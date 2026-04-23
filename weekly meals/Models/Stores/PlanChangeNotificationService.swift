@@ -1,6 +1,30 @@
 import Foundation
 import UserNotifications
 
+enum NotificationActorFormatter {
+    static func firstName(from raw: String?) -> String {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return "Ktoś"
+        }
+
+        var candidate = trimmed
+        if let atIndex = candidate.firstIndex(of: "@") {
+            candidate = String(candidate[..<atIndex])
+        }
+
+        let separators = CharacterSet(charactersIn: " \t._-+")
+        let token = candidate
+            .components(separatedBy: separators)
+            .first(where: { !$0.isEmpty }) ?? ""
+
+        let cleaned = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return "Ktoś" }
+
+        return cleaned.prefix(1).uppercased() + String(cleaned.dropFirst())
+    }
+}
+
 enum PlanChangeNotificationService {
     static func requestAuthorizationIfNeeded() {
         let center = UNUserNotificationCenter.current()
@@ -18,9 +42,7 @@ enum PlanChangeNotificationService {
         guard isPlanNotificationsEnabled else { return }
 
         let content = UNMutableNotificationContent()
-        let actor = (changedByDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
-            ? changedByDisplayName!
-            : "Ktoś"
+        let actor = NotificationActorFormatter.firstName(from: changedByDisplayName)
         content.title = "Aktualizacja planu posiłków"
         content.body = bodyText(for: action, weekStart: weekStart, actor: actor, dayOfWeek: dayOfWeek, mealType: mealType)
         content.sound = .default
@@ -46,20 +68,20 @@ enum PlanChangeNotificationService {
         switch action?.uppercased() {
         case "UPSERT_SLOT":
             if dayOfWeek != nil, mealType != nil {
-                return "\(actor) edytował plan \(meal) na \(day)."
+                return "\(actor) edytował/a plan \(meal) na \(day)."
             }
-            return "\(actor) zaktualizował plan posiłków."
+            return "\(actor) zaktualizował/a plan posiłków."
         case "REMOVE_SLOT":
             if dayOfWeek != nil, mealType != nil {
-                return "\(actor) usunął \(meal) z planu na \(day)."
+                return "\(actor) usunął/ęła \(meal) z planu na \(day)."
             }
-            return "\(actor) usunął pozycję z planu posiłków."
+            return "\(actor) usunął/ęła pozycję z planu posiłków."
         case "CLEAR_PLAN":
-            return "\(actor) usunął plan posiłków na ten tydzień."
+            return "\(actor) usunął/ęła plan posiłków na ten tydzień."
         case "SAVE_PLAN":
-            return "\(actor) ustawił plan posiłków na ten tydzień."
+            return "\(actor) ustawił/a plan posiłków na ten tydzień."
         default:
-            return "\(actor) zmienił plan posiłków."
+            return "\(actor) zmienił/a plan posiłków."
         }
     }
 
@@ -121,9 +143,7 @@ enum ShoppingListNotificationService {
         guard isNotificationsEnabled else { return }
         guard isShoppingNotificationsEnabled else { return }
 
-        let actor = (changedByDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
-            ? changedByDisplayName!
-            : "Ktoś"
+        let actor = NotificationActorFormatter.firstName(from: changedByDisplayName)
 
         guard let body = bodyText(for: action, actor: actor, isChecked: isChecked) else { return }
 
@@ -143,25 +163,24 @@ enum ShoppingListNotificationService {
     private static func bodyText(for action: String?, actor: String, isChecked: Bool?) -> String? {
         switch action?.uppercased() {
         case "SET_ITEM_CHECKED":
-            if isChecked == false {
-                return "\(actor) przywrócił produkt na liście zakupów do kupienia."
-            }
-            return "\(actor) oznaczył produkt na liście zakupów jako kupiony."
+            // Świadomie pomijamy powiadomienia dla pojedynczego checkboxa — realtime sync
+            // dalej aktualizuje UI, ale nie spamujemy pushem po każdym kliknięciu.
+            return nil
         case "ARCHIVE_LIST":
-            return "\(actor) zamknął listę zakupów."
+            return "\(actor) zamknął/a listę zakupów."
         case "SELECT_ARCHIVE":
-            return "\(actor) przywrócił wcześniejszą listę zakupów."
+            return "\(actor) przywrócił/a wcześniejszą listę zakupów."
         case "DELETE_ARCHIVE":
-            return "\(actor) usunął listę zakupów z historii."
+            return "\(actor) usunął/ęła listę zakupów z historii."
         case "DELETE_ALL_ARCHIVES":
-            return "\(actor) wyczyścił historię list zakupów."
+            return "\(actor) wyczyścił/a historię list zakupów."
         case "UPSERT_SLOT", "REMOVE_SLOT", "SAVE_PLAN", "CLEAR_PLAN":
             guard !isPlanNotificationsEnabled else { return nil }
-            return "\(actor) zmienił plan posiłków, więc lista zakupów została odświeżona."
+            return "\(actor) zmienił/a plan posiłków, więc lista zakupów została odświeżona."
         case .none:
             return nil
         default:
-            return "\(actor) zaktualizował listę zakupów."
+            return "\(actor) zaktualizował/a listę zakupów."
         }
     }
 
