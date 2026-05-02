@@ -76,12 +76,12 @@ struct weekly_mealsApp: App {
     }
 
     /// Stabilny identyfikator aktualnie widocznego ekranu. Sterowany przez niego
-    /// jest crossfade między Auth / Loader / Dashboard / NoHousehold.
+    /// jest crossfade między Auth / Welcome / Loader / Dashboard.
     private enum RootScreen: Equatable {
         case auth
+        case welcome
         case loader
         case dashboard
-        case noHousehold
     }
 
     private var currentRootScreen: RootScreen {
@@ -91,10 +91,14 @@ struct weekly_mealsApp: App {
         if sessionStore.isRestoringSession, sessionStore.currentHouseholdId == nil {
             return .loader
         }
-        if let householdId = sessionStore.currentHouseholdId, !householdId.isEmpty {
-            return sessionStore.startupPhase == .ready ? .dashboard : .loader
+        // No household → welcome flow. New users start at step 1 (full
+        // onboarding); users who already finished onboarding but have no
+        // household land on step 4 (household creation only). Routing
+        // logic in `rootScreen(_:)` decides the initial step.
+        if sessionStore.currentHouseholdId?.isEmpty ?? true {
+            return .welcome
         }
-        return .noHousehold
+        return sessionStore.startupPhase == .ready ? .dashboard : .loader
     }
 
     @ViewBuilder
@@ -109,6 +113,17 @@ struct weekly_mealsApp: App {
                         await sessionStore.signInWithApple()
                     }
                 }
+            )
+        case .welcome:
+            WelcomeView(
+                initialDisplayName: UserDefaults.standard.string(forKey: "settings.user.displayName") ?? "",
+                isCreatingHousehold: sessionStore.isSigningIn,
+                errorMessage: sessionStore.authError,
+                // Already onboarded but missing a household (left it,
+                // backend lost membership, etc.) → jump straight to the
+                // household-creation step instead of re-asking for
+                // profile/preferences they already filled in.
+                initialStep: sessionStore.onboardingCompletedAt != nil ? 4 : 1
             )
         case .loader:
             StartupLoaderView()
@@ -126,19 +141,6 @@ struct weekly_mealsApp: App {
                 // ale na wszelki wypadek pokażemy loader niż pusty ekran.
                 StartupLoaderView()
             }
-        case .noHousehold:
-            NoHouseholdView(
-                isLoading: sessionStore.isSigningIn,
-                errorMessage: sessionStore.authError,
-                onCreate: { name in
-                    Task {
-                        await sessionStore.createHousehold(name: name)
-                    }
-                },
-                onLogout: {
-                    sessionStore.logout()
-                }
-            )
         }
     }
 
