@@ -147,11 +147,9 @@ struct WelcomeStep4HouseholdView: View {
                     .multilineTextAlignment(.leading)
                     .padding(.top, 4)
             }
-
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 24)
-        .padding(.top, 140)
+        .padding(.top, 112)
         .padding(.bottom, 170)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
