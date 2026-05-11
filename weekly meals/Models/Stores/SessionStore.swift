@@ -8,6 +8,7 @@ import SwiftUI
 ///   - `SessionDTOs.swift`         — backend-shaped Codable DTOs
 ///   - `SessionPublicTypes.swift`  — InvitationPromptState / StartupPhase / HouseholdMemberSnapshot
 ///   - `Models/Environment/StoreEnvironmentKeys.swift` — SwiftUI Environment defaults
+
 @MainActor
 @Observable
 final class SessionStore {
@@ -28,6 +29,9 @@ final class SessionStore {
         static let avatarUrl = "settings.user.avatarUrl"
         static let householdName = "settings.household.name"
         static let pushDeviceToken = "notifications.pushDeviceToken"
+        // Welcome / onboarding state — persisted alongside the session so
+        // we can decide whether to show the welcome flow on cold start.
+        static let onboardingCompletedAt = "settings.user.onboardingCompletedAt"
     }
 
     private let baseURL = AppEnvironment.apiBaseURL
@@ -50,6 +54,12 @@ final class SessionStore {
     var currentHouseholdName: String?
     var invitationPrompt: InvitationPromptState?
     var householdRealtimeVersion: Int = 0
+    /// `nil` when the user hasn't completed the welcome flow yet — UI gates
+    /// the welcome screen on this. We hydrate it from AppStorage on cold
+    /// start (so we don't flash the welcome screen for users who completed
+    /// it on a previous launch) and refresh it from the backend when
+    /// `users:me` resolves.
+    var onboardingCompletedAt: Date?
 
     /// Bieżąca faza smart startup loadera.
     /// - `.idle` → brak sesji / brak gospodarstwa (Auth / NoHousehold)
@@ -89,7 +99,39 @@ final class SessionStore {
 
     init() {
         pendingPushDeviceToken = UserDefaults.standard.string(forKey: Keys.pushDeviceToken)
+        onboardingCompletedAt = Self.readPersistedOnboardingDate()
         restoreSession()
+    }
+
+    private static let onboardingDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static func parseOnboardingDate(_ iso8601: String?) -> Date? {
+        guard let iso8601, !iso8601.isEmpty else { return nil }
+        if let date = onboardingDateFormatter.date(from: iso8601) {
+            return date
+        }
+        let fallback = ISO8601DateFormatter()
+        return fallback.date(from: iso8601)
+    }
+
+    private static func readPersistedOnboardingDate() -> Date? {
+        let raw = UserDefaults.standard.string(forKey: Keys.onboardingCompletedAt)
+        return parseOnboardingDate(raw)
+    }
+
+    private func persistOnboardingCompletedAt(_ raw: String?) {
+        let defaults = UserDefaults.standard
+        if let raw, !raw.isEmpty {
+            defaults.set(raw, forKey: Keys.onboardingCompletedAt)
+            onboardingCompletedAt = Self.parseOnboardingDate(raw)
+        } else {
+            defaults.removeObject(forKey: Keys.onboardingCompletedAt)
+            onboardingCompletedAt = nil
+        }
     }
 
     func refreshRealtimeStoresOnForeground() {
@@ -318,6 +360,17 @@ final class SessionStore {
         // continue to display while this runs in the background.
         Task { @MainActor [weak self] in
             await self?.loadUserPreferences()
+        }
+
+        // Recover from the rare "household exists but onboardingCompletedAt
+        // is nil" state — the previous launch likely crashed between
+        // createHousehold and completeOnboarding. We don't make the user
+        // re-do the welcome flow; instead we flip the backend flag so the
+        // next `users:me` returns a stable shape.
+        if onboardingCompletedAt == nil {
+            Task { @MainActor [weak self] in
+                await self?.completeOnboarding()
+            }
         }
     }
 
@@ -656,6 +709,12 @@ final class SessionStore {
             } else {
                 defaults.removeObject(forKey: Keys.avatarUrl)
             }
+            persistProfileFields(
+                yearOfBirth: user.yearOfBirth,
+                heightCm: user.heightCm,
+                weightKg: user.weightKg
+            )
+            persistOnboardingCompletedAt(user.onboardingCompletedAt)
 
             guard let membership = user.memberships.first,
                   let household = membership.household else {
@@ -701,6 +760,7 @@ final class SessionStore {
         } else {
             defaults.removeObject(forKey: Keys.avatarUrl)
         }
+        persistOnboardingCompletedAt(response.user.onboardingCompletedAt)
         if let household = response.household {
             persistHousehold(id: household.id, name: household.name)
         } else {
@@ -744,6 +804,26 @@ final class SessionStore {
         defaults.removeObject(forKey: Keys.householdName)
         defaults.removeObject(forKey: Keys.appleUserIdentifier)
         defaults.removeObject(forKey: Keys.avatarUrl)
+        defaults.removeObject(forKey: Keys.displayName)
+        defaults.removeObject(forKey: Keys.email)
+        defaults.removeObject(forKey: Keys.onboardingCompletedAt)
+        clearPersistedProfileFields()
+        clearPersistedPreferences()
+        onboardingCompletedAt = nil
+    }
+
+    /// Wipe diet / kcal / allergens / goal / activityLevel AppStorage so
+    /// the welcome flow starts from clean defaults on the next sign-in.
+    /// Without this a previous user's selections leak into the new
+    /// session's welcome step 3 (radio dot pre-checked, allergen chips
+    /// already filled).
+    private func clearPersistedPreferences() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: PreferencesKeys.diet)
+        defaults.removeObject(forKey: PreferencesKeys.calorieGoal)
+        defaults.removeObject(forKey: PreferencesKeys.allergens)
+        defaults.removeObject(forKey: PreferencesKeys.goal)
+        defaults.removeObject(forKey: PreferencesKeys.activityLevel)
     }
 
     private func restoredSessionSnapshot() -> PersistedSessionSnapshot? {
@@ -937,6 +1017,32 @@ final class SessionStore {
         static let diet = "settings.diet.preference"
         static let calorieGoal = "settings.diet.calorieGoal"
         static let allergens = "settings.diet.allergens"
+        static let goal = "settings.diet.goal"
+        static let activityLevel = "settings.diet.activityLevel"
+    }
+
+    private enum ProfileKeys {
+        static let yearOfBirth = "settings.profile.yearOfBirth"
+        static let heightCm = "settings.profile.heightCm"
+        static let weightKg = "settings.profile.weightKg"
+    }
+
+    private func persistProfileFields(
+        yearOfBirth: Int?,
+        heightCm: Int?,
+        weightKg: Int?
+    ) {
+        let defaults = UserDefaults.standard
+        if let yearOfBirth { defaults.set(yearOfBirth, forKey: ProfileKeys.yearOfBirth) }
+        if let heightCm { defaults.set(heightCm, forKey: ProfileKeys.heightCm) }
+        if let weightKg { defaults.set(weightKg, forKey: ProfileKeys.weightKg) }
+    }
+
+    private func clearPersistedProfileFields() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: ProfileKeys.yearOfBirth)
+        defaults.removeObject(forKey: ProfileKeys.heightCm)
+        defaults.removeObject(forKey: ProfileKeys.weightKg)
     }
 
     /// Pull the user's preferences row from the backend and write into
@@ -965,6 +1071,8 @@ final class SessionStore {
                     .joined(separator: ","),
                 forKey: PreferencesKeys.allergens
             )
+            defaults.set(prefs.goal.lowercased(), forKey: PreferencesKeys.goal)
+            defaults.set(prefs.activityLevel, forKey: PreferencesKeys.activityLevel)
         } catch {
             // Swallow — preferences are non-critical, AppStorage default
             // applies. Will retry on the next session bootstrap.
@@ -978,17 +1086,43 @@ final class SessionStore {
     func saveUserPreferences(
         diet: String? = nil,
         calorieGoal: Int? = nil,
-        allergens: [String]? = nil
+        allergens: [String]? = nil,
+        goal: String? = nil,
+        activityLevel: Int? = nil
     ) async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
 
+        // Mirror to AppStorage so the welcome flow survives a kill-restart
+        // mid-flow and SettingsView reads the latest values without a
+        // round-trip. Settings already drives @AppStorage directly, so
+        // writing the same keys here is idempotent.
+        let defaults = UserDefaults.standard
         var data: [String: Any] = [:]
-        if let diet { data["dietPreference"] = diet.uppercased() }
-        if let calorieGoal { data["calorieGoal"] = calorieGoal }
+        if let diet {
+            data["dietPreference"] = diet.uppercased()
+            defaults.set(diet.lowercased(), forKey: PreferencesKeys.diet)
+        }
+        if let calorieGoal {
+            data["calorieGoal"] = calorieGoal
+            defaults.set(calorieGoal, forKey: PreferencesKeys.calorieGoal)
+        }
         if let allergens {
-            data["allergens"] = allergens
+            let normalised = allergens
                 .map { $0.lowercased() }
                 .sorted()
+            data["allergens"] = normalised
+            defaults.set(
+                normalised.joined(separator: ","),
+                forKey: PreferencesKeys.allergens
+            )
+        }
+        if let goal {
+            data["goal"] = goal.uppercased()
+            defaults.set(goal.lowercased(), forKey: PreferencesKeys.goal)
+        }
+        if let activityLevel {
+            data["activityLevel"] = activityLevel
+            defaults.set(activityLevel, forKey: PreferencesKeys.activityLevel)
         }
         guard !data.isEmpty else { return }
 
@@ -1003,6 +1137,93 @@ final class SessionStore {
         } catch {
             // Swallow — local AppStorage is already updated optimistically.
             // We retry on the next change.
+        }
+    }
+
+    // MARK: - Welcome flow (first login)
+    //
+    // Called from the four welcome steps. Each step persists optimistically
+    // (UserDefaults / AppStorage) so the UI shows the saved values even if
+    // the user kills the app mid-flow; the matching backend round-trip runs
+    // afterwards. Network failures are swallowed — the welcome flow degrades
+    // gracefully and we'll re-sync on next launch via `users:me`.
+
+    /// Persist the profile slice (display name + biometrics) for the
+    /// welcome flow's step 1. Updates AppStorage immediately, then mirrors
+    /// to the backend via `users:profile:update`.
+    @MainActor
+    func saveProfile(
+        displayName: String? = nil,
+        yearOfBirth: Int? = nil,
+        heightCm: Int? = nil,
+        weightKg: Int? = nil
+    ) async {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        var data: [String: Any] = [:]
+        if let displayName {
+            let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                data["displayName"] = trimmed
+                UserDefaults.standard.set(trimmed, forKey: Keys.displayName)
+            }
+        }
+        if let yearOfBirth {
+            data["yearOfBirth"] = yearOfBirth
+            UserDefaults.standard.set(yearOfBirth, forKey: ProfileKeys.yearOfBirth)
+        }
+        if let heightCm {
+            data["heightCm"] = heightCm
+            UserDefaults.standard.set(heightCm, forKey: ProfileKeys.heightCm)
+        }
+        if let weightKg {
+            data["weightKg"] = weightKg
+            UserDefaults.standard.set(weightKg, forKey: ProfileKeys.weightKg)
+        }
+        guard !data.isEmpty else { return }
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+
+        do {
+            let _: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
+                event: "users:profile:update",
+                payload: ["userId": userId, "data": data],
+                as: WsEnvelope<BackendUserProfileDTO>.self
+            )
+        } catch {
+            // Swallow — AppStorage is already updated optimistically. The
+            // user can keep going through the welcome flow even on flaky
+            // networks; the next `users:me` will reconcile.
+        }
+    }
+
+    /// Mark the welcome flow as complete on the backend. iOS optimistically
+    /// updates `onboardingCompletedAt` so the dashboard becomes available
+    /// immediately, then issues the round-trip in the background.
+    @MainActor
+    func completeOnboarding() async {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        let now = Date()
+        let nowIso = Self.onboardingDateFormatter.string(from: now)
+        persistOnboardingCompletedAt(nowIso)
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+
+        do {
+            let envelope: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
+                event: "users:onboarding:complete",
+                payload: ["userId": userId],
+                as: WsEnvelope<BackendUserProfileDTO>.self
+            )
+            if envelope.ok, let profile = envelope.data {
+                persistOnboardingCompletedAt(profile.onboardingCompletedAt)
+            }
+        } catch {
+            // Optimistic flag is already set; backend will re-confirm on
+            // the next `users:me`. If the device crashes before the round
+            // trip lands, the worst case is the welcome flow re-shows
+            // until the network succeeds.
         }
     }
 

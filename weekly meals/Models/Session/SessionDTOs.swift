@@ -20,6 +20,9 @@ struct SessionResponse: Codable {
         let email: String?
         let avatarUrl: String?
         let provider: String?
+        /// ISO 8601 timestamp; `nil` means the user hasn't finished the
+        /// welcome flow yet and should be routed to it.
+        let onboardingCompletedAt: String?
     }
 
     struct HouseholdDTO: Codable {
@@ -91,7 +94,24 @@ struct BackendCurrentUserDTO: Codable {
     let displayName: String
     let email: String?
     let avatarUrl: String?
+    let yearOfBirth: Int?
+    let heightCm: Int?
+    let weightKg: Int?
+    let onboardingCompletedAt: String?
     let memberships: [MembershipDTO]
+}
+
+/// Backend payload for `users:profile:update` and `users:onboarding:complete`.
+/// Mirrors `UserProfilePayload` server-side.
+struct BackendUserProfileDTO: Codable {
+    let id: String
+    let displayName: String
+    let email: String?
+    let avatarUrl: String?
+    let yearOfBirth: Int?
+    let heightCm: Int?
+    let weightKg: Int?
+    let onboardingCompletedAt: String?
 }
 
 struct BackendHouseholdMemberDTO: Decodable {
@@ -119,10 +139,12 @@ struct HouseholdMembersCachePayload: Codable {
 
 /// Backend payload for `users:preferences:get` and the response of
 /// `users:preferences:update`. The backend uses uppercase enum values
-/// (`VEGETARIAN`, `NONE`); iOS stores them lowercased in AppStorage so we
-/// normalise on the boundary.
+/// (`VEGETARIAN`, `NONE`, `HEALTHY`); iOS stores them lowercased in AppStorage
+/// so we normalise on the boundary.
 struct BackendUserPreferencesDTO: Decodable {
     let dietPreference: String
     let calorieGoal: Int
     let allergens: [String]
+    let goal: String
+    let activityLevel: Int
 }
