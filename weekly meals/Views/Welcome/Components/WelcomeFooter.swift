@@ -87,7 +87,7 @@ struct WelcomeFooter: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
-        .padding(.bottom, 22)
+        .padding(.bottom, 48)
         // The inner `.ignoresSafeArea(edges: .bottom)` extends the canvas
         // band down through the home-indicator safe area, so scroll
         // content can't peek into that zone underneath the button.
