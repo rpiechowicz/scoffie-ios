@@ -1,112 +1,123 @@
 import SwiftUI
 
-private struct RecipeMealSection: Identifiable {
-    let category: RecipesCategory
-    let title: String
-    let subtitle: String
-    let recipes: [Recipe]
-
-    var id: RecipesCategory { category }
-    var accent: Color { RecipesConstants.tint(for: category) }
-    var icon: String { RecipesConstants.icon(for: category) }
-}
-
+// Przepisy v2 — "Story carousel + Tasting menu" (W3 z handoff design'u).
+// Source: design/Weekly Meals - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
+//
+// Layout (top → bottom):
+//   1. EditorialRecipesHeader  — tytuł "Przepisy" + pigułka wyszukiwarki
+//   2. EditorialRecipesHero    — eyebrow + "Smaki na dziś" z terakotowym pionem
+//   3. Karuzela kart-story     — pełna szerokość, paging, kropki
+//   4. Sekcje Tasting menu     — Śniadania / Obiady / Kolacje, każdy z
+//      EditorialRecipesSectionHeader nad listą EditorialRecipeRow
+//
+// Stylistyka i paddings idą za pozostałymi widokami v2 (Ustawienia, Produkty,
+// Kalendarz): `WMPageBackground`, `pageTopPadding=78`, `pageHorizontalPadding=20`,
+// `pageBottomPadding=40`, hide-and-passthrough na NavigationBar.
 struct RecipesView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var scheme
 
     @State private var searchText = ""
-    @State private var selectedRecipe: Recipe?
-    @State private var featuredSelection: Int = 0
     @State private var debouncedSearchText = ""
     @State private var searchDebounceTask: Task<Void, Never>?
+    @State private var selectedRecipe: Recipe?
     @State private var categorySheetSelection: RecipesCategory?
+    @State private var featuredSelectionId: UUID?
 
+    // Sections rendered below the carousel — matches the W3 "Tasting menu"
+    // rhythm. Empty sections are filtered out when the user is actively
+    // searching so the list collapses to the relevant categories.
+    private struct RecipeSection: Identifiable {
+        let category: RecipesCategory
+        let title: String
+        let eyebrow: String
+        let accent: Color
+        let recipes: [Recipe]          // displayed inline (cap = sectionPreviewLimit)
+        let totalCount: Int            // full count for this category (sheet badge)
+
+        var id: RecipesCategory { category }
+        var hasMore: Bool { totalCount > recipes.count }
+    }
+
+    /// Max liczba przepisów pokazywanych inline w każdej sekcji Tasting menu.
+    /// Reszta dostępna pod chevronem (→ `RecipeCategorySheetView`).
+    private static let sectionPreviewLimit = 5
+
+    private var pageTopPadding: CGFloat { 78 }
+    private var pageHorizontalPadding: CGFloat { 20 }
+    private var pageBottomPadding: CGFloat { 40 }
+
+    // MARK: - Derived state
+
+    /// Wszystkie przepisy przefiltrowane po debounced query.
     private var visibleRecipes: [Recipe] {
-        var filtered = recipeCatalogStore.recipes
-
-        if !debouncedSearchText.isEmpty {
-            filtered = filtered.filter { recipe in
-                recipe.name.localizedCaseInsensitiveContains(debouncedSearchText) ||
-                recipe.description.localizedCaseInsensitiveContains(debouncedSearchText)
-            }
+        guard !debouncedSearchText.isEmpty else { return recipeCatalogStore.recipes }
+        return recipeCatalogStore.recipes.filter { recipe in
+            recipe.name.localizedCaseInsensitiveContains(debouncedSearchText) ||
+            recipe.description.localizedCaseInsensitiveContains(debouncedSearchText)
         }
-
-        return filtered
     }
 
-    private var shouldShowSkeleton: Bool {
-        recipeCatalogStore.isLoading && recipeCatalogStore.recipes.isEmpty
-    }
-
-    private var mealSections: [RecipeMealSection] {
-        let sections = [
-            makeSection(
-                for: .breakfast,
-                title: "Śniadania",
-                subtitle: "Na dobry start"
-            ),
-            makeSection(
-                for: .lunch,
-                title: "Obiady",
-                subtitle: "Na środek dnia"
-            ),
-            makeSection(
-                for: .dinner,
-                title: "Kolacje",
-                subtitle: "Na spokojny wieczór"
-            )
+    private var mealSections: [RecipeSection] {
+        let base: [RecipeSection] = [
+            makeSection(category: .breakfast, title: "Śniadania"),
+            makeSection(category: .lunch,     title: "Obiady"),
+            makeSection(category: .dinner,    title: "Kolacje")
         ]
-
-        if debouncedSearchText.isEmpty {
-            return sections
-        }
-
-        return sections.filter { !$0.recipes.isEmpty }
+        return debouncedSearchText.isEmpty ? base : base.filter { !$0.recipes.isEmpty }
     }
 
     private var hasVisibleRecipes: Bool {
         mealSections.contains { !$0.recipes.isEmpty }
     }
 
+    /// Top-N najlepszych kandydatów do karuzeli featured. Ulubione wygrywają,
+    /// potem krótszy `prepTime`, potem większy `servings`, potem alfabetycznie.
     private var featuredRecipes: [Recipe] {
         Array(
             visibleRecipes
                 .sorted(by: isFeaturedRecipePreferred(_:_:))
-                .prefix(6)
+                .prefix(5)
         )
     }
 
-    private var carouselCardWidth: CGFloat {
-        horizontalSizeClass == .compact ? 200 : 244
-    }
-
-    private var featuredTitle: String {
+    private var heroEyebrow: String {
         debouncedSearchText.isEmpty ? "Polecane" : "Najlepsze dopasowanie"
     }
 
-    private var featuredEyebrow: String? {
-        debouncedSearchText.isEmpty ? "SMAKI NA DZIŚ" : nil
+    private var heroTitle: String {
+        debouncedSearchText.isEmpty ? "Smaki na dziś" : "Pasujące do wyszukiwania"
     }
 
-    private var featuredEyebrowColor: Color {
-        colorScheme == .dark
-            ? Color(red: 0.74, green: 0.94, blue: 0.50)
-            : Color(red: 0.36, green: 0.62, blue: 0.14)
+    private var shouldShowSkeleton: Bool {
+        recipeCatalogStore.isLoading && recipeCatalogStore.recipes.isEmpty
     }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
-            rootContent
-            .navigationTitle("Przepisy")
+            ZStack(alignment: .top) {
+                WMPageBackground(scheme: scheme)
+                    .ignoresSafeArea()
+
+                content
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Color.clear.frame(width: 1, height: 1)
+                }
+            }
+            .background(NavBarHitTestPassthrough())
             .task {
                 debouncedSearchText = searchText
                 await recipeCatalogStore.loadIfNeeded()
+                resyncFeaturedSelectionIfNeeded()
             }
             .onChange(of: recipeCatalogStore.recipes.count) { _, _ in
-                featuredSelection = 0
                 ImagePrefetcher.prefetch(recipeCatalogStore.recipes.compactMap(\.imageURL))
+                resyncFeaturedSelectionIfNeeded()
             }
             .onChange(of: searchText) { _, newValue in
                 searchDebounceTask?.cancel()
@@ -114,13 +125,10 @@ struct RecipesView: View {
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     guard !Task.isCancelled else { return }
                     debouncedSearchText = newValue
-                    featuredSelection = 0
+                    resyncFeaturedSelectionIfNeeded()
                 }
             }
-            .onDisappear {
-                searchDebounceTask?.cancel()
-            }
-            .searchable(text: $searchText, prompt: "Szukaj przepisów")
+            .onDisappear { searchDebounceTask?.cancel() }
             .sheet(item: $selectedRecipe) { selected in
                 RecipeDetailView(
                     recipe: selected,
@@ -138,7 +146,8 @@ struct RecipesView: View {
             .sheet(item: $categorySheetSelection) { category in
                 RecipeCategorySheetView(
                     category: category,
-                    recipes: recipeCatalogStore.recipes.filter { $0.category == category }
+                    recipes: recipeCatalogStore.recipes.filter { $0.category == category },
+                    onSelect: openDetail(for:)
                 )
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
@@ -146,111 +155,329 @@ struct RecipesView: View {
         }
     }
 
-    private var rootContent: some View {
-        ZStack {
-            RecipesLiquidBackground()
-                .ignoresSafeArea()
+    // MARK: - Content tree
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    if let errorMessage = recipeCatalogStore.errorMessage {
-                        Text(errorMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .dashboardLiquidCard(cornerRadius: 16, strokeOpacity: 0.2)
-                    }
-
-                    contentBody
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 20)
+    private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                EditorialRecipesHeader(
+                    searchText: $searchText,
+                    onSubmit: { debouncedSearchText = searchText }
+                )
+                .padding(.horizontal, pageHorizontalPadding)
+                .padding(.top, pageTopPadding)
                 .padding(.bottom, 18)
+
+                if let errorMessage = recipeCatalogStore.errorMessage, !errorMessage.isEmpty {
+                    errorBanner(errorMessage)
+                        .padding(.horizontal, pageHorizontalPadding)
+                        .padding(.bottom, 12)
+                }
+
+                if shouldShowSkeleton {
+                    skeletonState
+                } else if !hasVisibleRecipes {
+                    emptyState
+                        .padding(.horizontal, pageHorizontalPadding)
+                        .padding(.top, 8)
+                } else {
+                    body(forRecipes: visibleRecipes)
+                }
+
+                if recipeCatalogStore.isLoadingMore {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
+                }
             }
+            .padding(.bottom, pageBottomPadding)
         }
+        .scrollIndicators(.hidden)
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     @ViewBuilder
-    private var contentBody: some View {
-        if shouldShowSkeleton {
-            VStack(spacing: 26) {
-                RecipeFeaturedSkeleton()
+    private func body(forRecipes _: [Recipe]) -> some View {
+        if !featuredRecipes.isEmpty {
+            EditorialRecipesHero(eyebrow: heroEyebrow, title: heroTitle)
+                .padding(.horizontal, pageHorizontalPadding)
+                .padding(.bottom, 14)
 
-                ForEach(0..<3, id: \.self) { _ in
-                    RecipeRailSkeletonSection(cardWidth: carouselCardWidth)
-                }
-            }
-        } else if !hasVisibleRecipes {
-            VStack(spacing: 12) {
-                Image(systemName: "fork.knife.circle")
-                    .font(.system(size: 56))
-                    .foregroundStyle(.secondary)
+            featuredCarousel
+                .padding(.bottom, 6)
 
-                Text("Brak przepisów")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-
-                Text(debouncedSearchText.isEmpty ? "Ta baza jest jeszcze pusta." : "Spróbuj wpisać inną frazę wyszukiwania.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 44)
-            .padding(.horizontal, 16)
-            .dashboardLiquidCard(cornerRadius: 22, strokeOpacity: 0.2)
-        } else {
-            if !featuredRecipes.isEmpty {
-                RecipesFeaturedSectionView(
-                    title: featuredTitle,
-                    eyebrow: featuredEyebrow,
-                    eyebrowColor: featuredEyebrowColor,
-                    recipes: featuredRecipes,
-                    selection: $featuredSelection,
-                    onSelect: openDetail(for:),
-                    onPrefetch: { recipe in
-                        await recipeCatalogStore.loadNextPageIfNeeded(currentItemId: recipe.id, threshold: 8)
-                    }
+            if featuredRecipes.count > 1 {
+                EditorialRecipesPageDots(
+                    count: featuredRecipes.count,
+                    activeId: featuredSelectionId,
+                    ids: featuredRecipes.map(\.id)
                 )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            } else {
+                Color.clear.frame(height: 8)
             }
+        }
 
-            VStack(spacing: 28) {
-                ForEach(mealSections) { section in
-                    RecipeRailSectionView(
-                        section: section,
-                        cardWidth: carouselCardWidth,
-                        onSelect: openDetail(for:),
-                        onSeeMore: { category in
-                            categorySheetSelection = category
-                        },
-                        onPrefetch: { recipe in
-                            await recipeCatalogStore.loadNextPageIfNeeded(currentItemId: recipe.id, threshold: 8)
-                        }
-                    )
-                }
-            }
-
-            if recipeCatalogStore.isLoadingMore {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, -8)
-                    .padding(.bottom, 6)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(mealSections) { section in
+                sectionView(section)
             }
         }
     }
 
-    private func makeSection(
-        for category: RecipesCategory,
-        title: String,
-        subtitle: String
-    ) -> RecipeMealSection {
-        RecipeMealSection(
+    // MARK: - Featured carousel
+
+    private var featuredCarousel: some View {
+        // Paging przez `ScrollView(.horizontal)` + `.viewAligned`, NIE przez
+        // `TabView(.page)`. TabView pod spodem to UIPageViewController, który
+        // ignoruje padding zewnętrzny i rysuje strony w pełnej szerokości
+        // ekranu — trzeba mu było wmusić szerokość karty z
+        // `UIScreen.main.bounds.width`, czyli zgadywać rozmiar kontenera
+        // zamiast go zmierzyć. Stąd gutter karuzeli rozjeżdżał się z
+        // rytmem 20pt reszty strony.
+        //
+        // Każdy element listy to pełnoszerokościowa STRONA (`pageWidth`), a
+        // gutter siedzi jako padding WEWNĄTRZ strony. Dzięki temu `.paging`
+        // przyciąga do granic stron i karta zawsze ma symetryczne 20pt —
+        // przy pierwszej, ostatniej i każdej środkowej tak samo:
+        //
+        //   ┌──────── strona (= kontener) ────────┐
+        //   │←20→│──── karta (page − 2·20) ────│←20→│
+        //
+        // `GeometryReader` mierzy kontener zamiast go zgadywać, więc rytm
+        // trzyma się też przy rotacji, na iPadzie i w Preview. Wysokość jest
+        // znana z góry (`cardHeight`), więc greedy GeometryReader nie psuje
+        // layoutu pionowego.
+        GeometryReader { proxy in
+            let pageWidth = proxy.size.width
+
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(featuredRecipes, id: \.id) { recipe in
+                        Button {
+                            openDetail(for: recipe)
+                        } label: {
+                            EditorialRecipeStoryCard(recipe: recipe)
+                                .frame(height: EditorialRecipeStoryCard.cardHeight)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, pageHorizontalPadding)
+                        .frame(width: pageWidth)
+                        .task {
+                            await recipeCatalogStore.loadNextPageIfNeeded(
+                                currentItemId: recipe.id,
+                                threshold: 8
+                            )
+                        }
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $featuredSelectionId)
+            .scrollIndicators(.hidden)
+        }
+        .frame(height: EditorialRecipeStoryCard.cardHeight)
+    }
+
+    // MARK: - Section block
+
+    @ViewBuilder
+    private func sectionView(_ section: RecipeSection) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            EditorialRecipesSectionHeader(
+                eyebrow: section.eyebrow,
+                title: section.title,
+                accent: section.accent,
+                action: section.recipes.isEmpty ? nil : {
+                    categorySheetSelection = section.category
+                }
+            )
+            .padding(.horizontal, pageHorizontalPadding)
+            .padding(.top, 22)
+            .padding(.bottom, 12)
+
+            if section.recipes.isEmpty {
+                emptySectionCard
+                    .padding(.horizontal, pageHorizontalPadding)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(section.recipes.enumerated()), id: \.element.id) { idx, recipe in
+                        EditorialRecipeRow(
+                            recipe: recipe,
+                            action: { openDetail(for: recipe) }
+                        )
+                        .task {
+                            await recipeCatalogStore.loadNextPageIfNeeded(
+                                currentItemId: recipe.id,
+                                threshold: 8
+                            )
+                        }
+
+                        if idx < section.recipes.count - 1 {
+                            Rectangle()
+                                .fill(Color.wmRule(scheme))
+                                .frame(height: 1)
+                                .padding(.leading, pageHorizontalPadding + 48 + 14)
+                                .padding(.trailing, pageHorizontalPadding)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptySectionCard: some View {
+        Text("Brak przepisów w tej sekcji.")
+            .font(.system(size: 13))
+            .foregroundStyle(Color.wmMuted(scheme))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+    }
+
+    // MARK: - Empty / error / skeleton states
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10))
+                Image(systemName: "fork.knife.circle")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(WMPalette.terracotta)
+            }
+            .frame(width: 78, height: 78)
+
+            VStack(spacing: 8) {
+                Text(debouncedSearchText.isEmpty ? "Brak przepisów" : "Brak wyników")
+                    .font(.system(size: 18, weight: .heavy))
+                    .tracking(-0.4)
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .multilineTextAlignment(.center)
+
+                Text(debouncedSearchText.isEmpty
+                     ? "Ta baza jest jeszcze pusta — wróć za chwilę."
+                     : "Spróbuj wpisać inną frazę wyszukiwania.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 28)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.wmTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+        )
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        Text(message)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.red)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.red.opacity(scheme == .dark ? 0.14 : 0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.red.opacity(0.32), lineWidth: 1)
+            )
+    }
+
+    private var skeletonState: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            // Hero placeholder
+            HStack(alignment: .center, spacing: 14) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+                    .frame(width: 6, height: 44)
+                VStack(alignment: .leading, spacing: 6) {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.wmTileBg(scheme))
+                        .frame(width: 90, height: 11)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.wmTileBg(scheme))
+                        .frame(width: 200, height: 24)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, pageHorizontalPadding)
+
+            // Story card placeholder
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.wmTileBg(scheme))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                )
+                .frame(height: 420)
+                .padding(.horizontal, pageHorizontalPadding)
+                .redacted(reason: .placeholder)
+
+            // Two section row placeholders
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(0..<2, id: \.self) { _ in
+                    VStack(spacing: 0) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            HStack(spacing: 14) {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.wmTileBg(scheme))
+                                    .frame(width: 48, height: 48)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(Color.wmTileBg(scheme))
+                                        .frame(maxWidth: .infinity, maxHeight: 14, alignment: .leading)
+                                        .frame(height: 14)
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(Color.wmTileBg(scheme))
+                                        .frame(width: 120, height: 10)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, pageHorizontalPadding)
+                            .padding(.vertical, 10)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+            }
+            .redacted(reason: .placeholder)
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: - Helpers
+
+    private func makeSection(category: RecipesCategory, title: String) -> RecipeSection {
+        let categoryRecipes = visibleRecipes.filter { $0.category == category }
+        let preview = Array(categoryRecipes.prefix(Self.sectionPreviewLimit))
+        return RecipeSection(
             category: category,
             title: title,
-            subtitle: subtitle,
-            recipes: visibleRecipes.filter { $0.category == category }
+            eyebrow: RecipeAccent.eyebrow(for: category),
+            accent: RecipeAccent.accent(for: category),
+            recipes: preview,
+            totalCount: categoryRecipes.count
         )
     }
 
@@ -260,561 +487,273 @@ struct RecipesView: View {
         }
     }
 
+    /// Stable ordering for the featured carousel.
     private func isFeaturedRecipePreferred(_ lhs: Recipe, _ rhs: Recipe) -> Bool {
         if lhs.favourite != rhs.favourite {
             return lhs.favourite && !rhs.favourite
         }
-
         if lhs.prepTimeMinutes != rhs.prepTimeMinutes {
             return lhs.prepTimeMinutes < rhs.prepTimeMinutes
         }
-
         if lhs.servings != rhs.servings {
             return lhs.servings > rhs.servings
         }
-
         return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
     }
+
+    /// Po przeładowaniu listy / zmianie filtra przewija karuzelę na pierwszą
+    /// kartę, jeśli aktualnie wybrana zniknęła z featured. `featuredSelectionId`
+    /// jest bindingiem `.scrollPosition`, więc sam zapis wystarcza — dopóki
+    /// wybrany przepis nadal jest na liście, zostawiamy pozycję nietkniętą.
+    private func resyncFeaturedSelectionIfNeeded() {
+        let ids = featuredRecipes.map(\.id)
+        if let current = featuredSelectionId, ids.contains(current) { return }
+        featuredSelectionId = ids.first
+    }
 }
 
-private struct RecipesFeaturedSectionView: View {
-    let title: String
-    let eyebrow: String?
-    let eyebrowColor: Color
-    let recipes: [Recipe]
-    @Binding var selection: Int
-    let onSelect: (Recipe) -> Void
-    let onPrefetch: (Recipe) async -> Void
+// MARK: - Page dots
+
+// Kropki paginujące pod karuzelą — `8pt` cienki passive, `22pt` szerszy
+// aktywny pill w `wmLabel`. Source: recipes-v2.jsx W3Dots.
+struct EditorialRecipesPageDots: View {
+    let count: Int
+    let activeId: UUID?
+    let ids: [UUID]
+
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                if let eyebrow {
-                    Text(eyebrow)
-                        .font(.caption2.weight(.semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(eyebrowColor)
-                }
-
-                Text(title)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 2)
-
-            TabView(selection: $selection) {
-                ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
-                    Button {
-                        onSelect(recipe)
-                    } label: {
-                        RecipeFeaturedCard(recipe: recipe)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 6)
-                    .tag(index)
-                    .task {
-                        await onPrefetch(recipe)
-                    }
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 372)
-
-            if recipes.count > 1 {
-                HStack(spacing: 6) {
-                    ForEach(recipes.indices, id: \.self) { index in
-                        Capsule()
-                            .fill(index == selection ? Color.primary.opacity(0.9) : Color.primary.opacity(0.18))
-                            .frame(width: index == selection ? 22 : 6, height: 6)
-                            .animation(.easeInOut(duration: 0.2), value: selection)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 2)
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { idx in
+                let isActive = ids.indices.contains(idx) && ids[idx] == activeId
+                Capsule(style: .continuous)
+                    .fill(isActive ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
+                    .frame(width: isActive ? 22 : 6, height: 6)
+                    .animation(.easeInOut(duration: 0.22), value: activeId)
             }
         }
     }
 }
 
-private struct RecipeFeaturedCard: View {
-    let recipe: Recipe
-    @Environment(\.colorScheme) private var colorScheme
+// MARK: - Category sheet
 
-    private let cornerRadius: CGFloat = 28
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            thumbnail
-
-            LinearGradient(
-                colors: [
-                    .clear,
-                    Color.black.opacity(0.1),
-                    Color.black.opacity(0.35),
-                    Color.black.opacity(0.72)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-
-            topRow
-
-            bottomContent
-        }
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(DashboardPalette.surface(colorScheme, level: .secondary))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(DashboardPalette.neutralBorder(colorScheme, opacity: 0.14), lineWidth: 1)
-        )
-        .shadow(color: colorScheme == .dark ? .black.opacity(0.2) : .clear, radius: 14, x: 0, y: 10)
-    }
-
-    private var topRow: some View {
-        VStack {
-            HStack {
-                Spacer()
-                favoriteBadge
-            }
-            .padding(.top, 14)
-            .padding(.horizontal, 14)
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var bottomContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(recipe.name)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 1)
-
-            HStack(spacing: 8) {
-                RecipeOverlayMetricBadge(icon: "clock", text: "\(recipe.prepTimeMinutes) min")
-
-                RecipeOverlayMetricBadge(
-                    icon: "flame.fill",
-                    text: "\(Int(recipe.nutritionPerServing.kcal)) kcal"
-                )
-
-                RecipeOverlayMetricBadge(
-                    icon: RecipesConstants.icon(for: recipe.category),
-                    text: RecipesConstants.displayName(for: recipe.category)
-                )
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var thumbnail: some View {
-        Group {
-            if let imageURL = recipe.imageURL {
-                CachedAsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .failure:
-                        placeholderThumb
-                    case .empty:
-                        ZStack {
-                            placeholderThumb
-                            ProgressView()
-                        }
-                    @unknown default:
-                        placeholderThumb
-                    }
-                }
-            } else {
-                placeholderThumb
-            }
-        }
-    }
-
-    private var placeholderThumb: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    RecipesConstants.tint(for: recipe.category).opacity(colorScheme == .dark ? 0.46 : 0.3),
-                    RecipesConstants.tint(for: recipe.category).opacity(colorScheme == .dark ? 0.22 : 0.14)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Image(systemName: RecipesConstants.icon(for: recipe.category))
-                .font(.system(size: 54, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
-        }
-    }
-
-    private var favoriteBadge: some View {
-        Image(systemName: recipe.favourite ? "heart.fill" : "heart")
-            .font(.system(size: 14, weight: .bold))
-            .foregroundStyle(recipe.favourite ? Color.pink : Color.white.opacity(0.96))
-            .frame(width: 38, height: 38)
-            .background(Color.black.opacity(colorScheme == .dark ? 0.34 : 0.3), in: Circle())
-    }
-
-}
-
-private struct RecipeRailSectionView: View {
-    let section: RecipeMealSection
-    let cardWidth: CGFloat
-    let onSelect: (Recipe) -> Void
-    let onSeeMore: (RecipesCategory) -> Void
-    let onPrefetch: (Recipe) async -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(section.subtitle.uppercased())
-                        .font(.caption2.weight(.semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(section.accent)
-
-                    Text(section.title)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.primary)
-                }
-
-                Spacer(minLength: 8)
-
-                Button {
-                    onSeeMore(section.category)
-                } label: {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(section.accent)
-                        .frame(width: 34, height: 34)
-                        .background(section.accent.opacity(0.16), in: Circle())
-                        .overlay(
-                            Circle()
-                                .stroke(section.accent.opacity(0.18), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Zobacz wszystkie – \(section.title)")
-            }
-            .padding(.horizontal, 2)
-
-            if section.recipes.isEmpty {
-                Text("Brak przepisów w tej sekcji.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .dashboardLiquidCard(cornerRadius: 22, strokeOpacity: 0.14)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 14) {
-                        ForEach(section.recipes) { recipe in
-                            Button {
-                                onSelect(recipe)
-                            } label: {
-                                RecipeCarouselCard(recipe: recipe, width: cardWidth)
-                            }
-                            .buttonStyle(.plain)
-                            .task {
-                                await onPrefetch(recipe)
-                            }
-                        }
-                    }
-                    .scrollTargetLayout()
-                    .padding(.horizontal, 2)
-                    .padding(.vertical, 4)
-                }
-                .scrollTargetBehavior(.viewAligned)
-            }
-        }
-    }
-}
-
+// Sheet pełnoekranowy z listą przepisów w danej kategorii. Source:
+// recipes-v2.jsx W3SectionSheet — header z kolorowym pionem, search,
+// scrollowana lista RowC.
 private struct RecipeCategorySheetView: View {
     let category: RecipesCategory
     let recipes: [Recipe]
+    let onSelect: (Recipe) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.recipeCatalogStore) private var recipeCatalogStore
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var scheme
 
     @State private var searchText = ""
-    @State private var selectedRecipe: Recipe?
 
-    private var accent: Color {
-        RecipesConstants.tint(for: category)
-    }
+    private var accent: Color { RecipeAccent.accent(for: category) }
 
     private var filteredRecipes: [Recipe] {
-        let source = recipes.filter { recipe in
-            guard !searchText.isEmpty else { return true }
-            return recipe.name.localizedCaseInsensitiveContains(searchText) ||
-                recipe.description.localizedCaseInsensitiveContains(searchText)
-        }
-
-        return source.sorted { lhs, rhs in
-            if lhs.favourite != rhs.favourite {
-                return lhs.favourite && !rhs.favourite
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let source: [Recipe]
+        if trimmed.isEmpty {
+            source = recipes
+        } else {
+            source = recipes.filter {
+                $0.name.localizedCaseInsensitiveContains(trimmed) ||
+                $0.description.localizedCaseInsensitiveContains(trimmed)
             }
-
+        }
+        return source.sorted { lhs, rhs in
+            if lhs.favourite != rhs.favourite { return lhs.favourite && !rhs.favourite }
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
     }
 
-    private var theme: DashboardSheetTheme {
-        switch category {
-        case .breakfast:
-            return .sunrise
-        case .lunch:
-            return .spring
-        case .dinner:
-            return .plum
-        case .all, .favourite:
-            return .ocean
-        }
-    }
-
     var body: some View {
-        NavigationStack {
-            GeometryReader { proxy in
-                ZStack {
-                    DashboardSheetBackground(theme: theme)
-                        .ignoresSafeArea()
+        ZStack(alignment: .top) {
+            WMPageBackground(scheme: scheme)
+                .ignoresSafeArea()
 
+            VStack(alignment: .leading, spacing: 0) {
+                grabber
+
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
+
+                sheetSearchPill
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+
+                if filteredRecipes.isEmpty {
+                    emptyState
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                    Spacer(minLength: 0)
+                } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            headerCard
-
-                            if filteredRecipes.isEmpty {
-                                emptyState
-                            } else {
-                                LazyVGrid(columns: sheetColumns(for: proxy.size.width), spacing: 12) {
-                                    ForEach(filteredRecipes) { recipe in
-                                        Button {
-                                            openDetail(for: recipe)
-                                        } label: {
-                                            RecipeCarouselCard(
-                                                recipe: recipe,
-                                                width: sheetCardWidth(for: proxy.size.width)
-                                            )
+                        VStack(spacing: 0) {
+                            ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { idx, recipe in
+                                EditorialRecipeRow(
+                                    recipe: recipe,
+                                    action: {
+                                        dismiss()
+                                        // Defer the detail open so the sheet
+                                        // dismissal can finish without the
+                                        // detail sheet stacking on top.
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                                            onSelect(recipe)
                                         }
-                                        .buttonStyle(.plain)
-                                        .frame(maxWidth: .infinity)
                                     }
+                                )
+
+                                if idx < filteredRecipes.count - 1 {
+                                    Rectangle()
+                                        .fill(Color.wmRule(scheme))
+                                        .frame(height: 1)
+                                        .padding(.leading, 20 + 48 + 14)
+                                        .padding(.trailing, 20)
                                 }
                             }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.top, 8)
-                        .padding(.bottom, 22)
+                        .padding(.bottom, 32)
                     }
-                }
-                .navigationTitle(RecipesConstants.displayName(for: category))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Zamknij") {
-                            dismiss()
-                        }
-                    }
-                }
-                .searchable(text: $searchText, prompt: "Szukaj w tej kategorii")
-                .sheet(item: $selectedRecipe) { selected in
-                    RecipeDetailView(
-                        recipe: selected,
-                        onToggleFavorite: {
-                            Task { @MainActor in
-                                await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
-                                selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: selected.id)
-                                    ?? recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
-                                    ?? selected
-                            }
-                        },
-                        onClose: { selectedRecipe = nil }
-                    )
-                    .presentationDetents([.large])
-                    .dashboardLiquidSheet()
+                    .scrollIndicators(.hidden)
                 }
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
-    private func sheetCardWidth(for availableWidth: CGFloat) -> CGFloat {
-        let columnCount = horizontalSizeClass == .compact ? 2 : 3
-        let horizontalPadding: CGFloat = 28
-        let spacing: CGFloat = 12
-        let totalSpacing = CGFloat(columnCount - 1) * spacing
-        let usableWidth = availableWidth - horizontalPadding - totalSpacing
-        return max(150, floor(usableWidth / CGFloat(columnCount)))
+    private var grabber: some View {
+        Capsule()
+            .fill(Color.wmFaint(scheme))
+            .frame(width: 38, height: 5)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
     }
 
-    private func sheetColumns(for availableWidth: CGFloat) -> [GridItem] {
-        let count = horizontalSizeClass == .compact ? 2 : 3
-        let width = sheetCardWidth(for: availableWidth)
-        return Array(repeating: GridItem(.fixed(width), spacing: 12), count: count)
-    }
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Capsule(style: .continuous)
+                .fill(accent)
+                .frame(width: 5, height: 36)
+                .shadow(color: accent.opacity(scheme == .dark ? 0.55 : 0.32), radius: 10, x: 0, y: 0)
 
-    private var headerCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(colorScheme == .dark ? 0.22 : 0.16))
-
-                Image(systemName: RecipesConstants.icon(for: category))
-                    .font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(RecipeAccent.eyebrow(for: category).uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.4)
                     .foregroundStyle(accent)
+
+                Text(RecipesConstants.displayName(for: category))
+                    .font(.system(size: 24, weight: .bold))
+                    .tracking(-0.4)
+                    .foregroundStyle(Color.wmLabel(scheme))
             }
-            .frame(width: 48, height: 48)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Wszystkie \(RecipesConstants.displayName(for: category).lowercased())")
-                    .font(.headline.weight(.bold))
-
-                Text("\(recipes.count) przepisów do szybkiego przeglądu i wyszukania.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(Color.wmFeatureRowBg(scheme)))
+                    .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
             }
-
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Zamknij")
         }
-        .padding(16)
-        .dashboardLiquidCard(cornerRadius: 20, strokeOpacity: 0.16)
+    }
+
+    private var sheetSearchPill: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.wmMuted(scheme).opacity(0.7))
+
+            TextField(text: $searchText) {
+                Text("Szukaj w \(RecipesConstants.displayName(for: category).lowercased())")
+                    .foregroundStyle(Color.wmMuted(scheme).opacity(0.7))
+            }
+            .font(.system(size: 15))
+            .tracking(-0.2)
+            .foregroundStyle(Color.wmLabel(scheme))
+            .submitLabel(.search)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous).fill(Color.wmTileBg(scheme))
+        )
+        .overlay(
+            Capsule(style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+        )
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Color.wmMuted(scheme))
 
             Text("Brak wyników")
-                .font(.headline.weight(.semibold))
+                .font(.system(size: 16, weight: .heavy))
+                .tracking(-0.3)
+                .foregroundStyle(Color.wmLabel(scheme))
 
             Text("Spróbuj innej frazy wyszukiwania.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.wmMuted(scheme))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 36)
         .padding(.horizontal, 16)
-        .dashboardLiquidCard(cornerRadius: 20, strokeOpacity: 0.16)
-    }
-
-    private func openDetail(for recipe: Recipe) {
-        Task { @MainActor in
-            selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
-        }
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.wmTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+        )
     }
 }
 
-private struct RecipeRailSkeletonSection: View {
-    let cardWidth: CGFloat
-    @Environment(\.colorScheme) private var colorScheme
+// MARK: - Nav bar passthrough
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(DashboardPalette.surface(colorScheme, level: .tertiary))
-                .frame(width: 220, height: 48)
+// Wyłącza interakcję `UINavigationBar` żeby tapy padały na content pod
+// nim — taki sam shim jak w Kalendarzu / Produktach / Ustawieniach (każdy
+// widok ma własną kopię, żeby uniknąć importu prywatnego pliku).
+private struct NavBarHitTestPassthrough: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView { BarUnlocker() }
+    func updateUIView(_ uiView: UIView, context: Context) {}
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .fill(DashboardPalette.surface(colorScheme, level: .tertiary))
-                            .frame(width: cardWidth, height: cardWidth * 1.26)
-                            .redacted(reason: .placeholder)
-                    }
+    private final class BarUnlocker: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            DispatchQueue.main.async { [weak self] in
+                self?.findNavigationBar()?.isUserInteractionEnabled = false
+            }
+        }
+
+        private func findNavigationBar() -> UINavigationBar? {
+            var responder: UIResponder? = self
+            while let r = responder {
+                if let vc = r as? UIViewController,
+                   let bar = vc.navigationController?.navigationBar {
+                    return bar
                 }
-                .padding(.horizontal, 2)
+                responder = r.next
             }
-        }
-    }
-}
-
-private struct RecipeFeaturedSkeleton: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(DashboardPalette.surface(colorScheme, level: .tertiary))
-                    .frame(width: 170, height: 28)
-
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(DashboardPalette.surface(colorScheme, level: .tertiary))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 16)
-            }
-
-            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                .fill(DashboardPalette.surface(colorScheme, level: .tertiary))
-                .frame(height: 352)
-                .redacted(reason: .placeholder)
-
-            HStack(spacing: 8) {
-                Spacer()
-                ForEach(0..<4, id: \.self) { index in
-                    Capsule()
-                        .fill(index == 1 ? Color.green.opacity(0.7) : Color.primary.opacity(0.14))
-                        .frame(width: index == 1 ? 20 : 6, height: 6)
-                }
-                Spacer()
-            }
-        }
-    }
-}
-
-private struct RecipesLiquidBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    DashboardPalette.backgroundTop(for: colorScheme),
-                    DashboardPalette.backgroundBottom(for: colorScheme)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Circle()
-                .fill(Color.blue.opacity(colorScheme == .dark ? 0.22 : 0.11))
-                .frame(width: 260, height: 260)
-                .blur(radius: 90)
-                .offset(x: -130, y: -210)
-
-            Circle()
-                .fill(Color.cyan.opacity(colorScheme == .dark ? 0.14 : 0.09))
-                .frame(width: 210, height: 210)
-                .blur(radius: 80)
-                .offset(x: 120, y: -260)
-
-            Circle()
-                .fill(Color.purple.opacity(colorScheme == .dark ? 0.16 : 0.08))
-                .frame(width: 280, height: 280)
-                .blur(radius: 100)
-                .offset(x: 140, y: 260)
+            return nil
         }
     }
 }
