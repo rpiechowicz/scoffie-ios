@@ -4,6 +4,8 @@ struct CalendarView: View {
     @Environment(\.weeklyMealStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+    @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.colorScheme) private var scheme
 
     // Mirrors the AppStorage row owned by Settings → Dieta i alergeny. The
@@ -13,7 +15,14 @@ struct CalendarView: View {
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
 
     @State private var detailRecipe: Recipe?
-    @State private var showAssigner = false
+    @State private var pickerTarget: PickerTarget?
+
+    /// Day + slot the recipe picker is filling.
+    private struct PickerTarget: Identifiable {
+        let date: Date
+        let slot: MealSlot
+        var id: String { "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue)" }
+    }
 
     // MARK: - Derived
 
@@ -42,19 +51,32 @@ struct CalendarView: View {
         return set
     }
 
-    private func recipe(for slot: MealSlot) -> Recipe? {
-        mealStore.recipe(for: datesViewModel.selectedDate, slot: slot)
+    /// One card per planned variant, plus an empty card for untouched slots.
+    /// A household that splits a meal gets both variants stacked.
+    private struct DayCard: Identifiable {
+        let slot: MealSlot
+        let meal: PlanMeal?
+        var id: String {
+            meal.map { "\(slot.rawValue).\($0.id)" } ?? "\(slot.rawValue).empty"
+        }
+    }
+
+    private var dayCards: [DayCard] {
+        MealSlot.allCases.flatMap { slot -> [DayCard] in
+            let meals = mealStore.meals(for: datesViewModel.selectedDate, slot: slot)
+            guard !meals.isEmpty else { return [DayCard(slot: slot, meal: nil)] }
+            return meals.map { DayCard(slot: slot, meal: $0) }
+        }
     }
 
     /// Live `favourite` flag from the recipe catalog. The meal store snapshots
     /// `Recipe.favourite` at plan-save time and never resyncs, so we look up
     /// the current state by recipe id and fall back to the snapshot.
-    private func isFavourite(for slot: MealSlot) -> Bool {
-        guard let r = recipe(for: slot) else { return false }
-        if let live = recipeCatalogStore.recipes.first(where: { $0.id == r.id }) {
+    private func isFavourite(_ recipe: Recipe) -> Bool {
+        if let live = recipeCatalogStore.recipes.first(where: { $0.id == recipe.id }) {
             return live.favourite
         }
-        return r.favourite
+        return recipe.favourite
     }
 
     // MARK: - Body
@@ -119,16 +141,22 @@ struct CalendarView: View {
 
                         // Meals — `padding: '0 22px 0', gap: 16`. Outer scroll has `paddingBottom: 40`.
                         VStack(alignment: .leading, spacing: 16) {
-                            ForEach(Array(MealSlot.allCases.enumerated()), id: \.element.id) { idx, slot in
+                            ForEach(Array(dayCards.enumerated()), id: \.element.id) { idx, card in
                                 EditorialMealCard(
-                                    slot: slot,
+                                    slot: card.slot,
                                     number: idx + 1,
-                                    recipe: recipe(for: slot),
-                                    isFavourite: isFavourite(for: slot),
+                                    meal: card.meal,
+                                    members: sessionStore.householdMembers,
+                                    isFavourite: card.meal.map { isFavourite($0.recipe) } ?? false,
                                     isEditable: isDayEditable,
-                                    onTap: { handleAssignedTap(slot: slot) },
-                                    onAssign: { showAssigner = true },
-                                    onToggleFavorite: { toggleFavorite(for: slot) }
+                                    onTap: { if let meal = card.meal { handleAssignedTap(meal.recipe) } },
+                                    onAssign: {
+                                        pickerTarget = PickerTarget(
+                                            date: datesViewModel.selectedDate,
+                                            slot: card.slot
+                                        )
+                                    },
+                                    onToggleFavorite: { if let meal = card.meal { toggleFavorite(meal.recipe) } }
                                 )
                             }
                         }
@@ -168,12 +196,27 @@ struct CalendarView: View {
                     dates: datesViewModel.dates
                 )
             }
-            .sheet(isPresented: $showAssigner) {
-                DayAssignerSheet(
-                    weekDates: datesViewModel.dates,
-                    weekStartISO: datesViewModel.weekStartISO
+            // Same picker Plan uses: pick a recipe, it lands on this day and
+            // slot. The old `DayAssignerSheet` distributed a week-long *pool*
+            // that Plan v2 no longer fills, so it could only ever report an
+            // exhausted pool.
+            .sheet(item: $pickerTarget) { target in
+                PlanSlotPickerSheet(
+                    date: target.date,
+                    slot: target.slot,
+                    weekStartISO: datesViewModel.weekStartISO,
+                    members: sessionStore.householdMembers,
+                    editing: nil
                 )
-                .dashboardLiquidSheet()
+            }
+            .onChange(of: pickerTarget?.id) { oldValue, newValue in
+                guard oldValue != nil, newValue == nil else { return }
+                Task { @MainActor in
+                    await shoppingListStore.load(
+                        weekStart: datesViewModel.weekStartISO,
+                        force: true
+                    )
+                }
             }
             .sheet(item: $detailRecipe) { selected in
                 RecipeDetailView(
@@ -217,17 +260,15 @@ struct CalendarView: View {
 
     // MARK: - Actions
 
-    private func handleAssignedTap(slot: MealSlot) {
-        guard let assigned = recipe(for: slot) else { return }
+    private func handleAssignedTap(_ recipe: Recipe) {
         Task { @MainActor in
-            detailRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: assigned.id) ?? assigned
+            detailRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
         }
     }
 
-    private func toggleFavorite(for slot: MealSlot) {
-        guard let assigned = recipe(for: slot) else { return }
+    private func toggleFavorite(_ recipe: Recipe) {
         Task { @MainActor in
-            await recipeCatalogStore.toggleFavorite(recipeId: assigned.id)
+            await recipeCatalogStore.toggleFavorite(recipeId: recipe.id)
         }
     }
 }

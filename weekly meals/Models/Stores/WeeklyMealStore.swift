@@ -79,6 +79,11 @@ class WeeklyMealStore {
         plan(for: date).recipe(for: slot)
     }
 
+    /// Every variant planned into that slot — one per household split.
+    func meals(for date: Date, slot: MealSlot) -> [PlanMeal] {
+        plan(for: date).meals(for: slot)
+    }
+
     func allRecipes(for dates: [Date]) -> [Recipe] {
         dates.flatMap { plan(for: $0).allRecipes }
     }
@@ -89,6 +94,14 @@ class WeeklyMealStore {
         let key = Self.dateKey(for: date)
         var dayPlan = plans[key] ?? DayMealPlan(dateKey: key)
         dayPlan.setRecipe(recipe, for: slot)
+        plans[key] = dayPlan
+        save()
+    }
+
+    func setMeals(_ meals: [PlanMeal], for date: Date, slot: MealSlot) {
+        let key = Self.dateKey(for: date)
+        var dayPlan = plans[key] ?? DayMealPlan(dateKey: key)
+        dayPlan.setMeals(meals, for: slot)
         plans[key] = dayPlan
         save()
     }
@@ -116,7 +129,17 @@ class WeeklyMealStore {
             for slot in slots {
                 let key = slot.dateKey
                 var dayPlan = plans[key] ?? DayMealPlan(dateKey: key)
-                dayPlan.setRecipe(slot.recipe, for: slot.mealSlot)
+                // A slot can carry several variants, so accumulate rather than
+                // overwrite — the backend returns one row per split.
+                var meals = dayPlan.meals(for: slot.mealSlot)
+                meals.append(
+                    PlanMeal(
+                        id: slot.itemId,
+                        recipe: slot.recipe,
+                        participantIds: slot.participantIds
+                    )
+                )
+                dayPlan.setMeals(meals, for: slot.mealSlot)
                 plans[key] = dayPlan
             }
             save()
@@ -129,38 +152,70 @@ class WeeklyMealStore {
         }
     }
 
+    /// Adds a recipe to a slot, or rewrites who an already-planned recipe is
+    /// for. `participantIds` empty means the whole household eats it.
+    ///
+    /// `replacingRecipeId` drops another variant in the same call — that is how
+    /// „Zmień przepis" swaps one meal for another without briefly showing both.
     @MainActor
     func upsertWeekSlot(
         recipe: Recipe,
+        participantIds: [String] = [],
+        replacingRecipeId: UUID? = nil,
         for date: Date,
         slot: MealSlot,
         weekStart: String
     ) async -> Bool {
-        let previous = self.recipe(for: date, slot: slot)
-        setRecipe(recipe, for: date, slot: slot)
+        let previous = meals(for: date, slot: slot)
+
+        var optimistic = previous.filter { $0.recipe.id != replacingRecipeId }
+        if let index = optimistic.firstIndex(where: { $0.recipe.id == recipe.id }) {
+            optimistic[index].participantIds = participantIds
+        } else {
+            optimistic.append(PlanMeal(recipe: recipe, participantIds: participantIds))
+        }
+        setMeals(optimistic, for: date, slot: slot)
 
         guard let weeklyPlanRepository else { return true }
 
         do {
+            if let replacingRecipeId, replacingRecipeId != recipe.id {
+                try await weeklyPlanRepository.removeWeekSlot(
+                    weekStart: weekStart,
+                    date: date,
+                    mealSlot: slot,
+                    recipeId: replacingRecipeId
+                )
+            }
             try await weeklyPlanRepository.upsertWeekSlot(
                 weekStart: weekStart,
                 date: date,
                 mealSlot: slot,
-                recipeId: recipe.id
+                recipeId: recipe.id,
+                participantIds: participantIds
             )
             errorMessage = nil
             return true
         } catch {
-            setRecipe(previous, for: date, slot: slot)
+            setMeals(previous, for: date, slot: slot)
             errorMessage = UserFacingErrorMapper.message(from: error)
             return false
         }
     }
 
+    /// Removes one variant from a slot, or the whole slot when `recipe` is nil.
     @MainActor
-    func removeWeekSlot(for date: Date, slot: MealSlot, weekStart: String) async -> Bool {
-        let previous = self.recipe(for: date, slot: slot)
-        clearRecipe(for: date, slot: slot)
+    func removeWeekSlot(
+        for date: Date,
+        slot: MealSlot,
+        weekStart: String,
+        recipe: Recipe? = nil
+    ) async -> Bool {
+        let previous = meals(for: date, slot: slot)
+        let remaining = recipe.map { target in
+            previous.filter { $0.recipe.id != target.id }
+        } ?? []
+        setMeals(remaining, for: date, slot: slot)
 
         guard let weeklyPlanRepository else { return true }
 
@@ -168,12 +223,13 @@ class WeeklyMealStore {
             try await weeklyPlanRepository.removeWeekSlot(
                 weekStart: weekStart,
                 date: date,
-                mealSlot: slot
+                mealSlot: slot,
+                recipeId: recipe?.id
             )
             errorMessage = nil
             return true
         } catch {
-            setRecipe(previous, for: date, slot: slot)
+            setMeals(previous, for: date, slot: slot)
             errorMessage = UserFacingErrorMapper.message(from: error)
             return false
         }
@@ -416,9 +472,9 @@ class WeeklyMealStore {
         var usedDinner: [UUID: Int] = [:]
 
         for dayPlan in plans.values {
-            if let b = dayPlan.breakfast { usedBreakfast[b.id, default: 0] += 1 }
-            if let l = dayPlan.lunch { usedLunch[l.id, default: 0] += 1 }
-            if let d = dayPlan.dinner { usedDinner[d.id, default: 0] += 1 }
+            for meal in dayPlan.breakfast { usedBreakfast[meal.recipe.id, default: 0] += 1 }
+            for meal in dayPlan.lunch { usedLunch[meal.recipe.id, default: 0] += 1 }
+            for meal in dayPlan.dinner { usedDinner[meal.recipe.id, default: 0] += 1 }
         }
 
         syncEntries(&savedPlan.breakfastEntries, usedCounts: usedBreakfast)
@@ -439,16 +495,19 @@ class WeeklyMealStore {
         for (key, var dayPlan) in plans {
             var dayChanged = false
 
-            if let b = dayPlan.breakfast, !newBreakfastIDs.contains(b.id) {
-                dayPlan.breakfast = nil
+            let keptBreakfast = dayPlan.breakfast.filter { newBreakfastIDs.contains($0.recipe.id) }
+            if keptBreakfast.count != dayPlan.breakfast.count {
+                dayPlan.breakfast = keptBreakfast
                 dayChanged = true
             }
-            if let l = dayPlan.lunch, !newLunchIDs.contains(l.id) {
-                dayPlan.lunch = nil
+            let keptLunch = dayPlan.lunch.filter { newLunchIDs.contains($0.recipe.id) }
+            if keptLunch.count != dayPlan.lunch.count {
+                dayPlan.lunch = keptLunch
                 dayChanged = true
             }
-            if let d = dayPlan.dinner, !newDinnerIDs.contains(d.id) {
-                dayPlan.dinner = nil
+            let keptDinner = dayPlan.dinner.filter { newDinnerIDs.contains($0.recipe.id) }
+            if keptDinner.count != dayPlan.dinner.count {
+                dayPlan.dinner = keptDinner
                 dayChanged = true
             }
 
@@ -465,9 +524,9 @@ class WeeklyMealStore {
         var usedDinner: [UUID: Int] = [:]
 
         for dayPlan in plans.values {
-            if let b = dayPlan.breakfast { usedBreakfast[b.id, default: 0] += 1 }
-            if let l = dayPlan.lunch { usedLunch[l.id, default: 0] += 1 }
-            if let d = dayPlan.dinner { usedDinner[d.id, default: 0] += 1 }
+            for meal in dayPlan.breakfast { usedBreakfast[meal.recipe.id, default: 0] += 1 }
+            for meal in dayPlan.lunch { usedLunch[meal.recipe.id, default: 0] += 1 }
+            for meal in dayPlan.dinner { usedDinner[meal.recipe.id, default: 0] += 1 }
         }
 
         // 3. Ustaw isSelected na podstawie faktycznego użycia w kalendarzu
