@@ -66,7 +66,8 @@ struct PlanProfileChip: View {
             }
             .padding(.leading, 7)
             .padding(.trailing, 10)
-            .padding(.vertical, 7)
+            // 6pt → wysokość 38pt, tyle co `EditorialIconButton` obok.
+            .padding(.vertical, 6)
             .background(Capsule().fill(Color.wmTileBg(scheme)))
             .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
         }

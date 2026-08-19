@@ -290,11 +290,10 @@ struct SettingsView: View {
         }
     }
 
-    // Match the v2 paddings used by Calendar / Produkty so the title sits
-    // at the same vertical position across tabs (~78pt from screen top).
-    private var pageTopPadding: CGFloat { 78 }
-    private var pageHorizontalPadding: CGFloat { 20 }
-    private var pageBottomPadding: CGFloat { 40 }
+    // Marginesy strony wspólne dla wszystkich zakładek v2.
+    private var pageTopPadding: CGFloat { WMPageMetrics.top }
+    private var pageHorizontalPadding: CGFloat { WMPageMetrics.horizontal }
+    private var pageBottomPadding: CGFloat { WMPageMetrics.bottom }
 
     // MARK: - Body
 
@@ -306,7 +305,7 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        EditorialSettingsHeader()
+                        EditorialPageHeader("Ustawienia")
                             .padding(.horizontal, pageHorizontalPadding)
                             .padding(.top, pageTopPadding)
                             .padding(.bottom, 16)

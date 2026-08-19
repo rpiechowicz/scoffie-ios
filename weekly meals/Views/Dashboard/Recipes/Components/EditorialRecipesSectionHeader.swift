@@ -76,6 +76,26 @@ enum RecipeAccent {
         }
     }
 
+    /// Akcent dla poziomu trudności — używany przez chipy w arkuszu filtrów.
+    static func accent(for difficulty: Difficulty) -> Color {
+        switch difficulty {
+        case .easy:   return WMPalette.sage
+        case .medium: return WMPalette.butter
+        case .hard:   return WMPalette.terracotta
+        }
+    }
+
+    /// Akcent dla tagu profilu odżywczego — chipy w arkuszu filtrów.
+    static func accent(for tag: RecipeNutritionTag) -> Color {
+        switch tag {
+        case .highProtein: return WMPalette.terracotta
+        case .lowCarb:     return WMPalette.indigo
+        case .lowFat:      return WMPalette.butter
+        case .highFiber:   return WMPalette.sage
+        case .lowSalt:     return WMPalette.indigo
+        }
+    }
+
     /// Polish "eyebrow" tagline above the section title — matches the
     /// design's "Na dobry start / Na środek dnia / Na spokojny wieczór"
     /// rhythm and falls back to the category name for filter pseudo-cats.

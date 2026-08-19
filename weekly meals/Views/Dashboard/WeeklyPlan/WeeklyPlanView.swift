@@ -113,10 +113,11 @@ struct WeeklyPlanView: View {
                     @Bindable var bindableDates = datesViewModel
 
                     VStack(alignment: .leading, spacing: 0) {
-                        // `padding: '58px 16px 14px'` — design.
+                        // Marginesy wspólne z pozostałymi zakładkami —
+                        // tytuł siada w tym samym miejscu co „Przepisy".
                         headerRow
-                            .padding(.horizontal, 16)
-                            .padding(.top, 58)
+                            .padding(.horizontal, WMPageMetrics.horizontal)
+                            .padding(.top, WMPageMetrics.top)
                             .padding(.bottom, 14)
 
                         // Day strip instead of a week switcher: it is the
@@ -126,12 +127,12 @@ struct WeeklyPlanView: View {
                             datesViewModel: bindableDates,
                             plannedDates: plannedDates
                         )
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, WMPageMetrics.horizontal)
 
                         Rectangle()
                             .fill(Color.wmRule(scheme))
                             .frame(height: 1)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, WMPageMetrics.horizontal)
                             .padding(.top, 6)
                             .padding(.bottom, 16)
 
@@ -139,7 +140,7 @@ struct WeeklyPlanView: View {
                             Text(errorMessage)
                                 .font(.footnote)
                                 .foregroundStyle(.red)
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, WMPageMetrics.horizontal)
                                 .padding(.bottom, 10)
                         }
 
@@ -257,20 +258,13 @@ struct WeeklyPlanView: View {
     // MARK: - Pieces
 
     private var headerRow: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text("Plan tygodnia")
-                .font(.system(size: 28, weight: .bold))
-                .tracking(-0.5)
-                .foregroundStyle(Color.wmLabel(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+        EditorialPageHeader(title: "Plan tygodnia") {
+            HStack(spacing: 8) {
+                overflowMenu
 
-            Spacer(minLength: 0)
-
-            overflowMenu
-
-            PlanProfileChip(profile: profile, members: members) {
-                showProfileSheet = true
+                PlanProfileChip(profile: profile, members: members) {
+                    showProfileSheet = true
+                }
             }
         }
     }
@@ -312,10 +306,12 @@ struct WeeklyPlanView: View {
                 }
             }
         } label: {
+            // Ten sam rozmiar co `EditorialIconButton` (38pt), żeby akcje
+            // nagłówka wyglądały tak samo na każdej zakładce.
             Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.wmLabel(scheme))
-                .frame(width: 40, height: 40)
+                .frame(width: 38, height: 38)
                 .background(Circle().fill(Color.wmTileBg(scheme)))
                 .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
         }
@@ -368,8 +364,8 @@ struct WeeklyPlanView: View {
                             .padding(.top, 30)
                         }
                     }
-                    // `padding: '0 16px'` inside a 100%-width page — design.
-                    .padding(.horizontal, 16)
+                    // Strona karuzeli trzyma wspólny margines strony.
+                    .padding(.horizontal, WMPageMetrics.horizontal)
                     .containerRelativeFrame(.horizontal)
                 }
             }
