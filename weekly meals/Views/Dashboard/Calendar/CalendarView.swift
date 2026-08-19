@@ -39,14 +39,36 @@ struct CalendarView: View {
         return all.visibleTo(memberId: userId)
     }
 
-    private var dayRecipes: [Recipe] {
-        MealSlot.allCases.flatMap { myMeals(for: $0) }.map(\.recipe)
+    private var dayMeals: [PlanMeal] {
+        MealSlot.allCases.flatMap { myMeals(for: $0) }
     }
 
-    private var dayKcal:    Int { dayRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.kcal) } }
-    private var dayProtein: Int { dayRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.protein) } }
-    private var dayFat:     Int { dayRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.fat) } }
-    private var dayCarbs:   Int { dayRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.carbs) } }
+    private var dayRecipes: [Recipe] { dayMeals.map(\.recipe) }
+
+    /// Posiłki faktycznie odhaczone przez zalogowanego użytkownika. To one —
+    /// a nie sam plan — zasilają licznik kalorii i makra: zaplanowany obiad
+    /// nie jest dowodem, że ktokolwiek go zjadł.
+    private var eatenRecipes: [Recipe] {
+        dayMeals
+            .filter { $0.isEaten(by: sessionStore.currentUserId) }
+            .map(\.recipe)
+    }
+
+    private var dayKcal:    Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.kcal) } }
+    private var dayProtein: Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.protein) } }
+    private var dayFat:     Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.fat) } }
+    private var dayCarbs:   Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.carbs) } }
+
+    /// Suma całego dnia — zjedzone i jeszcze nie. Rysuje widmo na pasku makro.
+    private var dayPlannedKcal: Int { dayRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.kcal) } }
+
+    /// Odhaczać można dziś i wstecz. Dzień z przyszłości nie ma czego
+    /// odhaczać, a przeszły jest zablokowany tylko do *planowania* — to, co
+    /// już się wydarzyło, wolno zapisać.
+    private var canLogEatenMeals: Bool {
+        Calendar.current.startOfDay(for: datesViewModel.selectedDate)
+            <= Calendar.current.startOfDay(for: Date())
+    }
 
     /// Set of "yyyy-MM-dd" keys for visible days that already have ≥1 meal — drives the sage planned-dot.
     private var plannedDates: Set<String> {
@@ -122,6 +144,7 @@ struct CalendarView: View {
                         // Makro — dolny odstęp 22pt z projektu.
                         EditorialMacroBlock(
                             kcal: dayKcal,
+                            plannedKcal: dayPlannedKcal,
                             protein: dayProtein,
                             fat: dayFat,
                             carbs: dayCarbs,
@@ -144,14 +167,16 @@ struct CalendarView: View {
                                 .padding(.bottom, 12)
                         }
 
-                        // Posiłki — `gap: 16`, dolny odstęp scrolla 40pt.
-                        VStack(alignment: .leading, spacing: 16) {
-                            ForEach(Array(dayCards.enumerated()), id: \.element.id) { idx, card in
+                        // Posiłki — kompaktowe wiersze, `gap: 10`, dolny
+                        // odstęp scrolla 40pt.
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(dayCards) { card in
                                 EditorialMealCard(
                                     slot: card.slot,
-                                    number: idx + 1,
                                     meal: card.meal,
                                     isFavourite: card.meal.map { isFavourite($0.recipe) } ?? false,
+                                    isEaten: card.meal?.isEaten(by: sessionStore.currentUserId) ?? false,
+                                    showsEatenToggle: canLogEatenMeals,
                                     isEditable: isDayEditable,
                                     onTap: { if let meal = card.meal { handleAssignedTap(meal.recipe) } },
                                     onAssign: {
@@ -160,7 +185,8 @@ struct CalendarView: View {
                                             slot: card.slot
                                         )
                                     },
-                                    onToggleFavorite: { if let meal = card.meal { toggleFavorite(meal.recipe) } }
+                                    onToggleFavorite: { if let meal = card.meal { toggleFavorite(meal.recipe) } },
+                                    onToggleEaten: { if let meal = card.meal { toggleEaten(meal, slot: card.slot) } }
                                 )
                             }
                         }
@@ -266,6 +292,19 @@ struct CalendarView: View {
     private func handleAssignedTap(_ recipe: Recipe) {
         Task { @MainActor in
             detailRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
+        }
+    }
+
+    private func toggleEaten(_ meal: PlanMeal, slot: MealSlot) {
+        let isEaten = meal.isEaten(by: sessionStore.currentUserId)
+        Task { @MainActor in
+            await mealStore.setMealEaten(
+                !isEaten,
+                recipeId: meal.recipe.id,
+                for: datesViewModel.selectedDate,
+                slot: slot,
+                weekStart: datesViewModel.weekStartISO
+            )
         }
     }
 

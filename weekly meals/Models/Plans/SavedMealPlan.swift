@@ -15,14 +15,41 @@ struct PlanMeal: Codable, Identifiable, Hashable {
     let id: String
     var recipe: Recipe
     var participantIds: [String]
+    /// Household members who marked this meal as eaten. Per-user, because a
+    /// shared meal is eaten by each person on their own schedule — one flag
+    /// could not answer „did *I* eat this?".
+    var eatenByUserIds: [String]
 
-    init(id: String = UUID().uuidString, recipe: Recipe, participantIds: [String] = []) {
+    init(
+        id: String = UUID().uuidString,
+        recipe: Recipe,
+        participantIds: [String] = [],
+        eatenByUserIds: [String] = []
+    ) {
         self.id = id
         self.recipe = recipe
         self.participantIds = participantIds
+        self.eatenByUserIds = eatenByUserIds
+    }
+
+    // Plans persisted before eaten-marks existed have no `eatenByUserIds` key.
+    // The synthesized decoder would reject them outright and wipe the user's
+    // local calendar, so the field decodes as „nobody ate it yet" instead.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.recipe = try container.decode(Recipe.self, forKey: .recipe)
+        self.participantIds = try container.decodeIfPresent([String].self, forKey: .participantIds) ?? []
+        self.eatenByUserIds = try container.decodeIfPresent([String].self, forKey: .eatenByUserIds) ?? []
     }
 
     var isShared: Bool { participantIds.isEmpty }
+
+    /// Did this member mark the meal as eaten?
+    func isEaten(by memberId: String?) -> Bool {
+        guard let memberId else { return false }
+        return eatenByUserIds.contains(memberId)
+    }
 
     // `Recipe` isn't Hashable, so identity is carried by the ids that actually
     // distinguish one planned meal from another.
@@ -30,12 +57,14 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         lhs.id == rhs.id
             && lhs.recipe.id == rhs.recipe.id
             && lhs.participantIds == rhs.participantIds
+            && lhs.eatenByUserIds == rhs.eatenByUserIds
     }
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
         hasher.combine(recipe.id)
         hasher.combine(participantIds)
+        hasher.combine(eatenByUserIds)
     }
 }
 
