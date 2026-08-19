@@ -6,7 +6,9 @@ import SwiftUI
 struct EditorialMealCard: View {
     let slot: MealSlot
     let number: Int
-    let recipe: Recipe?
+    /// One variant of the slot — a slot can hold several when the household
+    /// splits the meal, and Kalendarz stacks them.
+    let meal: PlanMeal?
     /// Sourced from the recipe catalog — the meal store snapshots `favourite`
     /// at plan-save time and never re-syncs, so we read the live value here.
     let isFavourite: Bool
@@ -26,9 +28,9 @@ struct EditorialMealCard: View {
                 // (i.e. user swaps days). The transition cross-fades + slightly
                 // scales so the photo, title and badges swap together as a unit.
                 Group {
-                    if let recipe {
+                    if let meal {
                         AssignedHero(
-                            recipe: recipe,
+                            recipe: meal.recipe,
                             isFavourite: isFavourite,
                             slot: slot,
                             isEditable: isEditable,
@@ -56,8 +58,8 @@ struct EditorialMealCard: View {
     }
 
     private var contentIdentity: String {
-        if let recipe {
-            return "\(slot.id).recipe.\(recipe.id.uuidString)"
+        if let meal {
+            return "\(slot.id).meal.\(meal.id)"
         }
         return "\(slot.id).empty"
     }
@@ -240,7 +242,8 @@ private struct AssignedHero: View {
             .padding(.bottom, 16)
     }
 
-    /// Badge row pinned to the top-leading corner — clock and flame side by side.
+    /// Badge row pinned to the top-leading corner — clock and flame side by
+    /// side. No "who eats this" badge: every card here is already yours.
     private var badgeColumn: some View {
         HStack(spacing: 6) {
             GlassBadge(icon: "clock",      value: recipe.prepTimeMinutes,               unit: " min")

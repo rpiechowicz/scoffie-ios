@@ -1,15 +1,21 @@
 import Foundation
 
 struct WeekPlanSlot {
+    /// Backend `PlanItem.id` — a slot can hold several of these, one per
+    /// household split, so the id is what identifies a single variant.
+    let itemId: String
     let dateKey: String
     let mealSlot: MealSlot
     let recipe: Recipe
+    /// Household member ids this variant is for. Empty = shared („Wspólne").
+    let participantIds: [String]
 }
 
 protocol WeeklyPlanRepository {
     func fetchWeekPlan(weekStart: String) async throws -> [WeekPlanSlot]
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID) async throws
-    func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot) async throws
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String]) async throws
+    /// `recipeId == nil` clears every variant in the slot.
+    func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws
     func clearWeekPlan(weekStart: String) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
     func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO
@@ -20,8 +26,8 @@ protocol WeeklyPlanRepository {
 
 protocol WeeklyPlanTransportClient {
     func fetchWeekPlan(weekStart: String) async throws -> [BackendWeeklyPlanItemDTO]
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String) async throws
-    func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String) async throws
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String]) async throws
+    func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String?) async throws
     func clearWeekPlan(weekStart: String) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
     func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO
@@ -41,6 +47,9 @@ struct BackendWeeklyPlanItemDTO: Codable {
     let dayOfWeek: String
     let mealType: String
     let recipe: BackendRecipeDTO
+    /// Absent on responses from a backend that predates splits — treated as
+    /// „Wspólne", which is what those rows have always meant.
+    let participantIds: [String]?
 }
 
 struct BackendSharedMealPlanDTO: Codable {
@@ -56,6 +65,13 @@ struct BackendSharedMealPlanItemDTO: Codable {
 
 private struct BackendPlanItemAckDTO: Codable {
     let id: String
+}
+
+/// `weeklyPlans:removeWeekSlot` answers with the ids it deleted — a slot can
+/// hold several variants, and clearing it removes them all.
+private struct BackendRemoveWeekSlotAckDTO: Codable {
+    let removedItemIds: [String]?
+    let count: Int?
 }
 
 private struct BackendClearWeekPlanAckDTO: Codable {
@@ -224,7 +240,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getByWeek.")
     }
 
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String) async throws {
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String]) async throws {
         let householdId = try await resolveHouseholdId()
         let envelope: WsEnvelope<BackendPlanItemAckDTO> = try await socket.emitWithAck(
             event: "weeklyPlans:upsertWeekSlot",
@@ -235,7 +251,8 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
                 "data": [
                     "dayOfWeek": dayOfWeek,
                     "mealType": mealType,
-                    "recipeId": recipeId
+                    "recipeId": recipeId,
+                    "participantIds": participantIds
                 ]
             ],
             as: WsEnvelope<BackendPlanItemAckDTO>.self
@@ -248,20 +265,24 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:upsertWeekSlot.")
     }
 
-    func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String) async throws {
+    func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String?) async throws {
         let householdId = try await resolveHouseholdId()
-        let envelope: WsEnvelope<BackendPlanItemAckDTO> = try await socket.emitWithAck(
+        var data: [String: Any] = [
+            "dayOfWeek": dayOfWeek,
+            "mealType": mealType
+        ]
+        if let recipeId {
+            data["recipeId"] = recipeId
+        }
+        let envelope: WsEnvelope<BackendRemoveWeekSlotAckDTO> = try await socket.emitWithAck(
             event: "weeklyPlans:removeWeekSlot",
             payload: [
                 "userId": userId,
                 "householdId": householdId,
                 "weekStart": weekStart,
-                "data": [
-                    "dayOfWeek": dayOfWeek,
-                    "mealType": mealType
-                ]
+                "data": data
             ],
-            as: WsEnvelope<BackendPlanItemAckDTO>.self
+            as: WsEnvelope<BackendRemoveWeekSlotAckDTO>.self
         )
 
         if envelope.ok {
@@ -389,11 +410,17 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
                   let recipe = item.recipe.toAppRecipe() else {
                 return nil
             }
-            return WeekPlanSlot(dateKey: dateKey, mealSlot: mealSlot, recipe: recipe)
+            return WeekPlanSlot(
+                itemId: item.id,
+                dateKey: dateKey,
+                mealSlot: mealSlot,
+                recipe: recipe,
+                participantIds: item.participantIds ?? []
+            )
         }
     }
 
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID) async throws {
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String]) async throws {
         guard let dayOfWeek = WeekDateMapper.dayOfWeek(from: date, weekStart: weekStart) else {
             throw RecipeDataError.serverError(message: "Nie można wyznaczyć dnia tygodnia dla slotu.")
         }
@@ -401,18 +428,20 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             weekStart: weekStart,
             dayOfWeek: dayOfWeek,
             mealType: mealSlot.backendMealType,
-            recipeId: recipeId.uuidString
+            recipeId: recipeId.uuidString,
+            participantIds: participantIds
         )
     }
 
-    func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot) async throws {
+    func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws {
         guard let dayOfWeek = WeekDateMapper.dayOfWeek(from: date, weekStart: weekStart) else {
             throw RecipeDataError.serverError(message: "Nie można wyznaczyć dnia tygodnia dla slotu.")
         }
         try await client.removeWeekSlot(
             weekStart: weekStart,
             dayOfWeek: dayOfWeek,
-            mealType: mealSlot.backendMealType
+            mealType: mealSlot.backendMealType,
+            recipeId: recipeId?.uuidString
         )
     }
 
