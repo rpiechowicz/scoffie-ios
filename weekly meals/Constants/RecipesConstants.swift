@@ -31,6 +31,15 @@ enum RecipesConstants {
         }
     }
 
+    /// Ikona SF Symbol dla poziomu trudności przepisu.
+    static func icon(for difficulty: Difficulty) -> String {
+        switch difficulty {
+        case .easy:   return "leaf.fill"
+        case .medium: return "flame.fill"
+        case .hard:   return "bolt.fill"
+        }
+    }
+
     static func tint(for category: RecipesCategory) -> Color {
         switch category {
         case .all:

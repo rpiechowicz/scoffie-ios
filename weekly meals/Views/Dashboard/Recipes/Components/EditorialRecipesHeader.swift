@@ -14,17 +14,80 @@ import SwiftUI
 // per-week thing.
 struct EditorialRecipesHeader: View {
     @Binding var searchText: String
+
+    /// Liczba aktywnych grup filtrów — steruje plakietką na przycisku filtra.
+    var activeFilterCount: Int = 0
     var onSubmit: (() -> Void)? = nil
+    var onOpenFilters: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
     @FocusState private var isSearchFocused: Bool
+
+    private var hasActiveFilters: Bool { activeFilterCount > 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             EditorialPageHeader("Przepisy")
 
-            searchPill
+            HStack(spacing: 10) {
+                searchPill
+
+                filterButton
+            }
         }
+    }
+
+    // Przycisk filtra dzieli z pigułką te same `padding(.vertical, 12)` i
+    // wysokość linii 16pt fonta, więc oba elementy kończą się dokładnie na
+    // tej samej wysokości bez wpisywania sztywnego `frame`.
+    private var filterButton: some View {
+        Button {
+            onOpenFilters?()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 15, weight: .bold))
+
+                if hasActiveFilters {
+                    Text("\(activeFilterCount)")
+                        .font(.system(size: 13, weight: .heavy))
+                        .monospacedDigit()
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .foregroundStyle(hasActiveFilters ? .white : Color.wmLabel(scheme))
+            .frame(minWidth: 20)
+            .frame(height: 19)
+            .padding(.horizontal, hasActiveFilters ? 14 : 13)
+            .padding(.vertical, 12)
+            .background(
+                Capsule(style: .continuous).fill(
+                    hasActiveFilters
+                        ? AnyShapeStyle(
+                            LinearGradient(
+                                colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        : AnyShapeStyle(Color.wmTileBg(scheme))
+                )
+            )
+            .overlay(
+                Capsule(style: .continuous).stroke(
+                    hasActiveFilters ? WMPalette.terracotta.opacity(0.35) : Color.wmTileStroke(scheme),
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: WMPalette.terracotta.opacity(hasActiveFilters ? 0.24 : 0), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .animation(.smooth(duration: 0.2), value: hasActiveFilters)
+        .accessibilityLabel(
+            hasActiveFilters
+                ? "Filtry, aktywne: \(activeFilterCount)"
+                : "Filtry"
+        )
     }
 
     private var searchPill: some View {
