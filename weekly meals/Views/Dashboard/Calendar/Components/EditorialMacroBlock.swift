@@ -3,11 +3,21 @@ import SwiftUI
 // Editorial macro block. Big rolling KCAL counter on the left, three macro
 // stats on the right, three-segment progress bar underneath.
 //
+// Zjedzone vs zaplanowane: wielki licznik i makra liczą wyłącznie posiłki
+// odhaczone jako zjedzone, bo plan sam z siebie nic nie mówi o tym, co
+// naprawdę trafiło na talerz. Reszta dnia jedzie na pasku jako widmo —
+// widać, gdzie użytkownik wyląduje, jeśli zje wszystko, co zaplanował, ale
+// te kalorie nie udają policzonych.
+//
 // Animations:
 // - kcal / protein / fat / carbs roll on appear and on day swap (CountingNumber)
 // - segmented progress bar fills from 0 → target % via withAnimation
 struct EditorialMacroBlock: View {
+    /// Kalorie z posiłków oznaczonych jako zjedzone.
     let kcal: Int
+    /// Wszystko zaplanowane na dzień — zjedzone i jeszcze nie. Rysuje widmo.
+    let plannedKcal: Int
+    /// Makra liczone tak samo jak `kcal` — tylko ze zjedzonych posiłków.
     let protein: Int
     let fat: Int
     let carbs: Int
@@ -25,7 +35,20 @@ struct EditorialMacroBlock: View {
         min(1, CGFloat(kcal) / CGFloat(max(target, 1)))
     }
 
+    /// Dokąd dojedzie pasek, jeśli użytkownik zje resztę planu.
+    private var plannedPct: CGFloat {
+        min(1, CGFloat(max(plannedKcal, kcal)) / CGFloat(max(target, 1)))
+    }
+
+    /// Nic jeszcze nie zjedzone — wielki licznik i makra stoją na zerze i idą
+    /// w kolor przygaszony.
     private var isEmpty: Bool { kcal == 0 }
+
+    /// Dzień w ogóle bez posiłków — inaczej niż „zaplanowane, ale niezjedzone".
+    private var hasNothingPlanned: Bool { plannedKcal == 0 && kcal == 0 }
+
+    /// Ile kalorii wisi jeszcze w planie.
+    private var pendingKcal: Int { max(0, plannedKcal - kcal) }
 
     var body: some View {
         let label = Color.wmLabel(scheme)
@@ -40,7 +63,7 @@ struct EditorialMacroBlock: View {
                 // same horizontal slot). Values that overflow the slot
                 // (5+ digits) shrink via `minimumScaleFactor(0.6)`.
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("KALORIE")
+                    Text(hasNothingPlanned ? "KALORIE" : "ZJEDZONE")
                         .font(.system(size: 9, weight: .bold))
                         .tracking(2)
                         .foregroundStyle(muted)
@@ -91,6 +114,15 @@ struct EditorialMacroBlock: View {
                     Capsule()
                         .fill(Color.wmBarTrack(scheme))
 
+                    // Widmo planu — dokąd dojedzie dzień, jeśli użytkownik
+                    // zje resztę. Neutralny, przygaszony kolor: to jeszcze
+                    // nie są policzone kalorie.
+                    if plannedPct > fillPct {
+                        Capsule()
+                            .fill(Color.wmMuted(scheme).opacity(0.32))
+                            .frame(width: w * plannedPct, height: 4)
+                    }
+
                     if !isEmpty {
                         HStack(spacing: 0) {
                             Rectangle().fill(WMPalette.indigo).frame(width: filled * pPct)
@@ -126,8 +158,10 @@ struct EditorialMacroBlock: View {
 
     @ViewBuilder
     private var progressFootnote: some View {
-        if isEmpty {
+        if hasNothingPlanned {
             Text("BRAK ZAPLANOWANYCH POSIŁKÓW")
+        } else if isEmpty {
+            Text("NIC JESZCZE NIE ODHACZONE")
         } else {
             let pct = Int((CGFloat(kcal) / CGFloat(max(target, 1)) * 100).rounded())
             HStack(spacing: 0) {
@@ -139,8 +173,16 @@ struct EditorialMacroBlock: View {
 
     @ViewBuilder
     private var remainingFootnote: some View {
-        if isEmpty {
+        if hasNothingPlanned {
             Text("— KCAL")
+        } else if pendingKcal > 0 {
+            // Dopóki coś wisi w planie, „do celu" wprowadzałoby w błąd —
+            // użytkownik ma już te kalorie na talerzu, tylko ich nie odhaczył.
+            HStack(spacing: 0) {
+                Text("+")
+                CountingNumber(target: pendingKcal)
+                Text(" KCAL W PLANIE")
+            }
         } else {
             let remaining = max(0, target - kcal)
             HStack(spacing: 0) {

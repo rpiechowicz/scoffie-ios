@@ -136,7 +136,8 @@ class WeeklyMealStore {
                     PlanMeal(
                         id: slot.itemId,
                         recipe: slot.recipe,
-                        participantIds: slot.participantIds
+                        participantIds: slot.participantIds,
+                        eatenByUserIds: slot.eatenByUserIds
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -225,6 +226,57 @@ class WeeklyMealStore {
                 date: date,
                 mealSlot: slot,
                 recipeId: recipe?.id
+            )
+            errorMessage = nil
+            return true
+        } catch {
+            setMeals(previous, for: date, slot: slot)
+            errorMessage = UserFacingErrorMapper.message(from: error)
+            return false
+        }
+    }
+
+    /// Marks a planned meal as eaten by the signed-in user, or clears the mark.
+    ///
+    /// Optimistic like the other writes here: the tick flips immediately and
+    /// rolls back if the server refuses. Without a signed-in user there is
+    /// nobody to attribute the mark to, so the call is a no-op rather than a
+    /// silent local-only edit that would vanish on the next week refresh.
+    @MainActor
+    @discardableResult
+    func setMealEaten(
+        _ isEaten: Bool,
+        recipeId: UUID,
+        for date: Date,
+        slot: MealSlot,
+        weekStart: String
+    ) async -> Bool {
+        guard let currentUserId else { return false }
+
+        let previous = meals(for: date, slot: slot)
+        guard previous.contains(where: { $0.recipe.id == recipeId }) else { return false }
+
+        var optimistic = previous
+        for index in optimistic.indices where optimistic[index].recipe.id == recipeId {
+            var marks = Set(optimistic[index].eatenByUserIds)
+            if isEaten {
+                marks.insert(currentUserId)
+            } else {
+                marks.remove(currentUserId)
+            }
+            optimistic[index].eatenByUserIds = Array(marks).sorted()
+        }
+        setMeals(optimistic, for: date, slot: slot)
+
+        guard let weeklyPlanRepository else { return true }
+
+        do {
+            try await weeklyPlanRepository.setMealEaten(
+                weekStart: weekStart,
+                date: date,
+                mealSlot: slot,
+                recipeId: recipeId,
+                isEaten: isEaten
             )
             errorMessage = nil
             return true
