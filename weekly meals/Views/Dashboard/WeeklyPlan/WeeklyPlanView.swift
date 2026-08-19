@@ -15,8 +15,6 @@ import SwiftUI
 //
 // Still out of scope: „Przekąski" as a fourth slot — `MealSlot` has three
 // cases end-to-end.
-//
-// The legacy pool-based planner lives on in `Legacy/WeeklyPlanPoolView.swift`.
 struct WeeklyPlanView: View {
     @Environment(\.weeklyMealStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
@@ -99,12 +97,8 @@ struct WeeklyPlanView: View {
     /// person's day double-counted every slot they had a variant in.
     private func visibleMeals(date: Date, slot: MealSlot) -> [PlanMeal] {
         let all = mealStore.meals(for: date, slot: slot)
-
         guard let memberId = profile.memberId else { return all }
-
-        let ownDishes = all.filter { $0.participantIds.contains(memberId) }
-        if !ownDishes.isEmpty { return ownDishes }
-        return all.filter { profile.includes(participantIds: $0.participantIds) }
+        return all.visibleTo(memberId: memberId)
     }
 
     // MARK: - Body

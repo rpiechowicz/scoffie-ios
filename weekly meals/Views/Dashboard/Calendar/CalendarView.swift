@@ -30,8 +30,17 @@ struct CalendarView: View {
         datesViewModel.isEditable(datesViewModel.selectedDate)
     }
 
+    /// Kalendarz is a personal day view: only what *you* eat. Someone else's
+    /// variant of a slot is their business, and counting it here inflated the
+    /// day's macros against a per-person goal.
+    private func myMeals(for slot: MealSlot) -> [PlanMeal] {
+        let all = mealStore.meals(for: datesViewModel.selectedDate, slot: slot)
+        guard let userId = sessionStore.currentUserId else { return all }
+        return all.visibleTo(memberId: userId)
+    }
+
     private var dayRecipes: [Recipe] {
-        mealStore.plan(for: datesViewModel.selectedDate).allRecipes
+        MealSlot.allCases.flatMap { myMeals(for: $0) }.map(\.recipe)
     }
 
     private var dayKcal:    Int { dayRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.kcal) } }
@@ -63,7 +72,7 @@ struct CalendarView: View {
 
     private var dayCards: [DayCard] {
         MealSlot.allCases.flatMap { slot -> [DayCard] in
-            let meals = mealStore.meals(for: datesViewModel.selectedDate, slot: slot)
+            let meals = myMeals(for: slot)
             guard !meals.isEmpty else { return [DayCard(slot: slot, meal: nil)] }
             return meals.map { DayCard(slot: slot, meal: $0) }
         }
@@ -146,7 +155,6 @@ struct CalendarView: View {
                                     slot: card.slot,
                                     number: idx + 1,
                                     meal: card.meal,
-                                    members: sessionStore.householdMembers,
                                     isFavourite: card.meal.map { isFavourite($0.recipe) } ?? false,
                                     isEditable: isDayEditable,
                                     onTap: { if let meal = card.meal { handleAssignedTap(meal.recipe) } },
@@ -197,9 +205,8 @@ struct CalendarView: View {
                 )
             }
             // Same picker Plan uses: pick a recipe, it lands on this day and
-            // slot. The old `DayAssignerSheet` distributed a week-long *pool*
-            // that Plan v2 no longer fills, so it could only ever report an
-            // exhausted pool.
+            // slot. This replaced an assigner that distributed a week-long
+            // *pool* of recipes onto days — a step Plan v2 removed.
             .sheet(item: $pickerTarget) { target in
                 PlanSlotPickerSheet(
                     date: target.date,

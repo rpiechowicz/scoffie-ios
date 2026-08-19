@@ -8,9 +8,8 @@ import SwiftUI
 /// normal household meal stays a single tap. Naming people instead is what
 /// turns the slot into a „Każdy je inaczej" split.
 ///
-/// Deliberately narrower than the legacy pool picker (`WeeklyPlanPoolView`'s
-/// `RecipePickerSheet`), which selects N recipes per slot for the whole week
-/// and leaves day assignment to `DayAssignerSheet`.
+/// This is the only way meals enter the plan. Kalendarz opens it too, so both
+/// tabs assign the same way.
 struct PlanSlotPickerSheet: View {
     let date: Date
     let slot: MealSlot

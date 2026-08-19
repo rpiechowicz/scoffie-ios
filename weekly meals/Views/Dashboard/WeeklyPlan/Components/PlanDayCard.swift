@@ -7,7 +7,7 @@ import SwiftUI
 // opacity and are read-only.
 //
 // A slot holding several variants stacks them as plain rows; the „kto co je"
-// comparison lives in `PlanDaySplitsSection` below the carousel.
+// comparison lives in `PlanDaySplitsSection`, directly under this card.
 struct PlanDayCard: View {
     let date: Date
     let isToday: Bool
@@ -71,8 +71,8 @@ struct PlanDayCard: View {
             row(slot: slot, meal: nil, in: [])
         } else {
             // Variants stack plainly here; who-eats-what is spelled out in
-            // `PlanDaySplitsSection` under the carousel, where there is room
-            // for names instead of a 22pt avatar.
+            // `PlanDaySplitsSection` below, where there is room for names
+            // instead of a 22pt avatar.
             VStack(spacing: Self.rowGap) {
                 ForEach(slotMeals) { meal in
                     row(slot: slot, meal: meal, in: slotMeals)

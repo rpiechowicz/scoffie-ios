@@ -51,7 +51,11 @@ struct PlanDaySplitsSection: View {
                 if meal.isShared && audience.isEmpty { return nil }
                 return SplitRow(meal: meal, audience: audience)
             }
-            guard rows.count > 1 else { return nil }
+            // One personal dish is already a difference — that person eats
+            // something the rest of the household isn't having. Requiring two
+            // rows made the section claim „wszyscy jedzą to samo" while the
+            // card above badged the very same meal with one person's avatar.
+            guard !rows.isEmpty else { return nil }
             return SplitGroup(slot: slot, rows: rows)
         }
     }

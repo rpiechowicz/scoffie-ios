@@ -42,12 +42,21 @@ struct PlanMeal: Codable, Identifiable, Hashable {
 // MARK: - Slot audience
 
 extension Array where Element == PlanMeal {
+    /// The meals in this slot that one member actually eats.
+    ///
+    /// Their own dish wins over the shared one — if Ania has her own lunch she
+    /// isn't also eating the shared lunch — which is what keeps a personal day
+    /// view from counting two dinners against one calorie goal.
+    func visibleTo(memberId: String) -> [PlanMeal] {
+        let own = filter { $0.participantIds.contains(memberId) }
+        return own.isEmpty ? filter(\.isShared) : own
+    }
+
     /// Who a meal in this slot effectively feeds.
     ///
-    /// A personal dish beats the shared one — if Ania has her own lunch she
-    /// isn't also eating the shared lunch — so a shared meal only covers the
-    /// members no personal dish names. An empty result means „Wspólne": either
-    /// nobody has a personal dish, or (degenerately) everybody does.
+    /// The same precedence seen from the other side: a shared meal only covers
+    /// the members no personal dish names. An empty result means „Wspólne" —
+    /// either nobody has a personal dish, or (degenerately) everybody does.
     func effectiveAudience(for meal: PlanMeal, allMemberIds: [String]) -> [String] {
         guard meal.isShared else { return meal.participantIds }
 

@@ -9,7 +9,6 @@ struct EditorialMealCard: View {
     /// One variant of the slot — a slot can hold several when the household
     /// splits the meal, and Kalendarz stacks them.
     let meal: PlanMeal?
-    let members: [HouseholdMemberSnapshot]
     /// Sourced from the recipe catalog — the meal store snapshots `favourite`
     /// at plan-save time and never re-syncs, so we read the live value here.
     let isFavourite: Bool
@@ -32,8 +31,6 @@ struct EditorialMealCard: View {
                     if let meal {
                         AssignedHero(
                             recipe: meal.recipe,
-                            participantIds: meal.participantIds,
-                            members: members,
                             isFavourite: isFavourite,
                             slot: slot,
                             isEditable: isEditable,
@@ -134,8 +131,6 @@ private struct EyebrowRow: View {
 
 private struct AssignedHero: View {
     let recipe: Recipe
-    let participantIds: [String]
-    let members: [HouseholdMemberSnapshot]
     let isFavourite: Bool
     let slot: MealSlot
     let isEditable: Bool
@@ -248,16 +243,11 @@ private struct AssignedHero: View {
     }
 
     /// Badge row pinned to the top-leading corner — clock and flame side by
-    /// side, plus who the meal is for when it isn't shared. A house glyph on
-    /// every card would be noise, so shared meals stay unbadged.
+    /// side. No "who eats this" badge: every card here is already yours.
     private var badgeColumn: some View {
         HStack(spacing: 6) {
             GlassBadge(icon: "clock",      value: recipe.prepTimeMinutes,               unit: " min")
             GlassBadge(icon: "flame.fill", value: Int(recipe.nutritionPerServing.kcal), unit: " kcal")
-
-            if !participantIds.isEmpty {
-                PlanWhoBadge(participantIds: participantIds, members: members, size: 26)
-            }
         }
         .fixedSize()
         .padding(.top, 12)
