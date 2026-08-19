@@ -7,10 +7,16 @@ import SwiftUI
 // you ate it — was never visible at once. This row is ~88pt, which puts all
 // three meals plus the macro block above the fold.
 //
-// Layout: thumbnail · (eyebrow / title / meta) · (heart, eaten tick).
+// Layout: thumbnail · (eyebrow / title / meta) · eaten tick.
 // The folio number (01/02/03) is gone with the hero — the slot eyebrow
 // already says which meal this is, and three numbered circles cost 42pt of
 // width to repeat it.
+//
+// Only one control sits on the row: the eaten tick. Favourite moved into the
+// long-press context menu — it was costing a permanent 28pt slot on every
+// meal for an action taken once in a while, and the row reads calmer with a
+// single obvious target. Nothing is lost: the menu also carries the eaten
+// toggle, so both actions have a discoverable home.
 struct EditorialMealCard: View {
     let slot: MealSlot
     /// One variant of the slot — a slot can hold several when the household
@@ -63,14 +69,14 @@ struct EditorialMealCard: View {
     // MARK: - Assigned
 
     private func assignedRow(_ meal: PlanMeal) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 14) {
             MealThumbnail(recipe: meal.recipe, slot: slot, isEaten: isEaten)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 EyebrowRow(slot: slot, isEaten: isEaten)
 
                 Text(meal.recipe.name)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .tracking(-0.3)
                     .foregroundStyle(Color.wmLabel(scheme))
                     .lineLimit(2)
@@ -81,28 +87,53 @@ struct EditorialMealCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            actionColumn
+            if showsEatenToggle {
+                EatenToggle(isEaten: isEaten, action: onToggleEaten)
+            }
         }
-        .padding(10)
+        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(isEaten ? WMPalette.sage.opacity(scheme == .dark ? 0.14 : 0.09) : Color.wmTileBg(scheme))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
                     isEaten ? WMPalette.sage.opacity(0.38) : Color.wmTileStroke(scheme),
                     lineWidth: 1
                 )
         )
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .onTapGesture { onTap() }
+        .contextMenu { contextActions }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             "\(slot.title): \(meal.recipe.name), \(meal.recipe.prepTimeMinutes) minut, "
             + "\(Int(meal.recipe.nutritionPerServing.kcal)) kalorii"
             + (isEaten ? ", zjedzone" : "")
         )
+    }
+
+    /// Długie przytrzymanie. Trzyma ulubione, które zeszło z kafla, i dubluje
+    /// odhaczanie — jeden mechanizm może być niewidoczny (menu), drugi musi
+    /// być widoczny (ptaszek), i to ten drugi uczy pierwszego.
+    @ViewBuilder
+    private var contextActions: some View {
+        if showsEatenToggle {
+            Button(action: onToggleEaten) {
+                Label(
+                    isEaten ? "Cofnij oznaczenie" : "Oznacz jako zjedzone",
+                    systemImage: isEaten ? "arrow.uturn.backward" : "checkmark.circle"
+                )
+            }
+        }
+
+        Button(action: onToggleFavorite) {
+            Label(
+                isFavourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
+                systemImage: isFavourite ? "heart.slash" : "heart"
+            )
+        }
     }
 
     /// Czas · kcal, a po oznaczeniu — sam znacznik „Zjedzone". Kalorie
@@ -116,7 +147,7 @@ struct EditorialMealCard: View {
                     .foregroundStyle(WMPalette.sage)
 
                 Text("Zjedzone · \(Int(recipe.nutritionPerServing.kcal)) kcal")
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(WMPalette.sage)
                     .monospacedDigit()
             } else {
@@ -125,7 +156,7 @@ struct EditorialMealCard: View {
                     .foregroundStyle(Color.wmMuted(scheme))
 
                 Text("\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal)) kcal")
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.wmMuted(scheme))
                     .monospacedDigit()
             }
@@ -133,48 +164,29 @@ struct EditorialMealCard: View {
         .lineLimit(1)
     }
 
-    private var actionColumn: some View {
-        VStack(spacing: 6) {
-            Button(action: onToggleFavorite) {
-                Image(systemName: isFavourite ? "heart.fill" : "heart")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(isFavourite ? WMPalette.terracotta : Color.wmMuted(scheme))
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(Color.wmChipBg(scheme)))
-                    .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isFavourite ? "Usuń z ulubionych" : "Dodaj do ulubionych")
-
-            if showsEatenToggle {
-                EatenToggle(isEaten: isEaten, action: onToggleEaten)
-            }
-        }
-    }
-
     // MARK: - Empty
 
     private var emptyRow: some View {
         Button(action: { if isEditable { onAssign() } }) {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
                 Image(systemName: slot.icon)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 21, weight: .medium))
                     .foregroundStyle(Color.wmMuted(scheme))
-                    .frame(width: 64, height: 64)
+                    .frame(width: 76, height: 76)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.wmChipBg(scheme))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(Color.wmRule(scheme), lineWidth: 1)
                     )
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     EyebrowRow(slot: slot, isEaten: false)
 
                     Text(promptText)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.wmLabel(scheme))
                         .lineLimit(1)
@@ -199,13 +211,13 @@ struct EditorialMealCard: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(10)
+            .padding(12)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.wmTileBg(scheme).opacity(0.55))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(
                         Color.wmTileStroke(scheme),
                         style: StrokeStyle(lineWidth: 1, dash: [5, 4])
@@ -264,12 +276,12 @@ private struct EyebrowRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(slot.title.uppercased())
-                .font(.system(size: 9.5, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .tracking(1.6)
                 .foregroundStyle(isEaten ? WMPalette.sage : slot.cozyAccent)
 
             Text(slot.time)
-                .font(.system(size: 9.5, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .tracking(0.8)
                 .foregroundStyle(Color.wmMuted(scheme))
         }
@@ -301,14 +313,14 @@ private struct MealThumbnail: View {
                 gradientFallback
             }
         }
-        .frame(width: 64, height: 64)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(width: 76, height: 76)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         // Zjedzony posiłek przygasa — zdjęcie zostaje czytelne, ale przestaje
         // konkurować o uwagę z tym, co dopiero przed użytkownikiem.
         .saturation(isEaten ? 0.45 : 1)
         .opacity(isEaten ? 0.75 : 1)
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(.white.opacity(0.10), lineWidth: 1)
         )
     }
@@ -322,7 +334,7 @@ private struct MealThumbnail: View {
             )
 
             Image(systemName: slot.icon)
-                .font(.system(size: 22, weight: .light))
+                .font(.system(size: 26, weight: .light))
                 .foregroundStyle(Color.white.opacity(0.65))
         }
     }
@@ -342,9 +354,9 @@ private struct EatenToggle: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "checkmark")
-                .font(.system(size: 14, weight: .heavy))
+                .font(.system(size: 16, weight: .heavy))
                 .foregroundStyle(isEaten ? .white : Color.wmMuted(scheme))
-                .frame(width: 34, height: 34)
+                .frame(width: 42, height: 42)
                 .background(
                     Circle().fill(
                         isEaten
@@ -364,7 +376,7 @@ private struct EatenToggle: View {
                         lineWidth: 1
                     )
                 )
-                .shadow(color: WMPalette.sage.opacity(isEaten ? 0.28 : 0), radius: 6, x: 0, y: 3)
+                .shadow(color: WMPalette.sage.opacity(isEaten ? 0.30 : 0), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isEaten ? "Cofnij oznaczenie zjedzenia" : "Oznacz jako zjedzone")
