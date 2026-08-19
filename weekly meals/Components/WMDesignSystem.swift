@@ -96,6 +96,32 @@ extension Color {
             : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).opacity(0.12)
     }
 
+    /// Elevated card surface. In light mode it goes *lighter* than the cream
+    /// canvas — a darker-tinted card there reads as a stain, not as elevation —
+    /// and leans on a shadow for separation. Dark mode keeps the dark-first
+    /// translucent fill, identical to `wmTileBg`.
+    static func wmCardSurface(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.04)
+            : Color(red: 255 / 255, green: 252 / 255, blue: 246 / 255)  // #FFFCF6 warm white
+    }
+
+    /// Recessed surface *inside* a card — meal rows, date tiles. Sits one step
+    /// below `wmCardSurface`, which is how a well reads on a white card.
+    static func wmInsetSurface(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.025)
+            : Color(red: 246 / 255, green: 239 / 255, blue: 228 / 255)  // #F6EFE4 cream well
+    }
+
+    /// Hairline for elevated cards — softer than `wmTileStroke`, because the
+    /// shadow is already doing the separating.
+    static func wmCardStroke(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.06)
+            : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).opacity(0.07)
+    }
+
     static func wmFeatureRowBg(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.08)

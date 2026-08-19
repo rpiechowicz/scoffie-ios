@@ -49,15 +49,16 @@ struct PlanDayCard: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(
                     isToday
-                        ? WMPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.38)
-                        : Color.wmTileStroke(scheme),
+                        ? WMPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.30)
+                        : Color.wmCardStroke(scheme),
                     lineWidth: 1
                 )
         )
-        .shadow(
-            color: isToday ? WMPalette.terracotta.opacity(scheme == .dark ? 0.32 : 0.20) : .clear,
-            radius: 20, x: 0, y: 12
-        )
+        // Light mode lifts the card with a warm ambient shadow instead of a
+        // darker fill: on cream a tinted surface reads as dirt, elevation reads
+        // as a card. Dark mode keeps the terracotta halo on today only.
+        .shadow(color: cardShadow, radius: isToday ? 22 : 14, x: 0, y: isToday ? 12 : 7)
+        .shadow(color: cardContactShadow, radius: 2, x: 0, y: 1)
         .opacity(isPast ? 0.72 : 1)
     }
 
@@ -107,17 +108,35 @@ struct PlanDayCard: View {
     private var cardBackground: some View {
         if isToday {
             ZStack {
-                Color.wmTileBg(scheme)
+                Color.wmCardSurface(scheme)
+                // Kept faint in light mode — over a white surface anything
+                // stronger turns the card pink instead of warm.
                 RadialGradient(
-                    colors: [WMPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.18), .clear],
+                    colors: [WMPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.09), .clear],
                     center: .topTrailing,
                     startRadius: 0,
                     endRadius: 320
                 )
             }
         } else {
-            Color.wmTileBg(scheme)
+            Color.wmCardSurface(scheme)
         }
+    }
+
+    /// Ambient shadow: terracotta halo for today, neutral warm lift otherwise.
+    /// Non-today cards cast nothing in dark mode — there the surface is already
+    /// lighter than the canvas.
+    private var cardShadow: Color {
+        if isToday {
+            return WMPalette.terracotta.opacity(scheme == .dark ? 0.32 : 0.16)
+        }
+        return scheme == .dark ? .clear : WMPalette.labelLight.opacity(0.07)
+    }
+
+    /// Tight contact shadow — light mode only, where it gives the white surface
+    /// a crisp edge against the cream canvas.
+    private var cardContactShadow: Color {
+        scheme == .dark ? .clear : WMPalette.labelLight.opacity(0.05)
     }
 
     // MARK: - Header
@@ -185,7 +204,9 @@ struct PlanDayCard: View {
                 endPoint: .bottom
             )
         } else {
-            Color.wmLabel(scheme).opacity(scheme == .dark ? 0.06 : 0.05)
+            scheme == .dark
+                ? Color.wmLabel(scheme).opacity(0.06)
+                : Color.wmInsetSurface(scheme)
         }
     }
 

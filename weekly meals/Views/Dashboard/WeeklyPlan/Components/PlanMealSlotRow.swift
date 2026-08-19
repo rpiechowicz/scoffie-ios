@@ -85,7 +85,7 @@ struct PlanMealSlotRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: Self.rowHeight)
-        .background(Color.wmLabel(scheme).opacity(scheme == .dark ? 0.025 : 0.04))
+        .background(Color.wmInsetSurface(scheme))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -170,7 +170,7 @@ struct PlanMealSlotRow: View {
                 .foregroundStyle(slot.cozyAccent)
                 .frame(width: Self.thumbWidth)
                 .frame(maxHeight: .infinity)
-                .background(slot.cozyAccent.opacity(scheme == .dark ? 0.10 : 0.12))
+                .background(slot.cozyAccent.opacity(scheme == .dark ? 0.10 : 0.14))
                 .overlay(alignment: .trailing) { dashedDivider }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -196,6 +196,7 @@ struct PlanMealSlotRow: View {
             }
         }
         .frame(height: Self.rowHeight)
+        .background(emptyRowBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -212,6 +213,13 @@ struct PlanMealSlotRow: View {
                 ? "\(slot.title): pusty slot. Stuknij, aby dodać przepis."
                 : "\(slot.title): pusty slot, dzień nieedytowalny"
         )
+    }
+
+    /// Empty slots sit a shade lighter than filled rows, so the stack still
+    /// reads „czegoś tu brakuje" instead of looking like three equal wells.
+    /// Dark mode keeps them fully transparent, as the design has them.
+    private var emptyRowBackground: Color {
+        scheme == .dark ? .clear : Color.wmInsetSurface(scheme).opacity(0.5)
     }
 
     /// Vertical dashed rule separating the icon well from the text — the design
