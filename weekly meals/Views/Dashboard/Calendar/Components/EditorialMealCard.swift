@@ -142,8 +142,8 @@ struct EditorialMealCard: View {
 
     /// Czas · kcal, a po oznaczeniu — „Zjedzone · kcal". Kalorie liczą się
     /// wtedy do bloku makro na górze ekranu, a ten wiersz mówi, który posiłek
-    /// je tam wniósł. Ptaszka „checkmark.seal" tu nie ma — znacznik po prawej
-    /// stronie kafla mówi to samo, a dwa ptaszki w jednym wierszu to szum.
+    /// je tam wniósł. Pieczątki „checkmark.seal.fill" tu nie ma — przeniosła się
+    /// na prawą krawędź kafla, a dwie takie same w jednym wierszu to szum.
     private func metaRow(_ recipe: Recipe) -> some View {
         HStack(spacing: 6) {
             if isEaten {
@@ -349,7 +349,12 @@ private struct MealThumbnail: View {
 //
 //   niezjedzone — cienki pusty pierscien, na tyle cichy, ze nie konkuruje ze
 //                 zdjeciem, ale widoczny na tyle, by bylo w co celowac
-//   zjedzone    — goly sage'owy ptaszek, bez tla, bez obwodki, bez cienia
+//   zjedzone    — sage'owa pieczatka 'checkmark.seal.fill', bez tla i cienia
+//
+// Pieczatka zamiast golego 'checkmark': ma wlasny ksztalt, wiec czyta sie jako
+// znak stanu, a nie jako szewron czy przypadkowa kreska w typografii wiersza.
+// Ten sam symbol stal wczesniej przy napisie 'Zjedzone' — wraca na kafel, ale
+// juz tylko raz.
 //
 // Ptaszek moze byc taki dyskretny, bo nie niesie informacji sam: zjedzony
 // posilek widac juz po sage'owym tle kafla, sage'owej ramce, przygaszonej
@@ -364,8 +369,8 @@ private struct EatenToggle: View {
         Button(action: action) {
             ZStack {
                 if isEaten {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(WMPalette.sage)
                         .transition(.opacity.combined(with: .scale(scale: 0.7)))
                 } else {
