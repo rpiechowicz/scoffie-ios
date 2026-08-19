@@ -99,20 +99,17 @@ struct CalendarView: View {
                 ScrollView {
                     @Bindable var bindableDates = datesViewModel
                     VStack(alignment: .leading, spacing: 0) {
-                        // Tytuł zakładki — ten sam komponent i te same
-                        // marginesy co na Przepisach. ScrollView ignoruje
-                        // górny safe area (rozciąga się pod pasek nawigacji),
-                        // więc pełne 78pt idzie tu jako jawny padding.
-                        EditorialPageHeader("Kalendarz")
-                            .padding(.horizontal, WMPageMetrics.horizontal)
-                            .padding(.top, WMPageMetrics.top)
-                            .padding(.bottom, 18)
-
+                        // Kalendarz nie ma tytułu — pasek dni sam mówi, co
+                        // to za ekran. ScrollView ignoruje górny safe area
+                        // (rozciąga się pod pasek nawigacji), więc pełne
+                        // 78pt idzie tu jako jawny padding, tak jak tytuł na
+                        // pozostałych zakładkach.
                         EditorialWeekBar(
                             datesViewModel: bindableDates,
                             plannedDates: plannedDates
                         )
                         .padding(.horizontal, WMPageMetrics.horizontal)
+                        .padding(.top, WMPageMetrics.top)
 
                         // Kreska pod paskiem dni — `margin: 14px … 18px` z projektu.
                         Rectangle()
