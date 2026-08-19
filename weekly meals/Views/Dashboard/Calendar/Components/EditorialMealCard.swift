@@ -12,7 +12,7 @@ import SwiftUI
 // already says which meal this is, and three numbered circles cost 42pt of
 // width to repeat it.
 //
-// Rząd urósł do ~114pt: przy trzech posiłkach dzień i tak mieści się nad
+// Rząd urósł do ~128pt: przy trzech posiłkach dzień i tak mieści się nad
 // zgięciem z zapasem, a większa miniatura sprawia, że jedzenie — nie
 // typografia — jest tym, co widać pierwsze.
 //
@@ -73,7 +73,7 @@ struct EditorialMealCard: View {
     // MARK: - Assigned
 
     private func assignedRow(_ meal: PlanMeal) -> some View {
-        HStack(alignment: .center, spacing: 15) {
+        HStack(alignment: .center, spacing: 16) {
             MealThumbnail(recipe: meal.recipe, slot: slot, isEaten: isEaten)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -95,19 +95,19 @@ struct EditorialMealCard: View {
                 EatenToggle(isEaten: isEaten, action: onToggleEaten)
             }
         }
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(isEaten ? WMPalette.sage.opacity(scheme == .dark ? 0.14 : 0.09) : Color.wmTileBg(scheme))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
                     isEaten ? WMPalette.sage.opacity(0.38) : Color.wmTileStroke(scheme),
                     lineWidth: 1
                 )
         )
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .onTapGesture { onTap() }
         .contextMenu { contextActions }
         .accessibilityElement(children: .contain)
@@ -140,18 +140,15 @@ struct EditorialMealCard: View {
         }
     }
 
-    /// Czas · kcal, a po oznaczeniu — sam znacznik „Zjedzone". Kalorie
-    /// przenoszą się wtedy do bloku makro na górze ekranu jako policzone,
-    /// więc powtarzanie ich tutaj tylko dublowałoby liczbę.
+    /// Czas · kcal, a po oznaczeniu — „Zjedzone · kcal". Kalorie liczą się
+    /// wtedy do bloku makro na górze ekranu, a ten wiersz mówi, który posiłek
+    /// je tam wniósł. Ptaszka „checkmark.seal" tu nie ma — znacznik po prawej
+    /// stronie kafla mówi to samo, a dwa ptaszki w jednym wierszu to szum.
     private func metaRow(_ recipe: Recipe) -> some View {
         HStack(spacing: 6) {
             if isEaten {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(WMPalette.sage)
-
                 Text("Zjedzone · \(Int(recipe.nutritionPerServing.kcal)) kcal")
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(WMPalette.sage)
                     .monospacedDigit()
             } else {
@@ -160,7 +157,7 @@ struct EditorialMealCard: View {
                     .foregroundStyle(Color.wmMuted(scheme))
 
                 Text("\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal)) kcal")
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.wmMuted(scheme))
                     .monospacedDigit()
             }
@@ -172,17 +169,17 @@ struct EditorialMealCard: View {
 
     private var emptyRow: some View {
         Button(action: { if isEditable { onAssign() } }) {
-            HStack(alignment: .center, spacing: 15) {
+            HStack(alignment: .center, spacing: 16) {
                 Image(systemName: slot.icon)
-                    .font(.system(size: 23, weight: .medium))
+                    .font(.system(size: 25, weight: .medium))
                     .foregroundStyle(Color.wmMuted(scheme))
-                    .frame(width: 86, height: 86)
+                    .frame(width: 96, height: 96)
                     .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .fill(Color.wmChipBg(scheme))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(Color.wmRule(scheme), lineWidth: 1)
                     )
 
@@ -215,13 +212,13 @@ struct EditorialMealCard: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(14)
+            .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(Color.wmTileBg(scheme).opacity(0.55))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(
                         Color.wmTileStroke(scheme),
                         style: StrokeStyle(lineWidth: 1, dash: [5, 4])
@@ -317,14 +314,14 @@ private struct MealThumbnail: View {
                 gradientFallback
             }
         }
-        .frame(width: 86, height: 86)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(width: 96, height: 96)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         // Zjedzony posiłek przygasa — zdjęcie zostaje czytelne, ale przestaje
         // konkurować o uwagę z tym, co dopiero przed użytkownikiem.
         .saturation(isEaten ? 0.45 : 1)
         .opacity(isEaten ? 0.75 : 1)
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(.white.opacity(0.10), lineWidth: 1)
         )
     }
@@ -338,7 +335,7 @@ private struct MealThumbnail: View {
             )
 
             Image(systemName: slot.icon)
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: 30, weight: .light))
                 .foregroundStyle(Color.white.opacity(0.65))
         }
     }
@@ -346,12 +343,17 @@ private struct MealThumbnail: View {
 
 // MARK: - Eaten tick
 
-// Znacznik jest celowo cichy. Że posiłek został zjedzony, kafel mówi już
-// czterema sygnałami naraz — sage'owym tłem, sage'ową ramką, przygaszoną
-// miniaturą i podpisem „Zjedzone" — więc piąty, wypełniony gradientem krążek
-// z poświatą nie dodawał informacji, tylko krzyczał i robił kaflowi drugi
-// środek ciężkości obok zdjęcia. Zostaje pusty okrąg przed i płaska plamka
-// po — różnica dalej czytelna kątem oka, bez gradientu i cienia.
+// Trzecie podejscie, tym razem odejmowaniem. Krazek — czy pelny z gradientem,
+// czy plaski — byl osobnym obiektem na kaflu i ciagnal wzrok na prawa krawedz,
+// a przeciez nie o niego tu chodzi. Zostaje wiec sam znak stanu:
+//
+//   niezjedzone — cienki pusty pierscien, na tyle cichy, ze nie konkuruje ze
+//                 zdjeciem, ale widoczny na tyle, by bylo w co celowac
+//   zjedzone    — goly sage'owy ptaszek, bez tla, bez obwodki, bez cienia
+//
+// Ptaszek moze byc taki dyskretny, bo nie niesie informacji sam: zjedzony
+// posilek widac juz po sage'owym tle kafla, sage'owej ramce, przygaszonej
+// miniaturze i podpisie „Zjedzone". On tylko potwierdza i daje w co stuknac.
 private struct EatenToggle: View {
     let isEaten: Bool
     let action: () -> Void
@@ -361,24 +363,21 @@ private struct EatenToggle: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                Circle()
-                    .fill(isEaten ? WMPalette.sage : Color.clear)
-
-                Circle()
-                    .strokeBorder(
-                        isEaten ? Color.clear : Color.wmTileStroke(scheme),
-                        lineWidth: 1.5
-                    )
-
                 if isEaten {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12.5, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(WMPalette.sage)
+                        .transition(.opacity.combined(with: .scale(scale: 0.7)))
+                } else {
+                    Circle()
+                        .strokeBorder(Color.wmRule(scheme), lineWidth: 1.25)
+                        .frame(width: 20, height: 20)
+                        .transition(.opacity)
                 }
             }
-            .frame(width: 26, height: 26)
-            // Widoczne 26pt to za mało na palec, więc obszar trafienia
-            // rozciągamy niewidocznie do 44pt zamiast puchnąć wizualnie.
+            // Znak ma 15-20pt, wiec sam w sobie jest za maly na palec. Ramka
+            // 44pt jest przezroczysta i sluzy wylacznie dotykowi — zejscie z
+            // rozmiarem nie moze oznaczac gorszego celowania.
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
         }
