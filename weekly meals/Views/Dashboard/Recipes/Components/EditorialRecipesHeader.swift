@@ -4,7 +4,7 @@ import SwiftUI
 // Source: design/Weekly Meals - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
 //   Outer block — `padding: '58px 20px 16px'` for the title row,
 //   `0 20px 18px` for the search row.
-//   Title — 32pt 700, tracking -0.5, line-height 38pt, label color.
+//   Title — `EditorialPageHeader`, wspólny dla wszystkich zakładek.
 //   Search — pill, `padding: 12px 14px 12px 16px`, rounded 99,
 //   surface bg + line border + inset highlight. Magnifying glass icon
 //   at 17pt with dim color; placeholder "Szukaj przepisów" at 16pt.
@@ -21,11 +21,7 @@ struct EditorialRecipesHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Przepisy")
-                .font(.system(size: 32, weight: .heavy))
-                .tracking(-0.5)
-                .foregroundStyle(Color.wmLabel(scheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
+            EditorialPageHeader("Przepisy")
 
             searchPill
         }
