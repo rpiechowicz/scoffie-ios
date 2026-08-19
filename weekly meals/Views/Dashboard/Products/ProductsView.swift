@@ -130,16 +130,6 @@ struct ProductsView: View {
         return "\(Self.weekRangeFormatter.string(from: first)) - \(Self.weekRangeFormatter.string(from: last))"
     }
 
-    /// Editorial folio number — locale-aware ISO 8601 week-of-year for the
-    /// currently-selected week. Falls back to "—" if no dates are loaded yet.
-    private var weekNumber: Int {
-        guard let first = datesViewModel.dates.first else { return 0 }
-        var cal = Calendar(identifier: .iso8601)
-        cal.firstWeekday = 2
-        cal.minimumDaysInFirstWeek = 4
-        return cal.component(.weekOfYear, from: first)
-    }
-
     private var canCloseCurrentList: Bool {
         if shoppingItems.isEmpty {
             return false
@@ -202,13 +192,9 @@ struct ProductsView: View {
         return { shoppingListStore.markAllChecked() }
     }
 
-    private var pageBottomPadding: CGFloat { 40 }
-    private var pageHorizontalPadding: CGFloat { 20 }
-    // Push the eyebrow clear of the status-bar / Dynamic Island zone.
-    // 58pt was right on the edge — the eyebrow was visually glued to the
-    // notch. 78pt mirrors Kalendarz v2's WeekBar offset, so both v2 tabs
-    // start their content at the same screen position.
-    private var pageTopPadding: CGFloat { 78 }
+    private var pageBottomPadding: CGFloat { WMPageMetrics.bottom }
+    private var pageHorizontalPadding: CGFloat { WMPageMetrics.horizontal }
+    private var pageTopPadding: CGFloat { WMPageMetrics.top }
 
     // MARK: - Body
 
@@ -282,12 +268,10 @@ struct ProductsView: View {
     // MARK: - Header (shared across states)
 
     private var editorialHeader: some View {
-        // History/archive access already lives inside the archived state
-        // (inline list of revisions + the modal for cross-week history),
-        // so the trailing icon button on the editorial header was a
-        // duplicate path. Dropped — the header now carries only the
-        // eyebrow + title block.
-        EditorialProductsHeader(weekNumber: weekNumber)
+        // Ten sam `EditorialPageHeader` co na Przepisach — sam tytuł, bez
+        // eyebrow „№ X · ZAKUPY TYGODNIA" i bez drugiej linii. Numer tygodnia
+        // nie niósł tu żadnej akcji, a robił z nagłówka osobny wzorzec.
+        EditorialPageHeader("Produkty")
             .padding(.horizontal, pageHorizontalPadding)
             .padding(.top, pageTopPadding)
             .padding(.bottom, 8)

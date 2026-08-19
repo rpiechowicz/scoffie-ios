@@ -99,31 +99,27 @@ struct CalendarView: View {
                 ScrollView {
                     @Bindable var bindableDates = datesViewModel
                     VStack(alignment: .leading, spacing: 0) {
-                        // Week bar — design spec puts it at ~78pt from screen
-                        // top. The ScrollView ignores top safe area below
-                        // (extends from screen top through the nav-bar zone),
-                        // so we use the full 78pt as explicit padding here.
+                        // Kalendarz nie ma tytułu — pasek dni sam mówi, co
+                        // to za ekran. ScrollView ignoruje górny safe area
+                        // (rozciąga się pod pasek nawigacji), więc pełne
+                        // 78pt idzie tu jako jawny padding, tak jak tytuł na
+                        // pozostałych zakładkach.
                         EditorialWeekBar(
                             datesViewModel: bindableDates,
                             plannedDates: plannedDates
                         )
-                        .padding(.horizontal, 22)
-                        .padding(.top, 78)
+                        .padding(.horizontal, WMPageMetrics.horizontal)
+                        .padding(.top, WMPageMetrics.top)
 
-                        // Rule below week bar — `margin: '14px 22px 18px'`.
+                        // Kreska pod paskiem dni — `margin: 14px … 18px` z projektu.
                         Rectangle()
                             .fill(Color.wmRule(scheme))
                             .frame(height: 1)
-                            .padding(.horizontal, 22)
+                            .padding(.horizontal, WMPageMetrics.horizontal)
                             .padding(.top, 14)
                             .padding(.bottom, 18)
 
-                        // Hero — `padding: '0 22px 18px'`.
-                        EditorialDayHero(date: datesViewModel.selectedDate)
-                            .padding(.horizontal, 22)
-                            .padding(.bottom, 18)
-
-                        // Macros — `padding: '0 22px 22px'`.
+                        // Makro — dolny odstęp 22pt z projektu.
                         EditorialMacroBlock(
                             kcal: dayKcal,
                             protein: dayProtein,
@@ -131,12 +127,12 @@ struct CalendarView: View {
                             carbs: dayCarbs,
                             target: calorieGoal
                         )
-                        .padding(.horizontal, 22)
+                        .padding(.horizontal, WMPageMetrics.horizontal)
                         .padding(.bottom, 22)
 
-                        // "W MENU" rule — `margin: '0 22px 18px'`.
+                        // Kreska "W MENU" — dolny odstęp 18pt z projektu.
                         menuRule
-                            .padding(.horizontal, 22)
+                            .padding(.horizontal, WMPageMetrics.horizontal)
                             .padding(.bottom, 18)
 
                         if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
@@ -144,11 +140,11 @@ struct CalendarView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 22)
+                                .padding(.horizontal, WMPageMetrics.horizontal)
                                 .padding(.bottom, 12)
                         }
 
-                        // Meals — `padding: '0 22px 0', gap: 16`. Outer scroll has `paddingBottom: 40`.
+                        // Posiłki — `gap: 16`, dolny odstęp scrolla 40pt.
                         VStack(alignment: .leading, spacing: 16) {
                             ForEach(Array(dayCards.enumerated()), id: \.element.id) { idx, card in
                                 EditorialMealCard(
@@ -168,7 +164,7 @@ struct CalendarView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 22)
+                        .padding(.horizontal, WMPageMetrics.horizontal)
                         .padding(.bottom, 40)
                     }
                 }

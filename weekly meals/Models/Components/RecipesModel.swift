@@ -148,6 +148,16 @@ struct Recipe: Identifiable, Codable {
 }
 
 extension Recipe {
+    /// Czy przepis ma w ogóle policzone makra. Backend nie zawsze je dowozi,
+    /// a `Nutrition.zero` jest nieodróżnialne od realnego zera — dlatego
+    /// filtry po profilu odżywczym pytają o to przed porównaniem progów.
+    var hasNutritionData: Bool {
+        nutrition.kcal > 0 ||
+        nutrition.protein > 0 ||
+        nutrition.fat > 0 ||
+        nutrition.carbs > 0
+    }
+
     /// Wartości odżywcze w przeliczeniu na 1 porcję.
     var nutritionPerServing: Nutrition {
         guard servings > 0 else { return nutrition }
