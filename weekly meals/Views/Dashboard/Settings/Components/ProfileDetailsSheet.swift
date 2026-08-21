@@ -28,6 +28,18 @@ struct ProfileDetailsSheet: View {
 
     @FocusState private var focusedField: Field?
 
+    // Pola tekstowe NIE są związane wprost z `@AppStorage`. `SessionStore
+    // .saveProfile` zapisuje z powrotem do tych samych kluczy
+    // (SessionStore.swift:1177), więc debounce'owany zapis wstrzykiwał
+    // przyciętą wartość w pole, w którym użytkownik właśnie pisze: po wpisaniu
+    // „173" w polu z „178" robiło się „178173", a 600 ms później clamp
+    // zamieniał to na 230 i pole samo się przestawiało. Edycja idzie po
+    // draftach, a do `@AppStorage` schodzi dopiero gotowa, przycięta liczba.
+    @State private var nameDraft: String = ""
+    @State private var heightDraft: String = ""
+    @State private var weightDraft: String = ""
+    @State private var didSeedDrafts = false
+
     private enum Field {
         case name
         case height
@@ -77,7 +89,19 @@ struct ProfileDetailsSheet: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
         }
-        .onAppear(perform: normaliseStoredValues)
+        .onAppear {
+            normaliseStoredValues()
+            seedDraftsIfNeeded()
+        }
+        // Pole liczbowe komituje się dopiero, gdy traci focus — dopiero wtedy
+        // wpisana liczba jest kompletna i można ją bezpiecznie przyciąć.
+        // Wejście w pole czyści draft, żeby pisanie zastępowało starą wartość
+        // zamiast dopisywać się do niej.
+        .onChange(of: focusedField) { previous, current in
+            commit(field: previous)
+            if current == .height { heightDraft = "" }
+            if current == .weight { weightDraft = "" }
+        }
         // Ten sam debounce co w arkuszu diety: każda zmiana kasuje poprzedni
         // zapis i planuje nowy 600 ms później, więc pisanie w polu imienia
         // nie generuje round-tripa na literę.
@@ -125,7 +149,7 @@ struct ProfileDetailsSheet: View {
                             .font(.system(size: 15))
                             .foregroundStyle(Color.wmMuted(scheme))
 
-                        TextField("Np. Rafał", text: $displayName)
+                        TextField("Np. Rafał", text: $nameDraft)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
                             .focused($focusedField, equals: .name)
@@ -181,16 +205,16 @@ struct ProfileDetailsSheet: View {
                     measureField(
                         caption: "Wzrost",
                         unit: "cm",
-                        value: $heightCm,
-                        placeholder: "178",
+                        draft: $heightDraft,
+                        placeholder: String(heightCm),
                         field: .height
                     )
 
                     measureField(
                         caption: "Waga",
                         unit: "kg",
-                        value: $weightKg,
-                        placeholder: "74",
+                        draft: $weightDraft,
+                        placeholder: String(weightKg),
                         field: .weight
                     )
                 }
@@ -218,7 +242,7 @@ struct ProfileDetailsSheet: View {
     private func measureField(
         caption: String,
         unit: String,
-        value: Binding<Int>,
+        draft: Binding<String>,
         placeholder: String,
         field: Field
     ) -> some View {
@@ -226,12 +250,31 @@ struct ProfileDetailsSheet: View {
             fieldCaption(caption)
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                TextField(placeholder, value: value, format: .number)
+                TextField(placeholder, text: draft)
                     .keyboardType(.numberPad)
                     .focused($focusedField, equals: field)
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(Color.wmLabel(scheme))
                     .monospacedDigit()
+                    // Klawiatura numeryczna nie ma klawisza return, więc bez
+                    // tego przycisku nie dałoby się zejść z pola inaczej niż
+                    // stuknięciem w inne miejsce arkusza.
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            if focusedField == field {
+                                Spacer()
+                                Button("Gotowe") { focusedField = nil }
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(WMPalette.terracotta)
+                            }
+                        }
+                    }
+                    // Numberpad i tak przepuszcza wklejenie — zostawiamy same
+                    // cyfry, żeby parsowanie nie zależało od schowka.
+                    .onChange(of: draft.wrappedValue) { _, newValue in
+                        let digits = newValue.filter(\.isNumber)
+                        if digits != newValue { draft.wrappedValue = digits }
+                    }
 
                 Text(unit)
                     .font(.system(size: 12, weight: .medium))
@@ -333,19 +376,69 @@ struct ProfileDetailsSheet: View {
         "\(displayName)|\(yearOfBirth)|\(heightCm)|\(weightKg)|\(activityLevelRaw)"
     }
 
+    /// Przepisuje zapisane wartości do draftów. Raz, przy pierwszym pokazaniu
+    /// arkusza — późniejsze nadpisanie przestawiłoby pole pod palcami.
+    private func seedDraftsIfNeeded() {
+        guard !didSeedDrafts else { return }
+        didSeedDrafts = true
+        nameDraft = displayName
+        heightDraft = String(heightCm)
+        weightDraft = String(weightKg)
+    }
+
+    /// Domyka edycję pola: parsuje draft, przycina do zakresu i dopiero wtedy
+    /// zapisuje do `@AppStorage`. Pusty albo niesparsowalny draft wraca do
+    /// ostatniej dobrej wartości, żeby wyjście z pustego pola nie kasowało
+    /// wzrostu.
+    private func commit(field: Field?) {
+        switch field {
+        case .name:
+            let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                nameDraft = displayName
+            } else {
+                displayName = trimmed
+                nameDraft = trimmed
+            }
+
+        case .height:
+            let resolved = Int(heightDraft).map { clamped($0, to: Self.heightRange) } ?? heightCm
+            heightCm = resolved
+            heightDraft = String(resolved)
+
+        case .weight:
+            let resolved = Int(weightDraft).map { clamped($0, to: Self.weightRange) } ?? weightKg
+            weightKg = resolved
+            weightDraft = String(resolved)
+
+        case .none:
+            break
+        }
+    }
+
+    /// Domknięcie wszystkich pól naraz — przed zapisem i przed zamknięciem.
+    private func commitAllFields() {
+        commit(field: .name)
+        commit(field: .height)
+        commit(field: .weight)
+    }
+
     /// Dwa round-tripy, bo to dwa różne zasoby: sylwetka idzie przez
     /// `users:profile:update`, a liczba treningów przez
     /// `users:preferences:update` (tam mieszka `activityLevel`). Przenoszenie
     /// jednego pod drugi endpoint tylko po to, żeby mieć jedno wywołanie,
     /// zmieniłoby kontrakt backendu bez żadnego zysku.
     private func pushProfile() async {
+        // Wartości są już przycięte przez `commit(field:)`, więc `saveProfile`
+        // zapisze do `UserDefaults` dokładnie to, co widać w polu — i nic nie
+        // podskoczy pod palcami.
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         await sessionStore.saveProfile(
             displayName: trimmedName.isEmpty ? nil : trimmedName,
-            yearOfBirth: clamped(yearOfBirth, to: yearRange),
-            heightCm: clamped(heightCm, to: Self.heightRange),
-            weightKg: clamped(weightKg, to: Self.weightRange)
+            yearOfBirth: yearOfBirth,
+            heightCm: heightCm,
+            weightKg: weightKg
         )
 
         await sessionStore.saveUserPreferences(activityLevel: activityLevelRaw)
@@ -355,12 +448,14 @@ struct ProfileDetailsSheet: View {
     /// `task(id:)` zostaje anulowany razem z widokiem, więc zapis wychodzi tu
     /// jeszcze raz, bez debounce'u.
     private func commitAndClose() {
+        focusedField = nil
+        commitAllFields()
         normaliseStoredValues()
         let store = sessionStore
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let year = clamped(yearOfBirth, to: yearRange)
-        let height = clamped(heightCm, to: Self.heightRange)
-        let weight = clamped(weightKg, to: Self.weightRange)
+        let year = yearOfBirth
+        let height = heightCm
+        let weight = weightKg
         let activity = activityLevelRaw
 
         Task { @MainActor in
