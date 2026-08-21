@@ -7,6 +7,10 @@ struct EditorialIconButton: View {
     let icon: String
     var accent: Color = WMPalette.terracotta
     var highlighted: Bool = false
+    /// Średnica pigułki. 38 pt to domyślny rozmiar w wierszu tytułu; różdżka
+    /// na Przepisach używa 43 pt, żeby zgadzać się wysokością z pigułką
+    /// filtra stojącą w rzędzie niżej.
+    var size: CGFloat = 38
     var action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -33,7 +37,7 @@ struct EditorialIconButton: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(highlighted ? accent : Color.wmLabel(scheme))
             }
-            .frame(width: 38, height: 38)
+            .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(icon))
