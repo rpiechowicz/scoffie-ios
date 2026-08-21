@@ -15,6 +15,11 @@ struct SettingsView: View {
     @AppStorage("settings.user.avatarUrl") private var userAvatarUrl: String = ""
     // −1 = backend jeszcze nie przydzielił koloru (konto sprzed tej zmiany).
     @AppStorage("settings.user.avatarColor") private var userAvatarColor: Int = -1
+    // Ziarno awatara musi być tym samym identyfikatorem, którego używa
+    // `MemberAvatar` (id użytkownika). Przy koncie bez przydzielonego
+    // `avatarColor` e-mail i id dawały dwa różne kolory tej samej osobie —
+    // jeden w Ustawieniach, drugi w Planie.
+    @AppStorage("auth.userId") private var userId: String = ""
     @AppStorage("settings.household.name") private var persistedHouseholdName: String = ""
     @AppStorage("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
     @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
@@ -441,7 +446,7 @@ struct SettingsView: View {
             displayName: userDisplayName,
             email: userEmail,
             avatarUrl: userAvatarUrl,
-            avatarSeed: userEmail.isEmpty ? userDisplayName : userEmail,
+            avatarSeed: userId.isEmpty ? userDisplayName : userId,
             avatarColorIndex: userAvatarColor >= 0 ? userAvatarColor : nil,
             action: { showProfileSheet = true }
         )
@@ -2460,6 +2465,15 @@ struct ProfileAvatar: View {
     /// Przejście po przekątnej, od krawędzi do krawędzi. Bez punktu
     /// pośredniego — zagęszczał gradient w środku i spłaszczał różnicę
     /// między barwami zamiast ją uwypuklić.
+    /// Pierwszy przystanek gradientu — dominujący odcień. Używany tam, gdzie
+    /// potrzebny jest jeden kolor osoby zamiast całego przejścia: tinty chipów
+    /// i obwódki na Planie.
+    static func baseColor(index: Int?, seed: String) -> Color {
+        let resolved = index.map { abs($0) % gradientPairs.count }
+            ?? stableIndex(for: seed, upperBound: gradientPairs.count)
+        return gradientPairs[resolved].0
+    }
+
     static func gradient(index: Int?, seed: String) -> LinearGradient {
         let resolved = index.map { abs($0) % gradientPairs.count }
             ?? stableIndex(for: seed, upperBound: gradientPairs.count)

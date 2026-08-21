@@ -43,6 +43,20 @@ struct PlanSlotPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.weeklyMealStore) private var mealStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+
+    // Te same klucze, co na widoku Przepisów. Bez nich wybór posiłku do planu
+    // szedł po surowym katalogu i podsuwał wegetarianinowi schabowego —
+    // dokładnie to danie, którego lista Przepisów mu nie pokazuje.
+    @AppStorage(RecipePersonalization.Keys.diet)
+    private var dietPreferenceRaw: String = DietPreference.none.rawValue
+    @AppStorage(RecipePersonalization.Keys.allergens)
+    private var allergensRaw: String = ""
+    @AppStorage(RecipePersonalization.Keys.goal)
+    private var goalRaw: String = UserGoal.healthy.rawValue
+    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
+    @AppStorage(RecipePersonalization.Keys.enabled)
+    private var isPersonalizationEnabled: Bool = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -64,8 +78,30 @@ struct PlanSlotPickerSheet: View {
         }
     }
 
+    private var personalization: RecipePersonalization {
+        RecipePersonalization(
+            dietRaw: dietPreferenceRaw,
+            allergensRaw: allergensRaw,
+            goalRaw: goalRaw,
+            calorieGoal: calorieGoal,
+            isEnabled: isPersonalizationEnabled
+        )
+    }
+
+    /// Ile przepisów w tym slocie zabiera dieta / alergeny — do notki nad
+    /// siatką, żeby krótka lista nie wyglądała na brak danych.
+    private var hiddenByPersonalizationCount: Int {
+        personalization.hiddenCount(
+            in: recipeCatalogStore.recipes.filter { $0.category == slotCategory }
+        )
+    }
+
     private var filtered: [Recipe] {
-        var list = recipeCatalogStore.recipes.filter { $0.category == slotCategory }
+        // Ta sama kolejność, co na Przepisach: najpierw preferencje (dieta
+        // i alergeny odsiewają, cel porządkuje), potem lokalne zawężenia.
+        var list = personalization.apply(
+            to: recipeCatalogStore.recipes.filter { $0.category == slotCategory }
+        )
         if onlyFavourites {
             list = list.filter(\.favourite)
         }
@@ -119,6 +155,10 @@ struct PlanSlotPickerSheet: View {
                                 Text(errorMessage)
                                     .font(.footnote)
                                     .foregroundStyle(.red)
+                            }
+
+                            if hiddenByPersonalizationCount > 0 {
+                                personalizationNote
                             }
 
                             if filtered.isEmpty {
@@ -313,6 +353,41 @@ struct PlanSlotPickerSheet: View {
         .buttonStyle(.plain)
         .disabled(isSaving)
         .accessibilityLabel(isCurrent ? "\(recipe.name), obecnie przypisany" : recipe.name)
+    }
+
+    /// Notka nad siatką. Bez niej krótka lista wygląda na brak przepisów,
+    /// a nie na skutek ustawień z zupełnie innego ekranu — tak samo jak
+    /// „Lista zawężona filtrami" w arkuszu kategorii na Przepisach.
+    private var personalizationNote: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 11, weight: .bold))
+
+            Text(personalizationNoteText)
+                .font(.system(size: 12, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(WMPalette.sage.mix(black: 0.20))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(WMPalette.sage.opacity(0.28), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private var personalizationNoteText: String {
+        let count = hiddenByPersonalizationCount
+        let noun = RecipeCountNoun.label(for: count)
+        return "Ukryto \(count) \(noun) spoza Twojej diety i alergenów."
     }
 
     private var emptyState: some View {

@@ -46,34 +46,40 @@ struct PlanProfileChip: View {
     var body: some View {
         // `padding: '7px 10px 7px 7px', borderRadius: 99, gap: 8` — design.
         Button(action: onTap) {
-            HStack(spacing: 8) {
-                if let selectedMember {
-                    MemberAvatar(member: selectedMember, members: members, size: 26)
-                } else {
-                    houseAvatar
-                }
-
-                Text(label)
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.wmLabel(scheme))
-                    .lineLimit(1)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.wmMuted(scheme))
-                    .padding(.trailing, 2)
-            }
-            .padding(.leading, 7)
-            .padding(.trailing, 10)
-            // 6pt → wysokość 38pt, tyle co `EditorialIconButton` obok.
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Color.wmTileBg(scheme)))
-            .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+            // Sam awatar z chevronem, bez nazwy.
+            //
+            // To ustępstwo na rzecz nagłówka: „Plan tygodnia" przy pełnym
+            // stopniu pisma zajmuje w wierszu ~222 pt, a razem z „…" i pełną
+            // pigułką („Dom" i nazwiska domowników) wychodziło ~398 pt przy
+            // 350 pt dostępnych. Coś musiało ustąpić, a etykieta jest tu
+            // najmniej potrzebna: awatar niesie tę samą informację (domek =
+            // całe gospodarstwo, zdjęcie = konkretna osoba), a stuknięcie
+            // otwiera arkusz, który nazywa wybór wprost.
+            chipBody()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Filtr profilu: \(label)")
         .accessibilityHint("Zmień, dla kogo pokazywany jest plan")
+    }
+
+    private func chipBody() -> some View {
+        HStack(spacing: 6) {
+            if let selectedMember {
+                MemberAvatar(member: selectedMember, members: members, size: 26)
+            } else {
+                houseAvatar
+            }
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(Color.wmMuted(scheme))
+        }
+        .padding(.leading, 7)
+        .padding(.trailing, 9)
+        // 6pt → wysokość 38pt, tyle co `EditorialIconButton` obok.
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.wmTileBg(scheme)))
+        .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
     }
 
     private var houseAvatar: some View {
