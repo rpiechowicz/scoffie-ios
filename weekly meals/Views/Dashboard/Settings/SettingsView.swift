@@ -21,7 +21,8 @@ struct SettingsView: View {
     // Sylwetka z arkusza „Twoje dane" — tylko do odczytu, żeby podpowiedź
     // kaloryczna liczyła się z realnych danych zamiast z płaskiej stałej.
     @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
-    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Int = 0
+    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
     @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
     @AppStorage(BodyMetrics.Keys.activityLevel) private var profileActivityRaw: Int = ActivityLevel.light.rawValue
 
@@ -247,7 +248,8 @@ struct SettingsView: View {
             heightCm: profileHeightCm,
             weightKg: profileWeightKg,
             yearOfBirth: profileYearOfBirth,
-            activityRaw: profileActivityRaw
+            activityRaw: profileActivityRaw,
+            sexRaw: profileSexRaw
         )
     }
 

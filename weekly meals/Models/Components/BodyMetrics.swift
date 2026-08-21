@@ -8,14 +8,27 @@ import SwiftUI
 /// liczbę, która cokolwiek znaczy.
 struct BodyMetrics: Equatable {
     var heightCm: Int
-    var weightKg: Int
+    /// Waga z częścią dziesiętną — 83,5 kg to normalny odczyt z wagi
+    /// łazienkowej, a zaokrąglenie do 84 przesuwa i BMI, i zapotrzebowanie.
+    var weightKg: Double
     var age: Int
     var activity: ActivityLevel
+    /// `nil` dla kont założonych zanim pojawiło się to pole — wtedy BMR
+    /// liczy się ze średniej obu wariantów wzoru.
+    var sex: Sex?
 
     /// Zwraca `nil`, gdy którejkolwiek danej brakuje albo jest bez sensu —
     /// wtedy UI schodzi do płaskiej podpowiedzi z `UserGoal`, zamiast liczyć
-    /// z zer.
-    init?(heightCm: Int, weightKg: Int, yearOfBirth: Int, activityRaw: Int, now: Date = Date()) {
+    /// z zer. Płeć jest wyjątkiem: jej brak obniża dokładność, ale nie
+    /// blokuje rachunku.
+    init?(
+        heightCm: Int,
+        weightKg: Double,
+        yearOfBirth: Int,
+        activityRaw: Int,
+        sexRaw: String = "",
+        now: Date = Date()
+    ) {
         let currentYear = Calendar.current.component(.year, from: now)
         let age = currentYear - yearOfBirth
 
@@ -29,7 +42,43 @@ struct BodyMetrics: Equatable {
         self.weightKg = weightKg
         self.age = age
         self.activity = activity
+        self.sex = Sex(rawValue: sexRaw)
     }
+}
+
+/// Płeć biologiczna — używana wyłącznie we wzorze na podstawową przemianę
+/// materii. Nie ma jej w żadnym innym miejscu aplikacji i nie wpływa na nic
+/// poza liczbą kalorii, dlatego opis w UI mówi wprost, po co o nią pytamy.
+enum Sex: String, CaseIterable, Identifiable {
+    case male
+    case female
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .male:   return "Mężczyzna"
+        case .female: return "Kobieta"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .male:   return "figure.stand"
+        case .female: return "figure.stand.dress"
+        }
+    }
+
+    /// Stała ze wzoru Mifflina-St Jeora.
+    var basalConstant: Double {
+        switch self {
+        case .male:   return 5
+        case .female: return -161
+        }
+    }
+
+    /// Backend trzyma wartości wielkimi literami (`MALE`, `FEMALE`).
+    var backendValue: String { rawValue.uppercased() }
 }
 
 // MARK: - BMI
@@ -39,7 +88,7 @@ extension BodyMetrics {
     var bmi: Double {
         let metres = Double(heightCm) / 100
         guard metres > 0 else { return 0 }
-        return Double(weightKg) / (metres * metres)
+        return weightKg / (metres * metres)
     }
 
     var bmiCategory: BMICategory {
@@ -85,15 +134,21 @@ extension BodyMetrics {
     /// Podstawowa przemiana materii wg Mifflina-St Jeora.
     ///
     /// Wzór ma dwie wersje różniące się wyłącznie stałą: +5 dla mężczyzn
-    /// i −161 dla kobiet. Aplikacja nigdzie nie zbiera płci, więc bierzemy
-    /// środek (−78) — przy typowej sylwetce to rozjazd rzędu ±83 kcal, czyli
-    /// mniej niż błąd samego wzoru (±10 %). Gdy w profilu pojawi się płeć,
-    /// wystarczy podmienić tę stałą.
+    /// i −161 dla kobiet. Gdy płeć jest znana, bierzemy właściwą; gdy jej
+    /// nie ma (konta sprzed dodania tego pola), zostaje środek (−78), co
+    /// daje rozjazd rzędu ±83 kcal.
     var basalMetabolicRate: Double {
-        10 * Double(weightKg)
+        10 * weightKg
             + 6.25 * Double(heightCm)
             - 5 * Double(age)
-            - 78
+            + (sex?.basalConstant ?? -78)
+    }
+
+    /// Zapotrzebowanie zaokrąglone do 50 kcal — tak, jak pokazujemy je
+    /// w UI. Surowe 2328 sugeruje precyzję, której ten wzór nie ma
+    /// (±10 %), a i tak nie da się takiej wartości ustawić suwakiem.
+    var maintenanceCalories: Int {
+        Self.snapped(totalDailyEnergyExpenditure)
     }
 
     /// Całkowite zapotrzebowanie: BMR przemnożone przez współczynnik
@@ -149,6 +204,7 @@ extension BodyMetrics {
         static let weightKg = "settings.profile.weightKg"
         static let yearOfBirth = "settings.profile.yearOfBirth"
         static let activityLevel = "settings.diet.activityLevel"
+        static let sex = "settings.profile.sex"
     }
 }
 

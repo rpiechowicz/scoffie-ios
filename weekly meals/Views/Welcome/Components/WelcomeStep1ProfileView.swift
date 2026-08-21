@@ -10,7 +10,8 @@ struct WelcomeStep1ProfileView: View {
     @Binding var name: String
     @Binding var yearOfBirth: Int
     @Binding var heightCm: Int
-    @Binding var weightKg: Int
+    @Binding var weightKg: Double
+    @Binding var sex: Sex?
 
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focusedField: Field?
@@ -81,8 +82,10 @@ struct WelcomeStep1ProfileView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         WelcomeFieldCaption(text: "Waga")
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            TextField("74", value: $weightKg, format: .number)
-                                .keyboardType(.numberPad)
+                            // Jedno miejsce po przecinku — 83,5 kg to
+                            // normalny odczyt z wagi łazienkowej.
+                            TextField("74", value: $weightKg, format: .number.precision(.fractionLength(0...1)))
+                                .keyboardType(.decimalPad)
                                 .focused($focusedField, equals: .weight)
                                 .font(.system(size: 19, weight: .bold))
                                 .foregroundStyle(Color.wmLabel(colorScheme))
@@ -94,6 +97,23 @@ struct WelcomeStep1ProfileView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
                         .background(welcomeCardBackground)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    WelcomeFieldCaption(text: "Płeć")
+                    HStack(spacing: 8) {
+                        ForEach(Sex.allCases) { candidate in
+                            SexChip(
+                                candidate: candidate,
+                                isSelected: sex == candidate,
+                                onTap: {
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                        sex = (sex == candidate) ? nil : candidate
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -126,6 +146,52 @@ struct WelcomeStep1ProfileView: View {
 // feels tactile. Drag updates live (every cell-width of horizontal travel
 // changes the year by one) so the picker reads as a real wheel and not a
 // commit-on-release control.
+/// Płeć różnicuje wzór na przemianę materii wyłącznie stałą (+5 / −161),
+/// więc pytanie jest opcjonalne: ponowne stuknięcie w zaznaczoną opcję ją
+/// odznacza, a bez niej liczymy ze średniej.
+private struct SexChip: View {
+    let candidate: Sex
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 7) {
+                Image(systemName: candidate.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(candidate.title)
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundStyle(isSelected ? Color.white : Color.wmLabel(colorScheme))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [WMPalette.terracotta.opacity(0.95), WMPalette.terracotta],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            : AnyShapeStyle(Color.wmChipBg(colorScheme))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected ? Color.clear : Color.wmTileStroke(colorScheme), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(candidate.title)
+        .accessibilityValue(isSelected ? "Wybrane" : "Niewybrane")
+    }
+}
+
 // Nie `private` — korzysta z niego również arkusz „Twoje dane” w Ustawieniach,
 // żeby rok urodzenia wybierało się tam dokładnie tak samo jak w kreatorze.
 struct YearWheelPicker: View {
@@ -257,7 +323,8 @@ struct YearWheelPicker: View {
             name: .constant("Rafał"),
             yearOfBirth: .constant(1992),
             heightCm: .constant(178),
-            weightKg: .constant(74)
+            weightKg: .constant(74),
+            sex: .constant(.male)
         )
     }
     .preferredColorScheme(.dark)
@@ -269,7 +336,8 @@ struct YearWheelPicker: View {
             name: .constant("Rafał"),
             yearOfBirth: .constant(1992),
             heightCm: .constant(178),
-            weightKg: .constant(74)
+            weightKg: .constant(74),
+            sex: .constant(.male)
         )
     }
     .preferredColorScheme(.light)

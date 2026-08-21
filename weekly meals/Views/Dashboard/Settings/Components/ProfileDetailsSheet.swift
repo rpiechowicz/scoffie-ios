@@ -23,7 +23,8 @@ struct ProfileDetailsSheet: View {
     @AppStorage("settings.user.avatarUrl") private var avatarUrl: String = ""
     @AppStorage("settings.profile.yearOfBirth") private var yearOfBirth: Int = Self.defaultYearOfBirth
     @AppStorage("settings.profile.heightCm") private var heightCm: Int = Self.defaultHeightCm
-    @AppStorage("settings.profile.weightKg") private var weightKg: Int = Self.defaultWeightKg
+    @AppStorage("settings.profile.weightKg") private var weightKg: Double = Self.defaultWeightKg
+    @AppStorage("settings.profile.sex") private var sexRaw: String = ""
     @AppStorage("settings.diet.activityLevel") private var activityLevelRaw: Int = ActivityLevel.light.rawValue
 
     @FocusState private var focusedField: Field?
@@ -50,10 +51,10 @@ struct ProfileDetailsSheet: View {
     // pokazać innych liczb niż ekran, który je pierwszy zapisał.
     private static let defaultYearOfBirth = 1992
     private static let defaultHeightCm = 178
-    private static let defaultWeightKg = 74
+    private static let defaultWeightKg: Double = 74
 
     private static let heightRange = 120...230
-    private static let weightRange = 30...250
+    private static let weightRange: ClosedRange<Double> = 30...250
 
     private var currentYear: Int { Calendar.current.component(.year, from: Date()) }
     private var yearRange: ClosedRange<Int> { 1900...currentYear }
@@ -61,6 +62,8 @@ struct ProfileDetailsSheet: View {
     private var activityLevel: ActivityLevel {
         ActivityLevel(rawValue: activityLevelRaw) ?? .light
     }
+
+    private var sex: Sex? { Sex(rawValue: sexRaw) }
 
     var body: some View {
         ZStack {
@@ -191,17 +194,21 @@ struct ProfileDetailsSheet: View {
                         unit: "cm",
                         draft: $heightDraft,
                         placeholder: String(heightCm),
-                        field: .height
+                        field: .height,
+                        allowsDecimal: false
                     )
 
                     measureField(
                         caption: "Waga",
                         unit: "kg",
                         draft: $weightDraft,
-                        placeholder: String(weightKg),
-                        field: .weight
+                        placeholder: Self.weightText(weightKg),
+                        field: .weight,
+                        allowsDecimal: true
                     )
                 }
+
+                sexPicker
 
                 if let metrics {
                     bmiRow(metrics)
@@ -219,7 +226,8 @@ struct ProfileDetailsSheet: View {
             heightCm: heightCm,
             weightKg: weightKg,
             yearOfBirth: yearOfBirth,
-            activityRaw: activityLevelRaw
+            activityRaw: activityLevelRaw,
+            sexRaw: sexRaw
         )
     }
 
@@ -255,7 +263,7 @@ struct ProfileDetailsSheet: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(Int(metrics.totalDailyEnergyExpenditure.rounded()))")
+                    Text("\(metrics.maintenanceCalories)")
                         .font(.system(size: 20, weight: .heavy))
                         .tracking(-0.4)
                         .monospacedDigit()
@@ -281,7 +289,7 @@ struct ProfileDetailsSheet: View {
                 .fill(Color.wmInsetSurface(scheme))
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("BMI \(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? ""), \(category.title). Na utrzymanie wagi \(Int(metrics.totalDailyEnergyExpenditure.rounded())) kilokalorii dziennie.")
+        .accessibilityLabel("BMI \(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? ""), \(category.title). Na utrzymanie wagi \(metrics.maintenanceCalories) kilokalorii dziennie.")
     }
 
     private static let bmiFormatter: NumberFormatter = {
@@ -312,14 +320,15 @@ struct ProfileDetailsSheet: View {
         unit: String,
         draft: Binding<String>,
         placeholder: String,
-        field: Field
+        field: Field,
+        allowsDecimal: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             fieldCaption(caption)
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 TextField(placeholder, text: draft)
-                    .keyboardType(.numberPad)
+                    .keyboardType(allowsDecimal ? .decimalPad : .numberPad)
                     .focused($focusedField, equals: field)
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(Color.wmLabel(scheme))
@@ -327,15 +336,12 @@ struct ProfileDetailsSheet: View {
                     .onChange(of: draft.wrappedValue) { _, newValue in
                         // Numberpad przepuszcza wklejenie — zostawiamy same
                         // cyfry, żeby parsowanie nie zależało od schowka.
-                        // Trzy cyfry wystarczą na każdy wzrost i każdą wagę.
-                        // Bez limitu pole potrafiło uzbierać „83174", jeśli
-                        // czyszczenie przy wejściu w pole gdzieś nie zdążyło.
-                        let digits = String(newValue.filter(\.isNumber).prefix(3))
-                        if digits != newValue {
-                            draft.wrappedValue = digits
+                        let sanitised = Self.sanitise(newValue, allowsDecimal: allowsDecimal)
+                        if sanitised != newValue {
+                            draft.wrappedValue = sanitised
                             return
                         }
-                        commitLive(field: field, digits: digits)
+                        commitLive(field: field, text: sanitised)
                     }
                     // Wejście w pole czyści je przez `onChange(of: focusedField)`,
                     // ale ponowne stuknięcie w pole JUŻ aktywne nie zmienia
@@ -444,7 +450,7 @@ struct ProfileDetailsSheet: View {
     /// Token zmienia się przy każdej edycji pola — `task(id:)` anuluje
     /// zaplanowany zapis i planuje nowy.
     private var profileSyncToken: String {
-        "\(displayName)|\(yearOfBirth)|\(heightCm)|\(weightKg)|\(activityLevelRaw)"
+        "\(displayName)|\(yearOfBirth)|\(heightCm)|\(weightKg)|\(activityLevelRaw)|\(sexRaw)"
     }
 
     /// Przepisuje zapisane wartości do draftów. Raz, przy pierwszym pokazaniu
@@ -454,7 +460,7 @@ struct ProfileDetailsSheet: View {
         didSeedDrafts = true
         nameDraft = displayName
         heightDraft = String(heightCm)
-        weightDraft = String(weightKg)
+        weightDraft = Self.weightText(weightKg)
     }
 
     /// Domyka edycję pola: parsuje draft, przycina do zakresu i dopiero wtedy
@@ -482,9 +488,10 @@ struct ProfileDetailsSheet: View {
             heightDraft = String(resolved)
 
         case .weight:
-            let resolved = Int(weightDraft).flatMap { Self.weightRange.contains($0) ? $0 : nil } ?? weightKg
+            let resolved = Self.weightValue(from: weightDraft)
+                .flatMap { Self.weightRange.contains($0) ? $0 : nil } ?? weightKg
             weightKg = resolved
-            weightDraft = String(resolved)
+            weightDraft = Self.weightText(resolved)
 
         case .none:
             break
@@ -496,15 +503,20 @@ struct ProfileDetailsSheet: View {
     /// albo „17" nie jest ani zapisywane, ani przycinane — i właśnie dlatego
     /// nic nie przestawia się pod palcami. Wartości spoza zakresu domyka
     /// `commit(field:)` przy zejściu z pola.
-    private func commitLive(field: Field, digits: String) {
-        guard let value = Int(digits) else { return }
-
+    private func commitLive(field: Field, text: String) {
         switch field {
-        case .height where Self.heightRange.contains(value):
+        case .height:
+            guard let value = Int(text), Self.heightRange.contains(value) else { return }
             heightCm = value
-        case .weight where Self.weightRange.contains(value):
+
+        case .weight:
+            // „83," w trakcie pisania nie parsuje się na liczbę i dobrze —
+            // zapis czeka, aż użytkownik dopisze cyfrę po przecinku.
+            guard let value = Self.weightValue(from: text),
+                  Self.weightRange.contains(value) else { return }
             weightKg = value
-        default:
+
+        case .name:
             break
         }
     }
@@ -531,7 +543,8 @@ struct ProfileDetailsSheet: View {
             displayName: trimmedName.isEmpty ? nil : trimmedName,
             yearOfBirth: yearOfBirth,
             heightCm: heightCm,
-            weightKg: weightKg
+            weightKg: weightKg,
+            sex: sexRaw.isEmpty ? nil : sexRaw
         )
 
         await sessionStore.saveUserPreferences(activityLevel: activityLevelRaw)
@@ -550,13 +563,15 @@ struct ProfileDetailsSheet: View {
         let height = heightCm
         let weight = weightKg
         let activity = activityLevelRaw
+        let sexValue = sexRaw
 
         Task { @MainActor in
             await store.saveProfile(
                 displayName: name.isEmpty ? nil : name,
                 yearOfBirth: year,
                 heightCm: height,
-                weightKg: weight
+                weightKg: weight,
+                sex: sexValue.isEmpty ? nil : sexValue
             )
             await store.saveUserPreferences(activityLevel: activity)
         }
@@ -572,7 +587,120 @@ struct ProfileDetailsSheet: View {
         if !yearRange.contains(yearOfBirth) { yearOfBirth = Self.defaultYearOfBirth }
         if !Self.heightRange.contains(heightCm) { heightCm = Self.defaultHeightCm }
         if !Self.weightRange.contains(weightKg) { weightKg = Self.defaultWeightKg }
+        if !sexRaw.isEmpty, Sex(rawValue: sexRaw) == nil { sexRaw = "" }
         if ActivityLevel(rawValue: activityLevelRaw) == nil { activityLevelRaw = ActivityLevel.light.rawValue }
+    }
+
+    // MARK: - Płeć
+
+    /// Płeć wchodzi wyłącznie do wzoru na przemianę materii — i tak to
+    /// opisujemy. Trzeci stan („nie podano") nie jest osobnym przyciskiem:
+    /// wychodzi się z niego stukając wybraną opcję, a ponowne stuknięcie
+    /// w zaznaczoną odznacza ją z powrotem.
+    private var sexPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            fieldCaption("Płeć")
+
+            HStack(spacing: 8) {
+                ForEach(Sex.allCases) { candidate in
+                    sexChip(candidate)
+                }
+            }
+
+            Text(sex == nil
+                 ? "Bez płci liczymy ze średniej — zapotrzebowanie może się różnić o ok. 80 kcal."
+                 : "Używamy jej tylko do wyliczenia zapotrzebowania kalorycznego.")
+                .font(.system(size: 11.5, weight: .regular))
+                .foregroundStyle(Color.wmFaint(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func sexChip(_ candidate: Sex) -> some View {
+        let isSelected = sex == candidate
+
+        return Button {
+            withAnimation(.smooth(duration: 0.18)) {
+                sexRaw = isSelected ? "" : candidate.rawValue
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: candidate.icon)
+                    .font(.system(size: 12, weight: .semibold))
+
+                Text(candidate.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .tracking(-0.1)
+            }
+            .foregroundStyle(isSelected ? .white : Color.wmLabel(scheme))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            : AnyShapeStyle(Color.wmChipBg(scheme))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected ? Color.clear : Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(candidate.title)
+        .accessibilityValue(isSelected ? "Wybrane" : "Niewybrane")
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+    }
+
+    // MARK: - Liczby w polach
+
+    /// Przepuszcza cyfry i jeden separator dziesiętny. Przecinek i kropka są
+    /// wymienne, bo klawiatura `.decimalPad` podstawia separator zgodny
+    /// z ustawieniami systemu, a użytkownik i tak może mieć nawyk drugiego.
+    static func sanitise(_ raw: String, allowsDecimal: Bool) -> String {
+        guard allowsDecimal else {
+            return String(raw.filter(\.isNumber).prefix(3))
+        }
+
+        var whole = ""
+        var fraction = ""
+        var seenSeparator = false
+
+        for character in raw {
+            if character.isNumber {
+                if seenSeparator {
+                    if fraction.count < 1 { fraction.append(character) }
+                } else if whole.count < 3 {
+                    whole.append(character)
+                }
+            } else if character == "," || character == ".", !seenSeparator, !whole.isEmpty {
+                seenSeparator = true
+            }
+        }
+
+        if !seenSeparator { return whole }
+        return whole + "," + fraction
+    }
+
+    static func weightValue(from text: String) -> Double? {
+        Double(text.replacingOccurrences(of: ",", with: "."))
+    }
+
+    /// Bez zbędnego „,0" — 83 kg zostaje jako „83", 83,5 jako „83,5".
+    static func weightText(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded == rounded.rounded() {
+            return String(Int(rounded))
+        }
+        return String(format: "%.1f", rounded).replacingOccurrences(of: ".", with: ",")
     }
 
     // MARK: - Chassis

@@ -30,7 +30,8 @@ struct WelcomeView: View {
     @State private var name: String
     @State private var yearOfBirth: Int
     @State private var heightCm: Int
-    @State private var weightKg: Int
+    @State private var weightKg: Double
+    @State private var sex: Sex?
     @State private var goal: UserGoal
     @State private var activity: ActivityLevel
     @State private var diet: DietPreference
@@ -71,8 +72,11 @@ struct WelcomeView: View {
         let storedHeight = defaults.integer(forKey: "settings.profile.heightCm")
         _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : 178)
 
-        let storedWeight = defaults.integer(forKey: "settings.profile.weightKg")
+        let storedWeight = defaults.double(forKey: "settings.profile.weightKg")
         _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : 74)
+
+        let storedSex = defaults.string(forKey: "settings.profile.sex") ?? ""
+        _sex = State(initialValue: Sex(rawValue: storedSex))
 
         let storedGoal = defaults.string(forKey: "settings.diet.goal") ?? UserGoal.healthy.rawValue
         let resolvedGoal = UserGoal(rawValue: storedGoal) ?? .healthy
@@ -90,7 +94,8 @@ struct WelcomeView: View {
             heightCm: storedHeight > 0 ? storedHeight : 178,
             weightKg: storedWeight > 0 ? storedWeight : 74,
             yearOfBirth: storedYear > 0 ? storedYear : 1992,
-            activityRaw: storedActivity.rawValue
+            activityRaw: storedActivity.rawValue,
+            sexRaw: storedSex
         )
         let seedSuggestion = resolvedGoal.suggestedCalories(for: seedMetrics)
         let initialKcal = storedCalorieGoal > 0 ? storedCalorieGoal : seedSuggestion
@@ -188,7 +193,8 @@ struct WelcomeView: View {
             heightCm: heightCm,
             weightKg: weightKg,
             yearOfBirth: yearOfBirth,
-            activityRaw: activity.rawValue
+            activityRaw: activity.rawValue,
+            sexRaw: sex?.rawValue ?? ""
         )
     }
 
@@ -198,7 +204,7 @@ struct WelcomeView: View {
 
     /// Zmienia się przy każdej danej, która wpływa na podpowiedź.
     private var calorieSuggestionToken: String {
-        "\(goal.rawValue)|\(heightCm)|\(weightKg)|\(yearOfBirth)|\(activity.rawValue)"
+        "\(goal.rawValue)|\(heightCm)|\(weightKg)|\(yearOfBirth)|\(activity.rawValue)|\(sex?.rawValue ?? "")"
     }
 
     @ViewBuilder
@@ -209,7 +215,8 @@ struct WelcomeView: View {
                 name: $name,
                 yearOfBirth: $yearOfBirth,
                 heightCm: $heightCm,
-                weightKg: $weightKg
+                weightKg: $weightKg,
+                sex: $sex
             )
         case 2:
             WelcomeStep2GoalView(goal: $goal, activity: $activity)
@@ -288,12 +295,14 @@ struct WelcomeView: View {
             let year = yearOfBirth
             let height = heightCm
             let weight = weightKg
+            let sexValue = sex?.rawValue
             Task { @MainActor in
                 await store.saveProfile(
                     displayName: name,
                     yearOfBirth: year,
                     heightCm: height,
-                    weightKg: weight
+                    weightKg: weight,
+                    sex: sexValue
                 )
             }
             advance()

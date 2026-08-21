@@ -712,7 +712,8 @@ final class SessionStore {
             persistProfileFields(
                 yearOfBirth: user.yearOfBirth,
                 heightCm: user.heightCm,
-                weightKg: user.weightKg
+                weightKg: user.weightKg,
+                sex: user.sex
             )
             persistOnboardingCompletedAt(user.onboardingCompletedAt)
 
@@ -1025,17 +1026,22 @@ final class SessionStore {
         static let yearOfBirth = "settings.profile.yearOfBirth"
         static let heightCm = "settings.profile.heightCm"
         static let weightKg = "settings.profile.weightKg"
+        static let sex = "settings.profile.sex"
     }
 
     private func persistProfileFields(
         yearOfBirth: Int?,
         heightCm: Int?,
-        weightKg: Int?
+        weightKg: Double?,
+        sex: String?
     ) {
         let defaults = UserDefaults.standard
         if let yearOfBirth { defaults.set(yearOfBirth, forKey: ProfileKeys.yearOfBirth) }
         if let heightCm { defaults.set(heightCm, forKey: ProfileKeys.heightCm) }
         if let weightKg { defaults.set(weightKg, forKey: ProfileKeys.weightKg) }
+        // Backend oddaje `MALE` / `FEMALE`, iOS trzyma małymi literami —
+        // ta sama konwencja co przy diecie i celu.
+        if let sex { defaults.set(sex.lowercased(), forKey: ProfileKeys.sex) }
     }
 
     private func clearPersistedProfileFields() {
@@ -1043,6 +1049,7 @@ final class SessionStore {
         defaults.removeObject(forKey: ProfileKeys.yearOfBirth)
         defaults.removeObject(forKey: ProfileKeys.heightCm)
         defaults.removeObject(forKey: ProfileKeys.weightKg)
+        defaults.removeObject(forKey: ProfileKeys.sex)
     }
 
     /// Pull the user's preferences row from the backend and write into
@@ -1156,7 +1163,8 @@ final class SessionStore {
         displayName: String? = nil,
         yearOfBirth: Int? = nil,
         heightCm: Int? = nil,
-        weightKg: Int? = nil
+        weightKg: Double? = nil,
+        sex: String? = nil
     ) async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
 
@@ -1177,8 +1185,16 @@ final class SessionStore {
             UserDefaults.standard.set(heightCm, forKey: ProfileKeys.heightCm)
         }
         if let weightKg {
-            data["weightKg"] = weightKg
-            UserDefaults.standard.set(weightKg, forKey: ProfileKeys.weightKg)
+            // Jedno miejsce po przecinku — tyle waliduje backend i tyle
+            // pokazuje pole. Bez tego 83.30000000000001 z arytmetyki Double
+            // wywracałoby walidację `maxDecimalPlaces: 1`.
+            let rounded = (weightKg * 10).rounded() / 10
+            data["weightKg"] = rounded
+            UserDefaults.standard.set(rounded, forKey: ProfileKeys.weightKg)
+        }
+        if let sex, !sex.isEmpty {
+            data["sex"] = sex.uppercased()
+            UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
         }
         guard !data.isEmpty else { return }
 

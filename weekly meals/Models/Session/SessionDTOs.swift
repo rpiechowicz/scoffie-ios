@@ -96,7 +96,8 @@ struct BackendCurrentUserDTO: Codable {
     let avatarUrl: String?
     let yearOfBirth: Int?
     let heightCm: Int?
-    let weightKg: Int?
+    let weightKg: Double?
+    let sex: String?
     let onboardingCompletedAt: String?
     let memberships: [MembershipDTO]
 }
@@ -110,7 +111,8 @@ struct BackendUserProfileDTO: Codable {
     let avatarUrl: String?
     let yearOfBirth: Int?
     let heightCm: Int?
-    let weightKg: Int?
+    let weightKg: Double?
+    let sex: String?
     let onboardingCompletedAt: String?
 }
 
