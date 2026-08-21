@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
     @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
+    @AppStorage("settings.diet.goal") private var goalRaw: String = UserGoal.healthy.rawValue
 
     @State private var showCreateHouseholdSheet = false
     @State private var showHouseholdSheet = false
@@ -228,6 +229,10 @@ struct SettingsView: View {
         DietPreference(rawValue: dietPreferenceRaw) ?? .none
     }
 
+    private var currentGoal: UserGoal {
+        UserGoal(rawValue: goalRaw) ?? .healthy
+    }
+
     private var selectedAllergens: Set<Allergen> {
         Set(allergensRaw
             .split(separator: ",")
@@ -243,6 +248,10 @@ struct SettingsView: View {
 
         if currentDiet != .none {
             parts.append(currentDiet.title)
+        } else if currentGoal != .healthy {
+            // Bez diety wiersz pokazywał samo „2000 kcal” — cel jest wtedy
+            // ciekawszą informacją niż nic.
+            parts.append(currentGoal.shortTitle)
         }
         parts.append("\(calorieGoal) kcal")
         if !selectedAllergens.isEmpty {
@@ -959,16 +968,17 @@ struct SettingsView: View {
                         showDietSheet = false
                     }
 
-                    Text("Aplikacja użyje tych ustawień, żeby filtrować propozycje przepisów i zaznaczać te, na które musisz uważać.")
+                    Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
                         .font(.system(size: 13.5, weight: .regular))
                         .foregroundStyle(Color.wmMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     calorieGoalSection
+                    goalPickerSection
                     dietPickerSection
                     allergensSection
 
-                    if currentDiet != .none || calorieGoal != Self.calorieGoalDefault || !selectedAllergens.isEmpty {
+                    if hasCustomisedPreferences {
                         resetPreferencesButton
                             .padding(.top, 4)
                     }
@@ -989,9 +999,18 @@ struct SettingsView: View {
             await sessionStore.saveUserPreferences(
                 diet: currentDiet.rawValue,
                 calorieGoal: calorieGoal,
-                allergens: selectedAllergens.map(\.rawValue)
+                allergens: selectedAllergens.map(\.rawValue),
+                goal: currentGoal.rawValue
             )
         }
+    }
+
+    /// Czy jest co czyścić — steruje widocznością „Wyczyść preferencje”.
+    private var hasCustomisedPreferences: Bool {
+        currentDiet != .none
+            || currentGoal != .healthy
+            || calorieGoal != Self.calorieGoalDefault
+            || !selectedAllergens.isEmpty
     }
 
     /// Stable token that changes whenever the user touches any preference
@@ -999,7 +1018,132 @@ struct SettingsView: View {
     /// schedules a fresh one. Using a single concatenated string keeps the
     /// modifier signature simple.
     private var dietPreferencesSyncToken: String {
-        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)"
+        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)|\(goalRaw)"
+    }
+
+    // ─── Twój cel ──────────
+    //
+    // Ten sam wybór, co w kroku 2 kreatora powitalnego — powtórzony tutaj,
+    // bo po onboardingu nie było jak go zmienić. Cel nie odsiewa przepisów;
+    // przestawia kolejność listy (patrz `RecipePersonalization.goalScore`).
+    // Siedzi pod suwakiem kalorii, a podpowiedź „Ustaw” na dole tej karty
+    // przestawia suwak nad nią.
+    private var goalPickerSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetSectionLabel(title: "Twój cel")
+
+            VStack(spacing: 0) {
+                // Ostatni wiersz nigdy nie rysuje własnej kreski. Gdy pod nim
+                // siedzi podpowiedź kaloryczna, kreskę stawia ona — i to na
+                // pełnej szerokości. Wcześniej rysowały obie i pod ostatnim
+                // celem wychodziła podwójna linia: wcięta i pełna.
+                ForEach(Array(UserGoal.allCases.enumerated()), id: \.element.id) { idx, goal in
+                    goalRow(goal, isLast: idx == UserGoal.allCases.count - 1)
+                }
+
+                if showsCalorieSuggestion {
+                    calorieSuggestionRow
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private func goalRow(_ goal: UserGoal, isLast: Bool) -> some View {
+        let isSelected = goal == currentGoal
+
+        return Button {
+            withAnimation(.smooth(duration: 0.20)) {
+                goalRaw = goal.rawValue
+            }
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                EditorialSettingsTileIcon(icon: goal.icon, color: goal.accent)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(goal.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.wmLabel(scheme))
+
+                    Text(goal.subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                radioIndicator(selected: isSelected)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(Color.wmRule(scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 16 + 32 + 14)
+            }
+        }
+        .accessibilityLabel(goal.title)
+        .accessibilityValue(isSelected ? "Wybrane" : "")
+    }
+
+    /// Cel niesie ze sobą sugerowaną kaloryczność, ale ustawiony wcześniej
+    /// suwak jest decyzją użytkownika — więc podpowiadamy przyciskiem zamiast
+    /// nadpisywać. Kreator powitalny robi to samo, tyle że tam suwak jeszcze
+    /// nie był ruszany, więc może iść za celem sam.
+    private var showsCalorieSuggestion: Bool {
+        currentGoal != .plan && calorieGoal != currentGoal.suggestedCalories
+    }
+
+    private var calorieSuggestionRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(WMPalette.butter)
+                .frame(width: 22)
+
+            Text("Dla tego celu zwykle wychodzi \(currentGoal.suggestedCalories) kcal.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.wmMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                withAnimation(.smooth(duration: 0.22)) {
+                    calorieGoal = snappedCalorieGoal(from: Double(currentGoal.suggestedCalories))
+                }
+            } label: {
+                Text("Ustaw")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(WMPalette.terracotta)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
+                    .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.30), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ustaw \(currentGoal.suggestedCalories) kcal")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.wmChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.wmRule(scheme))
+                .frame(height: 1)
+        }
     }
 
     private var dietPickerSection: some View {
@@ -1275,6 +1419,7 @@ struct SettingsView: View {
                 dietPreferenceRaw = DietPreference.none.rawValue
                 allergensRaw = ""
                 calorieGoal = Self.calorieGoalDefault
+                goalRaw = UserGoal.healthy.rawValue
             }
         } label: {
             HStack(spacing: 8) {

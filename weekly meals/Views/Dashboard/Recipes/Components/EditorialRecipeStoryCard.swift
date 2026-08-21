@@ -51,7 +51,10 @@ struct EditorialRecipeStoryCard: View {
                 .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         )
         .overlay(alignment: .topTrailing) { heartChip }
-        .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.18), radius: 18, x: 0, y: 12)
+        // Bez cienia pod kartą. Karuzela to poziomy `ScrollView`, który
+        // przycina wszystko poza swoimi granicami — cień urywał się równo
+        // z krawędzią sekcji zamiast zanikać, więc na dole karty rysowała
+        // się twarda ciemna kreska.
     }
 
     // MARK: - Cover

@@ -24,6 +24,18 @@ enum UserGoal: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Skrócona etykieta pod wąskie miejsca — wiersz w Ustawieniach i chip
+    /// na banerze Przepisów. „Przytyć / zbudować masę” się tam nie mieści.
+    var shortTitle: String {
+        switch self {
+        case .healthy:  return "Zdrowiej"
+        case .lose:     return "Schudnąć"
+        case .gain:     return "Masa"
+        case .maintain: return "Utrzymanie wagi"
+        case .plan:     return "Planowanie"
+        }
+    }
+
     var subtitle: String {
         switch self {
         case .healthy:  return "Zbilansowane posiłki, mniej przetworzonych."

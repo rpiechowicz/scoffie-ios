@@ -25,6 +25,22 @@ struct RecipesView: View {
     @State private var featuredSelectionId: UUID?
     @State private var filters = RecipeFilterOptions()
     @State private var isFilterSheetPresented = false
+    @State private var isPersonalizationSheetPresented = false
+
+    // Preferencje żywieniowe właściciela ekranu — te same klucze, które
+    // zapisuje Ustawienia → „Dieta i alergeny”. Czytamy je przez
+    // `@AppStorage`, więc zmiana w Ustawieniach przestawia listę od razu po
+    // powrocie na tę zakładkę, bez żadnego odświeżania.
+    @AppStorage(RecipePersonalization.Keys.diet)
+    private var dietPreferenceRaw: String = DietPreference.none.rawValue
+    @AppStorage(RecipePersonalization.Keys.allergens)
+    private var allergensRaw: String = ""
+    @AppStorage(RecipePersonalization.Keys.goal)
+    private var goalRaw: String = UserGoal.healthy.rawValue
+    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
+    @AppStorage(RecipePersonalization.Keys.enabled)
+    private var isPersonalizationEnabled: Bool = true
 
     // Sections rendered below the carousel — matches the W3 "Tasting menu"
     // rhythm. Empty sections are filtered out when the user is actively
@@ -61,16 +77,56 @@ struct RecipesView: View {
         }
     }
 
-    /// Wszystkie przepisy przefiltrowane po debounced query i po filtrach
-    /// z arkusza.
+    /// Preferencje w formie, którą da się nałożyć na katalog.
+    private var personalization: RecipePersonalization {
+        RecipePersonalization(
+            dietRaw: dietPreferenceRaw,
+            allergensRaw: allergensRaw,
+            goalRaw: goalRaw,
+            calorieGoal: calorieGoal,
+            isEnabled: isPersonalizationEnabled
+        )
+    }
+
+    /// Przepisy po wyszukiwarce i po preferencjach — dieta i alergeny tną,
+    /// cel przestawia kolejność. Filtry z arkusza idą dopiero na to, żeby
+    /// licznik „Pokaż N przepisów” w arkuszu liczył się w tym samym świecie,
+    /// który użytkownik widzi na liście.
+    private var personalizedRecipes: [Recipe] {
+        personalization.apply(to: searchedRecipes)
+    }
+
+    /// Wszystkie przepisy przefiltrowane po debounced query, preferencjach
+    /// i po filtrach z arkusza.
     private var visibleRecipes: [Recipe] {
-        filters.apply(to: searchedRecipes)
+        filters.apply(to: personalizedRecipes)
+    }
+
+    /// Ile przepisów zabrała sama dieta / alergeny — do podpisu w banerze.
+    private var hiddenByPersonalizationCount: Int {
+        personalization.hiddenCount(in: searchedRecipes)
+    }
+
+    /// Ile przepisów zabiera dieta / alergeny w CAŁYM katalogu. Arkusz
+    /// „Dopasowanie” mówi o ustawieniu globalnym, więc jego liczby nie mogą
+    /// się zmieniać, gdy ktoś wpisze coś w wyszukiwarkę.
+    private var hiddenInCatalogCount: Int {
+        personalization.hiddenCount(in: recipeCatalogStore.recipes)
+    }
+
+    /// Czy katalog w ogóle niesie składniki. Bez nich klasyfikator diety nie
+    /// ma czego czytać i arkusz musi to powiedzieć wprost, zamiast twierdzić,
+    /// że wszystko pasuje.
+    private var hasIngredientCoverage: Bool {
+        recipeCatalogStore.recipes.contains { !$0.ingredients.isEmpty }
     }
 
     /// Czy lista jest w ogóle zawężona — steruje tekstem pustego stanu i
     /// zwijaniem pustych sekcji Tasting menu.
     private var isNarrowed: Bool {
-        !debouncedSearchText.isEmpty || filters.isActive
+        !debouncedSearchText.isEmpty
+            || filters.isActive
+            || (personalization.isEnabled && personalization.restrictsCatalog)
     }
 
     private var mealSections: [RecipeSection] {
@@ -89,7 +145,13 @@ struct RecipesView: View {
     /// Top-N najlepszych kandydatów do karuzeli featured. Ulubione wygrywają,
     /// potem krótszy `prepTime`, potem większy `servings`, potem alfabetycznie.
     private var featuredRecipes: [Recipe] {
-        Array(
+        // Gdy cel porządkuje katalog, `visibleRecipes` są już ułożone od
+        // najlepiej dopasowanych — drugie sortowanie po `prepTime` tylko by to
+        // zepsuło. Bez celu zostaje dotychczasowa heurystyka.
+        if personalization.isEnabled, personalization.ranksCatalog {
+            return Array(visibleRecipes.prefix(5))
+        }
+        return Array(
             visibleRecipes
                 .sorted(by: isFeaturedRecipePreferred(_:_:))
                 .prefix(5)
@@ -98,12 +160,20 @@ struct RecipesView: View {
 
     private var heroEyebrow: String {
         if !debouncedSearchText.isEmpty { return "Najlepsze dopasowanie" }
-        return filters.isActive ? "Twoje filtry" : "Polecane"
+        if filters.isActive { return "Twoje filtry" }
+        if personalization.isEnabled, personalization.ranksCatalog {
+            return "Pod cel: \(personalization.goal.title)"
+        }
+        return "Polecane"
     }
 
     private var heroTitle: String {
         if !debouncedSearchText.isEmpty { return "Pasujące do wyszukiwania" }
-        return filters.isActive ? "Wybrane dla Ciebie" : "Smaki na dziś"
+        if filters.isActive { return "Wybrane dla Ciebie" }
+        if personalization.isEnabled, personalization.hasAnyPreference {
+            return "Dopasowane do Ciebie"
+        }
+        return "Smaki na dziś"
     }
 
     private var shouldShowSkeleton: Bool {
@@ -148,9 +218,12 @@ struct RecipesView: View {
             .onChange(of: filters) { _, _ in
                 resyncFeaturedSelectionIfNeeded()
             }
+            .onChange(of: personalization) { _, _ in
+                resyncFeaturedSelectionIfNeeded()
+            }
             .onDisappear { searchDebounceTask?.cancel() }
             .sheet(isPresented: $isFilterSheetPresented) {
-                RecipeFilterSheet(filters: $filters, recipes: searchedRecipes)
+                RecipeFilterSheet(filters: $filters, recipes: personalizedRecipes)
                     .presentationDetents([.large])
                     .dashboardLiquidSheet()
             }
@@ -176,12 +249,32 @@ struct RecipesView: View {
                     // przepisy, które użytkownik przed chwilą odsiał.
                     // Wyszukiwarka zostaje poza tym celowo: ten arkusz ma
                     // własną, do przeszukiwania kategorii.
-                    recipes: filters.apply(to: recipeCatalogStore.recipes.filter { $0.category == category }),
+                    recipes: filters.apply(
+                        to: personalization.apply(
+                            to: recipeCatalogStore.recipes.filter { $0.category == category }
+                        )
+                    ),
                     hasActiveFilters: filters.isActive,
+                    isPersonalized: personalization.isEnabled && personalization.restrictsCatalog,
                     onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.reset() } },
                     onSelect: openDetail(for:)
                 )
                 .presentationDetents([.large])
+                .dashboardLiquidSheet()
+            }
+            .sheet(isPresented: $isPersonalizationSheetPresented) {
+                RecipePersonalizationSheet(
+                    personalization: personalization,
+                    catalog: recipeCatalogStore.recipes,
+                    canEvaluateDiet: hasIngredientCoverage,
+                    isEnabled: $isPersonalizationEnabled,
+                    onClose: { isPersonalizationSheetPresented = false }
+                )
+                // Jedyny arkusz na tym ekranie, który nie jest listą — treści
+                // jest na pół ekranu, więc `.large` zostawiałby pustą dolną
+                // połowę. `.medium` otwiera go w rozmiarze treści, `.large`
+                // zostaje na duży krój systemowy.
+                .presentationDetents([.medium, .large])
                 .dashboardLiquidSheet()
             }
         }
@@ -195,8 +288,12 @@ struct RecipesView: View {
                 EditorialRecipesHeader(
                     searchText: $searchText,
                     activeFilterCount: filters.activeCount,
+                    isPersonalizationEnabled: isPersonalizationEnabled,
+                    isPersonalizationActive: personalization.isActive,
+                    hiddenRecipeCount: hiddenInCatalogCount,
                     onSubmit: { debouncedSearchText = searchText },
-                    onOpenFilters: { isFilterSheetPresented = true }
+                    onOpenFilters: { isFilterSheetPresented = true },
+                    onOpenPersonalization: { isPersonalizationSheetPresented = true }
                 )
                 .padding(.horizontal, pageHorizontalPadding)
                 .padding(.top, pageTopPadding)
@@ -444,6 +541,11 @@ struct RecipesView: View {
         if !debouncedSearchText.isEmpty {
             return "Spróbuj wpisać inną frazę wyszukiwania."
         }
+        // Pusto po samej personalizacji to inny problem niż pusta baza —
+        // podpowiadamy przełącznik zamiast kazać czekać na przepisy.
+        if personalization.isEnabled, personalization.restrictsCatalog, hiddenByPersonalizationCount > 0 {
+            return "Żaden przepis w katalogu nie mieści się w Twojej diecie i alergenach. Stuknij ikonę dopasowania obok tytułu, żeby je wyłączyć."
+        }
         return "Ta baza jest jeszcze pusta — wróć za chwilę."
     }
 
@@ -605,6 +707,9 @@ private struct RecipeCategorySheetView: View {
     let category: RecipesCategory
     let recipes: [Recipe]
     let hasActiveFilters: Bool
+    /// Czy pula przyszła już zawężona dietą / alergenami. Zmienia tylko
+    /// treść notki — dopasowanie zdejmuje się na ekranie listy, nie tutaj.
+    let isPersonalized: Bool
     let onClearFilters: () -> Void
     let onSelect: (Recipe) -> Void
 
@@ -647,9 +752,9 @@ private struct RecipeCategorySheetView: View {
 
                 sheetSearchPill
                     .padding(.horizontal, 20)
-                    .padding(.bottom, hasActiveFilters ? 14 : 12)
+                    .padding(.bottom, (hasActiveFilters || isPersonalized) ? 14 : 12)
 
-                if hasActiveFilters {
+                if hasActiveFilters || isPersonalized {
                     activeFiltersNote
                         .padding(.horizontal, 20)
                         .padding(.bottom, 12)
@@ -743,22 +848,24 @@ private struct RecipeCategorySheetView: View {
     // na skutek filtra ustawionego ekran wyżej.
     private var activeFiltersNote: some View {
         HStack(spacing: 8) {
-            Image(systemName: "line.3.horizontal.decrease")
+            Image(systemName: hasActiveFilters ? "line.3.horizontal.decrease" : "wand.and.stars")
                 .font(.system(size: 11, weight: .bold))
 
-            Text("Lista zawężona filtrami")
+            Text(activeFiltersNoteTitle)
                 .font(.system(size: 12, weight: .semibold))
 
             Spacer(minLength: 8)
 
-            Button(action: onClearFilters) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .heavy))
-                    .frame(width: 22, height: 22)
-                    .background(Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.22 : 0.14)))
+            if hasActiveFilters {
+                Button(action: onClearFilters) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .heavy))
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.22 : 0.14)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Wyczyść filtry")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Wyczyść filtry")
         }
         .foregroundStyle(WMPalette.terracotta)
         .padding(.leading, 12)
@@ -772,6 +879,14 @@ private struct RecipeCategorySheetView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(WMPalette.terracotta.opacity(0.28), lineWidth: 1)
         )
+    }
+
+    private var activeFiltersNoteTitle: String {
+        switch (hasActiveFilters, isPersonalized) {
+        case (true, true):   return "Lista zawężona filtrami i Twoją dietą"
+        case (true, false):  return "Lista zawężona filtrami"
+        default:             return "Lista zawężona Twoją dietą"
+        }
     }
 
     private var sheetSearchPill: some View {
@@ -812,8 +927,8 @@ private struct RecipeCategorySheetView: View {
                 .tracking(-0.3)
                 .foregroundStyle(Color.wmLabel(scheme))
 
-            Text(hasActiveFilters && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                 ? "Żaden przepis w tej kategorii nie przechodzi przez filtry."
+            Text((hasActiveFilters || isPersonalized) && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                 ? "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoje preferencje."
                  : "Spróbuj innej frazy wyszukiwania.")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.wmMuted(scheme))
