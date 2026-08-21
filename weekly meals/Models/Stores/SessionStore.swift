@@ -1032,6 +1032,7 @@ final class SessionStore {
                         displayName: $0.user.displayName,
                         email: $0.user.email,
                         avatarUrl: $0.user.avatarUrl,
+                        avatarColor: $0.user.avatarColor,
                         role: $0.role
                     )
                 }

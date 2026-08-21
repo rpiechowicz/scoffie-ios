@@ -124,6 +124,9 @@ struct BackendHouseholdMemberDTO: Decodable {
         let displayName: String
         let email: String?
         let avatarUrl: String?
+        /// Indeks gradientu przydzielony przez backend — patrz
+        /// `ProfileAvatar.colorIndex`. `nil` dla kont sprzed tej zmiany.
+        let avatarColor: Int?
     }
 
     let id: String

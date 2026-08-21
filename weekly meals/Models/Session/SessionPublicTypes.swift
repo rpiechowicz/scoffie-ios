@@ -38,5 +38,9 @@ struct HouseholdMemberSnapshot: Identifiable, Hashable, Codable {
     let displayName: String
     let email: String?
     let avatarUrl: String?
+    /// Kolor awatara z backendu. Opcjonalny, bo starsze wpisy w cache'u
+    /// gospodarstwa go nie mają — wtedy `MemberAvatar` liczy kolor z id,
+    /// tak samo jak `ProfileAvatar` dla kont bez przydziału.
+    var avatarColor: Int?
     let role: String
 }
