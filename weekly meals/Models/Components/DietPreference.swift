@@ -92,20 +92,37 @@ enum DietPreference: String, CaseIterable, Identifiable {
     }
 }
 
-// 14 official EU allergens trimmed to the 10 most-common in everyday
-// Polish cooking. Multi-select; persisted in `@AppStorage` as a sorted
-// comma-separated raw-value string (`"eggs,gluten,nuts"`).
+// Alergeny i nietolerancje, których realnie da się uniknąć w tym katalogu.
+//
+// Lista jest krótsza niż „14 alergenów UE" i to jest celowe: chip, którego
+// nie ma czym wypełnić, obiecuje ochronę, której nie dowozimy. Zostały te,
+// które mają w katalogu składników rzeczywiste źródła i występują w polskiej
+// kuchni domowej:
+//
+//   laktoza  — 43 źródła   gluten   — 40 źródeł
+//   ryby     —  9 źródeł   orzechy  —  3 źródła
+//   jaja     —  2 źródła (ale 9 z 30 przepisów)
+//   soja     —  1 źródło (sos sojowy — najczęstszy ukryty nośnik)
+//   orzeszki —  1 źródło (osobno od orzechów: to inna alergia i częstsza)
+//
+// Wypadły `sezam` i `seler` (po jednym źródle, zero przepisów) oraz
+// `shellfish` — jedyna pozycja katalogu to krewetka, siedząca i tak w dziale
+// „Ryby", więc jest teraz obsługiwana przez „Ryby i owoce morza".
+//
+// Usunięte wartości nie wymagają migracji: `RecipePersonalization` czyta
+// zapisane alergeny przez `compactMap(Allergen.init(rawValue:))`, więc stare
+// wpisy po prostu przestają być rozpoznawane.
+//
+// Multi-select; persisted in `@AppStorage` as a sorted comma-separated
+// raw-value string (`"eggs,gluten,nuts"`).
 enum Allergen: String, CaseIterable, Identifiable {
     case gluten
     case lactose
+    case eggs
     case nuts
     case peanuts
-    case eggs
-    case soy
     case fish
-    case shellfish
-    case sesame
-    case celery
+    case soy
 
     var id: String { rawValue }
 
@@ -113,14 +130,11 @@ enum Allergen: String, CaseIterable, Identifiable {
         switch self {
         case .gluten:       return "Gluten"
         case .lactose:      return "Laktoza"
+        case .eggs:         return "Jaja"
         case .nuts:         return "Orzechy"
         case .peanuts:      return "Orzeszki ziemne"
-        case .eggs:         return "Jaja"
+        case .fish:         return "Ryby i owoce morza"
         case .soy:          return "Soja"
-        case .fish:         return "Ryby"
-        case .shellfish:    return "Skorupiaki"
-        case .sesame:       return "Sezam"
-        case .celery:       return "Seler"
         }
     }
 }

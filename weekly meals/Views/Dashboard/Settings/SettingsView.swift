@@ -295,31 +295,19 @@ struct SettingsView: View {
     /// always shows up; diet name is prepended when set, allergen count
     /// is appended when at least one is picked. Capped at two pieces so
     /// the value column doesn't overflow on narrow rows.
+    /// Kolumna wartości mieści około piętnastu znaków, więc pokazujemy
+    /// JEDNĄ informację, nie sklejkę. „Schudnąć · 2100 kcal" ucinało się do
+    /// „Schudnąć · 210…", czyli do liczby, której i tak nie dało się
+    /// odczytać. Kolejność: dieta (najbardziej konkretna), potem cel,
+    /// a na końcu kalorie — czyli to, co użytkownik faktycznie ustawił.
     private var dietRowValue: String {
-        var parts: [String] = []
-
         if currentDiet != .none {
-            parts.append(currentDiet.title)
-        } else if currentGoal != .healthy {
-            // Bez diety wiersz pokazywał samo „2000 kcal” — cel jest wtedy
-            // ciekawszą informacją niż nic.
-            parts.append(currentGoal.shortTitle)
+            return currentDiet.title
         }
-        parts.append("\(calorieGoal) kcal")
-        if !selectedAllergens.isEmpty {
-            let count = selectedAllergens.count
-            parts.append("\(count) \(allergenWord(for: count))")
+        if currentGoal != .healthy {
+            return currentGoal.shortTitle
         }
-
-        return parts.prefix(2).joined(separator: " · ")
-    }
-
-    private func allergenWord(for count: Int) -> String {
-        switch count {
-        case 1:         return "alergen"
-        case 2...4:     return "alergeny"
-        default:        return "alergenów"
-        }
+        return "\(calorieGoal) kcal"
     }
 
     private func toggleAllergen(_ allergen: Allergen) {
@@ -1264,20 +1252,18 @@ struct SettingsView: View {
                     Text(diet.subtitle)
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(Color.wmMuted(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 radioIndicator(selected: isSelected)
             }
-            // Stała wysokość wiersza. Wcześniej „Paleo" zawijało opis na dwie
-            // linie i było wyraźnie wyższe od sąsiadów — przy siedmiu
-            // pozycjach lista traciła rytm i wyglądała na poskładaną
-            // z różnych klocków.
-            .frame(minHeight: 60)
+            // Dokładnie ta sama geometria co `goalRow` — obie sekcje to ta
+            // sama lista wyboru i mają wyglądać identycznie. Wcześniej dieta
+            // miała własną `minHeight` i inny padding pionowy, przez co jej
+            // wiersze były wyraźnie wyższe od wierszy celu.
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

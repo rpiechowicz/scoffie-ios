@@ -25,10 +25,22 @@ struct EditorialPageHeader<Trailing: View>: View {
                 .foregroundStyle(Color.wmLabel(scheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                // Tytuł wymiaruje się pierwszy. Bez tego HStack dzielił
+                // szerokość po równo i „Plan tygodnia" — jedyny nagłówek
+                // z akcjami obok — zjeżdżał przez `minimumScaleFactor` do
+                // mniejszego stopnia niż „Przepisy" czy „Ustawienia".
+                // Skalowanie zostaje jako zabezpieczenie na naprawdę wąskie
+                // ekrany, ale nie odpala się już przy zwykłym układzie.
+                .layoutPriority(1)
 
             Spacer(minLength: 8)
 
+            // Akcje też biorą swój naturalny rozmiar. Sam `layoutPriority`
+            // na tytule przechylał podział za mocno w drugą stronę —
+            // pigułka gospodarstwa gubiła nazwę i zostawała z samą ikoną
+            // i strzałką.
             trailing()
+                .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

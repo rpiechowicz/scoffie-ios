@@ -186,6 +186,12 @@ struct ProfileDetailsSheet: View {
             EditorialSheetSectionLabel(title: "Sylwetka")
 
             VStack(alignment: .leading, spacing: 16) {
+                // Płeć jako pierwsza: to jedyne pole, które się nie zmienia,
+                // a reszta sekcji (rok, wzrost, waga) to liczby aktualizowane
+                // co jakiś czas. Naturalna kolejność czytania idzie od stałej
+                // do zmiennych.
+                sexPicker
+
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
                         fieldCaption("Rok urodzenia")
@@ -222,11 +228,10 @@ struct ProfileDetailsSheet: View {
                     )
                 }
 
-                sexPicker
-
                 if let metrics {
                     bmiRow(metrics)
                 }
+
             }
             .padding(18)
             .background(card)

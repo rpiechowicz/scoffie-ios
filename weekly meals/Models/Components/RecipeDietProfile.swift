@@ -183,11 +183,15 @@ enum RecipeDietClassifier {
             profile.containsFish = true
             profile.allergens.insert(.fish)
         }
+        // Skorupiaki nie mają osobnego alergenu — jedyna pozycja katalogu to
+        // krewetka, siedząca w dziale „Ryby". Wykrywanie zostaje, bo
+        // `containsFish` decyduje o diecie wegetariańskiej, ale alergen jest
+        // wspólny: „Ryby i owoce morza".
         if hasWord(words, prefixedBy: Keywords.shellfishStems)
             || hasWord(words, equalTo: Keywords.shellfishWords)
             || contains(name, anyOf: Keywords.seafoodPhrases) {
             profile.containsFish = true
-            profile.allergens.insert(.shellfish)
+            profile.allergens.insert(.fish)
         }
 
         // ── Nabiał ──
@@ -255,16 +259,6 @@ enum RecipeDietClassifier {
                 profile.allergens.insert(.gluten)
                 profile.containsGrains = true
             }
-        }
-
-        // ── Sezam ──
-        if hasWord(words, prefixedBy: Keywords.sesameStems) {
-            profile.allergens.insert(.sesame)
-        }
-
-        // ── Seler ──
-        if hasWord(words, prefixedBy: Keywords.celeryStems) {
-            profile.allergens.insert(.celery)
         }
 
         // ── Przetworzone / cukier ──
@@ -426,10 +420,6 @@ private enum Keywords {
     ]
 
     static let soyStems = ["soja", "soji", "soi", "sojow", "tofu", "tempeh", "edamame"]
-
-    static let sesameStems = ["sezam", "tahin"]
-
-    static let celeryStems = ["seler"]
 
     static let processedStems = [
         "cukier", "cukru", "syrop", "czekolad", "zelk", "baton", "chips",
