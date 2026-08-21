@@ -96,7 +96,9 @@ struct BackendCurrentUserDTO: Codable {
     let avatarUrl: String?
     let yearOfBirth: Int?
     let heightCm: Int?
-    let weightKg: Int?
+    let weightKg: Double?
+    let sex: String?
+    let avatarColor: Int?
     let onboardingCompletedAt: String?
     let memberships: [MembershipDTO]
 }
@@ -110,7 +112,9 @@ struct BackendUserProfileDTO: Codable {
     let avatarUrl: String?
     let yearOfBirth: Int?
     let heightCm: Int?
-    let weightKg: Int?
+    let weightKg: Double?
+    let sex: String?
+    let avatarColor: Int?
     let onboardingCompletedAt: String?
 }
 
@@ -147,4 +151,14 @@ struct BackendUserPreferencesDTO: Decodable {
     let allergens: [String]
     let goal: String
     let activityLevel: Int
+    /// `nil` = użytkownik nie nadpisał makra i klient ma je policzyć sam.
+    let proteinG: Int?
+    let fatG: Int?
+    let carbsG: Int?
+}
+
+/// Odpowiedź na `users:delete` — samo potwierdzenie, że konto o tym id
+/// zniknęło. Klient nie ma już czego z niego czytać.
+struct BackendDeletedUserDTO: Decodable {
+    let id: String
 }

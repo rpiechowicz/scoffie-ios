@@ -118,7 +118,10 @@ struct WeeklyPlanView: View {
                         headerRow
                             .padding(.horizontal, WMPageMetrics.horizontal)
                             .padding(.top, WMPageMetrics.top)
-                            .padding(.bottom, 14)
+                            // 22 zamiast 14 — pasek dni to osobna kontrolka,
+                            // a nie podtytuł nagłówka; przy 14 pt skrót „PON.
+                            // WT. ŚR." wyglądał na przyklejony do tytułu.
+                            .padding(.bottom, 22)
 
                         // Day strip instead of a week switcher: it is the
                         // navigation actually used day to day, and it matches

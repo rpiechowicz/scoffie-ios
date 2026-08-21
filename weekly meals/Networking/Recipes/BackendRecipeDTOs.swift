@@ -8,7 +8,10 @@ struct BackendRecipeIngredientDTO: Codable {
     let name: String
     let amount: Double
     let unit: String
-    let department: String
+    /// Dział katalogu. Opcjonalny — starsze wersje backendu nie dowoziły go
+    /// na liście przepisów, a wtedy dekodowanie całej listy padało na
+    /// brakującym kluczu zamiast po prostu zgubić jedną podpowiedź.
+    let department: String?
 }
 
 struct BackendRecipeDTO: Codable {
@@ -139,7 +142,8 @@ extension BackendRecipeDTO {
                 id: UUID(uuidString: item.id) ?? UUID(),
                 name: displayIngredientName(item.name),
                 amount: item.amount,
-                unit: mappedUnit
+                unit: mappedUnit,
+                department: item.department
             )
         }
 
