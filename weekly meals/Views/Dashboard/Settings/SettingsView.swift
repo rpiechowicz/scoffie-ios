@@ -13,6 +13,8 @@ struct SettingsView: View {
     @AppStorage("settings.user.displayName") private var userDisplayName: String = "user1"
     @AppStorage("settings.user.email") private var userEmail: String = "user1@example.com"
     @AppStorage("settings.user.avatarUrl") private var userAvatarUrl: String = ""
+    // −1 = backend jeszcze nie przydzielił koloru (konto sprzed tej zmiany).
+    @AppStorage("settings.user.avatarColor") private var userAvatarColor: Int = -1
     @AppStorage("settings.household.name") private var persistedHouseholdName: String = ""
     @AppStorage("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
     @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
@@ -452,6 +454,7 @@ struct SettingsView: View {
             email: userEmail,
             avatarUrl: userAvatarUrl,
             avatarSeed: userEmail.isEmpty ? userDisplayName : userEmail,
+            avatarColorIndex: userAvatarColor >= 0 ? userAvatarColor : nil,
             action: { showProfileSheet = true }
         )
     }
@@ -1326,7 +1329,13 @@ struct SettingsView: View {
                     macroRow(.carbs, value: macros.carbsG, override: $carbsOverride)
                     macroDivider
                     macroRow(.fat, value: macros.fatG, override: $fatOverride)
-                    macroDivider
+                    // Kreska nad stopką idzie na pełną szerokość, bo stopka
+                    // ma własne tło rozciągnięte od krawędzi do krawędzi —
+                    // wcięta kreska kończyła się w innym miejscu niż kolor
+                    // pod nią i wyglądało to na niedoróbkę.
+                    Rectangle()
+                        .fill(Color.wmRule(scheme))
+                        .frame(height: 1)
                     macroFooter(macros)
                 } else {
                     Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
@@ -1374,14 +1383,10 @@ struct SettingsView: View {
             }
         }
 
-        /// Krok steppera. Białko i węgle chodzą po 5 g, tłuszcz po 2 —
-        /// 5 g tłuszczu to 45 kcal, czyli zauważalny skok.
-        var step: Int {
-            switch self {
-            case .protein, .carbs: return 5
-            case .fat:             return 2
-            }
-        }
+        /// Ten sam krok, do którego zaokrąglane są wyliczenia — inaczej
+        /// stepper wyprowadzałby wartość z siatki („193 g") i pół karty
+        /// pokazywałoby okrągłe liczby, a pół nie.
+        var step: Int { MacroTargets.gramStep }
 
         var upperBound: Int {
             switch self {
@@ -1438,7 +1443,7 @@ struct SettingsView: View {
     private func macroStepper(_ macro: Macro, value: Int, override: Binding<Int>) -> some View {
         HStack(spacing: 0) {
             macroStepButton(systemName: "minus", accent: macro.accent) {
-                override.wrappedValue = max(value - macro.step, 0)
+                override.wrappedValue = MacroTargets.snappedGrams(Double(value - macro.step))
             }
 
             Rectangle()
@@ -1446,7 +1451,8 @@ struct SettingsView: View {
                 .frame(width: 1, height: 18)
 
             macroStepButton(systemName: "plus", accent: macro.accent) {
-                override.wrappedValue = min(value + macro.step, macro.upperBound)
+                let next = MacroTargets.snappedGrams(Double(value + macro.step))
+                override.wrappedValue = min(next, macro.upperBound)
             }
         }
         .background(Capsule().fill(Color.wmChipBg(scheme)))
@@ -2370,10 +2376,14 @@ struct ProfileAvatar: View {
     let displayName: String
     let size: CGFloat
 
-    /// Ziarno gradientu — stabilny identyfikator użytkownika (e-mail albo
-    /// id konta). Ta sama osoba dostaje zawsze ten sam kolor, na każdym
-    /// urządzeniu i po każdym przelogowaniu, a dwie różne osoby w jednym
-    /// gospodarstwie prawie zawsze różne. Pusty ziarno = fallback na imię.
+    /// Indeks gradientu przydzielony przez backend przy kończeniu onboardingu.
+    /// Ma pierwszeństwo, bo tylko serwer widzi, jakie kolory zajęli już
+    /// pozostali domownicy.
+    var colorIndex: Int? = nil
+
+    /// Zapasowe ziarno dla kont sprzed wprowadzenia `avatarColor` — kolor
+    /// liczy się wtedy z hasza e-maila. Ta sama osoba dostaje zawsze ten sam
+    /// odcień, ale bez gwarancji, że różny od domownika.
     var seed: String = ""
 
     @Environment(\.colorScheme) private var scheme
@@ -2418,7 +2428,7 @@ struct ProfileAvatar: View {
         // na usterkę. Paleta jest zamknięta i wzięta z `WMPalette`, więc
         // każdy wariant siedzi w tej samej rodzinie kolorów co reszta
         // aplikacji, zamiast wpadać w przypadkowy odcień z całego koła barw.
-        Self.gradient(for: seed.isEmpty ? displayName : seed)
+        Self.gradient(index: colorIndex, seed: seed.isEmpty ? displayName : seed)
         .overlay(
             Text(Self.initials(for: displayName))
                 .font(.system(size: size * 0.40, weight: .semibold))
@@ -2428,20 +2438,33 @@ struct ProfileAvatar: View {
         )
     }
 
-    /// Sześć par z palety aplikacji. Terakota zostaje pierwsza, bo to
-    /// dotychczasowy wygląd — kto ma stary avatar, w większości przypadków
-    /// go nie zauważy.
-    private static let gradientPairs: [(Color, Color)] = [
+    /// Dwanaście gradientów: cztery jednobarwne z palety aplikacji i osiem
+    /// przejść między nimi. Liczba musi zgadzać się z `AVATAR_COLOR_COUNT`
+    /// w `users.service.ts` — to serwer wybiera indeks, klient tylko go
+    /// odczytuje.
+    ///
+    /// Wszystkie warianty siedzą w rodzinie kolorów aplikacji zamiast być
+    /// losowane z całego koła barw: awatar ma odróżniać domowników, a nie
+    /// wyskakiwać z interfejsu.
+    static let gradientPairs: [(Color, Color)] = [
         (WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.22)),
         (WMPalette.sage, WMPalette.sage.mix(black: 0.24)),
         (WMPalette.indigo, WMPalette.indigo.mix(black: 0.22)),
-        (WMPalette.butter, WMPalette.butter.mix(black: 0.28)),
-        (WMPalette.terracottaDeep, WMPalette.terracottaDeep.mix(black: 0.20)),
-        (WMPalette.sage.mix(black: 0.12), WMPalette.indigo.mix(black: 0.10)),
+        (WMPalette.butter, WMPalette.butter.mix(black: 0.30)),
+        (WMPalette.sage, WMPalette.indigo.mix(black: 0.08)),
+        (WMPalette.terracotta, WMPalette.butter.mix(black: 0.18)),
+        (WMPalette.indigo, WMPalette.terracottaDeep),
+        (WMPalette.butter.mix(black: 0.10), WMPalette.sage.mix(black: 0.18)),
+        (WMPalette.terracottaDeep, WMPalette.terracottaDeep.mix(black: 0.24)),
+        (WMPalette.indigo.mix(black: 0.18), WMPalette.indigo.mix(black: 0.42)),
+        (WMPalette.sage.mix(black: 0.28), WMPalette.sage.mix(black: 0.50)),
+        (WMPalette.terracotta.mix(black: 0.10), WMPalette.indigo.mix(black: 0.26)),
     ]
 
-    static func gradient(for seed: String) -> LinearGradient {
-        let pair = gradientPairs[stableIndex(for: seed, upperBound: gradientPairs.count)]
+    static func gradient(index: Int?, seed: String) -> LinearGradient {
+        let resolved = index.map { abs($0) % gradientPairs.count }
+            ?? stableIndex(for: seed, upperBound: gradientPairs.count)
+        let pair = gradientPairs[resolved]
         return LinearGradient(
             colors: [pair.0, pair.1],
             startPoint: .topLeading,

@@ -76,6 +76,22 @@ struct RecipeDietProfile: Equatable {
         case .paleo:
             guard hasIngredientData else { return true }
             return !containsGrains && !containsLegumes && !containsDairy && !containsProcessed
+
+        case .highProtein:
+            // Udział energii z białka, nie same gramy. 20 % to próg
+            // oświadczenia „wysoka zawartość białka" z rozporządzenia UE
+            // 1924/2006 i jedyna definicja, która działa niezależnie od
+            // wielkości porcji.
+            //
+            // Chip „Wysokobiałkowe" w arkuszu filtrów mierzy co innego
+            // (≥ 20 g na porcję) i tak zostaje: tam chodzi o odsianie
+            // konkretnego posiłku, tu o styl odżywiania. 300-kalorycznemu
+            // śniadaniu z 18 g białka bliżej do wysokobiałkowego niż
+            // obiadowi z 22 g przy 900 kcal.
+            guard recipe.hasNutritionData else { return false }
+            let nutrition = recipe.nutritionPerServing
+            guard nutrition.kcal > 0 else { return false }
+            return (nutrition.protein * 4) / nutrition.kcal >= 0.20
         }
     }
 

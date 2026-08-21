@@ -21,6 +21,7 @@ struct ProfileDetailsSheet: View {
     @AppStorage("settings.user.displayName") private var displayName: String = ""
     @AppStorage("settings.user.email") private var email: String = ""
     @AppStorage("settings.user.avatarUrl") private var avatarUrl: String = ""
+    @AppStorage("settings.user.avatarColor") private var avatarColor: Int = -1
     @AppStorage("settings.profile.yearOfBirth") private var yearOfBirth: Int = Self.defaultYearOfBirth
     @AppStorage("settings.profile.heightCm") private var heightCm: Int = Self.defaultHeightCm
     @AppStorage("settings.profile.weightKg") private var weightKg: Double = Self.defaultWeightKg
@@ -141,6 +142,7 @@ struct ProfileDetailsSheet: View {
                     avatarUrl: avatarUrl.isEmpty ? nil : avatarUrl,
                     displayName: displayName.isEmpty ? "Twoje konto" : displayName,
                     size: 52,
+                    colorIndex: avatarColor >= 0 ? avatarColor : nil,
                     seed: email.isEmpty ? displayName : email
                 )
 

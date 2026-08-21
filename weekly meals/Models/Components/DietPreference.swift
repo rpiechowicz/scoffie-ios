@@ -11,6 +11,7 @@ enum DietPreference: String, CaseIterable, Identifiable {
     case pescatarian
     case keto
     case paleo
+    case highProtein
 
     var id: String { rawValue }
 
@@ -22,6 +23,7 @@ enum DietPreference: String, CaseIterable, Identifiable {
         case .pescatarian:  return "Pescetariańska"
         case .keto:         return "Ketogeniczna"
         case .paleo:        return "Paleo"
+        case .highProtein:  return "Wysokobiałkowa"
         }
     }
 
@@ -33,6 +35,7 @@ enum DietPreference: String, CaseIterable, Identifiable {
         case .pescatarian:  return "Bez mięsa, z rybami i owocami morza."
         case .keto:         return "Bardzo niska zawartość węglowodanów."
         case .paleo:        return "Bez zbóż, nabiału i przetworzonej żywności."
+        case .highProtein:  return "Co najmniej 20 % kalorii z białka."
         }
     }
 
@@ -44,6 +47,7 @@ enum DietPreference: String, CaseIterable, Identifiable {
         case .pescatarian:  return "fish.fill"
         case .keto:         return "flame.fill"
         case .paleo:        return "hare.fill"
+        case .highProtein:  return "figure.strengthtraining.traditional"
         }
     }
 
@@ -55,6 +59,7 @@ enum DietPreference: String, CaseIterable, Identifiable {
         case .pescatarian:  return WMPalette.indigo
         case .keto:         return WMPalette.terracotta
         case .paleo:        return WMPalette.butter
+        case .highProtein:  return WMPalette.indigo
         }
     }
 }

@@ -227,7 +227,22 @@ struct MacroTargets: Equatable {
     var proteinKcal: Int { proteinG * 4 }
     var fatKcal: Int { fatG * 9 }
     var carbsKcal: Int { carbsG * 4 }
-    var totalKcal: Int { proteinKcal + fatKcal + carbsKcal }
+
+    /// Suma zaokrąglona do 50 kcal, tak jak każda inna liczba kalorii w
+    /// aplikacji. „2102 kcal" sugeruje precyzję, której nie ma ani wzór na
+    /// zapotrzebowanie, ani makra zaokrąglone do pięciu gramów.
+    var totalKcal: Int {
+        BodyMetrics.snapped(Double(proteinKcal + fatKcal + carbsKcal))
+    }
+
+    /// Krok, o który chodzą steppery i do którego zaokrąglane są wyliczenia.
+    /// 193 g białka to liczba, której nikt nie odmierzy — 195 czyta się
+    /// i odmierza tak samo dobrze.
+    static let gramStep = 5
+
+    static func snappedGrams(_ raw: Double) -> Int {
+        max(Int((raw / Double(gramStep)).rounded()) * gramStep, 0)
+    }
 }
 
 extension BodyMetrics {
@@ -296,9 +311,9 @@ extension BodyMetrics {
         let carbs = max((kcal - proteinKcal - fatKcal) / 4, 0).rounded()
 
         return MacroTargets(
-            proteinG: Int(protein),
-            fatG: Int(fat),
-            carbsG: Int(carbs)
+            proteinG: MacroTargets.snappedGrams(protein),
+            fatG: MacroTargets.snappedGrams(fat),
+            carbsG: MacroTargets.snappedGrams(carbs)
         )
     }
 }

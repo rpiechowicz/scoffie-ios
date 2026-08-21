@@ -27,6 +27,7 @@ final class SessionStore {
         static let displayName = "settings.user.displayName"
         static let email = "settings.user.email"
         static let avatarUrl = "settings.user.avatarUrl"
+        static let avatarColor = "settings.user.avatarColor"
         static let householdName = "settings.household.name"
         static let pushDeviceToken = "notifications.pushDeviceToken"
         // Welcome / onboarding state — persisted alongside the session so
@@ -747,6 +748,7 @@ final class SessionStore {
                 defaults.set(avatarUrl, forKey: Keys.avatarUrl)
             } else {
                 defaults.removeObject(forKey: Keys.avatarUrl)
+        defaults.removeObject(forKey: Keys.avatarColor)
             }
             persistProfileFields(
                 yearOfBirth: user.yearOfBirth,
@@ -754,6 +756,7 @@ final class SessionStore {
                 weightKg: user.weightKg,
                 sex: user.sex
             )
+            defaults.set(user.avatarColor ?? -1, forKey: Keys.avatarColor)
             persistOnboardingCompletedAt(user.onboardingCompletedAt)
 
             guard let membership = user.memberships.first,

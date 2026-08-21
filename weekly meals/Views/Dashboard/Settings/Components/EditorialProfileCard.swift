@@ -17,6 +17,8 @@ struct EditorialProfileCard: View {
     let avatarUrl: String?
     /// Ziarno koloru avatara — patrz `ProfileAvatar.seed`.
     var avatarSeed: String = ""
+    /// Indeks gradientu z backendu — patrz `ProfileAvatar.colorIndex`.
+    var avatarColorIndex: Int? = nil
 
     /// Otwiera arkusz „Twoje dane”. Karta jest jedynym wejściem do danych
     /// zbieranych w kreatorze (rok urodzenia, wzrost, waga, treningi) — bez
@@ -77,6 +79,7 @@ struct EditorialProfileCard: View {
             avatarUrl: trimmedAvatarUrl,
             displayName: displayNameLabel,
             size: 48,
+            colorIndex: avatarColorIndex,
             seed: avatarSeed
         )
     }
