@@ -215,3 +215,90 @@ extension UserGoal {
         metrics?.suggestedCalories(for: self) ?? suggestedCalories
     }
 }
+
+// MARK: - Makroskładniki
+
+/// Rozbicie dziennego celu na białko, tłuszcz i węglowodany.
+struct MacroTargets: Equatable {
+    var proteinG: Int
+    var fatG: Int
+    var carbsG: Int
+
+    var proteinKcal: Int { proteinG * 4 }
+    var fatKcal: Int { fatG * 9 }
+    var carbsKcal: Int { carbsG * 4 }
+    var totalKcal: Int { proteinKcal + fatKcal + carbsKcal }
+}
+
+extension BodyMetrics {
+    /// Białko w gramach na kilogram masy ciała.
+    ///
+    /// Punkt wyjścia bierze się z celu, a treningi go przesuwają — i to jest
+    /// cały sens wciągnięcia aktywności do makr, nie tylko do kalorii. Osoba
+    /// na redukcji trenująca sześć razy w tygodniu potrzebuje wyraźnie więcej
+    /// białka niż ktoś z tym samym celem, kto nie trenuje wcale: w deficycie
+    /// białko chroni mięśnie, a im więcej bodźca treningowego, tym więcej
+    /// jest czego chronić.
+    ///
+    /// Wartości mieszczą się w zakresie 1,0–2,4 g/kg, czyli tam, gdzie
+    /// zgadzają się zalecenia dla osób aktywnych.
+    func proteinPerKilogram(for goal: UserGoal) -> Double {
+        let base: Double
+        switch goal {
+        case .lose:     base = 1.90   // deficyt — najwyższa ochrona mięśni
+        case .gain:     base = 1.90
+        case .maintain: base = 1.50
+        case .healthy:  base = 1.50
+        case .plan:     base = 1.20
+        }
+
+        let activityBonus: Double
+        switch activity {
+        case .sedentary:  activityBonus = -0.20
+        case .light:      activityBonus = 0
+        case .active:     activityBonus = 0.20
+        case .veryActive: activityBonus = 0.35
+        }
+
+        return min(max(base + activityBonus, 1.0), 2.4)
+    }
+
+    /// Udział tłuszczu w dziennej puli kalorii.
+    ///
+    /// Na redukcji i budowie masy schodzi do 25 %, żeby zostało miejsce na
+    /// białko i węglowodany wokół treningu; przy utrzymaniu i „jeść zdrowiej"
+    /// zostaje 30 %, bo nie ma po co ściskać.
+    func fatEnergyShare(for goal: UserGoal) -> Double {
+        switch goal {
+        case .lose, .gain:              return 0.25
+        case .maintain, .healthy, .plan: return 0.30
+        }
+    }
+
+    /// Rozbicie celu kalorycznego na makra.
+    ///
+    /// Kolejność liczenia nie jest przypadkowa: najpierw białko (zależne od
+    /// masy ciała i treningów), potem tłuszcz (udział w kaloriach, z podłogą
+    /// 0,6 g/kg dla gospodarki hormonalnej), a węglowodany biorą całą resztę.
+    /// Dzięki temu więcej treningów przy tym samym celu automatycznie oznacza
+    /// więcej węglowodanów — czyli dokładnie to, czego organizm wtedy
+    /// potrzebuje — bez osobnej reguły na to.
+    func macroTargets(for goal: UserGoal, calories: Int) -> MacroTargets {
+        let kcal = Double(max(calories, 0))
+
+        let protein = (weightKg * proteinPerKilogram(for: goal)).rounded()
+        let proteinKcal = protein * 4
+
+        let fatFloor = weightKg * 0.6
+        let fat = max((kcal * fatEnergyShare(for: goal)) / 9, fatFloor).rounded()
+        let fatKcal = fat * 9
+
+        let carbs = max((kcal - proteinKcal - fatKcal) / 4, 0).rounded()
+
+        return MacroTargets(
+            proteinG: Int(protein),
+            fatG: Int(fat),
+            carbsG: Int(carbs)
+        )
+    }
+}

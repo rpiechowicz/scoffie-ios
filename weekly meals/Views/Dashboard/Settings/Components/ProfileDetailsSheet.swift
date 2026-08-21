@@ -29,6 +29,10 @@ struct ProfileDetailsSheet: View {
 
     @FocusState private var focusedField: Field?
 
+    @State private var isConfirmingDeletion = false
+    @State private var isDeleting = false
+    @State private var deletionError: String?
+
     // Pola tekstowe NIE są związane wprost z `@AppStorage`. `SessionStore
     // .saveProfile` zapisuje z powrotem do tych samych kluczy
     // (SessionStore.swift:1177), więc debounce'owany zapis wstrzykiwał
@@ -84,6 +88,7 @@ struct ProfileDetailsSheet: View {
                     identitySection
                     bodySection
                     activitySection
+                    deleteAccountSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
@@ -95,6 +100,12 @@ struct ProfileDetailsSheet: View {
         .onAppear {
             normaliseStoredValues()
             seedDraftsIfNeeded()
+        }
+        .alert("Usunąć konto?", isPresented: $isConfirmingDeletion) {
+            Button("Anuluj", role: .cancel) {}
+            Button("Usuń konto", role: .destructive) { deleteAccount() }
+        } message: {
+            Text("Wypiszemy Cię z gospodarstwa i trwale usuniemy konto razem z Twoim profilem, preferencjami i odhaczonymi posiłkami. Tego nie da się cofnąć.")
         }
         // Pole liczbowe komituje się dopiero, gdy traci focus — dopiero wtedy
         // wpisana liczba jest kompletna i można ją bezpiecznie przyciąć.
@@ -129,7 +140,8 @@ struct ProfileDetailsSheet: View {
                 ProfileAvatar(
                     avatarUrl: avatarUrl.isEmpty ? nil : avatarUrl,
                     displayName: displayName.isEmpty ? "Twoje konto" : displayName,
-                    size: 52
+                    size: 52,
+                    seed: email.isEmpty ? displayName : email
                 )
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -445,6 +457,72 @@ struct ProfileDetailsSheet: View {
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
 
+    // MARK: - Usunięcie konta
+
+    /// Świadomie na samym dole i świadomie bez ikony w kaflu — to jedyna
+    /// nieodwracalna rzecz w tym arkuszu i ma wyglądać inaczej niż wszystko
+    /// nad nią. Potwierdzenie w alercie wymienia z nazwy, co zniknie:
+    /// „wszystkie dane" nie mówi nikomu nic.
+    private var deleteAccountSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                focusedField = nil
+                isConfirmingDeletion = true
+            } label: {
+                HStack(spacing: 8) {
+                    if isDeleting {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.red)
+                    } else {
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+
+                    Text(isDeleting ? "Usuwam konto…" : "Usuń konto")
+                        .font(.system(size: 14, weight: .bold))
+                        .tracking(-0.1)
+                }
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(Capsule().fill(Color.red.opacity(scheme == .dark ? 0.14 : 0.10)))
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeleting)
+
+            if let deletionError {
+                Text(deletionError)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    /// Arkusz zamyka się dopiero po potwierdzeniu z serwera. Gdyby zamykał
+    /// się od razu, nieudane kasowanie zostawiłoby użytkownika na ekranie
+    /// ustawień bez żadnej informacji, że konto nadal istnieje.
+    private func deleteAccount() {
+        guard !isDeleting else { return }
+        isDeleting = true
+        deletionError = nil
+
+        let store = sessionStore
+        Task { @MainActor in
+            let succeeded = await store.deleteAccount()
+            isDeleting = false
+
+            if succeeded {
+                onClose()
+            } else {
+                deletionError = store.authError ?? "Nie udało się usunąć konta. Spróbuj ponownie."
+                store.authError = nil
+            }
+        }
+    }
+
     // MARK: - Zapis
 
     /// Token zmienia się przy każdej edycji pola — `task(id:)` anuluje
@@ -607,12 +685,6 @@ struct ProfileDetailsSheet: View {
                 }
             }
 
-            Text(sex == nil
-                 ? "Bez płci liczymy ze średniej — zapotrzebowanie może się różnić o ok. 80 kcal."
-                 : "Używamy jej tylko do wyliczenia zapotrzebowania kalorycznego.")
-                .font(.system(size: 11.5, weight: .regular))
-                .foregroundStyle(Color.wmFaint(scheme))
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

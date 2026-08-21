@@ -23,6 +23,12 @@ struct SettingsView: View {
     @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
     @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
     @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    // −1 znaczy „nie nadpisane, licz za mnie". `@AppStorage` nie umie
+    // opcjonalnego `Int`, a 0 g białka jest legalną (choć głupią) wartością,
+    // więc potrzebny jest sentinel spoza dziedziny.
+    @AppStorage("settings.diet.proteinG") private var proteinOverride: Int = -1
+    @AppStorage("settings.diet.fatG") private var fatOverride: Int = -1
+    @AppStorage("settings.diet.carbsG") private var carbsOverride: Int = -1
     @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
     @AppStorage(BodyMetrics.Keys.activityLevel) private var profileActivityRaw: Int = ActivityLevel.light.rawValue
 
@@ -257,6 +263,26 @@ struct SettingsView: View {
         currentGoal.suggestedCalories(for: bodyMetrics)
     }
 
+    /// Makra policzone z celu kalorycznego, sylwetki i liczby treningów.
+    /// `nil`, gdy w profilu brakuje danych.
+    private var computedMacros: MacroTargets? {
+        bodyMetrics?.macroTargets(for: currentGoal, calories: calorieGoal)
+    }
+
+    /// To, co realnie obowiązuje: ręczne nadpisanie, a w jego braku wyliczenie.
+    private var effectiveMacros: MacroTargets? {
+        guard let computed = computedMacros else { return nil }
+        return MacroTargets(
+            proteinG: proteinOverride >= 0 ? proteinOverride : computed.proteinG,
+            fatG: fatOverride >= 0 ? fatOverride : computed.fatG,
+            carbsG: carbsOverride >= 0 ? carbsOverride : computed.carbsG
+        )
+    }
+
+    private var hasMacroOverride: Bool {
+        proteinOverride >= 0 || fatOverride >= 0 || carbsOverride >= 0
+    }
+
     private var selectedAllergens: Set<Allergen> {
         Set(allergensRaw
             .split(separator: ",")
@@ -425,6 +451,7 @@ struct SettingsView: View {
             displayName: userDisplayName,
             email: userEmail,
             avatarUrl: userAvatarUrl,
+            avatarSeed: userEmail.isEmpty ? userDisplayName : userEmail,
             action: { showProfileSheet = true }
         )
     }
@@ -1006,6 +1033,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     calorieGoalSection
+                    macroSection
                     goalPickerSection
                     dietPickerSection
                     allergensSection
@@ -1032,7 +1060,11 @@ struct SettingsView: View {
                 diet: currentDiet.rawValue,
                 calorieGoal: calorieGoal,
                 allergens: selectedAllergens.map(\.rawValue),
-                goal: currentGoal.rawValue
+                goal: currentGoal.rawValue,
+                proteinG: proteinOverride >= 0 ? proteinOverride : nil,
+                fatG: fatOverride >= 0 ? fatOverride : nil,
+                carbsG: carbsOverride >= 0 ? carbsOverride : nil,
+                clearMacroOverrides: !hasMacroOverride
             )
         }
     }
@@ -1043,6 +1075,7 @@ struct SettingsView: View {
             || currentGoal != .healthy
             || calorieGoal != Self.calorieGoalDefault
             || !selectedAllergens.isEmpty
+            || hasMacroOverride
     }
 
     /// Stable token that changes whenever the user touches any preference
@@ -1050,7 +1083,7 @@ struct SettingsView: View {
     /// schedules a fresh one. Using a single concatenated string keeps the
     /// modifier signature simple.
     private var dietPreferencesSyncToken: String {
-        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)|\(goalRaw)"
+        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)|\(goalRaw)|\(proteinOverride)|\(fatOverride)|\(carbsOverride)"
     }
 
     // ─── Twój cel ──────────
@@ -1274,6 +1307,224 @@ struct SettingsView: View {
         .animation(.smooth(duration: 0.18), value: selected)
     }
 
+    // ─── Makroskładniki ──────────
+    //
+    // Domyślnie liczone z celu, sylwetki i liczby treningów — użytkownik nie
+    // musi nic robić i wartości same podążają, gdy zmieni cel albo dołoży
+    // treningów. Każde makro da się jednak nadpisać: „max 2200 kcal, ale
+    // 160 g białka" to normalny sposób prowadzenia redukcji i aplikacja nie
+    // ma prawa go blokować.
+    @ViewBuilder
+    private var macroSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetSectionLabel(title: "Makroskładniki")
+
+            VStack(alignment: .leading, spacing: 0) {
+                if let macros = effectiveMacros {
+                    macroRow(.protein, value: macros.proteinG, override: $proteinOverride)
+                    macroDivider
+                    macroRow(.carbs, value: macros.carbsG, override: $carbsOverride)
+                    macroDivider
+                    macroRow(.fat, value: macros.fatG, override: $fatOverride)
+                    macroDivider
+                    macroFooter(macros)
+                } else {
+                    Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(16)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private var macroDivider: some View {
+        Rectangle()
+            .fill(Color.wmRule(scheme))
+            .frame(height: 1)
+            .padding(.leading, 16)
+    }
+
+    private enum Macro {
+        case protein, carbs, fat
+
+        var title: String {
+            switch self {
+            case .protein: return "Białko"
+            case .carbs:   return "Węglowodany"
+            case .fat:     return "Tłuszcze"
+            }
+        }
+
+        var accent: Color {
+            switch self {
+            case .protein: return WMPalette.indigo
+            case .carbs:   return WMPalette.sage
+            case .fat:     return WMPalette.butter
+            }
+        }
+
+        /// Krok steppera. Białko i węgle chodzą po 5 g, tłuszcz po 2 —
+        /// 5 g tłuszczu to 45 kcal, czyli zauważalny skok.
+        var step: Int {
+            switch self {
+            case .protein, .carbs: return 5
+            case .fat:             return 2
+            }
+        }
+
+        var upperBound: Int {
+            switch self {
+            case .protein: return 400
+            case .carbs:   return 800
+            case .fat:     return 300
+            }
+        }
+    }
+
+    private func macroRow(_ macro: Macro, value: Int, override: Binding<Int>) -> some View {
+        let isOverridden = override.wrappedValue >= 0
+
+        return HStack(spacing: 12) {
+            Circle()
+                .fill(macro.accent)
+                .frame(width: 10, height: 10)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(macro.title)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+
+                Text(isOverridden ? "Twoja wartość" : "Wyliczone")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(isOverridden ? macro.accent : Color.wmFaint(scheme))
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("\(value)")
+                    .font(.system(size: 17, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .contentTransition(.numericText(value: Double(value)))
+
+                Text("g")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+            .frame(minWidth: 58, alignment: .trailing)
+
+            macroStepper(macro, value: value, override: override)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .animation(.smooth(duration: 0.18), value: value)
+    }
+
+    /// Minus / plus zamiast pola tekstowego. Makra reguluje się o kilka
+    /// gramów w jedną albo drugą stronę, a nie wpisuje od zera — a przy okazji
+    /// nie ma tu żadnego stanu pośredniego do zepsucia.
+    private func macroStepper(_ macro: Macro, value: Int, override: Binding<Int>) -> some View {
+        HStack(spacing: 0) {
+            macroStepButton(systemName: "minus", accent: macro.accent) {
+                override.wrappedValue = max(value - macro.step, 0)
+            }
+
+            Rectangle()
+                .fill(Color.wmTileStroke(scheme))
+                .frame(width: 1, height: 18)
+
+            macroStepButton(systemName: "plus", accent: macro.accent) {
+                override.wrappedValue = min(value + macro.step, macro.upperBound)
+            }
+        }
+        .background(Capsule().fill(Color.wmChipBg(scheme)))
+        .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+        .accessibilityLabel(macro.title)
+        .accessibilityValue("\(value) gramów")
+    }
+
+    private func macroStepButton(
+        systemName: String,
+        accent: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            withAnimation(.smooth(duration: 0.18)) { action() }
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(accent)
+                .frame(width: 34, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Suma makr rzadko trafia w cel co do kilokalorii — i nie musi. Pokazujemy
+    /// ją wprost, żeby po ręcznym podkręceniu białka było widać, że dzienna
+    /// pula przestała się spinać, zamiast zostawiać użytkownika z trzema
+    /// liczbami bez kontekstu.
+    private func macroFooter(_ macros: MacroTargets) -> some View {
+        let diff = macros.totalKcal - calorieGoal
+
+        return HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Z makr wychodzi \(macros.totalKcal) kcal")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+
+                Text(macroFooterNote(diff: diff))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(abs(diff) > 60 ? WMPalette.terracotta : Color.wmMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if hasMacroOverride {
+                Button {
+                    withAnimation(.smooth(duration: 0.22)) { resetMacroOverrides() }
+                } label: {
+                    Text("Policz")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(WMPalette.terracotta)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
+                        .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.30), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Policz makra od nowa")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.wmChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
+    }
+
+    private func macroFooterNote(diff: Int) -> String {
+        if abs(diff) <= 20 { return "Spina się z dziennym celem." }
+        if diff > 0 { return "To \(diff) kcal ponad Twój cel \(calorieGoal) kcal." }
+        return "To \(abs(diff)) kcal poniżej Twojego celu \(calorieGoal) kcal."
+    }
+
+    private func resetMacroOverrides() {
+        proteinOverride = -1
+        fatOverride = -1
+        carbsOverride = -1
+    }
+
     private var calorieGoalSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Cel kaloryczny")
@@ -1462,6 +1713,7 @@ struct SettingsView: View {
                 allergensRaw = ""
                 calorieGoal = Self.calorieGoalDefault
                 goalRaw = UserGoal.healthy.rawValue
+                resetMacroOverrides()
             }
         } label: {
             HStack(spacing: 8) {
@@ -2118,6 +2370,12 @@ struct ProfileAvatar: View {
     let displayName: String
     let size: CGFloat
 
+    /// Ziarno gradientu — stabilny identyfikator użytkownika (e-mail albo
+    /// id konta). Ta sama osoba dostaje zawsze ten sam kolor, na każdym
+    /// urządzeniu i po każdym przelogowaniu, a dwie różne osoby w jednym
+    /// gospodarstwie prawie zawsze różne. Pusty ziarno = fallback na imię.
+    var seed: String = ""
+
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -2155,13 +2413,12 @@ struct ProfileAvatar: View {
     }
 
     private var initialsFallback: some View {
-        // Cozy Kitchen avatar — terracotta gradient with the user's
-        // initial in white. Mirrors the design's `Avatar` component.
-        LinearGradient(
-            colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.20)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        // Gradient dobierany deterministycznie z ziarna — nie losowany przy
+        // każdym renderze, bo avatar zmieniający kolor po scrollu wyglądałby
+        // na usterkę. Paleta jest zamknięta i wzięta z `WMPalette`, więc
+        // każdy wariant siedzi w tej samej rodzinie kolorów co reszta
+        // aplikacji, zamiast wpadać w przypadkowy odcień z całego koła barw.
+        Self.gradient(for: seed.isEmpty ? displayName : seed)
         .overlay(
             Text(Self.initials(for: displayName))
                 .font(.system(size: size * 0.40, weight: .semibold))
@@ -2169,6 +2426,40 @@ struct ProfileAvatar: View {
                 .foregroundStyle(.white)
                 .monospacedDigit()
         )
+    }
+
+    /// Sześć par z palety aplikacji. Terakota zostaje pierwsza, bo to
+    /// dotychczasowy wygląd — kto ma stary avatar, w większości przypadków
+    /// go nie zauważy.
+    private static let gradientPairs: [(Color, Color)] = [
+        (WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.22)),
+        (WMPalette.sage, WMPalette.sage.mix(black: 0.24)),
+        (WMPalette.indigo, WMPalette.indigo.mix(black: 0.22)),
+        (WMPalette.butter, WMPalette.butter.mix(black: 0.28)),
+        (WMPalette.terracottaDeep, WMPalette.terracottaDeep.mix(black: 0.20)),
+        (WMPalette.sage.mix(black: 0.12), WMPalette.indigo.mix(black: 0.10)),
+    ]
+
+    static func gradient(for seed: String) -> LinearGradient {
+        let pair = gradientPairs[stableIndex(for: seed, upperBound: gradientPairs.count)]
+        return LinearGradient(
+            colors: [pair.0, pair.1],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// Własny FNV-1a zamiast `hashValue`. `Hasher` Swifta jest zasolony na
+    /// każde uruchomienie procesu, więc kolor avatara zmieniałby się po
+    /// każdym restarcie aplikacji — a to ma być cecha użytkownika, nie sesji.
+    private static func stableIndex(for seed: String, upperBound: Int) -> Int {
+        guard upperBound > 0 else { return 0 }
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in seed.lowercased().utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01B3
+        }
+        return Int(hash % UInt64(upperBound))
     }
 
     static func initials(for name: String) -> String {

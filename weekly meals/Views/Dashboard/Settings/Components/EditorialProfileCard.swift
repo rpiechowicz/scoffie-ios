@@ -15,6 +15,8 @@ struct EditorialProfileCard: View {
     let displayName: String
     let email: String
     let avatarUrl: String?
+    /// Ziarno koloru avatara — patrz `ProfileAvatar.seed`.
+    var avatarSeed: String = ""
 
     /// Otwiera arkusz „Twoje dane”. Karta jest jedynym wejściem do danych
     /// zbieranych w kreatorze (rok urodzenia, wzrost, waga, treningi) — bez
@@ -74,7 +76,8 @@ struct EditorialProfileCard: View {
         ProfileAvatar(
             avatarUrl: trimmedAvatarUrl,
             displayName: displayNameLabel,
-            size: 48
+            size: 48,
+            seed: avatarSeed
         )
     }
 

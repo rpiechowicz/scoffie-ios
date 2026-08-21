@@ -229,6 +229,45 @@ final class SessionStore {
         isRestoringSession = false
     }
 
+    /// Trwale usuwa konto: wypisuje z gospodarstwa, kasuje użytkownika po
+    /// stronie backendu, a na koniec czyści sesję lokalnie.
+    ///
+    /// Kolejność jest istotna. `logout()` leci dopiero po potwierdzeniu
+    /// z serwera — gdyby poszedł wcześniej, nieudane żądanie zostawiłoby
+    /// wylogowanego użytkownika z żywym kontem i bez sposobu, żeby spróbować
+    /// ponownie. Zwraca `false`, gdy kasowanie się nie powiodło; wtedy
+    /// sesja zostaje nietknięta, a wywołujący pokazuje błąd.
+    @MainActor
+    func deleteAccount() async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+
+        do {
+            let envelope: WsEnvelope<BackendDeletedUserDTO> = try await socket.emitWithAck(
+                event: "users:delete",
+                payload: ["userId": userId],
+                as: WsEnvelope<BackendDeletedUserDTO>.self
+            )
+
+            guard envelope.ok else {
+                authError = envelope.error ?? "Nie udało się usunąć konta. Spróbuj ponownie."
+                return false
+            }
+        } catch {
+            authError = UserFacingErrorMapper.message(from: error)
+            return false
+        }
+
+        // Konto już nie istnieje, więc oprócz zwykłego wylogowania trzeba
+        // zdjąć też dane profilowe i preferencje — inaczej następne logowanie
+        // na tym urządzeniu zastałoby cudzy wzrost i cudzą dietę.
+        clearPersistedProfileFields()
+        clearPersistedPreferences()
+        logout()
+        return true
+    }
+
     func updatePushDeviceToken(_ token: String) {
         let normalized = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return }
@@ -825,6 +864,9 @@ final class SessionStore {
         defaults.removeObject(forKey: PreferencesKeys.allergens)
         defaults.removeObject(forKey: PreferencesKeys.goal)
         defaults.removeObject(forKey: PreferencesKeys.activityLevel)
+        defaults.removeObject(forKey: PreferencesKeys.proteinG)
+        defaults.removeObject(forKey: PreferencesKeys.fatG)
+        defaults.removeObject(forKey: PreferencesKeys.carbsG)
     }
 
     private func restoredSessionSnapshot() -> PersistedSessionSnapshot? {
@@ -1020,6 +1062,9 @@ final class SessionStore {
         static let allergens = "settings.diet.allergens"
         static let goal = "settings.diet.goal"
         static let activityLevel = "settings.diet.activityLevel"
+        static let proteinG = "settings.diet.proteinG"
+        static let fatG = "settings.diet.fatG"
+        static let carbsG = "settings.diet.carbsG"
     }
 
     private enum ProfileKeys {
@@ -1080,6 +1125,11 @@ final class SessionStore {
             )
             defaults.set(prefs.goal.lowercased(), forKey: PreferencesKeys.goal)
             defaults.set(prefs.activityLevel, forKey: PreferencesKeys.activityLevel)
+            // −1 to sentinel „licz za mnie" po stronie iOS; backend trzyma
+            // tam `null`. Tłumaczenie w obie strony siedzi wyłącznie tutaj.
+            defaults.set(prefs.proteinG ?? -1, forKey: PreferencesKeys.proteinG)
+            defaults.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
+            defaults.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
         } catch {
             // Swallow — preferences are non-critical, AppStorage default
             // applies. Will retry on the next session bootstrap.
@@ -1095,7 +1145,14 @@ final class SessionStore {
         calorieGoal: Int? = nil,
         allergens: [String]? = nil,
         goal: String? = nil,
-        activityLevel: Int? = nil
+        activityLevel: Int? = nil,
+        proteinG: Int? = nil,
+        fatG: Int? = nil,
+        carbsG: Int? = nil,
+        /// Wysyła jawne `null` na wszystkie trzy makra — czyli „przestań
+        /// trzymać moje wartości i licz za mnie". Bez tego nie dałoby się
+        /// wrócić do automatu, bo `nil` w parametrze znaczy „nie ruszaj".
+        clearMacroOverrides: Bool = false
     ) async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
 
@@ -1130,6 +1187,27 @@ final class SessionStore {
         if let activityLevel {
             data["activityLevel"] = activityLevel
             defaults.set(activityLevel, forKey: PreferencesKeys.activityLevel)
+        }
+        if clearMacroOverrides {
+            data["proteinG"] = NSNull()
+            data["fatG"] = NSNull()
+            data["carbsG"] = NSNull()
+            defaults.set(-1, forKey: PreferencesKeys.proteinG)
+            defaults.set(-1, forKey: PreferencesKeys.fatG)
+            defaults.set(-1, forKey: PreferencesKeys.carbsG)
+        } else {
+            if let proteinG {
+                data["proteinG"] = proteinG
+                defaults.set(proteinG, forKey: PreferencesKeys.proteinG)
+            }
+            if let fatG {
+                data["fatG"] = fatG
+                defaults.set(fatG, forKey: PreferencesKeys.fatG)
+            }
+            if let carbsG {
+                data["carbsG"] = carbsG
+                defaults.set(carbsG, forKey: PreferencesKeys.carbsG)
+            }
         }
         guard !data.isEmpty else { return }
 
