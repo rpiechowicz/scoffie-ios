@@ -13,16 +13,33 @@ struct SettingsView: View {
     @AppStorage("settings.user.displayName") private var userDisplayName: String = "user1"
     @AppStorage("settings.user.email") private var userEmail: String = "user1@example.com"
     @AppStorage("settings.user.avatarUrl") private var userAvatarUrl: String = ""
+    // −1 = backend jeszcze nie przydzielił koloru (konto sprzed tej zmiany).
+    @AppStorage("settings.user.avatarColor") private var userAvatarColor: Int = -1
     @AppStorage("settings.household.name") private var persistedHouseholdName: String = ""
     @AppStorage("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
     @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
+    @AppStorage("settings.diet.goal") private var goalRaw: String = UserGoal.healthy.rawValue
+    // Sylwetka z arkusza „Twoje dane" — tylko do odczytu, żeby podpowiedź
+    // kaloryczna liczyła się z realnych danych zamiast z płaskiej stałej.
+    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    // −1 znaczy „nie nadpisane, licz za mnie". `@AppStorage` nie umie
+    // opcjonalnego `Int`, a 0 g białka jest legalną (choć głupią) wartością,
+    // więc potrzebny jest sentinel spoza dziedziny.
+    @AppStorage("settings.diet.proteinG") private var proteinOverride: Int = -1
+    @AppStorage("settings.diet.fatG") private var fatOverride: Int = -1
+    @AppStorage("settings.diet.carbsG") private var carbsOverride: Int = -1
+    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @AppStorage(BodyMetrics.Keys.activityLevel) private var profileActivityRaw: Int = ActivityLevel.light.rawValue
 
     @State private var showCreateHouseholdSheet = false
     @State private var showHouseholdSheet = false
     @State private var showNotificationsSheet = false
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
+    @State private var showProfileSheet = false
     @State private var showHelpSheet = false
     @State private var createHouseholdName = ""
     @State private var householdNameError: String? = nil
@@ -228,6 +245,46 @@ struct SettingsView: View {
         DietPreference(rawValue: dietPreferenceRaw) ?? .none
     }
 
+    private var currentGoal: UserGoal {
+        UserGoal(rawValue: goalRaw) ?? .healthy
+    }
+
+    /// `nil`, gdy w profilu brakuje którejś danej — wtedy podpowiedź schodzi
+    /// do płaskiej wartości przypisanej do celu.
+    private var bodyMetrics: BodyMetrics? {
+        BodyMetrics(
+            heightCm: profileHeightCm,
+            weightKg: profileWeightKg,
+            yearOfBirth: profileYearOfBirth,
+            activityRaw: profileActivityRaw,
+            sexRaw: profileSexRaw
+        )
+    }
+
+    private var suggestedCalories: Int {
+        currentGoal.suggestedCalories(for: bodyMetrics)
+    }
+
+    /// Makra policzone z celu kalorycznego, sylwetki i liczby treningów.
+    /// `nil`, gdy w profilu brakuje danych.
+    private var computedMacros: MacroTargets? {
+        bodyMetrics?.macroTargets(for: currentGoal, calories: calorieGoal)
+    }
+
+    /// To, co realnie obowiązuje: ręczne nadpisanie, a w jego braku wyliczenie.
+    private var effectiveMacros: MacroTargets? {
+        guard let computed = computedMacros else { return nil }
+        return MacroTargets(
+            proteinG: proteinOverride >= 0 ? proteinOverride : computed.proteinG,
+            fatG: fatOverride >= 0 ? fatOverride : computed.fatG,
+            carbsG: carbsOverride >= 0 ? carbsOverride : computed.carbsG
+        )
+    }
+
+    private var hasMacroOverride: Bool {
+        proteinOverride >= 0 || fatOverride >= 0 || carbsOverride >= 0
+    }
+
     private var selectedAllergens: Set<Allergen> {
         Set(allergensRaw
             .split(separator: ",")
@@ -238,27 +295,19 @@ struct SettingsView: View {
     /// always shows up; diet name is prepended when set, allergen count
     /// is appended when at least one is picked. Capped at two pieces so
     /// the value column doesn't overflow on narrow rows.
+    /// Kolumna wartości mieści około piętnastu znaków, więc pokazujemy
+    /// JEDNĄ informację, nie sklejkę. „Schudnąć · 2100 kcal" ucinało się do
+    /// „Schudnąć · 210…", czyli do liczby, której i tak nie dało się
+    /// odczytać. Kolejność: dieta (najbardziej konkretna), potem cel,
+    /// a na końcu kalorie — czyli to, co użytkownik faktycznie ustawił.
     private var dietRowValue: String {
-        var parts: [String] = []
-
         if currentDiet != .none {
-            parts.append(currentDiet.title)
+            return currentDiet.title
         }
-        parts.append("\(calorieGoal) kcal")
-        if !selectedAllergens.isEmpty {
-            let count = selectedAllergens.count
-            parts.append("\(count) \(allergenWord(for: count))")
+        if currentGoal != .healthy {
+            return currentGoal.shortTitle
         }
-
-        return parts.prefix(2).joined(separator: " · ")
-    }
-
-    private func allergenWord(for count: Int) -> String {
-        switch count {
-        case 1:         return "alergen"
-        case 2...4:     return "alergeny"
-        default:        return "alergenów"
-        }
+        return "\(calorieGoal) kcal"
     }
 
     private func toggleAllergen(_ allergen: Allergen) {
@@ -352,6 +401,13 @@ struct SettingsView: View {
                 appearanceSheet
                     .dashboardLiquidSheet()
             }
+            .sheet(isPresented: $showProfileSheet) {
+                ProfileDetailsSheet {
+                    showProfileSheet = false
+                }
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+            }
             .sheet(isPresented: $showDietSheet) {
                 dietSheet
                     .dashboardLiquidSheet()
@@ -384,7 +440,10 @@ struct SettingsView: View {
         EditorialProfileCard(
             displayName: userDisplayName,
             email: userEmail,
-            avatarUrl: userAvatarUrl
+            avatarUrl: userAvatarUrl,
+            avatarSeed: userEmail.isEmpty ? userDisplayName : userEmail,
+            avatarColorIndex: userAvatarColor >= 0 ? userAvatarColor : nil,
+            action: { showProfileSheet = true }
         )
     }
 
@@ -959,16 +1018,18 @@ struct SettingsView: View {
                         showDietSheet = false
                     }
 
-                    Text("Aplikacja użyje tych ustawień, żeby filtrować propozycje przepisów i zaznaczać te, na które musisz uważać.")
+                    Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
                         .font(.system(size: 13.5, weight: .regular))
                         .foregroundStyle(Color.wmMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     calorieGoalSection
+                    macroSection
+                    goalPickerSection
                     dietPickerSection
                     allergensSection
 
-                    if currentDiet != .none || calorieGoal != Self.calorieGoalDefault || !selectedAllergens.isEmpty {
+                    if hasCustomisedPreferences {
                         resetPreferencesButton
                             .padding(.top, 4)
                     }
@@ -989,9 +1050,23 @@ struct SettingsView: View {
             await sessionStore.saveUserPreferences(
                 diet: currentDiet.rawValue,
                 calorieGoal: calorieGoal,
-                allergens: selectedAllergens.map(\.rawValue)
+                allergens: selectedAllergens.map(\.rawValue),
+                goal: currentGoal.rawValue,
+                proteinG: proteinOverride >= 0 ? proteinOverride : nil,
+                fatG: fatOverride >= 0 ? fatOverride : nil,
+                carbsG: carbsOverride >= 0 ? carbsOverride : nil,
+                clearMacroOverrides: !hasMacroOverride
             )
         }
+    }
+
+    /// Czy jest co czyścić — steruje widocznością „Wyczyść preferencje”.
+    private var hasCustomisedPreferences: Bool {
+        currentDiet != .none
+            || currentGoal != .healthy
+            || calorieGoal != Self.calorieGoalDefault
+            || !selectedAllergens.isEmpty
+            || hasMacroOverride
     }
 
     /// Stable token that changes whenever the user touches any preference
@@ -999,7 +1074,142 @@ struct SettingsView: View {
     /// schedules a fresh one. Using a single concatenated string keeps the
     /// modifier signature simple.
     private var dietPreferencesSyncToken: String {
-        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)"
+        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)|\(goalRaw)|\(proteinOverride)|\(fatOverride)|\(carbsOverride)"
+    }
+
+    // ─── Twój cel ──────────
+    //
+    // Ten sam wybór, co w kroku 2 kreatora powitalnego — powtórzony tutaj,
+    // bo po onboardingu nie było jak go zmienić. Cel nie odsiewa przepisów;
+    // przestawia kolejność listy (patrz `RecipePersonalization.goalScore`).
+    // Siedzi pod suwakiem kalorii, a podpowiedź „Ustaw” na dole tej karty
+    // przestawia suwak nad nią.
+    private var goalPickerSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetSectionLabel(title: "Twój cel")
+
+            VStack(spacing: 0) {
+                // Ostatni wiersz nigdy nie rysuje własnej kreski. Gdy pod nim
+                // siedzi podpowiedź kaloryczna, kreskę stawia ona — i to na
+                // pełnej szerokości. Wcześniej rysowały obie i pod ostatnim
+                // celem wychodziła podwójna linia: wcięta i pełna.
+                ForEach(Array(UserGoal.allCases.enumerated()), id: \.element.id) { idx, goal in
+                    goalRow(goal, isLast: idx == UserGoal.allCases.count - 1)
+                }
+
+                if showsCalorieSuggestion {
+                    calorieSuggestionRow
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private func goalRow(_ goal: UserGoal, isLast: Bool) -> some View {
+        let isSelected = goal == currentGoal
+
+        return Button {
+            withAnimation(.smooth(duration: 0.20)) {
+                goalRaw = goal.rawValue
+            }
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                EditorialSettingsTileIcon(icon: goal.icon, color: goal.accent)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(goal.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.wmLabel(scheme))
+
+                    Text(goal.subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                radioIndicator(selected: isSelected)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(Color.wmRule(scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 16 + 32 + 14)
+            }
+        }
+        .accessibilityLabel(goal.title)
+        .accessibilityValue(isSelected ? "Wybrane" : "")
+    }
+
+    /// Cel niesie ze sobą sugerowaną kaloryczność, ale ustawiony wcześniej
+    /// suwak jest decyzją użytkownika — więc podpowiadamy przyciskiem zamiast
+    /// nadpisywać. Kreator powitalny robi to samo, tyle że tam suwak jeszcze
+    /// nie był ruszany, więc może iść za celem sam.
+    private var showsCalorieSuggestion: Bool {
+        currentGoal != .plan && calorieGoal != suggestedCalories
+    }
+
+    /// Dwa warianty: policzony z sylwetki (wtedy mówimy skąd) i awaryjny,
+    /// gdy w profilu brakuje danych. Drugi zachęca do ich uzupełnienia,
+    /// zamiast udawać, że liczba jest szyta na miarę.
+    private var calorieSuggestionText: String {
+        guard bodyMetrics != nil else {
+            return "Dla tego celu zwykle wychodzi \(suggestedCalories) kcal. Uzupełnij sylwetkę w „Twoje dane”, a policzymy dokładniej."
+        }
+        return "Dla Twojej sylwetki i tego celu wychodzi \(suggestedCalories) kcal."
+    }
+
+    private var calorieSuggestionRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(WMPalette.butter)
+                .frame(width: 22)
+
+            Text(calorieSuggestionText)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.wmMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                withAnimation(.smooth(duration: 0.22)) {
+                    calorieGoal = snappedCalorieGoal(from: Double(suggestedCalories))
+                }
+            } label: {
+                Text("Ustaw")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(WMPalette.terracotta)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
+                    .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.30), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ustaw \(suggestedCalories) kcal")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.wmChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.wmRule(scheme))
+                .frame(height: 1)
+        }
     }
 
     private var dietPickerSection: some View {
@@ -1048,6 +1258,10 @@ struct SettingsView: View {
 
                 radioIndicator(selected: isSelected)
             }
+            // Dokładnie ta sama geometria co `goalRow` — obie sekcje to ta
+            // sama lista wyboru i mają wyglądać identycznie. Wcześniej dieta
+            // miała własną `minHeight` i inny padding pionowy, przez co jej
+            // wiersze były wyraźnie wyższe od wierszy celu.
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .contentShape(Rectangle())
@@ -1086,6 +1300,227 @@ struct SettingsView: View {
             }
         }
         .animation(.smooth(duration: 0.18), value: selected)
+    }
+
+    // ─── Makroskładniki ──────────
+    //
+    // Domyślnie liczone z celu, sylwetki i liczby treningów — użytkownik nie
+    // musi nic robić i wartości same podążają, gdy zmieni cel albo dołoży
+    // treningów. Każde makro da się jednak nadpisać: „max 2200 kcal, ale
+    // 160 g białka" to normalny sposób prowadzenia redukcji i aplikacja nie
+    // ma prawa go blokować.
+    @ViewBuilder
+    private var macroSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetSectionLabel(title: "Makroskładniki")
+
+            VStack(alignment: .leading, spacing: 0) {
+                if let macros = effectiveMacros {
+                    macroRow(.protein, value: macros.proteinG, override: $proteinOverride)
+                    macroDivider
+                    macroRow(.carbs, value: macros.carbsG, override: $carbsOverride)
+                    macroDivider
+                    macroRow(.fat, value: macros.fatG, override: $fatOverride)
+                    // Kreska nad stopką idzie na pełną szerokość, bo stopka
+                    // ma własne tło rozciągnięte od krawędzi do krawędzi —
+                    // wcięta kreska kończyła się w innym miejscu niż kolor
+                    // pod nią i wyglądało to na niedoróbkę.
+                    Rectangle()
+                        .fill(Color.wmRule(scheme))
+                        .frame(height: 1)
+                    macroFooter(macros)
+                } else {
+                    Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(16)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private var macroDivider: some View {
+        Rectangle()
+            .fill(Color.wmRule(scheme))
+            .frame(height: 1)
+            .padding(.leading, 16)
+    }
+
+    private enum Macro {
+        case protein, carbs, fat
+
+        var title: String {
+            switch self {
+            case .protein: return "Białko"
+            case .carbs:   return "Węglowodany"
+            case .fat:     return "Tłuszcze"
+            }
+        }
+
+        var accent: Color {
+            switch self {
+            case .protein: return WMPalette.indigo
+            case .carbs:   return WMPalette.sage
+            case .fat:     return WMPalette.butter
+            }
+        }
+
+        /// Ten sam krok, do którego zaokrąglane są wyliczenia — inaczej
+        /// stepper wyprowadzałby wartość z siatki („193 g") i pół karty
+        /// pokazywałoby okrągłe liczby, a pół nie.
+        var step: Int { MacroTargets.gramStep }
+
+        var upperBound: Int {
+            switch self {
+            case .protein: return 400
+            case .carbs:   return 800
+            case .fat:     return 300
+            }
+        }
+    }
+
+    private func macroRow(_ macro: Macro, value: Int, override: Binding<Int>) -> some View {
+        let isOverridden = override.wrappedValue >= 0
+
+        return HStack(spacing: 12) {
+            Circle()
+                .fill(macro.accent)
+                .frame(width: 10, height: 10)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(macro.title)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+
+                Text(isOverridden ? "Twoja wartość" : "Wyliczone")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(isOverridden ? macro.accent : Color.wmFaint(scheme))
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("\(value)")
+                    .font(.system(size: 17, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .contentTransition(.numericText(value: Double(value)))
+
+                Text("g")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+            .frame(minWidth: 58, alignment: .trailing)
+
+            macroStepper(macro, value: value, override: override)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .animation(.smooth(duration: 0.18), value: value)
+    }
+
+    /// Minus / plus zamiast pola tekstowego. Makra reguluje się o kilka
+    /// gramów w jedną albo drugą stronę, a nie wpisuje od zera — a przy okazji
+    /// nie ma tu żadnego stanu pośredniego do zepsucia.
+    private func macroStepper(_ macro: Macro, value: Int, override: Binding<Int>) -> some View {
+        HStack(spacing: 0) {
+            macroStepButton(systemName: "minus", accent: macro.accent) {
+                override.wrappedValue = MacroTargets.snappedGrams(Double(value - macro.step))
+            }
+
+            Rectangle()
+                .fill(Color.wmTileStroke(scheme))
+                .frame(width: 1, height: 18)
+
+            macroStepButton(systemName: "plus", accent: macro.accent) {
+                let next = MacroTargets.snappedGrams(Double(value + macro.step))
+                override.wrappedValue = min(next, macro.upperBound)
+            }
+        }
+        .background(Capsule().fill(Color.wmChipBg(scheme)))
+        .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+        .accessibilityLabel(macro.title)
+        .accessibilityValue("\(value) gramów")
+    }
+
+    private func macroStepButton(
+        systemName: String,
+        accent: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            withAnimation(.smooth(duration: 0.18)) { action() }
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(accent)
+                .frame(width: 34, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Suma makr rzadko trafia w cel co do kilokalorii — i nie musi. Pokazujemy
+    /// ją wprost, żeby po ręcznym podkręceniu białka było widać, że dzienna
+    /// pula przestała się spinać, zamiast zostawiać użytkownika z trzema
+    /// liczbami bez kontekstu.
+    private func macroFooter(_ macros: MacroTargets) -> some View {
+        let diff = macros.totalKcal - calorieGoal
+
+        return HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Z makr wychodzi \(macros.totalKcal) kcal")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+
+                Text(macroFooterNote(diff: diff))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(abs(diff) > 60 ? WMPalette.terracotta : Color.wmMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if hasMacroOverride {
+                Button {
+                    withAnimation(.smooth(duration: 0.22)) { resetMacroOverrides() }
+                } label: {
+                    Text("Policz")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(WMPalette.terracotta)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
+                        .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.30), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Policz makra od nowa")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.wmChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
+    }
+
+    private func macroFooterNote(diff: Int) -> String {
+        if abs(diff) <= 20 { return "Spina się z dziennym celem." }
+        if diff > 0 { return "To \(diff) kcal ponad Twój cel \(calorieGoal) kcal." }
+        return "To \(abs(diff)) kcal poniżej Twojego celu \(calorieGoal) kcal."
+    }
+
+    private func resetMacroOverrides() {
+        proteinOverride = -1
+        fatOverride = -1
+        carbsOverride = -1
     }
 
     private var calorieGoalSection: some View {
@@ -1275,6 +1710,8 @@ struct SettingsView: View {
                 dietPreferenceRaw = DietPreference.none.rawValue
                 allergensRaw = ""
                 calorieGoal = Self.calorieGoalDefault
+                goalRaw = UserGoal.healthy.rawValue
+                resetMacroOverrides()
             }
         } label: {
             HStack(spacing: 8) {
@@ -1931,6 +2368,16 @@ struct ProfileAvatar: View {
     let displayName: String
     let size: CGFloat
 
+    /// Indeks gradientu przydzielony przez backend przy kończeniu onboardingu.
+    /// Ma pierwszeństwo, bo tylko serwer widzi, jakie kolory zajęli już
+    /// pozostali domownicy.
+    var colorIndex: Int? = nil
+
+    /// Zapasowe ziarno dla kont sprzed wprowadzenia `avatarColor` — kolor
+    /// liczy się wtedy z hasza e-maila. Ta sama osoba dostaje zawsze ten sam
+    /// odcień, ale bez gwarancji, że różny od domownika.
+    var seed: String = ""
+
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -1968,13 +2415,12 @@ struct ProfileAvatar: View {
     }
 
     private var initialsFallback: some View {
-        // Cozy Kitchen avatar — terracotta gradient with the user's
-        // initial in white. Mirrors the design's `Avatar` component.
-        LinearGradient(
-            colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.20)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        // Gradient dobierany deterministycznie z ziarna — nie losowany przy
+        // każdym renderze, bo avatar zmieniający kolor po scrollu wyglądałby
+        // na usterkę. Paleta jest zamknięta i wzięta z `WMPalette`, więc
+        // każdy wariant siedzi w tej samej rodzinie kolorów co reszta
+        // aplikacji, zamiast wpadać w przypadkowy odcień z całego koła barw.
+        Self.gradient(index: colorIndex, seed: seed.isEmpty ? displayName : seed)
         .overlay(
             Text(Self.initials(for: displayName))
                 .font(.system(size: size * 0.40, weight: .semibold))
@@ -1982,6 +2428,60 @@ struct ProfileAvatar: View {
                 .foregroundStyle(.white)
                 .monospacedDigit()
         )
+    }
+
+    /// Dwanaście gradientów: cztery jednobarwne z palety aplikacji i osiem
+    /// przejść między nimi. Liczba musi zgadzać się z `AVATAR_COLOR_COUNT`
+    /// w `users.service.ts` — to serwer wybiera indeks, klient tylko go
+    /// odczytuje.
+    ///
+    /// Wszystkie warianty siedzą w rodzinie kolorów aplikacji zamiast być
+    /// losowane z całego koła barw: awatar ma odróżniać domowników, a nie
+    /// wyskakiwać z interfejsu.
+    static let gradientPairs: [(Color, Color)] = [
+        // Każda para przechodzi między DWOMA różnymi barwami palety, nie
+        // między odcieniami jednej. Warianty tonalne (terakota → ciemniejsza
+        // terakota) na kółku 48 pt wyglądały po prostu na jednolitą plamę
+        // z cieniem — dopiero zmiana barwy widać jako gradient.
+        (WMPalette.terracotta,               WMPalette.butter.mix(black: 0.06)),
+        (WMPalette.sage,                     WMPalette.indigo.mix(black: 0.10)),
+        (WMPalette.indigo,                   WMPalette.terracottaDeep),
+        (WMPalette.butter,                   WMPalette.terracottaDeep.mix(black: 0.10)),
+        (WMPalette.sage,                     WMPalette.butter.mix(black: 0.04)),
+        (WMPalette.terracotta,               WMPalette.indigo.mix(black: 0.22)),
+        (WMPalette.indigo,                   WMPalette.sage.mix(black: 0.04)),
+        (WMPalette.butter,                   WMPalette.sage.mix(black: 0.40)),
+        (WMPalette.terracottaDeep,           WMPalette.butter.mix(black: 0.02)),
+        (WMPalette.indigo.mix(black: 0.40),  WMPalette.indigo.mix(black: 0.02)),
+        (WMPalette.sage.mix(black: 0.44),    WMPalette.butter.mix(black: 0.08)),
+        (WMPalette.terracotta.mix(black: 0.34), WMPalette.terracotta.mix(black: 0.02)),
+    ]
+
+    /// Przejście po przekątnej, od krawędzi do krawędzi. Bez punktu
+    /// pośredniego — zagęszczał gradient w środku i spłaszczał różnicę
+    /// między barwami zamiast ją uwypuklić.
+    static func gradient(index: Int?, seed: String) -> LinearGradient {
+        let resolved = index.map { abs($0) % gradientPairs.count }
+            ?? stableIndex(for: seed, upperBound: gradientPairs.count)
+        let pair = gradientPairs[resolved]
+        return LinearGradient(
+            colors: [pair.0, pair.1],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// Własny FNV-1a zamiast `hashValue`. `Hasher` Swifta jest zasolony na
+    /// każde uruchomienie procesu, więc kolor avatara zmieniałby się po
+    /// każdym restarcie aplikacji — a to ma być cecha użytkownika, nie sesji.
+    private static func stableIndex(for seed: String, upperBound: Int) -> Int {
+        guard upperBound > 0 else { return 0 }
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in seed.lowercased().utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01B3
+        }
+        return Int(hash % UInt64(upperBound))
     }
 
     static func initials(for name: String) -> String {

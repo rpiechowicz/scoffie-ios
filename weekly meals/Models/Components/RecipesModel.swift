@@ -51,11 +51,23 @@ struct Ingredient: Identifiable, Codable, Hashable {
     var amount: Double
     var unit: IngredientUnit
 
-    init(id: UUID = UUID(), name: String, amount: Double, unit: IngredientUnit) {
+    /// Dział z katalogu backendu („Mięso”, „Nabiał”, „Ryby”, …). Opcjonalny,
+    /// bo starsze wpisy w cache'u i mocki go nie mają — klasyfikator diety
+    /// traktuje `nil` jak brak wskazówki i schodzi wtedy do samej nazwy.
+    var department: String?
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        amount: Double,
+        unit: IngredientUnit,
+        department: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.amount = amount
         self.unit = unit
+        self.department = department
     }
 }
 
