@@ -118,47 +118,46 @@ struct ProfileDetailsSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Profil")
 
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 14) {
-                    ProfileAvatar(
-                        avatarUrl: avatarUrl.isEmpty ? nil : avatarUrl,
-                        displayName: displayName.isEmpty ? "Twoje konto" : displayName,
-                        size: 64
-                    )
+            // Jeden wiersz: avatar, a obok e-mail i edytowalne imię. Wcześniej
+            // avatar 64 pt stał obok jednej linijki tekstu, a pole imienia
+            // siedziało w osobnym bloku pod spodem — z prawej strony awatara
+            // zostawała pusta połowa karty.
+            HStack(alignment: .center, spacing: 14) {
+                ProfileAvatar(
+                    avatarUrl: avatarUrl.isEmpty ? nil : avatarUrl,
+                    displayName: displayName.isEmpty ? "Twoje konto" : displayName,
+                    size: 52
+                )
 
+                VStack(alignment: .leading, spacing: 8) {
                     Text(email.isEmpty ? "Brak e-maila" : email)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(Color.wmLabel(scheme))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TextField("Twoje imię", text: $nameDraft)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .name)
+                        .submitLabel(.done)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color.wmLabel(scheme))
+                        .onSubmit { focusedField = nil }
+                        .onChange(of: nameDraft) { _, newValue in
+                            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !trimmed.isEmpty else { return }
+                            displayName = trimmed
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(insetField)
                 }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    fieldCaption("Imię")
-
-                    HStack(spacing: 12) {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.wmMuted(scheme))
-
-                        TextField("Np. Rafał", text: $nameDraft)
-                            .textInputAutocapitalization(.words)
-                            .autocorrectionDisabled()
-                            .focused($focusedField, equals: .name)
-                            .submitLabel(.done)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.wmLabel(scheme))
-                            .onSubmit { focusedField = nil }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(insetField)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(18)
+            .padding(16)
             .background(card)
         }
     }
@@ -325,25 +324,28 @@ struct ProfileDetailsSheet: View {
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(Color.wmLabel(scheme))
                     .monospacedDigit()
-                    // Klawiatura numeryczna nie ma klawisza return, więc bez
-                    // tego przycisku nie dałoby się zejść z pola inaczej niż
-                    // stuknięciem w inne miejsce arkusza.
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            if focusedField == field {
-                                Spacer()
-                                Button("Gotowe") { focusedField = nil }
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(WMPalette.terracotta)
-                            }
-                        }
-                    }
-                    // Numberpad i tak przepuszcza wklejenie — zostawiamy same
-                    // cyfry, żeby parsowanie nie zależało od schowka.
                     .onChange(of: draft.wrappedValue) { _, newValue in
-                        let digits = newValue.filter(\.isNumber)
-                        if digits != newValue { draft.wrappedValue = digits }
+                        // Numberpad przepuszcza wklejenie — zostawiamy same
+                        // cyfry, żeby parsowanie nie zależało od schowka.
+                        // Trzy cyfry wystarczą na każdy wzrost i każdą wagę.
+                        // Bez limitu pole potrafiło uzbierać „83174", jeśli
+                        // czyszczenie przy wejściu w pole gdzieś nie zdążyło.
+                        let digits = String(newValue.filter(\.isNumber).prefix(3))
+                        if digits != newValue {
+                            draft.wrappedValue = digits
+                            return
+                        }
+                        commitLive(field: field, digits: digits)
                     }
+                    // Wejście w pole czyści je przez `onChange(of: focusedField)`,
+                    // ale ponowne stuknięcie w pole JUŻ aktywne nie zmienia
+                    // focusu — bez tego limit trzech cyfr po cichu zjadał
+                    // wpisywane cyfry i wyglądało to na zawieszone pole.
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            if focusedField == field { draft.wrappedValue = "" }
+                        }
+                    )
 
                 Text(unit)
                     .font(.system(size: 12, weight: .medium))
@@ -470,17 +472,39 @@ struct ProfileDetailsSheet: View {
                 nameDraft = trimmed
             }
 
+        // Wartość spoza zakresu jest ODRZUCANA, nie przycinana. „83174" to nie
+        // jest waga 250 kg — to literówka, i jedyną uczciwą odpowiedzią jest
+        // zostawić to, co było. Przycinanie zamieniało pomyłkę w prawdopodobnie
+        // wyglądającą liczbę, którą łatwo przeoczyć.
         case .height:
-            let resolved = Int(heightDraft).map { clamped($0, to: Self.heightRange) } ?? heightCm
+            let resolved = Int(heightDraft).flatMap { Self.heightRange.contains($0) ? $0 : nil } ?? heightCm
             heightCm = resolved
             heightDraft = String(resolved)
 
         case .weight:
-            let resolved = Int(weightDraft).map { clamped($0, to: Self.weightRange) } ?? weightKg
+            let resolved = Int(weightDraft).flatMap { Self.weightRange.contains($0) ? $0 : nil } ?? weightKg
             weightKg = resolved
             weightDraft = String(resolved)
 
         case .none:
+            break
+        }
+    }
+
+    /// Zapis w locie. Wartość schodzi do `@AppStorage` natychmiast, ale TYLKO
+    /// wtedy, gdy wpisana liczba mieści się już w zakresie. Niedokończone „1"
+    /// albo „17" nie jest ani zapisywane, ani przycinane — i właśnie dlatego
+    /// nic nie przestawia się pod palcami. Wartości spoza zakresu domyka
+    /// `commit(field:)` przy zejściu z pola.
+    private func commitLive(field: Field, digits: String) {
+        guard let value = Int(digits) else { return }
+
+        switch field {
+        case .height where Self.heightRange.contains(value):
+            heightCm = value
+        case .weight where Self.weightRange.contains(value):
+            weightKg = value
+        default:
             break
         }
     }
@@ -549,10 +573,6 @@ struct ProfileDetailsSheet: View {
         if !Self.heightRange.contains(heightCm) { heightCm = Self.defaultHeightCm }
         if !Self.weightRange.contains(weightKg) { weightKg = Self.defaultWeightKg }
         if ActivityLevel(rawValue: activityLevelRaw) == nil { activityLevelRaw = ActivityLevel.light.rawValue }
-    }
-
-    private func clamped(_ value: Int, to range: ClosedRange<Int>) -> Int {
-        min(max(value, range.lowerBound), range.upperBound)
     }
 
     // MARK: - Chassis
