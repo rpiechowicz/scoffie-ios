@@ -32,7 +32,7 @@ struct ProfileDetailsSheet: View {
     // .saveProfile` zapisuje z powrotem do tych samych kluczy
     // (SessionStore.swift:1177), więc debounce'owany zapis wstrzykiwał
     // przyciętą wartość w pole, w którym użytkownik właśnie pisze: po wpisaniu
-    // „173" w polu z „178" robiło się „178173", a 600 ms później clamp
+    // „173” w polu z „178” robiło się „178173”, a 600 ms później clamp
     // zamieniał to na 230 i pole samo się przestawiało. Edycja idzie po
     // draftach, a do `@AppStorage` schodzi dopiero gotowa, przycięta liczba.
     @State private var nameDraft: String = ""
@@ -126,19 +126,14 @@ struct ProfileDetailsSheet: View {
                         size: 64
                     )
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(email.isEmpty ? "Brak e-maila" : email)
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(scheme))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-
-                        Text(avatarHint)
-                            .font(.system(size: 11.5, weight: .regular))
-                            .foregroundStyle(Color.wmFaint(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(email.isEmpty ? "Brak e-maila" : email)
+                        .font(.system(size: 16, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.wmLabel(scheme))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -166,16 +161,6 @@ struct ProfileDetailsSheet: View {
             .padding(18)
             .background(card)
         }
-    }
-
-    /// E-mail i zdjęcie przychodzą od dostawcy logowania i nie da się ich tu
-    /// zmienić. Apple w ogóle nie oddaje zdjęcia profilowego, więc dla kont
-    /// Apple zawsze zostają inicjały — mówimy o tym wprost, zamiast dawać
-    /// przycisk „zmień”, który nie miałby czego zrobić.
-    private var avatarHint: String {
-        avatarUrl.isEmpty
-            ? "Zdjęcie i e-mail pochodzą z konta, którym się logujesz."
-            : "Zdjęcie i e-mail pochodzą z konta Google."
     }
 
     // MARK: - Sylwetka
@@ -218,11 +203,95 @@ struct ProfileDetailsSheet: View {
                         field: .weight
                     )
                 }
+
+                if let metrics {
+                    bmiRow(metrics)
+                }
             }
             .padding(18)
             .background(card)
         }
     }
+
+    /// Sylwetka policzona z aktualnie ZAPISANYCH wartości, nie z draftów —
+    /// BMI nie ma migać przy każdej wpisanej cyfrze.
+    private var metrics: BodyMetrics? {
+        BodyMetrics(
+            heightCm: heightCm,
+            weightKg: weightKg,
+            yearOfBirth: yearOfBirth,
+            activityRaw: activityLevelRaw
+        )
+    }
+
+    /// BMI z kategorią i policzonym zapotrzebowaniem. Zapotrzebowanie ląduje
+    /// tutaj, a nie tylko w arkuszu diety, bo to jedyne miejsce, gdzie widać
+    /// wszystkie liczby, z których się bierze.
+    private func bmiRow(_ metrics: BodyMetrics) -> some View {
+        let category = metrics.bmiCategory
+
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? "—")
+                        .font(.system(size: 20, weight: .heavy))
+                        .tracking(-0.4)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.wmLabel(scheme))
+
+                    Text("BMI")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(Color.wmFaint(scheme))
+                }
+
+                Text(category.title)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(category.accent)
+            }
+
+            Rectangle()
+                .fill(Color.wmRule(scheme))
+                .frame(width: 1, height: 34)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(Int(metrics.totalDailyEnergyExpenditure.rounded()))")
+                        .font(.system(size: 20, weight: .heavy))
+                        .tracking(-0.4)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.wmLabel(scheme))
+
+                    Text("KCAL")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(Color.wmFaint(scheme))
+                }
+
+                Text("Na utrzymanie wagi")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.wmInsetSurface(scheme))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("BMI \(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? ""), \(category.title). Na utrzymanie wagi \(Int(metrics.totalDailyEnergyExpenditure.rounded())) kilokalorii dziennie.")
+    }
+
+    private static let bmiFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 1
+        formatter.maximumFractionDigits = 1
+        return formatter
+    }()
 
     private var ageLabel: String {
         let age = max(currentYear - yearOfBirth, 0)

@@ -86,10 +86,17 @@ struct WelcomeView: View {
         _diet = State(initialValue: DietPreference(rawValue: storedDiet) ?? .none)
 
         let storedCalorieGoal = defaults.integer(forKey: "settings.diet.calorieGoal")
-        let initialKcal = storedCalorieGoal > 0 ? storedCalorieGoal : resolvedGoal.suggestedCalories
+        let seedMetrics = BodyMetrics(
+            heightCm: storedHeight > 0 ? storedHeight : 178,
+            weightKg: storedWeight > 0 ? storedWeight : 74,
+            yearOfBirth: storedYear > 0 ? storedYear : 1992,
+            activityRaw: storedActivity.rawValue
+        )
+        let seedSuggestion = resolvedGoal.suggestedCalories(for: seedMetrics)
+        let initialKcal = storedCalorieGoal > 0 ? storedCalorieGoal : seedSuggestion
         _calorieGoal = State(initialValue: initialKcal)
         _calorieAdjustedManually = State(
-            initialValue: storedCalorieGoal > 0 && storedCalorieGoal != resolvedGoal.suggestedCalories
+            initialValue: storedCalorieGoal > 0 && storedCalorieGoal != seedSuggestion
         )
 
         let storedAllergensRaw = defaults.string(forKey: "settings.diet.allergens") ?? ""
@@ -157,20 +164,41 @@ struct WelcomeView: View {
                 }
             }
         }
-        .onChange(of: goal) { _, newValue in
-            // Keep the kcal slider in sync with the suggested target until
-            // the user explicitly drags it — once they do, leave it alone.
-            if !calorieAdjustedManually {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                    calorieGoal = newValue.suggestedCalories
-                }
+        // Suwak kalorii podąża za podpowiedzią, dopóki użytkownik sam go nie
+        // przeciągnie. Podpowiedź zależy nie tylko od celu, ale i od sylwetki
+        // z kroku 1 oraz treningów z kroku 2 — stąd wspólny token zamiast
+        // samego `goal`.
+        .onChange(of: calorieSuggestionToken) { _, _ in
+            guard !calorieAdjustedManually else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                calorieGoal = suggestedCalories
             }
         }
         .onChange(of: calorieGoal) { _, newValue in
-            if newValue != goal.suggestedCalories {
+            if newValue != suggestedCalories {
                 calorieAdjustedManually = true
             }
         }
+    }
+
+    /// Sylwetka z kroków 1 i 2. `nil`, dopóki użytkownik ich nie wypełni —
+    /// wtedy podpowiedź schodzi do płaskiej wartości przypisanej do celu.
+    private var bodyMetrics: BodyMetrics? {
+        BodyMetrics(
+            heightCm: heightCm,
+            weightKg: weightKg,
+            yearOfBirth: yearOfBirth,
+            activityRaw: activity.rawValue
+        )
+    }
+
+    private var suggestedCalories: Int {
+        goal.suggestedCalories(for: bodyMetrics)
+    }
+
+    /// Zmienia się przy każdej danej, która wpływa na podpowiedź.
+    private var calorieSuggestionToken: String {
+        "\(goal.rawValue)|\(heightCm)|\(weightKg)|\(yearOfBirth)|\(activity.rawValue)"
     }
 
     @ViewBuilder

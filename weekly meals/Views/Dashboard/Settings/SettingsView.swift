@@ -18,6 +18,12 @@ struct SettingsView: View {
     @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
     @AppStorage("settings.diet.goal") private var goalRaw: String = UserGoal.healthy.rawValue
+    // Sylwetka z arkusza „Twoje dane" — tylko do odczytu, żeby podpowiedź
+    // kaloryczna liczyła się z realnych danych zamiast z płaskiej stałej.
+    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Int = 0
+    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @AppStorage(BodyMetrics.Keys.activityLevel) private var profileActivityRaw: Int = ActivityLevel.light.rawValue
 
     @State private var showCreateHouseholdSheet = false
     @State private var showHouseholdSheet = false
@@ -232,6 +238,21 @@ struct SettingsView: View {
 
     private var currentGoal: UserGoal {
         UserGoal(rawValue: goalRaw) ?? .healthy
+    }
+
+    /// `nil`, gdy w profilu brakuje którejś danej — wtedy podpowiedź schodzi
+    /// do płaskiej wartości przypisanej do celu.
+    private var bodyMetrics: BodyMetrics? {
+        BodyMetrics(
+            heightCm: profileHeightCm,
+            weightKg: profileWeightKg,
+            yearOfBirth: profileYearOfBirth,
+            activityRaw: profileActivityRaw
+        )
+    }
+
+    private var suggestedCalories: Int {
+        currentGoal.suggestedCalories(for: bodyMetrics)
     }
 
     private var selectedAllergens: Set<Allergen> {
@@ -1113,7 +1134,17 @@ struct SettingsView: View {
     /// nadpisywać. Kreator powitalny robi to samo, tyle że tam suwak jeszcze
     /// nie był ruszany, więc może iść za celem sam.
     private var showsCalorieSuggestion: Bool {
-        currentGoal != .plan && calorieGoal != currentGoal.suggestedCalories
+        currentGoal != .plan && calorieGoal != suggestedCalories
+    }
+
+    /// Dwa warianty: policzony z sylwetki (wtedy mówimy skąd) i awaryjny,
+    /// gdy w profilu brakuje danych. Drugi zachęca do ich uzupełnienia,
+    /// zamiast udawać, że liczba jest szyta na miarę.
+    private var calorieSuggestionText: String {
+        guard bodyMetrics != nil else {
+            return "Dla tego celu zwykle wychodzi \(suggestedCalories) kcal. Uzupełnij sylwetkę w „Twoje dane”, a policzymy dokładniej."
+        }
+        return "Dla Twojej sylwetki i tego celu wychodzi \(suggestedCalories) kcal."
     }
 
     private var calorieSuggestionRow: some View {
@@ -1123,7 +1154,7 @@ struct SettingsView: View {
                 .foregroundStyle(WMPalette.butter)
                 .frame(width: 22)
 
-            Text("Dla tego celu zwykle wychodzi \(currentGoal.suggestedCalories) kcal.")
+            Text(calorieSuggestionText)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.wmMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -1131,7 +1162,7 @@ struct SettingsView: View {
 
             Button {
                 withAnimation(.smooth(duration: 0.22)) {
-                    calorieGoal = snappedCalorieGoal(from: Double(currentGoal.suggestedCalories))
+                    calorieGoal = snappedCalorieGoal(from: Double(suggestedCalories))
                 }
             } label: {
                 Text("Ustaw")
@@ -1143,7 +1174,7 @@ struct SettingsView: View {
                     .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.30), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Ustaw \(currentGoal.suggestedCalories) kcal")
+            .accessibilityLabel("Ustaw \(suggestedCalories) kcal")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
