@@ -24,6 +24,7 @@ struct SettingsView: View {
     @State private var showNotificationsSheet = false
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
+    @State private var showProfileSheet = false
     @State private var showHelpSheet = false
     @State private var createHouseholdName = ""
     @State private var householdNameError: String? = nil
@@ -361,6 +362,13 @@ struct SettingsView: View {
                 appearanceSheet
                     .dashboardLiquidSheet()
             }
+            .sheet(isPresented: $showProfileSheet) {
+                ProfileDetailsSheet {
+                    showProfileSheet = false
+                }
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+            }
             .sheet(isPresented: $showDietSheet) {
                 dietSheet
                     .dashboardLiquidSheet()
@@ -393,7 +401,8 @@ struct SettingsView: View {
         EditorialProfileCard(
             displayName: userDisplayName,
             email: userEmail,
-            avatarUrl: userAvatarUrl
+            avatarUrl: userAvatarUrl,
+            action: { showProfileSheet = true }
         )
     }
 

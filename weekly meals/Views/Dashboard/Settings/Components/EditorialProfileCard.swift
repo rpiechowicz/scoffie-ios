@@ -16,30 +16,56 @@ struct EditorialProfileCard: View {
     let email: String
     let avatarUrl: String?
 
+    /// Otwiera arkusz „Twoje dane”. Karta jest jedynym wejściem do danych
+    /// zbieranych w kreatorze (rok urodzenia, wzrost, waga, treningi) — bez
+    /// tego po onboardingu nie dało się ich już zmienić.
+    var action: (() -> Void)? = nil
+
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         EditorialSettingsCardGroup {
-            HStack(spacing: 14) {
-                avatar
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayNameLabel)
-                        .font(.system(size: 15.5, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
-                        .lineLimit(1)
-
-                    Text(emailLabel)
-                        .font(.system(size: 12.5, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+            if let action {
+                Button(action: action) {
+                    cardContent(showsChevron: true)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Twoje dane")
+                .accessibilityValue(displayNameLabel)
+                .accessibilityHint("Imię, zdjęcie, sylwetka i treningi")
+            } else {
+                cardContent(showsChevron: false)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
         }
+    }
+
+    private func cardContent(showsChevron: Bool) -> some View {
+        HStack(spacing: 14) {
+            avatar
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayNameLabel)
+                    .font(.system(size: 15.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .lineLimit(1)
+
+                Text(emailLabel)
+                    .font(.system(size: 12.5, weight: .regular))
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.wmFaint(scheme))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
     }
 
     // The profile photo. Falls back to a tinted gradient with the user's

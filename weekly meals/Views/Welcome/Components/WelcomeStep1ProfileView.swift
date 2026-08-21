@@ -126,9 +126,17 @@ struct WelcomeStep1ProfileView: View {
 // feels tactile. Drag updates live (every cell-width of horizontal travel
 // changes the year by one) so the picker reads as a real wheel and not a
 // commit-on-release control.
-private struct YearWheelPicker: View {
+// Nie `private` — korzysta z niego również arkusz „Twoje dane” w Ustawieniach,
+// żeby rok urodzenia wybierało się tam dokładnie tak samo jak w kreatorze.
+struct YearWheelPicker: View {
     @Binding var year: Int
     let range: ClosedRange<Int>
+
+    /// Tło pigułki. Domyślnie `wmTileBg`, czyli to, czego używa kreator na
+    /// tle kanwy. W arkuszu Ustawień picker siedzi WEWNĄTRZ karty `wmTileBg`
+    /// i przy domyślnym tle zlałby się z nią w jedną plamę — tam wchodzi
+    /// `wmInsetSurface`.
+    var surface: Color? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var dragAnchorYear: Int? = nil
@@ -161,7 +169,7 @@ private struct YearWheelPicker: View {
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.wmTileBg(colorScheme))
+                    .fill(surface ?? Color.wmTileBg(colorScheme))
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
 
