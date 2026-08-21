@@ -18,19 +18,21 @@ struct EditorialPageHeader<Trailing: View>: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 10) {
             Text(title)
                 .font(.system(size: 32, weight: .heavy))
                 .tracking(-0.5)
                 .foregroundStyle(Color.wmLabel(scheme))
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                // Tytuł wymiaruje się pierwszy. Bez tego HStack dzielił
-                // szerokość po równo i „Plan tygodnia" — jedyny nagłówek
-                // z akcjami obok — zjeżdżał przez `minimumScaleFactor` do
-                // mniejszego stopnia niż „Przepisy" czy „Ustawienia".
-                // Skalowanie zostaje jako zabezpieczenie na naprawdę wąskie
-                // ekrany, ale nie odpala się już przy zwykłym układzie.
+                // Skalowanie zostaje wyłącznie jako zabezpieczenie na bardzo
+                // wąskie ekrany. Przy zwykłym układzie nie odpala się, bo
+                // tytuł dostaje pierwszeństwo, a akcje obok są na tyle
+                // wąskie, że mieści się pełne 32 pt.
+                //
+                // `fixedSize` tu NIE działa: HStack układa wtedy dzieci przy
+                // ich idealnych szerokościach i cały wiersz wychodzi poza
+                // kontener, ciągnąc za sobą marginesy całej strony.
+                .minimumScaleFactor(0.9)
                 .layoutPriority(1)
 
             Spacer(minLength: 8)
