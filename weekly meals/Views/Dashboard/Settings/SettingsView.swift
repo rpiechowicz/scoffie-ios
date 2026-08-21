@@ -1264,14 +1264,20 @@ struct SettingsView: View {
                     Text(diet.subtitle)
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(Color.wmMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 radioIndicator(selected: isSelected)
             }
+            // Stała wysokość wiersza. Wcześniej „Paleo" zawijało opis na dwie
+            // linie i było wyraźnie wyższe od sąsiadów — przy siedmiu
+            // pozycjach lista traciła rytm i wyglądała na poskładaną
+            // z różnych klocków.
+            .frame(minHeight: 60)
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -2447,20 +2453,27 @@ struct ProfileAvatar: View {
     /// losowane z całego koła barw: awatar ma odróżniać domowników, a nie
     /// wyskakiwać z interfejsu.
     static let gradientPairs: [(Color, Color)] = [
-        (WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.22)),
-        (WMPalette.sage, WMPalette.sage.mix(black: 0.24)),
-        (WMPalette.indigo, WMPalette.indigo.mix(black: 0.22)),
-        (WMPalette.butter, WMPalette.butter.mix(black: 0.30)),
-        (WMPalette.sage, WMPalette.indigo.mix(black: 0.08)),
-        (WMPalette.terracotta, WMPalette.butter.mix(black: 0.18)),
-        (WMPalette.indigo, WMPalette.terracottaDeep),
-        (WMPalette.butter.mix(black: 0.10), WMPalette.sage.mix(black: 0.18)),
-        (WMPalette.terracottaDeep, WMPalette.terracottaDeep.mix(black: 0.24)),
-        (WMPalette.indigo.mix(black: 0.18), WMPalette.indigo.mix(black: 0.42)),
-        (WMPalette.sage.mix(black: 0.28), WMPalette.sage.mix(black: 0.50)),
-        (WMPalette.terracotta.mix(black: 0.10), WMPalette.indigo.mix(black: 0.26)),
+        // Każda para przechodzi między DWOMA różnymi barwami palety, nie
+        // między odcieniami jednej. Warianty tonalne (terakota → ciemniejsza
+        // terakota) na kółku 48 pt wyglądały po prostu na jednolitą plamę
+        // z cieniem — dopiero zmiana barwy widać jako gradient.
+        (WMPalette.terracotta,               WMPalette.butter.mix(black: 0.06)),
+        (WMPalette.sage,                     WMPalette.indigo.mix(black: 0.10)),
+        (WMPalette.indigo,                   WMPalette.terracottaDeep),
+        (WMPalette.butter,                   WMPalette.terracottaDeep.mix(black: 0.10)),
+        (WMPalette.sage,                     WMPalette.butter.mix(black: 0.04)),
+        (WMPalette.terracotta,               WMPalette.indigo.mix(black: 0.22)),
+        (WMPalette.indigo,                   WMPalette.sage.mix(black: 0.04)),
+        (WMPalette.butter,                   WMPalette.sage.mix(black: 0.40)),
+        (WMPalette.terracottaDeep,           WMPalette.butter.mix(black: 0.02)),
+        (WMPalette.indigo.mix(black: 0.40),  WMPalette.indigo.mix(black: 0.02)),
+        (WMPalette.sage.mix(black: 0.44),    WMPalette.butter.mix(black: 0.08)),
+        (WMPalette.terracotta.mix(black: 0.34), WMPalette.terracotta.mix(black: 0.02)),
     ]
 
+    /// Przejście po przekątnej, od krawędzi do krawędzi. Bez punktu
+    /// pośredniego — zagęszczał gradient w środku i spłaszczał różnicę
+    /// między barwami zamiast ją uwypuklić.
     static func gradient(index: Int?, seed: String) -> LinearGradient {
         let resolved = index.map { abs($0) % gradientPairs.count }
             ?? stableIndex(for: seed, upperBound: gradientPairs.count)

@@ -748,7 +748,6 @@ final class SessionStore {
                 defaults.set(avatarUrl, forKey: Keys.avatarUrl)
             } else {
                 defaults.removeObject(forKey: Keys.avatarUrl)
-        defaults.removeObject(forKey: Keys.avatarColor)
             }
             persistProfileFields(
                 yearOfBirth: user.yearOfBirth,
@@ -847,6 +846,7 @@ final class SessionStore {
         defaults.removeObject(forKey: Keys.householdName)
         defaults.removeObject(forKey: Keys.appleUserIdentifier)
         defaults.removeObject(forKey: Keys.avatarUrl)
+        defaults.removeObject(forKey: Keys.avatarColor)
         defaults.removeObject(forKey: Keys.displayName)
         defaults.removeObject(forKey: Keys.email)
         defaults.removeObject(forKey: Keys.onboardingCompletedAt)
@@ -1117,7 +1117,11 @@ final class SessionStore {
             guard envelope.ok, let prefs = envelope.data else { return }
 
             let defaults = UserDefaults.standard
-            defaults.set(prefs.dietPreference.lowercased(), forKey: PreferencesKeys.diet)
+            // Przez `backendValue`, nie przez `lowercased()` — patrz komentarz
+            // przy `DietPreference.backendValue`.
+            if let diet = DietPreference(backendValue: prefs.dietPreference) {
+                defaults.set(diet.rawValue, forKey: PreferencesKeys.diet)
+            }
             defaults.set(prefs.calorieGoal, forKey: PreferencesKeys.calorieGoal)
             defaults.set(
                 prefs.allergens
@@ -1165,9 +1169,9 @@ final class SessionStore {
         // writing the same keys here is idempotent.
         let defaults = UserDefaults.standard
         var data: [String: Any] = [:]
-        if let diet {
-            data["dietPreference"] = diet.uppercased()
-            defaults.set(diet.lowercased(), forKey: PreferencesKeys.diet)
+        if let diet, let preference = DietPreference(rawValue: diet) {
+            data["dietPreference"] = preference.backendValue
+            defaults.set(preference.rawValue, forKey: PreferencesKeys.diet)
         }
         if let calorieGoal {
             data["calorieGoal"] = calorieGoal

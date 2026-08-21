@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 // Przepisy v2 — "Story carousel + Tasting menu" (W3 z handoff design'u).
@@ -16,6 +17,11 @@ import SwiftUI
 struct RecipesView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Co dziesięć minut — wystarczy, żeby zestaw zmienił się najdalej dziesięć
+    /// minut po piątej, a nie budzi widoku częściej niż trzeba.
+    private let mealDayTicker = Timer.publish(every: 600, on: .main, in: .common).autoconnect()
 
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
@@ -26,6 +32,11 @@ struct RecipesView: View {
     @State private var filters = RecipeFilterOptions()
     @State private var isFilterSheetPresented = false
     @State private var isPersonalizationSheetPresented = false
+
+    /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
+    /// Trzymany w stanie, a nie liczony w locie z `Date()`, żeby przewijanie
+    /// listy nie przeliczało go przy każdej klatce.
+    @State private var mealDay = DailyRecipeRotation.mealDay()
 
     // Preferencje żywieniowe właściciela ekranu — te same klucze, które
     // zapisuje Ustawienia → „Dieta i alergeny”. Czytamy je przez
@@ -148,14 +159,16 @@ struct RecipesView: View {
         // Gdy cel porządkuje katalog, `visibleRecipes` są już ułożone od
         // najlepiej dopasowanych — drugie sortowanie po `prepTime` tylko by to
         // zepsuło. Bez celu zostaje dotychczasowa heurystyka.
-        if personalization.isEnabled, personalization.ranksCatalog {
-            return Array(visibleRecipes.prefix(5))
-        }
-        return Array(
-            visibleRecipes
-                .sorted(by: isFeaturedRecipePreferred(_:_:))
-                .prefix(5)
-        )
+        let ranked = (personalization.isEnabled && personalization.ranksCatalog)
+            ? visibleRecipes
+            : visibleRecipes.sorted(by: isFeaturedRecipePreferred(_:_:))
+
+        // Przy aktywnym wyszukiwaniu albo filtrach karuzela ma pokazać
+        // najlepsze trafienia, a nie codzienną propozycję — użytkownik czegoś
+        // wtedy szuka i rotacja tylko by mu to mieszała.
+        guard !isNarrowed else { return Array(ranked.prefix(5)) }
+
+        return DailyRecipeRotation.pick(count: 5, from: ranked, day: mealDay)
     }
 
     private var heroEyebrow: String {
@@ -174,6 +187,16 @@ struct RecipesView: View {
             return "Dopasowane do Ciebie"
         }
         return "Smaki na dziś"
+    }
+
+    /// Rotacja wchodzi o 5 rano, ale aplikacja bywa otwarta przez tę godzinę.
+    /// Bez odświeżania stanu użytkownik oglądałby wczorajszy zestaw do
+    /// następnego zimnego startu.
+    private func refreshMealDayIfNeeded() {
+        let current = DailyRecipeRotation.mealDay()
+        guard current != mealDay else { return }
+        mealDay = current
+        resyncFeaturedSelectionIfNeeded()
     }
 
     private var shouldShowSkeleton: Bool {
@@ -220,6 +243,12 @@ struct RecipesView: View {
             }
             .onChange(of: personalization) { _, _ in
                 resyncFeaturedSelectionIfNeeded()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { refreshMealDayIfNeeded() }
+            }
+            .onReceive(mealDayTicker) { _ in
+                refreshMealDayIfNeeded()
             }
             .onDisappear { searchDebounceTask?.cancel() }
             .sheet(isPresented: $isFilterSheetPresented) {

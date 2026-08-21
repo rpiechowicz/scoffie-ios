@@ -35,12 +35,16 @@ struct EditorialRecipesHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            EditorialPageHeader(title: "Przepisy") {
-                personalizationButton
-            }
+            EditorialPageHeader("Przepisy")
 
+            // Różdżka stoi obok filtra, a nie w wierszu tytułu: oba przyciski
+            // zawężają tę samą listę, więc mają ten sam kształt, tę samą
+            // wysokość i tę samą gramatykę plakietki. Rozdzielone wyglądały
+            // jak dwa niezwiązane mechanizmy.
             HStack(spacing: 10) {
                 searchPill
+
+                personalizationButton
 
                 filterButton
             }
@@ -53,33 +57,53 @@ struct EditorialRecipesHeader: View {
     // nie ustawił, nigdy nie dowiadywał się, że funkcja istnieje — a kto
     // ustawił, dostawał kartę znikąd. Nagłówek nie może podskakiwać.
     private var personalizationButton: some View {
-        EditorialIconButton(
-            icon: "wand.and.stars",
-            accent: WMPalette.sage,
-            highlighted: isPersonalizationActive
-        ) {
+        Button {
             onOpenPersonalization?()
-        }
-        // Kropka, nie liczba — pigułka filtra 18pt niżej ma już licznik, a dwa
-        // liczniki jeden nad drugim czytają się jak jedna kontrolka. Terakota,
-        // bo w arkuszu terakota znaczy „ukrywa”, więc kropka i wyjaśnienie
-        // mówią to samo. `hiddenRecipeCount > 0` implikuje `isPersonalizationActive`,
-        // więc kropka nigdy nie ląduje na szarym kółku.
-        .overlay(alignment: .topTrailing) {
-            if hiddenRecipeCount > 0 {
-                Circle()
-                    .fill(WMPalette.terracotta)
-                    .frame(width: 8, height: 8)
-                    .overlay(Circle().stroke(Color.wmCanvas(scheme), lineWidth: 1.5))
-                    .offset(x: 1, y: -1)
-                    .allowsHitTesting(false)
-                    .transition(.scale.combined(with: .opacity))
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 15, weight: .bold))
+
+                // Liczba, nie kropka. Pigułka filtra tuż obok pokazuje swój
+                // licznik cyfrą — dwie różne gramatyki plakietki na dwóch
+                // sąsiadujących przyciskach czytały się jak dwa różne
+                // mechanizmy.
+                if hiddenRecipeCount > 0 {
+                    Text("\(hiddenRecipeCount)")
+                        .font(.system(size: 13, weight: .heavy))
+                        .monospacedDigit()
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
+            .foregroundStyle(isPersonalizationActive ? .white : Color.wmLabel(scheme))
+            .frame(minWidth: 20)
+            .frame(height: 19)
+            .padding(.horizontal, hiddenRecipeCount > 0 ? 14 : 13)
+            .padding(.vertical, 12)
+            .background(
+                Capsule(style: .continuous).fill(
+                    isPersonalizationActive
+                        ? AnyShapeStyle(
+                            LinearGradient(
+                                colors: [WMPalette.sage, WMPalette.sage.mix(black: 0.18)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        : AnyShapeStyle(Color.wmTileBg(scheme))
+                )
+            )
+            .overlay(
+                Capsule(style: .continuous).stroke(
+                    isPersonalizationActive ? WMPalette.sage.opacity(0.35) : Color.wmTileStroke(scheme),
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: WMPalette.sage.opacity(isPersonalizationActive ? 0.24 : 0), radius: 8, x: 0, y: 4)
         }
-        .animation(.smooth(duration: 0.22), value: isPersonalizationActive)
-        .animation(.smooth(duration: 0.22), value: hiddenRecipeCount > 0)
-        // `EditorialIconButton` zaszywa `.accessibilityLabel(Text(icon))`,
-        // czyli czyta „wand.and.stars”. Etykieta z zewnątrz wygrywa.
+        .buttonStyle(.plain)
+        .animation(.smooth(duration: 0.2), value: isPersonalizationActive)
+        .animation(.smooth(duration: 0.2), value: hiddenRecipeCount)
         .accessibilityLabel("Dopasowanie przepisów")
         .accessibilityValue(personalizationAccessibilityValue)
         .accessibilityHint("Otwiera wyjaśnienie i przełącznik")

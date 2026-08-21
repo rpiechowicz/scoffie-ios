@@ -34,8 +34,8 @@ enum DietPreference: String, CaseIterable, Identifiable {
         case .vegan:        return "Bez produktów odzwierzęcych."
         case .pescatarian:  return "Bez mięsa, z rybami i owocami morza."
         case .keto:         return "Bardzo niska zawartość węglowodanów."
-        case .paleo:        return "Bez zbóż, nabiału i przetworzonej żywności."
-        case .highProtein:  return "Co najmniej 20 % kalorii z białka."
+        case .paleo:        return "Bez zbóż, nabiału i przetworzonych."
+        case .highProtein:  return "Min. 20 % kalorii z białka."
         }
     }
 
@@ -49,6 +49,34 @@ enum DietPreference: String, CaseIterable, Identifiable {
         case .paleo:        return "hare.fill"
         case .highProtein:  return "figure.strengthtraining.traditional"
         }
+    }
+
+    /// Wartość, którą rozumie backend (`DietPreferenceValue` w Prismie).
+    ///
+    /// Nie da się jej wyprowadzić przez `rawValue.uppercased()`: `highProtein`
+    /// dałoby `HIGHPROTEIN`, a kolumna trzyma `HIGH_PROTEIN`. Przez to zapis
+    /// leciał w kosz na walidacji, a przy następnym odczycie `high_protein`
+    /// nie parsowało się z powrotem i wybór wracał do „Bez ograniczeń”.
+    /// Mapowanie jest wypisane wprost, żeby dokładanie kolejnej
+    /// wieloczłonowej diety nie odtworzyło tego błędu.
+    var backendValue: String {
+        switch self {
+        case .none:         return "NONE"
+        case .vegetarian:   return "VEGETARIAN"
+        case .vegan:        return "VEGAN"
+        case .pescatarian:  return "PESCATARIAN"
+        case .keto:         return "KETO"
+        case .paleo:        return "PALEO"
+        case .highProtein:  return "HIGH_PROTEIN"
+        }
+    }
+
+    init?(backendValue: String) {
+        let normalised = backendValue.uppercased()
+        guard let match = DietPreference.allCases.first(where: { $0.backendValue == normalised }) else {
+            return nil
+        }
+        self = match
     }
 
     var accent: Color {
