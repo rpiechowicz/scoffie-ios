@@ -41,6 +41,12 @@ struct RecipeDetailView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 14)
 
+                    if !recipe.additionalSlots.isEmpty {
+                        alsoFitsRow
+                            .padding(.horizontal, 20)
+                            .padding(.top, 14)
+                    }
+
                     nutritionSection
                         .padding(.horizontal, 16)
                         .padding(.top, 20)
@@ -308,6 +314,38 @@ struct RecipeDetailView: View {
 
     private var categoryAccent: Color {
         RecipeDetailPalette.accent(for: recipe.category)
+    }
+
+    /// „Pasuje też na: II śniadanie · Przekąska".
+    ///
+    /// Przepis należy do jednej kategorii, ale bywa dobry o kilku porach dnia
+    /// — i bez tego wiersza użytkownik nie ma skąd wiedzieć, czemu owsianka
+    /// pojawia mu się przy dodawaniu drugiego śniadania. To jedyne miejsce,
+    /// w którym `suitableSlots` widać wprost.
+    private var alsoFitsRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text("Pasuje też na")
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(Color.wmFaint(scheme))
+
+            ForEach(recipe.additionalSlots) { slot in
+                HStack(spacing: 5) {
+                    Image(systemName: slot.icon)
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(slot.title)
+                        .font(.system(size: 11.5, weight: .semibold))
+                }
+                .foregroundStyle(slot.cozyAccent)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.10))
+                )
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 }
 

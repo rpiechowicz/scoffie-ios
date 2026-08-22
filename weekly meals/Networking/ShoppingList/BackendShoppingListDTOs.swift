@@ -38,6 +38,10 @@ struct BackendShoppingListStateDTO: Codable {
 struct BackendHouseholdDTO: Codable {
     let id: String
     let name: String
+    /// Sloty posiłków planowane przez gospodarstwo. Opcjonalne — starszy
+    /// backend pola nie dowozi i wtedy klient zostaje przy trójce
+    /// podstawowej zamiast wywalić się na dekodowaniu gospodarstwa.
+    let enabledMealTypes: [String]?
 }
 
 struct BackendShoppingItemCheckDTO: Codable {

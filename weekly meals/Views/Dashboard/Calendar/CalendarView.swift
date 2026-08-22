@@ -39,8 +39,17 @@ struct CalendarView: View {
         return all.visibleTo(memberId: userId)
     }
 
+    /// Sloty rysowane dla wybranego dnia: włączone przez gospodarstwo plus
+    /// te, w których mimo wyłączenia coś stoi. Ta sama reguła co w Planie —
+    /// wyłączenie posiłku ukrywa slot, ale nigdy nie ukrywa jedzenia.
+    private var visibleSlots: [MealSlot] {
+        sessionStore.mealSlots.visibleSlots(
+            planned: mealStore.plan(for: datesViewModel.selectedDate).plannedSlots
+        )
+    }
+
     private var dayMeals: [PlanMeal] {
-        MealSlot.allCases.flatMap { myMeals(for: $0) }
+        visibleSlots.flatMap { myMeals(for: $0) }
     }
 
     private var dayRecipes: [Recipe] { dayMeals.map(\.recipe) }
@@ -93,7 +102,7 @@ struct CalendarView: View {
     }
 
     private var dayCards: [DayCard] {
-        MealSlot.allCases.flatMap { slot -> [DayCard] in
+        visibleSlots.flatMap { slot -> [DayCard] in
             let meals = myMeals(for: slot)
             guard !meals.isEmpty else { return [DayCard(slot: slot, meal: nil)] }
             return meals.map { DayCard(slot: slot, meal: $0) }

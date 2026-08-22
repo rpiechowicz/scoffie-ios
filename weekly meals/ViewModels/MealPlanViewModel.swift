@@ -7,9 +7,12 @@ class MealPlanViewModel {
 
     var isActive: Bool = false
 
-    var breakfastRecipes: [Recipe] = []
-    var lunchRecipes: [Recipe] = []
-    var dinnerRecipes: [Recipe] = []
+    /// Wybór użytkownika, slot po slocie.
+    ///
+    /// Słownik zamiast `breakfastRecipes / lunchRecipes / dinnerRecipes` —
+    /// przy sześciu slotach trzy nazwane tablice zamieniały każdą operację
+    /// w trzykrotnie powtórzonego `switch`-a.
+    private(set) var recipesBySlot: [MealSlot: [Recipe]] = [:]
 
     var slotFullAlert: MealSlot? = nil
     var showSummarySheet: Bool = false
@@ -17,21 +20,20 @@ class MealPlanViewModel {
     // MARK: - Constants
 
     static let maxPerSlot = 7
-    static let maxTotal = 21
+
+    /// Sufit na cały tydzień skaluje się liczbą slotów — inaczej po włączeniu
+    /// podwieczorku limit obcinałby plan w pół tygodnia.
+    static var maxTotal: Int { maxPerSlot * MealSlot.allCases.count }
 
     // MARK: - Computed
 
     var totalCount: Int {
-        breakfastRecipes.count + lunchRecipes.count + dinnerRecipes.count
+        recipesBySlot.values.reduce(0) { $0 + $1.count }
     }
 
     /// Zbiór ID wszystkich wybranych przepisów (do szybkiego sprawdzania w UI)
     var selectedRecipeIDs: Set<UUID> {
-        Set(
-            breakfastRecipes.map(\.id) +
-            lunchRecipes.map(\.id) +
-            dinnerRecipes.map(\.id)
-        )
+        Set(recipesBySlot.values.flatMap { $0 }.map(\.id))
     }
 
     // MARK: - Actions
@@ -67,19 +69,11 @@ class MealPlanViewModel {
     }
 
     func count(for slot: MealSlot) -> Int {
-        switch slot {
-        case .breakfast: breakfastRecipes.count
-        case .lunch:     lunchRecipes.count
-        case .dinner:    dinnerRecipes.count
-        }
+        recipes(for: slot).count
     }
 
     func recipes(for slot: MealSlot) -> [Recipe] {
-        switch slot {
-        case .breakfast: breakfastRecipes
-        case .lunch:     lunchRecipes
-        case .dinner:    dinnerRecipes
-        }
+        recipesBySlot[slot] ?? []
     }
 
     /// Unikalne przepisy dla danego slotu (bez duplikatów)
@@ -94,25 +88,25 @@ class MealPlanViewModel {
 
     func loadFromSaved(_ plan: SavedMealPlan) {
         isActive = true
-        breakfastRecipes = plan.breakfastEntries.map(\.recipe)
-        lunchRecipes = plan.lunchEntries.map(\.recipe)
-        dinnerRecipes = plan.dinnerEntries.map(\.recipe)
+        recipesBySlot = Dictionary(
+            uniqueKeysWithValues: MealSlot.allCases.map { slot in
+                (slot, plan.entries(for: slot).map(\.recipe))
+            }
+        )
     }
 
     func exitPlanningMode() {
         isActive = false
         resetPlan()
     }
-    
+
     func savePlan() {
         isActive = false
         resetPlan()
     }
 
     func resetPlan() {
-        breakfastRecipes = []
-        lunchRecipes = []
-        dinnerRecipes = []
+        recipesBySlot = [:]
     }
 
     // MARK: - Private
@@ -130,39 +124,19 @@ class MealPlanViewModel {
             return
         }
 
-        switch slot {
-        case .breakfast: breakfastRecipes.append(recipe)
-        case .lunch:     lunchRecipes.append(recipe)
-        case .dinner:    dinnerRecipes.append(recipe)
-        }
+        recipesBySlot[slot, default: []].append(recipe)
     }
 
     private func removeAllOfRecipe(_ recipe: Recipe) {
         guard let slot = recipe.category.toMealSlot else { return }
-
-        switch slot {
-        case .breakfast: breakfastRecipes.removeAll { $0.id == recipe.id }
-        case .lunch:     lunchRecipes.removeAll { $0.id == recipe.id }
-        case .dinner:    dinnerRecipes.removeAll { $0.id == recipe.id }
-        }
+        recipesBySlot[slot]?.removeAll { $0.id == recipe.id }
     }
 
     private func removeOneOfRecipe(_ recipe: Recipe) {
         guard let slot = recipe.category.toMealSlot else { return }
-
-        switch slot {
-        case .breakfast:
-            if let idx = breakfastRecipes.lastIndex(where: { $0.id == recipe.id }) {
-                breakfastRecipes.remove(at: idx)
-            }
-        case .lunch:
-            if let idx = lunchRecipes.lastIndex(where: { $0.id == recipe.id }) {
-                lunchRecipes.remove(at: idx)
-            }
-        case .dinner:
-            if let idx = dinnerRecipes.lastIndex(where: { $0.id == recipe.id }) {
-                dinnerRecipes.remove(at: idx)
-            }
+        guard let index = recipesBySlot[slot]?.lastIndex(where: { $0.id == recipe.id }) else {
+            return
         }
+        recipesBySlot[slot]?.remove(at: index)
     }
 }

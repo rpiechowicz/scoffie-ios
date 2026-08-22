@@ -341,9 +341,11 @@ class WeeklyMealStore {
             }
         }
 
-        await applySlot(.breakfast, entries: plan.breakfastEntries)
-        await applySlot(.lunch, entries: plan.lunchEntries)
-        await applySlot(.dinner, entries: plan.dinnerEntries)
+        // Pętla po wszystkich slotach, nie po trzech wypisanych z nazwy —
+        // sloty puste są bezkosztowe, a wyliczanka gubiłaby każdy nowy posiłek.
+        for slot in MealSlot.allCases {
+            await applySlot(slot, entries: plan.entries(for: slot))
+        }
 
         cleanupCalendarAndSync(with: plan)
 
@@ -385,14 +387,17 @@ class WeeklyMealStore {
         guard let weeklyPlanRepository else { return }
 
         do {
-            let breakfast = plan.breakfastEntries.map { $0.recipe.id.uuidString }
-            let lunch = plan.lunchEntries.map { $0.recipe.id.uuidString }
-            let dinner = plan.dinnerEntries.map { $0.recipe.id.uuidString }
+            let recipeIdsByMealType = Dictionary(
+                uniqueKeysWithValues: MealSlot.allCases.map { slot in
+                    (
+                        slot.backendMealType,
+                        plan.entries(for: slot).map { $0.recipe.id.uuidString }
+                    )
+                }
+            )
             let dto = try await weeklyPlanRepository.saveSavedPlan(
                 weekStart: weekStart,
-                breakfastRecipeIds: breakfast,
-                lunchRecipeIds: lunch,
-                dinnerRecipeIds: dinner
+                recipeIdsByMealType: recipeIdsByMealType
             )
             let mapped = mapSavedPlan(dto: dto)
             savedPlan = mapped
@@ -502,9 +507,9 @@ class WeeklyMealStore {
     }
 
     private func mapSavedPlan(dto: BackendSharedMealPlanDTO) -> SavedMealPlan {
-        func expand(mealType: String) -> [PlanEntry] {
+        func expand(slot: MealSlot) -> [PlanEntry] {
             dto.items
-                .filter { $0.mealType.uppercased() == mealType }
+                .filter { $0.mealType.uppercased() == slot.backendMealType }
                 .flatMap { item -> [PlanEntry] in
                     guard let recipe = item.recipe.toAppRecipe(), item.quantity > 0 else { return [] }
                     return Array(repeating: PlanEntry(recipe: recipe), count: item.quantity)
@@ -512,55 +517,58 @@ class WeeklyMealStore {
         }
 
         return SavedMealPlan(
-            breakfastEntries: expand(mealType: "BREAKFAST"),
-            lunchEntries: expand(mealType: "LUNCH"),
-            dinnerEntries: expand(mealType: "DINNER")
+            entriesBySlot: Dictionary(
+                uniqueKeysWithValues: MealSlot.allCases.map { ($0, expand(slot: $0)) }
+            )
         )
     }
 
-    private func syncSavedPlanSelectionFlagsWithCalendar() {
-        var usedBreakfast: [UUID: Int] = [:]
-        var usedLunch: [UUID: Int] = [:]
-        var usedDinner: [UUID: Int] = [:]
-
+    /// Ile razy dany przepis stoi w kalendarzu, slot po slocie.
+    private func calendarUsageCounts() -> [MealSlot: [UUID: Int]] {
+        var counts: [MealSlot: [UUID: Int]] = [:]
         for dayPlan in plans.values {
-            for meal in dayPlan.breakfast { usedBreakfast[meal.recipe.id, default: 0] += 1 }
-            for meal in dayPlan.lunch { usedLunch[meal.recipe.id, default: 0] += 1 }
-            for meal in dayPlan.dinner { usedDinner[meal.recipe.id, default: 0] += 1 }
+            for slot in MealSlot.allCases {
+                for meal in dayPlan.meals(for: slot) {
+                    counts[slot, default: [:]][meal.recipe.id, default: 0] += 1
+                }
+            }
         }
+        return counts
+    }
 
-        syncEntries(&savedPlan.breakfastEntries, usedCounts: usedBreakfast)
-        syncEntries(&savedPlan.lunchEntries, usedCounts: usedLunch)
-        syncEntries(&savedPlan.dinnerEntries, usedCounts: usedDinner)
+    private func syncSavedPlanSelectionFlagsWithCalendar() {
+        let used = calendarUsageCounts()
+        for slot in MealSlot.allCases {
+            savedPlan.updateEntries(for: slot) { entries in
+                syncEntries(&entries, usedCounts: used[slot] ?? [:])
+            }
+        }
         saveSavedPlan()
     }
 
     /// Czyści z kalendarza przepisy, których nie ma w nowym planie
     /// i synchronizuje flagi isSelected z aktualnym stanem kalendarza
     func cleanupCalendarAndSync(with newPlan: SavedMealPlan) {
-        let newBreakfastIDs = Set(newPlan.breakfastEntries.map(\.recipe.id))
-        let newLunchIDs = Set(newPlan.lunchEntries.map(\.recipe.id))
-        let newDinnerIDs = Set(newPlan.dinnerEntries.map(\.recipe.id))
+        let allowedIdsBySlot: [MealSlot: Set<UUID>] = Dictionary(
+            uniqueKeysWithValues: MealSlot.allCases.map { slot in
+                (slot, Set(newPlan.entries(for: slot).map(\.recipe.id)))
+            }
+        )
 
         // 1. Usuń z kalendarza przepisy spoza nowego planu
         var changed = false
         for (key, var dayPlan) in plans {
             var dayChanged = false
 
-            let keptBreakfast = dayPlan.breakfast.filter { newBreakfastIDs.contains($0.recipe.id) }
-            if keptBreakfast.count != dayPlan.breakfast.count {
-                dayPlan.breakfast = keptBreakfast
-                dayChanged = true
-            }
-            let keptLunch = dayPlan.lunch.filter { newLunchIDs.contains($0.recipe.id) }
-            if keptLunch.count != dayPlan.lunch.count {
-                dayPlan.lunch = keptLunch
-                dayChanged = true
-            }
-            let keptDinner = dayPlan.dinner.filter { newDinnerIDs.contains($0.recipe.id) }
-            if keptDinner.count != dayPlan.dinner.count {
-                dayPlan.dinner = keptDinner
-                dayChanged = true
+            for slot in MealSlot.allCases {
+                let current = dayPlan.meals(for: slot)
+                guard !current.isEmpty else { continue }
+                let allowed = allowedIdsBySlot[slot] ?? []
+                let kept = current.filter { allowed.contains($0.recipe.id) }
+                if kept.count != current.count {
+                    dayPlan.setMeals(kept, for: slot)
+                    dayChanged = true
+                }
             }
 
             if dayChanged {
@@ -570,21 +578,13 @@ class WeeklyMealStore {
         }
         if changed { save() }
 
-        // 2. Policz ile razy każdy przepis jest użyty w kalendarzu per slot
-        var usedBreakfast: [UUID: Int] = [:]
-        var usedLunch: [UUID: Int] = [:]
-        var usedDinner: [UUID: Int] = [:]
-
-        for dayPlan in plans.values {
-            for meal in dayPlan.breakfast { usedBreakfast[meal.recipe.id, default: 0] += 1 }
-            for meal in dayPlan.lunch { usedLunch[meal.recipe.id, default: 0] += 1 }
-            for meal in dayPlan.dinner { usedDinner[meal.recipe.id, default: 0] += 1 }
+        // 2. + 3. Policz użycie w kalendarzu i ustaw na jego podstawie isSelected
+        let used = calendarUsageCounts()
+        for slot in MealSlot.allCases {
+            savedPlan.updateEntries(for: slot) { entries in
+                syncEntries(&entries, usedCounts: used[slot] ?? [:])
+            }
         }
-
-        // 3. Ustaw isSelected na podstawie faktycznego użycia w kalendarzu
-        syncEntries(&savedPlan.breakfastEntries, usedCounts: usedBreakfast)
-        syncEntries(&savedPlan.lunchEntries, usedCounts: usedLunch)
-        syncEntries(&savedPlan.dinnerEntries, usedCounts: usedDinner)
 
         saveSavedPlan()
     }
@@ -624,11 +624,7 @@ class WeeklyMealStore {
     }
 
     private func mutateEntries(for slot: MealSlot, _ mutation: (inout [PlanEntry]) -> Void) {
-        switch slot {
-        case .breakfast: mutation(&savedPlan.breakfastEntries)
-        case .lunch:     mutation(&savedPlan.lunchEntries)
-        case .dinner:    mutation(&savedPlan.dinnerEntries)
-        }
+        savedPlan.updateEntries(for: slot, mutation)
         saveSavedPlan()
     }
 

@@ -55,6 +55,27 @@ final class SessionStore {
     var currentHouseholdName: String?
     var invitationPrompt: InvitationPromptState?
     var householdRealtimeVersion: Int = 0
+
+    /// Posiłki, które planuje bieżące gospodarstwo (Ustawienia → „Posiłki
+    /// w planie"). Wspólne dla całego domu — zmiana u jednej osoby przychodzi
+    /// do pozostałych zdarzeniem `households:mealTypesChanged`.
+    ///
+    /// Hydratowane z `@AppStorage` na zimnym starcie, żeby pierwsza klatka
+    /// Planu nie migała trójką podstawową, zanim wróci odpowiedź z serwera.
+    var mealSlots: MealSlotConfiguration = MealSlotConfiguration(
+        storageValue: UserDefaults.standard
+            .string(forKey: MealSlotConfiguration.Keys.enabledSlots) ?? ""
+    )
+    /// Godziny posiłków. W odróżnieniu od `mealSlots` trzymane **wyłącznie
+    /// lokalnie** — backend nie ma jeszcze pola na porę posiłku, więc do czasu
+    /// jego dołożenia harmonogram jest per urządzenie. Kształt typu jest
+    /// celowo taki sam jak `MealSlotConfiguration`, żeby wpięcie synchronizacji
+    /// sprowadziło się do jednego wywołania w `saveMealSlotSchedule`.
+    var mealSlotSchedule: MealSlotSchedule = MealSlotSchedule(
+        storageValue: UserDefaults.standard
+            .string(forKey: MealSlotSchedule.Keys.times) ?? ""
+    )
+
     /// `nil` when the user hasn't completed the welcome flow yet — UI gates
     /// the welcome screen on this. We hydrate it from AppStorage on cold
     /// start (so we don't flash the welcome screen for users who completed
@@ -389,6 +410,7 @@ final class SessionStore {
         )
         self.shoppingListStore = shoppingListStore
         observeHouseholdRealtime()
+        observeMealSlotsRealtime()
 
         let initialWeekStart = datesViewModel.weekStartISO
         Task {
@@ -400,6 +422,13 @@ final class SessionStore {
         // continue to display while this runs in the background.
         Task { @MainActor [weak self] in
             await self?.loadUserPreferences()
+        }
+
+        // To samo dla zestawu posiłków gospodarstwa — Plan i Kalendarz
+        // rysują sloty z `mealSlots`, więc lepiej mieć świeżą listę zanim
+        // użytkownik zdąży przewinąć tydzień.
+        Task { @MainActor [weak self] in
+            await self?.loadMealSlotConfiguration()
         }
 
         // Recover from the rare "household exists but onboardingCompletedAt
@@ -416,6 +445,7 @@ final class SessionStore {
 
     private func clearRuntimeStores() {
         realtimeSocket?.off(event: "households:membersChanged")
+        realtimeSocket?.off(event: "households:mealTypesChanged")
         realtimeSocket = nil
         weeklyMealStore = nil
         recipeCatalogStore = nil
@@ -448,6 +478,105 @@ final class SessionStore {
                 // (bez refetchowania sheetu ponownie).
                 await self.refreshHouseholdMembers(force: true)
             }
+        }
+    }
+
+    // MARK: - Posiłki planowane przez gospodarstwo
+
+    private func observeMealSlotsRealtime() {
+        realtimeSocket?.off(event: "households:mealTypesChanged")
+        realtimeSocket?.on(event: "households:mealTypesChanged") { [weak self] items in
+            guard let self else { return }
+            guard let first = items.first,
+                  JSONSerialization.isValidJSONObject(first),
+                  let data = try? JSONSerialization.data(withJSONObject: first),
+                  let event = try? JSONDecoder().decode(BackendHouseholdMealTypesChangedDTO.self, from: data)
+            else { return }
+
+            Task { @MainActor in
+                guard let currentHouseholdId = self.currentHouseholdId, !currentHouseholdId.isEmpty else { return }
+                guard event.householdId == currentHouseholdId else { return }
+                // Ładunek niesie już nową listę, więc nie wracamy po nią na
+                // serwer — plan przebudowuje się od razu u wszystkich w domu.
+                self.applyMealSlots(MealSlotConfiguration(backendMealTypes: event.mealTypes))
+            }
+        }
+    }
+
+    @MainActor
+    private func applyMealSlots(_ configuration: MealSlotConfiguration) {
+        mealSlots = configuration
+        UserDefaults.standard.set(
+            configuration.storageValue,
+            forKey: MealSlotConfiguration.Keys.enabledSlots
+        )
+    }
+
+    /// Zapisuje godziny posiłków. Bez ruchu po sieci i bez ścieżki błędu —
+    /// zapis lokalny nie ma jak się nie udać, więc UI nie musi go cofać.
+    @MainActor
+    func saveMealSlotSchedule(_ schedule: MealSlotSchedule) {
+        mealSlotSchedule = schedule
+        UserDefaults.standard.set(schedule.storageValue, forKey: MealSlotSchedule.Keys.times)
+    }
+
+    /// Pobiera konfigurację posiłków bieżącego gospodarstwa.
+    /// Ciche na błędach — lokalne lustro zostaje jako fallback offline.
+    @MainActor
+    func loadMealSlotConfiguration() async {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else { return }
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
+                event: "households:findById",
+                payload: ["userId": userId, "id": householdId],
+                as: WsEnvelope<BackendHouseholdDTO>.self
+            )
+            guard envelope.ok, let household = envelope.data,
+                  let mealTypes = household.enabledMealTypes else { return }
+            applyMealSlots(MealSlotConfiguration(backendMealTypes: mealTypes))
+        } catch {
+            // Cisza — konfiguracja posiłków nie jest krytyczna dla startu,
+            // a lokalne lustro jest wystarczająco dobre do następnego wejścia.
+        }
+    }
+
+    /// Zapisuje nowy zestaw posiłków. Zapis jest optymistyczny: UI zmienia się
+    /// od razu, a przy błędzie wracamy do poprzedniego stanu — inaczej
+    /// przełącznik w ustawieniach zostawałby „w połowie".
+    @MainActor
+    @discardableResult
+    func saveMealSlotConfiguration(_ configuration: MealSlotConfiguration) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else { return false }
+
+        let previous = mealSlots
+        applyMealSlots(configuration)
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
+                event: "households:updateMealTypes",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId,
+                    "data": ["mealTypes": configuration.backendMealTypes]
+                ],
+                as: WsEnvelope<BackendHouseholdDTO>.self
+            )
+            guard envelope.ok, let household = envelope.data else {
+                applyMealSlots(previous)
+                return false
+            }
+            if let mealTypes = household.enabledMealTypes {
+                applyMealSlots(MealSlotConfiguration(backendMealTypes: mealTypes))
+            }
+            return true
+        } catch {
+            applyMealSlots(previous)
+            return false
         }
     }
 
