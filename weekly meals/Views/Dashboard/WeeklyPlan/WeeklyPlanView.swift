@@ -13,8 +13,9 @@ import SwiftUI
 // The profile chip switches the whole screen between the household lens and a
 // single person's.
 //
-// Still out of scope: „Przekąski" as a fourth slot — `MealSlot` has three
-// cases end-to-end.
+// Sloty posiłków: dzień rysuje tyle wierszy, ile gospodarstwo ma włączonych
+// w Ustawieniach → „Posiłki w planie", plus te, w których mimo wyłączenia coś
+// stoi (`visibleSlots(on:)`). Kolejność zawsze porą dnia.
 struct WeeklyPlanView: View {
     @Environment(\.weeklyMealStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
@@ -99,6 +100,18 @@ struct WeeklyPlanView: View {
         let all = mealStore.meals(for: date, slot: slot)
         guard let memberId = profile.memberId else { return all }
         return all.visibleTo(memberId: memberId)
+    }
+
+    /// Sloty do narysowania dla jednego dnia.
+    ///
+    /// Do włączonych w ustawieniach dokładamy te, w których tego dnia coś
+    /// stoi. Bez tego wyłączenie podwieczorku sprzątałoby z ekranu posiłki,
+    /// które nadal są w bazie i nadal liczą się do listy zakupów — czyli
+    /// aplikacja pokazywałaby plan inny niż ten, według którego się kupuje.
+    private func visibleSlots(on date: Date) -> [MealSlot] {
+        sessionStore.mealSlots.visibleSlots(
+            planned: mealStore.plan(for: date).plannedSlots
+        )
     }
 
     // MARK: - Body
@@ -341,6 +354,7 @@ struct WeeklyPlanView: View {
                         isEditable: datesViewModel.isEditable(day.date),
                         profile: profile,
                         members: members,
+                        slots: visibleSlots(on: day.date),
                         meals: { slot in visibleMeals(date: day.date, slot: slot) },
                         onTapMeal: { _, meal in openDetail(meal.recipe) },
                         onAddMeal: { slot in
@@ -360,6 +374,7 @@ struct WeeklyPlanView: View {
                         if profile == .household, members.count > 1, hasMeals(on: day.date) {
                             PlanDaySplitsSection(
                                 date: day.date,
+                                slots: visibleSlots(on: day.date),
                                 meals: { slot in mealStore.meals(for: day.date, slot: slot) },
                                 members: members,
                                 onTapMeal: { _, meal in openDetail(meal.recipe) }

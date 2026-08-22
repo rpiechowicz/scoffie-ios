@@ -85,16 +85,21 @@ enum PlanChangeNotificationService {
         }
     }
 
+    /// Nazwa slotu w bierniku — wchodzi w zdania typu „Marek dodał Śniadanie
+    /// na Poniedziałek", dlatego „Kolację", a nie „Kolacja". To samo
+    /// tłumaczenie stoi po stronie backendu (`notifications.service.ts`),
+    /// bo powiadomienie push składa się tam, a nie tutaj.
     private static func mapMealType(_ value: String?) -> String {
-        switch value?.uppercased() {
-        case "BREAKFAST":
-            return "Śniadanie"
-        case "LUNCH":
-            return "Obiad"
-        case "DINNER":
-            return "Kolację"
-        default:
+        guard let slot = value.flatMap({ MealSlot(backendMealType: $0) }) else {
             return "Posiłek"
+        }
+        switch slot {
+        case .breakfast:       return "Śniadanie"
+        case .secondBreakfast: return "II śniadanie"
+        case .lunch:           return "Obiad"
+        case .afternoonSnack:  return "Podwieczorek"
+        case .dinner:          return "Kolację"
+        case .snack:           return "Przekąskę"
         }
     }
 

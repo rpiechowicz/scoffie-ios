@@ -12,9 +12,11 @@ import SwiftUI
 // already says which meal this is, and three numbered circles cost 42pt of
 // width to repeat it.
 //
-// Rząd urósł do ~128pt: przy trzech posiłkach dzień i tak mieści się nad
-// zgięciem z zapasem, a większa miniatura sprawia, że jedzenie — nie
-// typografia — jest tym, co widać pierwsze.
+// Rząd ma ~98pt. Wersja 128-punktowa stawiała na dużą miniaturę, ale przy
+// włączonych slotach dodatkowych dzień ma nie trzy pozycje, a pięć albo sześć
+// — i wtedy kafle rozjeżdżały się na dwa ekrany, czyli dokładnie ten problem,
+// który hero-karta miała rozwiązać. Miniatura 72pt nadal niesie zdjęcie
+// czytelnie, a cały dzień wraca nad zgięcie.
 //
 // Only one control sits on the row: the eaten tick. Favourite moved into the
 // long-press context menu — it was costing a permanent 28pt slot on every
@@ -73,15 +75,15 @@ struct EditorialMealCard: View {
     // MARK: - Assigned
 
     private func assignedRow(_ meal: PlanMeal) -> some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: 13) {
             MealThumbnail(recipe: meal.recipe, slot: slot, isEaten: isEaten)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 EyebrowRow(slot: slot, isEaten: isEaten)
 
                 Text(meal.recipe.name)
-                    .font(.system(size: 17, weight: .bold))
-                    .tracking(-0.3)
+                    .font(.system(size: 15.5, weight: .bold))
+                    .tracking(-0.25)
                     .foregroundStyle(Color.wmLabel(scheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -95,19 +97,19 @@ struct EditorialMealCard: View {
                 EatenToggle(isEaten: isEaten, action: onToggleEaten)
             }
         }
-        .padding(16)
+        .padding(13)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(isEaten ? WMPalette.sage.opacity(scheme == .dark ? 0.14 : 0.09) : Color.wmTileBg(scheme))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
                     isEaten ? WMPalette.sage.opacity(0.38) : Color.wmTileStroke(scheme),
                     lineWidth: 1
                 )
         )
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .onTapGesture { onTap() }
         .contextMenu { contextActions }
         .accessibilityElement(children: .contain)
@@ -148,7 +150,7 @@ struct EditorialMealCard: View {
         HStack(spacing: 6) {
             if isEaten {
                 Text("Zjedzone · \(Int(recipe.nutritionPerServing.kcal)) kcal")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(WMPalette.sage)
                     .monospacedDigit()
             } else {
@@ -157,7 +159,7 @@ struct EditorialMealCard: View {
                     .foregroundStyle(Color.wmMuted(scheme))
 
                 Text("\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal)) kcal")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.wmMuted(scheme))
                     .monospacedDigit()
             }
@@ -169,33 +171,33 @@ struct EditorialMealCard: View {
 
     private var emptyRow: some View {
         Button(action: { if isEditable { onAssign() } }) {
-            HStack(alignment: .center, spacing: 16) {
+            HStack(alignment: .center, spacing: 13) {
                 Image(systemName: slot.icon)
-                    .font(.system(size: 25, weight: .medium))
+                    .font(.system(size: 21, weight: .medium))
                     .foregroundStyle(Color.wmMuted(scheme))
-                    .frame(width: 96, height: 96)
+                    .frame(width: 72, height: 72)
                     .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.wmChipBg(scheme))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(Color.wmRule(scheme), lineWidth: 1)
                     )
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     EyebrowRow(slot: slot, isEaten: false)
 
                     Text(promptText)
-                        .font(.system(size: 17, weight: .bold))
-                        .tracking(-0.3)
+                        .font(.system(size: 15.5, weight: .bold))
+                        .tracking(-0.25)
                         .foregroundStyle(Color.wmLabel(scheme))
                         .lineLimit(1)
 
                     if isEditable {
                         HStack(spacing: 4) {
                             Text("Wybierz z biblioteki")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 11.5, weight: .semibold))
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 10, weight: .bold))
                         }
@@ -205,20 +207,20 @@ struct EditorialMealCard: View {
                             Image(systemName: "lock.fill")
                                 .font(.system(size: 10, weight: .bold))
                             Text("Dzień nieedytowalny")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 11.5, weight: .semibold))
                         }
                         .foregroundStyle(Color.wmMuted(scheme))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(16)
+            .padding(13)
             .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.wmTileBg(scheme).opacity(0.55))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(
                         Color.wmTileStroke(scheme),
                         style: StrokeStyle(lineWidth: 1, dash: [5, 4])
@@ -237,9 +239,12 @@ struct EditorialMealCard: View {
 
     private var promptText: String {
         switch slot {
-        case .breakfast: return "Co dziś na śniadanie?"
-        case .lunch:     return "Co dziś na obiad?"
-        case .dinner:    return "Co dziś na kolację?"
+        case .breakfast:       return "Co dziś na śniadanie?"
+        case .secondBreakfast: return "Co dziś na drugie śniadanie?"
+        case .lunch:           return "Co dziś na obiad?"
+        case .afternoonSnack:  return "Co dziś na podwieczorek?"
+        case .dinner:          return "Co dziś na kolację?"
+        case .snack:           return "Na co masz dziś ochotę?"
         }
     }
 }
@@ -248,22 +253,22 @@ struct EditorialMealCard: View {
 
 extension MealSlot {
     /// Cozy Kitchen accent — overrides the default system colors for this design.
+    ///
+    /// Posiłek dodatkowy dziedziczy akcent po sąsiednim posiłku głównym
+    /// (II śniadanie ← śniadanie, podwieczorek ← obiad, przekąska ← kolacja).
+    /// Paleta „Cozy Kitchen" ma cztery akcenty i dokładanie do niej dwóch
+    /// nowych dla slotów, które są z definicji mniej ważne od głównych,
+    /// rozbiłoby hierarchię ekranu zamiast ją doprecyzować.
     var cozyAccent: Color {
         switch self {
-        case .breakfast: return WMPalette.butter
-        case .lunch:     return WMPalette.sage
-        case .dinner:    return WMPalette.indigo
+        case .breakfast, .secondBreakfast: return WMPalette.butter
+        case .lunch, .afternoonSnack:      return WMPalette.sage
+        case .dinner, .snack:              return WMPalette.indigo
         }
     }
 
     /// Hero tint used when the recipe has no image.
-    var cozyTint: Color {
-        switch self {
-        case .breakfast: return WMPalette.butter
-        case .lunch:     return WMPalette.sage
-        case .dinner:    return WMPalette.indigo
-        }
-    }
+    var cozyTint: Color { cozyAccent }
 }
 
 // MARK: - Eyebrow (slot label · time)
@@ -273,18 +278,21 @@ private struct EyebrowRow: View {
     let isEaten: Bool
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sessionStore) private var sessionStore
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(slot.title.uppercased())
                 .font(.system(size: 10.5, weight: .bold))
-                .tracking(1.6)
+                .tracking(1.4)
                 .foregroundStyle(isEaten ? WMPalette.sage : slot.cozyAccent)
 
-            Text(slot.time)
-                .font(.system(size: 10.5, weight: .semibold))
-                .tracking(0.8)
-                .foregroundStyle(Color.wmMuted(scheme))
+            if let time = sessionStore.mealSlotSchedule.time(for: slot) {
+                Text(time)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
         }
         .lineLimit(1)
     }
@@ -314,14 +322,14 @@ private struct MealThumbnail: View {
                 gradientFallback
             }
         }
-        .frame(width: 96, height: 96)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .frame(width: 72, height: 72)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         // Zjedzony posiłek przygasa — zdjęcie zostaje czytelne, ale przestaje
         // konkurować o uwagę z tym, co dopiero przed użytkownikiem.
         .saturation(isEaten ? 0.45 : 1)
         .opacity(isEaten ? 0.75 : 1)
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(.white.opacity(0.10), lineWidth: 1)
         )
     }
@@ -335,7 +343,7 @@ private struct MealThumbnail: View {
             )
 
             Image(systemName: slot.icon)
-                .font(.system(size: 30, weight: .light))
+                .font(.system(size: 24, weight: .light))
                 .foregroundStyle(Color.white.opacity(0.65))
         }
     }

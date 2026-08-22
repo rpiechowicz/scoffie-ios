@@ -24,7 +24,7 @@ protocol WeeklyPlanRepository {
     func setMealEaten(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, isEaten: Bool) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
     func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO
-    func saveSavedPlan(weekStart: String, breakfastRecipeIds: [String], lunchRecipeIds: [String], dinnerRecipeIds: [String]) async throws -> BackendSharedMealPlanDTO
+    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO
     func observeSavedPlanChanges(_ onChange: @escaping (_ event: BackendSavedPlanChangedDTO) -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
@@ -37,7 +37,7 @@ protocol WeeklyPlanTransportClient {
     func setMealEaten(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, isEaten: Bool) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
     func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO
-    func saveSavedPlan(weekStart: String, breakfastRecipeIds: [String], lunchRecipeIds: [String], dinnerRecipeIds: [String]) async throws -> BackendSharedMealPlanDTO
+    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO
     func observeSavedPlanChanges(_ onChange: @escaping (_ event: BackendSavedPlanChangedDTO) -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
@@ -154,24 +154,13 @@ private final class WeekDateMapper {
     }
 }
 
-private extension MealSlot {
-    var backendMealType: String {
-        switch self {
-        case .breakfast: return "BREAKFAST"
-        case .lunch: return "LUNCH"
-        case .dinner: return "DINNER"
-        }
-    }
-}
-
+// Mapowanie slot ↔ `MealType` mieszka teraz przy samym `MealSlot`
+// (`Models/Components/MealSlot.swift`) — trzymanie go tutaj oznaczało, że
+// każdy nowy posiłek trzeba dopisać w dwóch miejscach, a ominięcie jednego
+// z nich nie było błędem kompilacji, tylko cicho gubionym posiłkiem.
 private extension BackendWeeklyPlanItemDTO {
     var appMealSlot: MealSlot? {
-        switch mealType.uppercased() {
-        case "BREAKFAST": return .breakfast
-        case "LUNCH": return .lunch
-        case "DINNER": return .dinner
-        default: return nil
-        }
+        MealSlot(backendMealType: mealType)
     }
 }
 
@@ -379,7 +368,13 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getSavedPlan.")
     }
 
-    func saveSavedPlan(weekStart: String, breakfastRecipeIds: [String], lunchRecipeIds: [String], dinnerRecipeIds: [String]) async throws -> BackendSharedMealPlanDTO {
+    /// Zapis puli na tydzień.
+    ///
+    /// Ładunek jedzie jako mapa `MealType → id przepisów` (`recipeIdsByMealType`)
+    /// zamiast trzech pól `breakfast/lunch/dinnerRecipeIds`. Backend nadal
+    /// przyjmuje stare pola, ale wysyłanie ich obok mapy nic nie wnosi — dla
+    /// slotów wymienionych w mapie i tak wygrywa mapa.
+    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO {
         let householdId = try await resolveHouseholdId()
         let envelope: WsEnvelope<BackendSharedMealPlanDTO> = try await socket.emitWithAck(
             event: "weeklyPlans:saveSavedPlan",
@@ -388,9 +383,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
                 "householdId": householdId,
                 "weekStart": weekStart,
                 "data": [
-                    "breakfastRecipeIds": breakfastRecipeIds,
-                    "lunchRecipeIds": lunchRecipeIds,
-                    "dinnerRecipeIds": dinnerRecipeIds
+                    "recipeIdsByMealType": recipeIdsByMealType
                 ]
             ],
             as: WsEnvelope<BackendSharedMealPlanDTO>.self
@@ -505,12 +498,10 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
         try await client.fetchSavedPlan(weekStart: weekStart)
     }
 
-    func saveSavedPlan(weekStart: String, breakfastRecipeIds: [String], lunchRecipeIds: [String], dinnerRecipeIds: [String]) async throws -> BackendSharedMealPlanDTO {
+    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO {
         try await client.saveSavedPlan(
             weekStart: weekStart,
-            breakfastRecipeIds: breakfastRecipeIds,
-            lunchRecipeIds: lunchRecipeIds,
-            dinnerRecipeIds: dinnerRecipeIds
+            recipeIdsByMealType: recipeIdsByMealType
         )
     }
 

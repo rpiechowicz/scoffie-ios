@@ -15,6 +15,10 @@ struct PlanDayCard: View {
     let isEditable: Bool
     let profile: PlanProfile
     let members: [HouseholdMemberSnapshot]
+    /// Sloty do narysowania — w kolejności dnia, już z uwzględnieniem
+    /// ustawień gospodarstwa. Karta ich nie wylicza, bo ta sama lista musi
+    /// zgadzać się z sekcją „Każdy je inaczej" pod spodem.
+    let slots: [MealSlot]
     /// Variants planned for that slot, already filtered to the active profile.
     let meals: (MealSlot) -> [PlanMeal]
     let onTapMeal: (MealSlot, PlanMeal) -> Void
@@ -24,7 +28,7 @@ struct PlanDayCard: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private static let rowGap: CGFloat = 10
+    private static let rowGap: CGFloat = 8
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -36,7 +40,7 @@ struct PlanDayCard: View {
             // Same gap between every row — a slot's second variant shouldn't
             // sit tighter than the next slot does.
             VStack(spacing: Self.rowGap) {
-                ForEach(MealSlot.allCases) { slot in
+                ForEach(slots) { slot in
                     slotContent(slot)
                 }
             }
@@ -233,7 +237,7 @@ struct PlanDayCard: View {
     }
 
     private var visibleMeals: [PlanMeal] {
-        MealSlot.allCases.flatMap { meals($0) }
+        slots.flatMap { meals($0) }
     }
 
     /// "3 posiłki · 1010 kcal", or "Brak planu" when nothing is visible in the
