@@ -7,6 +7,12 @@ import Foundation
 /// do ustawień, zachowując dotychczasowe wartości jako domyślne, więc nikt,
 /// kto nie wejdzie w ekran godzin, nie zobaczy żadnej zmiany.
 ///
+/// Rozkład jest **wspólny dla gospodarstwa**, tak samo jak lista posiłków:
+/// backend trzyma go w `Household.mealSlotTimes`, a zmiana u jednej osoby
+/// przychodzi do pozostałych zdarzeniem `households:mealTimesChanged`.
+/// Lokalny `UserDefaults` jest wyłącznie lustrem na czas offline i na
+/// pierwszą klatkę po starcie.
+///
 /// Trzy decyzje, które warto znać:
 ///
 /// 1. **Minuty od północy, nie `Date`.** Pora posiłku to punkt w dobie, a nie
@@ -140,6 +146,35 @@ struct MealSlotSchedule: Equatable {
 
     private static func clamp(_ minutes: Int) -> Int {
         min(max(minutes, 0), 24 * 60 - 1)
+    }
+
+    // MARK: - Mapowanie na backend
+
+    /// Mapa `MealType → minuty od północy` do wysyłki.
+    ///
+    /// Slot bez pory po prostu nie ma klucza — brak klucza to informacja
+    /// („ten posiłek nie ma stałej pory"), a nie luka. Dlatego pusta mapa
+    /// i brak mapy znaczą co innego i backend też ich nie skleja.
+    var backendMealSlotTimes: [String: Int] {
+        var payload: [String: Int] = [:]
+        for slot in MealSlot.allCases {
+            if let minutes = minutesBySlot[slot] {
+                payload[slot.backendMealType] = minutes
+            }
+        }
+        return payload
+    }
+
+    /// `nil` z serwera znaczy „gospodarstwo nie ruszało godzin" — wtedy
+    /// zostają wartości domyślne, a nie pusty rozkład.
+    init?(backendMealSlotTimes: [String: Int]?) {
+        guard let backendMealSlotTimes else { return nil }
+
+        let pairs = backendMealSlotTimes.compactMap { key, minutes -> (MealSlot, Int)? in
+            guard let slot = MealSlot(backendMealType: key) else { return nil }
+            return (slot, minutes)
+        }
+        self.init(minutesBySlot: Dictionary(pairs, uniquingKeysWith: { _, last in last }))
     }
 
     // MARK: - Persystencja

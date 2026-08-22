@@ -4,10 +4,9 @@ import SwiftUI
 ///
 /// Rozkład jazdy dnia. Odpowiada wyłącznie na pytanie „o której", a to,
 /// **które** posiłki w ogóle jecie, ustawia sąsiedni arkusz „Posiłki
-/// w planie". Rozdzielenie nie jest kosmetyczne — te dwie decyzje mają inny
-/// zasięg zapisu: lista posiłków jedzie na backend i obowiązuje całe
-/// gospodarstwo, godziny siedzą w `UserDefaults` tego telefonu. Ekran mówi
-/// o tym w nagłówku („To urządzenie"), a nie w przypisie na dole.
+/// w planie". Rozdzielone, bo to dwie różne decyzje — ale obie obowiązują
+/// całe gospodarstwo: plan tygodnia i lista zakupów są wspólne, więc pora
+/// obiadu też musi być jedna dla domu.
 ///
 /// Trzy decyzje projektowe:
 ///
@@ -33,6 +32,9 @@ struct MealTimesSheet: View {
     @Environment(\.colorScheme) private var scheme
 
     @State private var editing: MealSlot?
+    @State private var errorMessage: String?
+    /// Rozkład, którego nie udało się zapisać — zasila „Spróbuj ponownie".
+    @State private var lastFailed: MealSlotSchedule?
 
     private var configuration: MealSlotConfiguration { sessionStore.mealSlots }
     private var schedule: MealSlotSchedule { sessionStore.mealSlotSchedule }
@@ -57,12 +59,12 @@ struct MealTimesSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     EditorialSheetHeader(
-                        eyebrow: "To urządzenie",
+                        eyebrow: "Gospodarstwo",
                         title: "Pory posiłków",
                         onClose: onClose
                     )
 
-                    Text("Godziny podpisują posiłki w planie i kalendarzu. Są zapisane tylko na tym telefonie — inni domownicy mają u siebie swoje.")
+                    Text("Godziny podpisują posiłki w planie i kalendarzu. Obowiązują wszystkich domowników — zmiana pojawi się od razu u każdego.")
                         .font(.system(size: 13.5, weight: .regular))
                         .foregroundStyle(Color.wmMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -79,10 +81,11 @@ struct MealTimesSheet: View {
                     }
 
                     outOfOrderNotice(rows)
+                    saveStatus
 
                     if !schedule.isDefault {
                         Button("Przywróć domyślne godziny") {
-                            sessionStore.saveMealSlotSchedule(.default)
+                            save(.default)
                         }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(WMPalette.terracotta)
@@ -101,16 +104,52 @@ struct MealTimesSheet: View {
                 minutes: schedule.minutes(for: slot),
                 onPick: { picked in
                     guard picked != schedule.minutes(for: slot) else { return }
-                    sessionStore.saveMealSlotSchedule(schedule.setting(slot, toMinutes: picked))
+                    save(schedule.setting(slot, toMinutes: picked))
                 },
                 onClearTime: {
                     editing = nil
-                    sessionStore.saveMealSlotSchedule(schedule.setting(slot, toMinutes: nil))
+                    save(schedule.setting(slot, toMinutes: nil))
                 },
                 onClose: { editing = nil }
             )
             .presentationDetents([.height(360)])
             .dashboardLiquidSheet(cornerRadius: 26)
+        }
+    }
+
+    /// Bez stanu „Zapisuję…". Zapis jest optymistyczny — zegar pokazuje nową
+    /// godzinę, zanim cokolwiek poleci po sieci — a napis migający przez
+    /// kilkadziesiąt milisekund tylko podskakiwałby układem. Zostaje wyłącznie
+    /// stan, który niesie informację: nieudany zapis.
+    @ViewBuilder
+    private var saveStatus: some View {
+        if let errorMessage {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(errorMessage)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.red.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let lastFailed {
+                    Button("Spróbuj ponownie") { save(lastFailed) }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(WMPalette.terracotta)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
+        }
+    }
+
+    private func save(_ next: MealSlotSchedule) {
+        errorMessage = nil
+        lastFailed = nil
+        Task { @MainActor in
+            let saved = await sessionStore.saveMealSlotSchedule(next)
+            if !saved {
+                errorMessage = "Nie udało się zapisać godzin. Sprawdź połączenie i spróbuj ponownie."
+                lastFailed = next
+            }
         }
     }
 

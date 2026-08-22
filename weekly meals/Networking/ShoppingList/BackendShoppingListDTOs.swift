@@ -42,6 +42,10 @@ struct BackendHouseholdDTO: Codable {
     /// backend pola nie dowozi i wtedy klient zostaje przy trójce
     /// podstawowej zamiast wywalić się na dekodowaniu gospodarstwa.
     let enabledMealTypes: [String]?
+    /// Pory posiłków: mapa `MealType → minuty od północy`. Opcjonalna z tego
+    /// samego powodu co wyżej, a dodatkowo `null` ma własne znaczenie:
+    /// gospodarstwo nie ruszało godzin, więc obowiązują domyślne.
+    let mealSlotTimes: [String: Int]?
 }
 
 struct BackendShoppingItemCheckDTO: Codable {

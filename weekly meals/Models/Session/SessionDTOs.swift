@@ -69,6 +69,13 @@ struct BackendHouseholdMembersChangedDTO: Codable {
 /// Zmiana zestawu posiłków planowanych przez gospodarstwo
 /// (`households:mealTypesChanged`). Nowa lista jedzie w ładunku, więc
 /// odbiorca nie musi po nią wracać osobnym zapytaniem.
+struct BackendHouseholdMealTimesChangedDTO: Codable {
+    let householdId: String
+    let mealSlotTimes: [String: Int]?
+    let changedByUserId: String?
+    let changedByDisplayName: String?
+}
+
 struct BackendHouseholdMealTypesChangedDTO: Codable {
     let householdId: String
     let mealTypes: [String]
