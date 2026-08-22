@@ -19,6 +19,9 @@ struct BackendRecipeDTO: Codable {
     let title: String
     let description: String?
     let mealType: String
+    /// Sloty, w których danie ma sens. Opcjonalny — starszy backend go nie
+    /// dowozi, a wtedy odczytujemy je z samego `mealType`.
+    let suitableMealTypes: [String]?
     let difficulty: String
     let prepTimeMinutes: Int
     let servings: Int
@@ -39,6 +42,7 @@ struct BackendRecipeDTO: Codable {
         case title
         case description
         case mealType
+        case suitableMealTypes
         case difficulty
         case prepTimeMinutes
         case servings
@@ -61,6 +65,7 @@ struct BackendRecipeDTO: Codable {
         title = try container.decode(String.self, forKey: .title)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         mealType = try container.decode(String.self, forKey: .mealType)
+        suitableMealTypes = try container.decodeIfPresent([String].self, forKey: .suitableMealTypes)
         difficulty = try container.decode(String.self, forKey: .difficulty)
         prepTimeMinutes = try container.decode(Int.self, forKey: .prepTimeMinutes)
         servings = try container.decode(Int.self, forKey: .servings)
@@ -121,6 +126,19 @@ extension BackendRecipeDTO {
         }
     }
 
+    /// Sloty planu, do których danie pasuje.
+    ///
+    /// Slot bazowy dokładamy zawsze — backend go już normalizuje, ale przepis
+    /// zapisany przez starszego klienta może wrócić z pustą listą i wtedy
+    /// zniknąłby z wyboru posiłku, zamiast po prostu nie mieć dodatkowych pór.
+    var appSuitableSlots: [MealSlot] {
+        var slots = (suitableMealTypes ?? []).compactMap { MealSlot(backendMealType: $0) }
+        if let base = MealSlot(backendMealType: mealType) {
+            slots.append(base)
+        }
+        return slots.sortedByDay
+    }
+
     var appDifficulty: Difficulty {
         switch difficulty.uppercased() {
         case "EASY": .easy
@@ -163,6 +181,7 @@ extension BackendRecipeDTO {
             description: description ?? "",
             favourite: isFavorite ?? false,
             category: category,
+            suitableSlots: appSuitableSlots,
             servings: servings,
             prepTimeMinutes: prepTimeMinutes,
             difficulty: appDifficulty,

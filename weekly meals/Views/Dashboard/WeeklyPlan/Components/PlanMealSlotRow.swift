@@ -2,7 +2,7 @@ import SwiftUI
 
 // One meal variant inside a Plan v2 day card.
 //
-// Filled: 76pt full-height thumbnail on the left (recipe photo, or the design's
+// Filled: 64pt full-height thumbnail on the left (recipe photo, or the design's
 // tinted gradient + diagonal hatch when the recipe has no image), then the
 // eyebrow (ŚNIADANIE · 08:00), title, and a `15 min · 380 kcal` meta line with
 // the "who eats this" badge pinned to its trailing edge.
@@ -28,12 +28,18 @@ struct PlanMealSlotRow: View {
     let onRemove: () -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sessionStore) private var sessionStore
 
     // Both states share one fixed height so a day card reads as an even
     // stack whether its slots are filled or empty. `minHeight` used to let the
     // empty row — whose icon well is greedy — grow well past the filled one.
-    private static let rowHeight: CGFloat = 88
-    private static let thumbWidth: CGFloat = 76
+    //
+    // 72pt zamiast 88: przy komplecie sześciu slotów karta dnia z 88-punktowymi
+    // wierszami nie mieściła się na ekranie iPhone'a i dzień trzeba było
+    // doprzewijać, żeby zobaczyć kolację. Wiersz nadal utrzymuje trzy linie
+    // tekstu obok miniatury — schodzi tylko powietrze.
+    private static let rowHeight: CGFloat = 72
+    private static let thumbWidth: CGFloat = 64
 
     var body: some View {
         if let meal {
@@ -54,18 +60,18 @@ struct PlanMealSlotRow: View {
                 .frame(maxHeight: .infinity)
                 .clipped()
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 eyebrow(labelColor: slot.cozyAccent, timeColor: Color.wmMuted(scheme))
 
                 Text(recipe.name)
-                    .font(.system(size: 14.5, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.wmLabel(scheme))
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     Text("\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal)) kcal")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10.5, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(Color.wmMuted(scheme))
 
@@ -75,13 +81,13 @@ struct PlanMealSlotRow: View {
                         PlanWhoBadge(
                             participantIds: badgeAudience,
                             members: members,
-                            size: 22
+                            size: 20
                         )
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: Self.rowHeight)
@@ -156,7 +162,7 @@ struct PlanMealSlotRow: View {
             PlanDiagonalHatch(color: .white.opacity(0.07))
 
             Image(systemName: slot.icon)
-                .font(.system(size: 30, weight: .light))
+                .font(.system(size: 24, weight: .light))
                 .foregroundStyle(.white.opacity(0.85))
         }
     }
@@ -166,7 +172,7 @@ struct PlanMealSlotRow: View {
     private var empty: some View {
         HStack(spacing: 0) {
             Image(systemName: slot.icon)
-                .font(.system(size: 24, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(slot.cozyAccent)
                 .frame(width: Self.thumbWidth)
                 .frame(maxHeight: .infinity)
@@ -177,21 +183,21 @@ struct PlanMealSlotRow: View {
                 eyebrow(labelColor: Color.wmMuted(scheme), timeColor: Color.wmFaint(scheme))
 
                 Text("Pusty slot")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                     .tracking(-0.1)
                     .foregroundStyle(Color.wmFaint(scheme))
-                    .padding(.top, 2)
+                    .padding(.top, 1)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if isEditable {
                 Text("+ Dodaj")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 12.5, weight: .bold))
                     .tracking(-0.1)
                     .foregroundStyle(WMPalette.terracotta)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 12)
                     .fixedSize()
             }
         }
@@ -249,14 +255,18 @@ struct PlanMealSlotRow: View {
                 .tracking(0.6)
                 .foregroundStyle(labelColor)
 
-            Circle()
-                .fill(Color.wmFaint(scheme))
-                .frame(width: 3, height: 3)
+            // Slot bez ustawionej pory (domyślnie przekąska) gubi też kropkę,
+            // żeby nie zostawić w wierszu wiszącego separatora bez treści.
+            if let time = sessionStore.mealSlotSchedule.time(for: slot) {
+                Circle()
+                    .fill(Color.wmFaint(scheme))
+                    .frame(width: 3, height: 3)
 
-            Text(slot.time)
-                .font(.system(size: 11, weight: .medium))
-                .tracking(0.1)
-                .foregroundStyle(timeColor)
+                Text(time)
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(0.1)
+                    .foregroundStyle(timeColor)
+            }
         }
     }
 }

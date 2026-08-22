@@ -15,6 +15,11 @@ struct SettingsView: View {
     @AppStorage("settings.user.avatarUrl") private var userAvatarUrl: String = ""
     // −1 = backend jeszcze nie przydzielił koloru (konto sprzed tej zmiany).
     @AppStorage("settings.user.avatarColor") private var userAvatarColor: Int = -1
+    // Ziarno awatara musi być tym samym identyfikatorem, którego używa
+    // `MemberAvatar` (id użytkownika). Przy koncie bez przydzielonego
+    // `avatarColor` e-mail i id dawały dwa różne kolory tej samej osobie —
+    // jeden w Ustawieniach, drugi w Planie.
+    @AppStorage("auth.userId") private var userId: String = ""
     @AppStorage("settings.household.name") private var persistedHouseholdName: String = ""
     @AppStorage("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
     @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
@@ -39,6 +44,8 @@ struct SettingsView: View {
     @State private var showNotificationsSheet = false
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
+    @State private var showMealSlotsSheet = false
+    @State private var showMealTimesSheet = false
     @State private var showProfileSheet = false
     @State private var showHelpSheet = false
     @State private var createHouseholdName = ""
@@ -310,6 +317,31 @@ struct SettingsView: View {
         return "\(calorieGoal) kcal"
     }
 
+    /// Wartość przy „Posiłkach w planie".
+    ///
+    /// Liczba, nie wyliczanka nazw: sześć slotów nie zmieści się w kolumnie
+    /// wartości, a „Śniadanie · II śnia…" mówi mniej niż „5 posiłków dziennie".
+    /// Przy samej trójce podstawowej dopisek jest zbędny — to stan domyślny,
+    /// więc mówimy „Klasyczne 3", żeby nie sugerować, że coś jest ustawione.
+    private var mealSlotsRowValue: String {
+        let count = sessionStore.mealSlots.enabled.count
+        return count == MealSlot.core.count ? "Klasyczne 3" : "\(count) dziennie"
+    }
+
+    /// Rozpiętość dnia — od pierwszej do ostatniej pory wśród planowanych
+    /// posiłków. Mówi to, po co użytkownik wchodzi w ten ekran, i mieści się
+    /// w wierszu. Trójka obowiązkowa ma porę zawsze, więc oba końce istnieją.
+    private var mealTimesRowValue: String {
+        let schedule = sessionStore.mealSlotSchedule
+        guard !schedule.isDefault else { return "Domyślne" }
+
+        let times = sessionStore.mealSlots.enabled.compactMap { schedule.minutes(for: $0) }
+        guard let first = times.min(), let last = times.max(), first != last else {
+            return "Własne"
+        }
+        return "\(MealSlotSchedule.format(first)) – \(MealSlotSchedule.format(last))"
+    }
+
     private func toggleAllergen(_ allergen: Allergen) {
         var current = selectedAllergens
         if current.contains(allergen) {
@@ -412,6 +444,20 @@ struct SettingsView: View {
                 dietSheet
                     .dashboardLiquidSheet()
             }
+            .sheet(isPresented: $showMealSlotsSheet) {
+                MealSlotsSheet {
+                    showMealSlotsSheet = false
+                }
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+            }
+            .sheet(isPresented: $showMealTimesSheet) {
+                MealTimesSheet {
+                    showMealTimesSheet = false
+                }
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+            }
             .sheet(isPresented: $showHelpSheet) {
                 helpSheet
                     .dashboardLiquidSheet()
@@ -441,7 +487,7 @@ struct SettingsView: View {
             displayName: userDisplayName,
             email: userEmail,
             avatarUrl: userAvatarUrl,
-            avatarSeed: userEmail.isEmpty ? userDisplayName : userEmail,
+            avatarSeed: userId.isEmpty ? userDisplayName : userId,
             avatarColorIndex: userAvatarColor >= 0 ? userAvatarColor : nil,
             action: { showProfileSheet = true }
         )
@@ -465,8 +511,33 @@ struct SettingsView: View {
                     iconColor: WMPalette.sage,
                     title: "Dieta i alergeny",
                     value: dietRowValue,
-                    isLast: true,
                     action: { showDietSheet = true }
+                )
+
+                // Obok „Diety", a nie w Aplikacji: to decyzja o tym, jak dom
+                // jada (rytm dnia), a nie o zachowaniu aplikacji. Ta sama
+                // półka co dieta i alergeny — użytkownik szuka tego tam,
+                // gdzie ustawiał resztę rzeczy o jedzeniu.
+                EditorialSettingsRow(
+                    icon: "fork.knife",
+                    iconColor: WMPalette.terracotta,
+                    title: "Posiłki w planie",
+                    value: mealSlotsRowValue,
+                    action: { showMealSlotsSheet = true }
+                )
+
+                // Osobny wiersz, bo osobna decyzja i osobny zasięg zapisu:
+                // lista posiłków obowiązuje całe gospodarstwo, pory siedzą
+                // na tym telefonie. Stoją obok siebie, żeby rozdzielenie było
+                // widać przed otwarciem czegokolwiek — i żeby żaden z arkuszy
+                // nie musiał tłumaczyć w stopce, gdzie szukać drugiej połowy.
+                EditorialSettingsRow(
+                    icon: "clock.fill",
+                    iconColor: WMPalette.indigo,
+                    title: "Pory posiłków",
+                    value: mealTimesRowValue,
+                    isLast: true,
+                    action: { showMealTimesSheet = true }
                 )
             }
         }
@@ -2460,6 +2531,15 @@ struct ProfileAvatar: View {
     /// Przejście po przekątnej, od krawędzi do krawędzi. Bez punktu
     /// pośredniego — zagęszczał gradient w środku i spłaszczał różnicę
     /// między barwami zamiast ją uwypuklić.
+    /// Pierwszy przystanek gradientu — dominujący odcień. Używany tam, gdzie
+    /// potrzebny jest jeden kolor osoby zamiast całego przejścia: tinty chipów
+    /// i obwódki na Planie.
+    static func baseColor(index: Int?, seed: String) -> Color {
+        let resolved = index.map { abs($0) % gradientPairs.count }
+            ?? stableIndex(for: seed, upperBound: gradientPairs.count)
+        return gradientPairs[resolved].0
+    }
+
     static func gradient(index: Int?, seed: String) -> LinearGradient {
         let resolved = index.map { abs($0) % gradientPairs.count }
             ?? stableIndex(for: seed, upperBound: gradientPairs.count)

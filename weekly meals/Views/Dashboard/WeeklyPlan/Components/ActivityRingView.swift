@@ -94,6 +94,11 @@ struct WeeklyActivityRings: View {
 }
 
 /// Kolory dla każdego slotu – spójne na całym ekranie.
+///
+/// Posiłek dodatkowy dzieli rodzinę koloru z posiłkiem, obok którego stoi
+/// (II śniadanie idzie ze śniadaniem), tylko w jaśniejszym wariancie —
+/// sześć niezależnych gradientów zamieniłoby dzień w tęczę, a i tak nie
+/// niosłoby informacji, bo to wciąż „ten sam moment dnia, mniejszy posiłek".
 enum MealSlotPalette {
     static func colors(for slot: MealSlot) -> (start: Color, end: Color) {
         switch slot {
@@ -102,15 +107,30 @@ enum MealSlotPalette {
                 Color(red: 1.00, green: 0.58, blue: 0.22),
                 Color(red: 1.00, green: 0.82, blue: 0.30)
             )
+        case .secondBreakfast:
+            return (
+                Color(red: 1.00, green: 0.72, blue: 0.40),
+                Color(red: 1.00, green: 0.88, blue: 0.55)
+            )
         case .lunch:
             return (
                 Color(red: 0.28, green: 0.56, blue: 1.00),
                 Color(red: 0.34, green: 0.82, blue: 0.95)
             )
+        case .afternoonSnack:
+            return (
+                Color(red: 0.45, green: 0.72, blue: 1.00),
+                Color(red: 0.55, green: 0.90, blue: 0.96)
+            )
         case .dinner:
             return (
                 Color(red: 0.61, green: 0.38, blue: 1.00),
                 Color(red: 0.95, green: 0.40, blue: 0.78)
+            )
+        case .snack:
+            return (
+                Color(red: 0.74, green: 0.58, blue: 1.00),
+                Color(red: 0.97, green: 0.60, blue: 0.86)
             )
         }
     }

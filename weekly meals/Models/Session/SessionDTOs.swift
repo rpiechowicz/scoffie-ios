@@ -66,6 +66,23 @@ struct BackendHouseholdMembersChangedDTO: Codable {
     let changedByDisplayName: String?
 }
 
+/// Zmiana zestawu posiłków planowanych przez gospodarstwo
+/// (`households:mealTypesChanged`). Nowa lista jedzie w ładunku, więc
+/// odbiorca nie musi po nią wracać osobnym zapytaniem.
+struct BackendHouseholdMealTimesChangedDTO: Codable {
+    let householdId: String
+    let mealSlotTimes: [String: Int]?
+    let changedByUserId: String?
+    let changedByDisplayName: String?
+}
+
+struct BackendHouseholdMealTypesChangedDTO: Codable {
+    let householdId: String
+    let mealTypes: [String]
+    let changedByUserId: String?
+    let changedByDisplayName: String?
+}
+
 struct BackendInvitationPreviewDTO: Codable {
     struct HouseholdDTO: Codable {
         let id: String
@@ -124,6 +141,9 @@ struct BackendHouseholdMemberDTO: Decodable {
         let displayName: String
         let email: String?
         let avatarUrl: String?
+        /// Indeks gradientu przydzielony przez backend — patrz
+        /// `ProfileAvatar.colorIndex`. `nil` dla kont sprzed tej zmiany.
+        let avatarColor: Int?
     }
 
     let id: String

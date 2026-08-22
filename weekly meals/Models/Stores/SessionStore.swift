@@ -55,6 +55,26 @@ final class SessionStore {
     var currentHouseholdName: String?
     var invitationPrompt: InvitationPromptState?
     var householdRealtimeVersion: Int = 0
+
+    /// Posiłki, które planuje bieżące gospodarstwo (Ustawienia → „Posiłki
+    /// w planie"). Wspólne dla całego domu — zmiana u jednej osoby przychodzi
+    /// do pozostałych zdarzeniem `households:mealTypesChanged`.
+    ///
+    /// Hydratowane z `@AppStorage` na zimnym starcie, żeby pierwsza klatka
+    /// Planu nie migała trójką podstawową, zanim wróci odpowiedź z serwera.
+    var mealSlots: MealSlotConfiguration = MealSlotConfiguration(
+        storageValue: UserDefaults.standard
+            .string(forKey: MealSlotConfiguration.Keys.enabledSlots) ?? ""
+    )
+    /// Godziny posiłków. Wspólne dla gospodarstwa, dokładnie jak `mealSlots`
+    /// — zmiana u jednej osoby przychodzi do pozostałych zdarzeniem
+    /// `households:mealTimesChanged`. `UserDefaults` jest lustrem na zimny
+    /// start i na offline, nie źródłem prawdy.
+    var mealSlotSchedule: MealSlotSchedule = MealSlotSchedule(
+        storageValue: UserDefaults.standard
+            .string(forKey: MealSlotSchedule.Keys.times) ?? ""
+    )
+
     /// `nil` when the user hasn't completed the welcome flow yet — UI gates
     /// the welcome screen on this. We hydrate it from AppStorage on cold
     /// start (so we don't flash the welcome screen for users who completed
@@ -389,6 +409,7 @@ final class SessionStore {
         )
         self.shoppingListStore = shoppingListStore
         observeHouseholdRealtime()
+        observeMealSlotsRealtime()
 
         let initialWeekStart = datesViewModel.weekStartISO
         Task {
@@ -400,6 +421,13 @@ final class SessionStore {
         // continue to display while this runs in the background.
         Task { @MainActor [weak self] in
             await self?.loadUserPreferences()
+        }
+
+        // To samo dla zestawu posiłków gospodarstwa — Plan i Kalendarz
+        // rysują sloty z `mealSlots`, więc lepiej mieć świeżą listę zanim
+        // użytkownik zdąży przewinąć tydzień.
+        Task { @MainActor [weak self] in
+            await self?.loadMealSlotConfiguration()
         }
 
         // Recover from the rare "household exists but onboardingCompletedAt
@@ -416,6 +444,8 @@ final class SessionStore {
 
     private func clearRuntimeStores() {
         realtimeSocket?.off(event: "households:membersChanged")
+        realtimeSocket?.off(event: "households:mealTypesChanged")
+        realtimeSocket?.off(event: "households:mealTimesChanged")
         realtimeSocket = nil
         weeklyMealStore = nil
         recipeCatalogStore = nil
@@ -448,6 +478,167 @@ final class SessionStore {
                 // (bez refetchowania sheetu ponownie).
                 await self.refreshHouseholdMembers(force: true)
             }
+        }
+    }
+
+    // MARK: - Posiłki planowane przez gospodarstwo
+
+    private func observeMealSlotsRealtime() {
+        realtimeSocket?.off(event: "households:mealTypesChanged")
+        realtimeSocket?.on(event: "households:mealTypesChanged") { [weak self] items in
+            guard let self else { return }
+            guard let first = items.first,
+                  JSONSerialization.isValidJSONObject(first),
+                  let data = try? JSONSerialization.data(withJSONObject: first),
+                  let event = try? JSONDecoder().decode(BackendHouseholdMealTypesChangedDTO.self, from: data)
+            else { return }
+
+            Task { @MainActor in
+                guard let currentHouseholdId = self.currentHouseholdId, !currentHouseholdId.isEmpty else { return }
+                guard event.householdId == currentHouseholdId else { return }
+                // Ładunek niesie już nową listę, więc nie wracamy po nią na
+                // serwer — plan przebudowuje się od razu u wszystkich w domu.
+                self.applyMealSlots(MealSlotConfiguration(backendMealTypes: event.mealTypes))
+            }
+        }
+
+        realtimeSocket?.off(event: "households:mealTimesChanged")
+        realtimeSocket?.on(event: "households:mealTimesChanged") { [weak self] items in
+            guard let self else { return }
+            guard let first = items.first,
+                  JSONSerialization.isValidJSONObject(first),
+                  let data = try? JSONSerialization.data(withJSONObject: first),
+                  let event = try? JSONDecoder().decode(BackendHouseholdMealTimesChangedDTO.self, from: data)
+            else { return }
+
+            Task { @MainActor in
+                guard let currentHouseholdId = self.currentHouseholdId, !currentHouseholdId.isEmpty else { return }
+                guard event.householdId == currentHouseholdId else { return }
+                guard let times = MealSlotSchedule(backendMealSlotTimes: event.mealSlotTimes) else { return }
+                self.applyMealSlotSchedule(times)
+            }
+        }
+    }
+
+    @MainActor
+    private func applyMealSlots(_ configuration: MealSlotConfiguration) {
+        mealSlots = configuration
+        UserDefaults.standard.set(
+            configuration.storageValue,
+            forKey: MealSlotConfiguration.Keys.enabledSlots
+        )
+    }
+
+    @MainActor
+    private func applyMealSlotSchedule(_ schedule: MealSlotSchedule) {
+        mealSlotSchedule = schedule
+        UserDefaults.standard.set(schedule.storageValue, forKey: MealSlotSchedule.Keys.times)
+    }
+
+    /// Zapisuje godziny posiłków. Optymistycznie: UI zmienia się od razu,
+    /// a przy błędzie wracamy do poprzedniego rozkładu — inaczej zegar
+    /// w ustawieniach pokazywałby godzinę, której nikt poza tym telefonem
+    /// nie zobaczy.
+    @MainActor
+    @discardableResult
+    func saveMealSlotSchedule(_ schedule: MealSlotSchedule) async -> Bool {
+        let previous = mealSlotSchedule
+        applyMealSlotSchedule(schedule)
+
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else {
+            // Brak sesji: zostaje lustro lokalne. To jedyna ścieżka, w której
+            // rozkład nie jedzie na serwer, i nie jest błędem — po zalogowaniu
+            // gospodarstwo i tak przyśle swój.
+            return true
+        }
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
+                event: "households:updateMealTimes",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId,
+                    "data": ["mealSlotTimes": schedule.backendMealSlotTimes]
+                ],
+                as: WsEnvelope<BackendHouseholdDTO>.self
+            )
+            guard envelope.ok, let household = envelope.data else {
+                applyMealSlotSchedule(previous)
+                return false
+            }
+            if let times = MealSlotSchedule(backendMealSlotTimes: household.mealSlotTimes) {
+                applyMealSlotSchedule(times)
+            }
+            return true
+        } catch {
+            applyMealSlotSchedule(previous)
+            return false
+        }
+    }
+
+    /// Pobiera konfigurację posiłków bieżącego gospodarstwa.
+    /// Ciche na błędach — lokalne lustro zostaje jako fallback offline.
+    @MainActor
+    func loadMealSlotConfiguration() async {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else { return }
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
+                event: "households:findById",
+                payload: ["userId": userId, "id": householdId],
+                as: WsEnvelope<BackendHouseholdDTO>.self
+            )
+            guard envelope.ok, let household = envelope.data else { return }
+            if let mealTypes = household.enabledMealTypes {
+                applyMealSlots(MealSlotConfiguration(backendMealTypes: mealTypes))
+            }
+            if let times = MealSlotSchedule(backendMealSlotTimes: household.mealSlotTimes) {
+                applyMealSlotSchedule(times)
+            }
+        } catch {
+            // Cisza — konfiguracja posiłków nie jest krytyczna dla startu,
+            // a lokalne lustro jest wystarczająco dobre do następnego wejścia.
+        }
+    }
+
+    /// Zapisuje nowy zestaw posiłków. Zapis jest optymistyczny: UI zmienia się
+    /// od razu, a przy błędzie wracamy do poprzedniego stanu — inaczej
+    /// przełącznik w ustawieniach zostawałby „w połowie".
+    @MainActor
+    @discardableResult
+    func saveMealSlotConfiguration(_ configuration: MealSlotConfiguration) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else { return false }
+
+        let previous = mealSlots
+        applyMealSlots(configuration)
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
+                event: "households:updateMealTypes",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId,
+                    "data": ["mealTypes": configuration.backendMealTypes]
+                ],
+                as: WsEnvelope<BackendHouseholdDTO>.self
+            )
+            guard envelope.ok, let household = envelope.data else {
+                applyMealSlots(previous)
+                return false
+            }
+            if let mealTypes = household.enabledMealTypes {
+                applyMealSlots(MealSlotConfiguration(backendMealTypes: mealTypes))
+            }
+            return true
+        } catch {
+            applyMealSlots(previous)
+            return false
         }
     }
 
@@ -1032,6 +1223,7 @@ final class SessionStore {
                         displayName: $0.user.displayName,
                         email: $0.user.email,
                         avatarUrl: $0.user.avatarUrl,
+                        avatarColor: $0.user.avatarColor,
                         role: $0.role
                     )
                 }

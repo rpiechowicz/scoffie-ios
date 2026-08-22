@@ -2,28 +2,25 @@ import SwiftUI
 
 /// Visual identity for a household member on Plan v2.
 ///
-/// The design canvas gives every person a colour from the Cozy Kitchen accent
-/// set and two-letter initials (Marek → butter „MK", Ania → sage „AN",
-/// Lena → indigo „LE"). The backend stores none of that, so it is derived
-/// here from the member's position in the household roster — which
-/// `households:listMembers` returns in a stable order.
+/// Kolor bierze się z `avatarColor` przydzielonego przez backend przy
+/// kończeniu onboardingu — tego samego, którym maluje się awatar konta
+/// w Ustawieniach. Dzięki temu jedna osoba ma jeden kolor w całej aplikacji.
+///
+/// Wcześniej kolor liczył się z POZYCJI domownika na liście gospodarstwa.
+/// Miało to dwie wady: ta sama osoba wyglądała inaczej w profilu niż w Planie,
+/// a dołączenie kogoś nowego przestawiało kolory wszystkim pozostałym.
 enum HouseholdMemberStyle {
-    /// Accent order matches the design's household sample. Beyond the fifth
-    /// member colours repeat; a household that large is already past the point
-    /// where colour alone identifies anyone, and the avatar carries initials.
-    private static let palette: [Color] = [
-        WMPalette.butter,
-        WMPalette.sage,
-        WMPalette.indigo,
-        WMPalette.terracottaDeep,
-        WMPalette.terracotta
-    ]
-
     static func color(for memberId: String, in members: [HouseholdMemberSnapshot]) -> Color {
-        guard let index = members.firstIndex(where: { $0.id == memberId }) else {
+        guard let member = members.first(where: { $0.id == memberId }) else {
             return WMPalette.terracotta
         }
-        return palette[index % palette.count]
+        return color(for: member)
+    }
+
+    /// Pierwszy przystanek gradientu awatara — dominujący odcień tej osoby.
+    /// Chip i awatar mówią wtedy tym samym kolorem.
+    static func color(for member: HouseholdMemberSnapshot) -> Color {
+        ProfileAvatar.baseColor(index: member.avatarColor, seed: member.id)
     }
 
     /// „Rafał Piechowicz" → „RP", „Ania" → „AN".
@@ -106,41 +103,19 @@ struct MemberAvatar: View {
     var size: CGFloat = 22
 
     var body: some View {
-        let tint = HouseholdMemberStyle.color(for: member.id, in: members)
-
-        Group {
-            if let raw = member.avatarUrl, let url = URL(string: raw) {
-                CachedAsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .empty, .failure:
-                        initialsCircle(tint: tint)
-                    @unknown default:
-                        initialsCircle(tint: tint)
-                    }
-                }
-            } else {
-                initialsCircle(tint: tint)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(tint.opacity(0.5), lineWidth: 1))
+        // Ten sam awatar co w Ustawieniach: zdjęcie, a w jego braku gradient
+        // z `avatarColor` przydzielonego przez backend. Wcześniej domownicy
+        // byli kolorowani po POZYCJI na liście gospodarstwa, więc ta sama
+        // osoba miała jeden kolor w profilu i inny w Planie, a dołączenie
+        // kogoś nowego przestawiało kolory wszystkim.
+        ProfileAvatar(
+            avatarUrl: member.avatarUrl,
+            displayName: member.displayName,
+            size: size,
+            colorIndex: member.avatarColor,
+            seed: member.id
+        )
         .accessibilityLabel(member.displayName)
     }
 
-    private func initialsCircle(tint: Color) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [tint, tint.mix(black: 0.18)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            Text(HouseholdMemberStyle.initials(member.displayName))
-                .font(.system(size: max(9, size * 0.4), weight: .bold))
-                .foregroundStyle(.white)
-        }
-    }
 }

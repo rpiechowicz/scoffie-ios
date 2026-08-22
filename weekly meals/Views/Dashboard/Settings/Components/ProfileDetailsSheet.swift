@@ -22,6 +22,8 @@ struct ProfileDetailsSheet: View {
     @AppStorage("settings.user.email") private var email: String = ""
     @AppStorage("settings.user.avatarUrl") private var avatarUrl: String = ""
     @AppStorage("settings.user.avatarColor") private var avatarColor: Int = -1
+    /// Ziarno awatara — to samo id, którym posługuje się `MemberAvatar`.
+    @AppStorage("auth.userId") private var userId: String = ""
     @AppStorage("settings.profile.yearOfBirth") private var yearOfBirth: Int = Self.defaultYearOfBirth
     @AppStorage("settings.profile.heightCm") private var heightCm: Int = Self.defaultHeightCm
     @AppStorage("settings.profile.weightKg") private var weightKg: Double = Self.defaultWeightKg
@@ -133,46 +135,66 @@ struct ProfileDetailsSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Profil")
 
-            // Jeden wiersz: avatar, a obok e-mail i edytowalne imię. Wcześniej
-            // avatar 64 pt stał obok jednej linijki tekstu, a pole imienia
-            // siedziało w osobnym bloku pod spodem — z prawej strony awatara
-            // zostawała pusta połowa karty.
+            // Imię jest nagłówkiem, e-mail podpisem — odwrotnie niż wcześniej,
+            // gdzie e-mail siedział na górze pogrubiony i czytał się jak tytuł
+            // karty, a imię lądowało pod nim w szerokim, pustym polu. Pole
+            // zniknęło: imię jest edytowalne w miejscu, a że da się je
+            // kliknąć, mówi ołówek i podkreślenie, które zapala się przy
+            // wejściu w edycję.
             HStack(alignment: .center, spacing: 14) {
                 ProfileAvatar(
                     avatarUrl: avatarUrl.isEmpty ? nil : avatarUrl,
                     displayName: displayName.isEmpty ? "Twoje konto" : displayName,
-                    size: 52,
+                    size: 56,
                     colorIndex: avatarColor >= 0 ? avatarColor : nil,
-                    seed: email.isEmpty ? displayName : email
+                    seed: userId.isEmpty ? displayName : userId
                 )
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(email.isEmpty ? "Brak e-maila" : email)
-                        .font(.system(size: 15, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .truncationMode(.middle)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        TextField("Twoje imię", text: $nameDraft)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .name)
+                            .submitLabel(.done)
+                            .font(.system(size: 19, weight: .bold))
+                            .tracking(-0.3)
+                            .foregroundStyle(Color.wmLabel(scheme))
+                            .onSubmit { focusedField = nil }
+                            .onChange(of: nameDraft) { _, newValue in
+                                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !trimmed.isEmpty else { return }
+                                displayName = trimmed
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    TextField("Twoje imię", text: $nameDraft)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                        .focused($focusedField, equals: .name)
-                        .submitLabel(.done)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color.wmLabel(scheme))
-                        .onSubmit { focusedField = nil }
-                        .onChange(of: nameDraft) { _, newValue in
-                            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !trimmed.isEmpty else { return }
-                            displayName = trimmed
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(insetField)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(
+                                focusedField == .name
+                                    ? WMPalette.terracotta
+                                    : Color.wmFaint(scheme)
+                            )
+                    }
+
+                    Rectangle()
+                        .fill(
+                            focusedField == .name
+                                ? WMPalette.terracotta
+                                : Color.wmRule(scheme)
+                        )
+                        .frame(height: focusedField == .name ? 1.5 : 1)
+
+                    Text(email.isEmpty ? "Brak e-maila" : email)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .truncationMode(.middle)
+                        .padding(.top, 3)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(.smooth(duration: 0.18), value: focusedField == .name)
             }
             .padding(16)
             .background(card)

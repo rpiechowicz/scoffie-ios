@@ -43,6 +43,20 @@ struct PlanSlotPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.weeklyMealStore) private var mealStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+
+    // Te same klucze, co na widoku Przepisów. Bez nich wybór posiłku do planu
+    // szedł po surowym katalogu i podsuwał wegetarianinowi schabowego —
+    // dokładnie to danie, którego lista Przepisów mu nie pokazuje.
+    @AppStorage(RecipePersonalization.Keys.diet)
+    private var dietPreferenceRaw: String = DietPreference.none.rawValue
+    @AppStorage(RecipePersonalization.Keys.allergens)
+    private var allergensRaw: String = ""
+    @AppStorage(RecipePersonalization.Keys.goal)
+    private var goalRaw: String = UserGoal.healthy.rawValue
+    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
+    @AppStorage(RecipePersonalization.Keys.enabled)
+    private var isPersonalizationEnabled: Bool = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -50,22 +64,59 @@ struct PlanSlotPickerSheet: View {
     @State private var debouncedSearch = ""
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var onlyFavourites = false
+    /// Zdejmuje zawężenie do slotu i pokazuje cały katalog.
+    ///
+    /// Potrzebne z dwóch powodów. Pierwszy jest przejściowy: dopóki katalog
+    /// nie przejdzie klasyfikacji slotów, świeżo włączony podwieczorek nie
+    /// ma czego pokazać. Drugi zostaje na stałe — czasem na podwieczorek je
+    /// się wczorajszy obiad i aplikacja nie ma prawa tego zabronić.
+    @State private var showsWholeCatalog = false
     @State private var isSaving = false
     /// Empty means „Wspólne" — the whole household eats it.
     @State private var selectedParticipants: Set<String> = []
 
     // MARK: - Derived
 
-    private var slotCategory: RecipesCategory {
-        switch slot {
-        case .breakfast: .breakfast
-        case .lunch:     .lunch
-        case .dinner:    .dinner
-        }
+    /// Przepisy, które w ogóle wolno wstawić w ten slot.
+    ///
+    /// Dopasowanie po `Recipe.fits(_:)`, a nie po kategorii bazowej: dzięki
+    /// temu owsianka („Śniadania") pojawia się także w drugim śniadaniu
+    /// i w przekąsce, o ile ma tam ustawiony slot. Bez tego dodatkowe posiłki
+    /// startowałyby z pustą listą i wyglądałyby na zepsute.
+    private var slotCatalog: [Recipe] {
+        guard !showsWholeCatalog else { return recipeCatalogStore.recipes }
+        return recipeCatalogStore.recipes.filter { $0.fits(slot) }
+    }
+
+    /// Ile dań przepada przez zawężenie do slotu — do przypisu i do decyzji,
+    /// czy w ogóle pokazać wyjście awaryjne.
+    private var hiddenBySlotCount: Int {
+        guard !showsWholeCatalog else { return 0 }
+        return recipeCatalogStore.recipes.filter { !$0.fits(slot) }.count
+    }
+
+    private var personalization: RecipePersonalization {
+        RecipePersonalization(
+            dietRaw: dietPreferenceRaw,
+            allergensRaw: allergensRaw,
+            goalRaw: goalRaw,
+            calorieGoal: calorieGoal,
+            isEnabled: isPersonalizationEnabled
+        )
+    }
+
+    /// Ile przepisów w tym slocie zabiera dieta / alergeny — do notki nad
+    /// siatką, żeby krótka lista nie wyglądała na brak danych.
+    private var hiddenByPersonalizationCount: Int {
+        personalization.hiddenCount(
+            in: slotCatalog
+        )
     }
 
     private var filtered: [Recipe] {
-        var list = recipeCatalogStore.recipes.filter { $0.category == slotCategory }
+        // Ta sama kolejność, co na Przepisach: najpierw preferencje (dieta
+        // i alergeny odsiewają, cel porządkuje), potem lokalne zawężenia.
+        var list = personalization.apply(to: slotCatalog)
         if onlyFavourites {
             list = list.filter(\.favourite)
         }
@@ -119,6 +170,14 @@ struct PlanSlotPickerSheet: View {
                                 Text(errorMessage)
                                     .font(.footnote)
                                     .foregroundStyle(.red)
+                            }
+
+                            if showsWholeCatalog {
+                                wholeCatalogNote
+                            }
+
+                            if hiddenByPersonalizationCount > 0 {
+                                personalizationNote
                             }
 
                             if filtered.isEmpty {
@@ -315,6 +374,76 @@ struct PlanSlotPickerSheet: View {
         .accessibilityLabel(isCurrent ? "\(recipe.name), obecnie przypisany" : recipe.name)
     }
 
+    /// Notka nad siatką. Bez niej krótka lista wygląda na brak przepisów,
+    /// a nie na skutek ustawień z zupełnie innego ekranu — tak samo jak
+    /// „Lista zawężona filtrami" w arkuszu kategorii na Przepisach.
+    private var personalizationNote: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 11, weight: .bold))
+
+            Text(personalizationNoteText)
+                .font(.system(size: 12, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(WMPalette.sage.mix(black: 0.20))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(WMPalette.sage.opacity(0.28), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private var personalizationNoteText: String {
+        let count = hiddenByPersonalizationCount
+        let noun = RecipeCountNoun.label(for: count)
+        return "Ukryto \(count) \(noun) spoza Twojej diety i alergenów."
+    }
+
+    /// Widoczna tylko po ręcznym zdjęciu zawężenia — informuje, że lista nie
+    /// jest już listą „pod ten posiłek", i pozwala jednym stuknięciem wrócić.
+    /// Bez tego użytkownik zostawałby w trybie, o którego włączeniu zdążył
+    /// zapomnieć, i dziwił się, czemu na przekąskę podsuwana jest zapiekanka.
+    private var wholeCatalogNote: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 11, weight: .bold))
+
+            Text("Pokazujemy cały katalog, nie tylko dania oznaczone jako \u{201E}\(slot.title)\u{201D}.")
+                .font(.system(size: 12, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            Button("Zawęź") {
+                withAnimation(.smooth(duration: 0.2)) { showsWholeCatalog = false }
+            }
+            .font(.system(size: 12, weight: .bold))
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(WMPalette.terracotta)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(WMPalette.terracotta.opacity(0.28), lineWidth: 1)
+        )
+    }
+
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
@@ -325,12 +454,39 @@ struct PlanSlotPickerSheet: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(Color.wmLabel(scheme))
 
-            Text(debouncedSearch.isEmpty ? "Spróbuj zmienić filtr." : "Spróbuj innej frazy.")
+            Text(emptyStateHint)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.wmMuted(scheme))
+                .multilineTextAlignment(.center)
+
+            if hiddenBySlotCount > 0 {
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { showsWholeCatalog = true }
+                } label: {
+                    Text("Pokaż wszystkie przepisy")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(WMPalette.terracotta)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10))
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
+    }
+
+    private var emptyStateHint: String {
+        if !debouncedSearch.isEmpty { return "Spróbuj innej frazy." }
+        if hiddenBySlotCount > 0 {
+            return "Żaden przepis nie ma jeszcze oznaczenia \u{201E}\(slot.title)\u{201D}."
+        }
+        return "Spróbuj zmienić filtr."
     }
 
     // MARK: - Actions

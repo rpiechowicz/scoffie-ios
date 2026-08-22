@@ -99,38 +99,35 @@ extension Array where Element == PlanMeal {
 
 // MARK: - DayMealPlan
 
+/// Plan jednego dnia: sloty → warianty posiłków.
+///
+/// Trzymane jako słownik, a nie trzy nazwane pola. Przy trzech posiłkach
+/// `breakfast/lunch/dinner` czytało się dobrze, ale każdy nowy slot oznaczał
+/// dopisywanie pola i kolejnego `case` w czterech metodach — i nic nie
+/// przypominało o miejscach, których się nie dopisało.
 struct DayMealPlan: Codable, Identifiable {
     var id: String { dateKey }
     let dateKey: String // "yyyy-MM-dd"
-    var breakfast: [PlanMeal]
-    var lunch: [PlanMeal]
-    var dinner: [PlanMeal]
 
-    init(
-        dateKey: String,
-        breakfast: [PlanMeal] = [],
-        lunch: [PlanMeal] = [],
-        dinner: [PlanMeal] = []
-    ) {
+    private var mealsBySlot: [MealSlot: [PlanMeal]]
+
+    init(dateKey: String, mealsBySlot: [MealSlot: [PlanMeal]] = [:]) {
         self.dateKey = dateKey
-        self.breakfast = breakfast
-        self.lunch = lunch
-        self.dinner = dinner
+        self.mealsBySlot = mealsBySlot.filter { !$0.value.isEmpty }
     }
 
     func meals(for slot: MealSlot) -> [PlanMeal] {
-        switch slot {
-        case .breakfast: breakfast
-        case .lunch: lunch
-        case .dinner: dinner
-        }
+        mealsBySlot[slot] ?? []
     }
 
     mutating func setMeals(_ meals: [PlanMeal], for slot: MealSlot) {
-        switch slot {
-        case .breakfast: breakfast = meals
-        case .lunch: lunch = meals
-        case .dinner: dinner = meals
+        // Pusty slot znika ze słownika zamiast siedzieć jako pusta tablica —
+        // dzięki temu `plannedSlots` i zapis na dysk nie puchną o sloty,
+        // w których nic nie ma.
+        if meals.isEmpty {
+            mealsBySlot.removeValue(forKey: slot)
+        } else {
+            mealsBySlot[slot] = meals
         }
     }
 
@@ -154,38 +151,78 @@ struct DayMealPlan: Codable, Identifiable {
         setMeals([PlanMeal(recipe: recipe)], for: slot)
     }
 
-    var allMeals: [PlanMeal] { breakfast + lunch + dinner }
+    /// Sloty, w których cokolwiek stoi — porą dnia.
+    ///
+    /// To po tym poznaje się posiłek zaplanowany w slocie, który ktoś potem
+    /// wyłączył w ustawieniach. Widok pokazuje taki slot mimo wyłączenia,
+    /// żeby jedzenie nie znikało po cichu.
+    var plannedSlots: [MealSlot] {
+        MealSlot.allCases.filter { !meals(for: $0).isEmpty }
+    }
+
+    var allMeals: [PlanMeal] {
+        MealSlot.allCases.flatMap { meals(for: $0) }
+    }
 
     var allRecipes: [Recipe] { allMeals.map(\.recipe) }
 }
 
-// MARK: - DayMealPlan legacy decoding
+// MARK: - DayMealPlan Codable
 //
-// Persisted caches written before splits stored `breakfast/lunch/dinner` as a
-// single optional Recipe. Decode those into a one-element array instead of
-// throwing, so an app update doesn't blank the calendar until the next sync.
+// Klucze na dysku to `rawValue` slotu, czyli dla trójki podstawowej dokładnie
+// te same nazwy, których używała poprzednia wersja („breakfast", „lunch",
+// „dinner"). Dzięki temu aktualizacja aplikacji nie unieważnia cache'u.
+//
+// Dodatkowo cache sprzed podziału posiłków trzymał w tych kluczach pojedynczy
+// `Recipe` zamiast tablicy — dekodujemy go do jednoelementowej listy, zamiast
+// rzucić błędem i wyczyścić użytkownikowi kalendarz.
 extension DayMealPlan {
-    private enum CodingKeys: String, CodingKey {
-        case dateKey, breakfast, lunch, dinner
+    private struct DayKey: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+        init(_ slot: MealSlot) { self.stringValue = slot.rawValue }
+
+        static let dateKey = DayKey(stringValue: "dateKey")!
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(keyedBy: DayKey.self)
         dateKey = try container.decode(String.self, forKey: .dateKey)
 
-        func decodeSlot(_ key: CodingKeys) throws -> [PlanMeal] {
-            if let meals = try? container.decodeIfPresent([PlanMeal].self, forKey: key) {
-                return meals ?? []
-            }
-            if let legacy = try container.decodeIfPresent(Recipe.self, forKey: key) {
-                return [PlanMeal(recipe: legacy)]
-            }
-            return []
-        }
+        var decoded: [MealSlot: [PlanMeal]] = [:]
+        for slot in MealSlot.allCases {
+            let key = DayKey(slot)
 
-        breakfast = try decodeSlot(.breakfast)
-        lunch = try decodeSlot(.lunch)
-        dinner = try decodeSlot(.dinner)
+            // `try?` na `decodeIfPresent` daje `[PlanMeal]??` — podwójne
+            // `nil` znaczy dwie różne rzeczy („klucza nie ma" vs „klucz jest,
+            // ale w starym formacie"), więc rozplatamy je przez `flatMap`.
+            let meals = (try? container.decodeIfPresent([PlanMeal].self, forKey: key))
+                .flatMap { $0 }
+            if let meals {
+                if !meals.isEmpty { decoded[slot] = meals }
+                continue
+            }
+
+            let legacyRecipe = (try? container.decodeIfPresent(Recipe.self, forKey: key))
+                .flatMap { $0 }
+            if let legacyRecipe {
+                decoded[slot] = [PlanMeal(recipe: legacyRecipe)]
+            }
+        }
+        mealsBySlot = decoded
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: DayKey.self)
+        try container.encode(dateKey, forKey: .dateKey)
+        for slot in MealSlot.allCases {
+            let meals = meals(for: slot)
+            guard !meals.isEmpty else { continue }
+            try container.encode(meals, forKey: DayKey(slot))
+        }
     }
 }
 
@@ -205,26 +242,49 @@ struct PlanEntry: Codable, Identifiable {
 
 // MARK: - SavedMealPlan
 
+/// Pula przepisów odłożona „na ten tydzień", slot po slocie.
+///
+/// Ten sam powód dla słownika co przy `DayMealPlan`: trzy nazwane pola nie
+/// skalują się na sześć slotów, a kompilator nie przypomina o dopisaniu
+/// czwartego.
 struct SavedMealPlan: Codable {
-    var breakfastEntries: [PlanEntry] = []
-    var lunchEntries: [PlanEntry] = []
-    var dinnerEntries: [PlanEntry] = []
+    private var entriesBySlot: [MealSlot: [PlanEntry]]
 
-    var isEmpty: Bool {
-        breakfastEntries.isEmpty && lunchEntries.isEmpty && dinnerEntries.isEmpty
+    init(entriesBySlot: [MealSlot: [PlanEntry]] = [:]) {
+        self.entriesBySlot = entriesBySlot.filter { !$0.value.isEmpty }
     }
 
+    var isEmpty: Bool { entriesBySlot.values.allSatisfy(\.isEmpty) }
+
     func entries(for slot: MealSlot) -> [PlanEntry] {
-        switch slot {
-        case .breakfast: breakfastEntries
-        case .lunch: lunchEntries
-        case .dinner: dinnerEntries
+        entriesBySlot[slot] ?? []
+    }
+
+    mutating func setEntries(_ entries: [PlanEntry], for slot: MealSlot) {
+        if entries.isEmpty {
+            entriesBySlot.removeValue(forKey: slot)
+        } else {
+            entriesBySlot[slot] = entries
         }
+    }
+
+    /// Zmiana wpisów jednego slotu w miejscu.
+    ///
+    /// Osobna metoda zamiast `inout` na przechowywanym polu, bo pola już nie
+    /// ma — a wołający (`WeeklyMealStore`) i tak zawsze robił to samo:
+    /// weź listę, przerób, odłóż.
+    mutating func updateEntries(
+        for slot: MealSlot,
+        _ mutation: (inout [PlanEntry]) -> Void
+    ) {
+        var current = entries(for: slot)
+        mutation(&current)
+        setEntries(current, for: slot)
     }
 
     /// Wszystkie przepisy (do ProductsView - pełna lista niezależnie od isSelected)
     func allRecipes() -> [Recipe] {
-        (breakfastEntries + lunchEntries + dinnerEntries).map(\.recipe)
+        MealSlot.allCases.flatMap { entries(for: $0) }.map(\.recipe)
     }
 
     /// Dostępne do wybrania w CalendarView (nieoznaczone jako selected)
@@ -235,5 +295,43 @@ struct SavedMealPlan: Codable {
     /// Liczba dostępnych (niewybranych) dla danego przepisu
     func availableCount(for recipeId: UUID, slot: MealSlot) -> Int {
         entries(for: slot).filter { !$0.isSelected && $0.recipe.id == recipeId }.count
+    }
+}
+
+// MARK: - SavedMealPlan Codable
+//
+// Klucze zostają w formacie `<slot>Entries`, więc dla śniadania / obiadu /
+// kolacji są identyczne jak przed zmianą i zapisana wcześniej pula wczytuje
+// się bez migracji.
+extension SavedMealPlan {
+    private struct SlotKey: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+        init(_ slot: MealSlot) { self.stringValue = "\(slot.rawValue)Entries" }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: SlotKey.self)
+        var decoded: [MealSlot: [PlanEntry]] = [:]
+        for slot in MealSlot.allCases {
+            let entries = try container.decodeIfPresent(
+                [PlanEntry].self,
+                forKey: SlotKey(slot)
+            ) ?? []
+            if !entries.isEmpty { decoded[slot] = entries }
+        }
+        entriesBySlot = decoded
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: SlotKey.self)
+        for slot in MealSlot.allCases {
+            let entries = entries(for: slot)
+            guard !entries.isEmpty else { continue }
+            try container.encode(entries, forKey: SlotKey(slot))
+        }
     }
 }

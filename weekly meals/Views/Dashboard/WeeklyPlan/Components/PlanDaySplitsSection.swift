@@ -14,12 +14,17 @@ import SwiftUI
 // and a silent empty section would leave that question hanging.
 struct PlanDaySplitsSection: View {
     let date: Date
+    /// Sloty do przejrzenia — ta sama lista, którą rysuje karta dnia nad
+    /// sekcją. Gdyby każdy komponent liczył ją sobie sam, „wszyscy jedzą to
+    /// samo" mogłoby dotyczyć innego zestawu posiłków niż ten wyżej.
+    let slots: [MealSlot]
     /// All meals of the day, unfiltered — the section is a household-level view.
     let meals: (MealSlot) -> [PlanMeal]
     let members: [HouseholdMemberSnapshot]
     let onTapMeal: (MealSlot, PlanMeal) -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sessionStore) private var sessionStore
 
     private struct SplitRow: Identifiable {
         let meal: PlanMeal
@@ -41,7 +46,7 @@ struct PlanDaySplitsSection: View {
     private var groups: [SplitGroup] {
         let memberIds = members.map(\.id)
 
-        return MealSlot.allCases.compactMap { slot in
+        return slots.compactMap { slot in
             let slotMeals = meals(slot)
             guard slotMeals.contains(where: { !$0.isShared }) else { return nil }
 
@@ -61,7 +66,7 @@ struct PlanDaySplitsSection: View {
     }
 
     private var hasAnyMeal: Bool {
-        MealSlot.allCases.contains { !meals($0).isEmpty }
+        slots.contains { !meals($0).isEmpty }
     }
 
     var body: some View {
@@ -161,9 +166,11 @@ struct PlanDaySplitsSection: View {
                 .tracking(0.4)
                 .foregroundStyle(Color.wmLabel(scheme))
 
-            Text("· \(group.slot.time)")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+            if let time = sessionStore.mealSlotSchedule.time(for: group.slot) {
+                Text("· \(time)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
 
             Spacer(minLength: 4)
 
