@@ -8,8 +8,11 @@ import SwiftUI
 /// normal household meal stays a single tap. Naming people instead is what
 /// turns the slot into a „Każdy je inaczej" split.
 ///
-/// This is the only way meals enter the plan. Kalendarz opens it too, so both
-/// tabs assign the same way.
+/// To nie jest już jedyne wejście do planu: szczegół przepisu ma własny arkusz
+/// „Dodaj do planu", z tym samym rzędem chipów (`PlanAudienceChips`) i dodatkowo
+/// ze stepperem porcji. Ten arkusz zostaje wejściem „od strony planu" — startuje
+/// od znanego `(dzień, slot)` i pyta o przepis. Kalendarz otwiera go tak samo,
+/// więc obie zakładki przypisują identycznie.
 struct PlanSlotPickerSheet: View {
     let date: Date
     let slot: MealSlot
@@ -141,12 +144,11 @@ struct PlanSlotPickerSheet: View {
         return max(150, floor((total - horizontalPadding - spacing) / count))
     }
 
-    /// Audience to persist. Naming everyone is the same statement as naming
-    /// nobody, so it collapses to „Wspólne".
+    /// Audience to persist. Zwijanie „wszyscy" do „Wspólne" i przecięcie
+    /// z aktualnym składem gospodarstwa siedzą teraz w `PlanAudienceChips`,
+    /// żeby oba arkusze wysyłały identyczny payload.
     private var participantsToSave: [String] {
-        if selectedParticipants.isEmpty { return [] }
-        if selectedParticipants.count == members.count { return [] }
-        return members.map(\.id).filter { selectedParticipants.contains($0) }
+        PlanAudienceChips.collapsed(selectedParticipants, members: members)
     }
 
     // MARK: - Body
@@ -162,8 +164,13 @@ struct PlanSlotPickerSheet: View {
                         VStack(alignment: .leading, spacing: 16) {
                             header
 
+                            // Jednoosobowe gospodarstwo nie ma czego wybierać —
+                            // każdy posiłek i tak jest „Wspólne".
                             if members.count > 1 {
-                                audienceChips
+                                PlanAudienceChips(
+                                    members: members,
+                                    selection: $selectedParticipants
+                                )
                             }
 
                             if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
@@ -257,92 +264,6 @@ struct PlanSlotPickerSheet: View {
             .foregroundStyle(Color.wmMuted(scheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// „Wspólne / Marek / Ania …" — deselecting everyone falls back to
-    /// „Wspólne", so the slot always has a defined audience.
-    private var audienceChips: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("DLA KOGO")
-                .font(.system(size: 9, weight: .bold))
-                .tracking(2)
-                .foregroundStyle(Color.wmMuted(scheme))
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    chip(
-                        title: "Wspólne",
-                        tint: WMPalette.terracotta,
-                        isOn: selectedParticipants.isEmpty,
-                        avatar: AnyView(houseGlyph)
-                    ) {
-                        selectedParticipants.removeAll()
-                    }
-
-                    ForEach(members) { member in
-                        let tint = HouseholdMemberStyle.color(for: member.id, in: members)
-                        chip(
-                            title: HouseholdMemberStyle.shortName(member.displayName),
-                            tint: tint,
-                            isOn: selectedParticipants.contains(member.id),
-                            avatar: AnyView(MemberAvatar(member: member, members: members, size: 20))
-                        ) {
-                            toggle(member.id)
-                        }
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .scrollIndicators(.hidden)
-        }
-    }
-
-    private func chip(
-        title: String,
-        tint: Color,
-        isOn: Bool,
-        avatar: AnyView,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                avatar
-
-                Text(title)
-                    .font(.system(size: 13, weight: isOn ? .bold : .semibold))
-                    .foregroundStyle(isOn ? Color.wmLabel(scheme) : Color.wmMuted(scheme))
-                    .lineLimit(1)
-            }
-            .padding(.leading, 5)
-            .padding(.trailing, 12)
-            .padding(.vertical, 5)
-            .background(
-                Capsule().fill(isOn ? tint.opacity(scheme == .dark ? 0.22 : 0.16) : Color.wmTileBg(scheme))
-            )
-            .overlay(
-                Capsule().stroke(
-                    isOn ? tint.opacity(scheme == .dark ? 0.55 : 0.45) : Color.wmTileStroke(scheme),
-                    lineWidth: isOn ? 1.4 : 1
-                )
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-
-    private var houseGlyph: some View {
-        Image(systemName: "house.fill")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: 20, height: 20)
-            .background(
-                LinearGradient(
-                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.22)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                in: Circle()
-            )
     }
 
     private var favouritesToggle: some View {
@@ -491,14 +412,6 @@ struct PlanSlotPickerSheet: View {
 
     // MARK: - Actions
 
-    private func toggle(_ memberId: String) {
-        if selectedParticipants.contains(memberId) {
-            selectedParticipants.remove(memberId)
-        } else {
-            selectedParticipants.insert(memberId)
-        }
-    }
-
     private func assign(_ recipe: Recipe) {
         guard !isSaving else { return }
         isSaving = true
@@ -506,6 +419,20 @@ struct PlanSlotPickerSheet: View {
             let ok = await mealStore.upsertWeekSlot(
                 recipe: recipe,
                 participantIds: participantsToSave,
+                // Ten arkusz nie ma steppera porcji, więc świadomie nie wysyła
+                // pola — a pominięcie znaczy dla serwera „nie ruszaj tego, co
+                // wybrał użytkownik". Na nowym wpisie policzy porcje
+                // z audytorium („Wspólne" = liczba domowników); na istniejącym
+                // zostawi zapisaną wartość, a przeliczy ją tylko wtedy, gdy
+                // nikt jej wcześniej ręcznie nie nadpisał (czyli równała się
+                // regule auto ze starego audytorium). Dzięki temu zmiana
+                // chipów nie kasuje świadomego „gotuję 4 porcje", a przełączenie
+                // „Wspólne → tylko ja" nie zostawia porcji dla dwojga.
+                plannedServings: nil,
+                // Liczba domowników jest potrzebna do optymistycznego wpisu:
+                // bez niej „Wspólne" migałoby jedną porcją, zanim przyjdzie
+                // odpowiedź serwera.
+                householdMemberCount: members.count,
                 // In edit mode a different pick replaces the meal being edited
                 // rather than piling a second variant into the slot.
                 replacingRecipeId: editing?.recipe.id,
@@ -526,6 +453,10 @@ struct PlanSlotPickerSheet: View {
             let ok = await mealStore.upsertWeekSlot(
                 recipe: editing.recipe,
                 participantIds: participantsToSave,
+                // Porcji nie wysyłamy z tego samego powodu, co w `assign`:
+                // ten arkusz zmienia wyłącznie audytorium, a pominięte pole
+                // zostawia ręcznie ustawioną liczbę porcji w spokoju.
+                householdMemberCount: members.count,
                 for: date,
                 slot: slot,
                 weekStart: weekStartISO

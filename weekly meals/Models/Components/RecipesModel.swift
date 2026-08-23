@@ -100,6 +100,20 @@ struct Nutrition: Codable, Hashable {
     var salt: Double
 
     static let zero = Nutrition(kcal: 0, protein: 0, fat: 0, carbs: 0, fiber: 0, salt: 0)
+
+    /// Te same makra przemnożone przez `factor`. Jedno miejsce, bo skalowanie
+    /// porcji dotyka i szczegółu przepisu, i licznika kalorii w planie —
+    /// dwie kopie tego mnożenia rozjechałyby się przy pierwszym nowym makrze.
+    func scaled(by factor: Double) -> Nutrition {
+        Nutrition(
+            kcal: kcal * factor,
+            protein: protein * factor,
+            fat: fat * factor,
+            carbs: carbs * factor,
+            fiber: fiber * factor,
+            salt: salt * factor
+        )
+    }
 }
 
 struct Recipe: Identifiable, Codable {
@@ -125,7 +139,9 @@ struct Recipe: Identifiable, Codable {
     /// `effectiveSlots`, nie wprost.
     var suitableSlots: [MealSlot]
 
-    /// Liczba porcji. Jeśli > 0, to `nutritionPerServing` wylicza wartości na 1 porcję.
+    /// Na ile porcji napisany jest przepis. Zawsze co najmniej 1 — i `init`,
+    /// i dekoder to klamrują, bo to przez tę liczbę dzielą się makra
+    /// i gramatury składników.
     var servings: Int
 
     /// Czas przygotowania w minutach.
@@ -199,7 +215,12 @@ extension Recipe {
         category = try container.decode(RecipesCategory.self, forKey: .category)
         suitableSlots = (try container.decodeIfPresent([MealSlot].self, forKey: .suitableSlots) ?? [])
             .sortedByDay
-        servings = try container.decodeIfPresent(Int.self, forKey: .servings) ?? 1
+        // Klamra, a nie kosmetyka: w cache'u siedzą przepisy z `servings: 0`,
+        // a taka wartość przechodziła tu bez zmian i sprawiała, że makra
+        // „na porcję" po cichu pokazywały makra całego przepisu. Skoro każdy
+        // przepis jest napisany na co najmniej jedną porcję, prostujemy to już
+        // przy dekodowaniu, zamiast w każdym miejscu, które dzieli przez to pole.
+        servings = max(1, try container.decodeIfPresent(Int.self, forKey: .servings) ?? 1)
         prepTimeMinutes = try container.decodeIfPresent(Int.self, forKey: .prepTimeMinutes) ?? 0
         difficulty = try container.decodeIfPresent(Difficulty.self, forKey: .difficulty) ?? .easy
         imageURL = try container.decodeIfPresent(URL.self, forKey: .imageURL)
@@ -243,17 +264,34 @@ extension Recipe {
     }
 
     /// Wartości odżywcze w przeliczeniu na 1 porcję.
-    var nutritionPerServing: Nutrition {
-        guard servings > 0 else { return nutrition }
-        let factor = 1.0 / Double(servings)
-        return Nutrition(
-            kcal: nutrition.kcal * factor,
-            protein: nutrition.protein * factor,
-            fat: nutrition.fat * factor,
-            carbs: nutrition.carbs * factor,
-            fiber: nutrition.fiber * factor,
-            salt: nutrition.salt * factor
-        )
+    var nutritionPerServing: Nutrition { nutrition(forServings: 1) }
+
+    /// Makra dla wskazanej liczby porcji. `nutritionPerServing` to szczególny
+    /// przypadek dla 1.
+    func nutrition(forServings portions: Double) -> Nutrition {
+        nutrition.scaled(by: portionFactor(forServings: portions))
+    }
+
+    /// Składniki przeskalowane na wskazaną liczbę porcji.
+    ///
+    /// `Ingredient.amount` opisuje CAŁY przepis, czyli `self.servings` porcji —
+    /// bez tego dzielenia gotowanie jednej porcji zamawiałoby zakupy na dwie.
+    func ingredients(forServings portions: Double) -> [Ingredient] {
+        let factor = portionFactor(forServings: portions)
+        return ingredients.map { ingredient in
+            var scaled = ingredient
+            scaled.amount = ingredient.amount * factor
+            return scaled
+        }
+    }
+
+    /// Krotność przepisu bazowego dla żądanej liczby porcji.
+    ///
+    /// Osobno, bo makra i składniki muszą skalować się tym samym
+    /// współczynnikiem — inaczej szczegóły przepisu pokazywałyby kalorie
+    /// niepasujące do wypisanych pod nimi gramatur.
+    private func portionFactor(forServings portions: Double) -> Double {
+        portions / Double(max(1, servings))
     }
 }
 
