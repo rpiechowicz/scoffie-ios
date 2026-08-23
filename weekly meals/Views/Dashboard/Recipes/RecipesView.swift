@@ -265,7 +265,10 @@ struct RecipesView: View {
                             selectedRecipe = recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
                         }
                     },
-                    onClose: { selectedRecipe = nil }
+                    onClose: { selectedRecipe = nil },
+                    // Katalog nie zna żadnego slotu, więc szczegół otwiera się
+                    // na jednej porcji i to stepper decyduje, ile ich będzie.
+                    onAddedToPlan: { _, _ in selectedRecipe = nil }
                 )
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()

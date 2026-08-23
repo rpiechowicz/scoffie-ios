@@ -14,7 +14,7 @@ struct CalendarView: View {
     // block (so the day's "X / GOAL" reading reflects the user's choice).
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
 
-    @State private var detailRecipe: Recipe?
+    @State private var detailTarget: DetailTarget?
     @State private var pickerTarget: PickerTarget?
 
     /// Day + slot the recipe picker is filling.
@@ -22,6 +22,22 @@ struct CalendarView: View {
         let date: Date
         let slot: MealSlot
         var id: String { "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue)" }
+    }
+
+    /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
+    ///
+    /// Szczegół pozwala teraz przestawić liczbę porcji, a zapis musi trafić
+    /// w ten konkretny wpis planu — sam `Recipe` nie mówi, o który slot chodzi.
+    private struct DetailTarget: Identifiable {
+        let date: Date
+        let slot: MealSlot
+        let meal: PlanMeal
+        /// Przepis z pełnymi szczegółami; `meal.recipe` bywa wersją skróconą.
+        var recipe: Recipe
+
+        var id: String {
+            "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue).\(meal.id)"
+        }
     }
 
     // MARK: - Derived
@@ -52,24 +68,52 @@ struct CalendarView: View {
         visibleSlots.flatMap { myMeals(for: $0) }
     }
 
-    private var dayRecipes: [Recipe] { dayMeals.map(\.recipe) }
+    /// Ilu domowników dzieli się porcjami, albo `nil`, dopóki `SessionStore`
+    /// nie dowiezie listy.
+    ///
+    /// Pusta lista przed wczytaniem to brak odpowiedzi, a nie dom
+    /// jednoosobowy — podstawiona tu jedynka dzieliłaby zapisane porcje przez
+    /// jedną osobę i licznik kalorii pokazywałby przez pierwszą sekundę
+    /// wielokrotność prawdziwej wartości.
+    private var knownHouseholdMemberCount: Int? {
+        guard sessionStore.didLoadHouseholdMembers else { return nil }
+        return max(1, sessionStore.householdMembers.count)
+    }
 
     /// Posiłki faktycznie odhaczone przez zalogowanego użytkownika. To one —
     /// a nie sam plan — zasilają licznik kalorii i makra: zaplanowany obiad
     /// nie jest dowodem, że ktokolwiek go zjadł.
-    private var eatenRecipes: [Recipe] {
-        dayMeals
-            .filter { $0.isEaten(by: sessionStore.currentUserId) }
-            .map(\.recipe)
+    private var eatenMeals: [PlanMeal] {
+        dayMeals.filter { $0.isEaten(by: sessionStore.currentUserId) }
     }
 
-    private var dayKcal:    Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.kcal) } }
-    private var dayProtein: Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.protein) } }
-    private var dayFat:     Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.fat) } }
-    private var dayCarbs:   Int { eatenRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.carbs) } }
+    /// Suma jednego makra po posiłkach, licząca udział jednej osoby.
+    ///
+    /// Sumujemy w `Double` i zaokrąglamy dopiero na końcu, bo obcinanie każdego
+    /// posiłku z osobna gubiło do jednej kcal na pozycję i błąd kumulował się
+    /// przez cały dzień. Przy porcjach jest to jeszcze ważniejsze: udział na
+    /// osobę bywa ułamkowy (trzy porcje na dwie osoby to 1,5), więc część
+    /// ułamkowa przestaje być zaokrągleniem gramatury, a staje się realną
+    /// wartością, której nie wolno wyrzucić przy każdym składniku sumy.
+    private func dayTotal(
+        _ meals: [PlanMeal],
+        _ macro: KeyPath<Nutrition, Double>
+    ) -> Int {
+        let sum = meals.reduce(0.0) { partial, meal in
+            partial + meal.nutritionPerPerson(
+                knownHouseholdMemberCount: knownHouseholdMemberCount
+            )[keyPath: macro]
+        }
+        return Int(sum.rounded())
+    }
+
+    private var dayKcal:    Int { dayTotal(eatenMeals, \.kcal) }
+    private var dayProtein: Int { dayTotal(eatenMeals, \.protein) }
+    private var dayFat:     Int { dayTotal(eatenMeals, \.fat) }
+    private var dayCarbs:   Int { dayTotal(eatenMeals, \.carbs) }
 
     /// Suma całego dnia — zjedzone i jeszcze nie. Rysuje widmo na pasku makro.
-    private var dayPlannedKcal: Int { dayRecipes.reduce(0) { $0 + Int($1.nutritionPerServing.kcal) } }
+    private var dayPlannedKcal: Int { dayTotal(dayMeals, \.kcal) }
 
     /// Odhaczać można dziś i wstecz. Dzień z przyszłości nie ma czego
     /// odhaczać, a przeszły jest zablokowany tylko do *planowania* — to, co
@@ -187,7 +231,7 @@ struct CalendarView: View {
                                     isEaten: card.meal?.isEaten(by: sessionStore.currentUserId) ?? false,
                                     showsEatenToggle: canLogEatenMeals,
                                     isEditable: isDayEditable,
-                                    onTap: { if let meal = card.meal { handleAssignedTap(meal.recipe) } },
+                                    onTap: { if let meal = card.meal { handleAssignedTap(meal, slot: card.slot) } },
                                     onAssign: {
                                         pickerTarget = PickerTarget(
                                             date: datesViewModel.selectedDate,
@@ -256,18 +300,32 @@ struct CalendarView: View {
                     )
                 }
             }
-            .sheet(item: $detailRecipe) { selected in
+            .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
-                    recipe: selected,
+                    recipe: target.recipe,
                     onToggleFavorite: {
                         Task { @MainActor in
-                            await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
-                            detailRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: selected.id)
-                                ?? recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
-                                ?? selected
+                            await recipeCatalogStore.toggleFavorite(recipeId: target.recipe.id)
+                            let refreshed = await recipeCatalogStore.loadRecipeDetail(recipeId: target.recipe.id)
+                                ?? recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id })
+                                ?? target.recipe
+                            // Podmieniamy sam przepis, nie cały cel — `id`
+                            // zostaje ten sam, więc arkusz się nie przeładowuje
+                            // i porcje wybrane stepperem przeżywają serduszko.
+                            detailTarget?.recipe = refreshed
                         }
                     },
-                    onClose: { detailRecipe = nil }
+                    onClose: { detailTarget = nil },
+                    // Stepper startuje od liczby, którą pokazuje reszta ekranu.
+                    // Posiłek bez zapisanej wartości podstawia tu regułę auto,
+                    // bo zero i jedynka nie są tym samym co „nie ustawiono".
+                    initialServings: target.meal.effectiveServings(
+                        householdMemberCount: max(1, sessionStore.householdMembers.count)
+                    ),
+                    context: .planned(day: target.date, slot: target.slot),
+                    onSaveServings: { newValue in
+                        saveServings(newValue, for: target)
+                    }
                 )
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
@@ -298,9 +356,34 @@ struct CalendarView: View {
 
     // MARK: - Actions
 
-    private func handleAssignedTap(_ recipe: Recipe) {
+    private func handleAssignedTap(_ meal: PlanMeal, slot: MealSlot) {
+        let date = datesViewModel.selectedDate
         Task { @MainActor in
-            detailRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
+            let full = await recipeCatalogStore.loadRecipeDetail(recipeId: meal.recipe.id) ?? meal.recipe
+            detailTarget = DetailTarget(date: date, slot: slot, meal: meal, recipe: full)
+        }
+    }
+
+    /// Zapisuje liczbę porcji zmienioną stepperem w szczegółach.
+    ///
+    /// Audytorium zostaje nietknięte — zmieniamy ile gotujemy, a nie dla kogo.
+    /// `plannedServings` idzie jawnie, więc serwer nie nadpisze go regułą auto.
+    private func saveServings(_ servings: Int, for target: DetailTarget) {
+        Task { @MainActor in
+            _ = await mealStore.upsertWeekSlot(
+                recipe: target.meal.recipe,
+                participantIds: target.meal.participantIds,
+                plannedServings: servings,
+                householdMemberCount: sessionStore.householdMembers.count,
+                for: target.date,
+                slot: target.slot,
+                weekStart: datesViewModel.weekStartISO
+            )
+            detailTarget = nil
+            await shoppingListStore.load(
+                weekStart: datesViewModel.weekStartISO,
+                force: true
+            )
         }
     }
 
