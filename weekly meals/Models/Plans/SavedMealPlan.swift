@@ -20,16 +20,32 @@ struct PlanMeal: Codable, Identifiable, Hashable {
     /// could not answer „did *I* eat this?".
     var eatenByUserIds: [String]
 
+    /// Ile porcji przepisu gotujemy w tym slocie. To liczba ŁĄCZNA, nie „na
+    /// osobę": przepis jest napisany na `recipe.servings` porcji, więc zarówno
+    /// składniki, jak i makra skalują się przez `plannedServings /
+    /// recipe.servings`. Podział tej liczby między jedzących liczy dopiero
+    /// `servingsPerPerson(householdMemberCount:)`.
+    ///
+    /// `nil` znaczy „nie wiem, policz z audytorium" — tak wygląda posiłek
+    /// wczytany ze starego pliku planu albo z serwera sprzed tej zmiany.
+    /// Ani zero, ani jedynka nie mogą tu zastąpić `nil`, bo to są konkretne
+    /// odpowiedzi: twarde `1` w domu dwuosobowym połowiłoby i listę zakupów,
+    /// i licznik kalorii. Wartość faktycznie użytą do liczenia daje
+    /// `effectiveServings(householdMemberCount:)`.
+    var plannedServings: Int?
+
     init(
         id: String = UUID().uuidString,
         recipe: Recipe,
         participantIds: [String] = [],
-        eatenByUserIds: [String] = []
+        eatenByUserIds: [String] = [],
+        plannedServings: Int? = nil
     ) {
         self.id = id
         self.recipe = recipe
         self.participantIds = participantIds
         self.eatenByUserIds = eatenByUserIds
+        self.plannedServings = plannedServings
     }
 
     // Plans persisted before eaten-marks existed have no `eatenByUserIds` key.
@@ -41,6 +57,16 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         self.recipe = try container.decode(Recipe.self, forKey: .recipe)
         self.participantIds = try container.decodeIfPresent([String].self, forKey: .participantIds) ?? []
         self.eatenByUserIds = try container.decodeIfPresent([String].self, forKey: .eatenByUserIds) ?? []
+        // Dokładnie z tego samego powodu co linijkę wyżej: plany zapisane przed
+        // dodaniem porcji nie mają tego klucza, a pliki `meal_plans.json`
+        // i `saved_plan.json` są bez wersji, więc nie ma jak ich odróżnić.
+        // Twarde `decode` skasowałoby użytkownikowi cały lokalny kalendarz.
+        //
+        // Brak klucza zostaje `nil`, a NIE jedynką: stara wspólna kolacja
+        // w domu dwuosobowym ma się dalej liczyć jako dwie porcje, czyli tak
+        // samo jak przed wprowadzeniem tego pola. Podstawiona tu jedynka
+        // utrwaliłaby przy pierwszym zapisie połowę składników i połowę kalorii.
+        self.plannedServings = try container.decodeIfPresent(Int.self, forKey: .plannedServings)
     }
 
     var isShared: Bool { participantIds.isEmpty }
@@ -51,6 +77,57 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         return eatenByUserIds.contains(memberId)
     }
 
+    /// Ile osób realnie je to danie. Pusta lista uczestników = całe
+    /// gospodarstwo.
+    func eaterCount(householdMemberCount: Int) -> Int {
+        let eaters = participantIds.isEmpty ? householdMemberCount : participantIds.count
+        return max(1, eaters)
+    }
+
+    /// Liczba porcji użyta do liczenia — zapisana albo policzona z audytorium.
+    ///
+    /// To jest jedyne miejsce, w którym „nie wiem" zamienia się w liczbę, i
+    /// robi to tą samą regułą co serwer. Dzięki temu posiłek bez zapisanej
+    /// wartości (stary plik planu, stary backend) degraduje się do dzisiejszych
+    /// liczb, a nie do połowy. `max(1, ...)` chroni przed zerem z uszkodzonego
+    /// cache'u, które wyzerowałoby makra całego dnia.
+    func effectiveServings(householdMemberCount: Int) -> Int {
+        guard let plannedServings else {
+            return eaterCount(householdMemberCount: householdMemberCount)
+        }
+        return max(1, plannedServings)
+    }
+
+    /// Czy użytkownik świadomie odszedł od reguły auto.
+    ///
+    /// `nil` to nie odejście, tylko brak odpowiedzi — bez tego rozróżnienia
+    /// każdy posiłek sprzed tej zmiany doklejałby sobie plakietkę „1 porcja"
+    /// w domu, w którym mieszka więcej niż jedna osoba.
+    func isCustomServings(householdMemberCount: Int) -> Bool {
+        guard plannedServings != nil else { return false }
+        return effectiveServings(householdMemberCount: householdMemberCount)
+            != eaterCount(householdMemberCount: householdMemberCount)
+    }
+
+    /// Udział jednej osoby w tym daniu, wyrażony w porcjach przepisu.
+    ///
+    /// Przy regule auto (wspólne → liczba domowników, solo → 1) wychodzi z tego
+    /// równo `1.0`, więc licznik kalorii pokazuje dokładnie to samo co przed
+    /// wprowadzeniem porcji. To jest zamierzone: sam stepper zmienia listę
+    /// zakupów, a makra dopiero wtedy, gdy ktoś ręcznie ugotuje więcej lub
+    /// mniej, niż wynika z audytorium.
+    func servingsPerPerson(householdMemberCount: Int) -> Double {
+        Double(effectiveServings(householdMemberCount: householdMemberCount))
+            / Double(eaterCount(householdMemberCount: householdMemberCount))
+    }
+
+    /// Makra przypadające na jedną osobę.
+    func nutritionPerPerson(householdMemberCount: Int) -> Nutrition {
+        recipe.nutrition(
+            forServings: servingsPerPerson(householdMemberCount: householdMemberCount)
+        )
+    }
+
     // `Recipe` isn't Hashable, so identity is carried by the ids that actually
     // distinguish one planned meal from another.
     static func == (lhs: PlanMeal, rhs: PlanMeal) -> Bool {
@@ -58,6 +135,7 @@ struct PlanMeal: Codable, Identifiable, Hashable {
             && lhs.recipe.id == rhs.recipe.id
             && lhs.participantIds == rhs.participantIds
             && lhs.eatenByUserIds == rhs.eatenByUserIds
+            && lhs.plannedServings == rhs.plannedServings
     }
 
     func hash(into hasher: inout Hasher) {
@@ -65,6 +143,27 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         hasher.combine(recipe.id)
         hasher.combine(participantIds)
         hasher.combine(eatenByUserIds)
+        hasher.combine(plannedServings)
+    }
+}
+
+// MARK: - Licznik, zanim znamy audytorium
+
+extension PlanMeal {
+    /// Makra na jedną osobę; `nil` znaczy „jeszcze nie wiadomo, ilu nas jest".
+    ///
+    /// `SessionStore` dowozi listę domowników asynchronicznie i do tego czasu
+    /// `householdMembers.count` jest zerem — a zero to brak odpowiedzi, nie
+    /// dom jednoosobowy. Podstawiona w to miejsce jedynka dzieliła zapisane
+    /// trzy porcje przez jedną osobę, więc tuż po starcie apki ekran migał
+    /// potrójnymi kaloriami, które sekundę później same spadały.
+    ///
+    /// Dopóki nie wiadomo, udział jednej osoby to pełna porcja przepisu —
+    /// czyli dokładnie ta liczba, którą reguła auto pokaże po wczytaniu listy.
+    /// Ekran nie miga wtedy w ogóle.
+    func nutritionPerPerson(knownHouseholdMemberCount: Int?) -> Nutrition {
+        guard let knownHouseholdMemberCount else { return recipe.nutritionPerServing }
+        return nutritionPerPerson(householdMemberCount: knownHouseholdMemberCount)
     }
 }
 

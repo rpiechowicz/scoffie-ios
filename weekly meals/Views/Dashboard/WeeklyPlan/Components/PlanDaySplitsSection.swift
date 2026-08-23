@@ -104,7 +104,7 @@ struct PlanDaySplitsSection: View {
                 .frame(maxWidth: .infinity)
 
             if !groups.isEmpty {
-                Text("\(groups.count) \(Self.mealsPlural(groups.count))")
+                Text(PolishPlural.meals(groups.count))
                     .font(.system(size: 10.5, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(Color.wmFaint(scheme))
@@ -201,7 +201,7 @@ struct PlanDaySplitsSection: View {
                     .foregroundStyle(Color.wmLabel(scheme))
                     .lineLimit(1)
 
-                Text(metaLine(named: named, recipe: meal.recipe))
+                Text(metaLine(named: named, meal: meal))
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(Color.wmMuted(scheme))
@@ -228,10 +228,39 @@ struct PlanDaySplitsSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func metaLine(named: [HouseholdMemberSnapshot], recipe: Recipe) -> String {
-        let who = named.map { HouseholdMemberStyle.shortName($0.displayName) }.joined(separator: ", ")
-        let stats = "\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal)) kcal"
-        return who.isEmpty ? stats : "\(who) · \(stats)"
+    /// „Ania · 22 min · 279 kcal", a przy ręcznie zmienionej liczbie porcji
+    /// jeszcze „· 3 porcje".
+    ///
+    /// Kalorie to udział jednej osoby — sekcja porównuje, co kto je, więc
+    /// wartość musi być porównywalna między wierszami, a nie zależeć od tego,
+    /// ile porcji akurat ugotowano dla której grupy. Porcji nie dopisujemy przy
+    /// wartości domyślnej: to, że coś jest domyślne, nie jest informacją.
+    private func metaLine(named: [HouseholdMemberSnapshot], meal: PlanMeal) -> String {
+        // `nil` znaczy „lista domowników jeszcze nie dojechała", a nie „dom
+        // jednoosobowy". Bez tego rozróżnienia zapisane trzy porcje dzieliły
+        // się przez zgadywaną jedną osobę i wiersz migał potrójnymi kaloriami.
+        let memberCount: Int? = sessionStore.didLoadHouseholdMembers
+            ? max(1, sessionStore.householdMembers.count)
+            : nil
+        let kcal = Int(
+            meal.nutritionPerPerson(knownHouseholdMemberCount: memberCount).kcal.rounded()
+        )
+
+        // Imiona rozdziela przecinek, a nie kropka — inaczej „Ania · Marek"
+        // czytałoby się jak dwie osobne pozycje meta, a nie jak jedna lista osób.
+        let who = named.map { HouseholdMemberStyle.shortName($0.displayName) }
+            .joined(separator: ", ")
+
+        var parts: [String] = who.isEmpty ? [] : [who]
+        parts.append("\(meal.recipe.prepTimeMinutes) min")
+        parts.append("\(kcal) kcal")
+        // Liczbę porcji dopisujemy wyłącznie przy świadomym odejściu od reguły
+        // auto. Brak zapisanej wartości to nie ręczny wybór, więc posiłek
+        // sprzed tej zmiany nie ma się chwalić plakietką „1 porcja".
+        if let count = memberCount, meal.isCustomServings(householdMemberCount: count) {
+            parts.append(PolishPlural.servings(meal.effectiveServings(householdMemberCount: count)))
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func thumbnail(slot: MealSlot, recipe: Recipe) -> some View {
@@ -317,19 +346,7 @@ struct PlanDaySplitsSection: View {
 
     // MARK: - Plurals
 
-    private static func mealsPlural(_ count: Int) -> String {
-        if count == 1 { return "posiłek" }
-        let lastTwo = count % 100
-        let last = count % 10
-        if (2...4).contains(last) && !(12...14).contains(lastTwo) { return "posiłki" }
-        return "posiłków"
-    }
-
     private static func variantsPlural(_ count: Int) -> String {
-        if count == 1 { return "wariant" }
-        let lastTwo = count % 100
-        let last = count % 10
-        if (2...4).contains(last) && !(12...14).contains(lastTwo) { return "warianty" }
-        return "wariantów"
+        PolishPlural.form(count, one: "wariant", few: "warianty", many: "wariantów")
     }
 }

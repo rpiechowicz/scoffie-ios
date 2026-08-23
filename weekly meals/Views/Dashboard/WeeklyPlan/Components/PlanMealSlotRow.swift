@@ -70,7 +70,7 @@ struct PlanMealSlotRow: View {
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
-                    Text("\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal)) kcal")
+                    Text(metaText(for: meal))
                         .font(.system(size: 10.5, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(Color.wmMuted(scheme))
@@ -116,9 +116,61 @@ struct PlanMealSlotRow: View {
         .accessibilityLabel(accessibilityLabel(for: meal))
     }
 
+    /// Ilu domowników dzieli się porcjami, albo `nil`, dopóki `SessionStore`
+    /// nie dowiezie listy.
+    ///
+    /// Pusta lista znaczy „jeszcze się nie wczytała", a nie „dom bez ludzi".
+    /// Jedynka podstawiona w to miejsce dzieliła zapisane porcje przez jedną
+    /// osobę i wiersz migał zawyżonymi kaloriami przez pierwszą sekundę.
+    private var knownHouseholdMemberCount: Int? {
+        guard sessionStore.didLoadHouseholdMembers else { return nil }
+        return max(1, sessionStore.householdMembers.count)
+    }
+
+    /// „22 min · 279 kcal", a gdy ktoś ustawił stepperem inną liczbę porcji niż
+    /// wynika z audytorium — „22 min · 279 kcal · 3 porcje".
+    ///
+    /// Kalorie są udziałem jednej osoby, bo wiersz odpowiada na pytanie „ile mnie
+    /// to kosztuje", a nie „ile jedzenia stoi na stole". Liczby porcji nie
+    /// pokazujemy przy wartości domyślnej: sam fakt, że coś jest domyślne, nie
+    /// jest informacją i nie zasługuje na piksel w i tak gęstym wierszu.
+    private func metaText(for meal: PlanMeal) -> String {
+        var parts = [
+            "\(meal.recipe.prepTimeMinutes) min",
+            "\(perPersonKcal(meal)) kcal"
+        ]
+        if let servings = customServingsText(meal) {
+            parts.append(servings)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func perPersonKcal(_ meal: PlanMeal) -> Int {
+        Int(
+            meal.nutritionPerPerson(knownHouseholdMemberCount: knownHouseholdMemberCount)
+                .kcal
+                .rounded()
+        )
+    }
+
+    /// „3 porcje", ale tylko gdy użytkownik świadomie odszedł od reguły auto.
+    ///
+    /// `nil` dostaje i posiłek na domyślnej liczbie porcji, i taki, dla którego
+    /// nie znamy jeszcze audytorium — brak zapisanej wartości nie może udawać
+    /// ręcznego wyboru, bo wtedy każdy posiłek sprzed tej zmiany doklejałby
+    /// sobie plakietkę „1 porcja".
+    private func customServingsText(_ meal: PlanMeal) -> String? {
+        guard let count = knownHouseholdMemberCount,
+              meal.isCustomServings(householdMemberCount: count) else { return nil }
+        return PolishPlural.servings(meal.effectiveServings(householdMemberCount: count))
+    }
+
     private func accessibilityLabel(for meal: PlanMeal) -> String {
         let recipe = meal.recipe
-        let base = "\(slot.title): \(recipe.name), \(recipe.prepTimeMinutes) minut, \(Int(recipe.nutritionPerServing.kcal)) kalorii"
+        var base = "\(slot.title): \(recipe.name), \(recipe.prepTimeMinutes) minut, \(perPersonKcal(meal)) kalorii"
+        if let servings = customServingsText(meal) {
+            base += ", \(servings)"
+        }
         guard showsWhoBadge else { return base }
 
         if badgeAudience.isEmpty { return base + ", wspólne" }

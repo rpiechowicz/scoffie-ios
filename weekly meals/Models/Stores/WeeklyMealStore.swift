@@ -137,7 +137,8 @@ class WeeklyMealStore {
                         id: slot.itemId,
                         recipe: slot.recipe,
                         participantIds: slot.participantIds,
-                        eatenByUserIds: slot.eatenByUserIds
+                        eatenByUserIds: slot.eatenByUserIds,
+                        plannedServings: slot.plannedServings
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -158,10 +159,20 @@ class WeeklyMealStore {
     ///
     /// `replacingRecipeId` drops another variant in the same call — that is how
     /// „Zmień przepis" swaps one meal for another without briefly showing both.
+    ///
+    /// `plannedServings == nil` znaczy „niech serwer policzy porcje z
+    /// audytorium" — domyślna wartość jest tu po to, żeby wywołania sprzed
+    /// steppera dalej trafiały w tę regułę zamiast wymuszać jedną porcję.
+    ///
+    /// `householdMemberCount` jest wymagany właśnie dlatego: bez niego nie da
+    /// się powtórzyć reguły serwera dla „Wspólne", a optymistyczny wpis siada
+    /// na dysk i miga złą liczbą, zanim tydzień się odświeży.
     @MainActor
     func upsertWeekSlot(
         recipe: Recipe,
         participantIds: [String] = [],
+        plannedServings: Int? = nil,
+        householdMemberCount: Int,
         replacingRecipeId: UUID? = nil,
         for date: Date,
         slot: MealSlot,
@@ -169,11 +180,26 @@ class WeeklyMealStore {
     ) async -> Bool {
         let previous = meals(for: date, slot: slot)
 
+        // Optymistyczny wpis musi mieć konkretną liczbę porcji już teraz, więc
+        // powtarzamy tu regułę serwera co do joty: liczba uczestników, a dla
+        // „Wspólne" liczba domowników. Wcześniej stała tu jedynka i to ona
+        // trafiała do `meal_plans.json` — wspólna kolacja w dwuosobowym domu
+        // utrwalała się jako jedna porcja i nikt jej już potem nie poprawiał.
+        let optimisticServings = plannedServings
+            ?? (participantIds.isEmpty ? max(1, householdMemberCount) : participantIds.count)
+
         var optimistic = previous.filter { $0.recipe.id != replacingRecipeId }
         if let index = optimistic.firstIndex(where: { $0.recipe.id == recipe.id }) {
             optimistic[index].participantIds = participantIds
+            optimistic[index].plannedServings = optimisticServings
         } else {
-            optimistic.append(PlanMeal(recipe: recipe, participantIds: participantIds))
+            optimistic.append(
+                PlanMeal(
+                    recipe: recipe,
+                    participantIds: participantIds,
+                    plannedServings: optimisticServings
+                )
+            )
         }
         setMeals(optimistic, for: date, slot: slot)
 
@@ -193,7 +219,8 @@ class WeeklyMealStore {
                 date: date,
                 mealSlot: slot,
                 recipeId: recipe.id,
-                participantIds: participantIds
+                participantIds: participantIds,
+                plannedServings: plannedServings
             )
             errorMessage = nil
             return true
@@ -305,8 +332,17 @@ class WeeklyMealStore {
         }
     }
 
+    /// - Parameter householdMemberCount: potrzebne tylko po to, żeby
+    ///   optymistyczny wpis policzył porcje tą samą regułą co serwer. Wpisy
+    ///   z zapisanego planu są zawsze „Wspólne", więc liczba porcji to liczba
+    ///   domowników — a jedynka na sztywno połowiłaby im listę zakupów.
     @MainActor
-    func applySavedPlanToWeek(weekStart: String, dates: [Date], plan: SavedMealPlan) async {
+    func applySavedPlanToWeek(
+        weekStart: String,
+        dates: [Date],
+        plan: SavedMealPlan,
+        householdMemberCount: Int
+    ) async {
         guard !dates.isEmpty else { return }
 
         // Upewnij się, że lokalny cache odzwierciedla backend przed nadpisaniem tygodnia.
@@ -325,6 +361,7 @@ class WeeklyMealStore {
                     }
                     let success = await upsertWeekSlot(
                         recipe: targetRecipe,
+                        householdMemberCount: householdMemberCount,
                         for: date,
                         slot: slot,
                         weekStart: weekStart

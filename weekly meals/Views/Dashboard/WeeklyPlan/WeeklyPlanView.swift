@@ -29,9 +29,27 @@ struct WeeklyPlanView: View {
     @State private var profile: PlanProfile = .household
     @State private var showProfileSheet = false
     @State private var pickerTarget: PickerTarget?
-    @State private var detailRecipe: Recipe?
+    @State private var detailTarget: DetailTarget?
     @State private var showClearDayAlert = false
     @State private var showClearWeekAlert = false
+
+    /// Posiłek otwarty w szczegółach, razem z miejscem, z którego przyszedł.
+    ///
+    /// Sam `Recipe` tu nie wystarczy: ekran szczegółu pozwala teraz zmienić
+    /// liczbę porcji, a zapis musi trafić w ten konkretny wpis planu — czyli
+    /// potrzebuje dnia, slotu i dotychczasowego audytorium.
+    private struct DetailTarget: Identifiable {
+        let date: Date
+        let slot: MealSlot
+        let meal: PlanMeal
+        /// Przepis dociągnięty z pełnymi szczegółami; `meal.recipe` bywa
+        /// skróconą wersją z listy planu.
+        var recipe: Recipe
+
+        var id: String {
+            "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue).\(meal.id)"
+        }
+    }
 
     private struct PickerTarget: Identifiable {
         let date: Date
@@ -252,18 +270,33 @@ struct WeeklyPlanView: View {
                 // ingredients, so pull a fresh shopping list.
                 if oldValue != nil && newValue == nil { refreshShoppingList() }
             }
-            .sheet(item: $detailRecipe) { selected in
+            .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
-                    recipe: selected,
+                    recipe: target.recipe,
                     onToggleFavorite: {
                         Task { @MainActor in
-                            await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
-                            detailRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: selected.id)
-                                ?? recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
-                                ?? selected
+                            await recipeCatalogStore.toggleFavorite(recipeId: target.recipe.id)
+                            let refreshed = await recipeCatalogStore.loadRecipeDetail(recipeId: target.recipe.id)
+                                ?? recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id })
+                                ?? target.recipe
+                            // Podmieniamy sam przepis, nie cały cel — `id`
+                            // zostaje ten sam, więc arkusz się nie przeładowuje
+                            // i liczba porcji wybrana stepperem przeżywa
+                            // kliknięcie w serduszko.
+                            detailTarget?.recipe = refreshed
                         }
                     },
-                    onClose: { detailRecipe = nil }
+                    onClose: { detailTarget = nil },
+                    // Stepper startuje od liczby, którą pokazuje wiersz planu.
+                    // Posiłek bez zapisanej wartości podstawia tu regułę auto,
+                    // bo „nie ustawiono" to nie to samo co jedna porcja.
+                    initialServings: target.meal.effectiveServings(
+                        householdMemberCount: max(1, members.count)
+                    ),
+                    context: .planned(day: target.date, slot: target.slot),
+                    onSaveServings: { newValue in
+                        saveServings(newValue, for: target)
+                    }
                 )
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
@@ -356,7 +389,7 @@ struct WeeklyPlanView: View {
                         members: members,
                         slots: visibleSlots(on: day.date),
                         meals: { slot in visibleMeals(date: day.date, slot: slot) },
-                        onTapMeal: { _, meal in openDetail(meal.recipe) },
+                        onTapMeal: { slot, meal in openDetail(date: day.date, slot: slot, meal: meal) },
                         onAddMeal: { slot in
                             pickerTarget = PickerTarget(date: day.date, slot: slot, editing: nil)
                         },
@@ -377,7 +410,7 @@ struct WeeklyPlanView: View {
                                 slots: visibleSlots(on: day.date),
                                 meals: { slot in mealStore.meals(for: day.date, slot: slot) },
                                 members: members,
-                                onTapMeal: { _, meal in openDetail(meal.recipe) }
+                                onTapMeal: { slot, meal in openDetail(date: day.date, slot: slot, meal: meal) }
                             )
                             .padding(.top, 30)
                         }
@@ -396,9 +429,31 @@ struct WeeklyPlanView: View {
 
     // MARK: - Actions
 
-    private func openDetail(_ recipe: Recipe) {
+    private func openDetail(date: Date, slot: MealSlot, meal: PlanMeal) {
         Task { @MainActor in
-            detailRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
+            let full = await recipeCatalogStore.loadRecipeDetail(recipeId: meal.recipe.id) ?? meal.recipe
+            detailTarget = DetailTarget(date: date, slot: slot, meal: meal, recipe: full)
+        }
+    }
+
+    /// Zapisuje liczbę porcji zmienioną stepperem w szczegółach.
+    ///
+    /// Audytorium zostaje takie, jakie było — użytkownik zmieniał porcje, a nie
+    /// to, kto je danie. `plannedServings` idzie jawnie, więc serwer nie
+    /// nadpisze go swoją regułą auto.
+    private func saveServings(_ servings: Int, for target: DetailTarget) {
+        Task { @MainActor in
+            _ = await mealStore.upsertWeekSlot(
+                recipe: target.meal.recipe,
+                participantIds: target.meal.participantIds,
+                plannedServings: servings,
+                householdMemberCount: sessionStore.householdMembers.count,
+                for: target.date,
+                slot: target.slot,
+                weekStart: datesViewModel.weekStartISO
+            )
+            detailTarget = nil
+            refreshShoppingList()
         }
     }
 

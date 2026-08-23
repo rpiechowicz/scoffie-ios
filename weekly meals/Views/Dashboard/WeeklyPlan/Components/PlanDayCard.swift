@@ -27,6 +27,7 @@ struct PlanDayCard: View {
     let onRemoveMeal: (MealSlot, PlanMeal) -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sessionStore) private var sessionStore
 
     private static let rowGap: CGFloat = 8
 
@@ -240,24 +241,34 @@ struct PlanDayCard: View {
         slots.flatMap { meals($0) }
     }
 
+    /// Ilu domowników dzieli się porcjami, albo `nil`, dopóki `SessionStore`
+    /// nie dowiezie listy.
+    ///
+    /// Pusta lista przed wczytaniem to brak odpowiedzi, a nie dom
+    /// jednoosobowy — jedynka podstawiona w mianownik zawyżała podsumowanie
+    /// dnia tyle razy, ile porcji zapisano w slocie.
+    private var knownHouseholdMemberCount: Int? {
+        guard sessionStore.didLoadHouseholdMembers else { return nil }
+        return max(1, sessionStore.householdMembers.count)
+    }
+
     /// "3 posiłki · 1010 kcal", or "Brak planu" when nothing is visible in the
     /// active profile.
+    ///
+    /// Kalorie są udziałem jednej osoby, nie sumą tego, co stoi na stole:
+    /// nagłówek dnia stoi obok osobistego celu kalorycznego i musi się z nim
+    /// dać porównać. Suma leci w `Double`, bo obcinanie każdego posiłku
+    /// z osobna kumulowało błąd przez cały dzień.
     private var summaryText: String {
         let planned = visibleMeals
         guard !planned.isEmpty else { return "Brak planu" }
 
-        let kcal = planned.reduce(0) { $0 + Int($1.recipe.nutritionPerServing.kcal) }
-        return "\(planned.count) \(Self.mealsPlural(planned.count)) · \(kcal) kcal"
-    }
-
-    /// Polish plural for "posiłek": 1 → posiłek, 2–4 → posiłki, else posiłków
-    /// (with the 12–14 exception).
-    private static func mealsPlural(_ count: Int) -> String {
-        if count == 1 { return "posiłek" }
-        let lastTwo = count % 100
-        let last = count % 10
-        if (2...4).contains(last) && !(12...14).contains(lastTwo) { return "posiłki" }
-        return "posiłków"
+        let kcal = planned.reduce(0.0) { partial, meal in
+            partial + meal.nutritionPerPerson(
+                knownHouseholdMemberCount: knownHouseholdMemberCount
+            ).kcal
+        }
+        return "\(PolishPlural.meals(planned.count)) · \(Int(kcal.rounded())) kcal"
     }
 
     private static let longDayFormatter = plFormatter("EEEE")
