@@ -288,8 +288,7 @@ struct RecipesView: View {
                     ),
                     hasActiveFilters: filters.isActive,
                     isPersonalized: personalization.isEnabled && personalization.restrictsCatalog,
-                    onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.reset() } },
-                    onSelect: openDetail(for:)
+                    onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.reset() } }
                 )
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
@@ -743,12 +742,13 @@ private struct RecipeCategorySheetView: View {
     /// treść notki — dopasowanie zdejmuje się na ekranie listy, nie tutaj.
     let isPersonalized: Bool
     let onClearFilters: () -> Void
-    let onSelect: (Recipe) -> Void
 
+    @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var searchText = ""
+    @State private var selectedRecipe: Recipe?
 
     private var accent: Color { RecipeAccent.accent(for: category) }
 
@@ -803,15 +803,7 @@ private struct RecipeCategorySheetView: View {
                             ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { idx, recipe in
                                 EditorialRecipeRow(
                                     recipe: recipe,
-                                    action: {
-                                        dismiss()
-                                        // Defer the detail open so the sheet
-                                        // dismissal can finish without the
-                                        // detail sheet stacking on top.
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                                            onSelect(recipe)
-                                        }
-                                    }
+                                    action: { openDetail(for: recipe) }
                                 )
 
                                 if idx < filteredRecipes.count - 1 {
@@ -830,6 +822,30 @@ private struct RecipeCategorySheetView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        // Szczegół otwiera się NAD tym arkuszem — jak AddToPlanSheet nad
+        // szczegółem przepisu. Zamknięcie szczegółu wraca na listę kategorii,
+        // zamiast wyrzucać użytkownika na sam ekran Przepisów.
+        .sheet(item: $selectedRecipe) { selected in
+            RecipeDetailView(
+                recipe: selected,
+                onToggleFavorite: {
+                    Task {
+                        await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
+                        selectedRecipe = recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
+                    }
+                },
+                onClose: { selectedRecipe = nil },
+                onAddedToPlan: { _, _ in selectedRecipe = nil }
+            )
+            .presentationDetents([.large])
+            .dashboardLiquidSheet()
+        }
+    }
+
+    private func openDetail(for recipe: Recipe) {
+        Task { @MainActor in
+            selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
+        }
     }
 
     private var grabber: some View {
