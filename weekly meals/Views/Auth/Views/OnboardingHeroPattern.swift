@@ -147,14 +147,9 @@ struct OnboardingHeroPattern: View {
 
     private var brandChip: some View {
         HStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(WMPalette.terracotta)
-                Image(systemName: "fork.knife")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 22, height: 22)
+            // Mini app icon (logo v3) — chip udaje systemowy notification
+            // banner, więc pokazuje prawdziwą ikonę aplikacji.
+            WMSteamingBowlLogo(size: 22)
 
             Text("Weekly Meals")
                 .font(.system(size: 13, weight: .semibold))
