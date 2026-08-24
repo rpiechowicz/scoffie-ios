@@ -52,6 +52,10 @@ struct SettingsView: View {
     @State private var householdNameError: String? = nil
     @State private var showLogoutAlert = false
     @State private var showLeaveHouseholdAlert = false
+    /// Domownik wskazany do usunięcia — nie-nil otwiera alert potwierdzenia.
+    @State private var memberToRemove: HouseholdMemberSnapshot?
+    /// Id domownika w trakcie usuwania — wiersz pokazuje spinner zamiast menu.
+    @State private var removingMemberId: String?
     @State private var invitationLink: URL?
     @State private var isCreatingInvitation = false
     @State private var expandedFAQ: String? = nil
@@ -709,6 +713,21 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("Stracisz dostęp do wspólnego planu i listy zakupów.")
+            }
+            .alert(
+                "Usunąć domownika?",
+                isPresented: Binding(
+                    get: { memberToRemove != nil },
+                    set: { if !$0 { memberToRemove = nil } }
+                ),
+                presenting: memberToRemove
+            ) { member in
+                Button("Anuluj", role: .cancel) {}
+                Button("Usuń", role: .destructive) {
+                    Task { await removeMember(member) }
+                }
+            } message: { member in
+                Text("\(member.displayName) straci dostęp do wspólnego planu i listy zakupów tego gospodarstwa.")
             }
         }
     }
@@ -2441,6 +2460,17 @@ struct SettingsView: View {
             }
 
             Spacer(minLength: 0)
+
+            if removingMemberId == member.id {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 32, height: 32)
+            } else if canCreateInvitations, member.id != sessionStore.currentUserId {
+                // `canCreateInvitations` == „jestem właścicielem" — ta sama
+                // brama co przy zapraszaniu. Własnego wiersza nie da się
+                // usunąć stąd; od tego jest przycisk „Opuść" wyżej.
+                memberActionsMenu(for: member)
+            }
         }
         .padding(.vertical, 10)
         .overlay(alignment: .bottom) {
@@ -2453,7 +2483,38 @@ struct SettingsView: View {
         }
     }
 
+    /// Trzy kropki przy domowniku — 32pt kółko w stylistyce `inviteIcon`,
+    /// tylko w neutralnych barwach: akcja destrukcyjna mieszka w menu
+    /// i alertach, a nie w samym przycisku.
+    private func memberActionsMenu(for member: HouseholdMemberSnapshot) -> some View {
+        Menu {
+            Button(role: .destructive) {
+                memberToRemove = member
+            } label: {
+                Label("Usuń z gospodarstwa", systemImage: "person.badge.minus")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundStyle(Color.wmMuted(scheme))
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(Color.wmChipBg(scheme)))
+                .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(removingMemberId != nil)
+        .accessibilityLabel("Opcje domownika: \(member.displayName)")
+    }
+
     // MARK: - Actions / helpers
+
+    @MainActor
+    private func removeMember(_ member: HouseholdMemberSnapshot) async {
+        removingMemberId = member.id
+        defer { removingMemberId = nil }
+        await sessionStore.removeHouseholdMember(memberUserId: member.id)
+    }
 
     private func openHousehold() {
         if hasHousehold {

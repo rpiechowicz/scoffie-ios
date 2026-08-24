@@ -171,9 +171,16 @@ enum PlanChangeNotificationService {
     static func notifyHouseholdMembershipChange(
         action: String?,
         householdId: String?,
-        changedByDisplayName: String?
+        changedByDisplayName: String?,
+        affectedDisplayName: String? = nil
     ) {
-        guard !isPushDeliveryActive else { return }
+        let normalizedAction = action?.uppercased()
+        // Usunięcia domownika backend nie wysyła pushem (adresatów wylicza już
+        // PO zmianie składu), więc kanał lokalny nie może się wyłączać, gdy
+        // push działa — inaczej to zdarzenie nie miałoby ŻADNEGO kanału.
+        if normalizedAction != "REMOVE_MEMBER" {
+            guard !isPushDeliveryActive else { return }
+        }
         // Tylko główny przełącznik — kanał gospodarstwa nie ma osobnego
         // wyciszenia. To zdarzenie jest za rzadkie i za ważne, żeby dało się
         // je zgubić jednym tapnięciem w Ustawieniach.
@@ -182,11 +189,17 @@ enum PlanChangeNotificationService {
 
         let actor = NotificationActorFormatter.firstName(from: changedByDisplayName)
         let body: String
-        switch action?.uppercased() {
+        switch normalizedAction {
         case "ACCEPT_INVITATION":
             body = "\(actor) dołączył/a do Twojego gospodarstwa."
         case "LEAVE":
             body = "\(actor) opuścił/a Twoje gospodarstwo."
+        case "REMOVE_MEMBER":
+            if let affected = affectedDisplayName, !affected.isEmpty {
+                body = "\(actor) usunął/ęła \(NotificationActorFormatter.firstName(from: affected)) z gospodarstwa."
+            } else {
+                body = "\(actor) usunął/ęła domownika z gospodarstwa."
+            }
         default:
             return
         }
@@ -194,6 +207,37 @@ enum PlanChangeNotificationService {
         let content = UNMutableNotificationContent()
         content.title = "Gospodarstwo"
         content.body = body
+        content.sound = .default
+        content.interruptionLevel = .active
+        content.threadIdentifier = NotificationThread.household(household)
+
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(
+                identifier: "household-\(household)-\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+        )
+    }
+
+    /// Informacja dla OSOBY USUNIĘTEJ z gospodarstwa — lokalny kanał jest tu
+    /// jedyny: backend nie może jej wysłać pusha, bo po usunięciu nie jest już
+    /// adresatem powiadomień gospodarstwa. Bez tego aplikacja po prostu
+    /// przełączała się na ekran „Brak gospodarstwa" bez słowa wyjaśnienia.
+    static func notifyRemovedFromHousehold(
+        householdId: String?,
+        householdName: String?
+    ) {
+        guard isNotificationsEnabled else { return }
+        guard let household = householdId, !household.isEmpty else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Gospodarstwo"
+        if let name = householdName, !name.isEmpty {
+            content.body = "Usunięto Cię z gospodarstwa \(name)."
+        } else {
+            content.body = "Usunięto Cię z gospodarstwa."
+        }
         content.sound = .default
         content.interruptionLevel = .active
         content.threadIdentifier = NotificationThread.household(household)

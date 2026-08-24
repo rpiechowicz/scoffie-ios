@@ -527,6 +527,21 @@ final class SessionStore {
                 guard event.householdId == currentHouseholdId else { return }
                 self.householdRealtimeVersion &+= 1
 
+                let snapshots = event.members?.map(HouseholdMemberSnapshot.init(backend:))
+
+                // Usunięcie MNIE: nowa lista przyszła bez mojego id. Zamiast
+                // rysować dom, w którym mnie już nie ma, sprzątamy jak przy
+                // własnym wyjściu — z osobnym powiadomieniem, bo różnica
+                // między „opuściłem" a „usunięto mnie" jest dla użytkownika
+                // całą treścią tego zdarzenia.
+                if event.action == "REMOVE_MEMBER",
+                   let snapshots,
+                   let me = self.currentUserId,
+                   !snapshots.contains(where: { $0.id == me }) {
+                    await self.handleRemovedFromHousehold()
+                    return
+                }
+
                 // Dołączenie domownika ma być WIDOCZNE, a nie tylko odświeżone
                 // po cichu na liście — o to prosił użytkownik, któremu ktoś
                 // dołączył do gospodarstwa i nie dowiedział się o tym niczym.
@@ -536,7 +551,10 @@ final class SessionStore {
                     PlanChangeNotificationService.notifyHouseholdMembershipChange(
                         action: event.action,
                         householdId: currentHouseholdId,
-                        changedByDisplayName: event.changedByDisplayName
+                        changedByDisplayName: event.changedByDisplayName,
+                        // Kogo usunięto, liczymy z różnicy list — ładunek
+                        // zdarzenia wozi tylko autora zmiany.
+                        affectedDisplayName: self.removedMemberName(newMembers: snapshots)
                     )
                 }
 
@@ -544,11 +562,8 @@ final class SessionStore {
                 // serwer — dokładnie tak jak przy `mealTypesChanged`. Ten
                 // dodatkowy round-trip był ostatnim miejscem, w którym
                 // odświeżenie listy mogło po cichu przepaść.
-                if let members = event.members {
-                    self.applyHouseholdMembers(
-                        members.map(HouseholdMemberSnapshot.init(backend:)),
-                        householdId: currentHouseholdId
-                    )
+                if let snapshots {
+                    self.applyHouseholdMembers(snapshots, householdId: currentHouseholdId)
                     return
                 }
 
@@ -580,6 +595,34 @@ final class SessionStore {
         didLoadHouseholdMembers = true
         householdMembersLoadedAt = Date()
         saveHouseholdMembersCache(householdId: householdId, members: members)
+    }
+
+    /// Kogo ubyło względem obecnej listy — do treści powiadomienia
+    /// o usunięciu. `nil`, gdy nikt nie zniknął albo zdarzenie przyszło
+    /// bez nowej listy.
+    private func removedMemberName(newMembers: [HouseholdMemberSnapshot]?) -> String? {
+        guard let newMembers else { return nil }
+        let newIds = Set(newMembers.map(\.id))
+        return householdMembers.first { !newIds.contains($0.id) }?.displayName
+    }
+
+    /// Sprzątanie po usunięciu NAS z gospodarstwa przez właściciela — lustro
+    /// pomyślnej ścieżki `leaveCurrentHousehold`, tylko bez round-tripa,
+    /// bo członkostwa już nie ma.
+    private func handleRemovedFromHousehold() async {
+        PlanChangeNotificationService.notifyRemovedFromHousehold(
+            householdId: currentHouseholdId,
+            householdName: currentHouseholdName
+        )
+        clearPersistedHousehold()
+        clearRuntimeStores()
+        currentHouseholdId = nil
+        currentHouseholdName = nil
+        isAuthenticated = true
+        // Jak po własnym wyjściu: użytkownik ląduje na ekranie zakładania
+        // gospodarstwa, a czekające zaproszenia są tam jedyną alternatywą
+        // dla zakładania własnego domu.
+        await refreshPendingInvitations()
     }
 
     // MARK: - Posiłki planowane przez gospodarstwo
@@ -822,6 +865,47 @@ final class SessionStore {
             return
         } catch {
             authError = UserFacingErrorMapper.message(from: error)
+        }
+    }
+
+    /// Usunięcie domownika przez właściciela. Autoryzację rozstrzyga backend
+    /// (`ensureOwner` + ochrona ostatniego właściciela) — UI pokazuje akcję
+    /// tylko właścicielowi, więc błąd uprawnień to ostatnia linia obrony,
+    /// a nie ścieżka, którą ktoś ma oglądać.
+    @discardableResult
+    func removeHouseholdMember(memberUserId: String) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty,
+              !memberUserId.isEmpty, memberUserId != userId else { return false }
+
+        authError = nil
+        do {
+            let socketClient = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+            let envelope: WsEnvelope<BackendMembershipDTO> = try await socketClient.emitWithAck(
+                event: "households:removeMember",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId,
+                    "memberUserId": memberUserId
+                ],
+                as: WsEnvelope<BackendMembershipDTO>.self
+            )
+
+            if !envelope.ok {
+                throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się usunąć domownika.")
+            }
+
+            // `membersChanged` przywiezie nową listę, ale bez gwarancji
+            // kolejności względem acka — zdejmujemy osobę od razu, żeby wiersz
+            // nie wracał na moment po zamknięciu alertu.
+            householdMembers.removeAll { $0.id == memberUserId }
+            await refreshHouseholdMembers(force: true)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            authError = UserFacingErrorMapper.message(from: error)
+            return false
         }
     }
 
@@ -1145,9 +1229,18 @@ final class SessionStore {
         }
     }
 
+    /// Uzgadnia lokalne gospodarstwo ze stanem serwera przy starcie.
+    ///
+    /// Dwie role: (1) brak persisted householdu → może membership jednak
+    /// istnieje (dotychczasowe zachowanie), (2) persisted household, którego
+    /// już nie ma po stronie serwera — np. właściciel usunął nas, gdy
+    /// aplikacja była wyłączona i zdarzenie socketowe przepadło. Bez tej
+    /// drugiej gałęzi aplikacja startowała do „ducha": widoków gospodarstwa,
+    /// w którym backend odrzucał każde zapytanie.
     private func restoreHouseholdIfNeeded() async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
-        guard currentHouseholdId == nil || currentHouseholdId?.isEmpty == true else { return }
+        let persistedHouseholdId =
+            (currentHouseholdId?.isEmpty == false) ? currentHouseholdId : nil
 
         do {
             let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
@@ -1180,6 +1273,17 @@ final class SessionStore {
 
             guard let membership = user.memberships.first,
                   let household = membership.household else {
+                // Serwer mówi wprost: brak członkostwa. Offline tu nie trafia —
+                // błąd sieci ląduje w catch i zostawia stan bez zmian.
+                if persistedHouseholdId != nil {
+                    await handleRemovedFromHousehold()
+                }
+                return
+            }
+
+            guard household.id != persistedHouseholdId else {
+                // Ten sam dom co na dysku — bootstrap poszedł już synchronicznie
+                // w `restoreSession`, nie przebudowujemy stores drugi raz.
                 return
             }
 
