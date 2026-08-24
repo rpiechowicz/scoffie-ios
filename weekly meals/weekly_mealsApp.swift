@@ -50,12 +50,116 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Ignore in simulator/dev without APNs entitlement.
     }
 
+    /// Powiadomienie przyszło, gdy aplikacja jest NA WIERZCHU.
+    ///
+    /// Rutynowe zmiany planu i listy zakupów lądują wtedy cicho w Centrum
+    /// powiadomień (`.list`) zamiast wyskakiwać bannerem z dźwiękiem. Ekran,
+    /// którego dotyczą, i tak odświeża się na żywo po sockecie — banner nad
+    /// aktualizującą się listą był czystym hałasem i połową odczucia „spamu".
+    /// Bannerem zostaje tylko to, czego użytkownik nie zobaczy sam z siebie:
+    /// zmiana składu gospodarstwa.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound, .badge])
+        switch Self.payloadType(of: notification) {
+        case .householdMembers:
+            completionHandler([.banner, .sound])
+        case .householdInvitation:
+            // Zaproszenie przychodzi w chwili, gdy użytkownik właśnie otworzył
+            // link i patrzy na alert z tą samą treścią. Banner byłby drugą
+            // kopią tego, co widzi; powiadomienie ma tu jedno zadanie —
+            // zostać w Centrum powiadomień na później.
+            completionHandler([.list])
+        case .weeklyPlan, .shoppingList:
+            completionHandler([.list])
+        case .unknown:
+            completionHandler([.banner])
+        }
+    }
+
+    /// Użytkownik stuknął w powiadomienie.
+    ///
+    /// Zdarzenia realtime bywają zgubione (socket rozłączony w tle), więc
+    /// stuknięcie traktujemy jako moment na dociągnięcie prawdy — inaczej
+    /// aplikacja otwierałaby się na tym samym nieaktualnym ekranie, o którym
+    /// powiadomienie właśnie mówiło, że jest nieaktualny.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        // Paczka została dostarczona — kolejne zmiany zaczynają liczyć od zera.
+        PlanChangeNotificationService.resetPendingCount(
+            for: response.notification.request.identifier
+        )
+        handle(payloadType: Self.payloadType(of: response.notification))
+        completionHandler()
+    }
+
+    /// Cichy push (albo push dostarczony, gdy aplikacja ma chwilę na pracę).
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        handle(payloadType: Self.payloadType(ofUserInfo: userInfo))
+        completionHandler(.newData)
+    }
+
+    private func handle(payloadType: PushPayloadType) {
+        guard let sessionStore else { return }
+        switch payloadType {
+        case .householdMembers:
+            Task { @MainActor in
+                await sessionStore.refreshHouseholdMembers(force: true)
+            }
+        case .householdInvitation:
+            Task { @MainActor in
+                await sessionStore.refreshPendingInvitations()
+            }
+        case .weeklyPlan, .shoppingList:
+            Task { @MainActor in
+                sessionStore.refreshRealtimeStoresOnForeground()
+            }
+        case .unknown:
+            break
+        }
+    }
+
+    /// Rodzaj powiadomienia. Backend wkłada go do `data.type`
+    /// (`notifications.service.ts`), a powiadomienia lokalne rozpoznajemy po
+    /// prefiksie identyfikatora — ten sam podział, dwa źródła.
+    enum PushPayloadType {
+        case weeklyPlan
+        case shoppingList
+        case householdMembers
+        case householdInvitation
+        case unknown
+    }
+
+    private static func payloadType(of notification: UNNotification) -> PushPayloadType {
+        let fromPayload = payloadType(ofUserInfo: notification.request.content.userInfo)
+        guard case .unknown = fromPayload else { return fromPayload }
+
+        let identifier = notification.request.identifier
+        if identifier.hasPrefix("plan-change-") { return .weeklyPlan }
+        if identifier.hasPrefix("shopping-change-") { return .shoppingList }
+        if identifier.hasPrefix("invitation-") { return .householdInvitation }
+        if identifier.hasPrefix("household-") { return .householdMembers }
+        return .unknown
+    }
+
+    private static func payloadType(ofUserInfo userInfo: [AnyHashable: Any]) -> PushPayloadType {
+        let data = userInfo["data"] as? [AnyHashable: Any]
+        switch data?["type"] as? String {
+        case "WEEKLY_PLAN_CHANGED":       return .weeklyPlan
+        case "SHOPPING_LIST_CHANGED":     return .shoppingList
+        case "HOUSEHOLD_MEMBERS_CHANGED": return .householdMembers
+        case "HOUSEHOLD_INVITATION":      return .householdInvitation
+        default:                          return .unknown
+        }
     }
 }
 
@@ -173,8 +277,14 @@ struct weekly_mealsApp: App {
             .onOpenURL { url in
                 sessionStore.handleIncomingURL(url)
             }
+            // Tytuł i etykieta przycisku biorą się z samego zaproszenia, bo
+            // „Dołącz" i „Przenieś się" to dwie różne decyzje: druga oznacza
+            // utratę dostępu do dotychczasowego planu i listy zakupów, a bywa
+            // że także skasowanie opuszczanego gospodarstwa. Rola
+            // `.destructive` jest tam nie dla ozdoby — to jedyny moment, w
+            // którym da się z tego wycofać.
             .alert(
-                "Dołączyć do gospodarstwa?",
+                sessionStore.invitationPrompt?.title ?? "Dołączyć do gospodarstwa?",
                 isPresented: Binding(
                     get: { sessionStore.invitationPrompt != nil },
                     set: { isPresented in
@@ -188,9 +298,12 @@ struct weekly_mealsApp: App {
                 Button("Nie teraz", role: .cancel) {
                     sessionStore.dismissInvitationPrompt()
                 }
-                Button("Dołącz") {
+                Button(prompt.confirmLabel, role: prompt.requiresLeave ? .destructive : nil) {
                     Task {
-                        await sessionStore.acceptPendingInvitation(token: prompt.token)
+                        await sessionStore.acceptPendingInvitation(
+                            token: prompt.token,
+                            leaveOtherHouseholds: prompt.requiresLeave
+                        )
                     }
                 }
             } message: { prompt in

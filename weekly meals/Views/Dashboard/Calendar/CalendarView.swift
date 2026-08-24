@@ -15,14 +15,6 @@ struct CalendarView: View {
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
 
     @State private var detailTarget: DetailTarget?
-    @State private var pickerTarget: PickerTarget?
-
-    /// Day + slot the recipe picker is filling.
-    private struct PickerTarget: Identifiable {
-        let date: Date
-        let slot: MealSlot
-        var id: String { "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue)" }
-    }
 
     /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
     ///
@@ -41,10 +33,6 @@ struct CalendarView: View {
     }
 
     // MARK: - Derived
-
-    private var isDayEditable: Bool {
-        datesViewModel.isEditable(datesViewModel.selectedDate)
-    }
 
     /// Kalendarz is a personal day view: only what *you* eat. Someone else's
     /// variant of a slot is their business, and counting it here inflated the
@@ -230,14 +218,7 @@ struct CalendarView: View {
                                     isFavourite: card.meal.map { isFavourite($0.recipe) } ?? false,
                                     isEaten: card.meal?.isEaten(by: sessionStore.currentUserId) ?? false,
                                     showsEatenToggle: canLogEatenMeals,
-                                    isEditable: isDayEditable,
                                     onTap: { if let meal = card.meal { handleAssignedTap(meal, slot: card.slot) } },
-                                    onAssign: {
-                                        pickerTarget = PickerTarget(
-                                            date: datesViewModel.selectedDate,
-                                            slot: card.slot
-                                        )
-                                    },
                                     onToggleFavorite: { if let meal = card.meal { toggleFavorite(meal.recipe) } },
                                     onToggleEaten: { if let meal = card.meal { toggleEaten(meal, slot: card.slot) } }
                                 )
@@ -279,27 +260,10 @@ struct CalendarView: View {
                     dates: datesViewModel.dates
                 )
             }
-            // Same picker Plan uses: pick a recipe, it lands on this day and
-            // slot. This replaced an assigner that distributed a week-long
-            // *pool* of recipes onto days — a step Plan v2 removed.
-            .sheet(item: $pickerTarget) { target in
-                PlanSlotPickerSheet(
-                    date: target.date,
-                    slot: target.slot,
-                    weekStartISO: datesViewModel.weekStartISO,
-                    members: sessionStore.householdMembers,
-                    editing: nil
-                )
-            }
-            .onChange(of: pickerTarget?.id) { oldValue, newValue in
-                guard oldValue != nil, newValue == nil else { return }
-                Task { @MainActor in
-                    await shoppingListStore.load(
-                        weekStart: datesViewModel.weekStartISO,
-                        force: true
-                    )
-                }
-            }
+            // Kalendarz nie planuje — picker zniknął stąd celowo. Dwie drogi
+            // dodawania posiłków (Plan i Kalendarz) robiły to samo w dwóch
+            // miejscach i myliły się nawzajem; układanie tygodnia ma teraz
+            // jedno miejsce, a Kalendarz odpowiada na „co jem i czy zjadłem".
             .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
                     recipe: target.recipe,
@@ -319,9 +283,13 @@ struct CalendarView: View {
                     // Stepper startuje od liczby, którą pokazuje reszta ekranu.
                     // Posiłek bez zapisanej wartości podstawia tu regułę auto,
                     // bo zero i jedynka nie są tym samym co „nie ustawiono".
+                    // Nieznana liczba domowników nie może zamienić się w
+                    // jedynkę — wtedy stepper startuje od tego, na ile porcji
+                    // napisany jest sam przepis, a nie od liczby, której nikt
+                    // nie wybierał.
                     initialServings: target.meal.effectiveServings(
-                        householdMemberCount: max(1, sessionStore.householdMembers.count)
-                    ),
+                        knownHouseholdMemberCount: knownHouseholdMemberCount
+                    ) ?? target.recipe.servings,
                     context: .planned(day: target.date, slot: target.slot),
                     onSaveServings: { newValue in
                         saveServings(newValue, for: target)
@@ -374,7 +342,7 @@ struct CalendarView: View {
                 recipe: target.meal.recipe,
                 participantIds: target.meal.participantIds,
                 plannedServings: servings,
-                householdMemberCount: sessionStore.householdMembers.count,
+                householdMemberCount: knownHouseholdMemberCount,
                 for: target.date,
                 slot: target.slot,
                 weekStart: datesViewModel.weekStartISO

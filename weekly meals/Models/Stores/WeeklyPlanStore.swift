@@ -24,7 +24,14 @@ struct WeekPlanSlot {
 protocol WeeklyPlanRepository {
     func fetchWeekPlan(weekStart: String) async throws -> [WeekPlanSlot]
     /// `plannedServings == nil` zostawia wyliczenie liczby porcji serwerowi.
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws
+    ///
+    /// Zwraca slot TAK, JAK ZAPISAŁ GO SERWER. To nie jest wygoda, tylko
+    /// warunek poprawności: przy pominiętych porcjach dopiero odpowiedź mówi,
+    /// ile ich wyszło z reguły auto, a przy porcjach wysłanych jawnie —
+    /// potwierdza, że backend to pole w ogóle rozumie. `nil` znaczy „serwer
+    /// odpowiedział czymś, czego nie umiemy odczytać" i zostawia stan
+    /// optymistyczny nietknięty.
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws -> WeekPlanSlot?
     /// `recipeId == nil` clears every variant in the slot.
     func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws
     func clearWeekPlan(weekStart: String) async throws
@@ -40,7 +47,7 @@ protocol WeeklyPlanRepository {
 protocol WeeklyPlanTransportClient {
     func fetchWeekPlan(weekStart: String) async throws -> [BackendWeeklyPlanItemDTO]
     /// `plannedServings == nil` zostawia wyliczenie liczby porcji serwerowi.
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws -> BackendWeeklyPlanItemDTO?
     func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String?) async throws
     func clearWeekPlan(weekStart: String) async throws
     func setMealEaten(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, isEaten: Bool) async throws
@@ -85,9 +92,16 @@ struct BackendSharedMealPlanItemDTO: Codable {
     let recipe: BackendRecipeDTO
 }
 
-private struct BackendPlanItemAckDTO: Codable {
-    let id: String
-}
+/// Odpowiedź na `weeklyPlans:upsertWeekSlot`.
+///
+/// Serwer zawsze odsyłał pełną pozycję planu, a klient dekodował z niej samo
+/// `id` i resztę wyrzucał — łącznie z `plannedServings`, czyli jedyną
+/// autorytatywną odpowiedzią na pytanie „ile porcji się w końcu zapisało".
+/// Przez to zapis kończył się wiarą w wartość optymistyczną, a prawdę pokazywał
+/// dopiero pełny refetch tygodnia wywołany rozgłoszeniem — i to on potrafił ją
+/// cofnąć. `BackendWeeklyPlanItemDTO` ma wszystkie pola opcjonalne tam, gdzie
+/// starszy backend ich nie przysyła, więc podmiana typu nic nie psuje.
+private typealias BackendPlanItemAckDTO = BackendWeeklyPlanItemDTO
 
 /// `weeklyPlans:removeWeekSlot` answers with the ids it deleted — a slot can
 /// hold several variants, and clearing it removes them all.
@@ -251,7 +265,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getByWeek.")
     }
 
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws {
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws -> BackendWeeklyPlanItemDTO? {
         let householdId = try await resolveHouseholdId()
         var data: [String: Any] = [
             "dayOfWeek": dayOfWeek,
@@ -279,7 +293,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         )
 
         if envelope.ok {
-            return
+            return envelope.data
         }
 
         throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:upsertWeekSlot.")
@@ -453,31 +467,36 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
 
     func fetchWeekPlan(weekStart: String) async throws -> [WeekPlanSlot] {
         let items = try await client.fetchWeekPlan(weekStart: weekStart)
-        return items.compactMap { item in
-            guard let dateKey = WeekDateMapper.dateKey(weekStart: weekStart, dayOfWeek: item.dayOfWeek),
-                  let mealSlot = item.appMealSlot,
-                  let recipe = item.recipe.toAppRecipe() else {
-                return nil
-            }
-            return WeekPlanSlot(
-                itemId: item.id,
-                dateKey: dateKey,
-                mealSlot: mealSlot,
-                recipe: recipe,
-                participantIds: item.participantIds ?? [],
-                eatenByUserIds: item.eatenByUserIds ?? [],
-                // Bez `?? 1`: brak pola ma dojechać do modelu jako „nie wiem",
-                // żeby licznik zdążył policzyć porcje z audytorium.
-                plannedServings: item.plannedServings
-            )
-        }
+        return items.compactMap { Self.mapSlot($0, weekStart: weekStart) }
     }
 
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws {
+    /// Jedno miejsce zamiany pozycji z backendu na `WeekPlanSlot` — używane i
+    /// przy pobraniu tygodnia, i przy potwierdzeniu zapisu, żeby obie ścieżki
+    /// nie rozjechały się w interpretacji brakujących pól.
+    private static func mapSlot(_ item: BackendWeeklyPlanItemDTO, weekStart: String) -> WeekPlanSlot? {
+        guard let dateKey = WeekDateMapper.dateKey(weekStart: weekStart, dayOfWeek: item.dayOfWeek),
+              let mealSlot = item.appMealSlot,
+              let recipe = item.recipe.toAppRecipe() else {
+            return nil
+        }
+        return WeekPlanSlot(
+            itemId: item.id,
+            dateKey: dateKey,
+            mealSlot: mealSlot,
+            recipe: recipe,
+            participantIds: item.participantIds ?? [],
+            eatenByUserIds: item.eatenByUserIds ?? [],
+            // Bez `?? 1`: brak pola ma dojechać do modelu jako „nie wiem",
+            // żeby licznik zdążył policzyć porcje z audytorium.
+            plannedServings: item.plannedServings
+        )
+    }
+
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws -> WeekPlanSlot? {
         guard let dayOfWeek = WeekDateMapper.dayOfWeek(from: date, weekStart: weekStart) else {
             throw RecipeDataError.serverError(message: "Nie można wyznaczyć dnia tygodnia dla slotu.")
         }
-        try await client.upsertWeekSlot(
+        let saved = try await client.upsertWeekSlot(
             weekStart: weekStart,
             dayOfWeek: dayOfWeek,
             mealType: mealSlot.backendMealType,
@@ -485,6 +504,7 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             participantIds: participantIds,
             plannedServings: plannedServings
         )
+        return saved.flatMap { Self.mapSlot($0, weekStart: weekStart) }
     }
 
     func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws {

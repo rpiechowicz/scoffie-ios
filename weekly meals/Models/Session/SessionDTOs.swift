@@ -44,6 +44,14 @@ struct HouseholdLeaveAckDTO: Codable {
 
 struct PushDeviceRegisterAckDTO: Codable {
     let success: Bool
+    /// Czy serwer w ogóle umie wysłać pusha (APNs skonfigurowany).
+    ///
+    /// Samo „zarejestrowałem token" tego nie rozstrzyga — token zapisuje się
+    /// także wtedy, gdy APNs jest wyłączony w środowisku. Klient potrzebuje tej
+    /// odpowiedzi, żeby wiedzieć, czy może zamilknąć ze swoimi lokalnymi
+    /// powiadomieniami, czy zostaje jedynym kanałem. Starszy backend tego pola
+    /// nie przysyła — `nil` czytamy wtedy jako „nie wiadomo", czyli ostrożnie.
+    let pushEnabled: Bool?
 }
 
 struct BackendInvitationDTO: Codable {
@@ -59,11 +67,19 @@ struct BackendMembershipDTO: Codable {
     let role: String
 }
 
-struct BackendHouseholdMembersChangedDTO: Codable {
+struct BackendHouseholdMembersChangedDTO: Decodable {
     let householdId: String
     let action: String?
     let changedByUserId: String?
     let changedByDisplayName: String?
+    /// Nowy skład gospodarstwa, jeśli serwer go dołożył.
+    ///
+    /// Bez tej listy zdarzenie było samym sygnałem „coś się zmieniło" i klient
+    /// musiał po skład wrócić osobnym `households:listMembers`. Ten round-trip
+    /// bywał ostatnim brakującym ogniwem: gdy nie przechodził, nowy domownik
+    /// nie pojawiał się na liście i nikt się o tym nie dowiadywał. Wzorzec jest
+    /// ten sam co w `households:mealTypesChanged`, które listę wozi od zawsze.
+    let members: [BackendHouseholdMemberDTO]?
 }
 
 /// Zmiana zestawu posiłków planowanych przez gospodarstwo
@@ -90,7 +106,35 @@ struct BackendInvitationPreviewDTO: Codable {
     }
 
     let token: String
+    /// `PENDING` | `REQUIRES_LEAVE` | `ALREADY_MEMBER` | `EXPIRED`
+    /// | `REDEEMED` | `DECLINED` | `NOT_FOUND`.
     let status: String
+    let household: HouseholdDTO?
+    let invitedByDisplayName: String?
+    let expiresAt: String?
+    /// Gospodarstwo, które użytkownik straci, przyjmując zaproszenie.
+    /// `nil` na starszym backendzie i wtedy, gdy do żadnego nie należy.
+    let currentHousehold: HouseholdDTO?
+    /// Czy tamten dom zniknie razem z jego odejściem, bo nikt w nim nie
+    /// zostanie. `nil` (starszy backend) czytamy jak `false` — ostrożniej jest
+    /// nie straszyć usunięciem, którego może nie być.
+    let willDeleteCurrentHousehold: Bool?
+}
+
+/// Potwierdzenie prostej mutacji, która nie ma nic do odesłania poza
+/// „zrobione" (np. `households:declineInvitation`).
+struct BackendMutationAckDTO: Codable {
+    let success: Bool?
+}
+
+/// Zaproszenie czekające w skrzynce użytkownika (`households:listPendingInvitations`).
+struct BackendPendingInvitationDTO: Codable {
+    struct HouseholdDTO: Codable {
+        let id: String
+        let name: String
+    }
+
+    let token: String
     let household: HouseholdDTO?
     let invitedByDisplayName: String?
     let expiresAt: String?
@@ -175,6 +219,13 @@ struct BackendUserPreferencesDTO: Decodable {
     let proteinG: Int?
     let fatG: Int?
     let carbsG: Int?
+    /// Kanały powiadomień push. `nil` = backend sprzed tej zmiany; wtedy
+    /// zostawiamy lokalne ustawienia w spokoju i wyślemy je przy najbliższym
+    /// zapisie.
+    let pushPlanChanges: Bool?
+    let pushShoppingList: Bool?
+    let pushHousehold: Bool?
+    let pushQuietHours: Bool?
 }
 
 /// Odpowiedź na `users:delete` — samo potwierdzenie, że konto o tym id

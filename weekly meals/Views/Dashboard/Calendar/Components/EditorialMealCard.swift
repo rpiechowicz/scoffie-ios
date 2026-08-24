@@ -38,9 +38,7 @@ struct EditorialMealCard: View {
     /// yesterday's dinner in the evening is the normal case, and those days
     /// are read-only for *planning*, not for what already happened.
     let showsEatenToggle: Bool
-    let isEditable: Bool
     let onTap: () -> Void
-    let onAssign: () -> Void
     let onToggleFavorite: () -> Void
     let onToggleEaten: () -> Void
 
@@ -227,84 +225,64 @@ struct EditorialMealCard: View {
 
     // MARK: - Empty
 
+    /// Pusty slot jest INFORMACJĄ, nie przyciskiem.
+    ///
+    /// Kalendarz przestał planować: był tu skrót „Wybierz z biblioteki",
+    /// który otwierał ten sam picker co zakładka Plan — i te dwie drogi
+    /// myliły się użytkownikom nawzajem (dwa miejsca robiące to samo, każde
+    /// trochę inaczej). Kalendarz odpowiada teraz na „co dziś jem i czy już
+    /// zjadłem", a układanie posiłków ma jedno miejsce: Plan. Podpis niżej
+    /// mówi, dokąd iść, zamiast udawać, że tu się nic nie da zrobić.
     private var emptyRow: some View {
-        Button(action: { if isEditable { onAssign() } }) {
-            HStack(alignment: .center, spacing: 13) {
-                Image(systemName: slot.icon)
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
-                    .frame(width: 72, height: 72)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.wmChipBg(scheme))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.wmRule(scheme), lineWidth: 1)
-                    )
+        HStack(alignment: .center, spacing: 13) {
+            Image(systemName: slot.icon)
+                .font(.system(size: 21, weight: .medium))
+                .foregroundStyle(Color.wmMuted(scheme))
+                .frame(width: 72, height: 72)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.wmChipBg(scheme))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.wmRule(scheme), lineWidth: 1)
+                )
 
-                VStack(alignment: .leading, spacing: 3) {
-                    EyebrowRow(slot: slot, isEaten: false)
+            VStack(alignment: .leading, spacing: 3) {
+                EyebrowRow(slot: slot, isEaten: false)
 
-                    Text(promptText)
-                        .font(.system(size: 15.5, weight: .bold))
-                        .tracking(-0.25)
-                        .foregroundStyle(Color.wmLabel(scheme))
-                        .lineLimit(1)
+                Text("Nic nie zaplanowano")
+                    .font(.system(size: 15.5, weight: .bold))
+                    .tracking(-0.25)
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .lineLimit(1)
 
-                    if isEditable {
-                        HStack(spacing: 4) {
-                            Text("Wybierz z biblioteki")
-                                .font(.system(size: 11.5, weight: .semibold))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundStyle(WMPalette.terracotta)
-                    } else {
-                        HStack(spacing: 5) {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 10, weight: .bold))
-                            Text("Dzień nieedytowalny")
-                                .font(.system(size: 11.5, weight: .semibold))
-                        }
-                        .foregroundStyle(Color.wmMuted(scheme))
-                    }
+                HStack(spacing: 5) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Zaplanujesz w zakładce Plan")
+                        .font(.system(size: 11.5, weight: .semibold))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundStyle(Color.wmMuted(scheme))
             }
-            .padding(13)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.wmTileBg(scheme).opacity(0.55))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(
-                        Color.wmTileStroke(scheme),
-                        style: StrokeStyle(lineWidth: 1, dash: [5, 4])
-                    )
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(
-                isEditable
-                    ? "\(promptText). Stuknij, aby wybrać przepis."
-                    : "\(slot.title) — dzień nieedytowalny"
-            )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.plain)
-        .disabled(!isEditable)
+        .padding(13)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.wmTileBg(scheme).opacity(0.55))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(
+                    Color.wmTileStroke(scheme),
+                    style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(slot.title): nic nie zaplanowano. Posiłki planuje się w zakładce Plan.")
     }
 
-    private var promptText: String {
-        switch slot {
-        case .breakfast:       return "Co dziś na śniadanie?"
-        case .secondBreakfast: return "Co dziś na drugie śniadanie?"
-        case .lunch:           return "Co dziś na obiad?"
-        case .afternoonSnack:  return "Co dziś na podwieczorek?"
-        case .dinner:          return "Co dziś na kolację?"
-        case .snack:           return "Na co masz dziś ochotę?"
-        }
-    }
 }
 
 // MARK: - MealSlot palette mapping

@@ -231,7 +231,14 @@ struct WelcomeView: View {
                 householdName: $householdName,
                 firstName: trimmedName,
                 avatarInitial: avatarInitial,
-                errorMessage: errorMessage
+                errorMessage: errorMessage,
+                // Ktoś, kogo zaproszono, nie ma po co zakładać własnego
+                // gospodarstwa — a bez tej listy był to jedyny widoczny sposób
+                // wyjścia z tego ekranu.
+                pendingInvitations: sessionStore.pendingInvitations,
+                onAcceptInvitation: { token in
+                    Task { await sessionStore.acceptPendingInvitation(token: token) }
+                }
             )
         }
     }

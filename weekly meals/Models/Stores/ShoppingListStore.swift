@@ -70,8 +70,9 @@ final class ShoppingListStore {
                 self.scheduleReload(weekStart: currentWeekStart)
                 let changedByOtherUser = event.changedByUserId != nil && event.changedByUserId != self.currentUserId
                 if changedByOtherUser {
-                    ShoppingListNotificationService.notifyRemoteShoppingListChange(
+                    PlanChangeNotificationService.notifyRemoteShoppingListChange(
                         action: event.action,
+                        householdId: event.householdId,
                         changedByDisplayName: event.changedByDisplayName,
                         isChecked: event.isChecked
                     )
