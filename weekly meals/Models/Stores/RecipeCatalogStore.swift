@@ -19,7 +19,10 @@ final class RecipeCatalogStore {
     var hasMore: Bool = true
     var errorMessage: String?
     private var currentPage: Int = 0
-    private let pageSize: Int = 24
+    private let pageSize: Int = 100
+    /// Bezpiecznik pętli pełnego ładowania — 40 stron po 100 to 4000 przepisów,
+    /// daleko ponad realny rozmiar katalogu.
+    private let maxCatalogPages: Int = 40
     private let cacheMaxAge: TimeInterval = 60 * 60 * 12 // 12 h
     private let maxFetchAttempts: Int = 3
     private var pendingRealtimeReloadTask: Task<Void, Never>?
@@ -83,10 +86,21 @@ final class RecipeCatalogStore {
         isLoadingMore = false
         errorMessage = nil
         do {
-            let firstPage = try await fetchPageWithRetry(page: 1)
-            recipes = firstPage
-            currentPage = 1
-            hasMore = firstPage.count >= pageSize
+            // Ekran Przepisów buduje sekcje po kategoriach po stronie klienta,
+            // a API sortuje od najnowszych — po rozroście bazy sama pierwsza
+            // strona potrafi nie zawierać ani jednego śniadania i sekcja
+            // wygląda na pustą. Dlatego katalog ciągnie wszystkie strony od razu.
+            var all: [Recipe] = []
+            var page = 1
+            while true {
+                let items = try await fetchPageWithRetry(page: page)
+                all.append(contentsOf: items)
+                if items.count < pageSize || page >= maxCatalogPages { break }
+                page += 1
+            }
+            recipes = all
+            currentPage = page
+            hasMore = false
             didLoad = true
             saveCache()
         } catch {
@@ -194,7 +208,10 @@ final class RecipeCatalogStore {
         guard Date().timeIntervalSince(payload.savedAt) <= cacheMaxAge else { return false }
         recipes = payload.recipes
         currentPage = max(1, Int(ceil(Double(payload.recipes.count) / Double(pageSize))))
-        hasMore = payload.recipes.count % pageSize == 0
+        // Cache trzyma pełny katalog (reload ładuje wszystkie strony), a tuż po
+        // odczycie i tak startuje pełny reload — dociąganie stron ze scrolla
+        // tylko dublowałoby wiersze w tym oknie.
+        hasMore = false
         return !payload.recipes.isEmpty
     }
 
