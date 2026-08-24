@@ -609,28 +609,40 @@ struct RecipeDetailView: View {
     /// pojawia mu się przy dodawaniu drugiego śniadania. To jedyne miejsce,
     /// w którym `suitableSlots` widać wprost.
     private var alsoFitsRow: some View {
+        // Etykieta stoi poza scrollem, a chipy jadą w poziomym przewijaniu.
+        // Wcześniej wszystko siedziało w jednym HStacku: przy trzech slotach
+        // brakowało szerokości, SwiftUI ściskał teksty i „II śniadanie"
+        // łamało się w chipie na trzy linijki. `fixedSize` + `lineLimit(1)`
+        // zakazują łamania w ogóle, a ScrollView oddaje nadmiar szerokości
+        // przewinięciu zamiast kompresji.
         HStack(alignment: .center, spacing: 8) {
             Text("Pasuje też na")
                 .font(.system(size: 11.5, weight: .semibold))
                 .foregroundStyle(Color.wmFaint(scheme))
+                .fixedSize()
 
-            ForEach(recipe.additionalSlots) { slot in
-                HStack(spacing: 5) {
-                    Image(systemName: slot.icon)
-                        .font(.system(size: 10, weight: .semibold))
-                    Text(slot.title)
-                        .font(.system(size: 11.5, weight: .semibold))
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(recipe.additionalSlots) { slot in
+                        HStack(spacing: 5) {
+                            Image(systemName: slot.icon)
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(slot.title)
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                        .foregroundStyle(slot.cozyAccent)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.10))
+                        )
+                    }
                 }
-                .foregroundStyle(slot.cozyAccent)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.10))
-                )
             }
-
-            Spacer(minLength: 0)
+            .scrollIndicators(.hidden)
         }
     }
 }

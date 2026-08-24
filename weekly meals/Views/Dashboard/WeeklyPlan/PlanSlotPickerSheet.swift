@@ -431,8 +431,10 @@ struct PlanSlotPickerSheet: View {
                 plannedServings: nil,
                 // Liczba domowników jest potrzebna do optymistycznego wpisu:
                 // bez niej „Wspólne" migałoby jedną porcją, zanim przyjdzie
-                // odpowiedź serwera.
-                householdMemberCount: members.count,
+                // odpowiedź serwera. Pusta lista to brak odpowiedzi, nie dom
+                // jednoosobowy — wtedy porcje liczy serwer i przysyła je
+                // w potwierdzeniu zapisu.
+                householdMemberCount: members.isEmpty ? nil : members.count,
                 // In edit mode a different pick replaces the meal being edited
                 // rather than piling a second variant into the slot.
                 replacingRecipeId: editing?.recipe.id,
@@ -456,7 +458,7 @@ struct PlanSlotPickerSheet: View {
                 // Porcji nie wysyłamy z tego samego powodu, co w `assign`:
                 // ten arkusz zmienia wyłącznie audytorium, a pominięte pole
                 // zostawia ręcznie ustawioną liczbę porcji w spokoju.
-                householdMemberCount: members.count,
+                householdMemberCount: members.isEmpty ? nil : members.count,
                 for: date,
                 slot: slot,
                 weekStart: weekStartISO

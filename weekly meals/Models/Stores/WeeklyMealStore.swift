@@ -125,6 +125,18 @@ class WeeklyMealStore {
         observedWeekDates = dates
         do {
             let slots = try await weeklyPlanRepository.fetchWeekPlan(weekStart: weekStart)
+            // Porcje znane sprzed odświeżenia, po `PlanItem.id`. Odczyt tygodnia
+            // odtwarza plan od zera, więc bez tej mapy pozycja, przy której
+            // serwer nie podał `plannedServings`, traciła zapisaną liczbę —
+            // i wracała do reguły auto, czyli do jedynki w domu, którego
+            // składu aplikacja akurat nie zna. Serwerowe `nil` znaczy „nie
+            // wiem", a na „nie wiem" nie kasuje się tego, co się wie.
+            let knownServingsByItemId = Dictionary(
+                plans.values
+                    .flatMap(\.allMeals)
+                    .compactMap { meal in meal.plannedServings.map { (meal.id, $0) } },
+                uniquingKeysWith: { first, _ in first }
+            )
             clearWeek(dates: dates)
             for slot in slots {
                 let key = slot.dateKey
@@ -138,7 +150,7 @@ class WeeklyMealStore {
                         recipe: slot.recipe,
                         participantIds: slot.participantIds,
                         eatenByUserIds: slot.eatenByUserIds,
-                        plannedServings: slot.plannedServings
+                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId]
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -164,15 +176,19 @@ class WeeklyMealStore {
     /// audytorium" — domyślna wartość jest tu po to, żeby wywołania sprzed
     /// steppera dalej trafiały w tę regułę zamiast wymuszać jedną porcję.
     ///
-    /// `householdMemberCount` jest wymagany właśnie dlatego: bez niego nie da
-    /// się powtórzyć reguły serwera dla „Wspólne", a optymistyczny wpis siada
-    /// na dysk i miga złą liczbą, zanim tydzień się odświeży.
+    /// `householdMemberCount` jest po to, żeby optymistyczny wpis powtórzył
+    /// regułę serwera dla „Wspólne" — inaczej siada na dysk i miga złą liczbą,
+    /// zanim tydzień się odświeży. `nil` znaczy „lista domowników jeszcze nie
+    /// dojechała": wtedy NIE zgadujemy. Zgadywanie w tym miejscu dawało
+    /// `max(1, 0)`, czyli jedną porcję, i ta jedynka utrwalała się w pliku
+    /// planu. Lepiej zostawić „nie wiem" i podmienić je na prawdę z
+    /// potwierdzenia zapisu.
     @MainActor
     func upsertWeekSlot(
         recipe: Recipe,
         participantIds: [String] = [],
         plannedServings: Int? = nil,
-        householdMemberCount: Int,
+        householdMemberCount: Int?,
         replacingRecipeId: UUID? = nil,
         for date: Date,
         slot: MealSlot,
@@ -186,7 +202,7 @@ class WeeklyMealStore {
         // trafiała do `meal_plans.json` — wspólna kolacja w dwuosobowym domu
         // utrwalała się jako jedna porcja i nikt jej już potem nie poprawiał.
         let optimisticServings = plannedServings
-            ?? (participantIds.isEmpty ? max(1, householdMemberCount) : participantIds.count)
+            ?? (participantIds.isEmpty ? householdMemberCount.map { max(1, $0) } : participantIds.count)
 
         var optimistic = previous.filter { $0.recipe.id != replacingRecipeId }
         if let index = optimistic.firstIndex(where: { $0.recipe.id == recipe.id }) {
@@ -214,7 +230,7 @@ class WeeklyMealStore {
                     recipeId: replacingRecipeId
                 )
             }
-            try await weeklyPlanRepository.upsertWeekSlot(
+            let saved = try await weeklyPlanRepository.upsertWeekSlot(
                 weekStart: weekStart,
                 date: date,
                 mealSlot: slot,
@@ -222,6 +238,27 @@ class WeeklyMealStore {
                 participantIds: participantIds,
                 plannedServings: plannedServings
             )
+            // Wpis optymistyczny miał syntetyczne `id` i zgadywane porcje.
+            // Podmieniamy go na to, co naprawdę leży w bazie — dzięki temu
+            // późniejsze odświeżenie tygodnia trafia na ten sam `PlanItem.id`
+            // i nie ma czego „poprawiać". Bez tego kroku pozycja żyła pod
+            // losowym identyfikatorem aż do pełnego refetchu.
+            if let saved, saved.mealSlot == slot {
+                var confirmed = meals(for: date, slot: slot)
+                if let index = confirmed.firstIndex(where: { $0.recipe.id == recipe.id }) {
+                    confirmed[index] = PlanMeal(
+                        id: saved.itemId,
+                        recipe: confirmed[index].recipe,
+                        participantIds: saved.participantIds,
+                        eatenByUserIds: saved.eatenByUserIds,
+                        // `nil` z serwera znaczy „nie znam tego pola" (starszy
+                        // backend), więc zostawiamy własną wartość zamiast
+                        // zerować ją do reguły auto.
+                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings
+                    )
+                    setMeals(confirmed, for: date, slot: slot)
+                }
+            }
             errorMessage = nil
             return true
         } catch {
@@ -336,12 +373,13 @@ class WeeklyMealStore {
     ///   optymistyczny wpis policzył porcje tą samą regułą co serwer. Wpisy
     ///   z zapisanego planu są zawsze „Wspólne", więc liczba porcji to liczba
     ///   domowników — a jedynka na sztywno połowiłaby im listę zakupów.
+    ///   `nil` = jeszcze nie wiadomo, ilu ich jest; wtedy porcje wylicza serwer.
     @MainActor
     func applySavedPlanToWeek(
         weekStart: String,
         dates: [Date],
         plan: SavedMealPlan,
-        householdMemberCount: Int
+        householdMemberCount: Int?
     ) async {
         guard !dates.isEmpty else { return }
 
@@ -487,6 +525,7 @@ class WeeklyMealStore {
             PlanChangeNotificationService.notifyRemotePlanChange(
                 action: event.action,
                 weekStart: event.weekStart,
+                householdId: event.householdId,
                 changedByDisplayName: event.changedByDisplayName,
                 dayOfWeek: event.dayOfWeek,
                 mealType: event.mealType
@@ -511,6 +550,7 @@ class WeeklyMealStore {
             PlanChangeNotificationService.notifyRemotePlanChange(
                 action: event.action,
                 weekStart: event.weekStart,
+                householdId: event.householdId,
                 changedByDisplayName: event.changedByDisplayName
             )
         }

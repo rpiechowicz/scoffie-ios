@@ -428,6 +428,12 @@ struct SettingsView: View {
             .sheet(isPresented: $showNotificationsSheet) {
                 notificationsSheet
                     .dashboardLiquidSheet()
+                    // Przełączniki muszą dojechać na serwer, bo to on decyduje
+                    // o wysłaniu pusha. Trzymane tylko lokalnie wyciszały
+                    // wyłącznie powiadomienia rysowane przez aplikację.
+                    .task(id: notificationPreferencesToken) {
+                        await sessionStore.syncNotificationPreferences()
+                    }
             }
             .sheet(isPresented: $showAppearanceSheet) {
                 appearanceSheet
@@ -669,6 +675,15 @@ struct SettingsView: View {
                         showHouseholdSheet = false
                     }
 
+                    // Skrzynka zaproszeń nad resztą i w OBU gałęziach: dla
+                    // kogoś bez gospodarstwa to jedyna alternatywa dla
+                    // zakładania własnego, a dla kogoś, kto już gdzieś jest —
+                    // jedyne miejsce, w którym w ogóle zobaczy, że ktoś go
+                    // zaprosił.
+                    if !sessionStore.pendingInvitations.isEmpty {
+                        householdInvitationsCard
+                    }
+
                     if hasHousehold {
                         householdOverviewCard
                         householdMembersCard
@@ -721,15 +736,18 @@ struct SettingsView: View {
                         .opacity(notificationsEnabled ? 1 : 0.55)
                         .animation(.smooth(duration: 0.2), value: notificationsEnabled)
 
-                    Text(notificationsEnabled
-                         ? "Możesz osobno wyciszyć każdy typ powiadomień. Zmiana zaczyna obowiązywać od następnego planowanego przypomnienia."
-                         : "Wszystkie powiadomienia są wyciszone. Włącz główny przełącznik, aby zarządzać typami przypomnień."
-                    )
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 6)
-                    .padding(.top, 4)
+                    // Bez podpisu przy włączonych powiadomieniach — zachowanie
+                    // gospodarstwa i ciszy nocnej (22–7) jest wbudowane i nie
+                    // wymaga tłumaczenia na ekranie. Zostaje tylko wyjaśnienie
+                    // przygaszonej karty, gdy główny przełącznik jest wyłączony.
+                    if !notificationsEnabled {
+                        Text("Wszystkie powiadomienia są wyciszone. Włącz główny przełącznik, aby zarządzać typami przypomnień.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.wmMuted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 6)
+                            .padding(.top, 4)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
@@ -793,6 +811,19 @@ struct SettingsView: View {
         )
     }
 
+    /// Zmiana któregokolwiek przełącznika powiadomień. Steruje `task(id:)`,
+    /// więc SwiftUI anuluje poprzednią wysyłkę i planuje nową — bez ręcznego
+    /// debounce'u przy szybkim przeklikiwaniu.
+    private var notificationPreferencesToken: String {
+        [
+            notificationsEnabled,
+            planRemindersEnabled,
+            shoppingRemindersEnabled
+        ]
+        .map { $0 ? "1" : "0" }
+        .joined()
+    }
+
     private var notificationChannelsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Kanały")
@@ -802,7 +833,7 @@ struct SettingsView: View {
                     icon: "calendar.badge.clock",
                     accent: WMPalette.indigo,
                     title: "Plan tygodniowy",
-                    subtitle: "Przypomnienia o ułożeniu posiłków na nadchodzące dni.",
+                    subtitle: "Jedno podsumowanie, gdy domownik skończy zmieniać plan.",
                     isOn: $planRemindersEnabled,
                     isLast: false
                 )
@@ -811,7 +842,7 @@ struct SettingsView: View {
                     icon: "cart.fill",
                     accent: WMPalette.sage,
                     title: "Lista zakupów",
-                    subtitle: "Powiadomienia o niekupionych produktach przed weekendem.",
+                    subtitle: "Jedno podsumowanie, gdy domownik odhaczy zakupy.",
                     isOn: $shoppingRemindersEnabled,
                     isLast: true
                 )
@@ -2182,6 +2213,120 @@ struct SettingsView: View {
             .overlay(Circle().stroke(WMPalette.terracotta.opacity(scheme == .dark ? 0.34 : 0.28), lineWidth: 1))
     }
 
+    /// Zaproszenia czekające na użytkownika.
+    ///
+    /// Powód istnienia jest prosty: zaproszenie było wyłącznie linkiem
+    /// w komunikatorze. Kto otworzył je w złym momencie — bo należał już do
+    /// innego gospodarstwa albo zamknął alert — nie miał w aplikacji ŻADNEGO
+    /// śladu, że coś do niego przyszło.
+    private var householdInvitationsCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetSectionLabel(title: "Zaproszenia")
+
+            VStack(spacing: 0) {
+                ForEach(Array(sessionStore.pendingInvitations.enumerated()), id: \.element.id) { index, invitation in
+                    invitationRow(
+                        invitation,
+                        isLast: index == sessionStore.pendingInvitations.count - 1
+                    )
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private func invitationRow(
+        _ invitation: HouseholdInvitationSnapshot,
+        isLast: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 14) {
+                EditorialSettingsTileIcon(icon: "envelope.open.fill", color: WMPalette.butter)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(invitation.householdName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.wmLabel(scheme))
+
+                    Text(invitation.subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Color.wmMuted(scheme))
+
+                    if let expiry = invitation.expiresAtText {
+                        Text("Ważne do: \(expiry)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.wmMuted(scheme))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            // Dołączenie z gospodarstwa oznacza jego opuszczenie, więc etykieta
+            // mówi to wprost zamiast obiecywać samo „Dołącz".
+            HStack(spacing: 10) {
+                Button {
+                    Task { await sessionStore.declineInvitation(token: invitation.token) }
+                } label: {
+                    Text("Odrzuć")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(
+                            Capsule().fill(Color.wmFaint(scheme))
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    Task {
+                        await sessionStore.acceptPendingInvitation(
+                            token: invitation.token,
+                            leaveOtherHouseholds: hasHousehold
+                        )
+                        if sessionStore.currentHouseholdId != nil {
+                            persistedHouseholdName = sessionStore.currentHouseholdName ?? persistedHouseholdName
+                        }
+                    }
+                } label: {
+                    Text(hasHousehold ? "Przenieś się" : "Dołącz")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(Color.wmRule(scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 16 + 32 + 14)
+            }
+        }
+    }
+
     private var householdEmptyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
@@ -2313,7 +2458,11 @@ struct SettingsView: View {
     private func openHousehold() {
         if hasHousehold {
             showHouseholdSheet = true
-            Task { await preloadHouseholdContextIfNeeded(force: false) }
+            // `force: true`, bo to jest jawna intencja użytkownika: otwiera
+            // ekran, żeby zobaczyć AKTUALNY skład domu. `force: false`
+            // odbijało się od pamięci podręcznej i pokazywało listę sprzed
+            // dołączenia nowej osoby — aż do wylogowania.
+            Task { await preloadHouseholdContextIfNeeded(force: true) }
         } else {
             createHouseholdName = ""
             showCreateHouseholdSheet = true
@@ -2328,6 +2477,7 @@ struct SettingsView: View {
         }
 
         await sessionStore.refreshHouseholdMembers(force: force)
+        await sessionStore.refreshPendingInvitations()
 
         guard canCreateInvitations else {
             invitationLink = nil

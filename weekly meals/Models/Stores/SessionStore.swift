@@ -54,6 +54,14 @@ final class SessionStore {
     var currentHouseholdId: String?
     var currentHouseholdName: String?
     var invitationPrompt: InvitationPromptState?
+
+    /// Zaproszenia czekające na tego użytkownika.
+    ///
+    /// Zaproszenie żyło dotąd wyłącznie jako link w komunikatorze: kto otworzył
+    /// go w złym momencie — bo należał już do innego gospodarstwa albo po
+    /// prostu zamknął alert — nie miał jak do niego wrócić. Skrzynka jest tym
+    /// miejscem, do którego można wrócić.
+    private(set) var pendingInvitations: [HouseholdInvitationSnapshot] = []
     var householdRealtimeVersion: Int = 0
 
     /// Posiłki, które planuje bieżące gospodarstwo (Ustawienia → „Posiłki
@@ -97,6 +105,22 @@ final class SessionStore {
     var householdMembers: [HouseholdMemberSnapshot] = []
     var isLoadingHouseholdMembers: Bool = false
     private(set) var didLoadHouseholdMembers: Bool = false
+    /// Kiedy skład gospodarstwa przyszedł z SERWERA (nie z pliku cache).
+    ///
+    /// `didLoadHouseholdMembers` odpowiada na pytanie „czy mam co narysować",
+    /// a to na pytanie „czy to jeszcze aktualne". Zlanie ich w jedno było
+    /// powodem, dla którego nowy domownik pojawiał się dopiero po wylogowaniu:
+    /// flaga zapalona z 24-godzinnego cache'u blokowała każde kolejne pobranie,
+    /// więc jedyną drogą do świeżej listy było wyczyszczenie stanu przy
+    /// wylogowaniu.
+    private var householdMembersLoadedAt: Date?
+
+    /// Czy serwer potwierdził, że umie wysyłać powiadomienia push.
+    ///
+    /// Rozstrzyga, czy aplikacja ma jeszcze rysować własne lokalne
+    /// powiadomienia o zmianach drugiego domownika. Gdy push działa — nie ma:
+    /// byłby to drugi banner o tej samej treści, tylko innym tytułem.
+    private(set) var isPushDeliveryActive: Bool = false
 
     var weeklyMealStore: WeeklyMealStore?
     var recipeCatalogStore: RecipeCatalogStore?
@@ -108,6 +132,10 @@ final class SessionStore {
     private var startupTask: Task<Void, Never>?
     private var householdMembersTask: Task<Void, Never>?
     private let householdMembersCacheMaxAge: TimeInterval = 60 * 60 * 24 // 24 h
+    /// Jak długo świeżo pobrany skład uchodzi za aktualny. Krótko, bo pobranie
+    /// to jeden lekki event po już otwartym sockecie, a koszt nieaktualnej
+    /// listy jest wysoki: to od niej zależy liczba porcji i podział posiłków.
+    private let householdMembersFreshness: TimeInterval = 60
     private let startupTimeoutSeconds: Double = 6
     private let startupImagePrefetchCount: Int = 12
     /// Loader nie znika szybciej niż po tym czasie — nawet przy cieplutkim starcie
@@ -158,6 +186,14 @@ final class SessionStore {
     func refreshRealtimeStoresOnForeground() {
         weeklyMealStore?.refreshObservedState()
         shoppingListStore?.refreshCurrentWeek()
+        // Skład gospodarstwa też — zmiany, które zaszły, gdy aplikacja spała,
+        // nie mają innej drogi do ekranu. Bez tego nowy domownik czekał na
+        // wylogowanie i ponowne zalogowanie. To samo dotyczy skrzynki
+        // zaproszeń: mogło przyjść, gdy aplikacja była w tle.
+        Task { @MainActor [weak self] in
+            await self?.refreshHouseholdMembers(force: true)
+            await self?.refreshPendingInvitations()
+        }
         if let recipeCatalogStore {
             Task {
                 await recipeCatalogStore.reload()
@@ -421,6 +457,10 @@ final class SessionStore {
         // continue to display while this runs in the background.
         Task { @MainActor [weak self] in
             await self?.loadUserPreferences()
+            // Strefa czasowa mogła się zmienić między sesjami (podróż), a
+            // serwer potrzebuje jej do ciszy nocnej — odsyłamy stan
+            // przełączników od razu po ich wczytaniu.
+            await self?.syncNotificationPreferences()
         }
 
         // To samo dla zestawu posiłków gospodarstwa — Plan i Kalendarz
@@ -428,6 +468,15 @@ final class SessionStore {
         // użytkownik zdąży przewinąć tydzień.
         Task { @MainActor [weak self] in
             await self?.loadMealSlotConfiguration()
+        }
+
+        // Skrzynka zaproszeń — zaproszenie mogło przyjść, gdy aplikacja była
+        // wyłączona, a bez tego pobrania nie ma jak się o nim dowiedzieć.
+        Task { @MainActor [weak self] in
+            // Najpierw link odłożony przed zalogowaniem: dopiero on dopisuje
+            // zaproszenie do skrzynki, więc kolejność ma znaczenie.
+            await self?.replayStoredInvitationIfNeeded()
+            await self?.refreshPendingInvitations()
         }
 
         // Recover from the rare "household exists but onboardingCompletedAt
@@ -458,6 +507,9 @@ final class SessionStore {
         householdMembers = []
         isLoadingHouseholdMembers = false
         didLoadHouseholdMembers = false
+        householdMembersLoadedAt = nil
+        pendingInvitations = []
+        isPushDeliveryActive = false
     }
 
     private func observeHouseholdRealtime() {
@@ -474,11 +526,60 @@ final class SessionStore {
                 guard let currentHouseholdId = self.currentHouseholdId, !currentHouseholdId.isEmpty else { return }
                 guard event.householdId == currentHouseholdId else { return }
                 self.householdRealtimeVersion &+= 1
-                // Pull świeżej listy do store'a — widoki czytają ją bezpośrednio
-                // (bez refetchowania sheetu ponownie).
+
+                // Dołączenie domownika ma być WIDOCZNE, a nie tylko odświeżone
+                // po cichu na liście — o to prosił użytkownik, któremu ktoś
+                // dołączył do gospodarstwa i nie dowiedział się o tym niczym.
+                // Push wysyła backend; to jest kanał zapasowy na wypadek, gdyby
+                // APNs nie działał (symulator, brak kluczy, odmowa uprawnień).
+                if event.changedByUserId != nil, event.changedByUserId != self.currentUserId {
+                    PlanChangeNotificationService.notifyHouseholdMembershipChange(
+                        action: event.action,
+                        householdId: currentHouseholdId,
+                        changedByDisplayName: event.changedByDisplayName
+                    )
+                }
+
+                // Nowy skład jedzie w ładunku, więc nie wracamy po niego na
+                // serwer — dokładnie tak jak przy `mealTypesChanged`. Ten
+                // dodatkowy round-trip był ostatnim miejscem, w którym
+                // odświeżenie listy mogło po cichu przepaść.
+                if let members = event.members {
+                    self.applyHouseholdMembers(
+                        members.map(HouseholdMemberSnapshot.init(backend:)),
+                        householdId: currentHouseholdId
+                    )
+                    return
+                }
+
                 await self.refreshHouseholdMembers(force: true)
             }
         }
+
+        // Rozgłoszenie po sockecie jest jednorazowe i nie ma powtórek: jeśli
+        // aplikacja była w tle albo bez sieci, gdy ktoś dołączał, zdarzenie
+        // przepada bezpowrotnie. Odzyskujemy je przy każdym (re)połączeniu —
+        // ten sam wzorzec, którego używają już `WeeklyMealStore`
+        // i `ShoppingListStore`.
+        realtimeSocket?.observeConnection { [weak self] isConnected in
+            guard isConnected else { return }
+            Task { @MainActor in
+                await self?.refreshHouseholdMembers(force: true)
+                await self?.refreshPendingInvitations()
+            }
+        }
+    }
+
+    /// Jedno miejsce, w którym skład gospodarstwa trafia do stanu i do cache'u.
+    @MainActor
+    private func applyHouseholdMembers(
+        _ members: [HouseholdMemberSnapshot],
+        householdId: String
+    ) {
+        householdMembers = members
+        didLoadHouseholdMembers = true
+        householdMembersLoadedAt = Date()
+        saveHouseholdMembersCache(householdId: householdId, members: members)
     }
 
     // MARK: - Posiłki planowane przez gospodarstwo
@@ -711,6 +812,11 @@ final class SessionStore {
             currentHouseholdId = nil
             currentHouseholdName = nil
             isAuthenticated = true
+            // Po wyjściu użytkownik ląduje na ekranie zakładania gospodarstwa.
+            // `clearRuntimeStores` wyczyściło skrzynkę, a to właśnie tam
+            // czekające zaproszenie jest najbardziej potrzebne — bez tego
+            // jedynym widocznym wyjściem byłoby założenie własnego domu.
+            await refreshPendingInvitations()
         } catch is CancellationError {
             // Ignore task cancellation caused by view lifecycle updates.
             return
@@ -762,7 +868,7 @@ final class SessionStore {
             throw RecipeDataError.serverError(message: "Nieprawidłowy token zaproszenia.")
         }
 
-        let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
+        let socketClient = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
         let envelope: WsEnvelope<BackendInvitationPreviewDTO> = try await socketClient.emitWithAck(
             event: "households:previewInvitation",
             payload: [
@@ -779,7 +885,11 @@ final class SessionStore {
         return data
     }
 
-    func acceptInvitation(token: String) async throws {
+    /// - Parameter leaveOtherHouseholds: zgoda na opuszczenie dotychczasowego
+    ///   gospodarstwa. Bez niej backend odpowie `INVITATION_REQUIRES_LEAVE` —
+    ///   konto obsługuje jeden dom naraz, a taka decyzja nie może zapaść bez
+    ///   pytania.
+    func acceptInvitation(token: String, leaveOtherHouseholds: Bool = false) async throws {
         guard let userId = currentUserId, !userId.isEmpty else {
             throw RecipeDataError.serverError(message: "Brak użytkownika sesji.")
         }
@@ -793,12 +903,15 @@ final class SessionStore {
         authError = nil
         defer { isSigningIn = false }
 
-        let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
+        let socketClient = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
         let acceptEnvelope: WsEnvelope<BackendMembershipDTO> = try await socketClient.emitWithAck(
             event: "households:acceptInvitation",
             payload: [
                 "userId": userId,
-                "data": ["token": trimmedToken]
+                "data": [
+                    "token": trimmedToken,
+                    "leaveOtherHouseholds": leaveOtherHouseholds
+                ]
             ],
             as: WsEnvelope<BackendMembershipDTO>.self
         )
@@ -825,12 +938,15 @@ final class SessionStore {
         weeklyMealStore?.resetLocalPlanningState()
         await registerPushDeviceIfPossible()
         isAuthenticated = true
+        // Przyjęte zaproszenie znika ze skrzynki, a razem z nim wszystkie inne
+        // do tego samego domu.
+        await refreshPendingInvitations()
     }
 
-    func acceptPendingInvitation(token: String) async {
+    func acceptPendingInvitation(token: String, leaveOtherHouseholds: Bool = false) async {
         invitationPrompt = nil
         do {
-            try await acceptInvitation(token: token)
+            try await acceptInvitation(token: token, leaveOtherHouseholds: leaveOtherHouseholds)
         } catch is CancellationError {
             return
         } catch {
@@ -838,8 +954,88 @@ final class SessionStore {
         }
     }
 
+    /// Świadoma odmowa — zaproszenie znika ze skrzynki i nie wraca po
+    /// ponownym otwarciu linku.
+    func declineInvitation(token: String) async {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let _: WsEnvelope<BackendMutationAckDTO> = try await socket.emitWithAck(
+                event: "households:declineInvitation",
+                payload: ["userId": userId, "data": ["token": token]],
+                as: WsEnvelope<BackendMutationAckDTO>.self
+            )
+        } catch {
+            // Odmowa jest nieistotna dla działania apki — jeśli nie przeszła,
+            // zaproszenie po prostu zostanie na liście.
+        }
+        await refreshPendingInvitations()
+    }
+
+    /// Pobiera skrzynkę zaproszeń. Cicha przy błędzie: to lista pomocnicza,
+    /// a nie warunek działania ekranu.
+    @MainActor
+    func refreshPendingInvitations() async {
+        guard let userId = currentUserId, !userId.isEmpty else {
+            pendingInvitations = []
+            return
+        }
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let envelope: WsEnvelope<[BackendPendingInvitationDTO]> = try await socket.emitWithAck(
+                event: "households:listPendingInvitations",
+                payload: ["userId": userId],
+                as: WsEnvelope<[BackendPendingInvitationDTO]>.self
+            )
+            guard envelope.ok, let data = envelope.data else { return }
+            pendingInvitations = data.compactMap { dto in
+                guard let household = dto.household else { return nil }
+                return HouseholdInvitationSnapshot(
+                    token: dto.token,
+                    householdName: household.name,
+                    invitedByDisplayName: dto.invitedByDisplayName,
+                    expiresAtText: Self.formatInvitationExpiry(dto.expiresAt)
+                )
+            }
+        } catch {
+            // Starszy backend nie zna tego zdarzenia — brak skrzynki nie może
+            // wywrócić ekranu Ustawień.
+        }
+    }
+
     func dismissInvitationPrompt() {
         invitationPrompt = nil
+    }
+
+    /// Token zaproszenia, który przyszedł, zanim było wiadomo, kim jest
+    /// użytkownik.
+    ///
+    /// Link otwarty przed zalogowaniem przepadał: `previewInvitation` wymaga
+    /// `userId`, więc kończyło się komunikatem „Zaloguj się" i tokenem
+    /// wyrzuconym do kosza — a po zalogowaniu nie było już czego otworzyć.
+    /// Trzymany w `UserDefaults`, bo logowanie przez Apple potrafi odesłać
+    /// użytkownika poza aplikację.
+    private static let pendingInvitationTokenKey = "session.pendingInvitationToken"
+
+    private var storedInvitationToken: String? {
+        get { UserDefaults.standard.string(forKey: Self.pendingInvitationTokenKey) }
+        set {
+            if let newValue, !newValue.isEmpty {
+                UserDefaults.standard.set(newValue, forKey: Self.pendingInvitationTokenKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.pendingInvitationTokenKey)
+            }
+        }
+    }
+
+    /// Odtwarza zaproszenie odłożone przed zalogowaniem. Woła się po
+    /// bootstrapie sesji.
+    @MainActor
+    private func replayStoredInvitationIfNeeded() async {
+        guard let token = storedInvitationToken, !token.isEmpty else { return }
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        storedInvitationToken = nil
+        await presentInvitation(token: token)
     }
 
     func handleIncomingURL(_ url: URL) {
@@ -847,34 +1043,59 @@ final class SessionStore {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else { return }
 
+        guard currentUserId?.isEmpty == false else {
+            // Odkładamy i wracamy do tego po zalogowaniu — zamiast kazać
+            // użytkownikowi szukać linku po raz drugi.
+            storedInvitationToken = token
+            authError = "Zaloguj się, aby przyjąć zaproszenie do gospodarstwa."
+            return
+        }
+
         Task {
-            do {
-                let preview = try await previewInvitation(token: token)
-                switch preview.status {
-                case "PENDING":
-                    let expiry = Self.formatInvitationExpiry(preview.expiresAt)
-                    invitationPrompt = InvitationPromptState(
-                        token: preview.token,
-                        householdName: preview.household?.name ?? "Gospodarstwo",
-                        invitedByDisplayName: preview.invitedByDisplayName,
-                        expiresAtText: expiry
-                    )
-                case "ALREADY_MEMBER":
-                    authError = "Jesteś już członkiem tego gospodarstwa."
-                case "EXPIRED":
-                    authError = "To zaproszenie wygasło."
-                case "REDEEMED":
-                    authError = "Ten link zaproszenia jest jednorazowy. Poproś o nowy link."
-                case "NOT_FOUND":
-                    authError = "Nie znaleziono zaproszenia. Sprawdź link."
-                default:
-                    authError = "Nie można użyć tego zaproszenia."
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                authError = UserFacingErrorMapper.message(from: error)
+            await presentInvitation(token: token)
+        }
+    }
+
+    /// Sprawdza zaproszenie i pokazuje pytanie, co z nim zrobić.
+    @MainActor
+    private func presentInvitation(token: String) async {
+        do {
+            let preview = try await previewInvitation(token: token)
+            // Podgląd odkłada zaproszenie do skrzynki po stronie serwera, więc
+            // odświeżamy ją niezależnie od tego, co użytkownik zrobi z alertem
+            // — także wtedy, gdy go zamknie.
+            await refreshPendingInvitations()
+
+            switch preview.status {
+            case "PENDING", "REQUIRES_LEAVE":
+                let expiry = Self.formatInvitationExpiry(preview.expiresAt)
+                invitationPrompt = InvitationPromptState(
+                    token: preview.token,
+                    householdName: preview.household?.name ?? "Gospodarstwo",
+                    invitedByDisplayName: preview.invitedByDisplayName,
+                    expiresAtText: expiry,
+                    // `REQUIRES_LEAVE` niesie dom do opuszczenia; przy
+                    // `PENDING` pole jest puste i alert wygląda jak dotąd.
+                    currentHouseholdName: preview.currentHousehold?.name,
+                    willDeleteCurrentHousehold: preview.willDeleteCurrentHousehold ?? false
+                )
+            case "ALREADY_MEMBER":
+                authError = "Jesteś już członkiem tego gospodarstwa."
+            case "EXPIRED":
+                authError = "To zaproszenie wygasło."
+            case "REDEEMED":
+                authError = "Ten link zaproszenia został już wykorzystany. Poproś o nowy."
+            case "DECLINED":
+                authError = "To zaproszenie zostało odrzucone. Poproś o nowe."
+            case "NOT_FOUND":
+                authError = "Nie znaleziono zaproszenia. Sprawdź link."
+            default:
+                authError = "Nie można użyć tego zaproszenia."
             }
+        } catch is CancellationError {
+            return
+        } catch {
+            authError = UserFacingErrorMapper.message(from: error)
         }
     }
 
@@ -910,6 +1131,14 @@ final class SessionStore {
 
             if !envelope.ok {
                 throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się zarejestrować urządzenia.")
+            }
+
+            let pushEnabled = envelope.data?.pushEnabled ?? false
+            await MainActor.run { [weak self] in
+                self?.isPushDeliveryActive = pushEnabled
+                // Stores rysujące powiadomienia lokalne pytają o to statycznie —
+                // nie znają sesji, a muszą wiedzieć, czy nie dublują pusha.
+                PlanChangeNotificationService.setPushDeliveryActive(pushEnabled)
             }
         } catch {
             // App should continue normally even when push registration fails.
@@ -1192,7 +1421,14 @@ final class SessionStore {
             return
         }
         if !force, isLoadingHouseholdMembers { return }
-        if !force, didLoadHouseholdMembers, !householdMembers.isEmpty { return }
+        // Świeżość, a nie samo „już coś mam". Poprzedni warunek zamykał drogę
+        // do serwera na zawsze, gdy tylko lista raz się pojawiła — także wtedy,
+        // gdy pochodziła z pliku cache sprzed doby.
+        if !force, didLoadHouseholdMembers, !householdMembers.isEmpty,
+           let loadedAt = householdMembersLoadedAt,
+           Date().timeIntervalSince(loadedAt) < householdMembersFreshness {
+            return
+        }
 
         householdMembersTask?.cancel()
         let task = Task { @MainActor [weak self] in
@@ -1200,7 +1436,12 @@ final class SessionStore {
             self.isLoadingHouseholdMembers = true
             defer { self.isLoadingHouseholdMembers = false }
             do {
-                let socketClient = SocketIORecipeSocketClient(baseURL: self.baseURL)
+                // Ten sam socket, którym chodzi cała reszta aplikacji.
+                // Osobne połączenie na każde odświeżenie oznaczało pełny
+                // handshake (i do 3 s czekania) na jedynej ścieżce, która
+                // dowoziła nowego domownika — a przy zdalnym serwerze to
+                // czekanie potrafiło się nie zmieścić i pobranie cicho padało.
+                let socketClient = self.realtimeSocket ?? SocketIORecipeSocketClient(baseURL: self.baseURL)
                 let envelope: WsEnvelope<[BackendHouseholdMemberDTO]> = try await socketClient.emitWithAck(
                     event: "households:listMembers",
                     payload: [
@@ -1217,19 +1458,8 @@ final class SessionStore {
                     return
                 }
 
-                let snapshots = data.map {
-                    HouseholdMemberSnapshot(
-                        id: $0.user.id,
-                        displayName: $0.user.displayName,
-                        email: $0.user.email,
-                        avatarUrl: $0.user.avatarUrl,
-                        avatarColor: $0.user.avatarColor,
-                        role: $0.role
-                    )
-                }
-                self.householdMembers = snapshots
-                self.didLoadHouseholdMembers = true
-                self.saveHouseholdMembersCache(householdId: householdId, members: snapshots)
+                let snapshots = data.map(HouseholdMemberSnapshot.init(backend:))
+                self.applyHouseholdMembers(snapshots, householdId: householdId)
             } catch is CancellationError {
                 return
             } catch {
@@ -1260,6 +1490,14 @@ final class SessionStore {
         static let proteinG = "settings.diet.proteinG"
         static let fatG = "settings.diet.fatG"
         static let carbsG = "settings.diet.carbsG"
+    }
+
+    /// Klucze przełączników z ekranu „Powiadomienia". Te same stringi czyta
+    /// `SettingsView` przez `@AppStorage` i `PlanChangeNotificationService`.
+    enum NotificationKeys {
+        static let enabled = "settings.notifications.enabled"
+        static let plan = "settings.notifications.planReminders"
+        static let shopping = "settings.notifications.shoppingReminders"
     }
 
     private enum ProfileKeys {
@@ -1329,6 +1567,22 @@ final class SessionStore {
             defaults.set(prefs.proteinG ?? -1, forKey: PreferencesKeys.proteinG)
             defaults.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
             defaults.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
+
+            // Przełączniki powiadomień są teraz danymi konta, nie ustawieniem
+            // urządzenia: to serwer decyduje, czy wysłać pusha, więc to on
+            // trzyma prawdę. Backend sprzed tej zmiany przysyła `nil`
+            // i wtedy nie ruszamy tego, co użytkownik ustawił lokalnie.
+            if let planPush = prefs.pushPlanChanges {
+                defaults.set(planPush, forKey: NotificationKeys.plan)
+            }
+            if let shoppingPush = prefs.pushShoppingList {
+                defaults.set(shoppingPush, forKey: NotificationKeys.shopping)
+            }
+            // `pushHousehold` i `pushQuietHours` celowo nie mają lustra w
+            // ustawieniach: gospodarstwo powiadamia zawsze (steruje nim tylko
+            // główny przełącznik), a cisza nocna jest zachowaniem aplikacji,
+            // nie preferencją. Kolumny w bazie zostają — `syncNotification-
+            // Preferences` trzyma je w ryzach przy każdym starcie sesji.
         } catch {
             // Swallow — preferences are non-critical, AppStorage default
             // applies. Will retry on the next session bootstrap.
@@ -1421,6 +1675,58 @@ final class SessionStore {
         } catch {
             // Swallow — local AppStorage is already updated optimistically.
             // We retry on the next change.
+        }
+    }
+
+    /// Wysyła na backend stan przełączników powiadomień.
+    ///
+    /// Musi istnieć, bo od tej zmiany to serwer decyduje, czy wysłać pusha.
+    /// Wcześniej przełączniki żyły wyłącznie w `UserDefaults` i wyciszały
+    /// jedynie powiadomienia rysowane lokalnie — wyłączenie „Powiadomień"
+    /// w Ustawieniach nie zatrzymywało niczego, co przychodziło z zewnątrz,
+    /// więc z perspektywy użytkownika ten przełącznik był popsuty.
+    ///
+    /// Główny przełącznik wyłącza wszystkie kanały naraz: serwer nie ma
+    /// osobnego pola „wszystko", a trzy `false` znaczą dokładnie to samo
+    /// i nie wymagają kolejnej kolumny.
+    ///
+    /// Dwa pola idą na sztywno. `pushHousehold` podąża wyłącznie za głównym
+    /// przełącznikiem — dołączenie domownika jest zbyt rzadkie i zbyt ważne,
+    /// żeby dało się je wyciszyć osobno. `pushQuietHours` jest zawsze `true`:
+    /// cisza nocna to zachowanie aplikacji, nie preferencja, a wysyłanie tu
+    /// stałej pilnuje też baz, w których ktoś zdążył przestawić kolumnę,
+    /// zanim przełącznik zniknął z ekranu.
+    @MainActor
+    func syncNotificationPreferences() async {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        let defaults = UserDefaults.standard
+
+        func flag(_ key: String) -> Bool {
+            if defaults.object(forKey: key) == nil { return true }
+            return defaults.bool(forKey: key)
+        }
+
+        let master = flag(NotificationKeys.enabled)
+        let data: [String: Any] = [
+            "pushPlanChanges": master && flag(NotificationKeys.plan),
+            "pushShoppingList": master && flag(NotificationKeys.shopping),
+            "pushHousehold": master,
+            "pushQuietHours": true,
+            // Strefa z telefonu — bez niej cisza nocna liczyłaby się w strefie
+            // kontenera, czyli zwykle w UTC.
+            "timeZone": TimeZone.current.identifier,
+        ]
+
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let _: WsEnvelope<BackendUserPreferencesDTO> = try await socket.emitWithAck(
+                event: "users:preferences:update",
+                payload: ["userId": userId, "data": data],
+                as: WsEnvelope<BackendUserPreferencesDTO>.self
+            )
+        } catch {
+            // Przełączniki działają lokalnie od razu; ponowimy przy następnej
+            // zmianie albo przy starcie sesji.
         }
     }
 
@@ -1533,6 +1839,10 @@ final class SessionStore {
         guard Date().timeIntervalSince(payload.savedAt) <= householdMembersCacheMaxAge else { return }
         householdMembers = payload.members
         didLoadHouseholdMembers = !payload.members.isEmpty
+        // ŚWIADOMIE bez `householdMembersLoadedAt`: plik cache daje pierwszą
+        // klatkę, a nie potwierdzenie aktualności. Zapisany tu znacznik czasu
+        // udawałby świeże pobranie i blokował pytanie serwera przez kolejną
+        // dobę — czyli dokładnie to, przez co skład gospodarstwa zastygał.
     }
 
     private func saveHouseholdMembersCache(householdId: String, members: [HouseholdMemberSnapshot]) {

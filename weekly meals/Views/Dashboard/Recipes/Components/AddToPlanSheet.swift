@@ -679,7 +679,7 @@ struct AddToPlanSheet: View {
                 // Jawna jedynka z takiej sytuacji byłaby kłamstwem nie do
                 // odróżnienia od świadomego „gotuję jedną porcję".
                 plannedServings: didOverrideServings ? servings : nil,
-                householdMemberCount: members.count,
+                householdMemberCount: members.isEmpty ? nil : members.count,
                 replacingRecipeId: replacing,
                 for: date,
                 slot: slot,
