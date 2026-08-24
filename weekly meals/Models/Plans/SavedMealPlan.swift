@@ -165,6 +165,22 @@ extension PlanMeal {
         guard let knownHouseholdMemberCount else { return recipe.nutritionPerServing }
         return nutritionPerPerson(householdMemberCount: knownHouseholdMemberCount)
     }
+
+    /// Liczba porcji do pokazania, albo `nil`, dopóki nie da się jej wyznaczyć.
+    ///
+    /// Dwie niewiadome składają się tu w jedną odpowiedź: `plannedServings ==
+    /// nil` (serwer nie podał) i `knownHouseholdMemberCount == nil`
+    /// (`SessionStore` nie dowiózł jeszcze listy domowników). Wariant z
+    /// nieopcjonalnym `householdMemberCount` musiał wtedy coś podstawić i
+    /// podstawiał `max(1, 0)`, czyli jedynkę — a to jest dokładnie ta jedynka,
+    /// którą użytkownik widział na produkcji zamiast swoich porcji. Tutaj
+    /// „nie wiem" wychodzi na zewnątrz jako `nil` i decyzję, co pokazać,
+    /// podejmuje ekran, który zna swój kontekst.
+    func effectiveServings(knownHouseholdMemberCount: Int?) -> Int? {
+        if let plannedServings { return max(1, plannedServings) }
+        guard let knownHouseholdMemberCount else { return nil }
+        return effectiveServings(householdMemberCount: knownHouseholdMemberCount)
+    }
 }
 
 // MARK: - Slot audience

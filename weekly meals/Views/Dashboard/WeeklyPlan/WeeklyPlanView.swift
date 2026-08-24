@@ -74,6 +74,15 @@ struct WeeklyPlanView: View {
         sessionStore.householdMembers
     }
 
+    /// Ilu domowników dzieli się porcjami, albo `nil`, dopóki `SessionStore`
+    /// nie dowiezie listy. Pusta lista przed wczytaniem to brak odpowiedzi,
+    /// a nie dom jednoosobowy — i to właśnie ta różnica decyduje, czy stepper
+    /// porcji pokaże zapisaną liczbę, czy fałszywą jedynkę.
+    private var knownHouseholdMemberCount: Int? {
+        guard sessionStore.didLoadHouseholdMembers else { return nil }
+        return max(1, members.count)
+    }
+
     private var planDays: [PlanDay] {
         datesViewModel.dates.map { PlanDay(id: WeeklyMealStore.dateKey(for: $0), date: $0) }
     }
@@ -291,8 +300,8 @@ struct WeeklyPlanView: View {
                     // Posiłek bez zapisanej wartości podstawia tu regułę auto,
                     // bo „nie ustawiono" to nie to samo co jedna porcja.
                     initialServings: target.meal.effectiveServings(
-                        householdMemberCount: max(1, members.count)
-                    ),
+                        knownHouseholdMemberCount: knownHouseholdMemberCount
+                    ) ?? target.recipe.servings,
                     context: .planned(day: target.date, slot: target.slot),
                     onSaveServings: { newValue in
                         saveServings(newValue, for: target)
@@ -447,7 +456,7 @@ struct WeeklyPlanView: View {
                 recipe: target.meal.recipe,
                 participantIds: target.meal.participantIds,
                 plannedServings: servings,
-                householdMemberCount: sessionStore.householdMembers.count,
+                householdMemberCount: knownHouseholdMemberCount,
                 for: target.date,
                 slot: target.slot,
                 weekStart: datesViewModel.weekStartISO

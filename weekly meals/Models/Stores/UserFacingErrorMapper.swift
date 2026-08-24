@@ -31,6 +31,17 @@ enum UserFacingErrorMapper {
         if lower.contains("invitation expired") {
             return "To zaproszenie wygasło."
         }
+        if lower.contains("invitation was declined") {
+            return "To zaproszenie zostało odrzucone. Poproś o nowe."
+        }
+        // Ten stan nie jest błędem, tylko pytaniem, na które klient nie
+        // odpowiedział: przyjęcie zaproszenia wymaga wyjścia z obecnego
+        // gospodarstwa. Normalnie widok pyta o to wcześniej (podgląd zwraca
+        // `REQUIRES_LEAVE`), więc tu ląduje tylko wyścig — ktoś dołączył gdzieś
+        // między podglądem a przyjęciem.
+        if lower.contains("already belongs to another household") {
+            return "Należysz już do innego gospodarstwa. Otwórz zaproszenie ponownie, aby się przenieść."
+        }
         if lower.contains("invitation not found") || lower.contains("nie znaleziono zaproszenia") {
             return "Nie znaleziono zaproszenia. Sprawdź link."
         }
