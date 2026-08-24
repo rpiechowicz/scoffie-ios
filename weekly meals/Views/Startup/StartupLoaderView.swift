@@ -138,9 +138,10 @@ struct StartupLoaderView: View {
 
     // MARK: - Logo + steam
 
-    /// 3 cząstki pary unoszące się znad miski. `position(x:y:)` w przestrzeni
-    /// 84-coord (logo size). Bottom of "steam zone" = y=32 (4 px wisp half-height
-    /// nad bowl rim'em na y=36 w logo coord).
+    /// 3 cząstki pary kontynuujące ruch żółtej pary "WM" z logo v3.
+    /// `position(x:y:)` w przestrzeni 84-coord (logo size). Startują tuż nad
+    /// wierzchołkami narysowanej pary (y≈11–17 w 84-coord) i unoszą się
+    /// ponad kafelek logo (ZStack nie clipuje, więc ujemne y są widoczne).
     private func steamWispsOverlay(elapsed: Double) -> some View {
         ZStack {
             ForEach(SteamWisp.all) { wisp in
@@ -152,7 +153,7 @@ struct StartupLoaderView: View {
                     .scaleEffect(1.0 + 0.4 * phase.t)
                     .position(
                         x: wisp.x,
-                        y: 32 - 22 * phase.t
+                        y: wisp.startY - 22 * phase.t
                     )
                     .opacity(phase.opacity * wisp.baseOpacity)
             }
@@ -319,13 +320,16 @@ private struct CheckMarkShape: Shape {
 private struct SteamWisp: Identifiable {
     let id: Int
     let x: CGFloat
+    let startY: CGFloat
     let baseOpacity: Double
     let delay: Double
 
+    /// x/startY = wierzchołki trzech strug żółtej pary logo v3
+    /// przeliczone na 84-coord (SVG 1024 × 84/1024).
     static let all: [SteamWisp] = [
-        SteamWisp(id: 0, x: 30, baseOpacity: 0.5, delay: 0),
-        SteamWisp(id: 1, x: 44, baseOpacity: 0.7, delay: 0.5),
-        SteamWisp(id: 2, x: 58, baseOpacity: 0.5, delay: 1.0),
+        SteamWisp(id: 0, x: 37, startY: 9, baseOpacity: 0.5, delay: 0),
+        SteamWisp(id: 1, x: 45, startY: 7, baseOpacity: 0.7, delay: 0.5),
+        SteamWisp(id: 2, x: 60, startY: 15, baseOpacity: 0.5, delay: 1.0),
     ]
 
     /// `wm-steam-rise`: 0 % → opacity 0, 20 % → 0.9, 100 % → 0,
