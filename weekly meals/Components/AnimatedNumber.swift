@@ -32,7 +32,17 @@ struct CountingNumber: View {
     @State private var didLoad = false
 
     var body: some View {
-        AnimatableInt(value: displayed)
+        // Niewidoczny tekst DOCELOWEJ wartości rezerwuje szerokość od pierwszej
+        // klatki, a licznik rysuje się na nim. Bez tego rosnąca liczba cyfr
+        // („0" → „27") zmieniała szerokość widoku co klatkę animacji i całe
+        // wiersze z licznikami — hero listy zakupów, nagłówki sekcji — jeździły
+        // na boki przez cały czas trwania odliczania.
+        Text(verbatim: String(target))
+            .monospacedDigit()
+            .hidden()
+            .overlay(alignment: .trailing) {
+                AnimatableInt(value: displayed)
+            }
             .onAppear {
                 guard !didLoad else { return }
                 didLoad = true

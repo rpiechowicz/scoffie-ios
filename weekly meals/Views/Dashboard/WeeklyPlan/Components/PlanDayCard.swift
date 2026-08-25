@@ -3,8 +3,9 @@ import SwiftUI
 // One page of the Plan v2 day carousel: a single day with all its meal slots.
 //
 // Today gets the terracotta treatment (filled date tile, warm radial glow,
-// coloured border + drop shadow, "DZIŚ" badge); past days render at 0.72
-// opacity and are read-only.
+// coloured border, "DZIŚ" badge); past days render at 0.72 opacity and are
+// read-only. Cards sit flat — no drop shadows, the border and surface tone
+// carry the elevation.
 //
 // A slot holding several variants stacks them as plain rows; the „kto co je"
 // comparison lives in `PlanDaySplitsSection`, directly under this card.
@@ -59,11 +60,6 @@ struct PlanDayCard: View {
                     lineWidth: 1
                 )
         )
-        // Light mode lifts the card with a warm ambient shadow instead of a
-        // darker fill: on cream a tinted surface reads as dirt, elevation reads
-        // as a card. Dark mode keeps the terracotta halo on today only.
-        .shadow(color: cardShadow, radius: isToday ? 22 : 14, x: 0, y: isToday ? 12 : 7)
-        .shadow(color: cardContactShadow, radius: 2, x: 0, y: 1)
         .opacity(isPast ? 0.72 : 1)
     }
 
@@ -128,22 +124,6 @@ struct PlanDayCard: View {
         }
     }
 
-    /// Ambient shadow: terracotta halo for today, neutral warm lift otherwise.
-    /// Non-today cards cast nothing in dark mode — there the surface is already
-    /// lighter than the canvas.
-    private var cardShadow: Color {
-        if isToday {
-            return WMPalette.terracotta.opacity(scheme == .dark ? 0.32 : 0.16)
-        }
-        return scheme == .dark ? .clear : WMPalette.labelLight.opacity(0.07)
-    }
-
-    /// Tight contact shadow — light mode only, where it gives the white surface
-    /// a crisp edge against the cream canvas.
-    private var cardContactShadow: Color {
-        scheme == .dark ? .clear : WMPalette.labelLight.opacity(0.05)
-    }
-
     // MARK: - Header
 
     private var header: some View {
@@ -193,10 +173,6 @@ struct PlanDayCard: View {
                     isToday ? .white.opacity(0.18) : Color.wmTileStroke(scheme),
                     lineWidth: 1
                 )
-        )
-        .shadow(
-            color: isToday ? WMPalette.terracotta.opacity(0.35) : .clear,
-            radius: 7, x: 0, y: 6
         )
     }
 

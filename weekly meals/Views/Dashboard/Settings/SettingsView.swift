@@ -52,6 +52,16 @@ struct SettingsView: View {
     @State private var householdNameError: String? = nil
     @State private var showLogoutAlert = false
     @State private var showLeaveHouseholdAlert = false
+    /// `task(id:)` odpala się także przy pierwszym pokazaniu widoku, nie
+    /// tylko przy zmianie tokenu — a pierwsze odpalenie to żadna edycja.
+    /// Bez tych strażników samo OTWARCIE arkusza diety / powiadomień
+    /// wypychało bieżący lokalny stan do backendu; zaraz po świeżym
+    /// zalogowaniu (zanim bootstrap przywróci preferencje z serwera)
+    /// potrafiło to nadpisać w bazie prawdziwe ustawienia domyślnymi.
+    /// Flagi zeruje `onAppear` arkusza, więc każde otwarcie ma swój
+    /// „pierwszy strzał" do pominięcia.
+    @State private var didObserveDietPreferencesToken = false
+    @State private var didObserveNotificationToken = false
     /// Domownik wskazany do usunięcia — nie-nil otwiera alert potwierdzenia.
     @State private var memberToRemove: HouseholdMemberSnapshot?
     /// Id domownika w trakcie usuwania — wiersz pokazuje spinner zamiast menu.
@@ -435,7 +445,14 @@ struct SettingsView: View {
                     // Przełączniki muszą dojechać na serwer, bo to on decyduje
                     // o wysłaniu pusha. Trzymane tylko lokalnie wyciszały
                     // wyłącznie powiadomienia rysowane przez aplikację.
+                    // Pierwsze odpalenie (samo otwarcie arkusza) jest
+                    // pomijane — patrz `didObserveNotificationToken`.
+                    .onAppear { didObserveNotificationToken = false }
                     .task(id: notificationPreferencesToken) {
+                        guard didObserveNotificationToken else {
+                            didObserveNotificationToken = true
+                            return
+                        }
                         await sessionStore.syncNotificationPreferences()
                     }
             }
@@ -1164,8 +1181,14 @@ struct SettingsView: View {
         // Debounced sync: every time any of the three preference fields
         // changes the previous task is cancelled and a new one is scheduled
         // 600ms later. Slider drags coalesce into a single backend write
-        // instead of one per micro-step.
+        // instead of one per micro-step. Pierwsze odpalenie (samo otwarcie
+        // arkusza) jest pomijane — patrz `didObserveDietPreferencesToken`.
+        .onAppear { didObserveDietPreferencesToken = false }
         .task(id: dietPreferencesSyncToken) {
+            guard didObserveDietPreferencesToken else {
+                didObserveDietPreferencesToken = true
+                return
+            }
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
             await sessionStore.saveUserPreferences(
@@ -2429,10 +2452,16 @@ struct SettingsView: View {
 
     private func memberRow(_ member: HouseholdMemberSnapshot, isLast: Bool) -> some View {
         HStack(spacing: 12) {
+            // Kolor z backendu + ziarno z id — dokładnie to, czym ten sam
+            // domownik świeci na Planie. Bez tych parametrów kolor liczył
+            // się z IMIENIA i ta sama osoba miała tu inny odcień niż wszędzie
+            // indziej.
             ProfileAvatar(
                 avatarUrl: member.avatarUrl,
                 displayName: member.displayName,
-                size: 38
+                size: 38,
+                colorIndex: member.avatarColor,
+                seed: member.id
             )
 
             VStack(alignment: .leading, spacing: 2) {

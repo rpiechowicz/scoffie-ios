@@ -1,6 +1,18 @@
 import Foundation
 
 enum UserFacingErrorMapper {
+    /// Czy to błąd ŁĄCZNOŚCI (martwy socket, brak ACK), a nie odpowiedź
+    /// serwera na konkretną operację. Te pierwsze bywają chwilowe — zaraz po
+    /// wybudzeniu aplikacji socket jeszcze wstaje — i `ConnectivityErrorGate`
+    /// pokazuje je dopiero, gdy się utrzymają. Wzorce muszą pokrywać się
+    /// z gałęzią „Problem z połączeniem na żywo" w `message(from:)`.
+    static func isConnectivityIssue(_ error: Error) -> Bool {
+        let lower = extractMessage(from: error).lowercased()
+        return lower.contains("brak ack")
+            || lower.contains("brak połączenia websocket")
+            || lower.contains("socket")
+    }
+
     static func message(from error: Error) -> String {
         let baseMessage = extractMessage(from: error).trimmingCharacters(in: .whitespacesAndNewlines)
         if baseMessage.isEmpty {

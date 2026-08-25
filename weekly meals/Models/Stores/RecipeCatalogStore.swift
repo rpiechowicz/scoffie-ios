@@ -28,6 +28,10 @@ final class RecipeCatalogStore {
     private var pendingRealtimeReloadTask: Task<Void, Never>?
     private var pendingFavoriteTasks: [UUID: Task<Void, Never>] = [:]
     private var pendingFavoriteOriginalState: [UUID: Bool] = [:]
+    /// Odracza pokazanie błędów łączności z `reload()` — patrz komentarz
+    /// w `ConnectivityErrorGate`. Błędy akcji użytkownika (ulubione,
+    /// paginacja) pokazują się bez zmian, od razu.
+    private let connectivityErrorGate = ConnectivityErrorGate()
 
     private var cacheURL: URL {
         FileManager.default
@@ -85,6 +89,7 @@ final class RecipeCatalogStore {
         isLoading = true
         isLoadingMore = false
         errorMessage = nil
+        await connectivityErrorGate.reset()
         do {
             // Ekran Przepisów buduje sekcje po kategoriach po stronie klienta,
             // a API sortuje od najnowszych — po rozroście bazy sama pierwsza
@@ -104,7 +109,12 @@ final class RecipeCatalogStore {
             didLoad = true
             saveCache()
         } catch {
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            // Błąd łączności z odświeżenia pokazuje się dopiero, gdy się
+            // utrzyma — reconnect po powrocie z tła gasił go po ~0,3 s
+            // i banner tylko migał.
+            await connectivityErrorGate.publish(error) { [weak self] message in
+                self?.errorMessage = message
+            }
         }
         isLoading = false
     }

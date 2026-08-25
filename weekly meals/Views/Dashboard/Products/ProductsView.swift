@@ -196,6 +196,25 @@ struct ProductsView: View {
     private var pageHorizontalPadding: CGFloat { WMPageMetrics.horizontal }
     private var pageTopPadding: CGFloat { WMPageMetrics.top }
 
+    /// Który wariant treści pokazuje strona. Wyliczany raz na render i używany
+    /// zarówno w `switch`, jak i jako wartość animacji przejścia między stanami.
+    private enum ListState: Equatable {
+        case loading, archived, empty, content
+    }
+
+    private var listState: ListState {
+        if shoppingListStore.isLoading && shoppingItems.isEmpty {
+            return .loading
+        }
+        if isCurrentWeekArchived {
+            return .archived
+        }
+        if shoppingItems.isEmpty && !hasOpenRevision {
+            return .empty
+        }
+        return .content
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -204,17 +223,33 @@ struct ProductsView: View {
                 WMPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
-                Group {
-                    if shoppingListStore.isLoading && shoppingItems.isEmpty {
-                        loadingState
-                    } else if isCurrentWeekArchived {
-                        archivedState
-                    } else if shoppingItems.isEmpty && !hasOpenRevision {
-                        emptyState
-                    } else {
-                        shoppingListContent
+                // JEDEN ScrollView na wszystkie stany. Wcześniej każda gałąź
+                // była osobnym ScrollView wewnątrz `if/else`, więc przejście
+                // skeleton → lista niszczyło i budowało scroll od nowa: reset
+                // pozycji, twarde cięcie bez animacji i remount wszystkich
+                // liczników — czyli dokładnie to „przeskakiwanie" przy
+                // ładowaniu. Teraz scroll i nagłówek zachowują tożsamość,
+                // a podmienia się tylko treść pod nagłówkiem.
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        editorialHeader
+
+                        switch listState {
+                        case .loading:
+                            loadingState
+                        case .archived:
+                            archivedState
+                        case .empty:
+                            emptyState
+                        case .content:
+                            shoppingListContent
+                        }
                     }
+                    .padding(.bottom, pageBottomPadding)
+                    .animation(.easeInOut(duration: 0.2), value: listState)
                 }
+                .scrollIndicators(.hidden)
+                .ignoresSafeArea(.container, edges: .top)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -280,10 +315,9 @@ struct ProductsView: View {
     // MARK: - Active shopping list
 
     private var shoppingListContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                editorialHeader
-
+        // Bez własnego ScrollView i nagłówka — obie rzeczy żyją teraz w `body`,
+        // wspólne dla wszystkich stanów strony (patrz komentarz przy ScrollView).
+        VStack(alignment: .leading, spacing: 0) {
                 if let errorMessage = shoppingListStore.errorMessage, !errorMessage.isEmpty {
                     Text(verbatim: errorMessage)
                         .font(.footnote)
@@ -342,11 +376,7 @@ struct ProductsView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 18)
                 }
-            }
-            .padding(.bottom, pageBottomPadding)
         }
-        .scrollIndicators(.hidden)
-        .ignoresSafeArea(.container, edges: .top)
     }
 
     private func asAisleItem(_ item: ShoppingItem) -> EditorialAisleSection.Item {
@@ -368,10 +398,7 @@ struct ProductsView: View {
     // MARK: - Loading state
 
     private var loadingState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                editorialHeader
-
+        VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Przygotowuję listę zakupów")
                         .font(.system(size: 17, weight: .semibold))
@@ -408,20 +435,13 @@ struct ProductsView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 18)
                 .redacted(reason: .placeholder)
-            }
-            .padding(.bottom, pageBottomPadding)
         }
-        .scrollIndicators(.hidden)
-        .ignoresSafeArea(.container, edges: .top)
     }
 
     // MARK: - Empty state
 
     private var emptyState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                editorialHeader
-
+        VStack(alignment: .leading, spacing: 0) {
                 VStack(spacing: 16) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -463,11 +483,7 @@ struct ProductsView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-            }
-            .padding(.bottom, pageBottomPadding)
         }
-        .scrollIndicators(.hidden)
-        .ignoresSafeArea(.container, edges: .top)
     }
 
     private func emptyHintChip(icon: String, title: String) -> some View {
@@ -495,10 +511,7 @@ struct ProductsView: View {
     // date — they all belong to the viewed week — and shows just the folio,
     // revision label, and count.
     private var archivedState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                editorialHeader
-
+        VStack(alignment: .leading, spacing: 0) {
                 weekClosedRule
                     .padding(.horizontal, pageHorizontalPadding)
                     .padding(.top, 8)
@@ -512,11 +525,7 @@ struct ProductsView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 14)
                 }
-            }
-            .padding(.bottom, pageBottomPadding)
         }
-        .scrollIndicators(.hidden)
-        .ignoresSafeArea(.container, edges: .top)
     }
 
     /// Archives that belong to the currently-viewed week — sorted by
