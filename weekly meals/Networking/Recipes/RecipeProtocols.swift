@@ -28,6 +28,13 @@ protocol RecipeSocketClient {
     func on(event: String, handler: @escaping ([Any]) -> Void)
     func off(event: String)
     func observeConnection(_ handler: @escaping (_ isConnected: Bool) -> Void)
+    /// Wznów zerwane połączenie (np. po powrocie aplikacji z tła).
+    /// Domyślnie no-op — realny reconnect ma tylko klient Socket.IO.
+    func reconnectIfNeeded()
+}
+
+extension RecipeSocketClient {
+    func reconnectIfNeeded() {}
 }
 
 // MARK: - WebSocket envelope

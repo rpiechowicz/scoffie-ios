@@ -184,6 +184,11 @@ final class SessionStore {
     }
 
     func refreshRealtimeStoresOnForeground() {
+        // Najpierw obudź socket, dopiero potem odświeżaj. iOS zrywa
+        // połączenie w tle, a odświeżenia strzelające w martwy socket
+        // kończyły się chwilowym „Problem z połączeniem na żywo",
+        // które reconnect gasił pół sekundy później.
+        realtimeSocket?.reconnectIfNeeded()
         weeklyMealStore?.refreshObservedState()
         shoppingListStore?.refreshCurrentWeek()
         // Skład gospodarstwa też — zmiany, które zaszły, gdy aplikacja spała,
@@ -1025,6 +1030,29 @@ final class SessionStore {
         // Przyjęte zaproszenie znika ze skrzynki, a razem z nim wszystkie inne
         // do tego samego domu.
         await refreshPendingInvitations()
+        // Backend mógł właśnie zmienić kolor awatara (unika kolizji z nowymi
+        // domownikami) — dociągamy go od razu, zamiast czekać na `users:me`
+        // przy następnym starcie aplikacji.
+        await syncAvatarColorFromBackend()
+    }
+
+    /// Pobiera aktualny `avatarColor` z backendu i utrwala go lokalnie.
+    /// Cichy no-op przy błędzie sieci — kolor dojedzie przy następnym
+    /// pełnym `users:me`.
+    private func syncAvatarColorFromBackend() async {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        do {
+            let envelope: WsEnvelope<BackendCurrentUserDTO> = try await socket.emitWithAck(
+                event: "users:me",
+                payload: ["userId": userId],
+                as: WsEnvelope<BackendCurrentUserDTO>.self
+            )
+            guard envelope.ok, let color = envelope.data?.avatarColor else { return }
+            UserDefaults.standard.set(color, forKey: Keys.avatarColor)
+        } catch {
+            // Patrz komentarz wyżej — brak sieci nie psuje przepływu dołączania.
+        }
     }
 
     func acceptPendingInvitation(token: String, leaveOtherHouseholds: Bool = false) async {
@@ -1325,6 +1353,13 @@ final class SessionStore {
             defaults.set(avatarUrl, forKey: Keys.avatarUrl)
         } else {
             defaults.removeObject(forKey: Keys.avatarUrl)
+        }
+        // Kolor awatara prosto z logowania — bez tego do czasu pierwszego
+        // `users:me` profil świecił fallbackiem z hasza, innym niż listy
+        // domowników. `nil` (starszy backend / konto przed onboardingiem)
+        // nie nadpisuje wartości, którą mogliśmy już zsynchronizować.
+        if let avatarColor = response.user.avatarColor {
+            defaults.set(avatarColor, forKey: Keys.avatarColor)
         }
         persistOnboardingCompletedAt(response.user.onboardingCompletedAt)
         if let household = response.household {
@@ -1921,6 +1956,13 @@ final class SessionStore {
             )
             if envelope.ok, let profile = envelope.data {
                 persistOnboardingCompletedAt(profile.onboardingCompletedAt)
+                // To TUTAJ backend przydziela kolor awatara — bez zapisania
+                // go od razu świeży użytkownik do następnego `users:me`
+                // oglądał swój profil w kolorze z hasza, a domownicy widzieli
+                // go już w przydzielonym.
+                if let avatarColor = profile.avatarColor {
+                    UserDefaults.standard.set(avatarColor, forKey: Keys.avatarColor)
+                }
             }
         } catch {
             // Optimistic flag is already set; backend will re-confirm on

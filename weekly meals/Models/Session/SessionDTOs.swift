@@ -19,6 +19,12 @@ struct SessionResponse: Codable {
         let displayName: String
         let email: String?
         let avatarUrl: String?
+        /// Indeks gradientu awatara przydzielony przez backend. Jedzie już
+        /// w odpowiedzi logowania — bez niego klient do czasu pierwszego
+        /// `users:me` kolorował własny awatar fallbackiem z hasza, czyli
+        /// innym odcieniem niż listy domowników. `nil` na starszym backendzie
+        /// i dla kont sprzed onboardingu.
+        let avatarColor: Int?
         let provider: String?
         /// ISO 8601 timestamp; `nil` means the user hasn't finished the
         /// welcome flow yet and should be routed to it.

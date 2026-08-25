@@ -2429,10 +2429,16 @@ struct SettingsView: View {
 
     private func memberRow(_ member: HouseholdMemberSnapshot, isLast: Bool) -> some View {
         HStack(spacing: 12) {
+            // Kolor z backendu + ziarno z id — dokładnie to, czym ten sam
+            // domownik świeci na Planie. Bez tych parametrów kolor liczył
+            // się z IMIENIA i ta sama osoba miała tu inny odcień niż wszędzie
+            // indziej.
             ProfileAvatar(
                 avatarUrl: member.avatarUrl,
                 displayName: member.displayName,
-                size: 38
+                size: 38,
+                colorIndex: member.avatarColor,
+                seed: member.id
             )
 
             VStack(alignment: .leading, spacing: 2) {

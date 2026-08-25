@@ -19,7 +19,13 @@ final class SocketIORecipeSocketClient: RecipeSocketClient {
                 .log(false),
                 .compress,
                 .forceWebsockets(true),
-                .handleQueue(socketQueue)
+                .handleQueue(socketQueue),
+                // Domyślny backoff biblioteki potrafi czekać ~10 s z ponowieniem.
+                // Po wybudzeniu z tła to całe okno, w którym każde odświeżenie
+                // strzela w martwy socket i kończy się błędem łączności —
+                // krótszy backoff zamyka je do ~1 s.
+                .reconnectWait(1),
+                .reconnectWaitMax(5)
             ]
         )
         self.socket = manager.defaultSocket
@@ -67,6 +73,13 @@ final class SocketIORecipeSocketClient: RecipeSocketClient {
                 self.socket.connect()
             }
         }
+    }
+
+    /// Jawne wznowienie po powrocie aplikacji z tła. iOS zrywa połączenie,
+    /// gdy proces śpi, a bez tego wołania pierwszy foregroundowy request
+    /// odkrywał martwy socket dopiero własnym timeoutem.
+    func reconnectIfNeeded() {
+        connectIfNeeded()
     }
 
     private func ensureConnected() async throws {

@@ -39,6 +39,16 @@ final class ShoppingListStore {
     private var pendingResetProductKeys: Set<String> = []
     private var pendingToggleTasks: [String: Task<Void, Never>] = [:]
     private var pendingToggleOriginalState: [String: Bool] = [:]
+    /// Klucze produktów, których `setChecked` właśnie leci do serwera.
+    /// Wpis w `pendingToggleTasks` znika z chwilą odpalenia requestu, więc
+    /// bez tego zbioru `apply()` przez cały round-trip mógł nadpisać
+    /// optymistyczny ptaszek stanem z serwera, który o tapnięciu jeszcze
+    /// nie wie — checkbox „mrugał".
+    private var inFlightToggleKeys: Set<String> = []
+    /// Odracza pokazanie błędów łączności z `load()` — patrz komentarz
+    /// w `ConnectivityErrorGate`. Błędy akcji użytkownika pokazują się
+    /// bez zmian, od razu.
+    private let connectivityErrorGate = ConnectivityErrorGate()
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -59,6 +69,16 @@ final class ShoppingListStore {
                 guard let currentWeekStart = self.weekStart else { return }
                 guard !self.isMutatingState else { return }
                 guard event.weekStart == currentWeekStart else {
+                    return
+                }
+                // Serwer rozsyła zmianę do WSZYSTKICH klientów, także do autora.
+                // Własne echo nie wnosi nic nowego (stan lokalny jest już
+                // optymistycznie zaktualizowany i potwierdzony ACK-iem), a każde
+                // powodowało pełny refetch i podmianę tablicy `items` ~0,5 s po
+                // tapnięciu — z zewnątrz wyglądało to jak „skacząca" lista.
+                if let changedBy = event.changedByUserId,
+                   !self.currentUserId.isEmpty,
+                   changedBy == self.currentUserId {
                     return
                 }
                 if let changeVersion = event.changeVersion {
@@ -96,9 +116,15 @@ final class ShoppingListStore {
 
     func load(weekStart: String, force: Bool = false) async {
         errorMessage = nil
+        connectivityErrorGate.reset()
         self.weekStart = weekStart
 
+        // `!isLoading` także w gałęzi cache: gdy trwa fetch sieciowy, zapis
+        // z cache mógłby zaaplikować się PO świeżym stanie z serwera i cofnąć
+        // listę do starej zawartości na jedną klatkę — fetch i tak zaraz
+        // dostarczy nowsze dane.
         if !force,
+           !isLoading,
            let cachedState = cachedStateByWeek[weekStart],
            !invalidatedWeeks.contains(weekStart) {
             await apply(state: cachedState, for: weekStart)
@@ -114,7 +140,12 @@ final class ShoppingListStore {
             await apply(state: state, for: weekStart)
             invalidatedWeeks.remove(weekStart)
         } catch {
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            // Błąd łączności z odświeżenia pokazuje się dopiero, gdy się
+            // utrzyma — reconnect po powrocie z tła gasił go po ~0,3 s
+            // i banner tylko migał.
+            connectivityErrorGate.publish(error) { [weak self] message in
+                self?.errorMessage = message
+            }
             if let cachedState = cachedStateByWeek[weekStart] {
                 await apply(state: cachedState, for: weekStart)
             }
@@ -189,6 +220,8 @@ final class ShoppingListStore {
 
             if finalState == originalState { return }
 
+            self.inFlightToggleKeys.insert(productKey)
+            defer { self.inFlightToggleKeys.remove(productKey) }
             do {
                 try await self.repository.setChecked(weekStart: weekStart, productKey: productKey, isChecked: finalState)
             } catch {
@@ -362,7 +395,7 @@ final class ShoppingListStore {
 
     private func apply(state: ShoppingListState, for weekStart: String) async {
         archivedLists = state.archives
-        let pendingKeys = Set(pendingToggleTasks.keys)
+        let pendingKeys = Set(pendingToggleTasks.keys).union(inFlightToggleKeys)
         if pendingKeys.isEmpty {
             items = state.items
         } else {
@@ -398,13 +431,23 @@ final class ShoppingListStore {
         cachedStateByWeek = payload.weeks
     }
 
+    /// Jedna kolejka seryjna na wszystkie zapisy — gwarantuje kolejność
+    /// (ostatni snapshot wygrywa), czego `Task.detached` by nie dał.
+    private static let cacheWriteQueue = DispatchQueue(
+        label: "shopping-list-cache-write",
+        qos: .utility
+    )
+
     private func persistCache() {
-        do {
-            let payload = ShoppingListCachePayload(weeks: cachedStateByWeek)
-            let data = try JSONEncoder().encode(payload)
-            try data.write(to: cacheURL, options: .atomic)
-        } catch {
-            // intentionally ignore cache write failures
+        // Encode + zapis pliku poza main threadem: wołane przy KAŻDYM tapnięciu
+        // i każdym loadzie, a przy dłuższej liście serializacja wszystkich
+        // tygodni synchronicznie na MainActorze gubiła klatki dokładnie
+        // w trakcie ładowania i scrollowania.
+        let payload = ShoppingListCachePayload(weeks: cachedStateByWeek)
+        let url = cacheURL
+        Self.cacheWriteQueue.async {
+            guard let data = try? JSONEncoder().encode(payload) else { return }
+            try? data.write(to: url, options: .atomic)
         }
     }
 
