@@ -268,6 +268,16 @@ final class SessionStore {
         }
         await registerPushDeviceIfPossible()
         isAuthenticated = true
+
+        // Odpowiedź auth niesie tylko tożsamość i dom. Sylwetka (rok
+        // urodzenia, wzrost, waga, płeć) mieszka w bazie i wracała na ekran
+        // dopiero przy `users:me` po RESTARCIE aplikacji — wylogowanie
+        // i ponowne zalogowanie wyglądało więc jak reset ustawień profilu,
+        // bo logout czyści lokalne kopie. Dociągamy pełny profil od razu,
+        // w tle, żeby nie przedłużać spinnera logowania.
+        Task { [weak self] in
+            await self?.restoreHouseholdIfNeeded()
+        }
     }
 
     private static func decodeErrorMessage(data: Data) -> String? {

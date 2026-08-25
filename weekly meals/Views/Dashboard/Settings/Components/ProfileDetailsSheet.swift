@@ -47,6 +47,15 @@ struct ProfileDetailsSheet: View {
     @State private var heightDraft: String = ""
     @State private var weightDraft: String = ""
     @State private var didSeedDrafts = false
+    /// Czy w tym otwarciu arkusza doszło do JAKIEJKOLWIEK edycji. Zapis do
+    /// backendu (debounce i ten przy zamknięciu) wychodzi tylko wtedy —
+    /// samo otwarcie i zamknięcie arkusza nie może nic wysłać. Wcześniej
+    /// `task(id:)` odpalał się też przy pierwszym pokazaniu i po 600 ms
+    /// wypychał aktualny stan — jeśli lokalne wartości były akurat domyślne
+    /// (świeże logowanie, zanim `users:me` zdążył przywrócić prawdziwe),
+    /// nadpisywały w bazie realną sylwetkę.
+    @State private var didObserveInitialToken = false
+    @State private var didEditThisSession = false
 
     private enum Field {
         case name
@@ -121,8 +130,15 @@ struct ProfileDetailsSheet: View {
         }
         // Ten sam debounce co w arkuszu diety: każda zmiana kasuje poprzedni
         // zapis i planuje nowy 600 ms później, więc pisanie w polu imienia
-        // nie generuje round-tripa na literę.
+        // nie generuje round-tripa na literę. Pierwsze odpalenie to samo
+        // pokazanie arkusza (`task(id:)` startuje też bez zmiany id) — nic
+        // wtedy nie wysyłamy; każde KOLEJNE to już realna edycja.
         .task(id: profileSyncToken) {
+            guard didObserveInitialToken else {
+                didObserveInitialToken = true
+                return
+            }
+            didEditThisSession = true
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
             await pushProfile()
@@ -659,11 +675,19 @@ struct ProfileDetailsSheet: View {
 
     /// Zamknięcie arkusza nie może zgubić zmiany wpisanej sekundę wcześniej —
     /// `task(id:)` zostaje anulowany razem z widokiem, więc zapis wychodzi tu
-    /// jeszcze raz, bez debounce'u.
+    /// jeszcze raz, bez debounce'u. Ale TYLKO gdy w tym otwarciu cokolwiek
+    /// edytowano (`didEditThisSession`) albo domknięcie draftów właśnie coś
+    /// zmieniło — otwarcie i zamknięcie arkusza bez edycji nie może wypchnąć
+    /// lokalnego stanu do bazy (patrz komentarz przy `didEditThisSession`).
     private func commitAndClose() {
         focusedField = nil
+        let tokenBeforeCommit = profileSyncToken
         commitAllFields()
         normaliseStoredValues()
+        guard didEditThisSession || profileSyncToken != tokenBeforeCommit else {
+            onClose()
+            return
+        }
         let store = sessionStore
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let year = yearOfBirth

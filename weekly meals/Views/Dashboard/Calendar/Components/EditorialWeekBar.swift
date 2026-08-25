@@ -72,12 +72,20 @@ struct EditorialWeekBar: View {
                     .font(.system(size: 9, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(isSelected ? label : muted)
+                    // Jak niżej przy numerze dnia — bez tego kolor skrótu
+                    // przeskakiwał zamiast płynnie przejść razem ze sprężyną.
+                    .contentTransition(.interpolate)
 
                 Text(dayNumber)
                     .font(.system(size: 18, weight: isSelected ? .heavy : .semibold))
                     .tracking(-0.3)
                     .foregroundStyle(isPast ? muted : label)
                     .strikethrough(isPast, color: strike)
+                    // Grubość fontu nie jest animowalna „za darmo": w sprężynie
+                    // zaznaczenia tekst czekał do końca animacji i dopiero wtedy
+                    // przeskakiwał semibold → heavy. `.interpolate` prowadzi wagę
+                    // płynnie razem z suwającym się podkreśleniem.
+                    .contentTransition(.interpolate)
 
                 ZStack {
                     // Reserve the slot height so layout doesn't shift while
