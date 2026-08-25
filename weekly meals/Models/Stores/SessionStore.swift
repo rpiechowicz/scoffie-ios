@@ -600,6 +600,23 @@ final class SessionStore {
         didLoadHouseholdMembers = true
         householdMembersLoadedAt = Date()
         saveHouseholdMembersCache(householdId: householdId, members: members)
+        syncOwnAvatarColor(from: members)
+    }
+
+    /// Skład gospodarstwa jest źródłem prawdy o kolorach awatarów — także
+    /// o WŁASNYM. Lokalny `settings.user.avatarColor` potrafił zostać przy
+    /// `-1` na zawsze (logowanie na backendzie sprzed `avatarColor` w auth
+    /// nie niesie koloru, a `users:me` leci dopiero przy restore sesji) —
+    /// wtedy karta profilu w Ustawieniach świeciła fallbackiem z hasza,
+    /// a listy domowników kolorem przydzielonym przez backend. Przepisanie
+    /// własnego koloru przy KAŻDYM załadowaniu składu domyka tę lukę
+    /// niezależnie od tego, którą drogą skład przyszedł (fetch, zdarzenie
+    /// realtime, plik cache).
+    private func syncOwnAvatarColor(from members: [HouseholdMemberSnapshot]) {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let ownColor = members.first(where: { $0.id == userId })?.avatarColor
+        else { return }
+        UserDefaults.standard.set(ownColor, forKey: Keys.avatarColor)
     }
 
     /// Kogo ubyło względem obecnej listy — do treści powiadomienia
@@ -1985,6 +2002,7 @@ final class SessionStore {
         guard Date().timeIntervalSince(payload.savedAt) <= householdMembersCacheMaxAge else { return }
         householdMembers = payload.members
         didLoadHouseholdMembers = !payload.members.isEmpty
+        syncOwnAvatarColor(from: payload.members)
         // ŚWIADOMIE bez `householdMembersLoadedAt`: plik cache daje pierwszą
         // klatkę, a nie potwierdzenie aktualności. Zapisany tu znacznik czasu
         // udawałby świeże pobranie i blokował pytanie serwera przez kolejną
