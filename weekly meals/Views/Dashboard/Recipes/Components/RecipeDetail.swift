@@ -843,6 +843,10 @@ private struct EditorialEyebrowRow: View {
                     .monospacedDigit()
             }
             .foregroundStyle(Color.wmMuted(scheme))
+            // Bez tego HStack łamał „40 MIN" na dwie linie, gdy dwa chipy
+            // zjadły szerokość — tekst jest ściśliwy, a kreska nie ma
+            // minimalnej szerokości, więc to ona ma się kurczyć, nie czas.
+            .fixedSize()
         }
     }
 
