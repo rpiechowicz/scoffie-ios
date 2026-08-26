@@ -52,7 +52,11 @@ enum RecipesMock {
             PreparationStep(stepNumber: 6, instruction: "Dodaj śmietankę do zupy, wymieszaj i dopraw solą i pieprzem."),
             PreparationStep(stepNumber: 7, instruction: "Podawaj zupę z ugotowanym makaronem.")
         ],
-        nutrition: Nutrition(kcal: 1200, protein: 40, fat: 20, carbs: 200, fiber: 12, salt: 5)
+        nutrition: Nutrition(kcal: 1200, protein: 40, fat: 20, carbs: 200, fiber: 12, salt: 5),
+        // Mock „thermomixowy" — zasila podglądy badge'a, filtra i przycisku
+        // „Gotuj w Thermomixie" (id z prawdziwego Leczo na cookidoo.pl).
+        sourceProvider: "cookidoo",
+        sourceRecipeId: "r56899"
     )
 
     static let chickenBowl = Recipe(

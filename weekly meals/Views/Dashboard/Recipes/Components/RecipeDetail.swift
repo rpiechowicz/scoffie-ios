@@ -35,6 +35,7 @@ enum RecipeDetailContext {
 
 struct RecipeDetailView: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sessionStore) private var sessionStore
 
     let recipe: Recipe
     var onToggleFavorite: (() -> Void)?
@@ -78,6 +79,13 @@ struct RecipeDetailView: View {
     /// drugi. Flagi nie zerujemy, bo po zapisie ten ekran i tak znika:
     /// odblokowanie przycisku otwierałoby dokładnie to okno, które zamyka.
     @State private var isSavingServings = false
+
+    /// Stan wysyłki „Gotuj w Thermomixie". Spinner + `disabled` to pierwsza
+    /// linia obrony przed double-tapem; drugą jest 60-sekundowe okno
+    /// idempotencji na backendzie.
+    @State private var isSendingToThermomix = false
+    @State private var showThermomixSuccess = false
+    @State private var thermomixError: String?
 
     /// Jawny `init` zamiast memberwise'owego, bo `@State` z porcjami trzeba
     /// zasiać `initialServings`. Kolejność i domyślne wartości są dobrane tak,
@@ -123,7 +131,8 @@ struct RecipeDetailView: View {
 
                     EditorialEyebrowRow(
                         category: recipe.category,
-                        prepTimeMinutes: recipe.prepTimeMinutes
+                        prepTimeMinutes: recipe.prepTimeMinutes,
+                        showsThermomix: recipe.isThermomix
                     )
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
@@ -522,42 +531,33 @@ struct RecipeDetailView: View {
 
     // MARK: - Dolny pasek akcji
 
-    /// Jeden przycisk przyklejony nad bezpiecznym obszarem. Wygląd przeniesiony
-    /// ze stopki `RecipeFilterSheet`, żeby główna akcja w całej aplikacji
-    /// wyglądała tak samo. Pasek maluje pod sobą płótno, bo treść scrolla
-    /// przejeżdża mu pod spodem.
+    /// Dolny pasek akcji na w pełni kryjącym tle (przy półprzezroczystym
+    /// treść scrolla prześwitywała pod przyciskami).
+    ///
+    /// Dwa tryby:
+    /// - przepis thermomixowy + połączona integracja → podział pół na pół:
+    ///   „Dodaj" (plan) i „Gotuj w TM", oba jako subtle — żaden nie krzyczy,
+    ///   bo to dwie równorzędne drogi „co dalej z tym przepisem";
+    /// - w każdym innym przypadku → klasyczny pojedynczy pełny CTA.
     private var primaryActionBar: some View {
-        Button(action: performPrimaryAction) {
-            Text(primaryActionTitle)
-                .font(.system(size: 14, weight: .bold))
-                .tracking(-0.1)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    Capsule().fill(
-                        LinearGradient(
-                            colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                )
-                .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-                .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
+        VStack(spacing: 10) {
+            thermomixFeedback
+
+            if showsThermomixSplit {
+                HStack(spacing: 10) {
+                    planSubtleButton
+                    thermomixSubtleButton
+                }
+            } else {
+                primaryActionButton
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!isPrimaryActionEnabled || isSavingServings)
-        // Wygaszony, a nie ukryty: „Zapisz porcje" ma być widoczne od wejścia,
-        // żeby było wiadomo, co się stanie po ruszeniu steppera.
-        .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
-        .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
         .padding(.horizontal, 20)
         .padding(.top, 14)
         .padding(.bottom, 8)
         .background(
             Rectangle()
-                .fill(Color.wmCanvas(scheme).opacity(0.94))
+                .fill(Color.wmCanvas(scheme))
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color.wmRule(scheme))
@@ -567,10 +567,168 @@ struct RecipeDetailView: View {
         )
     }
 
+    // MARK: - Podzielony pasek (plan | Thermomix)
+
+    /// Split tylko przy potwierdzonym połączeniu — `.unknown` i brak
+    /// integracji rysują zwykły pojedynczy przycisk.
+    private var showsThermomixSplit: Bool {
+        recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
+    }
+
+    /// Sukces / błąd wysyłki — jedna linijka nad przyciskami, znika sama.
+    @ViewBuilder
+    private var thermomixFeedback: some View {
+        if showThermomixSuccess {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .bold))
+                Text("Wysłano — przepis czeka w \u{201E}Mój tydzień\u{201D} na Thermomixie")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .lineLimit(2)
+            }
+            .foregroundStyle(WMPalette.sage)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        } else if let thermomixError {
+            Text(thermomixError)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.red.opacity(0.9))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Akcja planu w wariancie subtle — terakota na tincie zamiast pełnego
+    /// gradientu. Jeden budowniczy dla obu trybów paska: split podaje krótką
+    /// etykietę („Dodaj"/„Zapisz"), tryb pojedynczy pełną — styl identyczny,
+    /// więc ekran nie zmienia charakteru zależnie od tego, czy przepis jest
+    /// thermomixowy.
+    private var planSubtleButton: some View {
+        planActionButton(title: splitPlanTitle)
+    }
+
+    private func planActionButton(title: String) -> some View {
+        Button(action: performPrimaryAction) {
+            HStack(spacing: 7) {
+                Image(systemName: primaryActionIcon)
+                    .font(.system(size: 13, weight: .heavy))
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(-0.1)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(WMPalette.terracotta)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)))
+            .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.45), lineWidth: 1.2))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isPrimaryActionEnabled || isSavingServings)
+        // Wygaszony, a nie ukryty: „Zapisz porcje" ma być widoczne od wejścia,
+        // żeby było wiadomo, co się stanie po ruszeniu steppera.
+        .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
+        .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+        .accessibilityLabel(primaryActionTitle)
+    }
+
+    /// Na połowie szerokości pełne „Dodaj do planu" nie mieści się bez
+    /// ściskania — krótsze etykiety niosą to samo obok ikony.
+    private var splitPlanTitle: String {
+        switch context {
+        case .catalog: return "Dodaj"
+        case .planned: return "Zapisz"
+        }
+    }
+
+    /// Prawa połowa: start gotowania. Glif wymienia się na spinner/checkmark
+    /// w stałej ramce, więc obie połówki trzymają rozmiar we wszystkich
+    /// stanach.
+    private var thermomixSubtleButton: some View {
+        Button(action: sendToThermomix) {
+            HStack(spacing: 7) {
+                Group {
+                    if isSendingToThermomix {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(WMPalette.sage)
+                    } else if showThermomixSuccess {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .heavy))
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 13, weight: .heavy))
+                    }
+                }
+                .frame(width: 16, height: 17)
+
+                Text("Gotuj w TM")
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(-0.1)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(WMPalette.sage)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10)))
+            .overlay(Capsule().stroke(WMPalette.sage.opacity(0.45), lineWidth: 1.2))
+        }
+        .buttonStyle(.plain)
+        .disabled(isSendingToThermomix)
+        .accessibilityLabel("Gotuj w Thermomixie")
+        .accessibilityHint("Wysyła przepis do planu Mój tydzień w Cookidoo na dzisiaj")
+    }
+
+    /// Zawsze dzisiejsza data w lokalnej strefie telefonu — przycisk znaczy
+    /// „gotuję TERAZ", więc nawet posiłek zaplanowany na środę ląduje
+    /// w Cookidoo na dziś: na ekranie TM6 kolumna dzisiejsza jest pierwsza,
+    /// bez przewijania kalendarza na urządzeniu.
+    private static func todayDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
+
+    private func sendToThermomix() {
+        guard let store = sessionStore.cookidooIntegrationStore, !isSendingToThermomix else { return }
+        isSendingToThermomix = true
+        thermomixError = nil
+        Task { @MainActor in
+            let outcome = await store.sendToWeek(
+                recipeId: recipe.id.uuidString.lowercased(),
+                date: Self.todayDateString()
+            )
+            isSendingToThermomix = false
+            switch outcome {
+            case .sent, .alreadySent:
+                // `alreadySent` to backendowe okno idempotencji — dla
+                // użytkownika oba przypadki znaczą „jest w Mój tydzień".
+                withAnimation(.smooth(duration: 0.2)) { showThermomixSuccess = true }
+                try? await Task.sleep(for: .seconds(3))
+                withAnimation(.smooth(duration: 0.3)) { showThermomixSuccess = false }
+            case .failed(let message):
+                thermomixError = message
+            }
+        }
+    }
+
+    private var primaryActionButton: some View {
+        planActionButton(title: primaryActionTitle)
+    }
+
     private var primaryActionTitle: String {
         switch context {
         case .catalog: return "Dodaj do planu"
         case .planned: return "Zapisz porcje"
+        }
+    }
+
+    private var primaryActionIcon: String {
+        switch context {
+        case .catalog: return "plus"
+        case .planned: return "checkmark"
         }
     }
 
@@ -652,12 +810,24 @@ struct RecipeDetailView: View {
 private struct EditorialEyebrowRow: View {
     let category: RecipesCategory
     let prepTimeMinutes: Int
+    /// Chip „THERMOMIX" obok kategorii — właściwość przepisu (ma odpowiednik
+    /// w Cookidoo), więc widoczny niezależnie od stanu integracji.
+    var showsThermomix: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            categoryPill
+            // Chipy nie oddają szerokości (`fixedSize`) — nadmiar zjada
+            // kreska; na wąskim ekranie z dwoma chipami po prostu robi się
+            // krótsza albo znika.
+            HStack(spacing: 6) {
+                categoryPill
+
+                if showsThermomix {
+                    thermomixPill
+                }
+            }
 
             Rectangle()
                 .fill(Color.wmRule(scheme))
@@ -673,18 +843,30 @@ private struct EditorialEyebrowRow: View {
                     .monospacedDigit()
             }
             .foregroundStyle(Color.wmMuted(scheme))
+            // Bez tego HStack łamał „40 MIN" na dwie linie, gdy dwa chipy
+            // zjadły szerokość — tekst jest ściśliwy, a kreska nie ma
+            // minimalnej szerokości, więc to ona ma się kurczyć, nie czas.
+            .fixedSize()
         }
     }
 
     private var categoryPill: some View {
-        let accent = RecipeDetailPalette.accent(for: category)
-        let fill = accent.opacity(scheme == .dark ? 0.22 : 0.16)
-        let stroke = accent.opacity(scheme == .dark ? 0.45 : 0.30)
+        pill(
+            icon: RecipesConstants.icon(for: category),
+            text: RecipesConstants.displayName(for: category).uppercased(),
+            accent: RecipeDetailPalette.accent(for: category)
+        )
+    }
 
-        return HStack(spacing: 6) {
-            Image(systemName: RecipesConstants.icon(for: category))
+    private var thermomixPill: some View {
+        pill(icon: "cooktop.fill", text: "THERMOMIX", accent: WMPalette.sage)
+    }
+
+    private func pill(icon: String, text: String, accent: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
                 .font(.system(size: 11, weight: .bold))
-            Text(RecipesConstants.displayName(for: category).uppercased())
+            Text(text)
                 .font(.system(size: 11, weight: .heavy))
                 .tracking(0.7)
                 .lineLimit(1)
@@ -693,8 +875,8 @@ private struct EditorialEyebrowRow: View {
         .padding(.leading, 8)
         .padding(.trailing, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(fill))
-        .overlay(Capsule().stroke(stroke, lineWidth: 1))
+        .background(Capsule().fill(accent.opacity(scheme == .dark ? 0.22 : 0.16)))
+        .overlay(Capsule().stroke(accent.opacity(scheme == .dark ? 0.45 : 0.30), lineWidth: 1))
         .fixedSize()
     }
 }
