@@ -48,6 +48,7 @@ struct SettingsView: View {
     @State private var showMealTimesSheet = false
     @State private var showProfileSheet = false
     @State private var showHelpSheet = false
+    @State private var showCookidooSheet = false
     @State private var createHouseholdName = ""
     @State private var householdNameError: String? = nil
     @State private var showLogoutAlert = false
@@ -409,6 +410,7 @@ struct SettingsView: View {
                             profileGroup
                             accountSection
                             appSection
+                            integrationsSection
                             infoSection
 
                             EditorialLogoutButton(isLoading: false) {
@@ -488,6 +490,13 @@ struct SettingsView: View {
             .sheet(isPresented: $showHelpSheet) {
                 helpSheet
                     .dashboardLiquidSheet()
+            }
+            .sheet(isPresented: $showCookidooSheet) {
+                CookidooIntegrationSheet {
+                    showCookidooSheet = false
+                }
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
             }
             .alert("Czy na pewno chcesz się wylogować?", isPresented: $showLogoutAlert) {
                 Button("Anuluj", role: .cancel) {}
@@ -591,6 +600,38 @@ struct SettingsView: View {
                     action: { showAppearanceSheet = true }
                 )
             }
+        }
+    }
+
+    private var integrationsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSettingsSectionHeader(title: "Integracje")
+
+            EditorialSettingsCardGroup {
+                EditorialSettingsRow(
+                    icon: "app.connected.to.app.below.fill",
+                    iconColor: WMPalette.sage,
+                    title: "Cookidoo (Thermomix)",
+                    value: cookidooRowValue,
+                    isLast: true,
+                    action: { showCookidooSheet = true }
+                )
+            }
+        }
+    }
+
+    /// Prawa kolumna wiersza Cookidoo. Pusta przy `.unknown` — lepiej nie
+    /// pisać nic, niż zgadywać, zanim serwer odpowie po zimnym starcie.
+    private var cookidooRowValue: String? {
+        switch sessionStore.cookidooIntegrationStore?.status {
+        case .connected:
+            return "Połączono"
+        case .authFailed:
+            return "Błąd logowania"
+        case .notConnected:
+            return "Nie połączono"
+        case .unknown, nil:
+            return nil
         }
     }
 

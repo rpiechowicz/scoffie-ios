@@ -125,6 +125,9 @@ final class SessionStore {
     var weeklyMealStore: WeeklyMealStore?
     var recipeCatalogStore: RecipeCatalogStore?
     var shoppingListStore: ShoppingListStore?
+    /// Integracja Cookidoo (Thermomix) — jedyny store gadający z backendem
+    /// po REST z tokenem, patrz `IntegrationsAPIClient`.
+    var cookidooIntegrationStore: CookidooIntegrationStore?
     var datesViewModel = DatesViewModel()
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
@@ -459,6 +462,20 @@ final class SessionStore {
             cacheNamespace: "\(userId)_\(householdId)"
         )
         self.shoppingListStore = shoppingListStore
+
+        let cookidooStore = CookidooIntegrationStore(
+            client: IntegrationsAPIClient(
+                baseURL: baseURL,
+                tokenProvider: { [weak self] in self?.currentAccessToken }
+            )
+        )
+        self.cookidooIntegrationStore = cookidooStore
+        // Stan integracji od razu przy starcie — ekran przepisu musi wiedzieć,
+        // czy rysować „Gotuj w Thermomixie", zanim ktoś otworzy Ustawienia.
+        Task { @MainActor in
+            await cookidooStore.refresh()
+        }
+
         observeHouseholdRealtime()
         observeMealSlotsRealtime()
 
@@ -514,6 +531,7 @@ final class SessionStore {
         weeklyMealStore = nil
         recipeCatalogStore = nil
         shoppingListStore = nil
+        cookidooIntegrationStore = nil
         datesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
