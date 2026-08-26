@@ -24,5 +24,7 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Aplikacja odczytuje liczbę kroków ze Zdrowia, aby pokazywać dzienny postęp w Kalendarzu i budować statystyki aktywności.</string>
 </dict>
 </plist>

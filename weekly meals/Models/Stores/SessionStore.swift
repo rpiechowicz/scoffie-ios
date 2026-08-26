@@ -128,6 +128,9 @@ final class SessionStore {
     /// Integracja Cookidoo (Thermomix) — jedyny store gadający z backendem
     /// po REST z tokenem, patrz `IntegrationsAPIClient`.
     var cookidooIntegrationStore: CookidooIntegrationStore?
+    /// Kroki z HealthKit (Apple Zdrowie / Garmin) — drugi klient REST-owy,
+    /// ta sama zasada tokenu co przy Cookidoo.
+    var healthStepsStore: HealthStepsStore?
     var datesViewModel = DatesViewModel()
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
@@ -205,6 +208,13 @@ final class SessionStore {
         if let recipeCatalogStore {
             Task {
                 await recipeCatalogStore.reload()
+            }
+        }
+        // Kroki mogły przyrosnąć, gdy aplikacja spała (obserwator HK nie
+        // działa w tle) — foreground to główny moment nadrobienia zaległości.
+        if let healthStepsStore {
+            Task { @MainActor in
+                await healthStepsStore.refreshAndSync()
             }
         }
     }
@@ -476,6 +486,21 @@ final class SessionStore {
             await cookidooStore.refresh()
         }
 
+        let healthStore = HealthStepsStore(
+            service: HealthKitService(),
+            client: IntegrationsAPIClient(
+                baseURL: baseURL,
+                tokenProvider: { [weak self] in self?.currentAccessToken }
+            )
+        )
+        self.healthStepsStore = healthStore
+        // Świeże kroki od razu przy starcie sesji + obserwacja na żywo.
+        // Oba to no-opy, dopóki użytkownik nie włączy integracji w Ustawieniach.
+        healthStore.startObserving()
+        Task { @MainActor in
+            await healthStore.refreshAndSync()
+        }
+
         observeHouseholdRealtime()
         observeMealSlotsRealtime()
 
@@ -532,6 +557,8 @@ final class SessionStore {
         recipeCatalogStore = nil
         shoppingListStore = nil
         cookidooIntegrationStore = nil
+        healthStepsStore?.stopObserving()
+        healthStepsStore = nil
         datesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
@@ -1456,7 +1483,19 @@ final class SessionStore {
         defaults.removeObject(forKey: Keys.onboardingCompletedAt)
         clearPersistedProfileFields()
         clearPersistedPreferences()
+        clearPersistedHealthIntegration()
         onboardingCompletedAt = nil
+    }
+
+    /// Integracja „Zdrowie" jest per konto: bez tego kolejna osoba zalogowana
+    /// na tym telefonie odziedziczyłaby włączoną flagę i pierwszy sync
+    /// wysłałby kroki poprzedniego użytkownika na jej konto.
+    private func clearPersistedHealthIntegration() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: HealthStepsStore.Keys.enabled)
+        defaults.removeObject(forKey: HealthStepsStore.Keys.source)
+        defaults.removeObject(forKey: HealthStepsStore.Keys.enabledAt)
+        defaults.removeObject(forKey: HealthStepsStore.Keys.stepsGoal)
     }
 
     /// Wipe diet / kcal / allergens / goal / activityLevel AppStorage so
