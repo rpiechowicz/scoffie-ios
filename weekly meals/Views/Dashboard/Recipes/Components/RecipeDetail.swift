@@ -597,15 +597,21 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// Lewa połowa: akcja planu w wariancie subtle (terakota na tincie,
-    /// nie pełny gradient — na pasku z dwiema akcjami pełny kolor robił
-    /// z planu krzyk, a z Thermomixa dodatek).
+    /// Akcja planu w wariancie subtle — terakota na tincie zamiast pełnego
+    /// gradientu. Jeden budowniczy dla obu trybów paska: split podaje krótką
+    /// etykietę („Dodaj"/„Zapisz"), tryb pojedynczy pełną — styl identyczny,
+    /// więc ekran nie zmienia charakteru zależnie od tego, czy przepis jest
+    /// thermomixowy.
     private var planSubtleButton: some View {
+        planActionButton(title: splitPlanTitle)
+    }
+
+    private func planActionButton(title: String) -> some View {
         Button(action: performPrimaryAction) {
             HStack(spacing: 7) {
                 Image(systemName: primaryActionIcon)
                     .font(.system(size: 13, weight: .heavy))
-                Text(splitPlanTitle)
+                Text(title)
                     .font(.system(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
@@ -618,6 +624,8 @@ struct RecipeDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(!isPrimaryActionEnabled || isSavingServings)
+        // Wygaszony, a nie ukryty: „Zapisz porcje" ma być widoczne od wejścia,
+        // żeby było wiadomo, co się stanie po ruszeniu steppera.
         .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
         .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
         .accessibilityLabel(primaryActionTitle)
@@ -706,35 +714,7 @@ struct RecipeDetailView: View {
     }
 
     private var primaryActionButton: some View {
-        Button(action: performPrimaryAction) {
-            HStack(spacing: 7) {
-                Image(systemName: primaryActionIcon)
-                    .font(.system(size: 13, weight: .heavy))
-                Text(primaryActionTitle)
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.1)
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            )
-            .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-            .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
-        .disabled(!isPrimaryActionEnabled || isSavingServings)
-        // Wygaszony, a nie ukryty: „Zapisz porcje" ma być widoczne od wejścia,
-        // żeby było wiadomo, co się stanie po ruszeniu steppera.
-        .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
-        .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+        planActionButton(title: primaryActionTitle)
     }
 
     private var primaryActionTitle: String {
