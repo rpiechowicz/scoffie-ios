@@ -35,6 +35,7 @@ enum RecipeDetailContext {
 
 struct RecipeDetailView: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sessionStore) private var sessionStore
 
     let recipe: Recipe
     var onToggleFavorite: (() -> Void)?
@@ -78,6 +79,14 @@ struct RecipeDetailView: View {
     /// drugi. Flagi nie zerujemy, bo po zapisie ten ekran i tak znika:
     /// odblokowanie przycisku otwierałoby dokładnie to okno, które zamyka.
     @State private var isSavingServings = false
+
+    /// Stan wysyłki „Gotuj w Thermomixie". Spinner + `disabled` to pierwsza
+    /// linia obrony przed double-tapem; drugą jest 60-sekundowe okno
+    /// idempotencji na backendzie.
+    @State private var isSendingToThermomix = false
+    @State private var showThermomixSuccess = false
+    @State private var thermomixError: String?
+    @State private var isThermomixInfoPresented = false
 
     /// Jawny `init` zamiast memberwise'owego, bo `@State` z porcjami trzeba
     /// zasiać `initialServings`. Kolejność i domyślne wartości są dobrane tak,
@@ -161,8 +170,9 @@ struct RecipeDetailView: View {
                     // Zapas pod dolny pasek: sam pasek to 14 + przycisk 45 + 8,
                     // do tego bezpieczny obszar na dole. Bez tej przerwy
                     // ostatni składnik chowa się pod przyciskiem i wygląda
-                    // na ucięty koniec listy.
-                    Color.clear.frame(height: 112)
+                    // na ucięty koniec listy. Wiersz Thermomixa dokłada
+                    // drugą wysokość przycisku.
+                    Color.clear.frame(height: (showsThermomixRow || showsThermomixHint) ? 168 : 112)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -522,11 +532,167 @@ struct RecipeDetailView: View {
 
     // MARK: - Dolny pasek akcji
 
-    /// Jeden przycisk przyklejony nad bezpiecznym obszarem. Wygląd przeniesiony
-    /// ze stopki `RecipeFilterSheet`, żeby główna akcja w całej aplikacji
-    /// wyglądała tak samo. Pasek maluje pod sobą płótno, bo treść scrolla
-    /// przejeżdża mu pod spodem.
+    /// Dolny pasek akcji. Zwykle jeden przycisk; przy przepisie z odpowiednikiem
+    /// w Cookidoo i połączonej integracji dochodzi nad nim „Gotuj
+    /// w Thermomixie" (secondary — głównym wyborem ekranu zostaje plan).
+    /// Wygląd przeniesiony ze stopki `RecipeFilterSheet`, żeby główna akcja
+    /// w całej aplikacji wyglądała tak samo. Pasek maluje pod sobą płótno,
+    /// bo treść scrolla przejeżdża mu pod spodem.
     private var primaryActionBar: some View {
+        VStack(spacing: 10) {
+            thermomixFeedback
+
+            if showsThermomixRow {
+                thermomixButton
+            } else if showsThermomixHint {
+                thermomixHintRow
+            }
+
+            primaryActionButton
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
+        .background(
+            Rectangle()
+                .fill(Color.wmCanvas(scheme).opacity(0.94))
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.wmRule(scheme))
+                        .frame(height: 1)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .sheet(isPresented: $isThermomixInfoPresented) {
+            ThermomixInfoSheet {
+                isThermomixInfoPresented = false
+            }
+            .presentationDetents([.medium, .large])
+            .dashboardLiquidSheet()
+        }
+    }
+
+    /// Czy w pasku jest wiersz Thermomixa (przycisk wysyłki). Widoczny tylko
+    /// przy potwierdzonym połączeniu — stan `.unknown` niczego nie obiecuje.
+    private var showsThermomixRow: Bool {
+        recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
+    }
+
+    /// Przepis ma wersję na Thermomixa, ale integracja nie jest połączona
+    /// (albo padło hasło) — zamiast przycisku dyskretna zachęta z wejściem
+    /// w wyjaśnienie. Przy `.unknown` nie pokazujemy nic.
+    private var showsThermomixHint: Bool {
+        guard recipe.isThermomix else { return false }
+        switch sessionStore.cookidooIntegrationStore?.status {
+        case .notConnected, .authFailed:
+            return true
+        case .connected, .unknown, nil:
+            return false
+        }
+    }
+
+    private var thermomixHintRow: some View {
+        Button {
+            isThermomixInfoPresented = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "cooktop.fill")
+                    .font(.system(size: 11.5, weight: .semibold))
+                Text("Ten przepis działa z Thermomixem — połącz Cookidoo w Ustawieniach")
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .foregroundStyle(Color.wmMuted(scheme))
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var thermomixFeedback: some View {
+        if showThermomixSuccess {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .bold))
+                Text("Wysłano na Thermomixa — przepis czeka w \u{201E}Mój tydzień\u{201D}")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .lineLimit(2)
+            }
+            .foregroundStyle(WMPalette.sage)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        } else if let thermomixError {
+            Text(thermomixError)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.red.opacity(0.9))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var thermomixButton: some View {
+        Button(action: sendToThermomix) {
+            HStack(spacing: 8) {
+                if isSendingToThermomix {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(WMPalette.sage)
+                } else {
+                    Image(systemName: "cooktop.fill")
+                        .font(.system(size: 13, weight: .heavy))
+                }
+                Text("Gotuj w Thermomixie")
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(-0.1)
+            }
+            .foregroundStyle(WMPalette.sage)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(Capsule().fill(WMPalette.sage.opacity(scheme == .dark ? 0.14 : 0.10)))
+            .overlay(Capsule().stroke(WMPalette.sage.opacity(0.45), lineWidth: 1.2))
+        }
+        .buttonStyle(.plain)
+        .disabled(isSendingToThermomix)
+        .accessibilityHint("Wysyła przepis do planu Mój tydzień w Cookidoo na dzisiaj")
+    }
+
+    /// Zawsze dzisiejsza data w lokalnej strefie telefonu — przycisk znaczy
+    /// „gotuję TERAZ", więc nawet posiłek zaplanowany na środę ląduje
+    /// w Cookidoo na dziś: na ekranie TM6 kolumna dzisiejsza jest pierwsza,
+    /// bez przewijania kalendarza na urządzeniu.
+    private static func todayDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
+
+    private func sendToThermomix() {
+        guard let store = sessionStore.cookidooIntegrationStore, !isSendingToThermomix else { return }
+        isSendingToThermomix = true
+        thermomixError = nil
+        Task { @MainActor in
+            let outcome = await store.sendToWeek(
+                recipeId: recipe.id.uuidString.lowercased(),
+                date: Self.todayDateString()
+            )
+            isSendingToThermomix = false
+            switch outcome {
+            case .sent, .alreadySent:
+                // `alreadySent` to backendowe okno idempotencji — dla
+                // użytkownika oba przypadki znaczą „jest w Mój tydzień".
+                withAnimation(.smooth(duration: 0.2)) { showThermomixSuccess = true }
+                try? await Task.sleep(for: .seconds(3))
+                withAnimation(.smooth(duration: 0.3)) { showThermomixSuccess = false }
+            case .failed(let message):
+                thermomixError = message
+            }
+        }
+    }
+
+    private var primaryActionButton: some View {
         Button(action: performPrimaryAction) {
             Text(primaryActionTitle)
                 .font(.system(size: 14, weight: .bold))
@@ -552,19 +718,6 @@ struct RecipeDetailView: View {
         // żeby było wiadomo, co się stanie po ruszeniu steppera.
         .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
         .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(
-            Rectangle()
-                .fill(Color.wmCanvas(scheme).opacity(0.94))
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.wmRule(scheme))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     private var primaryActionTitle: String {

@@ -36,7 +36,10 @@ final class RecipeCatalogStore {
     private var cacheURL: URL {
         FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("recipes_catalog_cache_v7.json")
+            // v8: doszły pola sourceProvider/sourceRecipeId (badge Thermomixa) —
+            // stary cache dekodowałby się bez nich i katalog nie miałby badge'ów
+            // aż do pełnego przeładowania.
+            .appendingPathComponent("recipes_catalog_cache_v8.json")
     }
 
     init(

@@ -92,6 +92,9 @@ struct RecipeFilterOptions: Equatable {
     /// Pokazuj wyłącznie przepisy oznaczone jako ulubione.
     var favouritesOnly: Bool = false
 
+    /// Pokazuj wyłącznie przepisy z odpowiednikiem w Cookidoo (Thermomix).
+    var thermomixOnly: Bool = false
+
     // MARK: - Dostępne opcje
 
     /// Kategorie realnie przypisywane przepisom (`.all` / `.favourite` to
@@ -117,6 +120,7 @@ struct RecipeFilterOptions: Equatable {
         if maxCaloriesPerServing != nil   { count += 1 }
         if !nutritionTags.isEmpty         { count += 1 }
         if favouritesOnly                 { count += 1 }
+        if thermomixOnly                  { count += 1 }
         return count
     }
 
@@ -126,6 +130,8 @@ struct RecipeFilterOptions: Equatable {
 
     func matches(_ recipe: Recipe) -> Bool {
         if favouritesOnly, !recipe.favourite { return false }
+
+        if thermomixOnly, !recipe.isThermomix { return false }
 
         if !categories.isEmpty, !categories.contains(recipe.category) { return false }
 
