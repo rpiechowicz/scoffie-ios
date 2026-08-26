@@ -173,6 +173,9 @@ struct EditorialRecipeStoryCard: View {
             HStack(spacing: 6) {
                 EditorialGlassChip(icon: "clock",     text: "\(recipe.prepTimeMinutes) min")
                 EditorialGlassChip(icon: "flame.fill", text: "\(Int(recipe.nutritionPerServing.kcal.rounded())) kcal")
+                if recipe.isThermomix {
+                    EditorialGlassChip(icon: "cooktop.fill", text: "Thermomix")
+                }
             }
         }
         .padding(.horizontal, 16)

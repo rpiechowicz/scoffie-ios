@@ -36,6 +36,10 @@ struct BackendRecipeDTO: Codable {
     let isFavorite: Bool?
     let ingredients: [BackendRecipeIngredientDTO]
     let sourceInstructions: [BackendRecipeInstructionDTO]?
+    /// Zewnętrzne źródło przepisu (Cookidoo: `"cookidoo"` + `"r907015"`).
+    /// Opcjonalne — starszy backend nie dowozi tych pól w projekcjach.
+    let sourceProvider: String?
+    let sourceRecipeId: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -57,6 +61,8 @@ struct BackendRecipeDTO: Codable {
         case isFavorite
         case ingredients
         case sourceInstructions
+        case sourceProvider
+        case sourceRecipeId
     }
 
     init(from decoder: Decoder) throws {
@@ -80,6 +86,8 @@ struct BackendRecipeDTO: Codable {
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite)
         ingredients = try container.decodeIfPresent([BackendRecipeIngredientDTO].self, forKey: .ingredients) ?? []
         sourceInstructions = try container.decodeIfPresent([BackendRecipeInstructionDTO].self, forKey: .sourceInstructions)
+        sourceProvider = try container.decodeIfPresent(String.self, forKey: .sourceProvider)
+        sourceRecipeId = try container.decodeIfPresent(String.self, forKey: .sourceRecipeId)
     }
 }
 
@@ -195,7 +203,9 @@ extension BackendRecipeDTO {
                 carbs: nutritionCarbs,
                 fiber: nutritionFiber,
                 salt: nutritionSalt
-            )
+            ),
+            sourceProvider: sourceProvider,
+            sourceRecipeId: sourceRecipeId
         )
     }
 }

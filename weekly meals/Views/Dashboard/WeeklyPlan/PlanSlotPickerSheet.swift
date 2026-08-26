@@ -21,6 +21,10 @@ struct PlanSlotPickerSheet: View {
     /// Meal being edited — preloads the audience chips and highlights its
     /// recipe. `nil` adds a new variant to the slot.
     let editing: PlanMeal?
+    /// Fires po potwierdzeniu zapisu przez serwer — już PO zamknięciu arkusza.
+    /// Odświeżenie listy zakupów musi czekać na ack, nie na sam dismiss,
+    /// inaczej pobiera listę policzoną ze starego planu.
+    let onSaveCompleted: (() -> Void)?
 
     init(
         date: Date,
@@ -28,13 +32,15 @@ struct PlanSlotPickerSheet: View {
         weekStartISO: String,
         members: [HouseholdMemberSnapshot],
         editing: PlanMeal?,
-        defaultParticipantIds: [String] = []
+        defaultParticipantIds: [String] = [],
+        onSaveCompleted: (() -> Void)? = nil
     ) {
         self.date = date
         self.slot = slot
         self.weekStartISO = weekStartISO
         self.members = members
         self.editing = editing
+        self.onSaveCompleted = onSaveCompleted
         // Seeded here rather than in `.task`: that ran after `await`ing the
         // recipe catalog, so a chip tapped in the meantime was silently reset
         // and the meal saved as „Wspólne".
@@ -208,7 +214,6 @@ struct PlanSlotPickerSheet: View {
                         .padding(.bottom, 40)
                     }
                     .scrollIndicators(.hidden)
-                    .disabled(isSaving)
                 }
             }
             .navigationTitle(slot.title)
@@ -291,7 +296,6 @@ struct PlanSlotPickerSheet: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(isSaving)
         .accessibilityLabel(isCurrent ? "\(recipe.name), obecnie przypisany" : recipe.name)
     }
 
@@ -415,8 +419,15 @@ struct PlanSlotPickerSheet: View {
     private func assign(_ recipe: Recipe) {
         guard !isSaving else { return }
         isSaving = true
+        // Arkusz zamyka się od razu: wpis optymistyczny ląduje w store przed
+        // wyjściem w sieć, więc plan pod spodem już pokazuje wybór. Czekanie
+        // na ack (w edycji: dwa round-tripy po sockecie) przetrzymywało
+        // arkusz ~pół sekundy z przygaszoną siatką. Błąd zapisu wraca
+        // rollbackiem w store i komunikatem `errorMessage` na widoku planu.
+        let store = mealStore
+        let completion = onSaveCompleted
         Task { @MainActor in
-            let ok = await mealStore.upsertWeekSlot(
+            _ = await store.upsertWeekSlot(
                 recipe: recipe,
                 participantIds: participantsToSave,
                 // Ten arkusz nie ma steppera porcji, więc świadomie nie wysyła
@@ -442,17 +453,21 @@ struct PlanSlotPickerSheet: View {
                 slot: slot,
                 weekStart: weekStartISO
             )
-            isSaving = false
-            if ok { dismiss() }
+            completion?()
         }
+        dismiss()
     }
 
     /// „Zapisz" in edit mode — keeps the recipe, rewrites who it is for.
     private func saveAudienceOnly() {
         guard let editing, !isSaving else { return }
         isSaving = true
+        // Ten sam natychmiastowy dismiss, co w `assign` — wpis optymistyczny
+        // już stoi, ack dogania w tle.
+        let store = mealStore
+        let completion = onSaveCompleted
         Task { @MainActor in
-            let ok = await mealStore.upsertWeekSlot(
+            _ = await store.upsertWeekSlot(
                 recipe: editing.recipe,
                 participantIds: participantsToSave,
                 // Porcji nie wysyłamy z tego samego powodu, co w `assign`:
@@ -463,9 +478,9 @@ struct PlanSlotPickerSheet: View {
                 slot: slot,
                 weekStart: weekStartISO
             )
-            isSaving = false
-            if ok { dismiss() }
+            completion?()
         }
+        dismiss()
     }
 
     private static let dayFormatter: DateFormatter = {

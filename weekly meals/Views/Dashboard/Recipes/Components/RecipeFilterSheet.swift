@@ -53,6 +53,7 @@ struct RecipeFilterSheet: View {
                         caloriesSection
                         nutritionSection
                         favouritesSection
+                        thermomixSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 18)
@@ -232,6 +233,39 @@ struct RecipeFilterSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(draft.favouritesOnly ? [.isSelected, .isButton] : .isButton)
+        }
+    }
+
+    private var thermomixSection: some View {
+        section("Thermomix") {
+            Button {
+                withAnimation(.smooth(duration: 0.18)) {
+                    draft.thermomixOnly.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "cooktop.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(WMPalette.sage)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(WMPalette.sage.opacity(scheme == .dark ? 0.20 : 0.12)))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Tylko przepisy na Thermomix")
+                            .font(.system(size: 14.5, weight: .semibold))
+                            .foregroundStyle(Color.wmLabel(scheme))
+
+                        Text("Przepisy z odpowiednikiem w Cookidoo")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Color.wmMuted(scheme))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    RecipeFilterToggleIndicator(isOn: draft.thermomixOnly)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(draft.thermomixOnly ? [.isSelected, .isButton] : .isButton)
         }
     }
 

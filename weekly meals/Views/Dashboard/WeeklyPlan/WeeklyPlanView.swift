@@ -271,13 +271,12 @@ struct WeeklyPlanView: View {
                     editing: target.editing,
                     // Planning through a person's lens means the meal is for
                     // them unless you say otherwise.
-                    defaultParticipantIds: profile.memberId.map { [$0] } ?? []
+                    defaultParticipantIds: profile.memberId.map { [$0] } ?? [],
+                    // Po acku serwera, nie po dismissie — arkusz zamyka się
+                    // przed końcem zapisu, a lista zakupów liczona ze starego
+                    // planu byłaby do wyrzucenia.
+                    onSaveCompleted: { refreshShoppingList() }
                 )
-            }
-            .onChange(of: pickerTarget?.id) { oldValue, newValue in
-                // Sheet dismissed — the assignment may have changed the week's
-                // ingredients, so pull a fresh shopping list.
-                if oldValue != nil && newValue == nil { refreshShoppingList() }
             }
             .sheet(item: $detailTarget) { target in
                 RecipeDetailView(

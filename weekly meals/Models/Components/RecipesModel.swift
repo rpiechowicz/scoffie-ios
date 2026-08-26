@@ -162,6 +162,13 @@ struct Recipe: Identifiable, Codable {
     /// Wartości odżywcze dla całego przepisu (chyba że aplikacja przyjmie, że to wartości na porcję – wtedy zmień opis zgodnie z potrzebą).
     var nutrition: Nutrition
 
+    /// Dostawca zewnętrznego źródła przepisu (np. `"cookidoo"`) i jego id
+    /// u dostawcy (np. `"r907015"` z URL-a przepisu w Cookidoo). Para razem
+    /// znaczy „ten przepis ma odpowiednik na Thermomixie" — czytać przez
+    /// `isThermomix`, nie wprost.
+    var sourceProvider: String?
+    var sourceRecipeId: String?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -175,7 +182,9 @@ struct Recipe: Identifiable, Codable {
         imageURL: URL? = nil,
         ingredients: [Ingredient] = [],
         preparationSteps: [PreparationStep] = [],
-        nutrition: Nutrition = .zero
+        nutrition: Nutrition = .zero,
+        sourceProvider: String? = nil,
+        sourceRecipeId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -190,6 +199,8 @@ struct Recipe: Identifiable, Codable {
         self.ingredients = ingredients
         self.preparationSteps = preparationSteps
         self.nutrition = nutrition
+        self.sourceProvider = sourceProvider
+        self.sourceRecipeId = sourceRecipeId
     }
 }
 
@@ -204,6 +215,7 @@ extension Recipe {
         case id, name, description, favourite, category, suitableSlots
         case servings, prepTimeMinutes, difficulty, imageURL
         case ingredients, preparationSteps, nutrition
+        case sourceProvider, sourceRecipeId
     }
 
     init(from decoder: Decoder) throws {
@@ -228,6 +240,15 @@ extension Recipe {
         preparationSteps = try container
             .decodeIfPresent([PreparationStep].self, forKey: .preparationSteps) ?? []
         nutrition = try container.decodeIfPresent(Nutrition.self, forKey: .nutrition) ?? .zero
+        sourceProvider = try container.decodeIfPresent(String.self, forKey: .sourceProvider)
+        sourceRecipeId = try container.decodeIfPresent(String.self, forKey: .sourceRecipeId)
+    }
+}
+
+extension Recipe {
+    /// Przepis ma odpowiednik w Cookidoo — da się go wysłać na Thermomixa.
+    var isThermomix: Bool {
+        sourceProvider == "cookidoo" && !(sourceRecipeId ?? "").isEmpty
     }
 }
 

@@ -668,8 +668,12 @@ struct AddToPlanSheet: View {
         // przycisk po prostu nic nie robił.
         let replacing = conflictingMeal?.recipe.id
 
+        // Dismiss od razu, jak w PlanSlotPickerSheet: wpis optymistyczny
+        // w store ląduje przed siecią, więc nie trzymamy arkusza przez cały
+        // round-trip. Błąd wraca rollbackiem i `errorMessage` w store.
+        let store = mealStore
         Task { @MainActor in
-            let ok = await mealStore.upsertWeekSlot(
+            _ = await store.upsertWeekSlot(
                 recipe: recipe,
                 participantIds: participantsToSave,
                 // Wysyłamy liczbę tylko wtedy, gdy jest wyborem użytkownika.
@@ -685,12 +689,9 @@ struct AddToPlanSheet: View {
                 slot: slot,
                 weekStart: Self.weekStartFormatter.string(from: Self.monday(of: date))
             )
-            isSaving = false
-            if ok {
-                onAdded?(date, slot)
-                dismiss()
-            }
         }
+        onAdded?(date, slot)
+        dismiss()
     }
 
     // MARK: - Kalendarz i formatery

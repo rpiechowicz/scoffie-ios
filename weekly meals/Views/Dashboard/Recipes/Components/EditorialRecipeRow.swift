@@ -39,6 +39,16 @@ struct EditorialRecipeRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                // Dyskretny znacznik przed serduszkiem — sam glif, bez
+                // kapsuły: wiersz ma 3 linie tekstu i każdy dodatkowy chip
+                // rozpychałby stałą wysokość listy.
+                if recipe.isThermomix {
+                    Image(systemName: "cooktop.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(WMPalette.sage)
+                        .accessibilityLabel("Przepis na Thermomix")
+                }
+
                 if recipe.favourite {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 14, weight: .bold))
