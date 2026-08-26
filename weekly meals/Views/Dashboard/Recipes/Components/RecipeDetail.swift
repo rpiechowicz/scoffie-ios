@@ -131,7 +131,8 @@ struct RecipeDetailView: View {
 
                     EditorialEyebrowRow(
                         category: recipe.category,
-                        prepTimeMinutes: recipe.prepTimeMinutes
+                        prepTimeMinutes: recipe.prepTimeMinutes,
+                        showsThermomix: recipe.isThermomix
                     )
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
@@ -809,12 +810,24 @@ struct RecipeDetailView: View {
 private struct EditorialEyebrowRow: View {
     let category: RecipesCategory
     let prepTimeMinutes: Int
+    /// Chip „THERMOMIX" obok kategorii — właściwość przepisu (ma odpowiednik
+    /// w Cookidoo), więc widoczny niezależnie od stanu integracji.
+    var showsThermomix: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            categoryPill
+            // Chipy nie oddają szerokości (`fixedSize`) — nadmiar zjada
+            // kreska; na wąskim ekranie z dwoma chipami po prostu robi się
+            // krótsza albo znika.
+            HStack(spacing: 6) {
+                categoryPill
+
+                if showsThermomix {
+                    thermomixPill
+                }
+            }
 
             Rectangle()
                 .fill(Color.wmRule(scheme))
@@ -834,14 +847,22 @@ private struct EditorialEyebrowRow: View {
     }
 
     private var categoryPill: some View {
-        let accent = RecipeDetailPalette.accent(for: category)
-        let fill = accent.opacity(scheme == .dark ? 0.22 : 0.16)
-        let stroke = accent.opacity(scheme == .dark ? 0.45 : 0.30)
+        pill(
+            icon: RecipesConstants.icon(for: category),
+            text: RecipesConstants.displayName(for: category).uppercased(),
+            accent: RecipeDetailPalette.accent(for: category)
+        )
+    }
 
-        return HStack(spacing: 6) {
-            Image(systemName: RecipesConstants.icon(for: category))
+    private var thermomixPill: some View {
+        pill(icon: "cooktop.fill", text: "THERMOMIX", accent: WMPalette.sage)
+    }
+
+    private func pill(icon: String, text: String, accent: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
                 .font(.system(size: 11, weight: .bold))
-            Text(RecipesConstants.displayName(for: category).uppercased())
+            Text(text)
                 .font(.system(size: 11, weight: .heavy))
                 .tracking(0.7)
                 .lineLimit(1)
@@ -850,8 +871,8 @@ private struct EditorialEyebrowRow: View {
         .padding(.leading, 8)
         .padding(.trailing, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(fill))
-        .overlay(Capsule().stroke(stroke, lineWidth: 1))
+        .background(Capsule().fill(accent.opacity(scheme == .dark ? 0.22 : 0.16)))
+        .overlay(Capsule().stroke(accent.opacity(scheme == .dark ? 0.45 : 0.30), lineWidth: 1))
         .fixedSize()
     }
 }
