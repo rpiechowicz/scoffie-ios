@@ -272,6 +272,26 @@ struct weekly_mealsApp: App {
             .onChange(of: scenePhase) { _, newValue in
                 if newValue == .active {
                     sessionStore.refreshRealtimeStoresOnForeground()
+                } else if newValue == .background {
+                    // Ostatnia szansa na wysyłkę kroków — w tle obserwator HK
+                    // nie działa i dławienie PUT mogło zjeść ostatnią zmianę.
+                    // Asercja background taska, bo iOS potrafi zawiesić proces
+                    // szybciej, niż domknie się request; bez niej ten hook
+                    // istniałby głównie na papierze.
+                    if let healthStepsStore = sessionStore.healthStepsStore {
+                        var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+                        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "health-steps-sync") {
+                            UIApplication.shared.endBackgroundTask(backgroundTask)
+                            backgroundTask = .invalid
+                        }
+                        Task { @MainActor in
+                            await healthStepsStore.syncNow()
+                            if backgroundTask != .invalid {
+                                UIApplication.shared.endBackgroundTask(backgroundTask)
+                                backgroundTask = .invalid
+                            }
+                        }
+                    }
                 }
             }
             .onOpenURL { url in

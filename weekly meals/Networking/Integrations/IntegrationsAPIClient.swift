@@ -57,6 +57,16 @@ final class IntegrationsAPIClient {
         )
     }
 
+    /// PUT, nie POST — idempotentny zapis kroczącego okna dziennych kroków;
+    /// ta sama paczka wysłana dwa razy zostawia bazę w identycznym stanie.
+    func syncHealthSteps(entries: [HealthStepsEntryDTO]) async throws -> HealthStepsSyncResponseDTO {
+        try await request(
+            path: "integrations/health/steps",
+            method: "PUT",
+            body: HealthStepsSyncRequestDTO(entries: entries)
+        )
+    }
+
     // MARK: - Rdzeń
 
     private func request<Response: Decodable>(

@@ -49,6 +49,12 @@ struct SettingsView: View {
     @State private var showProfileSheet = false
     @State private var showHelpSheet = false
     @State private var showCookidooSheet = false
+    @State private var showHealthSheet = false
+
+    // Stan integracji „Zdrowie" przez @AppStorage — to arkusz zmienia te
+    // klucze (via HealthStepsStore) i tylko @AppStorage odświeży wiersz.
+    @AppStorage(HealthStepsStore.Keys.enabled) private var healthStepsEnabled: Bool = false
+    @AppStorage(HealthStepsStore.Keys.source) private var healthStepsSource: String = StepsSource.appleHealth.rawValue
     @State private var createHouseholdName = ""
     @State private var householdNameError: String? = nil
     @State private var showLogoutAlert = false
@@ -498,6 +504,13 @@ struct SettingsView: View {
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
             }
+            .sheet(isPresented: $showHealthSheet) {
+                HealthIntegrationSheet {
+                    showHealthSheet = false
+                }
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+            }
             .alert("Czy na pewno chcesz się wylogować?", isPresented: $showLogoutAlert) {
                 Button("Anuluj", role: .cancel) {}
                 Button("Wyloguj", role: .destructive) {
@@ -613,11 +626,27 @@ struct SettingsView: View {
                     iconColor: WMPalette.sage,
                     title: "Cookidoo (Thermomix)",
                     value: cookidooRowValue,
-                    isLast: true,
+                    isLast: false,
                     action: { showCookidooSheet = true }
+                )
+
+                EditorialSettingsRow(
+                    icon: "figure.walk",
+                    iconColor: WMPalette.terracotta,
+                    title: "Zdrowie",
+                    value: healthRowValue,
+                    isLast: true,
+                    action: { showHealthSheet = true }
                 )
             }
         }
+    }
+
+    /// Prawa kolumna wiersza „Zdrowie": nazwa wybranego źródła kroków, gdy
+    /// integracja działa — od razu widać, czy kroki idą z Apple, czy z Garmina.
+    private var healthRowValue: String {
+        guard healthStepsEnabled else { return "Nie połączono" }
+        return healthStepsSource == StepsSource.garmin.rawValue ? "Garmin" : "Apple Zdrowie"
     }
 
     /// Prawa kolumna wiersza Cookidoo. Pusta przy `.unknown` — lepiej nie

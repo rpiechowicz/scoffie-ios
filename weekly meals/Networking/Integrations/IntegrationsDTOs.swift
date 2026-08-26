@@ -43,6 +43,28 @@ struct CookidooSendToWeekResponseDTO: Decodable {
     let alreadySent: Bool
 }
 
+// DTO-sy `integrations/health` (kroki z HealthKit) — patrz
+// `health-steps.controller.ts` po stronie backendu.
+
+struct HealthStepsEntryDTO: Codable, Equatable {
+    /// "yyyy-MM-dd" liczona w strefie telefonu — serwer (UTC) jej nie rusza.
+    let date: String
+    let steps: Int
+    /// Zrzut celu z dnia wysyłki — przyszłe statystyki znają ówczesny cel.
+    let stepsGoal: Int
+    /// `StepsSource.rawValue`: APPLE_HEALTH | GARMIN.
+    let source: String
+}
+
+struct HealthStepsSyncRequestDTO: Encodable {
+    let entries: [HealthStepsEntryDTO]
+}
+
+struct HealthStepsSyncResponseDTO: Decodable {
+    let ok: Bool
+    let synced: Int
+}
+
 /// Kształt błędu z backendu. `AppException` daje `{code, message}`,
 /// globalny ValidationPipe — `{message: [...], statusCode}`, a guard JWT —
 /// `{message, statusCode}`. Dekodujemy pobłażliwie i składamy w jedno.

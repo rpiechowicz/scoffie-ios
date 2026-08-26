@@ -14,6 +14,13 @@ struct CalendarView: View {
     // block (so the day's "X / GOAL" reading reflects the user's choice).
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
 
+    // Flaga i cel kroków przez @AppStorage, nie przez computed property na
+    // store — tylko @AppStorage gwarantuje re-render, gdy arkusz „Zdrowie"
+    // zmieni wartość (store trzyma je w UserDefaults poza swoim stanem
+    // @Observable).
+    @AppStorage(HealthStepsStore.Keys.enabled) private var stepsEnabled: Bool = false
+    @AppStorage(HealthStepsStore.Keys.stepsGoal) private var stepsGoal: Int = HealthStepsStore.defaultStepsGoal
+
     @State private var detailTarget: DetailTarget?
 
     /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
@@ -111,6 +118,12 @@ struct CalendarView: View {
             <= Calendar.current.startOfDay(for: Date())
     }
 
+    /// Pasek kroków: integracja „Zdrowie" włączona i dzień dzisiejszy lub
+    /// przeszły — ta sama granica co przy odhaczaniu posiłków.
+    private var stepsBarVisible: Bool {
+        stepsEnabled && canLogEatenMeals
+    }
+
     /// Set of "yyyy-MM-dd" keys for visible days that already have ≥1 meal — drives the sage planned-dot.
     private var plannedDates: Set<String> {
         var set = Set<String>()
@@ -192,7 +205,22 @@ struct CalendarView: View {
                             target: calorieGoal
                         )
                         .padding(.horizontal, WMPageMetrics.horizontal)
-                        .padding(.bottom, 22)
+                        .padding(.bottom, stepsBarVisible ? 16 : 22)
+
+                        // Kroki zHealthKit — tylko gdy integracja „Zdrowie"
+                        // włączona i dzień nie jest z przyszłości (przyszłość
+                        // nie ma czego pokazać, nawet zera).
+                        if stepsBarVisible {
+                            let day = sessionStore.healthStepsStore?
+                                .steps(for: datesViewModel.selectedDate)
+                            EditorialStepsBar(
+                                steps: day?.steps,
+                                goal: stepsGoal,
+                                source: day?.source
+                            )
+                            .padding(.horizontal, WMPageMetrics.horizontal)
+                            .padding(.bottom, 22)
+                        }
 
                         // Kreska "W MENU" — dolny odstęp 18pt z projektu.
                         menuRule
@@ -259,6 +287,12 @@ struct CalendarView: View {
                     weekStart: datesViewModel.weekStartISO,
                     dates: datesViewModel.dates
                 )
+            }
+            // Kroki dnia spoza kroczącego okna (przeglądanie przeszłości) —
+            // leniwy, czysto lokalny odczyt z HealthKit, bez wysyłki.
+            .task(id: WeeklyMealStore.dateKey(for: datesViewModel.selectedDate)) {
+                await sessionStore.healthStepsStore?
+                    .refreshIfNeeded(for: datesViewModel.selectedDate)
             }
             // Kalendarz nie planuje — picker zniknął stąd celowo. Dwie drogi
             // dodawania posiłków (Plan i Kalendarz) robiły to samo w dwóch
