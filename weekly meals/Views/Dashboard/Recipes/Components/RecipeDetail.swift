@@ -147,6 +147,16 @@ struct RecipeDetailView: View {
                             .padding(.top, 14)
                     }
 
+                    // Thermomix mieszka w treści, nie w dolnym pasku — to
+                    // odpowiednik „Ugotuj dzisiaj" z Cookidoo: osobna,
+                    // samoopisująca się karta zaraz pod opisem, a pasek na
+                    // dole zostaje jednoznacznie o planie.
+                    if showsThermomixCard {
+                        thermomixCard
+                            .padding(.horizontal, 20)
+                            .padding(.top, 18)
+                    }
+
                     servingsSection
                         .padding(.horizontal, 20)
                         .padding(.top, 22)
@@ -170,10 +180,8 @@ struct RecipeDetailView: View {
                     // Zapas pod dolny pasek: sam pasek to 14 + przycisk 45 + 8,
                     // do tego bezpieczny obszar na dole. Bez tej przerwy
                     // ostatni składnik chowa się pod przyciskiem i wygląda
-                    // na ucięty koniec listy. Przycisk TM stoi OBOK głównego,
-                    // więc podnosi pasek tylko wiersz zachęty (niepołączona
-                    // integracja).
-                    Color.clear.frame(height: showsThermomixHint ? 150 : 112)
+                    // na ucięty koniec listy.
+                    Color.clear.frame(height: 112)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -533,149 +541,184 @@ struct RecipeDetailView: View {
 
     // MARK: - Dolny pasek akcji
 
-    /// Dolny pasek akcji. Zwykle jeden przycisk; przy przepisie z odpowiednikiem
-    /// w Cookidoo i połączonej integracji dochodzi nad nim „Gotuj
-    /// w Thermomixie" (secondary — głównym wyborem ekranu zostaje plan).
+    /// Dolny pasek akcji — jeden przycisk, jedna decyzja (plan). Tło w pełni
+    /// kryjące: przy półprzezroczystym treść scrolla prześwitywała pod
+    /// przyciskami i pasek wyglądał na zepsuty, nie „szklany".
     /// Wygląd przeniesiony ze stopki `RecipeFilterSheet`, żeby główna akcja
-    /// w całej aplikacji wyglądała tak samo. Pasek maluje pod sobą płótno,
-    /// bo treść scrolla przejeżdża mu pod spodem.
+    /// w całej aplikacji wyglądała tak samo.
     private var primaryActionBar: some View {
-        VStack(spacing: 10) {
-            thermomixFeedback
-
-            if showsThermomixHint {
-                thermomixHintRow
-            }
-
-            // Thermomix jako kompaktowy przycisk OBOK głównego, nie nad nim:
-            // dwa pełnowymiarowe przyciski jeden pod drugim wyglądały jak dwie
-            // równorzędne decyzje, a plan pozostaje decyzją główną. „▶ TM"
-            // niesie i „start", i „na czym" — pełna nazwa akcji wraca w toaście
-            // i w etykiecie dostępności.
-            HStack(spacing: 10) {
-                if showsThermomixRow {
-                    thermomixButton
+        primaryActionButton
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+            .background(
+                Rectangle()
+                    .fill(Color.wmCanvas(scheme))
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(Color.wmRule(scheme))
+                            .frame(height: 1)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+            )
+            .sheet(isPresented: $isThermomixInfoPresented) {
+                ThermomixInfoSheet {
+                    isThermomixInfoPresented = false
                 }
-
-                primaryActionButton
+                .presentationDetents([.medium, .large])
+                .dashboardLiquidSheet()
             }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(
-            Rectangle()
-                .fill(Color.wmCanvas(scheme).opacity(0.94))
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.wmRule(scheme))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .bottom)
-        )
-        .sheet(isPresented: $isThermomixInfoPresented) {
-            ThermomixInfoSheet {
-                isThermomixInfoPresented = false
-            }
-            .presentationDetents([.medium, .large])
-            .dashboardLiquidSheet()
-        }
     }
 
-    /// Czy w pasku jest wiersz Thermomixa (przycisk wysyłki). Widoczny tylko
-    /// przy potwierdzonym połączeniu — stan `.unknown` niczego nie obiecuje.
-    private var showsThermomixRow: Bool {
-        recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
-    }
+    // MARK: - Karta Thermomixa
 
-    /// Przepis ma wersję na Thermomixa, ale integracja nie jest połączona
-    /// (albo padło hasło) — zamiast przycisku dyskretna zachęta z wejściem
-    /// w wyjaśnienie. Przy `.unknown` nie pokazujemy nic.
-    private var showsThermomixHint: Bool {
+    /// Karta pokazuje się, gdy przepis ma odpowiednik w Cookidoo i stan
+    /// integracji jest znany. `.unknown` nie rysuje nic — lepiej żaden
+    /// przycisk niż taki, który znika po odpowiedzi serwera.
+    private var showsThermomixCard: Bool {
         guard recipe.isThermomix else { return false }
         switch sessionStore.cookidooIntegrationStore?.status {
-        case .notConnected, .authFailed:
+        case .connected, .notConnected, .authFailed:
             return true
-        case .connected, .unknown, nil:
+        case .unknown, nil:
             return false
         }
     }
 
-    private var thermomixHintRow: some View {
+    private var isThermomixConnected: Bool {
+        sessionStore.cookidooIntegrationStore?.isConnected == true
+    }
+
+    /// Odpowiednik „Ugotuj dzisiaj" z Cookidoo: samoopisująca się karta
+    /// w treści przepisu — kafel z ikoną, tytuł, status w podtytule i okrągły
+    /// przycisk startu. Cała karta jest celem dotyku; stany (wysyłanie,
+    /// sukces, błąd) wymieniają podtytuł i glif w kółku, więc nic nie
+    /// zmienia rozmiaru ani nie zasłania treści pod spodem.
+    private var thermomixCard: some View {
         Button {
-            isThermomixInfoPresented = true
+            if isThermomixConnected {
+                sendToThermomix()
+            } else {
+                isThermomixInfoPresented = true
+            }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "cooktop.fill")
-                    .font(.system(size: 11.5, weight: .semibold))
-                Text("Ten przepis działa z Thermomixem — połącz Cookidoo w Ustawieniach")
-                    .font(.system(size: 12, weight: .medium))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
-            .foregroundStyle(Color.wmMuted(scheme))
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .buttonStyle(.plain)
-    }
+            HStack(spacing: 14) {
+                EditorialSettingsTileIcon(
+                    icon: "cooktop.fill",
+                    color: WMPalette.sage,
+                    size: 44,
+                    radius: 12
+                )
+                .opacity(isThermomixConnected ? 1 : 0.55)
 
-    @ViewBuilder
-    private var thermomixFeedback: some View {
-        if showThermomixSuccess {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12, weight: .bold))
-                Text("Wysłano na Thermomixa — przepis czeka w \u{201E}Mój tydzień\u{201D}")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .lineLimit(2)
-            }
-            .foregroundStyle(WMPalette.sage)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-        } else if let thermomixError {
-            Text(thermomixError)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.red.opacity(0.9))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(isThermomixConnected ? "Ugotuj w Thermomixie" : "Dostępny na Thermomixie")
+                        .font(.system(size: 15.5, weight: .heavy))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.wmLabel(scheme))
 
-    /// „▶ TM" — start gotowania na Thermomixie. Stała szerokość treści
-    /// (spinner i checkmark wchodzą w miejsce ikony), żeby przycisk nie
-    /// zmieniał rozmiaru między stanami i główny przycisk obok nie skakał.
-    private var thermomixButton: some View {
-        Button(action: sendToThermomix) {
-            HStack(spacing: 6) {
-                Group {
-                    if isSendingToThermomix {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(WMPalette.sage)
-                    } else if showThermomixSuccess {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 13, weight: .heavy))
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 13, weight: .heavy))
-                    }
+                    thermomixCardSubtitle
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(width: 16, height: 17)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("TM")
-                    .font(.system(size: 14, weight: .heavy))
-                    .tracking(0.4)
+                thermomixCardTrailing
             }
-            .foregroundStyle(WMPalette.sage)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .background(Capsule().fill(WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10)))
-            .overlay(Capsule().stroke(WMPalette.sage.opacity(0.45), lineWidth: 1.2))
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        isThermomixConnected
+                            ? WMPalette.sage.opacity(scheme == .dark ? 0.12 : 0.08)
+                            : Color.wmTileBg(scheme)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        isThermomixConnected
+                            ? WMPalette.sage.opacity(scheme == .dark ? 0.45 : 0.36)
+                            : Color.wmTileStroke(scheme),
+                        lineWidth: isThermomixConnected ? 1.4 : 1
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(isSendingToThermomix)
-        .accessibilityLabel("Gotuj w Thermomixie")
-        .accessibilityHint("Wysyła przepis do planu Mój tydzień w Cookidoo na dzisiaj")
+        .accessibilityLabel(
+            isThermomixConnected
+                ? "Ugotuj w Thermomixie"
+                : "Przepis dostępny na Thermomixie — dowiedz się więcej"
+        )
+        .accessibilityHint(
+            isThermomixConnected
+                ? "Wysyła przepis do planu Mój tydzień w Cookidoo na dzisiaj"
+                : "Otwiera wyjaśnienie, jak połączyć konto Cookidoo"
+        )
+    }
+
+    @ViewBuilder
+    private var thermomixCardSubtitle: some View {
+        if !isThermomixConnected {
+            Text("Połącz konto Cookidoo w Ustawieniach, aby wysyłać przepisy na urządzenie")
+                .foregroundStyle(Color.wmMuted(scheme))
+        } else if isSendingToThermomix {
+            Text("Wysyłanie do Cookidoo…")
+                .foregroundStyle(Color.wmMuted(scheme))
+        } else if showThermomixSuccess {
+            Text("Czeka w \u{201E}Mój tydzień\u{201D} na Twoim Thermomixie")
+                .foregroundStyle(WMPalette.sage)
+        } else if let thermomixError {
+            Text(thermomixError)
+                .foregroundStyle(Color.red.opacity(0.9))
+        } else {
+            Text("Przepis trafi do \u{201E}Mój tydzień\u{201D} w Cookidoo na dziś")
+                .foregroundStyle(Color.wmMuted(scheme))
+        }
+    }
+
+    /// Okrągły przycisk startu — pełny kolor, zero przezroczystości.
+    /// Spinner i checkmark wchodzą w miejsce glifu w tym samym kółku.
+    @ViewBuilder
+    private var thermomixCardTrailing: some View {
+        if isThermomixConnected {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [WMPalette.sage, WMPalette.sage.mix(black: 0.18)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                if isSendingToThermomix {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                } else if showThermomixSuccess {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundStyle(.white)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundStyle(.white)
+                        // Play optycznie ucieka w lewo od środka koła —
+                        // korekta o 1 pt zamiast matematycznego centrowania.
+                        .offset(x: 1)
+                }
+            }
+            .frame(width: 40, height: 40)
+            .shadow(color: WMPalette.sage.opacity(0.30), radius: 6, x: 0, y: 3)
+        } else {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .heavy))
+                .foregroundStyle(Color.wmFaint(scheme))
+        }
     }
 
     /// Zawsze dzisiejsza data w lokalnej strefie telefonu — przycisk znaczy
