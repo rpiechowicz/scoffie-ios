@@ -170,9 +170,10 @@ struct RecipeDetailView: View {
                     // Zapas pod dolny pasek: sam pasek to 14 + przycisk 45 + 8,
                     // do tego bezpieczny obszar na dole. Bez tej przerwy
                     // ostatni składnik chowa się pod przyciskiem i wygląda
-                    // na ucięty koniec listy. Wiersz Thermomixa dokłada
-                    // drugą wysokość przycisku.
-                    Color.clear.frame(height: (showsThermomixRow || showsThermomixHint) ? 168 : 112)
+                    // na ucięty koniec listy. Przycisk TM stoi OBOK głównego,
+                    // więc podnosi pasek tylko wiersz zachęty (niepołączona
+                    // integracja).
+                    Color.clear.frame(height: showsThermomixHint ? 150 : 112)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -542,13 +543,22 @@ struct RecipeDetailView: View {
         VStack(spacing: 10) {
             thermomixFeedback
 
-            if showsThermomixRow {
-                thermomixButton
-            } else if showsThermomixHint {
+            if showsThermomixHint {
                 thermomixHintRow
             }
 
-            primaryActionButton
+            // Thermomix jako kompaktowy przycisk OBOK głównego, nie nad nim:
+            // dwa pełnowymiarowe przyciski jeden pod drugim wyglądały jak dwie
+            // równorzędne decyzje, a plan pozostaje decyzją główną. „▶ TM"
+            // niesie i „start", i „na czym" — pełna nazwa akcji wraca w toaście
+            // i w etykiecie dostępności.
+            HStack(spacing: 10) {
+                if showsThermomixRow {
+                    thermomixButton
+                }
+
+                primaryActionButton
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
@@ -631,29 +641,40 @@ struct RecipeDetailView: View {
         }
     }
 
+    /// „▶ TM" — start gotowania na Thermomixie. Stała szerokość treści
+    /// (spinner i checkmark wchodzą w miejsce ikony), żeby przycisk nie
+    /// zmieniał rozmiaru między stanami i główny przycisk obok nie skakał.
     private var thermomixButton: some View {
         Button(action: sendToThermomix) {
-            HStack(spacing: 8) {
-                if isSendingToThermomix {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(WMPalette.sage)
-                } else {
-                    Image(systemName: "cooktop.fill")
-                        .font(.system(size: 13, weight: .heavy))
+            HStack(spacing: 6) {
+                Group {
+                    if isSendingToThermomix {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(WMPalette.sage)
+                    } else if showThermomixSuccess {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .heavy))
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 13, weight: .heavy))
+                    }
                 }
-                Text("Gotuj w Thermomixie")
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.1)
+                .frame(width: 16, height: 17)
+
+                Text("TM")
+                    .font(.system(size: 14, weight: .heavy))
+                    .tracking(0.4)
             }
             .foregroundStyle(WMPalette.sage)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(Capsule().fill(WMPalette.sage.opacity(scheme == .dark ? 0.14 : 0.10)))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10)))
             .overlay(Capsule().stroke(WMPalette.sage.opacity(0.45), lineWidth: 1.2))
         }
         .buttonStyle(.plain)
         .disabled(isSendingToThermomix)
+        .accessibilityLabel("Gotuj w Thermomixie")
         .accessibilityHint("Wysyła przepis do planu Mój tydzień w Cookidoo na dzisiaj")
     }
 
@@ -694,23 +715,27 @@ struct RecipeDetailView: View {
 
     private var primaryActionButton: some View {
         Button(action: performPrimaryAction) {
-            Text(primaryActionTitle)
-                .font(.system(size: 14, weight: .bold))
-                .tracking(-0.1)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    Capsule().fill(
-                        LinearGradient(
-                            colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+            HStack(spacing: 7) {
+                Image(systemName: primaryActionIcon)
+                    .font(.system(size: 13, weight: .heavy))
+                Text(primaryActionTitle)
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(-0.1)
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                Capsule().fill(
+                    LinearGradient(
+                        colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
                 )
-                .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-                .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
+            )
+            .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
+            .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .disabled(!isPrimaryActionEnabled || isSavingServings)
@@ -724,6 +749,13 @@ struct RecipeDetailView: View {
         switch context {
         case .catalog: return "Dodaj do planu"
         case .planned: return "Zapisz porcje"
+        }
+    }
+
+    private var primaryActionIcon: String {
+        switch context {
+        case .catalog: return "plus"
+        case .planned: return "checkmark"
         }
     }
 
