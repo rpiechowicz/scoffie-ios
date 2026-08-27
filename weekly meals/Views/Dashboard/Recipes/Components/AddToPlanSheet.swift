@@ -121,12 +121,16 @@ struct AddToPlanSheet: View {
         return (plannedDays, Array(plannedSlots).sortedByDay)
     }
 
-    /// Slot zaznaczany przy otwarciu: kategoria bazowa przepisu, o ile
+    /// Slot zaznaczany przy otwarciu: slot bazowy przepisu, o ile
     /// gospodarstwo ten posiłek planuje. Gdy nie planuje, spadamy na pierwszy
     /// widoczny slot, w który przepis pasuje — pusty wybór zostawiłby CTA
     /// zablokowane bez wyjaśnienia.
+    ///
+    /// Bazowy slot, a nie kategoria: sekcja „Przekąski i desery" zbiera trzy
+    /// sloty naraz, więc z kategorii wychodziłaby zawsze przekąska — także dla
+    /// koktajlu opisanego jako II śniadanie.
     private func defaultSlot(from visible: [MealSlot]) -> MealSlot? {
-        if let base = recipe.category.toMealSlot, visible.contains(base) { return base }
+        if let base = recipe.primarySlot, visible.contains(base) { return base }
         return visible.first { recipe.fits($0) } ?? visible.first
     }
 

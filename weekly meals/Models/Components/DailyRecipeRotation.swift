@@ -2,13 +2,13 @@ import Foundation
 
 /// Codzienna rotacja propozycji na karuzeli „Smaki na dziś”.
 ///
-/// Bez niej karuzela pokazywała zawsze tę samą piątkę — najlepiej dopasowaną
+/// Bez niej karuzela pokazywała zawsze ten sam zestaw — najlepiej dopasowany
 /// do celu, więc dopóki użytkownik nie zmienił ustawień, ekran wyglądał
 /// identycznie każdego dnia. Propozycja, która się nie zmienia, przestaje być
 /// propozycją.
 ///
-/// Wybór jest **deterministyczny**, nie losowy: ta sama doba daje tę samą
-/// piątkę przy każdym wejściu, na każdym urządzeniu i po każdym restarcie.
+/// Wybór jest **deterministyczny**, nie losowy: ta sama doba daje ten sam
+/// zestaw przy każdym wejściu, na każdym urządzeniu i po każdym restarcie.
 /// Losowanie przy każdym renderze przestawiałoby karty pod palcem w trakcie
 /// przewijania.
 enum DailyRecipeRotation {
@@ -29,22 +29,47 @@ enum DailyRecipeRotation {
         return Int(start.timeIntervalSince1970 / 86_400)
     }
 
+    /// Ile kart pokazuje karuzela „Smaki na dziś”.
+    ///
+    /// Osiem, nie pięć: karuzela ma pokazać, co w katalogu ciekawego, a pięć
+    /// pełnoekranowych kart kończyło się, zanim ktokolwiek zdążył się
+    /// rozejrzeć. Osiem to nadal osiem kropek pod kartami, czyli jednym
+    /// spojrzeniem widać, ile zostało — przy kilkunastu kropki przestają
+    /// cokolwiek znaczyć, a przewijanie robi się pracą, nie przeglądaniem.
+    /// Reszta katalogu i tak stoi niżej, w sekcjach.
+    static let featuredCount = 8
+
+    /// Wielkość puli, w obrębie której obraca się rotacja.
+    ///
+    /// Pula to początek listy uporządkowanej rankingiem, więc rotacja krąży
+    /// wśród najlepiej dopasowanych dań, a nie po całym katalogu — inaczej
+    /// „dopasowane do Ciebie” znaczyłoby po prostu „losowe”.
+    ///
+    /// Rośnie razem z katalogiem, bo stałe 15 znaczyło, że przy 89 przepisach
+    /// karuzela w kółko recyklinguje tę samą piętnastkę, a reszta katalogu nie
+    /// pokazuje się w niej nigdy — i żaden import nowych dań tego nie zmieniał.
+    /// Dolna granica `count * 4` pilnuje drugiej strony: przy ciasnej puli
+    /// kolejne dni pokazywałyby niemal ten sam zestaw. Przy `count = 8` i puli
+    /// 40 sąsiednie doby mają wspólne średnio półtorej karty.
+    static func poolSize(forCatalogOf total: Int, count: Int = featuredCount) -> Int {
+        max(count * 4, total / 2)
+    }
+
     /// Wybiera `count` przepisów na daną dobę.
     ///
-    /// Rotacja obraca się wewnątrz `poolLimit` najlepiej dopasowanych, a nie
-    /// całego katalogu — inaczej „dopasowane do Ciebie” znaczyłoby po prostu
-    /// „losowe”. Kolejność wejściowa niesie ranking pod cel użytkownika, więc
-    /// pula to po prostu jej początek.
+    /// `poolLimit` domyślnie liczy się z rozmiaru katalogu (`poolSize`);
+    /// jawna wartość jest po to, żeby dało się to przewidywalnie sprawdzić.
     static func pick(
-        count: Int,
+        count: Int = featuredCount,
         from recipes: [Recipe],
-        poolLimit: Int = 15,
+        poolLimit: Int? = nil,
         day: Int = mealDay()
     ) -> [Recipe] {
         guard !recipes.isEmpty else { return [] }
         guard recipes.count > count else { return recipes }
 
-        let pool = Array(recipes.prefix(max(poolLimit, count)))
+        let limit = poolLimit ?? poolSize(forCatalogOf: recipes.count, count: count)
+        let pool = Array(recipes.prefix(max(limit, count)))
 
         // Przesunięcie startu o numer doby daje przewidywalny obrót: każdy
         // dzień zaczyna od kolejnego przepisu w puli, więc przez `pool.count`
