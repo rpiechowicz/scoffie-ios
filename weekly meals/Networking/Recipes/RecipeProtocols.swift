@@ -7,8 +7,22 @@ import Foundation
 //   - Transport:  protocol-level API working in DTOs (Strings, BackendRecipeDTO)
 //   - Socket:     raw event-level API working in JSON-compatible payloads
 
+/// Jedna strona katalogu.
+///
+/// Dwie liczby zamiast jednej listy, bo to nie jest to samo: mapowanie DTO →
+/// `Recipe` potrafi odrzucić wiersz (id spoza UUID), a stronicowanie musi
+/// patrzeć na to, ILE SERWER PRZYSŁAŁ, nie na to, ile z tego zostało. Pętla
+/// czytająca `recipes.count` brała jeden odrzucony wiersz na pełnej stronie za
+/// koniec katalogu i reszta stron nigdy nie dojeżdżała — a użytkownik widział
+/// „urwany" katalog bez śladu błędu.
+struct RecipePage {
+    let recipes: [Recipe]
+    /// Liczba wierszy sprzed mapowania — po niej poznaje się ostatnią stronę.
+    let receivedCount: Int
+}
+
 protocol RecipeRepository {
-    func fetchRecipes(page: Int, limit: Int) async throws -> [Recipe]
+    func fetchRecipes(page: Int, limit: Int) async throws -> RecipePage
     func fetchRecipeById(_ recipeId: UUID) async throws -> Recipe
     func setFavorite(recipeId: UUID, isFavorite: Bool) async throws
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: UUID, _ isFavorite: Bool) -> Void)

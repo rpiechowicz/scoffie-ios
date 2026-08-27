@@ -24,6 +24,28 @@ enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
 
     var id: String { rawValue }
 
+    /// Kategoria bazowa, pod którą ten slot podpada na widoku Przepisów.
+    ///
+    /// Odwrotność `RecipesCategory.toMealSlot`. `RecipesCategory` ma trzy
+    /// wartości i tak zostaje — steruje sekcją, okładką i akcentem, a sześć
+    /// sekcji rozbiłoby ekran Przepisów. Posiłek dodatkowy dziedziczy więc
+    /// kategorię po posiłku, obok którego stoi — dokładnie tak, jak dziedziczy
+    /// kolor w `accentColor`.
+    ///
+    /// Bez tego przepis, którego `mealType` z backendu to `SNACK`,
+    /// `SECOND_BREAKFAST` albo `AFTERNOON_SNACK`, nie miał kategorii — a brak
+    /// kategorii wywalał CAŁY przepis przy mapowaniu DTO (`toAppRecipe`).
+    /// Dziesięć dań (koktajle, pudding chia, hummus, wrap z indykiem) nie
+    /// istniało wtedy w aplikacji: ani na Przepisach, ani przy dodawaniu
+    /// podwieczorku, który przez to wyglądał na pusty.
+    var baseCategory: RecipesCategory {
+        switch self {
+        case .breakfast, .secondBreakfast: return .breakfast
+        case .lunch, .afternoonSnack:      return .lunch
+        case .dinner, .snack:              return .dinner
+        }
+    }
+
     /// Posiłki, których nie da się wyłączyć.
     static let core: [MealSlot] = [.breakfast, .lunch, .dinner]
 
