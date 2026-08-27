@@ -8,7 +8,12 @@ import SwiftUI
 // - Terracotta selected-day underline slides between cells via matched geometry.
 // - Sage planned dots fade/scale in & out when a day's planned status changes.
 struct EditorialWeekBar: View {
-    @Bindable var datesViewModel: DatesViewModel
+    let datesViewModel: DatesViewModel
+    // Wybrany dzień jest stanem ekranu, który pokazuje pasek — nie
+    // `DatesViewModel`. Plan i Kalendarz dzielą tydzień, ale każdy trzyma
+    // własny dzień, więc przestawienie dnia w jednej zakładce nie przestawia
+    // go w drugiej.
+    @Binding var selectedDate: Date
     let plannedDates: Set<String>   // "yyyy-MM-dd" keys for days that already have ≥1 meal
     @Environment(\.colorScheme) private var scheme
     @Namespace private var indicatorNS
@@ -34,7 +39,7 @@ struct EditorialWeekBar: View {
             ForEach(datesViewModel.dates, id: \.self) { date in
                 DayCell(
                     date: date,
-                    isSelected: datesViewModel.isSelected(date),
+                    isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
                     isToday: datesViewModel.isToday(date),
                     isPast: !datesViewModel.isEditable(date) && !datesViewModel.isToday(date),
                     isPlanned: plannedDates.contains(Self.dayKeyFormatter.string(from: date)),
@@ -44,7 +49,7 @@ struct EditorialWeekBar: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-                        datesViewModel.selectDate(date)
+                        selectedDate = date
                     }
                 }
             }

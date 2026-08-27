@@ -147,7 +147,10 @@ struct PlanSlotPickerSheet: View {
         let count: CGFloat = horizontalSizeClass == .compact ? 2 : 3
         let horizontalPadding: CGFloat = 44   // 22pt each side
         let spacing: CGFloat = 12 * (count - 1)
-        return max(150, floor((total - horizontalPadding - spacing) / count))
+        // Bez dolnego ograniczenia: kafel szerszy od swojej kolumny nachodzi
+        // na sąsiedni i — rysowany później — przejmuje dotknięcia przy jego
+        // prawej krawędzi.
+        return max(1, floor((total - horizontalPadding - spacing) / count))
     }
 
     /// Audience to persist. Zwijanie „wszyscy" do „Wspólne" i przecięcie

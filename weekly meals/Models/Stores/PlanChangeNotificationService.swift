@@ -32,6 +32,16 @@ enum NotificationThread {
     static func household(_ householdId: String) -> String { "household-\(householdId)" }
 }
 
+/// Prefiksy identyfikatorów powiadomień lokalnych. Po nich `AppDelegate`
+/// rozpoznaje rodzaj powiadomienia i po nich kasuje zapas, gdy tę samą sprawę
+/// dowiozło już push.
+enum NotificationIdentifierPrefix {
+    static let plan = "plan-change-"
+    static let shopping = "shopping-change-"
+    static let invitation = "invitation-"
+    static let household = "household-"
+}
+
 /// Powiadomienia o tym, co w gospodarstwie zrobił KTOŚ INNY.
 ///
 /// Historia tej klasy tłumaczy jej dzisiejszy kształt. Każde zdarzenie
@@ -43,11 +53,13 @@ enum NotificationThread {
 ///
 /// Teraz obowiązują cztery zasady:
 ///
-/// 1. **Push wygrywa.** Jeśli serwer potwierdził, że umie wysyłać powiadomienia
-///    (`SessionStore.isPushDeliveryActive`), lokalne nie powstają w ogóle —
-///    backend zbiera zmiany w paczki i wysyła jedno podsumowanie. Lokalne
-///    zostają wyłącznie jako zapasowy kanał tam, gdzie APNs nie działa
-///    (symulator, środowisko bez kluczy, odmowa uprawnień).
+/// 1. **Push wygrywa, ale nie przez wyłączenie zapasu.** Gdy serwer
+///    potwierdził, że umie wysyłać powiadomienia (`isPushDeliveryActive`),
+///    lokalne czeka dłużej i kasuje się samo w chwili, gdy push naprawdę
+///    przyjdzie (`cancelPendingFallback`). Wcześniej sama deklaracja serwera
+///    „mam klucze APNs" gasiła kanał lokalny na stałe — a deklaracja to nie
+///    dostarczenie: token z innego środowiska APNs, cofnięte uprawnienie czy
+///    martwy klucz kończyły się ciszą w obu kanałach naraz.
 /// 2. **Zbieranie zamiast strumienia.** Powiadomienie jest planowane z
 ///    opóźnieniem i pod STAŁYM identyfikatorem. Kolejne zdarzenie w tym samym
 ///    oknie nie dokłada bannera, tylko podmienia ten zaplanowany — `add`
@@ -79,6 +91,12 @@ enum PlanChangeNotificationService {
     /// kanały opisywały tę samą jednostkę czasu.
     private static let batchWindowSeconds: TimeInterval = 60
 
+    /// Ile czeka powiadomienie lokalne, gdy push jest zadeklarowany jako
+    /// działający. Dłużej niż okno zbierania backendu, żeby push zdążył
+    /// przyjść i skasować zapas — a jeśli nie przyjdzie, użytkownik i tak
+    /// dostaje informację zamiast ciszy.
+    private static let pushFallbackDelaySeconds: TimeInterval = 150
+
     /// Ile zmian zebrało się pod danym identyfikatorem i kiedy doszła ostatnia.
     ///
     /// Znacznik czasu jest tu zamiast callbacku „dostarczono": system nie
@@ -107,7 +125,6 @@ enum PlanChangeNotificationService {
         dayOfWeek: String? = nil,
         mealType: String? = nil
     ) {
-        guard !isPushDeliveryActive else { return }
         guard isNotificationsEnabled, isPlanNotificationsEnabled else { return }
         guard let household = householdId, !household.isEmpty else { return }
 
@@ -119,7 +136,7 @@ enum PlanChangeNotificationService {
             mealType: mealType
         ) else { return }
 
-        let identifier = "plan-change-\(household)-\(weekStart)"
+        let identifier = "\(NotificationIdentifierPrefix.plan)\(household)-\(weekStart)"
         let count = bumpPendingCount(for: identifier)
         let body = count <= 1
             ? single
@@ -140,7 +157,6 @@ enum PlanChangeNotificationService {
         changedByDisplayName: String?,
         isChecked: Bool? = nil
     ) {
-        guard !isPushDeliveryActive else { return }
         guard isNotificationsEnabled, isShoppingNotificationsEnabled else { return }
         guard let household = householdId, !household.isEmpty else { return }
 
@@ -149,7 +165,7 @@ enum PlanChangeNotificationService {
             return
         }
 
-        let identifier = "shopping-change-\(household)"
+        let identifier = "\(NotificationIdentifierPrefix.shopping)\(household)"
         let count = bumpPendingCount(for: identifier)
         let body = count <= 1
             ? single
@@ -275,12 +291,28 @@ enum PlanChangeNotificationService {
             identifier: identifier,
             content: content,
             trigger: UNTimeIntervalNotificationTrigger(
-                timeInterval: batchWindowSeconds,
+                timeInterval: isPushDeliveryActive
+                    ? pushFallbackDelaySeconds
+                    : batchWindowSeconds,
                 repeats: false
             )
         )
 
         UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Push o tej samej sprawie już dotarł — czekający zapas lokalny jest
+    /// zbędny i zniknąłby jako druga kopia tej samej wiadomości.
+    static func cancelPendingFallback(prefix: String) {
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { requests in
+            let identifiers = requests
+                .map(\.identifier)
+                .filter { $0.hasPrefix(prefix) }
+            guard !identifiers.isEmpty else { return }
+            center.removePendingNotificationRequests(withIdentifiers: identifiers)
+            identifiers.forEach { resetPendingCount(for: $0) }
+        }
     }
 
     /// Zwiększa licznik zmian dla identyfikatora i zwraca nową wartość.

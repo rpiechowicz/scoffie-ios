@@ -26,6 +26,10 @@ struct WeeklyPlanView: View {
 
     /// Day currently centred in the carousel, keyed by "yyyy-MM-dd".
     @State private var scrolledDayKey: String?
+
+    /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
+    /// wspólny zostaje tylko tydzień.
+    @State private var selectedDate: Date = Date()
     @State private var profile: PlanProfile = .household
     @State private var showProfileSheet = false
     @State private var pickerTarget: PickerTarget?
@@ -88,7 +92,7 @@ struct WeeklyPlanView: View {
     }
 
     private var selectedDayKey: String {
-        WeeklyMealStore.dateKey(for: datesViewModel.selectedDate)
+        WeeklyMealStore.dateKey(for: selectedDate)
     }
 
     /// Index of the day in view. Falls back to the selected day while the
@@ -150,8 +154,6 @@ struct WeeklyPlanView: View {
                     .ignoresSafeArea()
 
                 ScrollView {
-                    @Bindable var bindableDates = datesViewModel
-
                     VStack(alignment: .leading, spacing: 0) {
                         // Marginesy wspólne z pozostałymi zakładkami —
                         // tytuł siada w tym samym miejscu co „Przepisy".
@@ -164,10 +166,12 @@ struct WeeklyPlanView: View {
                             .padding(.bottom, 22)
 
                         // Day strip instead of a week switcher: it is the
-                        // navigation actually used day to day, and it matches
-                        // Kalendarz so both tabs move together.
+                        // navigation actually used day to day. Wygląd wspólny
+                        // z Kalendarzem, ale wybrany dzień jest osobny —
+                        // planowanie i podgląd dnia to dwie różne czynności.
                         EditorialWeekBar(
-                            datesViewModel: bindableDates,
+                            datesViewModel: datesViewModel,
+                            selectedDate: $selectedDate,
                             plannedDates: plannedDates
                         )
                         .padding(.horizontal, WMPageMetrics.horizontal)
@@ -220,7 +224,14 @@ struct WeeklyPlanView: View {
                 await sessionStore.refreshHouseholdMembers(force: false)
             }
             .onAppear {
+                selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
                 if scrolledDayKey == nil { scrolledDayKey = selectedDayKey }
+            }
+            .onChange(of: datesViewModel.weekStartISO) { _, _ in
+                selectedDate = datesViewModel.selectedDate
+            }
+            .onChange(of: selectedDate) { _, newValue in
+                datesViewModel.selectDate(newValue)
             }
             // Two-way with the day strip: tapping a day scrolls the carousel,
             // swiping the carousel moves the strip's underline.
@@ -231,8 +242,8 @@ struct WeeklyPlanView: View {
                 guard oldKey != nil,
                       let newKey,
                       let day = planDays.first(where: { $0.id == newKey }),
-                      !datesViewModel.isSelected(day.date) else { return }
-                datesViewModel.selectDate(day.date)
+                      !Calendar.current.isDate(day.date, inSameDayAs: selectedDate) else { return }
+                selectedDate = day.date
             }
             .onChange(of: selectedDayKey) { _, newKey in
                 guard scrolledDayKey != newKey else { return }
