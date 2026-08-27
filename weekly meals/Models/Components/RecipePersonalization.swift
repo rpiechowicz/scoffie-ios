@@ -139,14 +139,22 @@ struct RecipePersonalization: Equatable {
 
     // MARK: - Dopasowanie do celu
 
-    /// Orientacyjny udział posiłku w dziennej puli kalorii. Śniadanie 25 %,
-    /// obiad 40 %, kolacja 30 % — reszta zostaje na przekąski. To ten sam
-    /// podział, którym operuje podpowiedź na Kalendarzu.
+    /// Orientacyjna wielkość porcji w danej kategorii, liczona jako udział
+    /// dziennej puli kalorii. Śniadanie 25 %, obiad 40 %, kolacja 30 % — ten
+    /// sam podział, którym operuje podpowiedź na Kalendarzu.
+    ///
+    /// To punkty odniesienia dla pojedynczego dania, a nie podział doby: dzień
+    /// z podwieczorkiem po prostu przycina posiłki główne, więc udziały nie
+    /// muszą sumować się do 100 %. Przekąska dostaje 15 %, bo tyle waży realny
+    /// podwieczorek z katalogu (250–450 kcal na porcję) — przy 5 % „reszty po
+    /// trzech posiłkach" każdy deser wyglądałby na wielokrotne przekroczenie
+    /// celu i cel spychałby całą sekcję na koniec listy.
     func calorieShare(for category: RecipesCategory) -> Double {
         switch category {
         case .breakfast: return 0.25
         case .lunch:     return 0.40
         case .dinner:    return 0.30
+        case .snacks:    return 0.15
         case .all, .favourite: return 0.33
         }
     }

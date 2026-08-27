@@ -24,13 +24,18 @@ enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
 
     var id: String { rawValue }
 
-    /// Kategoria bazowa, pod którą ten slot podpada na widoku Przepisów.
+    /// Kategoria, pod którą ten slot podpada na widoku Przepisów.
     ///
-    /// Odwrotność `RecipesCategory.toMealSlot`. `RecipesCategory` ma trzy
-    /// wartości i tak zostaje — steruje sekcją, okładką i akcentem, a sześć
-    /// sekcji rozbiłoby ekran Przepisów. Posiłek dodatkowy dziedziczy więc
-    /// kategorię po posiłku, obok którego stoi — dokładnie tak, jak dziedziczy
-    /// kolor w `accentColor`.
+    /// Odwrotność `RecipesCategory.toMealSlot`. Sekcji jest cztery, nie sześć —
+    /// sześć rozbiłoby ekran Przepisów. Trzy główne posiłki mają swoje, a trzy
+    /// sloty „pomiędzy" (II śniadanie, podwieczorek, przekąska) schodzą do
+    /// wspólnej sekcji `.snacks`: z punktu widzenia katalogu to ten sam rodzaj
+    /// dania — coś małego, na słodko albo pod rękę — a nie trzy osobne kuchnie.
+    ///
+    /// Kolor idzie tu inną drogą niż `accentColor`: akcent grupuje sloty porą
+    /// dnia, bo w planie podwieczorek stoi obok obiadu, a katalogu pora dnia
+    /// nie obchodzi. Dlatego podwieczorek jest tu przy przekąsce, a tam przy
+    /// obiedzie — i to jest zamierzone, nie przeoczenie.
     ///
     /// Bez tego przepis, którego `mealType` z backendu to `SNACK`,
     /// `SECOND_BREAKFAST` albo `AFTERNOON_SNACK`, nie miał kategorii — a brak
@@ -40,9 +45,10 @@ enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
     /// podwieczorku, który przez to wyglądał na pusty.
     var baseCategory: RecipesCategory {
         switch self {
-        case .breakfast, .secondBreakfast: return .breakfast
-        case .lunch, .afternoonSnack:      return .lunch
-        case .dinner, .snack:              return .dinner
+        case .breakfast:                                  return .breakfast
+        case .lunch:                                      return .lunch
+        case .dinner:                                     return .dinner
+        case .secondBreakfast, .afternoonSnack, .snack:   return .snacks
         }
     }
 

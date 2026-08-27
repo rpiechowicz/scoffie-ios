@@ -109,7 +109,7 @@ struct RecipeCategoryBadge: View {
                 .font(.system(size: iconFontSize, weight: .semibold))
                 .foregroundStyle(iconColor)
 
-            Text(RecipesConstants.displayName(for: category))
+            Text(RecipesConstants.shortDisplayName(for: category))
                 .lineLimit(1)
                 .foregroundStyle(labelColor)
         }

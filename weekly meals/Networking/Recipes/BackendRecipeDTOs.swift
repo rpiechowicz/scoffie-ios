@@ -130,7 +130,7 @@ extension BackendRecipeDTO {
     /// Idzie przez `MealSlot`, a nie po własnej liście trzech napisów: backend
     /// zna sześć wartości `MealType` i te spoza trójki podstawowej gubiły tu
     /// kategorię, a wraz z nią cały przepis (patrz `toAppRecipe`). Regułę
-    /// „posiłek dodatkowy dziedziczy kategorię po sąsiedzie" trzyma
+    /// „sloty pomiędzy posiłkami idą do sekcji Przekąski i desery" trzyma
     /// `MealSlot.baseCategory`, więc dopisanie kolejnego slotu jest błędem
     /// kompilacji tam, a nie cichym zniknięciem dania tutaj.
     ///
@@ -195,6 +195,7 @@ extension BackendRecipeDTO {
             description: description ?? "",
             favourite: isFavorite ?? false,
             category: category,
+            baseSlot: MealSlot(backendMealType: mealType),
             suitableSlots: appSuitableSlots,
             servings: servings,
             prepTimeMinutes: prepTimeMinutes,

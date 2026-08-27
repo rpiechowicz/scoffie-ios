@@ -39,6 +39,10 @@ struct RecipeCarouselCard: View {
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        // Bez tego obszarem dotyku jest suma NARYSOWANYCH warstw: gradient jest
+        // wyłączony z hit-testu, a miniatura pojawia się dopiero po wczytaniu —
+        // więc dopóki obrazka nie ma, klikalny bywał sam tytuł na dole.
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(selectionStroke, lineWidth: selectionCount > 0 ? 2 : 1)

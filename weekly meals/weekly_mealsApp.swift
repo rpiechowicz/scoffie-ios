@@ -52,18 +52,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// Powiadomienie przyszło, gdy aplikacja jest NA WIERZCHU.
     ///
-    /// Rutynowe zmiany planu i listy zakupów lądują wtedy cicho w Centrum
-    /// powiadomień (`.list`) zamiast wyskakiwać bannerem z dźwiękiem. Ekran,
-    /// którego dotyczą, i tak odświeża się na żywo po sockecie — banner nad
-    /// aktualizującą się listą był czystym hałasem i połową odczucia „spamu".
-    /// Bannerem zostaje tylko to, czego użytkownik nie zobaczy sam z siebie:
-    /// zmiana składu gospodarstwa.
+    /// Podsumowanie planu dostaje banner i dźwięk — dokładnie to, o co prosi
+    /// backend (`interruption-level: active`, `sound: default`). Wcześniej
+    /// klient zbijał je tu do `.list`, czyli cichego wpisu w Centrum
+    /// powiadomień, i przy otwartej aplikacji domownik nie widział niczego.
+    /// `.list` zostaje tam, gdzie użytkownik i tak patrzy na tę samą treść.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        switch Self.payloadType(of: notification) {
+        let type = Self.payloadType(of: notification)
+        Self.cancelLocalFallbackIfRemote(notification, type: type)
+
+        switch type {
         case .householdMembers:
             completionHandler([.banner, .sound])
         case .householdInvitation:
@@ -72,10 +74,38 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             // kopią tego, co widzi; powiadomienie ma tu jedno zadanie —
             // zostać w Centrum powiadomień na później.
             completionHandler([.list])
-        case .weeklyPlan, .shoppingList:
+        case .weeklyPlan:
+            completionHandler([.banner, .sound])
+        case .shoppingList:
             completionHandler([.list])
         case .unknown:
             completionHandler([.banner])
+        }
+    }
+
+    /// Kasuje czekające powiadomienie lokalne, gdy tę samą sprawę dowiozło
+    /// już push. Tylko dla pushy — zaplanowane lokalne nie ma kasować samo
+    /// siebie w chwili wyświetlenia.
+    private static func cancelLocalFallbackIfRemote(
+        _ notification: UNNotification,
+        type: PushPayloadType
+    ) {
+        guard notification.request.trigger is UNPushNotificationTrigger else { return }
+        cancelLocalFallback(for: type)
+    }
+
+    private static func cancelLocalFallback(for type: PushPayloadType) {
+        switch type {
+        case .weeklyPlan:
+            PlanChangeNotificationService.cancelPendingFallback(
+                prefix: NotificationIdentifierPrefix.plan
+            )
+        case .shoppingList:
+            PlanChangeNotificationService.cancelPendingFallback(
+                prefix: NotificationIdentifierPrefix.shopping
+            )
+        case .householdMembers, .householdInvitation, .unknown:
+            break
         }
     }
 
@@ -94,7 +124,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         PlanChangeNotificationService.resetPendingCount(
             for: response.notification.request.identifier
         )
-        handle(payloadType: Self.payloadType(of: response.notification))
+        let type = Self.payloadType(of: response.notification)
+        Self.cancelLocalFallbackIfRemote(response.notification, type: type)
+        handle(payloadType: type)
         completionHandler()
     }
 
@@ -104,7 +136,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        handle(payloadType: Self.payloadType(ofUserInfo: userInfo))
+        let type = Self.payloadType(ofUserInfo: userInfo)
+        Self.cancelLocalFallback(for: type)
+        handle(payloadType: type)
         completionHandler(.newData)
     }
 
@@ -144,10 +178,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         guard case .unknown = fromPayload else { return fromPayload }
 
         let identifier = notification.request.identifier
-        if identifier.hasPrefix("plan-change-") { return .weeklyPlan }
-        if identifier.hasPrefix("shopping-change-") { return .shoppingList }
-        if identifier.hasPrefix("invitation-") { return .householdInvitation }
-        if identifier.hasPrefix("household-") { return .householdMembers }
+        if identifier.hasPrefix(NotificationIdentifierPrefix.plan) { return .weeklyPlan }
+        if identifier.hasPrefix(NotificationIdentifierPrefix.shopping) { return .shoppingList }
+        if identifier.hasPrefix(NotificationIdentifierPrefix.invitation) { return .householdInvitation }
+        if identifier.hasPrefix(NotificationIdentifierPrefix.household) { return .householdMembers }
         return .unknown
     }
 

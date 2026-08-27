@@ -8,7 +8,8 @@ import SwiftUI
 //   1. EditorialRecipesHeader  — tytuł "Przepisy" + pigułka wyszukiwarki
 //   2. EditorialRecipesHero    — eyebrow + "Smaki na dziś" z terakotowym pionem
 //   3. Karuzela kart-story     — pełna szerokość, paging, kropki
-//   4. Sekcje Tasting menu     — Śniadania / Obiady / Kolacje, każdy z
+//   4. Sekcje Tasting menu     — po jednej na `RecipesCategory.catalogSections`
+//      (Śniadania / Obiady / Kolacje / Przekąski i desery), każda z
 //      EditorialRecipesSectionHeader nad listą EditorialRecipeRow
 //
 // Stylistyka i paddings idą za pozostałymi widokami v2 (Ustawienia, Produkty,
@@ -140,12 +141,11 @@ struct RecipesView: View {
             || (personalization.isEnabled && personalization.restrictsCatalog)
     }
 
+    /// Sekcje Tasting menu — jedna na kategorię katalogu, w kolejności
+    /// `RecipesCategory.catalogSections`. Dołożenie kategorii tam dokłada
+    /// sekcję tutaj; ta lista niczego już nie wymienia z nazwy.
     private var mealSections: [RecipeSection] {
-        let base: [RecipeSection] = [
-            makeSection(category: .breakfast, title: "Śniadania"),
-            makeSection(category: .lunch,     title: "Obiady"),
-            makeSection(category: .dinner,    title: "Kolacje")
-        ]
+        let base = RecipesCategory.catalogSections.map(makeSection(category:))
         return isNarrowed ? base.filter { !$0.recipes.isEmpty } : base
     }
 
@@ -166,9 +166,11 @@ struct RecipesView: View {
         // Przy aktywnym wyszukiwaniu albo filtrach karuzela ma pokazać
         // najlepsze trafienia, a nie codzienną propozycję — użytkownik czegoś
         // wtedy szuka i rotacja tylko by mu to mieszała.
-        guard !isNarrowed else { return Array(ranked.prefix(5)) }
+        guard !isNarrowed else {
+            return Array(ranked.prefix(DailyRecipeRotation.featuredCount))
+        }
 
-        return DailyRecipeRotation.pick(count: 5, from: ranked, day: mealDay)
+        return DailyRecipeRotation.pick(from: ranked, day: mealDay)
     }
 
     private var heroEyebrow: String {
@@ -661,12 +663,12 @@ struct RecipesView: View {
 
     // MARK: - Helpers
 
-    private func makeSection(category: RecipesCategory, title: String) -> RecipeSection {
+    private func makeSection(category: RecipesCategory) -> RecipeSection {
         let categoryRecipes = visibleRecipes.filter { $0.category == category }
         let preview = Array(categoryRecipes.prefix(Self.sectionPreviewLimit))
         return RecipeSection(
             category: category,
-            title: title,
+            title: RecipesConstants.displayName(for: category),
             eyebrow: RecipeAccent.eyebrow(for: category),
             accent: RecipeAccent.accent(for: category),
             recipes: preview,
@@ -775,11 +777,12 @@ private struct RecipeCategorySheetView: View {
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
-                grabber
-
                 header
                     .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    // Uchwyt rysuje `presentationDragIndicator` z
+                    // `dashboardLiquidSheet()`; własna kapsułka dokładała nad
+                    // nim drugą belkę. Odstęp jak w pozostałych arkuszach.
+                    .padding(.top, 18)
                     .padding(.bottom, 14)
 
                 sheetSearchPill
@@ -846,15 +849,6 @@ private struct RecipeCategorySheetView: View {
         Task { @MainActor in
             selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
         }
-    }
-
-    private var grabber: some View {
-        Capsule()
-            .fill(Color.wmFaint(scheme))
-            .frame(width: 38, height: 5)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
     }
 
     private var header: some View {

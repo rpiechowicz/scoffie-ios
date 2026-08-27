@@ -1,21 +1,48 @@
 import Foundation
 
+/// Kategoria, pod którą przepis stoi w katalogu.
+///
+/// To **nie** to samo co slot posiłku. Slotów jest sześć i opisują porę dnia
+/// w planie; kategorie porządkują listę Przepisów, a tam sześć sekcji
+/// rozbiłoby ekran. Dlatego kategorie idą za trzema głównymi posiłkami, a
+/// wszystko, co jada się „pomiędzy" — II śniadanie, podwieczorek, przekąska —
+/// ląduje w jednej sekcji `.snacks`. Regułę trzyma `MealSlot.baseCategory`.
+///
+/// `.all` i `.favourite` to pseudo-kategorie filtrujące: żaden przepis ich nie
+/// dostaje i nie mają własnej sekcji. Sekcje wymienia `catalogSections`.
+///
+/// `rawValue` jedzie do cache'u przepisów — nie wolno go zmieniać bez migracji.
 enum RecipesCategory: String, CaseIterable, Identifiable, Codable {
     case all = "Wszystkie"
     case favourite = "Ulubione"
     case breakfast = "Śniadania"
     case lunch = "Obiady"
     case dinner = "Kolacje"
+    case snacks = "Przekąski i desery"
 
     var id: String { rawValue }
 
-    /// Mapuje kategorię przepisu na slot posiłku.
-    /// Zwraca nil dla kategorii filtrujących (.all, .favourite).
+    /// Kategorie, które faktycznie grupują katalog — w kolejności, w jakiej
+    /// stoją sekcje na Przepisach i chipy w arkuszu „Filtry".
+    ///
+    /// Jedno miejsce, bo obie listy muszą pokazywać ten sam zestaw: dołożenie
+    /// kategorii tutaj dokłada i sekcję, i chip, zamiast zostawiać przepisy
+    /// widoczne w filtrze, ale bez sekcji, w której dałoby się je przejrzeć.
+    static let catalogSections: [RecipesCategory] = [.breakfast, .lunch, .dinner, .snacks]
+
+    /// Slot posiłku reprezentujący kategorię — slot bazowy przepisów, którym
+    /// nikt nie zapisał własnego (`Recipe.primarySlot`).
+    ///
+    /// Zwraca nil dla kategorii filtrujących (.all, .favourite). Dla `.snacks`
+    /// zwraca `.snack`, bo to jedyny slot przekąskowy bez stałej pory —
+    /// mapowanie jest z natury stratne (kategoria zbiera trzy sloty), więc
+    /// konkretny slot przepisu czytaj z `Recipe.primarySlot`, nie stąd.
     var toMealSlot: MealSlot? {
         switch self {
         case .breakfast: .breakfast
         case .lunch:     .lunch
         case .dinner:    .dinner
+        case .snacks:    .snack
         case .all, .favourite: nil
         }
     }
@@ -126,6 +153,17 @@ struct Recipe: Identifiable, Codable {
     /// Zawsze jedna.
     let category: RecipesCategory
 
+    /// Slot, na który przepis jest napisany — `Recipe.mealType` z backendu.
+    ///
+    /// Kategoria tego nie niesie: `.snacks` zbiera trzy sloty, `.breakfast`
+    /// dwa, więc z samej kategorii nie da się odtworzyć pory dnia. Bez tego
+    /// pola arkusz „Dodaj do planu" podpowiadałby koktajlowi z II śniadania
+    /// przekąskę, a plakietka „Pasuje też na…" wymieniałaby jego własny slot.
+    ///
+    /// Opcjonalny, bo przepisy z cache'u sprzed tej zmiany i mocki go nie
+    /// mają — czytać przez `primarySlot`, nie wprost.
+    var baseSlot: MealSlot?
+
     /// Sloty, w których danie faktycznie da się zaplanować.
     ///
     /// To nie to samo co `category`. Owsianka „należy" do śniadań, ale nadaje
@@ -175,6 +213,7 @@ struct Recipe: Identifiable, Codable {
         description: String,
         favourite: Bool = false,
         category: RecipesCategory,
+        baseSlot: MealSlot? = nil,
         suitableSlots: [MealSlot] = [],
         servings: Int = 1,
         prepTimeMinutes: Int = 0,
@@ -191,6 +230,7 @@ struct Recipe: Identifiable, Codable {
         self.description = description
         self.favourite = favourite
         self.category = category
+        self.baseSlot = baseSlot
         self.suitableSlots = suitableSlots.sortedByDay
         self.servings = max(servings, 1)
         self.prepTimeMinutes = max(prepTimeMinutes, 0)
@@ -207,12 +247,13 @@ struct Recipe: Identifiable, Codable {
 // MARK: - Recipe legacy decoding
 //
 // Przepisy zapisane w cache'u przed dodaniem dodatkowych posiłków nie mają
-// klucza `suitableSlots`. Syntetyzowany dekoder wywaliłby na nim cały plan
-// tygodnia, więc brak klucza czytamy jako pustą listę — czyli „pasuje tylko
-// do swojej kategorii".
+// kluczy `suitableSlots` ani `baseSlot`. Syntetyzowany dekoder wywaliłby na
+// nich cały plan tygodnia, więc brak klucza czytamy jako pustą listę (czyli
+// „pasuje tylko do swojego slotu bazowego") i brak slotu bazowego (czyli
+// „zejdź do kategorii").
 extension Recipe {
     private enum CodingKeys: String, CodingKey {
-        case id, name, description, favourite, category, suitableSlots
+        case id, name, description, favourite, category, baseSlot, suitableSlots
         case servings, prepTimeMinutes, difficulty, imageURL
         case ingredients, preparationSteps, nutrition
         case sourceProvider, sourceRecipeId
@@ -225,6 +266,7 @@ extension Recipe {
         description = try container.decode(String.self, forKey: .description)
         favourite = try container.decodeIfPresent(Bool.self, forKey: .favourite) ?? false
         category = try container.decode(RecipesCategory.self, forKey: .category)
+        baseSlot = try container.decodeIfPresent(MealSlot.self, forKey: .baseSlot)
         suitableSlots = (try container.decodeIfPresent([MealSlot].self, forKey: .suitableSlots) ?? [])
             .sortedByDay
         // Klamra, a nie kosmetyka: w cache'u siedzą przepisy z `servings: 0`,
@@ -253,11 +295,16 @@ extension Recipe {
 }
 
 extension Recipe {
+    /// Slot bazowy z rozwinięciem reguły „brak wartości = zejdź do kategorii".
+    /// Przepisy z cache'u sprzed dodania `baseSlot` i mocki dostają przez to
+    /// dokładnie to, co miały wcześniej.
+    var primarySlot: MealSlot? { baseSlot ?? category.toMealSlot }
+
     /// Sloty, w których to danie da się zaplanować — z rozwinięciem reguły
-    /// „pusta lista = tylko kategoria bazowa".
+    /// „pusta lista = tylko slot bazowy".
     var effectiveSlots: [MealSlot] {
         if !suitableSlots.isEmpty { return suitableSlots }
-        return category.toMealSlot.map { [$0] } ?? []
+        return primarySlot.map { [$0] } ?? []
     }
 
     /// Czy danie pasuje do konkretnego slotu planu.
@@ -265,10 +312,10 @@ extension Recipe {
         effectiveSlots.contains(slot)
     }
 
-    /// Sloty poza kategorią bazową — do plakietki „Pasuje też na…"
+    /// Sloty poza slotem bazowym — do plakietki „Pasuje też na…"
     /// w szczegółach przepisu.
     var additionalSlots: [MealSlot] {
-        guard let base = category.toMealSlot else { return effectiveSlots }
+        guard let base = primarySlot else { return effectiveSlots }
         return effectiveSlots.filter { $0 != base }
     }
 }
