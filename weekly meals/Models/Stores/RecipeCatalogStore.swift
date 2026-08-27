@@ -36,6 +36,11 @@ final class RecipeCatalogStore {
     private var cacheURL: URL {
         FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            // v10: prostowanie id przepisów w katalogu przestawia 28 wierszy
+            // pod istniejącymi id. Cache trzyma pary (id, tytuł, imageUrl) z
+            // poprzedniego parowania, więc do końca 12 h ważności pokazywałby
+            // dawne nazwy przy nowych zdjęciach — czyli dokładnie ten objaw,
+            // który ta poprawka usuwa po stronie serwera.
             // v9: doszła sekcja „Przekąski i desery". Zmieniło się i pole
             // (`baseSlot`), i sposób liczenia `category` dla slotów pomiędzy
             // posiłkami, więc cache z v8 trzymałby te dania w starych sekcjach
@@ -43,7 +48,7 @@ final class RecipeCatalogStore {
             // v8: doszły pola sourceProvider/sourceRecipeId (badge Thermomixa) —
             // stary cache dekodowałby się bez nich i katalog nie miałby badge'ów
             // aż do pełnego przeładowania.
-            .appendingPathComponent("recipes_catalog_cache_v9.json")
+            .appendingPathComponent("recipes_catalog_cache_v10.json")
     }
 
     init(

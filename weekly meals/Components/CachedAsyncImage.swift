@@ -42,11 +42,41 @@ private final class SharedImageDiskCache {
     private let maxDiskBytes: Int = 300 * 1_024 * 1_024
     private let maxAge: TimeInterval = 60 * 60 * 24 * 30
 
+    /// Wersja katalogu na dysku. Podbicie unieważnia CAŁY cache obrazów.
+    ///
+    /// Cache kluczuje po URL-u, więc nie ma jak zauważyć, że pod tym samym
+    /// adresem serwer podmienił zawartość — a dokładnie to zdarzyło się przy
+    /// prostowaniu id przepisów: przez chwilę pod adresem `<id>.png` leżało
+    /// zdjęcie innego dania i telefony zdążyły je sobie zapisać. Numer w
+    /// nazwie katalogu jest jedynym sposobem, żeby kazać im pobrać wszystko
+    /// od nowa; sam czas nie wystarczy, bo wpis żyje 30 dni.
+    private static let directoryName = "com.weeklymeals.imagecache.v3"
+
     private init() {
         let base = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        directory = base.appendingPathComponent("com.weeklymeals.imagecache.v2", isDirectory: true)
+        directory = base.appendingPathComponent(Self.directoryName, isDirectory: true)
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        ioQueue.async { [weak self] in self?.pruneIfNeeded() }
+        ioQueue.async { [weak self] in
+            self?.removeStaleVersions(in: base)
+            self?.pruneIfNeeded()
+        }
+    }
+
+    /// Kasuje katalogi po poprzednich wersjach cache'u. Bez tego każde
+    /// podbicie zostawia na dysku użytkownika kilkaset megabajtów, których
+    /// nic już nie czyta i których `pruneIfNeeded` nie widzi — patrzy tylko
+    /// do katalogu bieżącej wersji.
+    private func removeStaleVersions(in base: URL) {
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: base,
+            includingPropertiesForKeys: nil
+        ) else { return }
+
+        for url in contents
+        where url.lastPathComponent.hasPrefix("com.weeklymeals.imagecache.")
+            && url.lastPathComponent != Self.directoryName {
+            try? fileManager.removeItem(at: url)
+        }
     }
 
     func data(for url: URL) -> Data? {
