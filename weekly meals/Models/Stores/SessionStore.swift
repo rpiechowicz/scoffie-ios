@@ -1294,6 +1294,16 @@ final class SessionStore {
         return output.string(from: date)
     }
 
+    /// Środowisko APNs tego buildu — musi odpowiadać `aps-environment`
+    /// z uprawnień (Debug: development, Release: production).
+    private static var apnsEnvironment: String {
+        #if DEBUG
+        "SANDBOX"
+        #else
+        "PRODUCTION"
+        #endif
+    }
+
     private func registerPushDeviceIfPossible() async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
         guard let token = pendingPushDeviceToken, !token.isEmpty else { return }
@@ -1308,6 +1318,11 @@ final class SessionStore {
                         "deviceToken": token,
                         "platform": "IOS",
                         "appBundleId": Bundle.main.bundleIdentifier ?? "weeklymeals",
+                        // Token z buildu debugowego jest ważny wyłącznie na
+                        // sandboksowym hoście APNs, a z TestFlight/App Store
+                        // wyłącznie na produkcyjnym. Serwer musi to wiedzieć,
+                        // bo pisze do obu flot naraz.
+                        "apnsEnvironment": Self.apnsEnvironment,
                     ],
                 ],
                 as: WsEnvelope<PushDeviceRegisterAckDTO>.self

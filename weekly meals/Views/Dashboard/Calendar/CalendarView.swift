@@ -23,6 +23,10 @@ struct CalendarView: View {
 
     @State private var detailTarget: DetailTarget?
 
+    /// Dzień oglądany w Kalendarzu. Własny stan zakładki — Plan ma swój,
+    /// wspólny zostaje tylko tydzień.
+    @State private var selectedDate: Date = Date()
+
     /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
     ///
     /// Szczegół pozwala teraz przestawić liczbę porcji, a zapis musi trafić
@@ -45,7 +49,7 @@ struct CalendarView: View {
     /// variant of a slot is their business, and counting it here inflated the
     /// day's macros against a per-person goal.
     private func myMeals(for slot: MealSlot) -> [PlanMeal] {
-        let all = mealStore.meals(for: datesViewModel.selectedDate, slot: slot)
+        let all = mealStore.meals(for: selectedDate, slot: slot)
         guard let userId = sessionStore.currentUserId else { return all }
         return all.visibleTo(memberId: userId)
     }
@@ -55,7 +59,7 @@ struct CalendarView: View {
     /// wyłączenie posiłku ukrywa slot, ale nigdy nie ukrywa jedzenia.
     private var visibleSlots: [MealSlot] {
         sessionStore.mealSlots.visibleSlots(
-            planned: mealStore.plan(for: datesViewModel.selectedDate).plannedSlots
+            planned: mealStore.plan(for: selectedDate).plannedSlots
         )
     }
 
@@ -114,7 +118,7 @@ struct CalendarView: View {
     /// odhaczać, a przeszły jest zablokowany tylko do *planowania* — to, co
     /// już się wydarzyło, wolno zapisać.
     private var canLogEatenMeals: Bool {
-        Calendar.current.startOfDay(for: datesViewModel.selectedDate)
+        Calendar.current.startOfDay(for: selectedDate)
             <= Calendar.current.startOfDay(for: Date())
     }
 
@@ -173,7 +177,6 @@ struct CalendarView: View {
                     .ignoresSafeArea()
 
                 ScrollView {
-                    @Bindable var bindableDates = datesViewModel
                     VStack(alignment: .leading, spacing: 0) {
                         // Kalendarz nie ma tytułu — pasek dni sam mówi, co
                         // to za ekran. ScrollView ignoruje górny safe area
@@ -181,7 +184,8 @@ struct CalendarView: View {
                         // 78pt idzie tu jako jawny padding, tak jak tytuł na
                         // pozostałych zakładkach.
                         EditorialWeekBar(
-                            datesViewModel: bindableDates,
+                            datesViewModel: datesViewModel,
+                            selectedDate: $selectedDate,
                             plannedDates: plannedDates
                         )
                         .padding(.horizontal, WMPageMetrics.horizontal)
@@ -212,7 +216,7 @@ struct CalendarView: View {
                         // nie ma czego pokazać, nawet zera).
                         if stepsBarVisible {
                             let day = sessionStore.healthStepsStore?
-                                .steps(for: datesViewModel.selectedDate)
+                                .steps(for: selectedDate)
                             EditorialStepsBar(
                                 steps: day?.steps,
                                 goal: stepsGoal,
@@ -281,6 +285,15 @@ struct CalendarView: View {
             // the scroll content underneath. There are no real toolbar
             // items, so nothing legitimate is lost.
             .background(NavBarHitTestPassthrough())
+            .onAppear {
+                selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
+            }
+            .onChange(of: datesViewModel.weekStartISO) { _, _ in
+                selectedDate = datesViewModel.selectedDate
+            }
+            .onChange(of: selectedDate) { _, newValue in
+                datesViewModel.selectDate(newValue)
+            }
             .task(id: datesViewModel.weekStartISO) {
                 await mealStore.loadSavedPlanFromBackend(weekStart: datesViewModel.weekStartISO)
                 await mealStore.loadWeekPlanFromBackend(
@@ -290,9 +303,9 @@ struct CalendarView: View {
             }
             // Kroki dnia spoza kroczącego okna (przeglądanie przeszłości) —
             // leniwy, czysto lokalny odczyt z HealthKit, bez wysyłki.
-            .task(id: WeeklyMealStore.dateKey(for: datesViewModel.selectedDate)) {
+            .task(id: WeeklyMealStore.dateKey(for: selectedDate)) {
                 await sessionStore.healthStepsStore?
-                    .refreshIfNeeded(for: datesViewModel.selectedDate)
+                    .refreshIfNeeded(for: selectedDate)
             }
             // Kalendarz nie planuje — picker zniknął stąd celowo. Dwie drogi
             // dodawania posiłków (Plan i Kalendarz) robiły to samo w dwóch
@@ -359,7 +372,7 @@ struct CalendarView: View {
     // MARK: - Actions
 
     private func handleAssignedTap(_ meal: PlanMeal, slot: MealSlot) {
-        let date = datesViewModel.selectedDate
+        let date = selectedDate
         Task { @MainActor in
             let full = await recipeCatalogStore.loadRecipeDetail(recipeId: meal.recipe.id) ?? meal.recipe
             detailTarget = DetailTarget(date: date, slot: slot, meal: meal, recipe: full)
@@ -395,7 +408,7 @@ struct CalendarView: View {
             await mealStore.setMealEaten(
                 !isEaten,
                 recipeId: meal.recipe.id,
-                for: datesViewModel.selectedDate,
+                for: selectedDate,
                 slot: slot,
                 weekStart: datesViewModel.weekStartISO
             )

@@ -79,9 +79,22 @@ class DatesViewModel {
         return formatter.string(from: date).capitalized
     }
         
-    /// Wybiera konkretną datę
+    /// Kotwica dnia dla tygodnia: ekrany trzymają własny wybrany dzień i
+    /// zapisują go tutaj, żeby po zmianie tygodnia obie zakładki miały od
+    /// czego zacząć.
     func selectDate(_ date: Date) {
         selectedDate = date
+    }
+
+    /// Zwraca `date`, jeśli mieści się w pokazywanym tygodniu — inaczej
+    /// kotwicę tygodnia. Ekran wchodzący na zakładkę po zmianie tygodnia w
+    /// innej nie może zostać z dniem spoza paska.
+    func dayWithinVisibleWeek(_ date: Date) -> Date {
+        let calendar = Calendar.current
+        if dates.contains(where: { calendar.isDate($0, inSameDayAs: date) }) {
+            return date
+        }
+        return selectedDate
     }
     
     /// Przechodzi do poprzedniego tygodnia

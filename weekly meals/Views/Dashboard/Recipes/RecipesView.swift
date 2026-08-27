@@ -775,11 +775,12 @@ private struct RecipeCategorySheetView: View {
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
-                grabber
-
                 header
                     .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    // Uchwyt rysuje `presentationDragIndicator` z
+                    // `dashboardLiquidSheet()`; własna kapsułka dokładała nad
+                    // nim drugą belkę. Odstęp jak w pozostałych arkuszach.
+                    .padding(.top, 18)
                     .padding(.bottom, 14)
 
                 sheetSearchPill
@@ -846,15 +847,6 @@ private struct RecipeCategorySheetView: View {
         Task { @MainActor in
             selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
         }
-    }
-
-    private var grabber: some View {
-        Capsule()
-            .fill(Color.wmFaint(scheme))
-            .frame(width: 38, height: 5)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
     }
 
     private var header: some View {
