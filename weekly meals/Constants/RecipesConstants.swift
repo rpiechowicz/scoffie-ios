@@ -14,8 +14,23 @@ enum RecipesConstants {
             return "Obiady"
         case .dinner:
             return "Kolacje"
+        case .snacks:
+            return "Przekąski i desery"
         @unknown default:
             return String(describing: category)
+        }
+    }
+
+    /// Krótsza etykieta pod ciasne miejsca — plakietki i pigułki, gdzie obok
+    /// stoi jeszcze chip „THERMOMIX" i stempel z czasem.
+    ///
+    /// Istnieje dla jednej kategorii: „Przekąski i desery" wersalikami zjada
+    /// tyle szerokości, że na wąskim ekranie wypycha stempel czasu poza wiersz.
+    /// Reszta kategorii mieści się w pełnej nazwie i dostaje ją bez zmian.
+    static func shortDisplayName(for category: RecipesCategory) -> String {
+        switch category {
+        case .snacks: return "Przekąski"
+        default:      return displayName(for: category)
         }
     }
 
@@ -27,6 +42,7 @@ enum RecipesConstants {
         case .breakfast: return "sunrise.fill"
         case .lunch:     return "fork.knife"
         case .dinner:    return "moon.stars.fill"
+        case .snacks:    return "birthday.cake.fill"
         @unknown default: return "questionmark.circle"
         }
     }
@@ -52,6 +68,8 @@ enum RecipesConstants {
             return .blue
         case .dinner:
             return .purple
+        case .snacks:
+            return .pink
         @unknown default:
             return .teal
         }

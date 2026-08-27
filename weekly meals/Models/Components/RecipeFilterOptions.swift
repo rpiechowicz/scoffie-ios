@@ -98,8 +98,10 @@ struct RecipeFilterOptions: Equatable {
     // MARK: - Dostępne opcje
 
     /// Kategorie realnie przypisywane przepisom (`.all` / `.favourite` to
-    /// pseudo-kategorie filtrujące, więc nie trafiają do chipów).
-    static let selectableCategories: [RecipesCategory] = [.breakfast, .lunch, .dinner]
+    /// pseudo-kategorie filtrujące, więc nie trafiają do chipów). Ta sama
+    /// lista co sekcje na Przepisach — chip ma odpowiadać sekcji, którą
+    /// użytkownik przed chwilą oglądał.
+    static let selectableCategories: [RecipesCategory] = RecipesCategory.catalogSections
 
     /// Progi czasu przygotowania pokazywane jako chipy „do X min”.
     static let prepTimeChoices: [Int] = [15, 30, 60]

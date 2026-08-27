@@ -71,6 +71,11 @@ enum RecipeAccent {
         case .breakfast: return WMPalette.butter
         case .lunch:     return WMPalette.sage
         case .dinner:    return WMPalette.indigo
+        // Terakota była dotąd zarezerwowana dla pseudo-kategorii, które nigdy
+        // nie rysują sekcji — paleta „Cozy Kitchen" ma dokładnie cztery
+        // akcenty, więc czwarta realna kategoria domyka komplet zamiast
+        // dokładać piąty kolor spoza tokenów.
+        case .snacks:    return WMPalette.terracotta
         case .favourite: return WMPalette.terracotta
         case .all:       return WMPalette.terracotta
         }
@@ -104,6 +109,7 @@ enum RecipeAccent {
         case .breakfast: return "Na dobry start"
         case .lunch:     return "Na środek dnia"
         case .dinner:    return "Na spokojny wieczór"
+        case .snacks:    return "Na małe co nieco"
         case .favourite: return "Smaki na dziś"
         case .all:       return "Wszystkie smaki"
         }

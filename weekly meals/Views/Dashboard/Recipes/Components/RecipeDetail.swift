@@ -853,7 +853,7 @@ private struct EditorialEyebrowRow: View {
     private var categoryPill: some View {
         pill(
             icon: RecipesConstants.icon(for: category),
-            text: RecipesConstants.displayName(for: category).uppercased(),
+            text: RecipesConstants.shortDisplayName(for: category).uppercased(),
             accent: RecipeDetailPalette.accent(for: category)
         )
     }
@@ -1315,6 +1315,7 @@ private enum RecipeDetailPalette {
         case .breakfast: return WMPalette.butter
         case .lunch:     return WMPalette.sage
         case .dinner:    return WMPalette.indigo
+        case .snacks:    return WMPalette.terracotta
         case .favourite: return WMPalette.terracotta
         case .all:       return WMPalette.terracotta
         }
