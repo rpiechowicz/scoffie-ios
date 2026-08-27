@@ -125,13 +125,19 @@ extension BackendRecipeDTO {
         return URL(string: "/" + raw, relativeTo: Self.apiBaseURL)?.absoluteURL
     }
 
+    /// Kategoria bazowa przepisu — sekcja na Przepisach, okładka, akcent.
+    ///
+    /// Idzie przez `MealSlot`, a nie po własnej liście trzech napisów: backend
+    /// zna sześć wartości `MealType` i te spoza trójki podstawowej gubiły tu
+    /// kategorię, a wraz z nią cały przepis (patrz `toAppRecipe`). Regułę
+    /// „posiłek dodatkowy dziedziczy kategorię po sąsiedzie" trzyma
+    /// `MealSlot.baseCategory`, więc dopisanie kolejnego slotu jest błędem
+    /// kompilacji tam, a nie cichym zniknięciem dania tutaj.
+    ///
+    /// `nil` zostaje wyłącznie dla wartości, której klient w ogóle nie zna —
+    /// tam nie ma czego zgadywać.
     var appCategory: RecipesCategory? {
-        switch mealType.uppercased() {
-        case "BREAKFAST": .breakfast
-        case "LUNCH": .lunch
-        case "DINNER": .dinner
-        default: nil
-        }
+        MealSlot(backendMealType: mealType)?.baseCategory
     }
 
     /// Sloty planu, do których danie pasuje.

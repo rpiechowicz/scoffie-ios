@@ -9,9 +9,12 @@ final class ApiRecipeRepository: RecipeRepository {
         self.client = client
     }
 
-    func fetchRecipes(page: Int, limit: Int) async throws -> [Recipe] {
+    func fetchRecipes(page: Int, limit: Int) async throws -> RecipePage {
         let dtos = try await client.fetchRecipes(page: page, limit: limit)
-        return dtos.compactMap { $0.toAppRecipe() }
+        return RecipePage(
+            recipes: dtos.compactMap { $0.toAppRecipe() },
+            receivedCount: dtos.count
+        )
     }
 
     func fetchRecipeById(_ recipeId: UUID) async throws -> Recipe {

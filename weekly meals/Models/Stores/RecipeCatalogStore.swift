@@ -101,9 +101,12 @@ final class RecipeCatalogStore {
             var all: [Recipe] = []
             var page = 1
             while true {
-                let items = try await fetchPageWithRetry(page: page)
-                all.append(contentsOf: items)
-                if items.count < pageSize || page >= maxCatalogPages { break }
+                let fetched = try await fetchPageWithRetry(page: page)
+                all.append(contentsOf: fetched.recipes)
+                // Koniec katalogu poznajemy po tym, ile wierszy przysłał
+                // serwer, a nie po tym, ile z nich dało się zmapować — patrz
+                // `RecipePage`.
+                if fetched.receivedCount < pageSize || page >= maxCatalogPages { break }
                 page += 1
             }
             recipes = all
@@ -134,10 +137,12 @@ final class RecipeCatalogStore {
 
         do {
             let nextPage = currentPage + 1
-            let items = try await fetchPageWithRetry(page: nextPage)
-            recipes.append(contentsOf: items)
+            let fetched = try await fetchPageWithRetry(page: nextPage)
+            recipes.append(contentsOf: fetched.recipes)
             currentPage = nextPage
-            hasMore = items.count >= pageSize
+            // Ta sama zasada co w `reload()`: o kolejnej stronie decyduje
+            // liczba wierszy z serwera, nie liczba tych zmapowanych.
+            hasMore = fetched.receivedCount >= pageSize
             saveCache()
         } catch {
             errorMessage = UserFacingErrorMapper.message(from: error)
@@ -228,7 +233,7 @@ final class RecipeCatalogStore {
         return !payload.recipes.isEmpty
     }
 
-    private func fetchPageWithRetry(page: Int) async throws -> [Recipe] {
+    private func fetchPageWithRetry(page: Int) async throws -> RecipePage {
         var lastError: Error?
         for attempt in 1...maxFetchAttempts {
             do {
