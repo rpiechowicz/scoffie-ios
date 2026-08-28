@@ -1349,45 +1349,12 @@ private enum RecipeDetailFormat {
     }
 
     static func ingredientAmount(_ ingredient: Ingredient) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "pl_PL")
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.roundingMode = .halfUp
-        let value = kitchenRounded(ingredient.amount, unit: ingredient.unit)
-        let amount = formatter.string(from: NSNumber(value: value)) ?? "\(value)"
-        return "\(amount) \(ingredient.unit.rawValue)"
-    }
-
-    /// Ilość zaokrąglona do wartości, którą da się odmierzyć w kuchni.
-    ///
-    /// Skalowanie porcji dzieli gramatury przez liczbę porcji przepisu, więc
-    /// z „5 szt" przy jednej porcji robi się 2,5, a z „100 g" — 33,33. Suche
-    /// obcięcie do dwóch miejsc po przecinku daje listę zakupów, po której
-    /// nikt nie gotuje. Reguła:
-    /// — rzeczy liczone sztukami i miarkami idą do połówki, bo pół jajka
-    ///   i pół łyżki da się odmierzyć, a 0,33 łyżki nie;
-    /// — gramy i mililitry od 10 w górę tną się do liczby całkowitej, bo przy
-    ///   takiej masie ułamek grama to szum wagi kuchennej, a nie informacja;
-    ///   poniżej 10 zostaje jedno miejsce, żeby „7,5 g drożdży" nie awansowało
-    ///   na 8 g;
-    /// — kilogramy i litry zostają z dwoma miejscami, bo w przepisach
-    ///   występują właśnie jako ułamki (0,25 kg) i połówka zrobiłaby z ćwierć
-    ///   kilo pół.
-    /// Z niezerowej ilości nigdy nie wychodzi zero — składnik ma się pojawić
-    /// na liście choćby w ilości śladowej.
-    private static func kitchenRounded(_ amount: Double, unit: IngredientUnit) -> Double {
-        guard amount > 0 else { return amount }
-
-        switch unit {
-        case .piece, .teaspoon, .tablespoon, .cup:
-            return max(0.5, (amount * 2).rounded() / 2)
-        case .gram, .milliliter:
-            return amount >= 10 ? amount.rounded() : max(0.1, (amount * 10).rounded() / 10)
-        case .kilogram, .liter:
-            return max(0.01, (amount * 100).rounded() / 100)
-        }
+        KitchenAmount.format(
+            amount: ingredient.amount,
+            unit: ingredient.unit,
+            rawUnit: ingredient.rawUnit,
+            department: ingredient.department
+        )
     }
 }
 

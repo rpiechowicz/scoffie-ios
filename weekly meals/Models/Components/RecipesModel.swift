@@ -67,6 +67,11 @@ enum IngredientUnit: String, CaseIterable, Codable, Identifiable {
     case teaspoon = "łyżeczka"
     case tablespoon = "łyżka"
     case cup = "szklanka"
+    case pinch = "szczypta"
+    /// Jednostka, której apka nie zna — składnik i tak zostaje na liście,
+    /// a etykietę bierze z `Ingredient.rawUnit`. Dawniej taki wiersz był
+    /// po cichu wyrzucany przy dekodowaniu (tak zniknęła każda szczypta).
+    case other = "inne"
 
     var id: String { rawValue }
 }
@@ -83,18 +88,33 @@ struct Ingredient: Identifiable, Codable, Hashable {
     /// traktuje `nil` jak brak wskazówki i schodzi wtedy do samej nazwy.
     var department: String?
 
+    /// Oryginalna jednostka z backendu — potrzebna tylko, gdy `unit == .other`.
+    var rawUnit: String?
+
+    /// Ilość i jednostka po normalizacji backendu (g / ml / szt) — te same
+    /// liczby, z których serwer buduje listę zakupów. Lista przepisów ich nie
+    /// dowozi (`nil`), szczegół przepisu tak.
+    var normalizedAmount: Double?
+    var normalizedUnit: String?
+
     init(
         id: UUID = UUID(),
         name: String,
         amount: Double,
         unit: IngredientUnit,
-        department: String? = nil
+        department: String? = nil,
+        rawUnit: String? = nil,
+        normalizedAmount: Double? = nil,
+        normalizedUnit: String? = nil
     ) {
         self.id = id
         self.name = name
         self.amount = amount
         self.unit = unit
         self.department = department
+        self.rawUnit = rawUnit
+        self.normalizedAmount = normalizedAmount
+        self.normalizedUnit = normalizedUnit
     }
 }
 

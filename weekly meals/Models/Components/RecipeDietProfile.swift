@@ -385,7 +385,11 @@ private enum Keywords {
         "owsian", "owies", "grahamk", "kajzerk", "rogalik", "precel",
         "krakers", "biszkopt", "ciastk", "ciasto", "ciasta", "muffin",
         "paczek", "drozdzowk", "panierk", "grzank", "sucharek", "seitan",
-        "kasza", "kaszy", "manna", "kuskus", "spaghetti", "penne", "lazani"
+        "kasza", "kaszy", "manna", "kuskus", "spaghetti", "penne", "lazani",
+        // Granola i musli to płatki owsiane (plus często pszenica), zakwas na
+        // żurek to mąka żytnia — bez tych rdzeni cztery dania z katalogu
+        // przechodziły filtr bezglutenowy.
+        "granol", "musli", "muesli", "zakwas"
     ]
 
     static let glutenGrainWords = ["maca", "pita", "pity", "bulka", "tost", "tosty"]

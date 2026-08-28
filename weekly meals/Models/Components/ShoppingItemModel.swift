@@ -9,8 +9,16 @@ struct ShoppingItem: Identifiable, Codable, Hashable {
     var department: String
     var isChecked: Bool
 
-    var formattedAmount: String {
-        let roundedValue = Int(totalAmount.rounded(.toNearestOrAwayFromZero))
-        return roundedValue.formatted(.number.locale(Locale(identifier: "pl_PL")))
+    /// Ilość z jednostką gotowa do pokazania: „480 g", „2 szt", a dla
+    /// śladowych przypraw „do smaku" — zamiast „Sól 0 g", które dawało
+    /// zaokrąglanie do liczby całkowitej.
+    var displayAmount: String {
+        let mappedUnit = IngredientUnit(rawValue: unit) ?? .other
+        return KitchenAmount.format(
+            amount: totalAmount,
+            unit: mappedUnit,
+            rawUnit: unit,
+            department: department
+        )
     }
 }

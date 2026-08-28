@@ -48,7 +48,7 @@ final class RecipeCatalogStore {
             // v8: doszły pola sourceProvider/sourceRecipeId (badge Thermomixa) —
             // stary cache dekodowałby się bez nich i katalog nie miałby badge'ów
             // aż do pełnego przeładowania.
-            .appendingPathComponent("recipes_catalog_cache_v10.json")
+            .appendingPathComponent("recipes_catalog_cache_v11.json")
     }
 
     init(

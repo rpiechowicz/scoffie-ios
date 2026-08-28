@@ -383,7 +383,7 @@ struct ProductsView: View {
         EditorialAisleSection.Item(
             id: item.productKey,
             name: item.name,
-            amount: "\(item.formattedAmount) \(item.unit)".trimmingCharacters(in: .whitespaces),
+            amount: item.displayAmount,
             bought: item.isChecked
         )
     }
