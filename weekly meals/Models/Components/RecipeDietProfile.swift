@@ -2,11 +2,12 @@ import Foundation
 
 /// Co przepis „zawiera” z punktu widzenia diety i alergenów.
 ///
-/// Backend nie trzyma tagów dietetycznych na przepisie — jedyne, co mamy, to
-/// lista składników (nazwa + dział z katalogu) i policzone makra. Profil
-/// wylicza się więc po stronie klienta: dział daje zgrubny sygnał
-/// („Mięso” → mięso), a słowniki nazw go doprecyzowują i poprawiają wyjątki
-/// („mleko owsiane” siedzi w dziale „Nabiał”, ale nabiałem nie jest).
+/// Od plastra D źródłem prawdy są tagi policzone na serwerze z kuratorowanych
+/// tagów składników (`Recipe.allergens` / `Recipe.dietTags`) — profil buduje
+/// `RecipeDietProfile.fromServerTags`. Heurystyka po nazwach składników
+/// (`RecipeDietClassifier`) zostaje WYŁĄCZNIE jako fallback, gdy serwer tagów
+/// nie przysłał (stary backend, cache sprzed zmiany, mocki): dział daje
+/// zgrubny sygnał („Mięso” → mięso), a słowniki nazw go doprecyzowują.
 ///
 /// Zasada bezpieczeństwa jest asymetryczna i celowo taka zostaje:
 /// - **alergen** wykrywamy nadmiarowo (owies liczy się jako gluten, masło jako
@@ -105,6 +106,33 @@ struct RecipeDietProfile: Equatable {
     /// ostrzegawczych, gdy personalizacja jest wyłączona.
     func conflicting(with avoided: Set<Allergen>) -> [Allergen] {
         Allergen.allCases.filter { allergens.contains($0) && avoided.contains($0) }
+    }
+
+    /// Profil z tagów serwera — parytet z `src/common/diet-tags.ts` i
+    /// `src/recipes/diet-rules.util.ts` w backendzie. Nieznane id (nowszy
+    /// serwer) są pomijane: alergen, którego enum nie zna, i tak nie ma chipa.
+    ///
+    /// `hasIngredientData` jest prawdą, gdy przepis ma składniki ALBO jakikolwiek
+    /// tag — projekcja listy potrafi przyjść bez składników, a tagi już
+    /// dowodzą, że było na czym pracować.
+    static func fromServerTags(
+        allergens serverAllergens: [String],
+        dietTags: [String],
+        hasIngredients: Bool
+    ) -> RecipeDietProfile {
+        let tags = Set(dietTags)
+        var profile = RecipeDietProfile()
+        profile.allergens = Set(serverAllergens.compactMap(Allergen.init(rawValue:)))
+        profile.containsMeat = tags.contains("MEAT")
+        profile.containsFish = tags.contains("FISH") || tags.contains("CRUSTACEAN")
+        profile.containsDairy = tags.contains("DAIRY")
+        profile.containsEggs = tags.contains("EGG")
+        profile.containsOtherAnimal = tags.contains("ANIMAL_OTHER")
+        profile.containsGrains = tags.contains("GRAIN") || tags.contains("GLUTEN_GRAIN")
+        profile.containsLegumes = tags.contains("LEGUME")
+        profile.containsProcessed = tags.contains("PROCESSED")
+        profile.hasIngredientData = hasIngredients || !tags.isEmpty || !serverAllergens.isEmpty
+        return profile
     }
 }
 
@@ -445,18 +473,31 @@ enum RecipeDietProfileCache {
 
     static func profile(for recipe: Recipe) -> RecipeDietProfile {
         // Lista przepisów potrafi przyjść uboższa niż szczegóły, więc wpis musi
-        // się unieważnić, gdy ten sam przepis wróci z pełniejszym składem.
+        // się unieważnić, gdy ten sam przepis wróci z pełniejszym składem —
+        // albo gdy po przeładowaniu doszły tagi z serwera.
         var hasher = Hasher()
         hasher.combine(recipe.ingredients.count)
         hasher.combine(recipe.nutrition.carbs)
         hasher.combine(recipe.servings)
+        hasher.combine(recipe.dietTags)
+        hasher.combine(recipe.allergens)
         let fingerprint = hasher.finalize()
 
         if let cached = storage[recipe.id], cached.fingerprint == fingerprint {
             return cached.profile
         }
 
-        let profile = RecipeDietClassifier.profile(for: recipe)
+        // Tagi z serwera wygrywają z heurystyką; `nil` = serwer ich nie zna.
+        let profile: RecipeDietProfile
+        if let dietTags = recipe.dietTags {
+            profile = RecipeDietProfile.fromServerTags(
+                allergens: recipe.allergens ?? [],
+                dietTags: dietTags,
+                hasIngredients: !recipe.ingredients.isEmpty
+            )
+        } else {
+            profile = RecipeDietClassifier.profile(for: recipe)
+        }
         storage[recipe.id] = (fingerprint, profile)
         return profile
     }

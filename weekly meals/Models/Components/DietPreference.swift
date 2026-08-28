@@ -94,24 +94,22 @@ enum DietPreference: String, CaseIterable, Identifiable {
 
 // Alergeny i nietolerancje, których realnie da się uniknąć w tym katalogu.
 //
-// Lista jest krótsza niż „14 alergenów UE" i to jest celowe: chip, którego
-// nie ma czym wypełnić, obiecuje ochronę, której nie dowozimy. Zostały te,
-// które mają w katalogu składników rzeczywiste źródła i występują w polskiej
-// kuchni domowej:
+// `rawValue` to kontrakt z backendem: dokładnie te id trzyma
+// `UserPreference.allergens` i `Recipe.allergens` (`src/common/allergens.ts`).
+// Nowa wartość wchodzi NAJPIERW na serwer — inaczej odrzuci cały zapis
+// preferencji. Od plastra D przepis niesie alergeny policzone na serwerze
+// z kuratorowanych tagów składników, więc chip nie obiecuje więcej, niż
+// katalog dowozi:
 //
-//   laktoza  — 43 źródła   gluten   — 40 źródeł
-//   ryby     —  9 źródeł   orzechy  —  3 źródła
-//   jaja     —  2 źródła (ale 9 z 30 przepisów)
-//   soja     —  1 źródło (sos sojowy — najczęstszy ukryty nośnik)
-//   orzeszki —  1 źródło (osobno od orzechów: to inna alergia i częstsza)
+//   laktoza = nabiał ZAWIERAJĄCY laktozę (nietolerancja), nie alergia na
+//             białko mleka — produkty „bez laktozy" i ghee jej nie mają;
+//   ryby    = ryby i owoce morza (krewetka też);
+//   seler   — także w bulionach i przyprawie uniwersalnej;
+//   gorczyca — także w majonezie; sezam — także w hummusie i tahini.
 //
-// Wypadły `sezam` i `seler` (po jednym źródle, zero przepisów) oraz
-// `shellfish` — jedyna pozycja katalogu to krewetka, siedząca i tak w dziale
-// „Ryby", więc jest teraz obsługiwana przez „Ryby i owoce morza".
-//
-// Usunięte wartości nie wymagają migracji: `RecipePersonalization` czyta
-// zapisane alergeny przez `compactMap(Allergen.init(rawValue:))`, więc stare
-// wpisy po prostu przestają być rozpoznawane.
+// Lista celowo krótsza niż „14 alergenów UE": chip, którego katalog nie
+// potrafi wypełnić, obiecuje ochronę, której nie dowozimy. Nieznane id z
+// serwera zostają w zapisie (unia w `SettingsView`), ale nie renderują chipa.
 //
 // Multi-select; persisted in `@AppStorage` as a sorted comma-separated
 // raw-value string (`"eggs,gluten,nuts"`).
@@ -123,6 +121,9 @@ enum Allergen: String, CaseIterable, Identifiable {
     case peanuts
     case fish
     case soy
+    case celery
+    case mustard
+    case sesame
 
     var id: String { rawValue }
 
@@ -135,6 +136,9 @@ enum Allergen: String, CaseIterable, Identifiable {
         case .peanuts:      return "Orzeszki ziemne"
         case .fish:         return "Ryby i owoce morza"
         case .soy:          return "Soja"
+        case .celery:       return "Seler"
+        case .mustard:      return "Gorczyca"
+        case .sesame:       return "Sezam"
         }
     }
 }

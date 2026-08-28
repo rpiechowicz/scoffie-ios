@@ -44,6 +44,10 @@ final class RecipeCatalogStore {
     private static var cacheFileURL: URL {
         FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            // v12: doszły tagi z serwera (allergens/dietTags). Stary cache
+            // dekodowałby się z `nil` i katalog przez 12 h filtrowałby dietę
+            // heurystyką zamiast tagami — z innymi wynikami (granola, seler).
+            // v11: plaster A — porcje 1..8 i prostowanie nazw składników.
             // v10: prostowanie id przepisów w katalogu przestawia 28 wierszy
             // pod istniejącymi id. Cache trzyma pary (id, tytuł, imageUrl) z
             // poprzedniego parowania, więc do końca 12 h ważności pokazywałby
@@ -56,7 +60,7 @@ final class RecipeCatalogStore {
             // v8: doszły pola sourceProvider/sourceRecipeId (badge Thermomixa) —
             // stary cache dekodowałby się bez nich i katalog nie miałby badge'ów
             // aż do pełnego przeładowania.
-            .appendingPathComponent("recipes_catalog_cache_v11.json")
+            .appendingPathComponent("recipes_catalog_cache_v12.json")
     }
 
     init(
