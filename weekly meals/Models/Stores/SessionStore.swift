@@ -962,6 +962,21 @@ final class SessionStore {
         }
     }
 
+    /// Granice nazwy gospodarstwa — parytet z `CreateHouseholdDto` (2…64) na
+    /// serwerze, który od Fazy 0 waliduje je również na WebSockecie.
+    static let householdNameLengthRange = 2...64
+
+    static func isValidHouseholdName(_ name: String) -> Bool {
+        householdNameLengthRange.contains(
+            name.trimmingCharacters(in: .whitespacesAndNewlines).count
+        )
+    }
+
+    /// Limit `displayName` z `UpdateProfileDto` (64). Przycinamy PRZED zapisem
+    /// lokalnym i wysyłką, bo `saveProfile` zapisuje optymistycznie — dłuższa
+    /// nazwa zostawałaby na telefonie, a serwer odrzucałby ją po cichu.
+    static let displayNameMaxLength = 64
+
     func createHousehold(name: String) async {
         guard let userId = currentUserId, !userId.isEmpty else {
             authError = "Brak użytkownika sesji."
@@ -971,6 +986,10 @@ final class SessionStore {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             authError = "Podaj nazwę gospodarstwa."
+            return
+        }
+        guard Self.isValidHouseholdName(trimmed) else {
+            authError = "Nazwa gospodarstwa musi mieć od 2 do 64 znaków."
             return
         }
 
@@ -2115,7 +2134,11 @@ final class SessionStore {
 
         var data: [String: Any] = [:]
         if let displayName {
-            let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = String(
+                displayName
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .prefix(Self.displayNameMaxLength)
+            )
             if !trimmed.isEmpty {
                 data["displayName"] = trimmed
                 UserDefaults.standard.set(trimmed, forKey: Keys.displayName)
