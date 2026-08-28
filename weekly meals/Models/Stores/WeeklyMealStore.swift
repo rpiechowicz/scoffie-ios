@@ -177,6 +177,11 @@ class WeeklyMealStore {
     ///
     /// `replacingRecipeId` drops another variant in the same call — that is how
     /// „Zmień przepis" swaps one meal for another without briefly showing both.
+    /// Serwer robi to w JEDNEJ transakcji (`replaceRecipeId` w payloadzie):
+    /// nie ma już wstępnego `removeWeekSlot`, po którym slot stał pusty, drugi
+    /// domownik dostawał dwa powiadomienia, a przerwany zapis zostawiał
+    /// pustkę. Rollback poniżej przywraca STARE danie, bo serwer bez ACK-a nic
+    /// nie zmienił.
     ///
     /// `plannedServings == nil` znaczy „niech serwer policzy porcje z
     /// audytorium" — domyślna wartość jest tu po to, żeby wywołania sprzed
@@ -228,21 +233,14 @@ class WeeklyMealStore {
         guard let weeklyPlanRepository else { return true }
 
         do {
-            if let replacingRecipeId, replacingRecipeId != recipe.id {
-                try await weeklyPlanRepository.removeWeekSlot(
-                    weekStart: weekStart,
-                    date: date,
-                    mealSlot: slot,
-                    recipeId: replacingRecipeId
-                )
-            }
             let saved = try await weeklyPlanRepository.upsertWeekSlot(
                 weekStart: weekStart,
                 date: date,
                 mealSlot: slot,
                 recipeId: recipe.id,
                 participantIds: participantIds,
-                plannedServings: plannedServings
+                plannedServings: plannedServings,
+                replaceRecipeId: replacingRecipeId
             )
             // Wpis optymistyczny miał syntetyczne `id` i zgadywane porcje.
             // Podmieniamy go na to, co naprawdę leży w bazie — dzięki temu

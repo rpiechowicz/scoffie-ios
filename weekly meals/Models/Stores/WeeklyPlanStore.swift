@@ -31,7 +31,13 @@ protocol WeeklyPlanRepository {
     /// potwierdza, że backend to pole w ogóle rozumie. `nil` znaczy „serwer
     /// odpowiedział czymś, czego nie umiemy odczytać" i zostawia stan
     /// optymistyczny nietknięty.
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws -> WeekPlanSlot?
+    ///
+    /// `replaceRecipeId` to danie, które ma zniknąć ze slotu W TEJ SAMEJ
+    /// transakcji, w której wchodzi `recipeId` — tak działa „Zmień przepis".
+    /// Dawniej szło to jako `removeWeekSlot` + `upsertWeekSlot`: slot stał
+    /// chwilę pusty, drugi domownik dostawał dwa zdarzenia, a przerwany zapis
+    /// zostawiał pustkę. Równe `recipeId` = brak podmiany.
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?) async throws -> WeekPlanSlot?
     /// `recipeId == nil` clears every variant in the slot.
     func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws
     func clearWeekPlan(weekStart: String) async throws
@@ -47,7 +53,8 @@ protocol WeeklyPlanRepository {
 protocol WeeklyPlanTransportClient {
     func fetchWeekPlan(weekStart: String) async throws -> [BackendWeeklyPlanItemDTO]
     /// `plannedServings == nil` zostawia wyliczenie liczby porcji serwerowi.
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws -> BackendWeeklyPlanItemDTO?
+    /// `replaceRecipeId` — patrz `WeeklyPlanRepository.upsertWeekSlot`.
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?, replaceRecipeId: String?) async throws -> BackendWeeklyPlanItemDTO?
     func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String?) async throws
     func clearWeekPlan(weekStart: String) async throws
     func setMealEaten(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, isEaten: Bool) async throws
@@ -258,7 +265,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getByWeek.")
     }
 
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws -> BackendWeeklyPlanItemDTO? {
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?, replaceRecipeId: String?) async throws -> BackendWeeklyPlanItemDTO? {
         let householdId = try await resolveHouseholdId()
         var data: [String: Any] = [
             "dayOfWeek": dayOfWeek,
@@ -273,6 +280,12 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         // ilu jest jedzących.
         if let plannedServings {
             data["plannedServings"] = plannedServings
+        }
+        // Podmiana dania: stary wariant znika po stronie serwera w tej samej
+        // transakcji. Równe `recipeId` (edycja audytorium tego samego dania)
+        // nie jest podmianą, więc pola nie wysyłamy wcale.
+        if let replaceRecipeId, replaceRecipeId != recipeId {
+            data["replaceRecipeId"] = replaceRecipeId
         }
         let envelope: WsEnvelope<BackendPlanItemAckDTO> = try await socket.emitWithAck(
             event: "weeklyPlans:upsertWeekSlot",
@@ -485,7 +498,7 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
         )
     }
 
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws -> WeekPlanSlot? {
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?) async throws -> WeekPlanSlot? {
         guard let dayOfWeek = WeekDateMapper.dayOfWeek(from: date, weekStart: weekStart) else {
             throw RecipeDataError.serverError(message: "Nie można wyznaczyć dnia tygodnia dla slotu.")
         }
@@ -495,7 +508,8 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             mealType: mealSlot.backendMealType,
             recipeId: recipeId.uuidString,
             participantIds: participantIds,
-            plannedServings: plannedServings
+            plannedServings: plannedServings,
+            replaceRecipeId: replaceRecipeId?.uuidString
         )
         return saved.flatMap { Self.mapSlot($0, weekStart: weekStart) }
     }
