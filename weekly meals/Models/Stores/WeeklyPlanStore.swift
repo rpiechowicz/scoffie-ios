@@ -135,14 +135,6 @@ struct BackendSavedPlanChangedDTO: Codable {
 }
 
 private final class WeekDateMapper {
-    private static let formatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 
     private static let dayOffsets: [String: Int] = [
         "MON": 0,
@@ -155,19 +147,20 @@ private final class WeekDateMapper {
     ]
 
     static func dateKey(weekStart: String, dayOfWeek: String) -> String? {
-        guard let monday = formatter.date(from: weekStart),
+        guard let monday = PlanWeek.date(fromKey: weekStart),
               let offset = dayOffsets[dayOfWeek.uppercased()],
-              let date = Calendar.current.date(byAdding: .day, value: offset, to: monday) else {
+              let date = PlanWeek.calendar.date(byAdding: .day, value: offset, to: monday) else {
             return nil
         }
-        return formatter.string(from: date)
+        return PlanWeek.dateKey(date)
     }
 
     static func dayOfWeek(from date: Date, weekStart: String) -> String? {
-        guard let monday = formatter.date(from: weekStart) else { return nil }
-        let startOfMonday = Calendar.current.startOfDay(for: monday)
-        let startOfDate = Calendar.current.startOfDay(for: date)
-        let diff = Calendar.current.dateComponents([.day], from: startOfMonday, to: startOfDate).day ?? 0
+        guard let monday = PlanWeek.date(fromKey: weekStart) else { return nil }
+        let calendar = PlanWeek.calendar
+        let startOfMonday = calendar.startOfDay(for: monday)
+        let startOfDate = calendar.startOfDay(for: date)
+        let diff = calendar.dateComponents([.day], from: startOfMonday, to: startOfDate).day ?? 0
         switch diff {
         case 0: return "MON"
         case 1: return "TUE"

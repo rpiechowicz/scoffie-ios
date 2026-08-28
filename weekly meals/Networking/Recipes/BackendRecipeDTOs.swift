@@ -12,6 +12,10 @@ struct BackendRecipeIngredientDTO: Codable {
     /// na liście przepisów, a wtedy dekodowanie całej listy padało na
     /// brakującym kluczu zamiast po prostu zgubić jedną podpowiedź.
     let department: String?
+    /// Znormalizowana ilość/jednostka (g / ml / szt). Backend dowozi je tylko
+    /// w szczególe przepisu, na liście brak → `nil`.
+    let normalizedAmount: Double?
+    let normalizedUnit: String?
 }
 
 struct BackendRecipeDTO: Codable {
@@ -167,15 +171,20 @@ extension BackendRecipeDTO {
             return nil
         }
 
-        let mappedIngredients = ingredients.compactMap { item -> Ingredient? in
-            let unit = IngredientUnit(rawValue: item.unit)
-            guard let mappedUnit = unit else { return nil }
+        // Nieznana jednostka NIE wyrzuca składnika — dawny `compactMap` gubił
+        // każdą szczyptę (118 składników w 69 przepisach), więc telefon
+        // pokazywał przepisy bez soli i pieprzu, a backend liczył je do listy.
+        let mappedIngredients = ingredients.map { item -> Ingredient in
+            let unit = IngredientUnit(rawValue: item.unit) ?? .other
             return Ingredient(
                 id: UUID(uuidString: item.id) ?? UUID(),
                 name: displayIngredientName(item.name),
                 amount: item.amount,
-                unit: mappedUnit,
-                department: item.department
+                unit: unit,
+                department: item.department,
+                rawUnit: unit == .other ? item.unit : nil,
+                normalizedAmount: item.normalizedAmount,
+                normalizedUnit: item.normalizedUnit
             )
         }
 

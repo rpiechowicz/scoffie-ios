@@ -15,6 +15,7 @@ enum RecipesMock {
             Ingredient(name: "Papryka", amount: 80, unit: .gram),
             Ingredient(name: "Szpinak", amount: 50, unit: .gram),
             Ingredient(name: "Ser feta", amount: 30, unit: .gram),
+            Ingredient(name: "Sól", amount: 1, unit: .pinch, department: "Przyprawy i sosy"),
             Ingredient(name: "Masło", amount: 10, unit: .gram)
         ],
         preparationSteps: [

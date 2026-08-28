@@ -10,42 +10,21 @@ class DatesViewModel {
         currentWeekOffset == 0
     }
     
-    /// Generuje tablicę dat dla wybranego tygodnia (Poniedziałek - Niedziela)
+    /// Generuje tablicę dat dla wybranego tygodnia (Poniedziałek - Niedziela).
+    /// Liczone przez `PlanWeek`, nie `Calendar.current` — region z niedzielą
+    /// jako pierwszym dniem tygodnia pokazywał w niedzielę następny tydzień.
     var dates: [Date] {
-        let calendar = Calendar.current
-        let today = Date()
-        
-        // Oblicz datę docelową na podstawie offsetu tygodnia
-        guard let targetDate = calendar.date(byAdding: .weekOfYear, value: currentWeekOffset, to: today),
-              let weekStart = calendar.dateInterval(of: .weekOfYear, for: targetDate)?.start else {
+        let calendar = PlanWeek.calendar
+        guard let targetDate = calendar.date(byAdding: .weekOfYear, value: currentWeekOffset, to: Date()) else {
             return []
         }
-        
-        // Znajdź poniedziałek
-        let monday = calendar.date(byAdding: .day, value: calendar.firstWeekday == 1 ? 1 : 0, to: weekStart) ?? weekStart
-        
-        // Wygeneruj 7 dni od poniedziałku
-        return (0..<7).compactMap { dayOffset in
-            calendar.date(byAdding: .day, value: dayOffset, to: monday)
-        }
+        return PlanWeek.dates(from: PlanWeek.monday(of: targetDate))
     }
 
     /// `weekStart` w formacie backendowym `yyyy-MM-dd` (poniedziałek wybranego tygodnia)
     var weekStartISO: String {
-        guard let monday = dates.first else {
-            return Self.weekStartFormatter.string(from: Date())
-        }
-        return Self.weekStartFormatter.string(from: monday)
+        PlanWeek.dateKey(dates.first ?? PlanWeek.monday(of: Date()))
     }
-
-    private static let weekStartFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
     
     /// Sprawdza czy podana data to dzisiaj
     func isToday(_ date: Date) -> Bool {
