@@ -126,11 +126,11 @@ struct RecipesView: View {
         personalization.hiddenCount(in: recipeCatalogStore.recipes)
     }
 
-    /// Czy katalog w ogóle niesie składniki. Bez nich klasyfikator diety nie
-    /// ma czego czytać i arkusz musi to powiedzieć wprost, zamiast twierdzić,
-    /// że wszystko pasuje.
+    /// Czy katalog w ogóle niesie dane do oceny diety: składniki dla
+    /// heurystyki albo tagi z serwera. Bez nich arkusz musi to powiedzieć
+    /// wprost, zamiast twierdzić, że wszystko pasuje.
     private var hasIngredientCoverage: Bool {
-        recipeCatalogStore.recipes.contains { !$0.ingredients.isEmpty }
+        recipeCatalogStore.recipes.contains { !$0.ingredients.isEmpty || $0.dietTags != nil }
     }
 
     /// Czy lista jest w ogóle zawężona — steruje tekstem pustego stanu i

@@ -44,6 +44,11 @@ struct BackendRecipeDTO: Codable {
     /// Opcjonalne — starszy backend nie dowozi tych pól w projekcjach.
     let sourceProvider: String?
     let sourceRecipeId: String?
+    /// Tagi policzone na serwerze (plaster D). Opcjonalne: starszy backend ich
+    /// nie dowozi i wtedy klient wraca do heurystyki po nazwach składników.
+    /// Pusta lista to fakt, nie brak danych — dlatego `nil` ≠ `[]`.
+    let allergens: [String]?
+    let dietTags: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -67,6 +72,8 @@ struct BackendRecipeDTO: Codable {
         case sourceInstructions
         case sourceProvider
         case sourceRecipeId
+        case allergens
+        case dietTags
     }
 
     init(from decoder: Decoder) throws {
@@ -92,6 +99,10 @@ struct BackendRecipeDTO: Codable {
         sourceInstructions = try container.decodeIfPresent([BackendRecipeInstructionDTO].self, forKey: .sourceInstructions)
         sourceProvider = try container.decodeIfPresent(String.self, forKey: .sourceProvider)
         sourceRecipeId = try container.decodeIfPresent(String.self, forKey: .sourceRecipeId)
+        // Obcy kształt pola nie może położyć całego przepisu — wtedy po prostu
+        // zostaje heurystyka.
+        allergens = try? container.decodeIfPresent([String].self, forKey: .allergens)
+        dietTags = try? container.decodeIfPresent([String].self, forKey: .dietTags)
     }
 }
 
@@ -221,7 +232,9 @@ extension BackendRecipeDTO {
                 salt: nutritionSalt
             ),
             sourceProvider: sourceProvider,
-            sourceRecipeId: sourceRecipeId
+            sourceRecipeId: sourceRecipeId,
+            allergens: allergens,
+            dietTags: dietTags
         )
     }
 }

@@ -227,6 +227,15 @@ struct Recipe: Identifiable, Codable {
     var sourceProvider: String?
     var sourceRecipeId: String?
 
+    /// Tagi policzone na serwerze z kuratorowanych tagów składników
+    /// (`Recipe.allergens` / `Recipe.dietTags`, plaster D). `nil` = serwer ich
+    /// nie przysłał (stary backend, cache sprzed tej zmiany, mock) — wtedy
+    /// profil diety liczy heurystyka z nazw składników. Pusta lista to
+    /// FAKT („nic nie wykryto"), nie brak danych — czytać przez
+    /// `dietProfile`, nie wprost.
+    var allergens: [String]?
+    var dietTags: [String]?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -243,7 +252,9 @@ struct Recipe: Identifiable, Codable {
         preparationSteps: [PreparationStep] = [],
         nutrition: Nutrition = .zero,
         sourceProvider: String? = nil,
-        sourceRecipeId: String? = nil
+        sourceRecipeId: String? = nil,
+        allergens: [String]? = nil,
+        dietTags: [String]? = nil
     ) {
         self.id = id
         self.name = name
@@ -261,6 +272,8 @@ struct Recipe: Identifiable, Codable {
         self.nutrition = nutrition
         self.sourceProvider = sourceProvider
         self.sourceRecipeId = sourceRecipeId
+        self.allergens = allergens
+        self.dietTags = dietTags
     }
 }
 
@@ -277,6 +290,7 @@ extension Recipe {
         case servings, prepTimeMinutes, difficulty, imageURL
         case ingredients, preparationSteps, nutrition
         case sourceProvider, sourceRecipeId
+        case allergens, dietTags
     }
 
     init(from decoder: Decoder) throws {
@@ -304,6 +318,10 @@ extension Recipe {
         nutrition = try container.decodeIfPresent(Nutrition.self, forKey: .nutrition) ?? .zero
         sourceProvider = try container.decodeIfPresent(String.self, forKey: .sourceProvider)
         sourceRecipeId = try container.decodeIfPresent(String.self, forKey: .sourceRecipeId)
+        // Brak klucza (cache sprzed plastra D) = nil = heurystyka; lista
+        // (także pusta) = tagi z serwera.
+        allergens = try container.decodeIfPresent([String].self, forKey: .allergens)
+        dietTags = try container.decodeIfPresent([String].self, forKey: .dietTags)
     }
 }
 
