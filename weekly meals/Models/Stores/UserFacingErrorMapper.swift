@@ -60,6 +60,11 @@ enum UserFacingErrorMapper {
         if lower.contains("brak ack") || lower.contains("brak połączenia websocket") || lower.contains("socket") {
             return "Problem z połączeniem na żywo. Spróbuj ponownie."
         }
+        // Wyścig dwóch telefonów o ten sam przepis w tym samym slocie — serwer
+        // odpowiada CONFLICT zamiast 500; plan i tak zaraz się odświeży.
+        if lower.contains("already assigned to that day and meal slot") {
+            return "Ten przepis jest już w tym slocie."
+        }
         if lower.contains("internal_error") || lower.contains("internal server error") {
             return "Wystąpił błąd serwera. Spróbuj ponownie za chwilę."
         }

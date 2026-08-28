@@ -37,6 +37,10 @@ struct WelcomeView: View {
     @State private var diet: DietPreference
     @State private var calorieGoal: Int
     @State private var allergens: Set<Allergen>
+    /// Wartości alergenów zapisane na koncie, których ten build nie rozumie.
+    /// Trzymamy je, żeby zapis z kreatora nie skasował ustawienia zrobionego
+    /// na nowszej wersji aplikacji (patrz `SettingsView.unknownAllergens`).
+    @State private var unknownAllergens: [String]
     @State private var householdName: String = ""
 
     // Whether the user has manually moved the kcal slider away from the
@@ -105,12 +109,14 @@ struct WelcomeView: View {
         )
 
         let storedAllergensRaw = defaults.string(forKey: "settings.diet.allergens") ?? ""
-        let initialAllergens: Set<Allergen> = Set(
-            storedAllergensRaw
-                .split(separator: ",")
-                .compactMap { Allergen(rawValue: String($0)) }
+        let storedTokens = storedAllergensRaw
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
+        _allergens = State(initialValue: Set(storedTokens.compactMap { Allergen(rawValue: $0) }))
+        _unknownAllergens = State(
+            initialValue: Array(Set(storedTokens.filter { Allergen(rawValue: $0) == nil })).sorted()
         )
-        _allergens = State(initialValue: initialAllergens)
     }
 
     var body: some View {
@@ -318,7 +324,8 @@ struct WelcomeView: View {
             let activityRaw = activity.rawValue
             let dietRaw = diet.rawValue
             let kcal = calorieGoal
-            let allergenRaws = allergens.map(\.rawValue).sorted()
+            // Unia z nieznanymi — kreator nie kasuje alergenu z nowszego buildu.
+            let allergenRaws = Array(Set(allergens.map(\.rawValue)).union(unknownAllergens)).sorted()
             Task { @MainActor in
                 await store.saveUserPreferences(
                     diet: dietRaw,

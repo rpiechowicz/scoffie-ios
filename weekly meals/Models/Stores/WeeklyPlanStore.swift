@@ -31,30 +31,31 @@ protocol WeeklyPlanRepository {
     /// potwierdza, że backend to pole w ogóle rozumie. `nil` znaczy „serwer
     /// odpowiedział czymś, czego nie umiemy odczytać" i zostawia stan
     /// optymistyczny nietknięty.
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws -> WeekPlanSlot?
+    ///
+    /// `replaceRecipeId` to danie, które ma zniknąć ze slotu W TEJ SAMEJ
+    /// transakcji, w której wchodzi `recipeId` — tak działa „Zmień przepis".
+    /// Dawniej szło to jako `removeWeekSlot` + `upsertWeekSlot`: slot stał
+    /// chwilę pusty, drugi domownik dostawał dwa zdarzenia, a przerwany zapis
+    /// zostawiał pustkę. Równe `recipeId` = brak podmiany.
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?) async throws -> WeekPlanSlot?
     /// `recipeId == nil` clears every variant in the slot.
     func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws
     func clearWeekPlan(weekStart: String) async throws
     /// Marks one planned meal as eaten by the signed-in user, or clears it.
     func setMealEaten(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, isEaten: Bool) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
-    func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO
-    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO
-    func observeSavedPlanChanges(_ onChange: @escaping (_ event: BackendSavedPlanChangedDTO) -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
 
 protocol WeeklyPlanTransportClient {
     func fetchWeekPlan(weekStart: String) async throws -> [BackendWeeklyPlanItemDTO]
     /// `plannedServings == nil` zostawia wyliczenie liczby porcji serwerowi.
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws -> BackendWeeklyPlanItemDTO?
+    /// `replaceRecipeId` — patrz `WeeklyPlanRepository.upsertWeekSlot`.
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?, replaceRecipeId: String?) async throws -> BackendWeeklyPlanItemDTO?
     func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String?) async throws
     func clearWeekPlan(weekStart: String) async throws
     func setMealEaten(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, isEaten: Bool) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
-    func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO
-    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO
-    func observeSavedPlanChanges(_ onChange: @escaping (_ event: BackendSavedPlanChangedDTO) -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
 
@@ -79,17 +80,6 @@ struct BackendWeeklyPlanItemDTO: Codable {
     /// `nil`. To znaczy „policz z audytorium", więc taki tydzień pokazuje
     /// dzisiejsze liczby zamiast twardej jednej porcji.
     let plannedServings: Int?
-}
-
-struct BackendSharedMealPlanDTO: Codable {
-    let weekStart: String
-    let items: [BackendSharedMealPlanItemDTO]
-}
-
-struct BackendSharedMealPlanItemDTO: Codable {
-    let mealType: String
-    let quantity: Int
-    let recipe: BackendRecipeDTO
 }
 
 /// Odpowiedź na `weeklyPlans:upsertWeekSlot`.
@@ -122,15 +112,6 @@ struct BackendWeekChangedDTO: Codable {
     let changedByDisplayName: String?
     let dayOfWeek: String?
     let mealType: String?
-    let changeVersion: Int64?
-}
-
-struct BackendSavedPlanChangedDTO: Codable {
-    let householdId: String
-    let weekStart: String
-    let changedByUserId: String?
-    let changedByDisplayName: String?
-    let action: String?
     let changeVersion: Int64?
 }
 
@@ -258,7 +239,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getByWeek.")
     }
 
-    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?) async throws -> BackendWeeklyPlanItemDTO? {
+    func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?, replaceRecipeId: String?) async throws -> BackendWeeklyPlanItemDTO? {
         let householdId = try await resolveHouseholdId()
         var data: [String: Any] = [
             "dayOfWeek": dayOfWeek,
@@ -273,6 +254,12 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         // ilu jest jedzących.
         if let plannedServings {
             data["plannedServings"] = plannedServings
+        }
+        // Podmiana dania: stary wariant znika po stronie serwera w tej samej
+        // transakcji. Równe `recipeId` (edycja audytorium tego samego dania)
+        // nie jest podmianą, więc pola nie wysyłamy wcale.
+        if let replaceRecipeId, replaceRecipeId != recipeId {
+            data["replaceRecipeId"] = replaceRecipeId
         }
         let envelope: WsEnvelope<BackendPlanItemAckDTO> = try await socket.emitWithAck(
             event: "weeklyPlans:upsertWeekSlot",
@@ -379,70 +366,6 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         }
     }
 
-    func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO {
-        let householdId = try await resolveHouseholdId()
-        let envelope: WsEnvelope<BackendSharedMealPlanDTO> = try await socket.emitWithAck(
-            event: "weeklyPlans:getSavedPlan",
-            payload: [
-                "userId": userId,
-                "householdId": householdId,
-                "weekStart": weekStart
-            ],
-            as: WsEnvelope<BackendSharedMealPlanDTO>.self
-        )
-
-        if envelope.ok, let data = envelope.data {
-            return data
-        }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getSavedPlan.")
-    }
-
-    /// Zapis puli na tydzień.
-    ///
-    /// Ładunek jedzie jako mapa `MealType → id przepisów` (`recipeIdsByMealType`)
-    /// zamiast trzech pól `breakfast/lunch/dinnerRecipeIds`. Backend nadal
-    /// przyjmuje stare pola, ale wysyłanie ich obok mapy nic nie wnosi — dla
-    /// slotów wymienionych w mapie i tak wygrywa mapa.
-    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO {
-        let householdId = try await resolveHouseholdId()
-        let envelope: WsEnvelope<BackendSharedMealPlanDTO> = try await socket.emitWithAck(
-            event: "weeklyPlans:saveSavedPlan",
-            payload: [
-                "userId": userId,
-                "householdId": householdId,
-                "weekStart": weekStart,
-                "data": [
-                    "recipeIdsByMealType": recipeIdsByMealType
-                ]
-            ],
-            as: WsEnvelope<BackendSharedMealPlanDTO>.self
-        )
-
-        if envelope.ok, let data = envelope.data {
-            return data
-        }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:saveSavedPlan.")
-    }
-
-    func observeSavedPlanChanges(_ onChange: @escaping (_ event: BackendSavedPlanChangedDTO) -> Void) {
-        socket.off(event: "weeklyPlans:savedPlanChanged")
-        socket.on(event: "weeklyPlans:savedPlanChanged") { [weak self] items in
-            guard let self else { return }
-            guard let first = items.first,
-                  JSONSerialization.isValidJSONObject(first),
-                  let data = try? JSONSerialization.data(withJSONObject: first),
-                  let event = try? JSONDecoder().decode(BackendSavedPlanChangedDTO.self, from: data)
-            else { return }
-
-            let expectedHouseholdId = self.resolvedHouseholdId ?? self.householdId
-            if let expectedHouseholdId, event.householdId != expectedHouseholdId {
-                return
-            }
-
-            onChange(event)
-        }
-    }
-
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void) {
         socket.observeConnection { isConnected in
             guard isConnected else { return }
@@ -485,7 +408,7 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
         )
     }
 
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?) async throws -> WeekPlanSlot? {
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?) async throws -> WeekPlanSlot? {
         guard let dayOfWeek = WeekDateMapper.dayOfWeek(from: date, weekStart: weekStart) else {
             throw RecipeDataError.serverError(message: "Nie można wyznaczyć dnia tygodnia dla slotu.")
         }
@@ -495,7 +418,8 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             mealType: mealSlot.backendMealType,
             recipeId: recipeId.uuidString,
             participantIds: participantIds,
-            plannedServings: plannedServings
+            plannedServings: plannedServings,
+            replaceRecipeId: replaceRecipeId?.uuidString
         )
         return saved.flatMap { Self.mapSlot($0, weekStart: weekStart) }
     }
@@ -531,21 +455,6 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
 
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void) {
         client.observeWeekPlanChanges(onChange)
-    }
-
-    func fetchSavedPlan(weekStart: String) async throws -> BackendSharedMealPlanDTO {
-        try await client.fetchSavedPlan(weekStart: weekStart)
-    }
-
-    func saveSavedPlan(weekStart: String, recipeIdsByMealType: [String: [String]]) async throws -> BackendSharedMealPlanDTO {
-        try await client.saveSavedPlan(
-            weekStart: weekStart,
-            recipeIdsByMealType: recipeIdsByMealType
-        )
-    }
-
-    func observeSavedPlanChanges(_ onChange: @escaping (_ event: BackendSavedPlanChangedDTO) -> Void) {
-        client.observeSavedPlanChanges(onChange)
     }
 
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void) {

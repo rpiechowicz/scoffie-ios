@@ -313,10 +313,31 @@ struct SettingsView: View {
         proteinOverride >= 0 || fatOverride >= 0 || carbsOverride >= 0
     }
 
-    private var selectedAllergens: Set<Allergen> {
-        Set(allergensRaw
+    /// Surowe tokeny z `@AppStorage` — CSV jest trwałym nadzbiorem tego, co
+    /// ten build umie narysować. `Allergen` to tylko filtr do renderowania.
+    private var allergenTokens: [String] {
+        allergensRaw
             .split(separator: ",")
-            .compactMap { Allergen(rawValue: String($0)) })
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
+    }
+
+    private var selectedAllergens: Set<Allergen> {
+        Set(allergenTokens.compactMap { Allergen(rawValue: $0) })
+    }
+
+    /// Wartości, których ta wersja aplikacji nie zna — nowszy build dopisał
+    /// je do konta i nie wolno ich skasować przy zwykłym stuknięciu w chip.
+    /// Renderować ich nie ma jak (brak tytułu), więc tylko je przenosimy.
+    /// Serwer i tak odrzuca id spoza swojej listy całym zapisem, więc nowa
+    /// wartość enuma musi najpierw wyjść na backend.
+    private var unknownAllergens: [String] {
+        Array(Set(allergenTokens.filter { Allergen(rawValue: $0) == nil })).sorted()
+    }
+
+    /// Pełny zestaw do wysyłki: znane ∪ nieznane, posortowany.
+    private var allergensPayload: [String] {
+        Array(Set(selectedAllergens.map(\.rawValue)).union(unknownAllergens)).sorted()
     }
 
     /// Inline value next to "Dieta i alergeny" — kcal is always-on so it
@@ -370,8 +391,9 @@ struct SettingsView: View {
         } else {
             current.insert(allergen)
         }
-        allergensRaw = current
-            .map(\.rawValue)
+        // Unia z nieznanymi: stuknięcie w chip nie ma prawa skasować
+        // alergenu ustawionego na nowszej wersji aplikacji.
+        allergensRaw = Array(Set(current.map(\.rawValue)).union(unknownAllergens))
             .sorted()
             .joined(separator: ",")
     }
@@ -1264,7 +1286,7 @@ struct SettingsView: View {
             await sessionStore.saveUserPreferences(
                 diet: currentDiet.rawValue,
                 calorieGoal: calorieGoal,
-                allergens: selectedAllergens.map(\.rawValue),
+                allergens: allergensPayload,
                 goal: currentGoal.rawValue,
                 proteinG: proteinOverride >= 0 ? proteinOverride : nil,
                 fatG: fatOverride >= 0 ? fatOverride : nil,
@@ -1279,7 +1301,9 @@ struct SettingsView: View {
         currentDiet != .none
             || currentGoal != .healthy
             || calorieGoal != Self.calorieGoalDefault
-            || !selectedAllergens.isEmpty
+            // Po tokenach, nie po rozpoznanych chipach: użytkownik, którego
+            // jedyne alergeny pochodzą z nowszego buildu, też ma co czyścić.
+            || !allergenTokens.isEmpty
             || hasMacroOverride
     }
 
@@ -1922,6 +1946,9 @@ struct SettingsView: View {
         Button {
             withAnimation(.smooth(duration: 0.22)) {
                 dietPreferenceRaw = DietPreference.none.rawValue
+                // Jedyne miejsce, gdzie unia „znane ∪ nieznane" celowo NIE
+                // obowiązuje: „Wyczyść" to jawna decyzja i kasuje też wartości,
+                // których ten build nie umie narysować.
                 allergensRaw = ""
                 calorieGoal = Self.calorieGoalDefault
                 goalRaw = UserGoal.healthy.rawValue

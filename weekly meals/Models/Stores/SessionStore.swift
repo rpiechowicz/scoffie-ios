@@ -1829,7 +1829,13 @@ final class SessionStore {
 
     /// Push the supplied preferences slice to the backend. Pass only the
     /// fields you want to change — the backend merges with the existing
-    /// row. Allergens, when supplied, replace the full set.
+    /// row. Allergens, when supplied, replace the full set — dlatego callerzy
+    /// MUSZĄ wysyłać sumę „znane ∪ nieznane" (`SettingsView.allergensPayload`,
+    /// `WelcomeView.unknownAllergens`). Wysłanie samych rozpoznanych wartości
+    /// kasuje z konta alergen ustawiony na nowszej wersji aplikacji.
+    /// Serwer odrzuca id spoza `src/common/allergens.ts` całym payloadem
+    /// (`code: "VALIDATION_ERROR"`), więc nowa wartość enuma musi najpierw
+    /// wyjść na backend.
     @MainActor
     func saveUserPreferences(
         diet: String? = nil,
@@ -1862,9 +1868,14 @@ final class SessionStore {
             defaults.set(calorieGoal, forKey: PreferencesKeys.calorieGoal)
         }
         if let allergens {
-            let normalised = allergens
-                .map { $0.lowercased() }
-                .sorted()
+            // Dedupe i trim tutaj, bo DTO ma `@ArrayUnique` tylko na ścieżce
+            // HTTP — po WebSockecie nic nie pilnuje, a „gluten,gluten" w
+            // AppStorage psułoby liczniki chipów.
+            let normalised = Array(Set(
+                allergens
+                    .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                    .filter { !$0.isEmpty }
+            )).sorted()
             data["allergens"] = normalised
             defaults.set(
                 normalised.joined(separator: ","),
@@ -1905,11 +1916,19 @@ final class SessionStore {
         let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
 
         do {
-            let _: WsEnvelope<BackendUserPreferencesDTO> = try await socket.emitWithAck(
+            let envelope: WsEnvelope<BackendUserPreferencesDTO> = try await socket.emitWithAck(
                 event: "users:preferences:update",
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserPreferencesDTO>.self
             )
+            // Odrzucenie (np. `VALIDATION_ERROR` na nieznanym alergenie) też
+            // dekoduje się poprawnie — bez tego logu wyglądało jak udany zapis,
+            // a AppStorage trzymał wartość, której serwer nie przyjął.
+            if !envelope.ok {
+                #if DEBUG
+                print("[SessionStore] users:preferences:update odrzucone: \(envelope.code ?? "?") \(envelope.error ?? "")")
+                #endif
+            }
         } catch {
             // Swallow — local AppStorage is already updated optimistically.
             // We retry on the next change.
