@@ -58,7 +58,7 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         )
 
         guard envelope.ok, let households = envelope.data else {
-            throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się pobrać gospodarstw.")
+            throw envelope.failure(fallback: "Nie udało się pobrać gospodarstw.")
         }
 
         if let preferredHouseholdName,
@@ -96,7 +96,7 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         if envelope.ok, let data = envelope.data {
             return data
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getShoppingListState.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:getShoppingListState.")
     }
 
     func setChecked(weekStart: String, productKey: String, isChecked: Bool) async throws {
@@ -121,7 +121,7 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:setShoppingItemChecked.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:setShoppingItemChecked.")
     }
 
     func archiveShoppingList(weekStart: String, weekLabel: String) async throws {
@@ -143,7 +143,7 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:archiveShoppingList.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:archiveShoppingList.")
     }
 
     func selectArchivedList(archiveId: String) async throws {
@@ -164,7 +164,7 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:selectShoppingListArchive.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:selectShoppingListArchive.")
     }
 
     func deleteArchivedList(archiveId: String) async throws {
@@ -185,7 +185,7 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:deleteShoppingListArchive.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:deleteShoppingListArchive.")
     }
 
     func deleteAllArchivedLists(weekStart: String) async throws {
@@ -206,7 +206,7 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:deleteAllShoppingListArchives.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:deleteAllShoppingListArchives.")
     }
 
     func observeShoppingListChanges(_ onChange: @escaping (_ event: BackendShoppingListChangedDTO) -> Void) {

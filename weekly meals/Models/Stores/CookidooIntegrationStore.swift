@@ -99,7 +99,7 @@ final class CookidooIntegrationStore {
             let response = try await client.sendToWeek(recipeId: recipeId, date: date)
             return response.alreadySent ? .alreadySent : .sent
         } catch {
-            if case IntegrationsAPIError.backend(let code, _) = error,
+            if case IntegrationsAPIError.backend(let code, _, _) = error,
                code == "COOKIDOO_AUTH_FAILED" || code == "COOKIDOO_NOT_CONNECTED" {
                 // Serwer oznaczył integrację jako zepsutą — dociągamy stan,
                 // żeby Ustawienia i przycisk wysyłki mówiły to samo.
@@ -133,7 +133,7 @@ final class CookidooIntegrationStore {
             return "Sesja wygasła. Zaloguj się ponownie do aplikacji."
         case IntegrationsAPIError.network:
             return "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie."
-        case IntegrationsAPIError.backend(let code, _):
+        case IntegrationsAPIError.backend(let code, _, _):
             switch code {
             case "COOKIDOO_AUTH_FAILED":
                 return context == .connect
@@ -145,13 +145,17 @@ final class CookidooIntegrationStore {
                 return "Ten przepis nie ma wersji na Thermomixa."
             case "COOKIDOO_SERVICE_UNAVAILABLE":
                 return "Usługa Cookidoo jest chwilowo niedostępna. Spróbuj ponownie za kilka minut."
+            case "COOKIDOO_UPSTREAM_ERROR":
+                return "Cookidoo odpowiedziało błędem. Spróbuj ponownie za chwilę."
             case "UNAUTHORIZED":
                 return "Sesja wygasła. Zaloguj się ponownie do aplikacji."
             default:
-                return "Coś poszło nie tak. Spróbuj ponownie."
+                // Wspólna tabela kodów — inne kody (np. TOO_MANY_REQUESTS)
+                // dostają tę samą kopię co reszta aplikacji.
+                return UserFacingErrorMapper.message(from: error)
             }
         default:
-            return "Coś poszło nie tak. Spróbuj ponownie."
+            return UserFacingErrorMapper.message(from: error)
         }
     }
 

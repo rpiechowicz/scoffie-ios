@@ -200,7 +200,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         )
 
         guard envelope.ok, let households = envelope.data else {
-            throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się pobrać gospodarstw.")
+            throw envelope.failure(fallback: "Nie udało się pobrać gospodarstw.")
         }
 
         if let preferredHouseholdName,
@@ -236,7 +236,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
             return []
         }
 
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:getByWeek.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:getByWeek.")
     }
 
     func upsertWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, participantIds: [String], plannedServings: Int?, replaceRecipeId: String?) async throws -> BackendWeeklyPlanItemDTO? {
@@ -276,7 +276,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
             return envelope.data
         }
 
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:upsertWeekSlot.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:upsertWeekSlot.")
     }
 
     func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String?) async throws {
@@ -302,7 +302,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:removeWeekSlot.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:removeWeekSlot.")
     }
 
     func setMealEaten(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, isEaten: Bool) async throws {
@@ -327,7 +327,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
             return
         }
 
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:setMealEaten.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:setMealEaten.")
     }
 
     func clearWeekPlan(weekStart: String) async throws {
@@ -344,7 +344,7 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd weeklyPlans:clearWeekPlan.")
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:clearWeekPlan.")
     }
 
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void) {

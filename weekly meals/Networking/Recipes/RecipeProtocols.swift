@@ -54,12 +54,71 @@ extension RecipeSocketClient {
 // MARK: - WebSocket envelope
 
 /// Standard wrapper our backend uses for socket ACK responses.
+///
+/// Od plastra C koperta błędu niesie też `message` (== `error`), `details`
+/// i `requestId`. Pola dekodujemy pobłażliwie: obcy kształt któregokolwiek
+/// z nich nie może położyć całej koperty, bo wtedy udany ack wyglądałby jak
+/// błąd transportu.
 struct WsEnvelope<T: Decodable>: Decodable {
     let ok: Bool
     let data: T?
+    /// Komunikat błędu — pole historyczne; nowy backend wysyła też `message`.
     let error: String?
+    let message: String?
     let code: String?
     let status: Int?
+    let details: [String]?
+    let requestId: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case ok, data, error, message, code, status, details, requestId
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decode(Bool.self, forKey: .ok)
+        data = try container.decodeIfPresent(T.self, forKey: .data)
+        error = try? container.decodeIfPresent(String.self, forKey: .error)
+        message = try? container.decodeIfPresent(String.self, forKey: .message)
+        code = try? container.decodeIfPresent(String.self, forKey: .code)
+        status = try? container.decodeIfPresent(Int.self, forKey: .status)
+        details = try? container.decodeIfPresent([String].self, forKey: .details)
+        requestId = try? container.decodeIfPresent(String.self, forKey: .requestId)
+    }
+
+    init(
+        ok: Bool,
+        data: T? = nil,
+        error: String? = nil,
+        message: String? = nil,
+        code: String? = nil,
+        status: Int? = nil,
+        details: [String]? = nil,
+        requestId: String? = nil
+    ) {
+        self.ok = ok
+        self.data = data
+        self.error = error
+        self.message = message
+        self.code = code
+        self.status = status
+        self.details = details
+        self.requestId = requestId
+    }
+
+    /// Błąd dla koperty `ok:false`. Komunikat: `message` (nowy backend),
+    /// potem `error` (stary), na końcu `fallback`. Z kodem → `.server`, po
+    /// którym decyduje `UserFacingErrorMapper`; bez kodu → błąd transportu.
+    func failure(fallback: String) -> RecipeDataError {
+        let text = [message, error]
+            .compactMap { $0 }
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            ?? fallback
+        guard let code, !code.isEmpty else {
+            return .serverError(message: text)
+        }
+        return .server(code: code, message: text, status: status, requestId: requestId)
+    }
 }
 
 // MARK: - Errors
@@ -67,7 +126,12 @@ struct WsEnvelope<T: Decodable>: Decodable {
 enum RecipeDataError: LocalizedError {
     case invalidRecipeId
     case transportNotConfigured
+    /// Błąd transportu/klienta (brak ACK, martwy socket) albo odpowiedź, której
+    /// nie umiemy odczytać. Serwer odmawiający z kodem to `.server`.
     case serverError(message: String)
+    /// Odmowa serwera z kodem — po nim decyduje `UserFacingErrorMapper`;
+    /// `requestId` pozwala odnaleźć wpis w logu backendu.
+    case server(code: String, message: String, status: Int?, requestId: String?)
 
     var errorDescription: String? {
         switch self {
@@ -76,6 +140,8 @@ enum RecipeDataError: LocalizedError {
         case .transportNotConfigured:
             return "Transport WebSocket nie jest jeszcze skonfigurowany."
         case let .serverError(message):
+            return message
+        case let .server(_, message, _, _):
             return message
         }
     }

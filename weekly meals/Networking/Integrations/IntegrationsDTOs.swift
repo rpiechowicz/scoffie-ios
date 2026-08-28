@@ -65,16 +65,21 @@ struct HealthStepsSyncResponseDTO: Decodable {
     let synced: Int
 }
 
-/// Kształt błędu z backendu. `AppException` daje `{code, message}`,
-/// globalny ValidationPipe — `{message: [...], statusCode}`, a guard JWT —
-/// `{message, statusCode}`. Dekodujemy pobłażliwie i składamy w jedno.
+/// Kształt błędu z backendu: od plastra C zawsze
+/// `{code, message, details?, requestId}` (globalny filtr). Dekodujemy
+/// pobłażliwie — starszy backend potrafił oddać `{message: [...], statusCode}`
+/// z ValidationPipe albo `{message, statusCode}` z guardu JWT.
 struct BackendHttpErrorDTO: Decodable {
     let code: String?
     let message: String?
+    let details: [String]?
+    let requestId: String?
 
     private enum CodingKeys: String, CodingKey {
         case code
         case message
+        case details
+        case requestId
     }
 
     init(from decoder: Decoder) throws {
@@ -87,5 +92,7 @@ struct BackendHttpErrorDTO: Decodable {
         } else {
             message = nil
         }
+        details = try? container.decodeIfPresent([String].self, forKey: .details)
+        requestId = try? container.decodeIfPresent(String.self, forKey: .requestId)
     }
 }
