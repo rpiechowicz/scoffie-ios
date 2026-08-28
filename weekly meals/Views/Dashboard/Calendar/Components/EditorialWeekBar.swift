@@ -18,15 +18,6 @@ struct EditorialWeekBar: View {
     @Environment(\.colorScheme) private var scheme
     @Namespace private var indicatorNS
 
-    private static let dayKeyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
     private static let shortDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "pl_PL")
@@ -42,7 +33,7 @@ struct EditorialWeekBar: View {
                     isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
                     isToday: datesViewModel.isToday(date),
                     isPast: !datesViewModel.isEditable(date) && !datesViewModel.isToday(date),
-                    isPlanned: plannedDates.contains(Self.dayKeyFormatter.string(from: date)),
+                    isPlanned: plannedDates.contains(PlanWeek.dateKey(date)),
                     indicatorNS: indicatorNS
                 )
                 .frame(maxWidth: .infinity)

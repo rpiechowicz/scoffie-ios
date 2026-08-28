@@ -34,15 +34,11 @@ class WeeklyMealStore {
 
     // MARK: - Date formatting
 
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
-
+    /// Klucz dnia liczony przez `PlanWeek` — ten sam kalendarz i strefa, co
+    /// `weekStart`, żeby dzień nie „przeskakiwał" przy innym kalendarzu
+    /// systemowym niż gregoriański.
     static func dateKey(for date: Date) -> String {
-        dateFormatter.string(from: date)
+        PlanWeek.dateKey(date)
     }
 
     // MARK: - Init

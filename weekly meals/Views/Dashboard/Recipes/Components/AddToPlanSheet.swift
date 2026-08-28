@@ -97,9 +97,9 @@ struct AddToPlanSheet: View {
 
     /// Poniedziałek–niedziela tygodnia, w którym leży `selectedDate`.
     private var weekDates: [Date] {
-        let monday = Self.monday(of: selectedDate)
+        let monday = PlanWeek.monday(of: selectedDate)
         return (0..<7).compactMap {
-            Self.planCalendar.date(byAdding: .day, value: $0, to: monday)
+            PlanWeek.calendar.date(byAdding: .day, value: $0, to: monday)
         }
     }
 
@@ -113,7 +113,7 @@ struct AddToPlanSheet: View {
 
         for day in days {
             for slot in MealSlot.allCases where !mealStore.meals(for: day, slot: slot).isEmpty {
-                plannedDays.insert(Self.planCalendar.startOfDay(for: day))
+                plannedDays.insert(PlanWeek.calendar.startOfDay(for: day))
                 plannedSlots.insert(slot)
             }
         }
@@ -151,7 +151,7 @@ struct AddToPlanSheet: View {
     /// Bieżący tydzień jest ostatnim, w którym cokolwiek da się zaplanować, więc
     /// wcześniejsze pokazywałyby tylko siedem nieklikalnych komórek.
     private var canGoToPreviousWeek: Bool {
-        Self.monday(of: selectedDate) > Self.monday(of: Date())
+        PlanWeek.monday(of: selectedDate) > PlanWeek.monday(of: Date())
     }
 
     // MARK: - Body
@@ -275,9 +275,9 @@ struct AddToPlanSheet: View {
 
                     DayCell(
                         date: date,
-                        isSelected: Self.planCalendar.isDate(date, inSameDayAs: selectedDate),
+                        isSelected: PlanWeek.calendar.isDate(date, inSameDayAs: selectedDate),
                         isPast: !canPlan,
-                        isPlanned: plannedDays.contains(Self.planCalendar.startOfDay(for: date)),
+                        isPlanned: plannedDays.contains(PlanWeek.calendar.startOfDay(for: date)),
                         indicatorNS: dayIndicatorNS
                     )
                     .frame(maxWidth: .infinity)
@@ -336,7 +336,7 @@ struct AddToPlanSheet: View {
     /// dlatego w takim wypadku podciągamy wybór do dziś.
     private func shiftWeek(by delta: Int) {
         guard delta > 0 || canGoToPreviousWeek else { return }
-        guard let shifted = Self.planCalendar.date(
+        guard let shifted = PlanWeek.calendar.date(
             byAdding: .day,
             value: delta,
             to: selectedDate
@@ -691,42 +691,12 @@ struct AddToPlanSheet: View {
                 replacingRecipeId: replacing,
                 for: date,
                 slot: slot,
-                weekStart: Self.weekStartFormatter.string(from: Self.monday(of: date))
+                weekStart: PlanWeek.dateKey(PlanWeek.monday(of: date))
             )
         }
         onAdded?(date, slot)
         dismiss()
     }
-
-    // MARK: - Kalendarz i formatery
-
-    /// Kalendarz z twardym poniedziałkiem jako pierwszym dniem tygodnia.
-    /// Plan jest z definicji siatką pon–niedz, więc `firstWeekday` nie może
-    /// zależeć od locale telefonu — inaczej ten sam dzień trafiałby raz do
-    /// jednego, raz do drugiego `weekStart`.
-    private static let planCalendar: Calendar = {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.firstWeekday = 2
-        calendar.timeZone = .current
-        return calendar
-    }()
-
-    private static func monday(of date: Date) -> Date {
-        planCalendar.dateInterval(of: .weekOfYear, for: date)?.start
-            ?? planCalendar.startOfDay(for: date)
-    }
-
-    /// Konfiguracja przeniesiona z `DatesViewModel.weekStartFormatter` —
-    /// `weekStart` jedzie do backendu jako klucz tygodnia i musi wyjść
-    /// identycznie z obu miejsc.
-    private static let weekStartFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 
     private static let monthFormatter: DateFormatter = {
         let formatter = DateFormatter()
