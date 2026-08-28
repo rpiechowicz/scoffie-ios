@@ -555,6 +555,10 @@ final class SessionStore {
         realtimeSocket?.off(event: "households:mealTimesChanged")
         realtimeSocket = nil
         weeklyMealStore = nil
+        // Plik cache katalogu nie jest przypisany do konta: bez tego następna
+        // osoba zalogowana na tym telefonie widziała przez 12 h katalog
+        // (ulubione, tytuły) poprzedniego gospodarstwa.
+        RecipeCatalogStore.clearCache()
         recipeCatalogStore = nil
         shoppingListStore = nil
         cookidooIntegrationStore = nil
