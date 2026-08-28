@@ -5,8 +5,8 @@ import Foundation
 enum IntegrationsAPIError: Error, Equatable {
     /// Brak access tokenu w Keychain — sesja nie istnieje.
     case notAuthenticated
-    /// Backend odpowiedział błędem aplikacyjnym (`{code, message}`).
-    case backend(code: String, status: Int)
+    /// Backend odpowiedział błędem aplikacyjnym (`{code, message, requestId}`).
+    case backend(code: String, status: Int, message: String?)
     /// Nie doszło do odpowiedzi HTTP (offline, timeout, DNS).
     case network
 }
@@ -117,7 +117,11 @@ final class IntegrationsAPIClient {
             let decoded = try? JSONDecoder().decode(BackendHttpErrorDTO.self, from: data)
             let code = decoded?.code
                 ?? (http.statusCode == 401 ? "UNAUTHORIZED" : "HTTP_ERROR")
-            throw IntegrationsAPIError.backend(code: code, status: http.statusCode)
+            throw IntegrationsAPIError.backend(
+                code: code,
+                status: http.statusCode,
+                message: decoded?.message
+            )
         }
 
         return try JSONDecoder().decode(Response.self, from: data)

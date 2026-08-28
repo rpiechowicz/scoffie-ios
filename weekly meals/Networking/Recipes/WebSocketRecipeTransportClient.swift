@@ -34,7 +34,7 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
         if envelope.ok, let data = envelope.data {
             return data
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd recipes:findAll.")
+        throw envelope.failure(fallback: "Nieznany błąd recipes:findAll.")
     }
 
     func fetchRecipeById(recipeId: String) async throws -> BackendRecipeDTO {
@@ -54,7 +54,7 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
         if envelope.ok, let data = envelope.data {
             return data
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd recipes:findById.")
+        throw envelope.failure(fallback: "Nieznany błąd recipes:findById.")
     }
 
     func setFavorite(recipeId: String, isFavorite: Bool) async throws {
@@ -76,7 +76,7 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
         if envelope.ok {
             return
         }
-        throw RecipeDataError.serverError(message: envelope.error ?? "Nieznany błąd recipes:setFavorite.")
+        throw envelope.failure(fallback: "Nieznany błąd recipes:setFavorite.")
     }
 
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: String, _ isFavorite: Bool) -> Void) {

@@ -266,8 +266,15 @@ final class SessionStore {
             throw RecipeDataError.serverError(message: "Brak odpowiedzi HTTP z serwera.")
         }
         guard (200...299).contains(http.statusCode) else {
-            let message = Self.decodeErrorMessage(data: data) ?? "Błąd logowania Apple (HTTP \(http.statusCode))."
-            throw RecipeDataError.serverError(message: message)
+            // Ten sam kontrakt co reszta REST: `{code, message, requestId}`.
+            let decoded = try? JSONDecoder().decode(BackendHttpErrorDTO.self, from: data)
+            let fallback = "Błąd logowania Apple (HTTP \(http.statusCode))."
+            throw RecipeDataError.server(
+                code: decoded?.code ?? (http.statusCode == 401 ? "UNAUTHORIZED" : "HTTP_ERROR"),
+                message: decoded?.message ?? fallback,
+                status: http.statusCode,
+                requestId: decoded?.requestId
+            )
         }
 
         let decoded = try JSONDecoder().decode(SessionResponse.self, from: data)
@@ -291,14 +298,6 @@ final class SessionStore {
         Task { [weak self] in
             await self?.restoreHouseholdIfNeeded()
         }
-    }
-
-    private static func decodeErrorMessage(data: Data) -> String? {
-        struct ErrorResponse: Codable { let message: String? }
-        if let obj = try? JSONDecoder().decode(ErrorResponse.self, from: data), let msg = obj.message {
-            return msg
-        }
-        return String(data: data, encoding: .utf8)
     }
 
     func logout() {
@@ -336,7 +335,9 @@ final class SessionStore {
             )
 
             guard envelope.ok else {
-                authError = envelope.error ?? "Nie udało się usunąć konta. Spróbuj ponownie."
+                authError = UserFacingErrorMapper.message(
+                    from: envelope.failure(fallback: "Nie udało się usunąć konta. Spróbuj ponownie.")
+                )
                 return false
             }
         } catch {
@@ -554,6 +555,10 @@ final class SessionStore {
         realtimeSocket?.off(event: "households:mealTimesChanged")
         realtimeSocket = nil
         weeklyMealStore = nil
+        // Plik cache katalogu nie jest przypisany do konta: bez tego następna
+        // osoba zalogowana na tym telefonie widziała przez 12 h katalog
+        // (ulubione, tytuły) poprzedniego gospodarstwa.
+        RecipeCatalogStore.clearCache()
         recipeCatalogStore = nil
         shoppingListStore = nil
         cookidooIntegrationStore = nil
@@ -891,7 +896,7 @@ final class SessionStore {
             )
 
             guard envelope.ok, let household = envelope.data else {
-                throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się utworzyć gospodarstwa.")
+                throw envelope.failure(fallback: "Nie udało się utworzyć gospodarstwa.")
             }
 
             persistHousehold(id: household.id, name: household.name)
@@ -924,7 +929,7 @@ final class SessionStore {
             )
 
             if !envelope.ok {
-                throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się opuścić gospodarstwa.")
+                throw envelope.failure(fallback: "Nie udało się opuścić gospodarstwa.")
             }
 
             clearPersistedHousehold()
@@ -969,7 +974,7 @@ final class SessionStore {
             )
 
             if !envelope.ok {
-                throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się usunąć domownika.")
+                throw envelope.failure(fallback: "Nie udało się usunąć domownika.")
             }
 
             // `membersChanged` przywiezie nową listę, ale bez gwarancji
@@ -1004,7 +1009,7 @@ final class SessionStore {
         )
 
         guard envelope.ok, let invitation = envelope.data else {
-            throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się utworzyć zaproszenia.")
+            throw envelope.failure(fallback: "Nie udało się utworzyć zaproszenia.")
         }
 
         var components = URLComponents()
@@ -1040,7 +1045,7 @@ final class SessionStore {
         )
 
         guard envelope.ok, let data = envelope.data else {
-            throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się sprawdzić zaproszenia.")
+            throw envelope.failure(fallback: "Nie udało się sprawdzić zaproszenia.")
         }
 
         return data
@@ -1329,7 +1334,7 @@ final class SessionStore {
             )
 
             if !envelope.ok {
-                throw RecipeDataError.serverError(message: envelope.error ?? "Nie udało się zarejestrować urządzenia.")
+                throw envelope.failure(fallback: "Nie udało się zarejestrować urządzenia.")
             }
 
             let pushEnabled = envelope.data?.pushEnabled ?? false
@@ -1691,7 +1696,9 @@ final class SessionStore {
 
                 guard envelope.ok, let data = envelope.data else {
                     if !self.didLoadHouseholdMembers {
-                        self.authError = envelope.error
+                        self.authError = UserFacingErrorMapper.message(
+                            from: envelope.failure(fallback: "Nie udało się pobrać domowników.")
+                        )
                     }
                     return
                 }
@@ -1926,7 +1933,7 @@ final class SessionStore {
             // a AppStorage trzymał wartość, której serwer nie przyjął.
             if !envelope.ok {
                 #if DEBUG
-                print("[SessionStore] users:preferences:update odrzucone: \(envelope.code ?? "?") \(envelope.error ?? "")")
+                print("[SessionStore] users:preferences:update odrzucone: \(envelope.code ?? "?") \(envelope.error ?? "") requestId=\(envelope.requestId ?? "-")")
                 #endif
             }
         } catch {

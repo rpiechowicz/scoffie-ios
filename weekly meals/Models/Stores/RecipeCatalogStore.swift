@@ -33,7 +33,15 @@ final class RecipeCatalogStore {
     /// paginacja) pokazują się bez zmian, od razu.
     private let connectivityErrorGate = ConnectivityErrorGate()
 
-    private var cacheURL: URL {
+    private var cacheURL: URL { Self.cacheFileURL }
+
+    /// Kasuje plik cache — wołane przy wylogowaniu (`SessionStore`), bo plik
+    /// nie zna konta, a żyje 12 h.
+    static func clearCache() {
+        try? FileManager.default.removeItem(at: cacheFileURL)
+    }
+
+    private static var cacheFileURL: URL {
         FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
             // v10: prostowanie id przepisów w katalogu przestawia 28 wierszy
