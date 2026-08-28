@@ -30,5 +30,10 @@
 	<false/>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Aplikacja odczytuje liczbę kroków ze Zdrowia, aby pokazywać dzienny postęp w Kalendarzu i budować statystyki aktywności.</string>
+	<!-- Wymagane przez walidację App Store (kod 90683) dla samego entitlementu
+	     HealthKit — aplikacja o zapis nigdy nie prosi, więc ten opis nie ma
+	     szansy pojawić się użytkownikowi. -->
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Aplikacja nie zapisuje żadnych danych do Zdrowia — kroki są wyłącznie odczytywane.</string>
 </dict>
 </plist>
