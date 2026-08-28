@@ -12,8 +12,8 @@ import SwiftUI
 /// w Ustawieniach → „Posiłki w planie". Backend pilnuje tego samego
 /// (`normalizeEnabledMealTypes`), więc klient nie jest jedyną obroną.
 ///
-/// `rawValue` jedzie do zapisanych na dysku planów (`DayMealPlan`,
-/// `SavedMealPlan`) — nie wolno go zmieniać bez migracji cache'u.
+/// `rawValue` jedzie do zapisanego na dysku planu (`DayMealPlan`,
+/// `meal_plans.json`) — nie wolno go zmieniać bez migracji cache'u.
 enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
     case breakfast
     case secondBreakfast

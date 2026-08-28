@@ -1,36 +1,35 @@
 import Foundation
 import Observation
 
-/// In-memory + persisted store for the weekly calendar (per-day breakfast/lunch/dinner)
-/// and the "saved plan" pool that Calendar/WeeklyPlan views draw from.
+/// In-memory + persisted store for the weekly calendar (per-day meals in
+/// every enabled slot). Źródłem prawdy jest backendowy `PlanItem`; lokalny
+/// plik `meal_plans.json` to cache dla szybkiego startu i pracy offline.
 ///
 /// Companion types live alongside this file:
-///   - `SavedMealPlan` (DayMealPlan / PlanEntry / SavedMealPlan structs) — `Models/Plans/SavedMealPlan.swift`
+///   - `PlanMeal` / `DayMealPlan` — `Models/Plans/SavedMealPlan.swift`
 ///   - Environment keys / defaults — `Models/Environment/StoreEnvironmentKeys.swift`
 ///   - Recipe data layer (protocols, DTOs, socket clients) — `Networking/Recipes/*`
+///
+/// Dawna „pula tygodnia" (`SavedMealPlan`, `saved_plan.json`,
+/// `weeklyPlans:getSavedPlan`) została wycofana: żaden widok jej nie czytał,
+/// a każda zmiana tygodnia kosztowała dodatkowy round-trip po sockecie.
 @Observable
 class WeeklyMealStore {
 
     // MARK: - Storage
 
     private(set) var plans: [String: DayMealPlan] = [:]
-    private(set) var savedPlan: SavedMealPlan = SavedMealPlan()
     private let weeklyPlanRepository: WeeklyPlanRepository?
     private let currentUserId: String?
     private var observedWeekStart: String?
     private var observedWeekDates: [Date] = []
-    private var observedSavedPlanWeekStart: String?
     private var lastWeekChangeVersionByWeek: [String: Int64] = [:]
-    private var lastSavedPlanChangeVersionByWeek: [String: Int64] = [:]
     private var pendingWeekReloadTask: Task<Void, Never>?
-    private var pendingSavedPlanReloadTask: Task<Void, Never>?
     /// Odracza pokazanie błędów łączności z odczytu tygodnia — patrz
     /// komentarz w `ConnectivityErrorGate`. Błędy mutacji planu pokazują
     /// się bez zmian, od razu.
     private let connectivityErrorGate = ConnectivityErrorGate()
     var errorMessage: String?
-
-    var hasSavedPlan: Bool { !savedPlan.isEmpty }
 
     // MARK: - Date formatting
 
@@ -52,12 +51,6 @@ class WeeklyMealStore {
                 await self.handleRemoteWeekPlanChanged(event: event)
             }
         }
-        self.weeklyPlanRepository?.observeSavedPlanChanges { [weak self] event in
-            guard let self else { return }
-            Task { @MainActor in
-                await self.handleRemoteSavedPlanChanged(event: event)
-            }
-        }
         self.weeklyPlanRepository?.observeRealtimeReconnect { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -65,7 +58,7 @@ class WeeklyMealStore {
             }
         }
         load()
-        loadSavedPlan()
+        Self.deleteLegacySavedPlanFile()
     }
 
     // MARK: - Read API
@@ -158,9 +151,6 @@ class WeeklyMealStore {
                 plans[key] = dayPlan
             }
             save()
-            // Recompute availability flags based on the freshly loaded calendar state.
-            // Without this, another device can keep stale "selected" entries and show 0/x as blocked.
-            syncSavedPlanSelectionFlagsWithCalendar()
             errorMessage = nil
         } catch {
             // Błąd łączności z odświeżenia pokazuje się dopiero, gdy się
@@ -365,154 +355,22 @@ class WeeklyMealStore {
         do {
             try await weeklyPlanRepository.clearWeekPlan(weekStart: weekStart)
             clearWeek(dates: dates)
-            savedPlan = SavedMealPlan()
-            saveSavedPlan()
             errorMessage = nil
         } catch {
             errorMessage = UserFacingErrorMapper.message(from: error)
         }
     }
 
-    /// - Parameter householdMemberCount: potrzebne tylko po to, żeby
-    ///   optymistyczny wpis policzył porcje tą samą regułą co serwer. Wpisy
-    ///   z zapisanego planu są zawsze „Wspólne", więc liczba porcji to liczba
-    ///   domowników — a jedynka na sztywno połowiłaby im listę zakupów.
-    ///   `nil` = jeszcze nie wiadomo, ilu ich jest; wtedy porcje wylicza serwer.
-    @MainActor
-    func applySavedPlanToWeek(
-        weekStart: String,
-        dates: [Date],
-        plan: SavedMealPlan,
-        householdMemberCount: Int?
-    ) async {
-        guard !dates.isEmpty else { return }
-
-        // Upewnij się, że lokalny cache odzwierciedla backend przed nadpisaniem tygodnia.
-        await loadWeekPlanFromBackend(weekStart: weekStart, dates: dates)
-
-        var hadError = false
-
-        func applySlot(_ slot: MealSlot, entries: [PlanEntry]) async {
-            let recipes = entries.map(\.recipe)
-
-            for (index, date) in dates.enumerated() {
-                if index < recipes.count {
-                    let targetRecipe = recipes[index]
-                    if recipe(for: date, slot: slot)?.id == targetRecipe.id {
-                        continue
-                    }
-                    let success = await upsertWeekSlot(
-                        recipe: targetRecipe,
-                        householdMemberCount: householdMemberCount,
-                        for: date,
-                        slot: slot,
-                        weekStart: weekStart
-                    )
-                    if !success { hadError = true }
-                } else if recipe(for: date, slot: slot) != nil {
-                    let success = await removeWeekSlot(
-                        for: date,
-                        slot: slot,
-                        weekStart: weekStart
-                    )
-                    if !success { hadError = true }
-                }
-            }
-        }
-
-        // Pętla po wszystkich slotach, nie po trzech wypisanych z nazwy —
-        // sloty puste są bezkosztowe, a wyliczanka gubiłaby każdy nowy posiłek.
-        for slot in MealSlot.allCases {
-            await applySlot(slot, entries: plan.entries(for: slot))
-        }
-
-        cleanupCalendarAndSync(with: plan)
-
-        if !hadError {
-            errorMessage = nil
-        }
-    }
-
-    // MARK: - Saved Plan API
-
-    func saveMealPlan(_ plan: SavedMealPlan) {
-        savedPlan = plan
-        saveSavedPlan()
-    }
-
-    func clearSavedPlan() {
-        savedPlan = SavedMealPlan()
-        saveSavedPlan()
-    }
-
-    @MainActor
-    func loadSavedPlanFromBackend(weekStart: String) async {
-        guard let weeklyPlanRepository else { return }
-        observedSavedPlanWeekStart = weekStart
-        connectivityErrorGate.reset()
-        do {
-            let dto = try await weeklyPlanRepository.fetchSavedPlan(weekStart: weekStart)
-            let mapped = mapSavedPlan(dto: dto)
-            savedPlan = mapped
-            syncSavedPlanSelectionFlagsWithCalendar()
-            errorMessage = nil
-        } catch {
-            // Jak w `loadWeekPlanFromBackend` — chwilowy błąd łączności nie
-            // ma migać bannerem, skoro reconnect zaraz go naprawi.
-            connectivityErrorGate.publish(error) { [weak self] message in
-                self?.errorMessage = message
-            }
-        }
-    }
-
-    @MainActor
-    func saveMealPlanToBackend(_ plan: SavedMealPlan, weekStart: String) async {
-        saveMealPlan(plan)
-        guard let weeklyPlanRepository else { return }
-
-        do {
-            let recipeIdsByMealType = Dictionary(
-                uniqueKeysWithValues: MealSlot.allCases.map { slot in
-                    (
-                        slot.backendMealType,
-                        plan.entries(for: slot).map { $0.recipe.id.uuidString }
-                    )
-                }
-            )
-            let dto = try await weeklyPlanRepository.saveSavedPlan(
-                weekStart: weekStart,
-                recipeIdsByMealType: recipeIdsByMealType
-            )
-            let mapped = mapSavedPlan(dto: dto)
-            savedPlan = mapped
-            cleanupCalendarAndSync(with: mapped)
-            errorMessage = nil
-        } catch {
-            errorMessage = UserFacingErrorMapper.message(from: error)
-        }
-    }
-
-    @MainActor
-    func clearSavedPlanFromBackend(weekStart: String) async {
-        await saveMealPlanToBackend(SavedMealPlan(), weekStart: weekStart)
-    }
-
-    /// Resetuje lokalny cache planów i zapisany plan.
+    /// Resetuje lokalny cache planów.
     /// Używane przy zmianie kontekstu gospodarstwa, aby nie przenosić starych danych.
     func resetLocalPlanningState() {
         plans = [:]
-        savedPlan = SavedMealPlan()
         observedWeekStart = nil
         observedWeekDates = []
-        observedSavedPlanWeekStart = nil
         lastWeekChangeVersionByWeek = [:]
-        lastSavedPlanChangeVersionByWeek = [:]
         pendingWeekReloadTask?.cancel()
-        pendingSavedPlanReloadTask?.cancel()
         pendingWeekReloadTask = nil
-        pendingSavedPlanReloadTask = nil
         save()
-        saveSavedPlan()
     }
 
     func refreshObservedState() {
@@ -542,29 +400,6 @@ class WeeklyMealStore {
         }
     }
 
-    @MainActor
-    private func handleRemoteSavedPlanChanged(event: BackendSavedPlanChangedDTO) async {
-        let changedByOtherUser = event.changedByUserId != nil && event.changedByUserId != currentUserId
-        guard event.weekStart == observedSavedPlanWeekStart else { return }
-        if let changeVersion = event.changeVersion {
-            let previous = lastSavedPlanChangeVersionByWeek[event.weekStart] ?? 0
-            guard changeVersion > previous else { return }
-            lastSavedPlanChangeVersionByWeek[event.weekStart] = changeVersion
-        }
-        scheduleSavedPlanReload(weekStart: event.weekStart)
-        if changedByOtherUser {
-            if event.action?.uppercased() == "CLEAR_PLAN" {
-                return
-            }
-            PlanChangeNotificationService.notifyRemotePlanChange(
-                action: event.action,
-                weekStart: event.weekStart,
-                householdId: event.householdId,
-                changedByDisplayName: event.changedByDisplayName
-            )
-        }
-    }
-
     private func scheduleWeekReload(weekStart: String, dates: [Date]) {
         pendingWeekReloadTask?.cancel()
         pendingWeekReloadTask = Task { @MainActor [weak self] in
@@ -574,144 +409,10 @@ class WeeklyMealStore {
         }
     }
 
-    private func scheduleSavedPlanReload(weekStart: String) {
-        pendingSavedPlanReloadTask?.cancel()
-        pendingSavedPlanReloadTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            guard let self else { return }
-            await self.loadSavedPlanFromBackend(weekStart: weekStart)
-        }
-    }
-
     private func scheduleRefreshForObservedState() {
         if let observedWeekStart, !observedWeekDates.isEmpty {
             scheduleWeekReload(weekStart: observedWeekStart, dates: observedWeekDates)
         }
-        if let observedSavedPlanWeekStart {
-            scheduleSavedPlanReload(weekStart: observedSavedPlanWeekStart)
-        }
-    }
-
-    private func mapSavedPlan(dto: BackendSharedMealPlanDTO) -> SavedMealPlan {
-        func expand(slot: MealSlot) -> [PlanEntry] {
-            dto.items
-                .filter { $0.mealType.uppercased() == slot.backendMealType }
-                .flatMap { item -> [PlanEntry] in
-                    guard let recipe = item.recipe.toAppRecipe(), item.quantity > 0 else { return [] }
-                    return Array(repeating: PlanEntry(recipe: recipe), count: item.quantity)
-                }
-        }
-
-        return SavedMealPlan(
-            entriesBySlot: Dictionary(
-                uniqueKeysWithValues: MealSlot.allCases.map { ($0, expand(slot: $0)) }
-            )
-        )
-    }
-
-    /// Ile razy dany przepis stoi w kalendarzu, slot po slocie.
-    private func calendarUsageCounts() -> [MealSlot: [UUID: Int]] {
-        var counts: [MealSlot: [UUID: Int]] = [:]
-        for dayPlan in plans.values {
-            for slot in MealSlot.allCases {
-                for meal in dayPlan.meals(for: slot) {
-                    counts[slot, default: [:]][meal.recipe.id, default: 0] += 1
-                }
-            }
-        }
-        return counts
-    }
-
-    private func syncSavedPlanSelectionFlagsWithCalendar() {
-        let used = calendarUsageCounts()
-        for slot in MealSlot.allCases {
-            savedPlan.updateEntries(for: slot) { entries in
-                syncEntries(&entries, usedCounts: used[slot] ?? [:])
-            }
-        }
-        saveSavedPlan()
-    }
-
-    /// Czyści z kalendarza przepisy, których nie ma w nowym planie
-    /// i synchronizuje flagi isSelected z aktualnym stanem kalendarza
-    func cleanupCalendarAndSync(with newPlan: SavedMealPlan) {
-        let allowedIdsBySlot: [MealSlot: Set<UUID>] = Dictionary(
-            uniqueKeysWithValues: MealSlot.allCases.map { slot in
-                (slot, Set(newPlan.entries(for: slot).map(\.recipe.id)))
-            }
-        )
-
-        // 1. Usuń z kalendarza przepisy spoza nowego planu
-        var changed = false
-        for (key, var dayPlan) in plans {
-            var dayChanged = false
-
-            for slot in MealSlot.allCases {
-                let current = dayPlan.meals(for: slot)
-                guard !current.isEmpty else { continue }
-                let allowed = allowedIdsBySlot[slot] ?? []
-                let kept = current.filter { allowed.contains($0.recipe.id) }
-                if kept.count != current.count {
-                    dayPlan.setMeals(kept, for: slot)
-                    dayChanged = true
-                }
-            }
-
-            if dayChanged {
-                plans[key] = dayPlan
-                changed = true
-            }
-        }
-        if changed { save() }
-
-        // 2. + 3. Policz użycie w kalendarzu i ustaw na jego podstawie isSelected
-        let used = calendarUsageCounts()
-        for slot in MealSlot.allCases {
-            savedPlan.updateEntries(for: slot) { entries in
-                syncEntries(&entries, usedCounts: used[slot] ?? [:])
-            }
-        }
-
-        saveSavedPlan()
-    }
-
-    /// Synchronizuje flagi isSelected — tyle wpisów ile jest w kalendarzu ustawia na true
-    private func syncEntries(_ entries: inout [PlanEntry], usedCounts: [UUID: Int]) {
-        // Najpierw ustaw wszystko na false
-        for i in entries.indices { entries[i].isSelected = false }
-
-        // Potem oznacz tyle ile jest w kalendarzu
-        var remaining = usedCounts
-        for i in entries.indices {
-            let recipeId = entries[i].recipe.id
-            if let count = remaining[recipeId], count > 0 {
-                entries[i].isSelected = true
-                remaining[recipeId] = count - 1
-            }
-        }
-    }
-
-    /// Oznacz jeden wpis jako wybrany (po dodaniu do kalendarza)
-    func markAsSelected(_ recipe: Recipe, slot: MealSlot) {
-        mutateEntries(for: slot) { entries in
-            if let idx = entries.firstIndex(where: { !$0.isSelected && $0.recipe.id == recipe.id }) {
-                entries[idx].isSelected = true
-            }
-        }
-    }
-
-    /// Oznacz jeden wpis jako dostępny (po usunięciu z kalendarza)
-    func markAsAvailable(_ recipe: Recipe, slot: MealSlot) {
-        mutateEntries(for: slot) { entries in
-            if let idx = entries.firstIndex(where: { $0.isSelected && $0.recipe.id == recipe.id }) {
-                entries[idx].isSelected = false
-            }
-        }
-    }
-
-    private func mutateEntries(for slot: MealSlot, _ mutation: (inout [PlanEntry]) -> Void) {
-        savedPlan.updateEntries(for: slot, mutation)
-        saveSavedPlan()
     }
 
     // MARK: - Persistence
@@ -739,28 +440,17 @@ class WeeklyMealStore {
         }
     }
 
-    // MARK: - Saved Plan Persistence
+    // MARK: - Legacy cleanup
 
-    private var savedPlanURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    /// `saved_plan.json` trzymał wycofaną pulę tygodniową. Plik nie ma już
+    /// czytelnika, więc kasujemy go raz, przy pierwszym starcie po
+    /// aktualizacji — inaczej zostałby na dysku każdego użytkownika na zawsze.
+    /// Błąd „nie ma pliku" jest normalnym przypadkiem i jest ignorowany, więc
+    /// nie potrzeba flagi „czy już sprzątnięte".
+    private static func deleteLegacySavedPlanFile() {
+        let url = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("saved_plan.json")
-    }
-
-    private func saveSavedPlan() {
-        do {
-            let data = try JSONEncoder().encode(savedPlan)
-            try data.write(to: savedPlanURL, options: .atomic)
-        } catch {
-            print("WeeklyMealStore saveSavedPlan error: \(error)")
-        }
-    }
-
-    private func loadSavedPlan() {
-        guard let data = try? Data(contentsOf: savedPlanURL) else { return }
-        do {
-            savedPlan = try JSONDecoder().decode(SavedMealPlan.self, from: data)
-        } catch {
-            print("WeeklyMealStore loadSavedPlan error: \(error)")
-        }
+        try? FileManager.default.removeItem(at: url)
     }
 }

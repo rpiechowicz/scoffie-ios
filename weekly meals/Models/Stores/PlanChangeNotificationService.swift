@@ -345,7 +345,7 @@ enum PlanChangeNotificationService {
     /// `nil` = to zdarzenie nie zasługuje na powiadomienie.
     ///
     /// Brak gałęzi domyślnej jest tu celowy. Backend rozgłasza po sockecie
-    /// także zdarzenia czysto techniczne (`SET_MEAL_EATEN`, `SAVE_PLAN_SYNC`),
+    /// także zdarzenia czysto techniczne (`SET_MEAL_EATEN`, `MEMBERSHIP_CHANGED`),
     /// świadomie NIE wysyłając dla nich pusha — a klient odpalał na nie
     /// „Ktoś zmienił plan posiłków", czyli dokładnie to powiadomienie, którego
     /// serwer postanowił nie wysyłać.
