@@ -26,5 +26,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (komentarz w `RecipeCatalogStore.cacheFileURL`); kasowany przy wylogowaniu.
 - `plannedServings` = porcje łączne; sloty per gospodarstwo + `suitableMealTypes`; tydzień od
   poniedziałku przez `PlanWeek`.
-- WebSocket bez auth (`userId` w payloadzie) — do zmiany w Fazie 0 razem z odświeżaniem tokenu
-  (JWT 30 dni, refresh nieużywany; `IntegrationsAPIClient` to jedyny uwierzytelniony klient REST).
+- WebSocket z auth (Faza 0): access token w handshake (`SocketIORecipeSocketClient(baseURL:tokenProvider:)`
+  → `connect(withPayload: ["token"])`); JEDEN socket sesji z `SessionStore.sessionSocket()` — nie tworzyć
+  nowych `SocketIORecipeSocketClient` w kodzie sesji. Odmowa serwera (`connect_error` z `data.code ==
+  "UNAUTHORIZED"`, `auth:expired`) → `observeAuthFailure` → `refreshSessionTokens()` (single-flight,
+  `POST /auth/refresh`) → `reconnectWithFreshToken()` albo `logout()`. `userId` w payloadach eventów jest
+  ignorowane przez serwer dla socketu z tokenem — zostaje na jedno wydanie. REST 401 →
+  `IntegrationsAPIClient` robi jeden refresh i retry. Logout woła `POST /auth/logout`. Backend w
+  `WS_AUTH_MODE=soft` wpuszcza jeszcze stare buildy bez tokenu; `strict` po adopcji tego buildu.

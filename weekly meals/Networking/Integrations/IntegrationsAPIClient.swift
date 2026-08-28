@@ -13,20 +13,30 @@ enum IntegrationsAPIError: Error, Equatable {
 
 /// Pierwszy uwierzytelniony klient REST w aplikacji.
 ///
-/// Cała reszta backendu jeździ po Socket.IO z `userId` w payloadzie, ale
-/// poświadczenia Cookidoo wymagają prawdziwej autoryzacji — token z Keychain
-/// idzie w `Authorization: Bearer`, a tożsamość ustala serwer z JWT.
+/// Poświadczenia Cookidoo i kroki wymagają prawdziwej autoryzacji — token
+/// z Keychain idzie w `Authorization: Bearer`, a tożsamość ustala serwer z JWT.
 /// Celowo feature-scoped (nie „wielki generyczny klient"): jak dojdą kolejne
 /// uwierzytelnione zasoby, wtedy będzie z czego uogólniać.
+///
+/// Od Fazy 0 pierwszy 401 uruchamia jednorazowe odświeżenie sesji
+/// (`refreshSession`, single-flight w `SessionStore`) i ponowienie żądania;
+/// drugi 401 wraca do wywołującego jako `UNAUTHORIZED`.
 final class IntegrationsAPIClient {
     private let baseURL: URL
     /// Token czytany per żądanie, nie trzymany — Keychain jest źródłem prawdy
     /// i wylogowanie unieważnia klienta bez dodatkowego sprzątania.
     private let tokenProvider: () -> String?
+    /// `true` = para tokenów odświeżona, można ponowić żądanie.
+    private let refreshSession: (() async -> Bool)?
 
-    init(baseURL: URL, tokenProvider: @escaping () -> String?) {
+    init(
+        baseURL: URL,
+        tokenProvider: @escaping () -> String?,
+        refreshSession: (() async -> Bool)? = nil
+    ) {
         self.baseURL = baseURL
         self.tokenProvider = tokenProvider
+        self.refreshSession = refreshSession
     }
 
     func fetchStatus() async throws -> CookidooStatusDTO {
@@ -87,7 +97,8 @@ final class IntegrationsAPIClient {
     private func perform<Response: Decodable>(
         path: String,
         method: String,
-        bodyData: Data?
+        bodyData: Data?,
+        isRetryAfterRefresh: Bool = false
     ) async throws -> Response {
         guard let token = tokenProvider(), !token.isEmpty else {
             throw IntegrationsAPIError.notAuthenticated
@@ -113,6 +124,18 @@ final class IntegrationsAPIClient {
         guard let http = response as? HTTPURLResponse else {
             throw IntegrationsAPIError.network
         }
+
+        if http.statusCode == 401, !isRetryAfterRefresh, let refreshSession {
+            if await refreshSession() {
+                return try await perform(
+                    path: path,
+                    method: method,
+                    bodyData: bodyData,
+                    isRetryAfterRefresh: true
+                )
+            }
+        }
+
         guard (200...299).contains(http.statusCode) else {
             let decoded = try? JSONDecoder().decode(BackendHttpErrorDTO.self, from: data)
             let code = decoded?.code
