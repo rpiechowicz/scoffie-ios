@@ -1,8 +1,12 @@
 import Foundation
 
-/// Błąd wywołania endpointów integracji, już po przetłumaczeniu na kod
+/// Błąd uwierzytelnionego wywołania REST, już po przetłumaczeniu na kod
 /// backendu (`AppErrorCode` z `app-error-code.ts`).
-enum IntegrationsAPIError: Error, Equatable {
+///
+/// Nazwa mówiła kiedyś „integracje", bo to był jedyny taki klient. Od
+/// asystenta AI (`AgentAPIClient`) jest ich dwa i kształt błędu jest ten sam
+/// dla każdego uwierzytelnionego zasobu — stąd nazwa bez nazwy funkcji.
+enum BackendAPIError: Error, Equatable {
     /// Brak access tokenu w Keychain — sesja nie istnieje.
     case notAuthenticated
     /// Backend odpowiedział błędem aplikacyjnym (`{code, message, requestId}`).
@@ -13,20 +17,30 @@ enum IntegrationsAPIError: Error, Equatable {
 
 /// Pierwszy uwierzytelniony klient REST w aplikacji.
 ///
-/// Cała reszta backendu jeździ po Socket.IO z `userId` w payloadzie, ale
-/// poświadczenia Cookidoo wymagają prawdziwej autoryzacji — token z Keychain
-/// idzie w `Authorization: Bearer`, a tożsamość ustala serwer z JWT.
+/// Poświadczenia Cookidoo i kroki wymagają prawdziwej autoryzacji — token
+/// z Keychain idzie w `Authorization: Bearer`, a tożsamość ustala serwer z JWT.
 /// Celowo feature-scoped (nie „wielki generyczny klient"): jak dojdą kolejne
 /// uwierzytelnione zasoby, wtedy będzie z czego uogólniać.
+///
+/// Od Fazy 0 pierwszy 401 uruchamia jednorazowe odświeżenie sesji
+/// (`refreshSession`, single-flight w `SessionStore`) i ponowienie żądania;
+/// drugi 401 wraca do wywołującego jako `UNAUTHORIZED`.
 final class IntegrationsAPIClient {
     private let baseURL: URL
     /// Token czytany per żądanie, nie trzymany — Keychain jest źródłem prawdy
     /// i wylogowanie unieważnia klienta bez dodatkowego sprzątania.
     private let tokenProvider: () -> String?
+    /// `true` = para tokenów odświeżona, można ponowić żądanie.
+    private let refreshSession: (() async -> Bool)?
 
-    init(baseURL: URL, tokenProvider: @escaping () -> String?) {
+    init(
+        baseURL: URL,
+        tokenProvider: @escaping () -> String?,
+        refreshSession: (() async -> Bool)? = nil
+    ) {
         self.baseURL = baseURL
         self.tokenProvider = tokenProvider
+        self.refreshSession = refreshSession
     }
 
     func fetchStatus() async throws -> CookidooStatusDTO {
@@ -87,10 +101,11 @@ final class IntegrationsAPIClient {
     private func perform<Response: Decodable>(
         path: String,
         method: String,
-        bodyData: Data?
+        bodyData: Data?,
+        isRetryAfterRefresh: Bool = false
     ) async throws -> Response {
         guard let token = tokenProvider(), !token.isEmpty else {
-            throw IntegrationsAPIError.notAuthenticated
+            throw BackendAPIError.notAuthenticated
         }
 
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
@@ -107,17 +122,29 @@ final class IntegrationsAPIClient {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            throw IntegrationsAPIError.network
+            throw BackendAPIError.network
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw IntegrationsAPIError.network
+            throw BackendAPIError.network
         }
+
+        if http.statusCode == 401, !isRetryAfterRefresh, let refreshSession {
+            if await refreshSession() {
+                return try await perform(
+                    path: path,
+                    method: method,
+                    bodyData: bodyData,
+                    isRetryAfterRefresh: true
+                )
+            }
+        }
+
         guard (200...299).contains(http.statusCode) else {
             let decoded = try? JSONDecoder().decode(BackendHttpErrorDTO.self, from: data)
             let code = decoded?.code
                 ?? (http.statusCode == 401 ? "UNAUTHORIZED" : "HTTP_ERROR")
-            throw IntegrationsAPIError.backend(
+            throw BackendAPIError.backend(
                 code: code,
                 status: http.statusCode,
                 message: decoded?.message

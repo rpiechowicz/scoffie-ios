@@ -36,6 +36,7 @@ struct WeeklyPlanView: View {
     @State private var detailTarget: DetailTarget?
     @State private var showClearDayAlert = false
     @State private var showClearWeekAlert = false
+    @State private var showAssistant = false
 
     /// Posiłek otwarty w szczegółach, razem z miejscem, z którego przyszedł.
     ///
@@ -273,6 +274,19 @@ struct WeeklyPlanView: View {
             .sheet(isPresented: $showProfileSheet) {
                 PlanProfileSheet(profile: $profile, members: members)
             }
+            .sheet(isPresented: $showAssistant) {
+                if let agentStore = sessionStore.agentStore {
+                    AssistantSheet(store: agentStore)
+                } else {
+                    // Sesja bez gospodarstwa (albo w trakcie wstawania) —
+                    // pusty arkusz wyglądałby na awarię aplikacji.
+                    Text("Asystent będzie dostępny, gdy wczyta się gospodarstwo.")
+                        .font(.system(size: 15))
+                        .multilineTextAlignment(.center)
+                        .padding(32)
+                        .presentationDetents([.height(160)])
+                }
+            }
             .sheet(item: $pickerTarget) { target in
                 PlanSlotPickerSheet(
                     date: target.date,
@@ -328,6 +342,13 @@ struct WeeklyPlanView: View {
     private var headerRow: some View {
         EditorialPageHeader(title: "Plan tygodnia") {
             HStack(spacing: 8) {
+                // Asystent siedzi przy Planie, a nie w osobnej zakładce:
+                // rozmawia się o TYM tygodniu i wraca do niego z odpowiedzią.
+                EditorialIconButton(icon: "sparkles") {
+                    showAssistant = true
+                }
+                .accessibilityLabel("Asystent")
+
                 overflowMenu
 
                 PlanProfileChip(profile: profile, members: members) {

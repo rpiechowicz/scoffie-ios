@@ -131,6 +131,10 @@ final class SessionStore {
     /// Kroki z HealthKit (Apple Zdrowie / Garmin) — drugi klient REST-owy,
     /// ta sama zasada tokenu co przy Cookidoo.
     var healthStepsStore: HealthStepsStore?
+    /// Rozmowa z asystentem AI. Wisi na sesji, a nie na arkuszu, bo tura
+    /// potrafi trwać minutę — użytkownik ma prawo w tym czasie zamknąć
+    /// asystenta, obejrzeć plan i wrócić po odpowiedź.
+    var agentStore: AgentStore?
     var datesViewModel = DatesViewModel()
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
@@ -190,11 +194,35 @@ final class SessionStore {
     }
 
     func refreshRealtimeStoresOnForeground() {
+        // Proces obudzony, zanim Keychain był dostępny — sesja czeka na
+        // pierwsze wejście na pierwszy plan.
+        if !isAuthenticated, restoreDeferredUntilKeychainAvailable {
+            restoreSession()
+            return
+        }
+        // Powrót z tła zeruje licznik odmów: pętla refresh→odmowa dostaje
+        // jedną świeżą próbę.
+        socketAuthRetryTask?.cancel()
+        socketAuthRetryTask = nil
+        socketAuthRetryCount = 0
         // Najpierw obudź socket, dopiero potem odświeżaj. iOS zrywa
         // połączenie w tle, a odświeżenia strzelające w martwy socket
         // kończyły się chwilowym „Problem z połączeniem na żywo",
         // które reconnect gasił pół sekundy później.
-        realtimeSocket?.reconnectIfNeeded()
+        //
+        // Wyjątek: token już wygasł — nie budzimy socketu starym tokenem;
+        // najpierw refresh (po `.refreshed` `refreshSessionTokens` sam podnosi
+        // socket). Chroni to socket po wcześniejszej odmowie; własny
+        // auto-reconnect biblioteki może jeszcze wysłać stary token — ewentualna
+        // druga rotacja jest ograniczona licznikiem odmów.
+        let tokenAlreadyExpired = accessTokenExpiry().map { $0 <= Date() } ?? false
+        if !tokenAlreadyExpired {
+            realtimeSocket?.reconnectIfNeeded()
+        }
+        // Token mógł zbliżyć się do wygaśnięcia, gdy aplikacja spała.
+        Task { @MainActor [weak self] in
+            await self?.refreshSessionTokensIfExpiringSoon()
+        }
         weeklyMealStore?.refreshObservedState()
         shoppingListStore?.refreshCurrentWeek()
         // Skład gospodarstwa też — zmiany, które zaszły, gdy aplikacja spała,
@@ -238,10 +266,12 @@ final class SessionStore {
             authError = error.errorDescription
             isAuthenticated = false
             clearRuntimeStores()
+            tearDownSessionSocket()
         } catch {
             authError = UserFacingErrorMapper.message(from: error)
             isAuthenticated = false
             clearRuntimeStores()
+            tearDownSessionSocket()
         }
     }
 
@@ -301,6 +331,24 @@ final class SessionStore {
     }
 
     func logout() {
+        // Trwający refresh: `cancel()` przerywa żądanie w locie, a gdy odpowiedź
+        // już przyszła, przed zapisem tokenów `refreshSessionTokens` sprawdza,
+        // czy refresh token w Keychain to nadal ten użyty — po
+        // `clearPersistedSession()` nie jest, więc nowa para nie wskrzesi sesji.
+        refreshTask?.cancel()
+        refreshTask = nil
+        socketAuthRetryTask?.cancel()
+        socketAuthRetryTask = nil
+        socketAuthRetryCount = 0
+        // Best-effort: refresh token przestaje działać także po stronie
+        // serwera (dotąd logout był tylko lokalny, a token żył jeszcze 30 dni).
+        if let refreshToken = currentRefreshToken, !refreshToken.isEmpty {
+            let client = AuthAPIClient(baseURL: baseURL)
+            Task.detached {
+                try? await client.logout(refreshToken: refreshToken)
+            }
+        }
+        tearDownSessionSocket()
         clearPersistedSession()
         clearHouseholdMembersCache()
         clearRuntimeStores()
@@ -325,7 +373,7 @@ final class SessionStore {
     func deleteAccount() async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
 
         do {
             let envelope: WsEnvelope<BackendDeletedUserDTO> = try await socket.emitWithAck(
@@ -396,26 +444,63 @@ final class SessionStore {
             NSLog("[SessionStore] restoreSession EARLY RETURN — userId missing")
             return
         }
+        // Od Fazy 0 socket i REST wymagają tokenu. `userId` w UserDefaults
+        // migruje z backupem telefonu, Keychain (ThisDeviceOnly) nie — bez
+        // tokenu „zalogowana" sesja byłaby martwa na każdym ekranie.
+        guard let accessToken = currentAccessToken, !accessToken.isEmpty else {
+            let status = KeychainService.status(forKey: Keys.accessToken)
+            if status == errSecItemNotFound {
+                NSLog("[SessionStore] restoreSession EARLY RETURN — access token missing")
+                clearPersistedSession()
+            } else {
+                // Keychain chwilowo niedostępny (proces obudzony przed pierwszym
+                // odblokowaniem po restarcie, przejściowy błąd) — sesja żyje,
+                // wrócimy do niej przy pierwszym wejściu na pierwszy plan.
+                NSLog("[SessionStore] restoreSession deferred — keychain status \(status)")
+                restoreDeferredUntilKeychainAvailable = true
+            }
+            return
+        }
+        restoreDeferredUntilKeychainAvailable = false
 
         syncPersistedSessionSnapshot(snapshot)
         currentUserId = snapshot.userId
         let householdId = snapshot.householdId
-        let householdName = snapshot.householdName
-        if let householdId, !householdId.isEmpty {
+        let householdName = (snapshot.householdName?.isEmpty == false) ? snapshot.householdName : nil
+        // Wygasły access token: socket łączyłby się od razu martwym tokenem
+        // i każde żądanie startu dostawałoby odmowę, zanim refresh zdąży —
+        // wtedy bootstrap czeka na nową parę.
+        let tokenAlreadyExpired = accessTokenExpiry().map { $0 <= Date() } ?? false
+        var deferredBootstrap = false
+        if let householdId, !householdId.isEmpty, !tokenAlreadyExpired {
             bootstrapSession(
                 userId: snapshot.userId,
                 householdId: householdId,
-                householdName: (householdName?.isEmpty == false ? householdName : nil)
+                householdName: householdName
             )
             // Podnosimy skopiowany z dysku snapshot domowników od razu — jeśli jest świeży,
             // sheet Gospodarstwo otworzy się bez pustego stanu nawet przy cold starcie.
             loadHouseholdMembersFromCacheIfFresh(for: householdId)
         } else {
-            // Brak persisted householdu — musimy zapytać backend o membership.
-            // Dopóki to nie zakończy się, trzymamy loader zamiast mignięcia NoHouseholdView.
+            // Brak persisted householdu (albo wygasły token) — loader zamiast
+            // mignięcia NoHouseholdView, dopóki nie wrócimy z backendu.
+            if let householdId, !householdId.isEmpty { deferredBootstrap = true }
             isRestoringSession = true
         }
+        let snapshotUserId = snapshot.userId
         Task { [weak self] in
+            // Najpierw token: wygasły access token dostałby od socketu i REST
+            // same odmowy, a refresh po 401 tylko by to odwlekał.
+            await self?.refreshSessionTokensIfExpiringSoon()
+            if let self, deferredBootstrap, self.isAuthenticated,
+               let householdId, !householdId.isEmpty {
+                self.bootstrapSession(
+                    userId: snapshotUserId,
+                    householdId: householdId,
+                    householdName: householdName
+                )
+                self.loadHouseholdMembersFromCacheIfFresh(for: householdId)
+            }
             await self?.restoreHouseholdIfNeeded()
             await self?.registerPushDeviceIfPossible()
             await self?.validateAppleCredentialStateIfNeeded()
@@ -441,8 +526,13 @@ final class SessionStore {
         }
         let datesViewModel = DatesViewModel()
         self.datesViewModel = datesViewModel
-        let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
-        self.realtimeSocket = socketClient
+        // Stary warmup (katalog na starym sockecie, poprzednie gospodarstwo)
+        // nie ma już czego dociągać.
+        startupTask?.cancel()
+        startupTask = nil
+        // Nowy socket sesji z tokenem w handshake — stary (inne gospodarstwo
+        // albo świeże logowanie) zamykamy, żeby nie dublował obserwatorów.
+        let socketClient = replaceSessionSocket()
 
         let recipeTransport = WebSocketRecipeTransportClient(
             socket: socketClient,
@@ -477,7 +567,10 @@ final class SessionStore {
         let cookidooStore = CookidooIntegrationStore(
             client: IntegrationsAPIClient(
                 baseURL: baseURL,
-                tokenProvider: { [weak self] in self?.currentAccessToken }
+                tokenProvider: { [weak self] in self?.currentAccessToken },
+                refreshSession: { [weak self] in
+                    await self?.refreshSessionTokens() == .refreshed
+                }
             )
         )
         self.cookidooIntegrationStore = cookidooStore
@@ -491,10 +584,24 @@ final class SessionStore {
             service: HealthKitService(),
             client: IntegrationsAPIClient(
                 baseURL: baseURL,
-                tokenProvider: { [weak self] in self?.currentAccessToken }
+                tokenProvider: { [weak self] in self?.currentAccessToken },
+                refreshSession: { [weak self] in
+                    await self?.refreshSessionTokens() == .refreshed
+                }
             )
         )
         self.healthStepsStore = healthStore
+
+        self.agentStore = AgentStore(
+            client: AgentAPIClient(
+                baseURL: baseURL,
+                tokenProvider: { [weak self] in self?.currentAccessToken },
+                refreshSession: { [weak self] in
+                    await self?.refreshSessionTokens() == .refreshed
+                }
+            ),
+            householdId: householdId
+        )
         // Świeże kroki od razu przy starcie sesji + obserwacja na żywo.
         // Oba to no-opy, dopóki użytkownik nie włączy integracji w Ustawieniach.
         healthStore.startObserving()
@@ -553,7 +660,9 @@ final class SessionStore {
         realtimeSocket?.off(event: "households:membersChanged")
         realtimeSocket?.off(event: "households:mealTypesChanged")
         realtimeSocket?.off(event: "households:mealTimesChanged")
-        realtimeSocket = nil
+        // Socket sesji zostaje: to sprzątanie po gospodarstwie, nie po koncie
+        // (wyjście z domu, usunięcie z domu). Serwer sam przepina pokoje;
+        // wylogowanie zamyka go w `tearDownSessionSocket()`.
         weeklyMealStore = nil
         // Plik cache katalogu nie jest przypisany do konta: bez tego następna
         // osoba zalogowana na tym telefonie widziała przez 12 h katalog
@@ -564,6 +673,9 @@ final class SessionStore {
         cookidooIntegrationStore = nil
         healthStepsStore?.stopObserving()
         healthStepsStore = nil
+        // Rozmowy zostają na serwerze (użytkownik kasuje je sam, świadomie) —
+        // tu znika tylko stan w pamięci telefonu.
+        agentStore = nil
         datesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
@@ -779,7 +891,7 @@ final class SessionStore {
             return true
         }
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
         do {
             let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
                 event: "households:updateMealTimes",
@@ -811,7 +923,7 @@ final class SessionStore {
         guard let userId = currentUserId, !userId.isEmpty,
               let householdId = currentHouseholdId, !householdId.isEmpty else { return }
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
         do {
             let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
                 event: "households:findById",
@@ -843,7 +955,7 @@ final class SessionStore {
         let previous = mealSlots
         applyMealSlots(configuration)
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
         do {
             let envelope: WsEnvelope<BackendHouseholdDTO> = try await socket.emitWithAck(
                 event: "households:updateMealTypes",
@@ -868,6 +980,21 @@ final class SessionStore {
         }
     }
 
+    /// Granice nazwy gospodarstwa — parytet z `CreateHouseholdDto` (2…64) na
+    /// serwerze, który od Fazy 0 waliduje je również na WebSockecie.
+    static let householdNameLengthRange = 2...64
+
+    static func isValidHouseholdName(_ name: String) -> Bool {
+        householdNameLengthRange.contains(
+            name.trimmingCharacters(in: .whitespacesAndNewlines).count
+        )
+    }
+
+    /// Limit `displayName` z `UpdateProfileDto` (64). Przycinamy PRZED zapisem
+    /// lokalnym i wysyłką, bo `saveProfile` zapisuje optymistycznie — dłuższa
+    /// nazwa zostawałaby na telefonie, a serwer odrzucałby ją po cichu.
+    static let displayNameMaxLength = 64
+
     func createHousehold(name: String) async {
         guard let userId = currentUserId, !userId.isEmpty else {
             authError = "Brak użytkownika sesji."
@@ -879,13 +1006,17 @@ final class SessionStore {
             authError = "Podaj nazwę gospodarstwa."
             return
         }
+        guard Self.isValidHouseholdName(trimmed) else {
+            authError = "Nazwa gospodarstwa musi mieć od 2 do 64 znaków."
+            return
+        }
 
         isSigningIn = true
         authError = nil
         defer { isSigningIn = false }
 
         do {
-            let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
+            let socketClient = sessionSocket()
             let envelope: WsEnvelope<BackendHouseholdDTO> = try await socketClient.emitWithAck(
                 event: "households:create",
                 payload: [
@@ -918,7 +1049,7 @@ final class SessionStore {
         defer { isSigningIn = false }
 
         do {
-            let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
+            let socketClient = sessionSocket()
             let envelope: WsEnvelope<HouseholdLeaveAckDTO> = try await socketClient.emitWithAck(
                 event: "households:leave",
                 payload: [
@@ -962,7 +1093,7 @@ final class SessionStore {
 
         authError = nil
         do {
-            let socketClient = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+            let socketClient = sessionSocket()
             let envelope: WsEnvelope<BackendMembershipDTO> = try await socketClient.emitWithAck(
                 event: "households:removeMember",
                 payload: [
@@ -997,7 +1128,7 @@ final class SessionStore {
             throw RecipeDataError.serverError(message: "Brak aktywnego gospodarstwa.")
         }
 
-        let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
+        let socketClient = sessionSocket()
         let envelope: WsEnvelope<BackendInvitationDTO> = try await socketClient.emitWithAck(
             event: "households:createInvitation",
             payload: [
@@ -1034,7 +1165,7 @@ final class SessionStore {
             throw RecipeDataError.serverError(message: "Nieprawidłowy token zaproszenia.")
         }
 
-        let socketClient = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socketClient = sessionSocket()
         let envelope: WsEnvelope<BackendInvitationPreviewDTO> = try await socketClient.emitWithAck(
             event: "households:previewInvitation",
             payload: [
@@ -1069,7 +1200,7 @@ final class SessionStore {
         authError = nil
         defer { isSigningIn = false }
 
-        let socketClient = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socketClient = sessionSocket()
         let acceptEnvelope: WsEnvelope<BackendMembershipDTO> = try await socketClient.emitWithAck(
             event: "households:acceptInvitation",
             payload: [
@@ -1118,7 +1249,7 @@ final class SessionStore {
     /// pełnym `users:me`.
     private func syncAvatarColorFromBackend() async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
         do {
             let envelope: WsEnvelope<BackendCurrentUserDTO> = try await socket.emitWithAck(
                 event: "users:me",
@@ -1147,7 +1278,7 @@ final class SessionStore {
     /// ponownym otwarciu linku.
     func declineInvitation(token: String) async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
         do {
             let _: WsEnvelope<BackendMutationAckDTO> = try await socket.emitWithAck(
                 event: "households:declineInvitation",
@@ -1169,7 +1300,7 @@ final class SessionStore {
             pendingInvitations = []
             return
         }
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
         do {
             let envelope: WsEnvelope<[BackendPendingInvitationDTO]> = try await socket.emitWithAck(
                 event: "households:listPendingInvitations",
@@ -1314,7 +1445,7 @@ final class SessionStore {
         guard let token = pendingPushDeviceToken, !token.isEmpty else { return }
 
         do {
-            let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
+            let socketClient = sessionSocket()
             let envelope: WsEnvelope<PushDeviceRegisterAckDTO> = try await socketClient.emitWithAck(
                 event: "notifications:registerDevice",
                 payload: [
@@ -1363,7 +1494,7 @@ final class SessionStore {
             (currentHouseholdId?.isEmpty == false) ? currentHouseholdId : nil
 
         do {
-            let socketClient = SocketIORecipeSocketClient(baseURL: baseURL)
+            let socketClient = sessionSocket()
             let envelope: WsEnvelope<BackendCurrentUserDTO> = try await socketClient.emitWithAck(
                 event: "users:me",
                 payload: ["userId": userId],
@@ -1599,6 +1730,9 @@ final class SessionStore {
             self.startupPhase = .warmingUp
             let startedAt = Date()
             await self.runStartupWithTimeout()
+            // Anulowany warmup (bootstrap nowego gospodarstwa w trakcie) nie
+            // decyduje o fazie — nowy task sam przejdzie warmingUp → ready.
+            guard !Task.isCancelled else { return }
             // Minimum display — jeśli warmup poszedł z cache w <2 s, dotrzymujemy
             // loaderowi 2 s, żeby przejście Auth/Loader/Dashboard było płynne a nie migotało.
             let elapsed = Date().timeIntervalSince(startedAt)
@@ -1606,6 +1740,7 @@ final class SessionStore {
                 let remaining = minimumDisplay - elapsed
                 try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
             }
+            guard !Task.isCancelled else { return }
             // Nawet jeśli któryś krok się nie udał (offline / timeout),
             // wchodzimy w .ready — dashboard ma własne skeletony / cache.
             self.startupPhase = .ready
@@ -1684,7 +1819,7 @@ final class SessionStore {
                 // handshake (i do 3 s czekania) na jedynej ścieżce, która
                 // dowoziła nowego domownika — a przy zdalnym serwerze to
                 // czekanie potrafiło się nie zmieścić i pobranie cicho padało.
-                let socketClient = self.realtimeSocket ?? SocketIORecipeSocketClient(baseURL: self.baseURL)
+                let socketClient = self.sessionSocket()
                 let envelope: WsEnvelope<[BackendHouseholdMemberDTO]> = try await socketClient.emitWithAck(
                     event: "households:listMembers",
                     payload: [
@@ -1781,7 +1916,7 @@ final class SessionStore {
     @MainActor
     func loadUserPreferences() async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
 
         do {
             let envelope: WsEnvelope<BackendUserPreferencesDTO> = try await socket.emitWithAck(
@@ -1920,7 +2055,7 @@ final class SessionStore {
         }
         guard !data.isEmpty else { return }
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
 
         do {
             let envelope: WsEnvelope<BackendUserPreferencesDTO> = try await socket.emitWithAck(
@@ -1981,7 +2116,7 @@ final class SessionStore {
             "timeZone": TimeZone.current.identifier,
         ]
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
         do {
             let _: WsEnvelope<BackendUserPreferencesDTO> = try await socket.emitWithAck(
                 event: "users:preferences:update",
@@ -2017,7 +2152,11 @@ final class SessionStore {
 
         var data: [String: Any] = [:]
         if let displayName {
-            let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = String(
+                displayName
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .prefix(Self.displayNameMaxLength)
+            )
             if !trimmed.isEmpty {
                 data["displayName"] = trimmed
                 UserDefaults.standard.set(trimmed, forKey: Keys.displayName)
@@ -2045,7 +2184,7 @@ final class SessionStore {
         }
         guard !data.isEmpty else { return }
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
 
         do {
             let _: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
@@ -2071,7 +2210,7 @@ final class SessionStore {
         let nowIso = Self.onboardingDateFormatter.string(from: now)
         persistOnboardingCompletedAt(nowIso)
 
-        let socket = realtimeSocket ?? SocketIORecipeSocketClient(baseURL: baseURL)
+        let socket = sessionSocket()
 
         do {
             let envelope: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
@@ -2127,7 +2266,8 @@ final class SessionStore {
         try? FileManager.default.removeItem(at: householdMembersCacheURL)
     }
 
-    private func userIdFromAccessToken() -> String? {
+    /// Claimy z access tokenu (bez weryfikacji podpisu — to robi serwer).
+    private func accessTokenClaims() -> [String: Any]? {
         guard let token = currentAccessToken else { return nil }
         let segments = token.split(separator: ".")
         guard segments.count >= 2 else { return nil }
@@ -2141,12 +2281,221 @@ final class SessionStore {
         }
 
         guard let data = Data(base64Encoded: payload),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let userId = normalizedValue(object["sub"] as? String) else {
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object
+    }
+
+    private func userIdFromAccessToken() -> String? {
+        guard let claims = accessTokenClaims(),
+              let userId = normalizedValue(claims["sub"] as? String) else {
             return nil
         }
 
         NSLog("[SessionStore] restoreSession recovered userId from access token")
         return userId
+    }
+
+    /// `exp` z access tokenu; `nil`, gdy tokenu nie ma albo nie niesie `exp`.
+    private func accessTokenExpiry() -> Date? {
+        guard let claims = accessTokenClaims() else { return nil }
+        if let exp = claims["exp"] as? TimeInterval {
+            return Date(timeIntervalSince1970: exp)
+        }
+        if let exp = claims["exp"] as? Int {
+            return Date(timeIntervalSince1970: TimeInterval(exp))
+        }
+        return nil
+    }
+
+    // MARK: - Socket sesji i odświeżanie tokenu
+
+    /// Jeden socket sesji z tokenem w handshake, tworzony leniwie — także
+    /// PRZED gospodarstwem (Welcome), bo od Fazy 0 każdy event wymaga
+    /// tożsamości. Dawniej pięć miejsc otwierało własne, anonimowe połączenia.
+    private func sessionSocket() -> RecipeSocketClient {
+        if let realtimeSocket { return realtimeSocket }
+        let socket = makeSessionSocket()
+        realtimeSocket = socket
+        return socket
+    }
+
+    /// Nowy socket sesji zamiast obecnego (bootstrap po logowaniu / zmianie
+    /// domu) — stary zamykamy na dobre tą samą ścieżką co przy wylogowaniu,
+    /// żeby nie dublował obserwatorów ani handlerów `households:*`.
+    private func replaceSessionSocket() -> RecipeSocketClient {
+        tearDownSessionSocket()
+        let socket = makeSessionSocket()
+        realtimeSocket = socket
+        return socket
+    }
+
+    private func makeSessionSocket() -> RecipeSocketClient {
+        let socket = SocketIORecipeSocketClient(
+            baseURL: baseURL,
+            tokenProvider: { [weak self] in self?.currentAccessToken }
+        )
+        socket.observeAuthFailure { [weak self] reason in
+            Task { @MainActor [weak self] in
+                await self?.handleSocketAuthFailure(reason: reason)
+            }
+        }
+        // Udane połączenie zamyka ewentualną serię odmów.
+        socket.observeConnection { [weak self] isConnected in
+            guard isConnected else { return }
+            Task { @MainActor [weak self] in
+                self?.socketAuthRetryCount = 0
+            }
+        }
+        return socket
+    }
+
+    private func tearDownSessionSocket() {
+        socketAuthRetryTask?.cancel()
+        socketAuthRetryTask = nil
+        socketAuthRetryCount = 0
+        realtimeSocket?.off(event: "households:membersChanged")
+        realtimeSocket?.off(event: "households:mealTypesChanged")
+        realtimeSocket?.off(event: "households:mealTimesChanged")
+        realtimeSocket?.disconnect()
+        realtimeSocket = nil
+    }
+
+    enum SessionRefreshOutcome: Equatable {
+        /// Nowa para tokenów w Keychain.
+        case refreshed
+        /// Serwer odrzucił refresh token albo w Keychain nie ma go wcale —
+        /// sesja nie do uratowania bez ponownego logowania.
+        case rejected
+        /// Brak sieci / błąd serwera — sesja zostaje, spróbujemy później.
+        case unavailable
+    }
+
+    private var refreshTask: Task<SessionRefreshOutcome, Never>?
+    /// Odświeżamy proaktywnie, gdy do wygaśnięcia zostało mniej niż tydzień
+    /// (access token żyje 30 dni, refresh 60).
+    private static let proactiveRefreshWindow: TimeInterval = 7 * 24 * 3600
+    /// Sesja czeka na dostępny Keychain (patrz `restoreSession`).
+    private var restoreDeferredUntilKeychainAvailable = false
+    /// Seria odmów socketu po udanych refreshach — hamulec na wypadek, gdy
+    /// serwer odrzuca także świeże tokeny (rozjazd konfiguracji): backoff,
+    /// a po `maxSocketAuthRetries` czekamy na następny foreground.
+    private var socketAuthRetryCount = 0
+    private var socketAuthRetryTask: Task<Void, Never>?
+    private static let maxSocketAuthRetries = 5
+    private static let sessionExpiredMessage = "Sesja wygasła. Zaloguj się ponownie."
+
+    /// Jedna rotacja naraz. Równoległe 401 z REST i odmowa socketu nie mogą
+    /// wysłać tego samego refresh tokenu dwa razy — drugi przebieg serwer
+    /// uznałby za replay i unieważnił całą rodzinę tokenów.
+    ///
+    /// To jedyne miejsce, które decyduje o skutkach: `.rejected` kończy sesję,
+    /// `.refreshed` podnosi socket (jeśli czekał po odmowie — zdrowy zostaje).
+    @discardableResult
+    func refreshSessionTokens() async -> SessionRefreshOutcome {
+        if let refreshTask {
+            // Czekający nie decydują — właściciel taska obsłuży wynik.
+            return await refreshTask.value
+        }
+        let baseURL = self.baseURL
+        let refreshToken = currentRefreshToken
+        let task = Task<SessionRefreshOutcome, Never> {
+            guard let refreshToken, !refreshToken.isEmpty else {
+                // Brak refresh tokenu nie minie sam — bez ponownego logowania
+                // sesji nie da się uratować.
+                NSLog("[SessionStore] refreshSessionTokens — refresh token missing, session unrecoverable")
+                return .rejected
+            }
+            let client = AuthAPIClient(baseURL: baseURL)
+            do {
+                let pair = try await client.refresh(refreshToken: refreshToken)
+                // Wylogowanie / inne konto w trakcie żądania: nie wskrzeszaj
+                // sesji zapisem nowej pary po `clearPersistedSession()`, a świeżo
+                // wydany refresh token unieważnij (detached — ten Task może być
+                // już anulowany, a URLSession odrzuciłby wtedy żądanie).
+                guard !Task.isCancelled,
+                      KeychainService.get(forKey: Keys.refreshToken) == refreshToken else {
+                    Task.detached {
+                        try? await client.logout(refreshToken: pair.refreshToken)
+                    }
+                    return .unavailable
+                }
+                KeychainService.save(pair.accessToken, forKey: Keys.accessToken)
+                KeychainService.save(pair.refreshToken, forKey: Keys.refreshToken)
+                return .refreshed
+            } catch AuthAPIError.unauthorized {
+                return .rejected
+            } catch {
+                return .unavailable
+            }
+        }
+        refreshTask = task
+        let outcome = await task.value
+        // Nie zeruj nowszego taska założonego po logout()+relogin.
+        if refreshTask == task { refreshTask = nil }
+        switch outcome {
+        case .refreshed:
+            // Świeży token wchodzi tylko przez nowy pakiet CONNECT — klient
+            // przepina socket, który czekał po odmowie; zdrowy zostawia.
+            realtimeSocket?.reconnectWithFreshToken()
+            if authError == Self.sessionExpiredMessage {
+                authError = nil
+            }
+        case .rejected:
+            handleSessionExpired()
+        case .unavailable:
+            break
+        }
+        return outcome
+    }
+
+    private func refreshSessionTokensIfExpiringSoon() async {
+        guard isAuthenticated || currentUserId != nil else { return }
+        guard let expiry = accessTokenExpiry() else { return }
+        guard expiry.timeIntervalSinceNow < Self.proactiveRefreshWindow else { return }
+        await refreshSessionTokens()
+    }
+
+    /// Serwer odrzucił socket (`connect_error UNAUTHORIZED` / `auth:expired`):
+    /// odświeżamy tokeny — `refreshSessionTokens` sam podnosi socket albo
+    /// kończy sesję. Seria odmów po udanych refreshach dostaje backoff
+    /// (0, 2, 4, 8, 16 s) i limit; `.unavailable` (offline) zostawia socket
+    /// do następnego foregroundu (`reconnectIfNeeded` robi jedną próbę).
+    private func handleSocketAuthFailure(reason: String) async {
+        NSLog("[SessionStore] socket auth failure reason=\(reason) retry=\(socketAuthRetryCount)")
+        socketAuthRetryCount += 1
+        guard socketAuthRetryCount <= Self.maxSocketAuthRetries else {
+            NSLog("[SessionStore] socket auth failure loop — waiting for next foreground")
+            return
+        }
+        if socketAuthRetryCount > 1 {
+            let delay = UInt64(1 << (socketAuthRetryCount - 1)) * 1_000_000_000
+            socketAuthRetryTask?.cancel()
+            let waiter = Task<Void, Never> {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            socketAuthRetryTask = waiter
+            await waiter.value
+            if waiter.isCancelled { return }
+        }
+        if await refreshSessionTokens() == .unavailable {
+            // Offline / 5xx: socket czeka z flagą odmowy, więc bez ponowienia
+            // każde żądanie kończyłoby się błędem łączności aż do foregroundu.
+            // Ograniczone ponowienie tym samym licznikiem i backoffem.
+            let delay = UInt64(1 << socketAuthRetryCount) * 1_000_000_000
+            socketAuthRetryTask?.cancel()
+            socketAuthRetryTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: delay)
+                guard !Task.isCancelled else { return }
+                await self?.handleSocketAuthFailure(reason: reason)
+            }
+        }
+    }
+
+    private func handleSessionExpired() {
+        guard isAuthenticated || currentUserId != nil else { return }
+        logout()
+        authError = Self.sessionExpiredMessage
     }
 }

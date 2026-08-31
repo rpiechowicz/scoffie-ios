@@ -178,6 +178,12 @@ struct ProfileDetailsSheet: View {
                             .foregroundStyle(Color.wmLabel(scheme))
                             .onSubmit { focusedField = nil }
                             .onChange(of: nameDraft) { _, newValue in
+                                // Limit serwera (`UpdateProfileDto`, 64) — przycinamy
+                                // w polu, żeby stan lokalny = to, co przyjmie backend.
+                                if newValue.count > SessionStore.displayNameMaxLength {
+                                    nameDraft = String(newValue.prefix(SessionStore.displayNameMaxLength))
+                                    return
+                                }
                                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                                 guard !trimmed.isEmpty else { return }
                                 displayName = trimmed

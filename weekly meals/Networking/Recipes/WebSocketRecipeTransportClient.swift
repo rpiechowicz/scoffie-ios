@@ -96,6 +96,25 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
         }
     }
 
+    /// `recipes:changed` — od Fazy 1 przepis gospodarstwa potrafi zmienić się
+    /// bez udziału tego telefonu: edytuje go domownik albo asystent AI.
+    func observeRecipeChanges(_ onChange: @escaping () -> Void) {
+        socket.off(event: "recipes:changed")
+        socket.on(event: "recipes:changed") { [weak self] items in
+            guard let self else { return }
+            guard let first = items.first,
+                  JSONSerialization.isValidJSONObject(first),
+                  let data = try? JSONSerialization.data(withJSONObject: first),
+                  let event = try? JSONDecoder().decode(BackendRecipeChangedDTO.self, from: data)
+            else { return }
+
+            if let householdId = self.householdId, event.householdId != householdId {
+                return
+            }
+            onChange()
+        }
+    }
+
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void) {
         socket.observeConnection { isConnected in
             guard isConnected else { return }
@@ -105,6 +124,15 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
 }
 
 // MARK: - Internal DTO (only used by the transport client above)
+
+private struct BackendRecipeChangedDTO: Codable {
+    let householdId: String
+    let recipeId: String
+    /// `UPDATED` albo `DELETED` — dziś nie rozróżniamy, bo obie kończą się
+    /// przeładowaniem katalogu.
+    let action: String
+    let changedByUserId: String?
+}
 
 private struct BackendFavoritesChangedDTO: Codable {
     let householdId: String

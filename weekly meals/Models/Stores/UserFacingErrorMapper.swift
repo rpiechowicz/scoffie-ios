@@ -15,7 +15,7 @@ enum UserFacingErrorMapper {
         if case let RecipeDataError.server(code, _, _, _) = error {
             return code
         }
-        if case let IntegrationsAPIError.backend(code, _, _) = error {
+        if case let BackendAPIError.backend(code, _, _) = error {
             return code
         }
         return nil
@@ -37,13 +37,23 @@ enum UserFacingErrorMapper {
             return true
         case let RecipeDataError.serverError(message):
             return matchesConnectivity(message)
-        case IntegrationsAPIError.network:
+        case BackendAPIError.network:
             return true
         case is URLError:
             return true
         default:
             return matchesConnectivity(extractMessage(from: error))
         }
+    }
+
+    /// Kopia dla kodu, który NIE przyszedł jako błąd HTTP.
+    ///
+    /// Tura asystenta kończy się polem `errorCode` w odpowiedzi `200` — jest
+    /// sam kod, nie ma czego mapować przez `message(from:)`. `nil` znaczy
+    /// „nie znam tego kodu": wołający pokaże własne zdanie zamiast wyciągać
+    /// użytkownikowi surowy identyfikator.
+    static func copy(forCode code: String) -> String? {
+        copyByCode[code]
     }
 
     static func message(from error: Error) -> String {
@@ -136,15 +146,35 @@ enum UserFacingErrorMapper {
         "INVITATION_REQUIRES_LEAVE": "Należysz już do innego gospodarstwa. Otwórz zaproszenie ponownie, aby się przenieść.",
         // plan
         "RECIPE_NOT_FOUND": "Nie znaleziono przepisu.",
+        "INGREDIENT_NOT_FOUND": "Nie znaleziono składnika w katalogu.",
         "PLAN_ITEM_NOT_FOUND": "Tego posiłku nie ma już w planie.",
         "PLAN_SLOT_LIMIT_REACHED": "Ten typ posiłku ma już komplet dań w tym tygodniu.",
         "PLAN_SLOT_VARIANT_LIMIT_REACHED": "W tym slocie nie zmieści się więcej dań.",
         "PLAN_PARTICIPANT_NOT_IN_HOUSEHOLD": "Wybrana osoba nie należy do gospodarstwa.",
         "PLAN_TOTAL_LIMIT_REACHED": "Plan tygodnia jest pełny.",
         "PLAN_SLOT_DUPLICATE": "Ten przepis jest już w tym slocie.",
+        "RECIPE_NOT_SUITABLE_FOR_SLOT": "Ten przepis nie pasuje do tego posiłku.",
+        "RECIPE_ALLERGEN_CONFLICT": "Ten przepis ma składnik, na który ktoś z jedzących jest uczulony.",
+        "RECIPE_NOT_EDITABLE": "Przepisów z katalogu nie da się zmieniać. Zapisz własną wersję.",
+        "RECIPE_IN_USE": "Ten przepis jest w planie tygodnia. Najpierw usuń go z planu.",
         // lista zakupów
         "SHOPPING_LIST_EMPTY": "Lista zakupów jest pusta.",
         "SHOPPING_LIST_NOT_COMPLETED": "Odhacz wszystkie produkty, zanim zamkniesz listę.",
+        "SHOPPING_LIST_ARCHIVE_NOT_FOUND": "Tej listy zakupów już nie ma. Odśwież widok.",
+        "SHOPPING_ITEM_NOT_FOUND": "Tej pozycji nie ma już na liście. Odśwież widok.",
+        // asystent AI
+        // `AI_PLAN_QUOTA_EXCEEDED` NIE ma tu kopii świadomie: ten kod wraca do
+        // MODELU jako wynik narzędzia, a użytkownik dostaje o tym zdanie
+        // w odpowiedzi asystenta, nie alert.
+        "AI_DISABLED": "Asystent jest teraz niedostępny.",
+        "AI_QUOTA_EXCEEDED": "Limit rozmów z asystentem na ten miesiąc został wyczerpany.",
+        "AI_BUDGET_PAUSED": "Asystent jest dziś niedostępny. Spróbuj jutro.",
+        "AI_UPSTREAM_PAUSED": "Asystent ma chwilową przerwę. Spróbuj za minutę.",
+        "AI_TURN_IN_PROGRESS": "Poprzednia wiadomość jest jeszcze przetwarzana.",
+        "AI_CONVERSATION_NOT_FOUND": "Tej rozmowy już nie ma.",
+        "AI_TURN_NOT_FOUND": "Tej odpowiedzi już nie ma.",
+        "AI_TIMEOUT": "Asystent nie zdążył odpowiedzieć. Spróbuj jeszcze raz.",
+        "AI_PROVIDER_ERROR": "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.",
         // Cookidoo
         "COOKIDOO_NOT_CONNECTED": "Gospodarstwo nie ma połączonego konta Cookidoo. Połącz je w Ustawieniach.",
         "COOKIDOO_AUTH_FAILED": "Połączenie z Cookidoo wygasło. Zaloguj się ponownie w Ustawieniach.",
