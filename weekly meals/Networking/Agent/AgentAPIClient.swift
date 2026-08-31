@@ -92,13 +92,16 @@ final class AgentAPIClient {
         )
     }
 
-    func forgetMemory(noteId: String) async throws {
-        struct EmptyDTO: Decodable {}
-        let _: EmptyDTO = try await perform(
+    @discardableResult
+    func forgetMemory(noteId: String) async throws -> Int {
+        // Serwer oddaje `{deleted}` — pusta odpowiedź wywróciłaby dekoder.
+        struct DeletedDTO: Decodable { let deleted: Int }
+        let response: DeletedDTO = try await perform(
             path: "agent/memory/\(noteId)",
             method: "DELETE",
             bodyData: nil
         )
+        return response.deleted
     }
 
     /// „Usuń moje rozmowy z asystentem" (RODO). Działa też przy wyłączonym

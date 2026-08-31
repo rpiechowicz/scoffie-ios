@@ -61,6 +61,20 @@ enum UserFacingErrorMapper {
             return copy
         }
 
+        // Błędy transportu NIE mają kodu, a `BackendAPIError` nie jest
+        // `LocalizedError` — bez tych dwóch przypadków użytkownik dostawał
+        // „The operation couldn't be completed. (weekly_meals.BackendAPIError
+        // error 2.)". Cookidoo miało własny switch i dlatego to nie wyszło
+        // wcześniej; asystent jest pierwszym ekranem, który idzie tędy wprost.
+        switch error {
+        case BackendAPIError.network:
+            return "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie."
+        case BackendAPIError.notAuthenticated:
+            return copyByCode["UNAUTHORIZED"]!
+        default:
+            break
+        }
+
         let baseMessage = extractMessage(from: error).trimmingCharacters(in: .whitespacesAndNewlines)
         if baseMessage.isEmpty {
             return "Wystąpił nieoczekiwany błąd. Spróbuj ponownie."

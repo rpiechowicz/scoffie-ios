@@ -18,10 +18,9 @@ struct AgentConversationDTO: Decodable, Identifiable, Equatable {
     let createdAt: String
     /// Początek ostatniej wiadomości — bez tego lista rozmów jest listą dat.
     let preview: String?
-    /// Opcjonalne, bo starszy serwer tych pól nie oddaje.
-    let messageCount: Int?
     /// Tura, która JESZCZE BIEGNIE w tej rozmowie — po niej klient poznaje,
-    /// że jest do czego wrócić po zamknięciu aplikacji.
+    /// że jest do czego wrócić po zamknięciu aplikacji. Opcjonalne, bo starszy
+    /// serwer tego pola nie oddaje.
     let activeTurnId: String?
 }
 

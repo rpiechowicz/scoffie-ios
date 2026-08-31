@@ -319,7 +319,9 @@ struct AssistantView: View {
                 // W trakcie tury strzałka zamienia się w „stop": po dziesięciu
                 // sekundach widać już, że pytanie było źle zadane, a czekanie
                 // do końca nie daje nic poza czekaniem.
-                Button(action: store.isSending ? store.stopWaiting : send) {
+                Button {
+                    if store.isSending { store.stopWaiting() } else { send() }
+                } label: {
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 13 : 16, weight: .bold))
                         .foregroundStyle(Color.wmCanvas(scheme))
@@ -359,14 +361,12 @@ struct AssistantView: View {
         guard !trimmed.isEmpty, store.canSend else { return }
         draft = ""
         isComposerFocused = false
+        // Tekst, który nie doszedł, wraca przyciskiem „Spróbuj ponownie" przy
+        // komunikacie błędu — z tym samym kluczem idempotencji. Oddawanie go
+        // JEDNOCZEŚNIE do pola dawało dwie drogi wysyłki tego samego pytania
+        // i realny podwójny rachunek.
         Task {
-            let sent = await store.send(
-                text: trimmed,
-                weekStart: datesViewModel.weekStartISO
-            )
-            // Wiadomość, która nie doszła, wraca do pola — inaczej użytkownik
-            // traci to, co napisał, i musi wystukać wszystko od nowa.
-            if !sent && draft.isEmpty { draft = trimmed }
+            await store.send(text: trimmed, weekStart: datesViewModel.weekStartISO)
         }
     }
 

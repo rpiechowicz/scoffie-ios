@@ -47,6 +47,11 @@ final class AgentStore {
     /// Jedna zgubiona odpowiedź w tunelu nie może przerywać tury, za którą
     /// użytkownik już zapłacił kwotą.
     private static let maxPollFailures = 5
+    /// Tyle wiadomości oddaje jedna strona historii (kontrakt serwera).
+    private static let messagesPageSize = 100
+    /// Sufit stron historii — 2000 wiadomości to więcej, niż ktokolwiek napisze
+    /// w jednej rozmowie, a bez sufitu błąd serwera dałby pętlę bez końca.
+    private static let maxHistoryPages = 20
 
     private(set) var messages: [AgentChatMessage] = []
     private(set) var isSending = false
@@ -65,6 +70,12 @@ final class AgentStore {
     /// przy turze, która ruszyła i się nie domknęła, ponowienie oznaczałoby
     /// drugą kwotę za to samo.
     private(set) var retryText: String?
+    /// Klucz idempotencji NIEUDANEJ wysyłki.
+    ///
+    /// Ponowienie MUSI iść z tym samym kluczem: żądanie mogło dojść do serwera
+    /// i dopiero odpowiedź zginąć po drodze. Nowy klucz znaczyłby drugą turę,
+    /// drugą kwotę i drugi rachunek za to samo pytanie.
+    private var retryClientMessageId: String?
 
     /// Lista rozmów do panelu historii.
     private(set) var conversations: [AgentConversationDTO] = []
@@ -115,12 +126,17 @@ final class AgentStore {
     /// Wysyła wiadomość i czeka na odpowiedź, pokazując po drodze postęp.
     /// `false` = wiadomość nie doszła do serwera (ekran ma oddać tekst do pola).
     @discardableResult
-    func send(text: String, weekStart: String) async -> Bool {
+    func send(
+        text: String,
+        weekStart: String,
+        clientMessageId: String = UUID().uuidString
+    ) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, canSend else { return false }
 
         errorMessage = nil
         retryText = nil
+        retryClientMessageId = nil
         isSending = true
         progress = []
         defer { isSending = false }
@@ -128,11 +144,14 @@ final class AgentStore {
         if conversationId == nil {
             await loadOrCreateConversation()
         }
-        guard let conversationId else { return false }
-
-        // Klucz idempotencji zostaje ten sam przy ponowieniu — serwer odda tę
-        // samą turę, zamiast policzyć drugą kwotę za ten sam prompt.
-        let clientMessageId = UUID().uuidString
+        guard let conversationId else {
+            // Bez rozmowy nie ma dokąd wysłać, ale tekst musi mieć drogę
+            // powrotu — inaczej użytkownik zostaje z błędem i pustym polem.
+            retryText = trimmed
+            retryClientMessageId = clientMessageId
+            return false
+        }
+        let sentInConversation = conversationId
         messages.append(
             AgentChatMessage(
                 id: clientMessageId,
@@ -154,25 +173,46 @@ final class AgentStore {
                     timeZone: TimeZone.current.identifier
                 )
             )
+            // Rozmowa mogła się w tym czasie przełączyć — wtedy ta tura
+            // należy do POPRZEDNIEJ i nie ma prawa dopisać odpowiedzi tutaj.
+            guard sentInConversation == self.conversationId else { return true }
             confirmPendingMessage(clientMessageId)
             pendingTurnId = accepted.turnId
             await follow(turnId: accepted.turnId)
             return true
         } catch {
+            // Serwer pilnuje „jednej tury naraz". Zamiast pokazywać błąd,
+            // wracamy do tury, która wciąż biegnie — to dokładnie ta, na którą
+            // użytkownik czeka (typowo po wciśnięciu „stop").
+            if isTurnInProgress(error), let pendingTurnId {
+                messages.removeAll { $0.id == clientMessageId }
+                await follow(turnId: pendingTurnId)
+                return false
+            }
             handle(error)
             // Wiadomość, która nie doszła, nie ma prawa zostać w historii jako
             // wysłana — inaczej użytkownik czekałby na odpowiedź, której nikt
-            // nie zamówił. Treść zostaje do ponowienia jednym przyciskiem.
+            // nie zamówił. Treść i KLUCZ zostają do ponowienia.
             messages.removeAll { $0.id == clientMessageId }
             retryText = trimmed
+            retryClientMessageId = clientMessageId
             return false
         }
     }
 
-    /// Ponawia wiadomość, która nie doszła do serwera.
+    /// Ponawia wiadomość, która nie doszła do serwera — tym samym kluczem
+    /// idempotencji, bo poprzednie żądanie mogło jednak dojść.
     func retry(weekStart: String) async {
         guard let text = retryText else { return }
-        await send(text: text, weekStart: weekStart)
+        let key = retryClientMessageId ?? UUID().uuidString
+        await send(text: text, weekStart: weekStart, clientMessageId: key)
+    }
+
+    private func isTurnInProgress(_ error: Error) -> Bool {
+        if case let BackendAPIError.backend(code, _, _) = error {
+            return code == "AI_TURN_IN_PROGRESS"
+        }
+        return false
     }
 
     /// Przestaje czekać na turę.
@@ -202,6 +242,16 @@ final class AgentStore {
         } catch {
             handle(error)
         }
+    }
+
+    /// Odświeżenie listy w tle — bez dotykania komunikatu błędu.
+    ///
+    /// Wołane po udanej turze, żeby lista dostała tytuł nowej rozmowy. Gdyby
+    /// szło przez `refreshConversations`, nieudane odświeżenie wyświetlałoby
+    /// błąd POD poprawną odpowiedzią — i to o czymś, o co nikt nie prosił.
+    private func refreshConversationsQuietly() async {
+        guard let fresh = try? await client.listConversations() else { return }
+        conversations = fresh.filter { $0.householdId == householdId }
     }
 
     /// Przełącza widok na inną rozmowę.
@@ -259,6 +309,10 @@ final class AgentStore {
             messages = []
             conversations = []
             conversationId = nil
+            unseenAnswers = 0
+            // Bez tego zostaje ekran bez rozmowy: pierwsza wiadomość i tak
+            // musiałaby ją założyć, tylko z opóźnieniem i bez historii.
+            await loadOrCreateConversation()
         } catch {
             handle(error)
         }
@@ -307,8 +361,10 @@ final class AgentStore {
                 conversations = [conversation]
             }
             conversationId = conversation.id
-            messages = try await client.messages(conversationId: conversation.id)
-                .map { Self.chatMessage(from: $0) }
+            // Tura, która biegła, gdy aplikacja została ubita: identyfikator
+            // przychodzi z serwera, bo w pamięci telefonu go już nie ma.
+            pendingTurnId = conversation.activeTurnId
+            messages = try await loadAllMessages(conversationId: conversation.id)
             isUnavailable = false
         } catch {
             handle(error)
@@ -319,11 +375,31 @@ final class AgentStore {
         isLoadingHistory = true
         defer { isLoadingHistory = false }
         do {
-            messages = try await client.messages(conversationId: id)
-                .map { Self.chatMessage(from: $0) }
+            messages = try await loadAllMessages(conversationId: id)
+            pendingTurnId = conversations
+                .first { $0.id == id }?
+                .activeTurnId
         } catch {
             handle(error)
         }
+    }
+
+    /// Historia rozmowy w całości.
+    ///
+    /// Serwer oddaje po sto wiadomości na stronę i podaje kursor. Bez pętli
+    /// rozmowa dłuższa niż sto wiadomości urywała się w połowie, a klient nawet
+    /// o tym nie wiedział — sufit stron jest po to, żeby błąd po stronie
+    /// serwera nie zamienił się w nieskończone pobieranie.
+    private func loadAllMessages(conversationId id: String) async throws -> [AgentChatMessage] {
+        var all: [AgentChatMessage] = []
+        var cursor: String?
+        for _ in 0..<Self.maxHistoryPages {
+            let page = try await client.messages(conversationId: id, after: cursor)
+            all.append(contentsOf: page.map { Self.chatMessage(from: $0) })
+            guard page.count == Self.messagesPageSize, let last = page.last else { break }
+            cursor = last.id
+        }
+        return all
     }
 
     private func resetTurnState() {
@@ -340,8 +416,13 @@ final class AgentStore {
 
     /// Odpytywanie w osobnym zadaniu, żeby dało się je przerwać `stopWaiting`.
     private func follow(turnId: String) async {
+        // `guard let self` robi z tego domknięcie WIELOINSTRUKCYJNE, więc
+        // zadanie ma typ `Task<Void, Never>`. Zapis jednoinstrukcyjny
+        // z `await self?.followTurn(...)` dawał `Task<Void?, Never>` przez
+        // opcjonalne łańcuchowanie i nie dało się go przypisać do `turnTask`.
         let task = Task { [weak self] in
-            await self?.followTurn(turnId: turnId)
+            guard let self else { return }
+            await self.followTurn(turnId: turnId)
         }
         turnTask = task
         await task.value
@@ -349,12 +430,19 @@ final class AgentStore {
     }
 
     private func followTurn(turnId: String) async {
+        // Znacznik startu jest tożsamością TEJ tury. Sprzątamy po sobie tylko
+        // wtedy, gdy nikt nas nie zastąpił: anulowana tura kończy się po tym,
+        // jak użytkownik zdążył wysłać następną, i bez tego warunku gasiłaby
+        // jej kręciołek i kroki postępu.
+        let startedAt = Date()
         isSending = true
-        turnStartedAt = Date()
+        turnStartedAt = startedAt
         defer {
-            isSending = false
-            progress = []
-            turnStartedAt = nil
+            if turnStartedAt == startedAt {
+                isSending = false
+                progress = []
+                turnStartedAt = nil
+            }
         }
 
         let deadline = ContinuousClock.now + Self.pollTimeout
@@ -373,6 +461,9 @@ final class AgentStore {
                 }
 
                 pendingTurnId = nil
+                // Komunikat z poprzedniej, nieudanej próby nie ma prawa wisieć
+                // pod świeżą odpowiedzią.
+                errorMessage = nil
                 apply(finished: turn)
                 return
             } catch is CancellationError {
@@ -388,9 +479,15 @@ final class AgentStore {
             }
         }
 
-        // Sufit czasu. Tura mogła się domknąć po naszej stronie ciszy, więc
-        // nie kasujemy jej identyfikatora — po ponownym wejściu na zakładkę
-        // sięgniemy po nią jeszcze raz.
+        // Sufit czasu. Zanim powiemy „nie zdążył", pytamy JESZCZE RAZ: pętla
+        // mogła stać w tle razem z całą aplikacją, a odpowiedź czekać od dawna.
+        if let turn = try? await client.turn(id: turnId), turn.isFinished {
+            pendingTurnId = nil
+            apply(finished: turn)
+            return
+        }
+        // Identyfikatora nie kasujemy — po powrocie na zakładkę spróbujemy
+        // jeszcze raz.
         errorMessage = "Asystent nie odpowiedział na czas. Wróć tu za chwilę — odpowiedź może już czekać."
     }
 
@@ -415,7 +512,7 @@ final class AgentStore {
                 if !isVisible { unseenAnswers += answers.count }
                 // Tytuł rozmowy nadaje serwer z PIERWSZEJ wiadomości, a lista
                 // historii ma go pokazać bez ręcznego odświeżania.
-                Task { [weak self] in await self?.refreshConversations() }
+                Task { [weak self] in await self?.refreshConversationsQuietly() }
             }
         case "LIMITED":
             errorMessage = copy(forCode: turn.errorCode)
