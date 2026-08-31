@@ -16,6 +16,12 @@ enum AssistantBlock {
 struct AssistantListItem {
     /// Skrót dnia („PN"), gdy pozycja zaczyna się od dnia tygodnia.
     let day: String?
+    /// Numer z listy numerowanej („1."). Kroki przepisu bez numeru przestają
+    /// być krokami — zostaje z nich zbiór czynności w przypadkowej kolejności.
+    let ordinal: Int?
+    /// Poziom wcięcia (0 = najwyższy). Liczony PRZED przycięciem linii, bo po
+    /// nim cała hierarchia odpowiedzi znika.
+    let depth: Int
     let text: String
 }
 
@@ -37,7 +43,10 @@ enum AssistantAnswerParser {
                 continue
             }
 
-            if let item = listItem(from: trimmed) {
+            // Wcięcie liczymy z SUROWEJ linii — po przycięciu podpunkt
+            // („  - bez laktozy") wygląda identycznie jak pozycja nadrzędna.
+            let indent = line.prefix(while: { $0 == " " || $0 == "\t" }).count
+            if let item = listItem(from: trimmed, depth: min(indent / 2, 3)) {
                 pending.append(item)
                 continue
             }
@@ -72,24 +81,38 @@ enum AssistantAnswerParser {
         return nil
     }
 
-    private static func listItem(from line: String) -> AssistantListItem? {
-        guard let content = listContent(of: line) else { return nil }
-        guard let (day, rest) = splitDay(content) else {
-            return AssistantListItem(day: nil, text: clean(content))
+    private static func listItem(from line: String, depth: Int) -> AssistantListItem? {
+        guard let parsed = listContent(of: line) else { return nil }
+        guard let (day, rest) = splitDay(parsed.content) else {
+            return AssistantListItem(
+                day: nil,
+                ordinal: parsed.ordinal,
+                depth: depth,
+                text: clean(parsed.content)
+            )
         }
-        return AssistantListItem(day: day, text: clean(rest))
+        return AssistantListItem(
+            day: day,
+            ordinal: parsed.ordinal,
+            depth: depth,
+            text: clean(rest)
+        )
     }
 
-    private static func listContent(of line: String) -> String? {
+    private static func listContent(
+        of line: String
+    ) -> (content: String, ordinal: Int?)? {
         for marker in ["- ", "– ", "— ", "* ", "• "] where line.hasPrefix(marker) {
-            return String(line.dropFirst(marker.count))
+            return (String(line.dropFirst(marker.count)), nil)
         }
-        // „1. Coś tam" — numerowana lista.
+        // „1. Coś tam" — numerowana lista. Numer zostaje: to on niesie
+        // kolejność kroków przepisu.
         let parts = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
         if parts.count == 2, parts[0].count <= 3,
            let last = parts[0].last, last == "." || last == ")",
-           parts[0].dropLast().allSatisfy({ $0.isNumber }) {
-            return String(parts[1])
+           parts[0].dropLast().allSatisfy({ $0.isNumber }),
+           let ordinal = Int(parts[0].dropLast()) {
+            return (String(parts[1]), ordinal)
         }
         return nil
     }
@@ -162,14 +185,16 @@ struct AssistantAnswer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                 switch block {
                 case let .heading(title):
                     Text(title.uppercased())
                         .font(.system(size: 11, weight: .semibold))
                         .tracking(0.8)
                         .foregroundStyle(Color.wmMuted(scheme))
-                        .padding(.top, 2)
+                        // Nagłówek rozdziela sekcje, więc potrzebuje powietrza
+                        // NAD sobą — ale nie wtedy, gdy stoi na samej górze.
+                        .padding(.top, index == 0 ? 0 : 8)
 
                 case let .paragraph(paragraph):
                     Text(AssistantAnswerParser.inline(paragraph))
@@ -199,12 +224,15 @@ private struct AssistantListCard: View {
                     Rectangle()
                         .fill(Color.wmRule(scheme))
                         .frame(height: 0.5)
-                        .padding(.leading, item.day == nil ? 14 : 60)
+                        .padding(
+                            .leading,
+                            item.day == nil && item.ordinal == nil ? 14 : 60
+                        )
                 }
 
                 HStack(alignment: .top, spacing: 10) {
-                    if let day = item.day {
-                        Text(day)
+                    if let badge = item.day ?? item.ordinal.map({ "\($0)." }) {
+                        Text(badge)
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(WMPalette.terracotta)
                             .frame(width: 36, height: 22)
@@ -225,7 +253,8 @@ private struct AssistantListCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 12)
+                .padding(.leading, 12 + CGFloat(item.depth) * 14)
+                .padding(.trailing, 12)
                 .padding(.vertical, 9)
             }
         }

@@ -25,8 +25,8 @@ struct AgentChatMessage: Identifiable, Equatable {
 /// Stan rozmowy z asystentem AI.
 ///
 /// Wisi na `SessionStore` jak pozostałe store'y (budowany w `bootstrapSession`,
-/// czyszczony przy wylogowaniu), więc rozmowa przeżywa zamknięcie arkusza —
-/// tura potrafi trwać minutę, a użytkownik w tym czasie wraca do planu.
+/// czyszczony przy wylogowaniu), więc rozmowa przeżywa przejście na inną
+/// zakładkę — tura potrafi trwać minutę, a użytkownik w tym czasie ogląda plan.
 ///
 /// Tura NIE jest zwykłym żądaniem: serwer przyjmuje wiadomość (`202`) i oddaje
 /// identyfikator, a odpowiedź przychodzi przez odpytywanie. Tutaj żyje cała ta
@@ -52,6 +52,9 @@ final class AgentStore {
     private(set) var isSending = false
     /// Kroki bieżącej tury — „Czytam plan tygodnia", „Zapisuję plan tygodnia".
     private(set) var progress: [AgentProgressStepDTO] = []
+    /// Kiedy ruszyła bieżąca tura — ekran pokazuje przy postępie upływ sekund,
+    /// bo między krokami bywa kilkanaście sekund ciszy.
+    private(set) var turnStartedAt: Date?
     private(set) var errorMessage: String?
     /// Asystent wyłączony na serwerze (`AI_DISABLED`) — ekran mówi to wprost,
     /// zamiast udawać, że wiadomość poszła.
@@ -63,12 +66,27 @@ final class AgentStore {
     /// drugą kwotę za to samo.
     private(set) var retryText: String?
 
+    /// Lista rozmów do panelu historii.
+    private(set) var conversations: [AgentConversationDTO] = []
+    private(set) var isLoadingConversations = false
+
+    /// Co asystent pamięta o tym domu (pamięć wspólna dla gospodarstwa).
+    private(set) var memory: [AgentMemoryNoteDTO] = []
+    private(set) var isLoadingMemory = false
+
+    /// Odpowiedzi, które przyszły, gdy użytkownik był na innej zakładce —
+    /// kropka na ikonie asystenta zamyka pętlę „zapytaj, odejdź, wróć".
+    private(set) var unseenAnswers = 0
+
     private let client: AgentAPIClient
     private let householdId: String
-    private var conversationId: String?
-    /// Tura, która może jeszcze biec — po powrocie do arkusza wracamy do niej,
+    private(set) var conversationId: String?
+    /// Tura, która może jeszcze biec — po powrocie na zakładkę wracamy do niej,
     /// zamiast pokazywać rozmowę bez odpowiedzi.
     private var pendingTurnId: String?
+    /// Zadanie odpytywania — istnieje po to, żeby dało się przestać czekać.
+    private var turnTask: Task<Void, Never>?
+    private var isVisible = false
 
     init(client: AgentAPIClient, householdId: String) {
         self.client = client
@@ -77,20 +95,29 @@ final class AgentStore {
 
     var canSend: Bool { !isSending && !isUnavailable }
 
-    /// Otwarcie ekranu: historia rozmowy i ewentualny powrót do tury w biegu.
+    /// Otwarcie zakładki: historia rozmowy i ewentualny powrót do tury w biegu.
     func openIfNeeded() async {
         if conversationId == nil {
             await loadOrCreateConversation()
         }
         if let pendingTurnId, !isSending {
-            await followTurn(turnId: pendingTurnId)
+            await follow(turnId: pendingTurnId)
         }
     }
 
+    /// Ekran wszedł na wierzch albo z niego zszedł. Po tym poznajemy, czy
+    /// odpowiedź trzeba jeszcze zgłosić kropką na zakładce.
+    func setVisible(_ visible: Bool) {
+        isVisible = visible
+        if visible { unseenAnswers = 0 }
+    }
+
     /// Wysyła wiadomość i czeka na odpowiedź, pokazując po drodze postęp.
-    func send(text: String, weekStart: String) async {
+    /// `false` = wiadomość nie doszła do serwera (ekran ma oddać tekst do pola).
+    @discardableResult
+    func send(text: String, weekStart: String) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, canSend else { return }
+        guard !trimmed.isEmpty, canSend else { return false }
 
         errorMessage = nil
         retryText = nil
@@ -101,7 +128,7 @@ final class AgentStore {
         if conversationId == nil {
             await loadOrCreateConversation()
         }
-        guard let conversationId else { return }
+        guard let conversationId else { return false }
 
         // Klucz idempotencji zostaje ten sam przy ponowieniu — serwer odda tę
         // samą turę, zamiast policzyć drugą kwotę za ten sam prompt.
@@ -129,7 +156,8 @@ final class AgentStore {
             )
             confirmPendingMessage(clientMessageId)
             pendingTurnId = accepted.turnId
-            await followTurn(turnId: accepted.turnId)
+            await follow(turnId: accepted.turnId)
+            return true
         } catch {
             handle(error)
             // Wiadomość, która nie doszła, nie ma prawa zostać w historii jako
@@ -137,6 +165,7 @@ final class AgentStore {
             // nie zamówił. Treść zostaje do ponowienia jednym przyciskiem.
             messages.removeAll { $0.id == clientMessageId }
             retryText = trimmed
+            return false
         }
     }
 
@@ -146,21 +175,117 @@ final class AgentStore {
         await send(text: text, weekStart: weekStart)
     }
 
-    /// Kasuje rozmowy tego użytkownika na serwerze (RODO) i czyści ekran.
-    func deleteAllConversations() async {
+    /// Przestaje czekać na turę.
+    ///
+    /// NIE anuluje pracy modelu — ta biegnie na serwerze i tak czy owak
+    /// zostanie policzona. Zatrzymujemy tylko odpytywanie, a identyfikator
+    /// tury zostaje: po powrocie na zakładkę odpowiedź może już czekać.
+    func stopWaiting() {
+        guard isSending else { return }
+        turnTask?.cancel()
+        turnTask = nil
+        isSending = false
+        progress = []
+        turnStartedAt = nil
+        errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
+    }
+
+    // MARK: - Rozmowy
+
+    func refreshConversations() async {
+        isLoadingConversations = true
+        defer { isLoadingConversations = false }
         do {
-            try await client.deleteAllConversations()
-            messages = []
-            progress = []
-            conversationId = nil
-            pendingTurnId = nil
-            errorMessage = nil
+            conversations = try await client.listConversations()
+                .filter { $0.householdId == householdId }
+            isUnavailable = false
         } catch {
             handle(error)
         }
     }
 
-    // MARK: - Rozmowa
+    /// Przełącza widok na inną rozmowę.
+    ///
+    /// Tura, która akurat biegnie, zostaje ze swoją rozmową — `pendingTurnId`
+    /// jest czyszczony, bo należał do TAMTEJ rozmowy, a jej odpowiedź i tak
+    /// dopisze się na serwerze. Inaczej odpowiedź z jednej rozmowy wpadłaby
+    /// do drugiej.
+    func select(conversationId id: String) async {
+        guard id != conversationId else { return }
+        resetTurnState()
+        conversationId = id
+        messages = []
+        await loadMessages(conversationId: id)
+    }
+
+    /// Zaczyna pustą rozmowę. Nowa rozmowa nie zna poprzednich wiadomości —
+    /// od tego jest pamięć asystenta (notatki gospodarstwa).
+    func startNewConversation() async {
+        resetTurnState()
+        messages = []
+        isLoadingHistory = true
+        defer { isLoadingHistory = false }
+        do {
+            let conversation = try await client.createConversation(
+                householdId: householdId
+            )
+            conversationId = conversation.id
+            conversations.insert(conversation, at: 0)
+        } catch {
+            handle(error)
+        }
+    }
+
+    func deleteConversation(id: String) async {
+        do {
+            try await client.deleteConversation(id: id)
+            conversations.removeAll { $0.id == id }
+            if id == conversationId {
+                resetTurnState()
+                conversationId = nil
+                messages = []
+                await loadOrCreateConversation()
+            }
+        } catch {
+            handle(error)
+        }
+    }
+
+    /// Kasuje rozmowy tego użytkownika na serwerze (RODO) i czyści ekran.
+    func deleteAllConversations() async {
+        do {
+            try await client.deleteAllConversations()
+            resetTurnState()
+            messages = []
+            conversations = []
+            conversationId = nil
+        } catch {
+            handle(error)
+        }
+    }
+
+    // MARK: - Pamięć
+
+    func refreshMemory() async {
+        isLoadingMemory = true
+        defer { isLoadingMemory = false }
+        do {
+            memory = try await client.memory(householdId: householdId)
+        } catch {
+            handle(error)
+        }
+    }
+
+    func forgetMemory(noteId: String) async {
+        do {
+            try await client.forgetMemory(noteId: noteId)
+            memory.removeAll { $0.id == noteId }
+        } catch {
+            handle(error)
+        }
+    }
+
+    // MARK: - Wczytywanie rozmowy
 
     private func loadOrCreateConversation() async {
         isLoadingHistory = true
@@ -168,13 +293,18 @@ final class AgentStore {
         do {
             // Rozmowy wracają od najnowszej — bierzemy tę z bieżącego
             // gospodarstwa, żeby po przeprowadzce nie dopisywać do cudzego domu.
-            let existing = try await client.listConversations()
-                .first { $0.householdId == householdId }
+            let mine = try await client.listConversations()
+                .filter { $0.householdId == householdId }
+            conversations = mine
+
             let conversation: AgentConversationDTO
-            if let existing {
+            if let existing = mine.first {
                 conversation = existing
             } else {
-                conversation = try await client.createConversation(householdId: householdId)
+                conversation = try await client.createConversation(
+                    householdId: householdId
+                )
+                conversations = [conversation]
             }
             conversationId = conversation.id
             messages = try await client.messages(conversationId: conversation.id)
@@ -185,19 +315,53 @@ final class AgentStore {
         }
     }
 
+    private func loadMessages(conversationId id: String) async {
+        isLoadingHistory = true
+        defer { isLoadingHistory = false }
+        do {
+            messages = try await client.messages(conversationId: id)
+                .map { Self.chatMessage(from: $0) }
+        } catch {
+            handle(error)
+        }
+    }
+
+    private func resetTurnState() {
+        turnTask?.cancel()
+        turnTask = nil
+        isSending = false
+        progress = []
+        turnStartedAt = nil
+        pendingTurnId = nil
+        errorMessage = nil
+    }
+
     // MARK: - Tura
+
+    /// Odpytywanie w osobnym zadaniu, żeby dało się je przerwać `stopWaiting`.
+    private func follow(turnId: String) async {
+        let task = Task { [weak self] in
+            await self?.followTurn(turnId: turnId)
+        }
+        turnTask = task
+        await task.value
+        if turnTask == task { turnTask = nil }
+    }
 
     private func followTurn(turnId: String) async {
         isSending = true
+        turnStartedAt = Date()
         defer {
             isSending = false
             progress = []
+            turnStartedAt = nil
         }
 
         let deadline = ContinuousClock.now + Self.pollTimeout
         var failures = 0
 
         while ContinuousClock.now < deadline {
+            if Task.isCancelled { return }
             do {
                 let turn = try await client.turn(id: turnId)
                 failures = 0
@@ -214,6 +378,7 @@ final class AgentStore {
             } catch is CancellationError {
                 return
             } catch {
+                if Task.isCancelled { return }
                 failures += 1
                 if failures >= Self.maxPollFailures {
                     handle(error)
@@ -224,9 +389,9 @@ final class AgentStore {
         }
 
         // Sufit czasu. Tura mogła się domknąć po naszej stronie ciszy, więc
-        // nie kasujemy jej identyfikatora — po ponownym otwarciu ekranu
+        // nie kasujemy jej identyfikatora — po ponownym wejściu na zakładkę
         // sięgniemy po nią jeszcze raz.
-        errorMessage = "Asystent nie odpowiedział na czas. Otwórz rozmowę za chwilę — odpowiedź może już tam być."
+        errorMessage = "Asystent nie odpowiedział na czas. Wróć tu za chwilę — odpowiedź może już czekać."
     }
 
     private func apply(finished turn: AgentTurnDTO) {
@@ -247,6 +412,10 @@ final class AgentStore {
                 errorMessage = "Asystent nie miał nic do powiedzenia. Spróbuj zapytać inaczej."
             } else {
                 messages.append(contentsOf: answers)
+                if !isVisible { unseenAnswers += answers.count }
+                // Tytuł rozmowy nadaje serwer z PIERWSZEJ wiadomości, a lista
+                // historii ma go pokazać bez ręcznego odświeżania.
+                Task { [weak self] in await self?.refreshConversations() }
             }
         case "LIMITED":
             errorMessage = copy(forCode: turn.errorCode)
@@ -288,6 +457,11 @@ final class AgentStore {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
+
+    static func parseTimestamp(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        return timestampParser.date(from: raw)
+    }
 
     private static func chatMessage(from dto: AgentMessageDTO) -> AgentChatMessage {
         AgentChatMessage(

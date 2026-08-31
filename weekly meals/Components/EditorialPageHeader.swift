@@ -56,6 +56,14 @@ extension EditorialPageHeader where Trailing == EmptyView {
 
 // Marginesy strony wspólne dla wszystkich zakładek v2. `top` odsuwa tytuł od
 // Dynamic Island — wartość przeniesiona z Przepisów / Kalendarza.
+//
+// UWAGA, warunek kontraktu: `top` mierzy się od KRAWĘDZI EKRANU, nie od safe
+// area. Kontener, który tego paddingu używa (ScrollView albo VStack ze stałym
+// nagłówkiem), MUSI mieć `.ignoresSafeArea(.container, edges: .top)` — inaczej
+// górny inset liczy się dwa razy i tytuł spada o 47–59 pt, zależnie od
+// urządzenia. Tak wpadł ekran asystenta, dodany jako ostatni. Wyjątek: ekran
+// pokazywany jako arkusz podaje własny, mniejszy `topPadding` (patrz
+// `ProductsView`), bo tam mierzy się od uchwytu arkusza, nie od Dynamic Island.
 enum WMPageMetrics {
     static let top: CGFloat = 78
     static let horizontal: CGFloat = 20

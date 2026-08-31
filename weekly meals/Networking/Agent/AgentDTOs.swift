@@ -16,6 +16,21 @@ struct AgentConversationDTO: Decodable, Identifiable, Equatable {
     let title: String?
     let lastMessageAt: String?
     let createdAt: String
+    /// Początek ostatniej wiadomości — bez tego lista rozmów jest listą dat.
+    let preview: String?
+    /// Opcjonalne, bo starszy serwer tych pól nie oddaje.
+    let messageCount: Int?
+    /// Tura, która JESZCZE BIEGNIE w tej rozmowie — po niej klient poznaje,
+    /// że jest do czego wrócić po zamknięciu aplikacji.
+    let activeTurnId: String?
+}
+
+/// Notatka pamięci asystenta — jedno trwałe zdanie o gospodarstwie.
+struct AgentMemoryNoteDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let text: String
+    let createdByUserId: String?
+    let createdAt: String
 }
 
 struct AgentMessageDTO: Decodable, Identifiable, Equatable {

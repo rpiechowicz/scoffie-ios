@@ -42,6 +42,9 @@ struct NavigationMenu: View {
                     AssistantUnavailableView()
                 }
             }
+            // Odpowiedź potrafi dojść, gdy użytkownik ogląda plan — bez tej
+            // kropki musiałby sam wracać i sprawdzać, czy już jest.
+            .badge(sessionStore.agentStore?.unseenAnswers ?? 0)
 
             Tab(MenuConstans.Settings.name, systemImage: MenuConstans.Settings.icon, value: DashboardTab.settings) {
                 SettingsView()
