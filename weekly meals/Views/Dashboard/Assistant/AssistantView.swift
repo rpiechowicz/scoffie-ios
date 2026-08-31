@@ -96,8 +96,11 @@ struct AssistantView: View {
                     }
 
                     if let errorMessage = store.errorMessage {
-                        ErrorNote(text: errorMessage)
-                            .id(Self.errorAnchor)
+                        ErrorNote(
+                            text: errorMessage,
+                            onRetry: store.retryText == nil ? nil : retry
+                        )
+                        .id(Self.errorAnchor)
                     }
                 }
                 .padding(.horizontal, WMPageMetrics.horizontal)
@@ -203,6 +206,12 @@ struct AssistantView: View {
 
     private var sendTint: Color {
         canSend ? WMPalette.terracotta : Color.wmMuted(scheme).opacity(0.4)
+    }
+
+    private func retry() {
+        Task {
+            await store.retry(weekStart: datesViewModel.weekStartISO)
+        }
     }
 
     private func send() {
@@ -364,22 +373,39 @@ private struct ProgressTrail: View {
 
 private struct ErrorNote: View {
     let text: String
+    /// `nil`, gdy nie ma czego ponawiać — tura, która ruszyła i się nie
+    /// domknęła, przy ponowieniu kosztowałaby drugi raz to samo.
+    var onRetry: (() -> Void)?
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(WMPalette.terracotta)
-                .padding(.top, 1)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(WMPalette.terracotta)
+                    .padding(.top, 1)
 
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundStyle(Color.wmLabel(scheme))
-                .multilineTextAlignment(.leading)
+                Text(text)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .multilineTextAlignment(.leading)
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+
+            if let onRetry {
+                Button(action: onRetry) {
+                    Text("Spróbuj ponownie")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(WMPalette.terracotta)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Color.wmTileBg(scheme)))
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

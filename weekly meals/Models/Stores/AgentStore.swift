@@ -57,6 +57,11 @@ final class AgentStore {
     /// zamiast udawać, że wiadomość poszła.
     private(set) var isUnavailable = false
     private(set) var isLoadingHistory = false
+    /// Treść wiadomości, która NIE doszła do serwera — do ponowienia jednym
+    /// przyciskiem. Ustawiana tylko wtedy, gdy wiadomość wypadła z historii;
+    /// przy turze, która ruszyła i się nie domknęła, ponowienie oznaczałoby
+    /// drugą kwotę za to samo.
+    private(set) var retryText: String?
 
     private let client: AgentAPIClient
     private let householdId: String
@@ -88,6 +93,7 @@ final class AgentStore {
         guard !trimmed.isEmpty, canSend else { return }
 
         errorMessage = nil
+        retryText = nil
         isSending = true
         progress = []
         defer { isSending = false }
@@ -128,9 +134,16 @@ final class AgentStore {
             handle(error)
             // Wiadomość, która nie doszła, nie ma prawa zostać w historii jako
             // wysłana — inaczej użytkownik czekałby na odpowiedź, której nikt
-            // nie zamówił.
+            // nie zamówił. Treść zostaje do ponowienia jednym przyciskiem.
             messages.removeAll { $0.id == clientMessageId }
+            retryText = trimmed
         }
+    }
+
+    /// Ponawia wiadomość, która nie doszła do serwera.
+    func retry(weekStart: String) async {
+        guard let text = retryText else { return }
+        await send(text: text, weekStart: weekStart)
     }
 
     /// Kasuje rozmowy tego użytkownika na serwerze (RODO) i czyści ekran.
