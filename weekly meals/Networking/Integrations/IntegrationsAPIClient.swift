@@ -1,8 +1,12 @@
 import Foundation
 
-/// Błąd wywołania endpointów integracji, już po przetłumaczeniu na kod
+/// Błąd uwierzytelnionego wywołania REST, już po przetłumaczeniu na kod
 /// backendu (`AppErrorCode` z `app-error-code.ts`).
-enum IntegrationsAPIError: Error, Equatable {
+///
+/// Nazwa mówiła kiedyś „integracje", bo to był jedyny taki klient. Od
+/// asystenta AI (`AgentAPIClient`) jest ich dwa i kształt błędu jest ten sam
+/// dla każdego uwierzytelnionego zasobu — stąd nazwa bez nazwy funkcji.
+enum BackendAPIError: Error, Equatable {
     /// Brak access tokenu w Keychain — sesja nie istnieje.
     case notAuthenticated
     /// Backend odpowiedział błędem aplikacyjnym (`{code, message, requestId}`).
@@ -101,7 +105,7 @@ final class IntegrationsAPIClient {
         isRetryAfterRefresh: Bool = false
     ) async throws -> Response {
         guard let token = tokenProvider(), !token.isEmpty else {
-            throw IntegrationsAPIError.notAuthenticated
+            throw BackendAPIError.notAuthenticated
         }
 
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
@@ -118,11 +122,11 @@ final class IntegrationsAPIClient {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            throw IntegrationsAPIError.network
+            throw BackendAPIError.network
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw IntegrationsAPIError.network
+            throw BackendAPIError.network
         }
 
         if http.statusCode == 401, !isRetryAfterRefresh, let refreshSession {
@@ -140,7 +144,7 @@ final class IntegrationsAPIClient {
             let decoded = try? JSONDecoder().decode(BackendHttpErrorDTO.self, from: data)
             let code = decoded?.code
                 ?? (http.statusCode == 401 ? "UNAUTHORIZED" : "HTTP_ERROR")
-            throw IntegrationsAPIError.backend(
+            throw BackendAPIError.backend(
                 code: code,
                 status: http.statusCode,
                 message: decoded?.message

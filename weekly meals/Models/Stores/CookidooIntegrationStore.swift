@@ -99,7 +99,7 @@ final class CookidooIntegrationStore {
             let response = try await client.sendToWeek(recipeId: recipeId, date: date)
             return response.alreadySent ? .alreadySent : .sent
         } catch {
-            if case IntegrationsAPIError.backend(let code, _, _) = error,
+            if case BackendAPIError.backend(let code, _, _) = error,
                code == "COOKIDOO_AUTH_FAILED" || code == "COOKIDOO_NOT_CONNECTED" {
                 // Serwer oznaczył integrację jako zepsutą — dociągamy stan,
                 // żeby Ustawienia i przycisk wysyłki mówiły to samo.
@@ -129,11 +129,11 @@ final class CookidooIntegrationStore {
 
     private static func message(for error: Error, context: ErrorContext) -> String {
         switch error {
-        case IntegrationsAPIError.notAuthenticated:
+        case BackendAPIError.notAuthenticated:
             return "Sesja wygasła. Zaloguj się ponownie do aplikacji."
-        case IntegrationsAPIError.network:
+        case BackendAPIError.network:
             return "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie."
-        case IntegrationsAPIError.backend(let code, _, _):
+        case BackendAPIError.backend(let code, _, _):
             switch code {
             case "COOKIDOO_AUTH_FAILED":
                 return context == .connect

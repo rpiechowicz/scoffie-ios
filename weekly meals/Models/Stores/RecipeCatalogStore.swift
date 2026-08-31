@@ -81,17 +81,37 @@ final class RecipeCatalogStore {
                 }
             }
         }
+        // Przepis zmieniony poza tym telefonem — przez domownika albo przez
+        // asystenta AI, który od Fazy 1 potrafi dopisać i poprawić przepis.
+        // Ten sam debounce co przy powrocie połączenia: kilka zmian pod rząd
+        // (asystent zapisujący tydzień) ma dać JEDNO przeładowanie.
+        self.repository.observeRecipeChanges { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                guard self.didLoad else { return }
+                self.scheduleRealtimeReload()
+            }
+        }
         self.repository.observeRealtimeReconnect { [weak self] in
             guard let self else { return }
             Task { @MainActor in
                 guard self.didLoad else { return }
-                self.pendingRealtimeReloadTask?.cancel()
-                self.pendingRealtimeReloadTask = Task { @MainActor [weak self] in
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    guard let self else { return }
-                    await self.reload()
-                }
+                self.scheduleRealtimeReload()
             }
+        }
+    }
+
+    /// Przeładowanie katalogu po zdarzeniu z serwera, z krótkim opóźnieniem.
+    ///
+    /// Zdarzenia potrafią przyjść seriami (powrót połączenia, asystent
+    /// zapisujący kilka przepisów) — bez tego każde z nich ciągnęłoby osobne
+    /// pobranie całego katalogu.
+    private func scheduleRealtimeReload() {
+        pendingRealtimeReloadTask?.cancel()
+        pendingRealtimeReloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let self else { return }
+            await self.reload()
         }
     }
 
