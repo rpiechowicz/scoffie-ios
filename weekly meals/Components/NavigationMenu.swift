@@ -1,20 +1,25 @@
 import SwiftUI
 
-struct NavigationMenu: View {
-    private enum DashboardTab: Hashable {
-        case recipes
-        case plan
-        case calendar
-        case assistant
-        case settings
-    }
+/// Zakładki dolnego menu.
+///
+/// Wybór mieszka w `SessionStore`, a nie w `@State` menu, bo przełącza go też
+/// kod spoza menu: asystent po zapisaniu planu daje skrót „Otwórz", który ma
+/// przenieść użytkownika na Plan tygodnia.
+enum DashboardTab: Hashable {
+    case recipes
+    case plan
+    case calendar
+    case assistant
+    case settings
+}
 
+struct NavigationMenu: View {
     @Environment(\.sessionStore) private var sessionStore
 
-    @State private var selectedTab: DashboardTab = .calendar
-
     var body: some View {
-        TabView(selection: $selectedTab) {
+        @Bindable var session = sessionStore
+
+        return TabView(selection: $session.dashboardTab) {
             Tab(MenuConstans.Recipes.name, systemImage: MenuConstans.Recipes.icon, value: DashboardTab.recipes) {
                 RecipesView()
             }

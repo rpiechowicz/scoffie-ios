@@ -51,6 +51,10 @@ struct AgentProgressStepDTO: Decodable, Equatable {
     let tool: String
     let label: String
     let at: String
+    /// Czy krok ZMIENIŁ dane gospodarstwa — po tym poznajemy, że po turze
+    /// jest co otworzyć. Opcjonalne, bo tury sprzed tego pola siedzą
+    /// w bazie i muszą się nadal dekodować.
+    let writes: Bool?
 }
 
 struct AgentTurnUsageDTO: Decodable, Equatable {

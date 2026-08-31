@@ -18,6 +18,8 @@ struct AgentChatMessage: Identifiable, Equatable {
     let text: String
     let createdAt: Date?
     var isPending: Bool = false
+    /// Tura, która skończyła się ZAPISEM planu — dymek dostaje skrót do Planu.
+    var savedPlan: Bool = false
 }
 
 /// Stan rozmowy z asystentem AI.
@@ -217,9 +219,17 @@ final class AgentStore {
     private func apply(finished turn: AgentTurnDTO) {
         switch turn.status {
         case "DONE":
-            let answers = (turn.messages ?? [])
+            // `apply_week_plan` biegnie w każdej turze najpierw jako próba,
+            // więc o zapisie decyduje flaga z serwera, nie nazwa narzędzia.
+            let savedPlan = turn.progress.contains {
+                $0.tool == "apply_week_plan" && $0.writes == true
+            }
+            var answers = (turn.messages ?? [])
                 .filter { $0.role == "ASSISTANT" }
                 .map { Self.chatMessage(from: $0) }
+            if savedPlan, !answers.isEmpty {
+                answers[answers.count - 1].savedPlan = true
+            }
             if answers.isEmpty {
                 errorMessage = "Asystent nie miał nic do powiedzenia. Spróbuj zapytać inaczej."
             } else {

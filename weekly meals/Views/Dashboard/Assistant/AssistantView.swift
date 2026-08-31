@@ -15,6 +15,7 @@ struct AssistantView: View {
     let store: AgentStore
 
     @Environment(\.datesViewModel) private var datesViewModel
+    @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
 
     @State private var draft = ""
@@ -83,8 +84,10 @@ struct AssistantView: View {
                     }
 
                     ForEach(store.messages) { message in
-                        MessageBubble(message: message)
-                            .id(message.id)
+                        MessageBubble(message: message) {
+                            sessionStore.dashboardTab = .plan
+                        }
+                        .id(message.id)
                     }
 
                     if store.isSending {
@@ -254,14 +257,29 @@ struct AssistantUnavailableView: View {
 
 // MARK: - Dymek
 
+/// Wiadomość w rozmowie.
+///
+/// Dwa różne kształty, bo to dwie różne treści: pytanie użytkownika to jedno
+/// zdanie i zachowuje się jak dymek, a odpowiedź asystenta bywa całym
+/// tygodniem — dostaje więc pełną szerokość i strukturę (nagłówki, kafelki
+/// dni) zamiast ściany tekstu wciśniętej w dymek.
 private struct MessageBubble: View {
     let message: AgentChatMessage
+    let onOpenPlan: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        if message.author == .user {
+            userBubble
+        } else {
+            assistantCard
+        }
+    }
+
+    private var userBubble: some View {
         HStack {
-            if message.author == .user { Spacer(minLength: 40) }
+            Spacer(minLength: 40)
 
             Text(message.text)
                 .font(.system(size: 15))
@@ -272,23 +290,34 @@ private struct MessageBubble: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(
-                            message.author == .user
-                            ? Color.wmAccentTint(scheme)
-                            : Color.wmCardSurface(scheme)
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.wmCardStroke(scheme), lineWidth: 1)
+                        .fill(Color.wmAccentTint(scheme))
                 )
                 // Wysłana, jeszcze niepotwierdzona — subtelnie, bo w 99 %
                 // przypadków potwierdzenie przychodzi zanim ktokolwiek zdąży
                 // to zauważyć.
                 .opacity(message.isPending ? 0.6 : 1)
-
-            if message.author == .assistant { Spacer(minLength: 40) }
         }
+    }
+
+    private var assistantCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if message.savedPlan {
+                AssistantSavedPlanCard(onOpenPlan: onOpenPlan)
+            }
+
+            AssistantAnswer(text: message.text)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.wmCardSurface(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.wmCardStroke(scheme), lineWidth: 1)
+        )
+        .textSelection(.enabled)
     }
 }
 
