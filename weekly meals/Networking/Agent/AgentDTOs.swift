@@ -16,6 +16,20 @@ struct AgentConversationDTO: Decodable, Identifiable, Equatable {
     let title: String?
     let lastMessageAt: String?
     let createdAt: String
+    /// Początek ostatniej wiadomości — bez tego lista rozmów jest listą dat.
+    let preview: String?
+    /// Tura, która JESZCZE BIEGNIE w tej rozmowie — po niej klient poznaje,
+    /// że jest do czego wrócić po zamknięciu aplikacji. Opcjonalne, bo starszy
+    /// serwer tego pola nie oddaje.
+    let activeTurnId: String?
+}
+
+/// Notatka pamięci asystenta — jedno trwałe zdanie o gospodarstwie.
+struct AgentMemoryNoteDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let text: String
+    let createdByUserId: String?
+    let createdAt: String
 }
 
 struct AgentMessageDTO: Decodable, Identifiable, Equatable {
@@ -51,6 +65,10 @@ struct AgentProgressStepDTO: Decodable, Equatable {
     let tool: String
     let label: String
     let at: String
+    /// Czy krok ZMIENIŁ dane gospodarstwa — po tym poznajemy, że po turze
+    /// jest co otworzyć. Opcjonalne, bo tury sprzed tego pola siedzą
+    /// w bazie i muszą się nadal dekodować.
+    let writes: Bool?
 }
 
 struct AgentTurnUsageDTO: Decodable, Equatable {

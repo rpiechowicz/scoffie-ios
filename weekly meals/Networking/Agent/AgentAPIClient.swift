@@ -70,6 +70,40 @@ final class AgentAPIClient {
         try await perform(path: "agent/turns/\(id)", method: "GET", bodyData: nil)
     }
 
+    /// Kasuje JEDNĄ rozmowę — porządki na liście, nie RODO.
+    @discardableResult
+    func deleteConversation(id: String) async throws -> Int {
+        struct DeletedDTO: Decodable { let deleted: Int }
+        let response: DeletedDTO = try await perform(
+            path: "agent/conversations/\(id)",
+            method: "DELETE",
+            bodyData: nil
+        )
+        return response.deleted
+    }
+
+    /// Co asystent pamięta o gospodarstwie — pamięć jest wspólna dla domu.
+    func memory(householdId: String) async throws -> [AgentMemoryNoteDTO] {
+        try await perform(
+            path: "agent/memory",
+            method: "GET",
+            bodyData: nil,
+            query: [URLQueryItem(name: "householdId", value: householdId)]
+        )
+    }
+
+    @discardableResult
+    func forgetMemory(noteId: String) async throws -> Int {
+        // Serwer oddaje `{deleted}` — pusta odpowiedź wywróciłaby dekoder.
+        struct DeletedDTO: Decodable { let deleted: Int }
+        let response: DeletedDTO = try await perform(
+            path: "agent/memory/\(noteId)",
+            method: "DELETE",
+            bodyData: nil
+        )
+        return response.deleted
+    }
+
     /// „Usuń moje rozmowy z asystentem" (RODO). Działa też przy wyłączonym
     /// asystencie — dlatego nie chowamy tej akcji za flagą dostępności.
     @discardableResult

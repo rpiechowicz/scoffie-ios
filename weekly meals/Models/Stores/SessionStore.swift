@@ -136,6 +136,9 @@ final class SessionStore {
     /// asystenta, obejrzeć plan i wrócić po odpowiedź.
     var agentStore: AgentStore?
     var datesViewModel = DatesViewModel()
+    /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
+    /// też asystent — skrót „Otwórz" po zapisaniu planu.
+    var dashboardTab: DashboardTab = .calendar
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
     private let appleSignInCoordinator = AppleSignInCoordinator()
