@@ -44,6 +44,12 @@ struct WelcomeStep1ProfileView: View {
                         TextField("Np. Rafał", text: $name)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
+                            .onChange(of: name) { _, newValue in
+                                // Limit serwera (`UpdateProfileDto`, 64).
+                                if newValue.count > SessionStore.displayNameMaxLength {
+                                    name = String(newValue.prefix(SessionStore.displayNameMaxLength))
+                                }
+                            }
                             .focused($focusedField, equals: .name)
                             .submitLabel(.next)
                             .font(.system(size: 16, weight: .medium))

@@ -136,6 +136,7 @@ enum UserFacingErrorMapper {
         "INVITATION_REQUIRES_LEAVE": "Należysz już do innego gospodarstwa. Otwórz zaproszenie ponownie, aby się przenieść.",
         // plan
         "RECIPE_NOT_FOUND": "Nie znaleziono przepisu.",
+        "INGREDIENT_NOT_FOUND": "Nie znaleziono składnika w katalogu.",
         "PLAN_ITEM_NOT_FOUND": "Tego posiłku nie ma już w planie.",
         "PLAN_SLOT_LIMIT_REACHED": "Ten typ posiłku ma już komplet dań w tym tygodniu.",
         "PLAN_SLOT_VARIANT_LIMIT_REACHED": "W tym slocie nie zmieści się więcej dań.",
@@ -145,6 +146,8 @@ enum UserFacingErrorMapper {
         // lista zakupów
         "SHOPPING_LIST_EMPTY": "Lista zakupów jest pusta.",
         "SHOPPING_LIST_NOT_COMPLETED": "Odhacz wszystkie produkty, zanim zamkniesz listę.",
+        "SHOPPING_LIST_ARCHIVE_NOT_FOUND": "Tej listy zakupów już nie ma. Odśwież widok.",
+        "SHOPPING_ITEM_NOT_FOUND": "Tej pozycji nie ma już na liście. Odśwież widok.",
         // Cookidoo
         "COOKIDOO_NOT_CONNECTED": "Gospodarstwo nie ma połączonego konta Cookidoo. Połącz je w Ustawieniach.",
         "COOKIDOO_AUTH_FAILED": "Połączenie z Cookidoo wygasło. Zaloguj się ponownie w Ustawieniach.",

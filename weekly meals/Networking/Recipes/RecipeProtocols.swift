@@ -45,10 +45,24 @@ protocol RecipeSocketClient {
     /// Wznów zerwane połączenie (np. po powrocie aplikacji z tła).
     /// Domyślnie no-op — realny reconnect ma tylko klient Socket.IO.
     func reconnectIfNeeded()
+    /// Serwer odmówił uwierzytelnienia socketu (`connect_error` z kodem
+    /// `UNAUTHORIZED` albo `auth:expired` w trakcie sesji). `reason`:
+    /// `missing` / `invalid` / `expired` / `user_gone`. Klient sam zatrzymuje
+    /// auto-reconnect — bez tego stary token biłby w serwer co 1–5 s bez końca.
+    func observeAuthFailure(_ handler: @escaping (_ reason: String) -> Void)
+    /// Połącz ponownie z AKTUALNYM tokenem z `tokenProvider` — po udanym
+    /// `POST /auth/refresh`. Biblioteka przy własnym reconnect wysyła token
+    /// zapamiętany przy pierwszym `connect`, więc świeży trzeba podać jawnie.
+    func reconnectWithFreshToken()
+    /// Zamknij połączenie na dobre (wylogowanie) — także auto-reconnect.
+    func disconnect()
 }
 
 extension RecipeSocketClient {
     func reconnectIfNeeded() {}
+    func observeAuthFailure(_ handler: @escaping (_ reason: String) -> Void) {}
+    func reconnectWithFreshToken() {}
+    func disconnect() {}
 }
 
 // MARK: - WebSocket envelope

@@ -51,6 +51,20 @@ enum KeychainService {
         return value
     }
 
+    /// Status wpisu bez czytania wartości. `get` zwraca `nil` zarówno dla
+    /// braku wpisu (`errSecItemNotFound`), jak i dla wpisu chwilowo
+    /// niedostępnego (`errSecInteractionNotAllowed` przed pierwszym
+    /// odblokowaniem po restarcie) — a tylko ten pierwszy oznacza, że sesji
+    /// naprawdę nie ma.
+    static func status(forKey key: String) -> OSStatus {
+        let query: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil)
+    }
+
     /// Usuwa wartość z Keychain.
     @discardableResult
     static func delete(forKey key: String) -> Bool {

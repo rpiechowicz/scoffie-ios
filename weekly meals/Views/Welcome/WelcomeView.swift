@@ -273,7 +273,11 @@ struct WelcomeView: View {
         case 2, 3:
             return true
         case 4:
-            return !householdName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            // Te same granice, co w Ustawieniach i na serwerze (`CreateHouseholdDto`
+            // 2…64). Od Fazy 0 backend egzekwuje je także na WebSockecie —
+            // 1-znakowa nazwa wracałaby jako VALIDATION_ERROR z generycznym
+            // komunikatem i kreator nie dałby się dokończyć.
+            return SessionStore.isValidHouseholdName(householdName)
         default:
             return true
         }
