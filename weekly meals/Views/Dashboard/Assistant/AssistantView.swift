@@ -1,19 +1,20 @@
 import SwiftUI
 
-/// Rozmowa z asystentem AI.
+/// Zakładka „Asystent".
 ///
-/// Arkusz, nie zakładka: asystent jest narzędziem DO planu, a nie osobnym
-/// miejscem w aplikacji — wchodzi się w niego z Planu tygodnia i wraca do
-/// tego samego tygodnia, o którym się rozmawiało.
+/// Zakładka, a nie arkusz nad Planem: rozmowa trwa 25–60 sekund i wraca się
+/// do niej wiele razy w tygodniu, a wszystko, co chowa się za przyciskiem
+/// w nagłówku, jest w praktyce niewidoczne. Miejsce w dolnym menu zwolniły
+/// „Produkty", które przeniosły się do nagłówka Planu tygodnia — tam, gdzie
+/// i tak powstaje lista zakupów.
 ///
-/// Ekran świadomie nie ma „stanu ładowania" w środku dymka: tura trwa
-/// dziesiątki sekund, więc zamiast kręciołka pokazujemy kroki, które
-/// przysyła serwer („Czytam plan tygodnia", „Zapisuję plan tygodnia").
-struct AssistantSheet: View {
+/// Ekran świadomie nie ma kręciołka: tura trwa dziesiątki sekund, więc
+/// zamiast niego pokazujemy kroki przysyłane przez serwer („Czytam plan
+/// tygodnia", „Zapisuję plan tygodnia").
+struct AssistantView: View {
     let store: AgentStore
 
     @Environment(\.datesViewModel) private var datesViewModel
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var draft = ""
@@ -21,46 +22,54 @@ struct AssistantSheet: View {
     @FocusState private var isComposerFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.wmCanvas(scheme).ignoresSafeArea()
+        ZStack {
+            WMPageBackground(scheme: scheme)
+                .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    conversation
-                    composer
-                }
-            }
-            .navigationTitle("Asystent")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Zamknij") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            showDeleteAlert = true
-                        } label: {
-                            Label("Usuń historię rozmów", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .accessibilityLabel("Więcej opcji asystenta")
-                }
-            }
-            .alert("Usunąć historię rozmów?", isPresented: $showDeleteAlert) {
-                Button("Usuń", role: .destructive) {
-                    Task { await store.deleteAllConversations() }
-                }
-                Button("Anuluj", role: .cancel) {}
-            } message: {
-                Text("Znikną wszystkie Twoje rozmowy z asystentem. Plan tygodnia i przepisy zostają.")
+            VStack(spacing: 0) {
+                header
+                conversation
+                composer
             }
         }
         .task {
             await store.openIfNeeded()
         }
+        .alert("Usunąć historię rozmów?", isPresented: $showDeleteAlert) {
+            Button("Usuń", role: .destructive) {
+                Task { await store.deleteAllConversations() }
+            }
+            Button("Anuluj", role: .cancel) {}
+        } message: {
+            Text("Znikną wszystkie Twoje rozmowy z asystentem. Plan tygodnia i przepisy zostają.")
+        }
+    }
+
+    // MARK: - Nagłówek
+
+    private var header: some View {
+        EditorialPageHeader(title: "Asystent") {
+            Menu {
+                Button(role: .destructive) {
+                    showDeleteAlert = true
+                } label: {
+                    Label("Usuń historię rozmów", systemImage: "trash")
+                }
+            } label: {
+                // Ten sam rozmiar co `EditorialIconButton` (38 pt), żeby akcje
+                // nagłówka wyglądały tak samo na każdej zakładce.
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Color.wmTileBg(scheme)))
+                    .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+            }
+            .accessibilityLabel("Więcej opcji asystenta")
+        }
+        .padding(.horizontal, WMPageMetrics.horizontal)
+        .padding(.top, WMPageMetrics.top)
+        .padding(.bottom, 12)
     }
 
     // MARK: - Rozmowa
@@ -88,10 +97,10 @@ struct AssistantSheet: View {
                             .id(Self.errorAnchor)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
+                .padding(.horizontal, WMPageMetrics.horizontal)
                 .padding(.bottom, 12)
             }
+            .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: store.messages.count) { _, _ in
                 scroll(proxy, to: store.messages.last?.id)
@@ -180,10 +189,9 @@ struct AssistantSheet: View {
                 .disabled(!canSend)
                 .accessibilityLabel("Wyślij")
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, WMPageMetrics.horizontal)
             .padding(.vertical, 12)
         }
-        .background(Color.wmCanvas(scheme))
     }
 
     private var canSend: Bool {
@@ -217,6 +225,31 @@ struct AssistantSheet: View {
         "Podmień kolację we wtorek na coś do 30 minut",
         "Czego brakuje w planie, żeby wyrobić się z białkiem?",
     ]
+}
+
+/// Zakładka asystenta, zanim sesja postawi store'y (zimny start, brak
+/// gospodarstwa). Pusta zakładka wyglądałaby na awarię aplikacji.
+struct AssistantUnavailableView: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack {
+            WMPageBackground(scheme: scheme)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 12) {
+                EditorialPageHeader("Asystent")
+
+                Text("Asystent będzie dostępny, gdy wczyta się gospodarstwo.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.wmMuted(scheme))
+
+                Spacer()
+            }
+            .padding(.horizontal, WMPageMetrics.horizontal)
+            .padding(.top, WMPageMetrics.top)
+        }
+    }
 }
 
 // MARK: - Dymek

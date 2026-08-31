@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct ProductsView: View {
+    /// Odsunięcie tytułu od góry. Na pełnym ekranie odsuwa go od Dynamic
+    /// Island; w arkuszu (wejście z nagłówka Planu tygodnia) taki margines
+    /// zostawiałby pod uchwytem pustą, niczym nieuzasadnioną przestrzeń.
+    var topPadding: CGFloat = WMPageMetrics.top
+
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.colorScheme) private var scheme
@@ -194,7 +199,7 @@ struct ProductsView: View {
 
     private var pageBottomPadding: CGFloat { WMPageMetrics.bottom }
     private var pageHorizontalPadding: CGFloat { WMPageMetrics.horizontal }
-    private var pageTopPadding: CGFloat { WMPageMetrics.top }
+    private var pageTopPadding: CGFloat { topPadding }
 
     /// Który wariant treści pokazuje strona. Wyliczany raz na render i używany
     /// zarówno w `switch`, jak i jako wartość animacji przejścia między stanami.
