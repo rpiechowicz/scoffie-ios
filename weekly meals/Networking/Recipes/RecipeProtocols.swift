@@ -26,6 +26,12 @@ protocol RecipeRepository {
     func fetchRecipeById(_ recipeId: UUID) async throws -> Recipe
     func setFavorite(recipeId: UUID, isFavorite: Bool) async throws
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: UUID, _ isFavorite: Bool) -> Void)
+    /// Przepis gospodarstwa powstał, zmienił się albo został wycofany.
+    ///
+    /// Bez identyfikatora świadomie: zmiana przepisu przelicza makra, tagi
+    /// i sloty, a wycofanie usuwa go z listy — katalog i tak trzeba przeładować,
+    /// a jeden przepis wyjęty z kontekstu potrafi być niespójny z resztą.
+    func observeRecipeChanges(_ onChange: @escaping () -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
 
@@ -34,6 +40,7 @@ protocol RecipeTransportClient {
     func fetchRecipeById(recipeId: String) async throws -> BackendRecipeDTO
     func setFavorite(recipeId: String, isFavorite: Bool) async throws
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: String, _ isFavorite: Bool) -> Void)
+    func observeRecipeChanges(_ onChange: @escaping () -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
 

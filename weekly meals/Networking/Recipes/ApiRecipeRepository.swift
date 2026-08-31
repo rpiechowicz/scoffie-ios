@@ -40,6 +40,10 @@ final class ApiRecipeRepository: RecipeRepository {
         }
     }
 
+    func observeRecipeChanges(_ onChange: @escaping () -> Void) {
+        client.observeRecipeChanges(onChange)
+    }
+
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void) {
         client.observeRealtimeReconnect(onReconnect)
     }

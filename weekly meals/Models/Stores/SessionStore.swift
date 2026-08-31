@@ -131,6 +131,10 @@ final class SessionStore {
     /// Kroki z HealthKit (Apple Zdrowie / Garmin) — drugi klient REST-owy,
     /// ta sama zasada tokenu co przy Cookidoo.
     var healthStepsStore: HealthStepsStore?
+    /// Rozmowa z asystentem AI. Wisi na sesji, a nie na arkuszu, bo tura
+    /// potrafi trwać minutę — użytkownik ma prawo w tym czasie zamknąć
+    /// asystenta, obejrzeć plan i wrócić po odpowiedź.
+    var agentStore: AgentStore?
     var datesViewModel = DatesViewModel()
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
@@ -587,6 +591,17 @@ final class SessionStore {
             )
         )
         self.healthStepsStore = healthStore
+
+        self.agentStore = AgentStore(
+            client: AgentAPIClient(
+                baseURL: baseURL,
+                tokenProvider: { [weak self] in self?.currentAccessToken },
+                refreshSession: { [weak self] in
+                    await self?.refreshSessionTokens() == .refreshed
+                }
+            ),
+            householdId: householdId
+        )
         // Świeże kroki od razu przy starcie sesji + obserwacja na żywo.
         // Oba to no-opy, dopóki użytkownik nie włączy integracji w Ustawieniach.
         healthStore.startObserving()
@@ -658,6 +673,9 @@ final class SessionStore {
         cookidooIntegrationStore = nil
         healthStepsStore?.stopObserving()
         healthStepsStore = nil
+        // Rozmowy zostają na serwerze (użytkownik kasuje je sam, świadomie) —
+        // tu znika tylko stan w pamięci telefonu.
+        agentStore = nil
         datesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
