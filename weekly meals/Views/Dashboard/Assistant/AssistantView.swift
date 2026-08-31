@@ -152,7 +152,15 @@ struct AssistantView: View {
                         if let errorMessage = store.errorMessage {
                             ErrorNote(
                                 text: errorMessage,
-                                onRetry: store.retryText == nil ? nil : retry
+                                // Domknięcie, a nie referencja `retry`: pod
+                                // `InferSendableFromCaptures` (SE-0418, włączone
+                                // w tym projekcie) referencja do metody obok `nil`
+                                // w wyrażeniu warunkowym daje dwa równorzędne
+                                // rozwiązania typu i CAŁY `ScrollView` przestaje
+                                // się kompilować („ambiguous use of 'init'"),
+                                // ze wskazaniem na linię 60 wierszy wyżej.
+                                // Jawny typ tu nie pomaga — tylko domknięcie.
+                                onRetry: store.retryText == nil ? nil : { retry() }
                             )
                             .id(Self.errorAnchor)
                         }
