@@ -5,9 +5,11 @@ struct NavigationMenu: View {
         case recipes
         case plan
         case calendar
-        case products
+        case assistant
         case settings
     }
+
+    @Environment(\.sessionStore) private var sessionStore
 
     @State private var selectedTab: DashboardTab = .calendar
 
@@ -25,8 +27,15 @@ struct NavigationMenu: View {
                 CalendarView()
             }
 
-            Tab(MenuConstans.Products.name, systemImage: MenuConstans.Products.icon, value: DashboardTab.products) {
-                ProductsView()
+            // Asystent zajął miejsce „Produktów": to do niego wraca się
+            // wiele razy w tygodniu, a lista zakupów powstaje przy Planie
+            // i tam też ma swoje wejście.
+            Tab(MenuConstans.Assistant.name, systemImage: MenuConstans.Assistant.icon, value: DashboardTab.assistant) {
+                if let agentStore = sessionStore.agentStore {
+                    AssistantView(store: agentStore)
+                } else {
+                    AssistantUnavailableView()
+                }
             }
 
             Tab(MenuConstans.Settings.name, systemImage: MenuConstans.Settings.icon, value: DashboardTab.settings) {
