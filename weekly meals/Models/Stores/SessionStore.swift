@@ -1911,6 +1911,34 @@ final class SessionStore {
         }
     }
 
+    /// Wyszukiwarka składników — ta sama, z której korzysta asystent.
+    ///
+    /// Handler `ingredients:search` istniał na serwerze od Fazy 1, ale żaden
+    /// ekran go nie wołał: składniki wybierał wyłącznie model. Ekran „czego
+    /// nie jem" potrzebuje dokładnie tego samego, bo wykluczenia trzymamy
+    /// jako IDENTYFIKATORY — wpisana z ręki nazwa nie miałaby jak trafić
+    /// w skład przepisu.
+    func searchIngredients(query: String, limit: Int = 20) async -> [BackendIngredientHitDTO] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+        do {
+            let socketClient = sessionSocket()
+            let envelope: WsEnvelope<[BackendIngredientHitDTO]> = try await socketClient.emitWithAck(
+                event: "ingredients:search",
+                payload: [
+                    "userId": userId,
+                    "filters": ["query": query, "limit": limit],
+                ],
+                as: WsEnvelope<[BackendIngredientHitDTO]>.self
+            )
+            guard envelope.ok, let data = envelope.data else { return [] }
+            return data
+        } catch {
+            // Cicho: lista pokaże „nic nie znaleziono", a użytkownik spróbuje
+            // jeszcze raz. To ekran ustawień, nie ścieżka krytyczna.
+            return []
+        }
+    }
+
     // MARK: - User preferences (diet, kcal, allergens)
     //
     // Source of truth lives in `@AppStorage` so SwiftUI views read it
@@ -1928,6 +1956,10 @@ final class SessionStore {
         static let proteinG = "settings.diet.proteinG"
         static let fatG = "settings.diet.fatG"
         static let carbsG = "settings.diet.carbsG"
+        /// Identyfikatory składników po przecinku — tak samo jak alergeny.
+        static let excludedIngredients = "settings.diet.excludedIngredients"
+        /// 0 = bez ograniczenia (AppStorage nie ma `nil` dla `Int`).
+        static let maxPrepTimeMinutes = "settings.diet.maxPrepTimeMinutes"
     }
 
     /// Klucze przełączników z ekranu „Powiadomienia". Te same stringi czyta
@@ -2006,6 +2038,21 @@ final class SessionStore {
             defaults.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
             defaults.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
 
+            // Ograniczenia bywają ustawione też z rozmowy z asystentem, więc
+            // serwer jest tu źródłem prawdy. `nil` znaczy „backend sprzed tej
+            // zmiany" — wtedy nie ruszamy tego, co użytkownik ma lokalnie.
+            if let excluded = prefs.excludedIngredientIds {
+                defaults.set(
+                    excluded.sorted().joined(separator: ","),
+                    forKey: PreferencesKeys.excludedIngredients
+                )
+            }
+            // 0 = brak ograniczenia; AppStorage nie ma `nil` dla `Int`.
+            defaults.set(
+                prefs.maxPrepTimeMinutes ?? 0,
+                forKey: PreferencesKeys.maxPrepTimeMinutes
+            )
+
             // Przełączniki powiadomień są teraz danymi konta, nie ustawieniem
             // urządzenia: to serwer decyduje, czy wysłać pusha, więc to on
             // trzyma prawdę. Backend sprzed tej zmiany przysyła `nil`
@@ -2046,6 +2093,11 @@ final class SessionStore {
         proteinG: Int? = nil,
         fatG: Int? = nil,
         carbsG: Int? = nil,
+        /// Czego domownik nie je. Pusta tablica kasuje wykluczenia.
+        excludedIngredientIds: [String]? = nil,
+        /// Maksymalny czas gotowania; `clearMaxPrepTime` kasuje ograniczenie.
+        maxPrepTimeMinutes: Int? = nil,
+        clearMaxPrepTime: Bool = false,
         /// Wysyła jawne `null` na wszystkie trzy makra — czyli „przestań
         /// trzymać moje wartości i licz za mnie". Bez tego nie dałoby się
         /// wrócić do automatu, bo `nil` w parametrze znaczy „nie ruszaj".
@@ -2081,6 +2133,23 @@ final class SessionStore {
                 normalised.joined(separator: ","),
                 forKey: PreferencesKeys.allergens
             )
+        }
+        if let excludedIngredientIds {
+            let normalised = Array(Set(excludedIngredientIds)).sorted()
+            data["excludedIngredientIds"] = normalised
+            defaults.set(
+                normalised.joined(separator: ","),
+                forKey: PreferencesKeys.excludedIngredients
+            )
+        }
+        if clearMaxPrepTime {
+            // Jawny `null`, nie pominięte pole: pominięcie znaczy „nie ruszaj",
+            // więc bez tego nie dałoby się skasować ograniczenia.
+            data["maxPrepTimeMinutes"] = NSNull()
+            defaults.set(0, forKey: PreferencesKeys.maxPrepTimeMinutes)
+        } else if let maxPrepTimeMinutes {
+            data["maxPrepTimeMinutes"] = maxPrepTimeMinutes
+            defaults.set(maxPrepTimeMinutes, forKey: PreferencesKeys.maxPrepTimeMinutes)
         }
         if let goal {
             data["goal"] = goal.uppercased()
