@@ -11,7 +11,13 @@ struct MenuConstans {
 
     struct Plan: MenuModel {
         static let name: String = "Plan"
-        static let icon: String = "calendar.badge.clock"
+        /// Karta z jadłospisem, nie kalendarz.
+        ///
+        /// `calendar.badge.clock` stał obok `calendar` Kalendarza i przy 24 pt
+        /// obie ikony miały tę samą sylwetkę — plakietka zegara schodziła do
+        /// plamki. Przy tym rozmiarze przeżywa wyłącznie kształt, więc dwie
+        /// sąsiednie zakładki nie mogą go dzielić.
+        static let icon: String = "menucard"
     }
     
     /// Produkty NIE są już zakładką — wpis zostaje, bo z tej samej nazwy
