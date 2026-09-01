@@ -110,17 +110,6 @@ struct AgentCreateConversationRequestDTO: Encodable {
 /// użytkownika. `clientMessageId` jest kluczem idempotencji — ponowione
 /// żądanie po utraconej odpowiedzi oddaje TĘ SAMĄ turę, zamiast płacić
 /// drugi raz za ten sam prompt.
-/// Zdjęcie dołączone do wiadomości.
-///
-/// Serwer go NIE ZAPISUJE — idzie prosto do modelu i znika razem z turą.
-/// Dlatego jedzie w kopercie wiadomości, a nie osobnym wysyłaniem pliku:
-/// nie ma czego wgrywać, jest tylko co pokazać.
-struct AgentImageRequestDTO: Encodable {
-    let mediaType: String
-    /// base64 bez prefiksu `data:`.
-    let data: String
-}
-
 /// Poprawienie własnego pytania.
 ///
 /// Nie jest to edycja tekstu w miejscu: serwer wycofuje poprawianą wiadomość
@@ -142,7 +131,6 @@ struct AgentPostMessageRequestDTO: Encodable {
     let weekStart: String
     let clientToday: String
     let timeZone: String
-    let image: AgentImageRequestDTO?
     /// Kogo dotyczy pytanie; `nil` albo pusta lista = całe gospodarstwo.
     /// Wysyłamy IDENTYFIKATORY, nie imiona — model dostaje je gotowe do
     /// wpisania w propozycję, zamiast dopasowywać „Ania" do wiersza w bazie.

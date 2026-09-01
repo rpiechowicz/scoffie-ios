@@ -327,24 +327,6 @@ struct ShoppingListCardSummaryDTO: Decodable, Equatable {
     let checked: Int
 }
 
-/// Produkt rozpoznany na zdjęciu.
-struct DetectedItemDTO: Decodable, Equatable, Identifiable {
-    let name: String
-    /// `false` = model się domyśla; karta stawia przy tym znak zapytania.
-    let sure: Bool
-
-    var id: String { name }
-}
-
-/// Co asystent zobaczył na zdjęciu — do sprostowania jednym zdaniem.
-struct DetectedItemsCardDTO: Decodable, Equatable {
-    let v: Int
-    let eyebrow: String
-    let title: String
-    let items: [DetectedItemDTO]
-    let actions: [AgentCardActionDTO]
-}
-
 struct AppliedCardSummaryDTO: Decodable, Equatable {
     let created: Int
     let updated: Int
@@ -381,7 +363,6 @@ enum AgentCardDTO: Decodable, Equatable {
     case householdSplit(HouseholdSplitCardDTO)
     case macroGap(MacroGapCardDTO)
     case shoppingList(ShoppingListCardDTO)
-    case detectedItems(DetectedItemsCardDTO)
     case clarify(ClarifyCardDTO)
     case applied(AppliedCardDTO)
     case unknown
@@ -440,12 +421,6 @@ enum AgentCardDTO: Decodable, Equatable {
             } else {
                 self = .unknown
             }
-        case "DETECTED_ITEMS":
-            if let card = try? DetectedItemsCardDTO(from: decoder) {
-                self = .detectedItems(card)
-            } else {
-                self = .unknown
-            }
         case "CLARIFY":
             if let card = try? ClarifyCardDTO(from: decoder) {
                 self = .clarify(card)
@@ -472,8 +447,7 @@ enum AgentCardDTO: Decodable, Equatable {
         case .swap(let card): return card.proposalId
         case .householdSplit(let card): return card.proposalId
         case .applied(let card): return card.proposalId
-        case .options, .macroGap, .shoppingList, .detectedItems, .clarify,
-             .unknown:
+        case .options, .macroGap, .shoppingList, .clarify, .unknown:
             return nil
         }
     }
@@ -495,8 +469,7 @@ enum AgentCardDTO: Decodable, Equatable {
         case .swap(let card): return card.state
         case .householdSplit(let card): return card.state
         case .applied(let card): return card.state
-        case .options, .macroGap, .shoppingList, .detectedItems, .clarify,
-             .unknown:
+        case .options, .macroGap, .shoppingList, .clarify, .unknown:
             return nil
         }
     }
@@ -524,8 +497,7 @@ enum AgentCardDTO: Decodable, Equatable {
         case .applied(var card):
             card.state = state
             return .applied(card)
-        case .options, .macroGap, .shoppingList, .detectedItems, .clarify,
-             .unknown:
+        case .options, .macroGap, .shoppingList, .clarify, .unknown:
             return self
         }
     }

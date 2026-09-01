@@ -190,37 +190,105 @@ struct AssistantProgressTrail: View {
     let steps: [AgentProgressStepDTO]
     let startedAt: Date?
 
+    /// Po tylu sekundach czekanie przestaje być chwilą i warto powiedzieć,
+    /// że nie trzeba przy nim siedzieć. Wcześniej ta sama informacja jest
+    /// szumem pod każdym pytaniem — i tak właśnie była odbierana.
+    private static let patienceAfter: TimeInterval = 18
+
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             if steps.isEmpty {
                 row(label: "Zastanawiam się…", isCurrent: true)
+                    .transition(.opacity)
             } else {
                 ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                     row(label: step.label, isCurrent: index == steps.count - 1)
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: 8)),
+                                removal: .opacity
+                            )
+                        )
                 }
             }
 
-            Text("Zwykle zajmuje mi to pół minuty — możesz wyjść, wrócę z odpowiedzią.")
-                .font(.system(size: 12))
-                .foregroundStyle(Color.wmFaint(scheme))
-                .padding(.leading, 28)
-                .padding(.top, 1)
-
             if let startedAt {
-                elapsed(from: startedAt)
+                footer(from: startedAt)
             }
         }
         .padding(.vertical, 4)
+        // Kroki dochodzą po jednym co kilka sekund — bez tego lista skacze,
+        // a wiersz, który właśnie się skończył, zmienia się w ptaszek bez
+        // żadnego przejścia.
+        .animation(.smooth(duration: 0.3), value: steps.count)
     }
 
     @ViewBuilder
     private func row(label: String, isCurrent: Bool) -> some View {
         HStack(alignment: .center, spacing: 10) {
+            StepIcon(isCurrent: isCurrent)
+
+            Text(label)
+                .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
+                .tracking(-0.15)
+                .foregroundStyle(isCurrent ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .contentTransition(.opacity)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Licznik sekund plus — dopiero po chwili — zdanie o tym, że nie trzeba
+    /// tu siedzieć.
+    private func footer(from startedAt: Date) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let elapsed = max(0, context.date.timeIntervalSince(startedAt))
+            let seconds = Int(elapsed)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(seconds) s")
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.wmFaint(scheme))
+                    // Ta sama animacja liczby co przy kaloriach w szczegółach
+                    // przepisu: cyfra przewija się, zamiast podmieniać skokiem.
+                    .contentTransition(.numericText(value: Double(seconds)))
+                    .animation(.snappy(duration: 0.25), value: seconds)
+
+                if elapsed >= Self.patienceAfter {
+                    Text("Możesz wyjść — wrócę z odpowiedzią.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.wmFaint(scheme))
+                        .transition(.opacity.combined(with: .offset(y: -4)))
+                }
+            }
+            .padding(.leading, 28)
+            .animation(.smooth(duration: 0.35), value: elapsed >= Self.patienceAfter)
+        }
+    }
+
+    /// Znacznik kroku: kręciołek albo ptaszek, ZAWSZE tej samej wielkości.
+    ///
+    /// Wcześniej kółko postępu było obrysem, a znacznik zrobionego kroku
+    /// wypełnionym kołem tej samej ramki — obrys ma pół grubości linii poza
+    /// promieniem, więc oba wyglądały na różne. Teraz obrys jest wsunięty
+    /// o tę grubość i oba kończą się na tej samej średnicy.
+    private struct StepIcon: View {
+        let isCurrent: Bool
+
+        private static let diameter: CGFloat = 18
+        private static let lineWidth: CGFloat = 2
+
+        @Environment(\.colorScheme) private var scheme
+
+        var body: some View {
             ZStack {
                 if isCurrent {
-                    Spinner()
+                    Spinner(lineWidth: Self.lineWidth)
+                        .padding(Self.lineWidth / 2)
                 } else {
                     Circle().fill(Color.wmSageTint(scheme))
                     Image(systemName: "checkmark")
@@ -228,15 +296,8 @@ struct AssistantProgressTrail: View {
                         .foregroundStyle(WMPalette.sage)
                 }
             }
-            .frame(width: 18, height: 18)
-
-            Text(label)
-                .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
-                .tracking(-0.15)
-                .foregroundStyle(isCurrent ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 0)
+            .frame(width: Self.diameter, height: Self.diameter)
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
     }
 
@@ -248,6 +309,8 @@ struct AssistantProgressTrail: View {
     /// animacja nie ruszała i kółko zastygało pod kątem 360°. Kąt liczony
     /// z czasu nie ma stanu, który dałoby się zgubić przy przebudowie widoku.
     private struct Spinner: View {
+        let lineWidth: CGFloat
+
         /// Pełny obrót; 0,9 s to tempo, przy którym oko widzi ruch, a nie miga.
         private static let period: TimeInterval = 0.9
 
@@ -259,23 +322,10 @@ struct AssistantProgressTrail: View {
                     .trim(from: 0, to: 0.72)
                     .stroke(
                         WMPalette.terracotta,
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(phase / Self.period * 360))
             }
-        }
-    }
-
-    /// Licznik sekund mówi, że aplikacja żyje; po 45 s wprost proponuje wyjście,
-    /// bo tura przeżywa zamknięcie ekranu.
-    private func elapsed(from startedAt: Date) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let seconds = max(0, Int(context.date.timeIntervalSince(startedAt)))
-            Text("\(seconds) s")
-                .font(.system(size: 12))
-                .monospacedDigit()
-                .foregroundStyle(Color.wmFaint(scheme))
-                .padding(.leading, 28)
         }
     }
 }
