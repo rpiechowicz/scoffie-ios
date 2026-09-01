@@ -240,6 +240,17 @@ struct HouseholdMembersCachePayload: Codable {
     let savedAt: Date
 }
 
+/// Jeden wynik `ingredients:search`.
+///
+/// Serwer oddaje więcej pól (alergeny, jednostki, makra); klient bierze to,
+/// czego potrzebuje lista wyboru — resztę pomija, bo `Decodable` ignoruje
+/// nieznane klucze.
+struct BackendIngredientHitDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let name: String
+    let category: String
+}
+
 // MARK: - User preferences DTO
 
 /// Backend payload for `users:preferences:get` and the response of
@@ -256,6 +267,11 @@ struct BackendUserPreferencesDTO: Decodable {
     let proteinG: Int?
     let fatG: Int?
     let carbsG: Int?
+    /// Czego ten domownik nie je, choć nie jest to alergia. `nil` = backend
+    /// sprzed tej zmiany; wtedy nie ruszamy lokalnej listy.
+    let excludedIngredientIds: [String]?
+    /// Ile minut najwyżej ma zajmować gotowanie; `nil` = bez ograniczenia.
+    let maxPrepTimeMinutes: Int?
     /// Kanały powiadomień push. `nil` = backend sprzed tej zmiany; wtedy
     /// zostawiamy lokalne ustawienia w spokoju i wyślemy je przy najbliższym
     /// zapisie.
