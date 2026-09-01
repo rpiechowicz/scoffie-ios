@@ -144,6 +144,13 @@ final class SessionStore {
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
     var dashboardTab: DashboardTab = .calendar
+    /// Prośba asystenta o otwarcie listy zakupów.
+    ///
+    /// Lista jest arkuszem WEWNĄTRZ Planu, więc samo przełączenie zakładki
+    /// zostawiłoby użytkownika o jedno dotknięcie od tego, co obiecał
+    /// przycisk. Flagę zdejmuje ekran, który ją obsłużył — inaczej arkusz
+    /// otwierałby się przy każdym powrocie na Plan.
+    var opensShoppingList = false
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
     private let appleSignInCoordinator = AppleSignInCoordinator()

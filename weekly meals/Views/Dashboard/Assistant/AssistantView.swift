@@ -134,6 +134,12 @@ struct AssistantView: View {
                                 message: message,
                                 isBusy: isBusy(message),
                                 onOpenPlan: { sessionStore.dashboardTab = .plan },
+                                onOpenShopping: {
+                                    // Lista zakupów jest arkuszem w Planie,
+                                    // więc sama zakładka to za mało.
+                                    sessionStore.opensShoppingList = true
+                                    sessionStore.dashboardTab = .plan
+                                },
                                 onAskAgain: { ask(message.text) },
                                 onApply: { id in
                                     Task { await store.applyProposal(id: id) }
@@ -588,6 +594,7 @@ private struct MessageBubble: View {
     let message: AgentChatMessage
     let isBusy: Bool
     let onOpenPlan: () -> Void
+    let onOpenShopping: () -> Void
     let onAskAgain: () -> Void
     let onApply: (String) -> Void
     let onUndo: (String) -> Void
@@ -702,6 +709,17 @@ private struct MessageBubble: View {
                 onApply: { onApply(swap.proposalId) },
                 onRevise: onRevise
             )
+        case .householdSplit(let split):
+            AssistantHouseholdSplitCard(
+                card: split,
+                isBusy: isBusy,
+                onApply: { onApply(split.proposalId) },
+                onRevise: onRevise
+            )
+        case .macroGap(let macro):
+            AssistantMacroGapCard(card: macro, onAsk: onAsk)
+        case .shoppingList(let shopping):
+            AssistantShoppingListCard(card: shopping, onOpenShopping: onOpenShopping)
         case .clarify(let clarify):
             AssistantClarifyCard(card: clarify, onAsk: onAsk)
         case .applied(let applied):

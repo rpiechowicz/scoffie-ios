@@ -29,6 +29,7 @@ struct AgentCardActionDTO: Decodable, Equatable, Identifiable {
         case apply = "APPLY"
         case undo = "UNDO"
         case openPlan = "OPEN_PLAN"
+        case openShopping = "OPEN_SHOPPING"
         /// Wysyła gotowe zdanie jako zwykłą wiadomość. Nie zmienia niczego —
         /// stąd brak `proposalId` i brak stanu do sprawdzenia.
         case ask = "ASK"
@@ -235,6 +236,92 @@ struct SwapCardDTO: Decodable, Equatable {
     var state: AgentCardStateDTO
 }
 
+/// Jedna osoba przy wspólnym daniu.
+struct HouseholdSplitPortionDTO: Decodable, Equatable, Identifiable {
+    let userId: String
+    let displayName: String
+    /// „2 100 kcal · bez laktozy" — cel i ograniczenia prosto z profilu.
+    let goalLabel: String
+    /// Jak podać TEJ osobie; jedno zdanie od modelu.
+    let note: String?
+    let kcal: Int
+
+    var id: String { userId }
+    /// Inicjał do awatara. Puste imię nie może dać pustego kółka.
+    var initial: String {
+        String(displayName.first.map(String.init) ?? "?").uppercased()
+    }
+}
+
+/// Jedno danie, kilka talerzy.
+struct HouseholdSplitCardDTO: Decodable, Equatable {
+    let v: Int
+    let proposalId: String
+    let weekStart: String
+    let date: String
+    let eyebrow: String
+    let title: String
+    let prepTimeMinutes: Int
+    let portions: [HouseholdSplitPortionDTO]
+    let actions: [AgentCardActionDTO]
+    var state: AgentCardStateDTO
+}
+
+/// Zmiana, która domyka brak: „Twarożek zamiast musli (śr.)" +24 g.
+struct MacroGapBoosterDTO: Decodable, Equatable, Identifiable {
+    let text: String
+    let amount: Int
+
+    var id: String { text }
+}
+
+/// Luka między planem a celem — i zmiany, które ją domykają.
+struct MacroGapCardDTO: Decodable, Equatable {
+    let v: Int
+    let eyebrow: String
+    let title: String
+    let macro: String
+    /// „g" albo „kcal" — klient nie zgaduje jednostki.
+    let unit: String
+    let current: Int
+    let target: Int
+    let boosters: [MacroGapBoosterDTO]
+    let actions: [AgentCardActionDTO]
+
+    /// Ile z celu dowozi plan. Powyżej celu pasek nie rośnie dalej — to jest
+    /// informacja „dowiezione", a nie konkurs.
+    var progress: Double {
+        guard target > 0 else { return 0 }
+        return min(Double(current) / Double(target), 1)
+    }
+}
+
+/// Dział sklepu z pozycjami.
+struct ShoppingListCardGroupDTO: Decodable, Equatable, Identifiable {
+    let department: String
+    let items: [String]
+
+    var id: String { department }
+}
+
+/// Co trzeba kupić na ten tydzień.
+struct ShoppingListCardDTO: Decodable, Equatable {
+    let v: Int
+    let weekStart: String
+    let eyebrow: String
+    let title: String
+    let groups: [ShoppingListCardGroupDTO]
+    let summary: ShoppingListCardSummaryDTO
+    /// `nil`, gdy nic nie odhaczono — pusta linia mówiłaby o niczym.
+    let checkedNote: String?
+    let actions: [AgentCardActionDTO]
+}
+
+struct ShoppingListCardSummaryDTO: Decodable, Equatable {
+    let remaining: Int
+    let checked: Int
+}
+
 struct AppliedCardSummaryDTO: Decodable, Equatable {
     let created: Int
     let updated: Int
@@ -268,6 +355,9 @@ enum AgentCardDTO: Decodable, Equatable {
     case planDay(PlanDayCardDTO)
     case options(OptionsCardDTO)
     case swap(SwapCardDTO)
+    case householdSplit(HouseholdSplitCardDTO)
+    case macroGap(MacroGapCardDTO)
+    case shoppingList(ShoppingListCardDTO)
     case clarify(ClarifyCardDTO)
     case applied(AppliedCardDTO)
     case unknown
@@ -308,6 +398,24 @@ enum AgentCardDTO: Decodable, Equatable {
             } else {
                 self = .unknown
             }
+        case "HOUSEHOLD_SPLIT":
+            if let card = try? HouseholdSplitCardDTO(from: decoder) {
+                self = .householdSplit(card)
+            } else {
+                self = .unknown
+            }
+        case "MACRO_GAP":
+            if let card = try? MacroGapCardDTO(from: decoder) {
+                self = .macroGap(card)
+            } else {
+                self = .unknown
+            }
+        case "SHOPPING_LIST":
+            if let card = try? ShoppingListCardDTO(from: decoder) {
+                self = .shoppingList(card)
+            } else {
+                self = .unknown
+            }
         case "CLARIFY":
             if let card = try? ClarifyCardDTO(from: decoder) {
                 self = .clarify(card)
@@ -332,8 +440,9 @@ enum AgentCardDTO: Decodable, Equatable {
         case .planWeek(let card): return card.proposalId
         case .planDay(let card): return card.proposalId
         case .swap(let card): return card.proposalId
+        case .householdSplit(let card): return card.proposalId
         case .applied(let card): return card.proposalId
-        case .options, .clarify, .unknown: return nil
+        case .options, .macroGap, .shoppingList, .clarify, .unknown: return nil
         }
     }
 
@@ -352,8 +461,9 @@ enum AgentCardDTO: Decodable, Equatable {
         case .planWeek(let card): return card.state
         case .planDay(let card): return card.state
         case .swap(let card): return card.state
+        case .householdSplit(let card): return card.state
         case .applied(let card): return card.state
-        case .options, .clarify, .unknown: return nil
+        case .options, .macroGap, .shoppingList, .clarify, .unknown: return nil
         }
     }
 
@@ -374,10 +484,13 @@ enum AgentCardDTO: Decodable, Equatable {
         case .swap(var card):
             card.state = state
             return .swap(card)
+        case .householdSplit(var card):
+            card.state = state
+            return .householdSplit(card)
         case .applied(var card):
             card.state = state
             return .applied(card)
-        case .options, .clarify, .unknown:
+        case .options, .macroGap, .shoppingList, .clarify, .unknown:
             return self
         }
     }

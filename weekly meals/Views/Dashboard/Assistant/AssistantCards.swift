@@ -1079,3 +1079,362 @@ struct AssistantSwapCard: View {
         }
     }
 }
+
+// MARK: - Jedno danie, kilka talerzy
+
+/// Podział wspólnego dania na porcje.
+///
+/// Karta odpowiada na pytanie, którego nie da się zadać planowi tygodnia:
+/// „ugotuję jedno, ale jak to podać czterem osobom z czterema różnymi celami".
+/// Cel obok imienia pochodzi z profilu — to jedyna rzecz, po której użytkownik
+/// pozna, że asystent naprawdę je przeczytał.
+struct AssistantHouseholdSplitCard: View {
+    let card: HouseholdSplitCardDTO
+    let isBusy: Bool
+    let onApply: () -> Void
+    let onRevise: () -> Void
+
+    /// Kolor osoby jest STAŁY w obrębie karty i bierze się z pozycji na
+    /// liście — nie niesie znaczenia, tylko pozwala odróżnić wiersze wzrokiem.
+    private static let avatarColors: [Color] = [
+        WMPalette.terracotta, WMPalette.indigo, WMPalette.sage, WMPalette.butter,
+    ]
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        AssistantCard(tone: .neutral) {
+            AssistantCardHead(eyebrow: card.eyebrow, title: card.title) {
+                if card.prepTimeMinutes > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("\(card.prepTimeMinutes)′")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .padding(.horizontal, 9)
+                    .frame(height: 26)
+                    .background(Capsule().fill(Color.wmChipBg(scheme)))
+                }
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(card.portions.enumerated()), id: \.element.id) { index, portion in
+                    PortionRow(
+                        portion: portion,
+                        tint: Self.avatarColors[index % Self.avatarColors.count]
+                    )
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(Color.wmRule(scheme))
+                            .frame(height: 1)
+                            .padding(.leading, 16)
+                    }
+                }
+            }
+
+            footer
+        }
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        if card.state.canApply {
+            AssistantCardActions(
+                primaryTitle: card.actions.first { $0.type == .apply }?.label ?? "Zapisz",
+                primaryIcon: "checkmark",
+                isBusy: isBusy,
+                secondaryTitle: "Zmień",
+                secondaryIcon: "slider.horizontal.3",
+                onSecondary: onRevise,
+                onPrimary: onApply
+            )
+        } else {
+            AssistantCardStatusFooter(state: card.state)
+        }
+    }
+
+    private struct PortionRow: View {
+        let portion: HouseholdSplitPortionDTO
+        let tint: Color
+
+        @Environment(\.colorScheme) private var scheme
+
+        var body: some View {
+            HStack(alignment: .center, spacing: 11) {
+                ZStack {
+                    Circle().fill(tint.opacity(0.15))
+                    Circle().stroke(tint.opacity(0.33), lineWidth: 1)
+                    Text(portion.initial)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(tint)
+                }
+                .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(portion.displayName)
+                            .font(.system(size: 14, weight: .semibold))
+                            .tracking(-0.25)
+                            .foregroundStyle(Color.wmLabel(scheme))
+                        Text(portion.goalLabel)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.wmFaint(scheme))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+
+                    if let note = portion.note, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 12.5))
+                            .tracking(-0.15)
+                            .foregroundStyle(Color.wmMuted(scheme))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if portion.kcal > 0 {
+                    Text("\(portion.kcal)")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.wmLabel(scheme))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+    }
+}
+
+// MARK: - Luka makro
+
+/// Ile brakuje do celu — i co to domknie.
+///
+/// Indygo, nie terakota: to jest analiza, a nie propozycja do zatwierdzenia.
+/// Kolor odróżnia karty, po których coś się dzieje, od tych, które tłumaczą.
+struct AssistantMacroGapCard: View {
+    let card: MacroGapCardDTO
+    let onAsk: (String) -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        AssistantCard(tone: .indigo) {
+            AssistantCardHead(
+                eyebrow: card.eyebrow,
+                eyebrowColor: WMPalette.indigo,
+                title: card.title
+            ) {
+                ZStack {
+                    Circle().fill(WMPalette.indigo.opacity(0.2))
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(WMPalette.indigo)
+                }
+                .frame(width: 34, height: 34)
+            }
+
+            progress
+
+            if !card.boosters.isEmpty {
+                boosters
+            }
+
+            if let action = card.actions.first, let prompt = action.prompt {
+                AssistantCardActions(
+                    primaryTitle: action.label,
+                    primaryIcon: "checkmark",
+                    onPrimary: { onAsk(prompt) }
+                )
+            }
+        }
+    }
+
+    private var progress: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.wmBarTrack(scheme))
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    WMPalette.indigo.opacity(0.65), WMPalette.indigo,
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * card.progress)
+                }
+            }
+            .frame(height: 10)
+
+            HStack {
+                Text("\(card.current) \(card.unit) z planu")
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.wmLabel(scheme))
+                Spacer(minLength: 8)
+                Text("cel \(card.target) \(card.unit)")
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 14)
+    }
+
+    private var boosters: some View {
+        VStack(spacing: 0) {
+            Text(card.boosters.count == 1 ? "Zmiana, która to załatwi" : "Zmiany, które to załatwią")
+                .font(.system(size: 10.5, weight: .bold))
+                .tracking(1.1)
+                .textCase(.uppercase)
+                .foregroundStyle(Color.wmFaint(scheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.top, 11)
+                .padding(.bottom, 4)
+
+            ForEach(Array(card.boosters.enumerated()), id: \.element.id) { index, booster in
+                HStack(alignment: .center, spacing: 11) {
+                    Text(booster.text)
+                        .font(.system(size: 13.5))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.wmLabel(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 8)
+
+                    Text("+\(booster.amount) \(card.unit)")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(WMPalette.indigo)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .overlay(alignment: .top) {
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.wmRule(scheme))
+                            .frame(height: 1)
+                            .padding(.leading, 16)
+                    }
+                }
+            }
+        }
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+        }
+    }
+}
+
+// MARK: - Lista zakupów
+
+/// Co trzeba kupić, po działach sklepu.
+///
+/// Działy nie są ozdobą: listę czyta się chodząc alejkami, a nie w kolejności,
+/// w jakiej przepisy trafiły do planu.
+struct AssistantShoppingListCard: View {
+    let card: ShoppingListCardDTO
+    let onOpenShopping: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        AssistantCard(tone: .neutral) {
+            AssistantCardHead(eyebrow: card.eyebrow, title: card.title) {
+                ZStack {
+                    Circle().fill(WMPalette.terracotta.opacity(0.16))
+                    Image(systemName: "cart")
+                        .font(.system(size: 15))
+                        .foregroundStyle(WMPalette.terracotta)
+                }
+                .frame(width: 34, height: 34)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(card.groups) { group in
+                    GroupBlock(group: group)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+                        }
+                }
+            }
+            .padding(.horizontal, 16)
+
+            if let note = card.checkedNote {
+                HStack(spacing: 7) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(WMPalette.sage)
+                    Text(note)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 2)
+            }
+
+            AssistantCardActions(
+                primaryTitle: card.actions.first?.label ?? "Otwórz listę zakupów",
+                primaryIcon: "cart",
+                onPrimary: onOpenShopping
+            )
+        }
+    }
+
+    private struct GroupBlock: View {
+        let group: ShoppingListCardGroupDTO
+
+        @Environment(\.colorScheme) private var scheme
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(group.department)
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color.wmMuted(scheme))
+                    Text("\(group.items.count)")
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.wmFaint(scheme))
+                    Spacer(minLength: 0)
+                }
+
+                AllergenChipFlow(spacing: 6) {
+                    ForEach(group.items, id: \.self) { item in
+                        Text(item)
+                            .font(.system(size: 12.5))
+                            .tracking(-0.15)
+                            .foregroundStyle(Color.wmLabel(scheme))
+                            .padding(.horizontal, 10)
+                            .frame(height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.wmInsetSurface(scheme))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(Color.wmCardStroke(scheme), lineWidth: 1)
+                            )
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+        }
+    }
+}
