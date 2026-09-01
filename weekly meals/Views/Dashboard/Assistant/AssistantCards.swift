@@ -1438,3 +1438,71 @@ struct AssistantShoppingListCard: View {
         }
     }
 }
+
+// MARK: - Rozpoznane ze zdjęcia
+
+/// Co asystent zobaczył — z zaznaczeniem, czego nie jest pewien.
+///
+/// Ta karta istnieje po to, żeby dało się go POPRAWIĆ. Zgadnięty produkt na
+/// liście składników jest gorszy niż jego brak, bo bez znaku zapytania nie
+/// widać, który to.
+struct AssistantDetectedItemsCard: View {
+    let card: DetectedItemsCardDTO
+    let onAsk: (String) -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(card.eyebrow)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(WMPalette.indigo)
+
+                Text(card.title)
+                    .font(.system(size: 15.5, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            AllergenChipFlow(spacing: 6) {
+                ForEach(card.items) { item in
+                    HStack(spacing: 5) {
+                        Text(item.name)
+                            .font(.system(size: 12.5))
+                            .tracking(-0.15)
+                            .foregroundStyle(Color.wmLabel(scheme))
+                        if !item.sure {
+                            Text("?")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.wmFaint(scheme))
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+                    .background(
+                        Capsule().fill(
+                            item.sure ? Color.wmSageTint(scheme) : Color.wmTileBg(scheme)
+                        )
+                    )
+                    .overlay(
+                        Capsule().stroke(
+                            item.sure
+                                ? WMPalette.sage.opacity(0.26)
+                                : Color.wmTileStroke(scheme),
+                            lineWidth: 1
+                        )
+                    )
+                }
+            }
+
+            if !card.actions.isEmpty {
+                AssistantAnswerChips(actions: card.actions, onAsk: onAsk)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

@@ -888,6 +888,8 @@ private struct MessageBubble: View {
             AssistantMacroGapCard(card: macro, onAsk: onAsk)
         case .shoppingList(let shopping):
             AssistantShoppingListCard(card: shopping, onOpenShopping: onOpenShopping)
+        case .detectedItems(let detected):
+            AssistantDetectedItemsCard(card: detected, onAsk: onAsk)
         case .clarify(let clarify):
             AssistantClarifyCard(card: clarify, onAsk: onAsk)
         case .applied(let applied):

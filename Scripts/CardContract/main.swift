@@ -15,6 +15,7 @@ let swapJSON = #"{"kind": "SWAP", "v": 1, "proposalId": "77777777-7777-4777-8777
 let splitJSON = #"{"kind": "HOUSEHOLD_SPLIT", "v": 1, "proposalId": "88888888-8888-4888-8888-888888888888", "weekStart": "2026-08-31", "date": "2026-09-02", "eyebrow": "Jedna baza · trzy porcje", "title": "Gulasz wołowy z kaszą gryczaną", "prepTimeMinutes": 55, "portions": [{"userId": "u-1", "displayName": "Rafał", "goalLabel": "2100 kcal", "note": "Duża porcja + kasza 100 g", "kcal": 740}, {"userId": "u-2", "displayName": "Ania", "goalLabel": "1750 kcal · wegetariańska", "note": "Bez mięsa, więcej kaszy", "kcal": 590}, {"userId": "u-3", "displayName": "Zosia", "goalLabel": "1400 kcal · bez laktozy", "note": "Śmietana osobno", "kcal": 420}], "actions": [{"type": "APPLY", "proposalId": "88888888-8888-4888-8888-888888888888", "label": "Zapisz na środę", "style": "PRIMARY"}], "state": {"status": "PENDING", "canApply": true, "canUndo": false, "until": "2026-09-03T10:00:00.000Z"}}"#
 let macroJSON = #"{"kind": "MACRO_GAP", "v": 1, "eyebrow": "Białko · ten tydzień", "title": "Brakuje średnio 44 g dziennie", "macro": "PROTEIN", "unit": "g", "current": 96, "target": 140, "boosters": [{"text": "Twarożek zamiast musli (śr.)", "amount": 24}, {"text": "Jogurt grecki do owsianki (pon., czw.)", "amount": 18}, {"text": "Kurczak zamiast makaronu na kolację (pt.)", "amount": 22}], "actions": [{"type": "ASK", "proposalId": null, "label": "Zastosuj wszystkie trzy", "style": "PRIMARY", "prompt": "Zastosuj te zmiany w planie i pokaż mi je jako propozycję."}]}"#
 let shoppingJSON = #"{"kind": "SHOPPING_LIST", "v": 1, "weekStart": "2026-08-31", "eyebrow": "Lista zakupów · 31 sierpnia – 6 września", "title": "4 rzeczy do kupienia", "groups": [{"department": "Warzywa", "items": ["Cukinia 2 szt.", "Dynia 1 kg"]}, {"department": "Ryby", "items": ["Dorsz 600 g"]}, {"department": "Nabiał", "items": ["Feta 2 op."]}], "summary": {"remaining": 4, "checked": 1}, "checkedNote": "1 pozycja już odhaczona", "actions": [{"type": "OPEN_SHOPPING", "proposalId": null, "label": "Otwórz listę zakupów", "style": "PRIMARY"}]}"#
+let detectedJSON = #"{"kind": "DETECTED_ITEMS", "v": 1, "eyebrow": "Ze zdjęcia", "title": "Widzę 3 produkty, 1 niepewny", "items": [{"name": "Jajka", "sure": true}, {"name": "Ser żółty", "sure": true}, {"name": "Coś w folii na dolnej półce", "sure": false}], "actions": [{"type": "ASK", "proposalId": null, "label": "Popraw listę", "style": "SECONDARY", "prompt": "Popraw listę: "}]}"#
 let appliedJSON = #"{"kind": "APPLIED", "v": 1, "proposalId": "55555555-5555-4555-8555-555555555555", "weekStart": "2026-08-31", "title": "Zapisano w planie", "subtitle": "2 nowe pozycje, 1 usunięta · 31 sierpnia – 6 września", "summary": {"created": 2, "updated": 0, "removed": 1}, "notes": ["Cofnięcie przywróci usunięte posiłki, ale nie odhaczenia „zjedzone”."], "actions": [{"type": "UNDO", "proposalId": "55555555-5555-4555-8555-555555555555", "label": "Cofnij", "style": "SECONDARY"}, {"type": "OPEN_PLAN", "proposalId": null, "label": "Otwórz Plan tygodnia", "style": "PRIMARY"}], "state": {"status": "APPLIED", "canApply": false, "canUndo": true, "until": "2026-08-31T11:00:00.000Z"}}"#
 let unknownJSON = #"{"kind":"MACRO_GAP","v":1,"cokolwiek":true}"#
 let brokenJSON = #"{"kind":"PLAN_WEEK","v":1}"#
@@ -111,6 +112,15 @@ check("pozycja z ilością i jednostką", shopping.groups[2].items == ["Feta 2 o
 check("odhaczone poza listą, ale w rachunku", shopping.summary.checked == 1 && shopping.summary.remaining == 4)
 check("odmiana idzie za liczbą", shopping.checkedNote == "1 pozycja już odhaczona")
 check("jedyna akcja otwiera listę", shopping.actions.first?.type == .openShopping)
+
+print("DETECTED_ITEMS")
+guard case .detectedItems(let detected) = card(detectedJSON) else {
+    print("  BŁĄD  karta rozpoznanych nie zdekodowała się"); exit(1)
+}
+check("pewne przed niepewnymi", detected.items.map(\.sure) == [true, true, false])
+check("tytuł mówi, ile jest niepewne", detected.title.contains("niepewny"))
+check("da się poprawić listę", detected.actions.first?.type == .ask)
+check("rozpoznanie nic nie zapisuje", card(detectedJSON).state == nil)
 
 print("CLARIFY")
 guard case .clarify(let clarify) = card(clarifyJSON) else {
