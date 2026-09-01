@@ -29,6 +29,9 @@ struct AgentCardActionDTO: Decodable, Equatable, Identifiable {
         case apply = "APPLY"
         case undo = "UNDO"
         case openPlan = "OPEN_PLAN"
+        /// Wysyła gotowe zdanie jako zwykłą wiadomość. Nie zmienia niczego —
+        /// stąd brak `proposalId` i brak stanu do sprawdzenia.
+        case ask = "ASK"
     }
 
     let type: Kind
@@ -36,8 +39,10 @@ struct AgentCardActionDTO: Decodable, Equatable, Identifiable {
     let label: String
     /// `PRIMARY` | `SECONDARY` — o wyglądzie decyduje klient.
     let style: String
+    /// Wyłącznie dla `ASK`: treść wiadomości do wysłania.
+    let prompt: String?
 
-    var id: String { "\(type.rawValue)-\(proposalId ?? "none")" }
+    var id: String { "\(type.rawValue)-\(proposalId ?? label)" }
     var isPrimary: Bool { style == "PRIMARY" }
 }
 
@@ -79,11 +84,17 @@ struct PlanWeekCardDayDTO: Decodable, Equatable, Identifiable {
     let dayOfWeek: String
     /// „Poniedziałek".
     let dayLabel: String
+    /// „Pon" — siedem dni musi zmieścić się w karcie bez przewijania.
+    /// Opcjonalne, bo starszy serwer tego pola nie oddaje.
+    let dayShort: String?
     let date: String
+    /// „1.09".
+    let dateLabel: String?
     let slots: [PlanWeekCardSlotDTO]
     let kcalTotal: Int
 
     var id: String { date }
+    var shortName: String { dayShort ?? dayLabel }
 }
 
 struct PlanWeekCardRemovalDTO: Decodable, Equatable, Identifiable {
@@ -102,6 +113,8 @@ struct PlanWeekCardSummaryDTO: Decodable, Equatable {
     let averageKcalPerDay: Int
     /// Cel pytającego; `nil`, gdy nie ma go w preferencjach.
     let targetKcalPerDay: Int?
+    /// „300 kcal poniżej celu" — sam pasek mówi „ile", ale nie „ile brakuje".
+    let goalNote: String?
 }
 
 /// Propozycja tygodnia — to, co użytkownik zatwierdza jednym kliknięciem.
@@ -109,6 +122,8 @@ struct PlanWeekCardDTO: Decodable, Equatable {
     let v: Int
     let proposalId: String
     let weekStart: String
+    /// „Propozycja planu · 1–7 września" — nadtytuł gotowy do pokazania.
+    let eyebrow: String?
     let title: String
     /// Jedno zdanie modelu „dlaczego tak"; `nil`, gdy nic nie dopisał.
     let subtitle: String?
@@ -120,6 +135,42 @@ struct PlanWeekCardDTO: Decodable, Equatable {
     /// `var`, bo po zatwierdzeniu poprawiamy stan karty NA MIEJSCU — patrz
     /// `AgentCardDTO.withState`.
     var state: AgentCardStateDTO
+}
+
+struct PlanDayCardSummaryDTO: Decodable, Equatable {
+    let meals: Int
+    let kcalTotal: Int
+    let targetKcalPerDay: Int?
+    /// „zostaje 228" — ile jeszcze wchodzi w cel.
+    let goalNote: String?
+}
+
+/// Propozycja JEDNEGO dnia — posiłek po posiłku, z sumą wobec celu.
+struct PlanDayCardDTO: Decodable, Equatable {
+    let v: Int
+    let proposalId: String
+    let weekStart: String
+    let date: String
+    let eyebrow: String?
+    let title: String
+    let subtitle: String?
+    let slots: [PlanWeekCardSlotDTO]
+    let removed: [PlanWeekCardRemovalDTO]
+    let summary: PlanDayCardSummaryDTO
+    let actions: [AgentCardActionDTO]
+    var state: AgentCardStateDTO
+}
+
+/// Pytanie asystenta z gotowymi odpowiedziami.
+///
+/// Nie ma tu stanu ani propozycji — to jest wiadomość, która ZATRZYMUJE
+/// zgadywanie. Odpowiedzi wysyłają się jak zwykłe wiadomości, więc w historii
+/// zostaje to, co użytkownik „powiedział".
+struct ClarifyCardDTO: Decodable, Equatable {
+    let v: Int
+    let question: String
+    let hint: String?
+    let actions: [AgentCardActionDTO]
 }
 
 struct AppliedCardSummaryDTO: Decodable, Equatable {
@@ -136,6 +187,8 @@ struct AppliedCardDTO: Decodable, Equatable {
     let proposalId: String
     let weekStart: String
     let title: String
+    /// „2 nowe pozycje, 1 usunięta · 1–7 września".
+    let subtitle: String?
     let summary: AppliedCardSummaryDTO
     /// Czego „Cofnij" NIE przywróci — użytkownik ma to wiedzieć PRZED kliknięciem.
     let notes: [String]
@@ -150,6 +203,8 @@ struct AppliedCardDTO: Decodable, Equatable {
 /// pokaże samo zdanie zamiast wywrócić dekodowanie całej rozmowy.
 enum AgentCardDTO: Decodable, Equatable {
     case planWeek(PlanWeekCardDTO)
+    case planDay(PlanDayCardDTO)
+    case clarify(ClarifyCardDTO)
     case applied(AppliedCardDTO)
     case unknown
 
@@ -171,6 +226,18 @@ enum AgentCardDTO: Decodable, Equatable {
             } else {
                 self = .unknown
             }
+        case "PLAN_DAY":
+            if let card = try? PlanDayCardDTO(from: decoder) {
+                self = .planDay(card)
+            } else {
+                self = .unknown
+            }
+        case "CLARIFY":
+            if let card = try? ClarifyCardDTO(from: decoder) {
+                self = .clarify(card)
+            } else {
+                self = .unknown
+            }
         case "APPLIED":
             if let card = try? AppliedCardDTO(from: decoder) {
                 self = .applied(card)
@@ -187,16 +254,28 @@ enum AgentCardDTO: Decodable, Equatable {
     var proposalId: String? {
         switch self {
         case .planWeek(let card): return card.proposalId
+        case .planDay(let card): return card.proposalId
         case .applied(let card): return card.proposalId
-        case .unknown: return nil
+        case .clarify, .unknown: return nil
         }
+    }
+
+    /// Czy karta ZASTĘPUJE tekst wiadomości, zamiast go uzupełniać.
+    ///
+    /// Prawie zawsze karta jest dodatkiem — model pisze zdanie, karta pokazuje
+    /// liczby. Pytanie jest wyjątkiem: jego treść JEST kartą, więc pokazanie
+    /// obu znaczyłoby to samo pytanie dwa razy pod rząd.
+    var replacesText: Bool {
+        if case .clarify = self { return true }
+        return false
     }
 
     var state: AgentCardStateDTO? {
         switch self {
         case .planWeek(let card): return card.state
+        case .planDay(let card): return card.state
         case .applied(let card): return card.state
-        case .unknown: return nil
+        case .clarify, .unknown: return nil
         }
     }
 
@@ -211,11 +290,14 @@ enum AgentCardDTO: Decodable, Equatable {
         case .planWeek(var card):
             card.state = state
             return .planWeek(card)
+        case .planDay(var card):
+            card.state = state
+            return .planDay(card)
         case .applied(var card):
             card.state = state
             return .applied(card)
-        case .unknown:
-            return .unknown
+        case .clarify, .unknown:
+            return self
         }
     }
 }

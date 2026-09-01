@@ -141,7 +141,8 @@ struct AssistantView: View {
                                 onUndo: { id in
                                     Task { await store.undoProposal(id: id) }
                                 },
-                                onRevise: { revise() }
+                                onRevise: { revise() },
+                                onAsk: { prompt in ask(prompt) }
                             )
                             .id(message.id)
                         }
@@ -591,6 +592,7 @@ private struct MessageBubble: View {
     let onApply: (String) -> Void
     let onUndo: (String) -> Void
     let onRevise: () -> Void
+    let onAsk: (String) -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -659,7 +661,9 @@ private struct MessageBubble: View {
                 AssistantSavedPlanCard(onOpenPlan: onOpenPlan)
             }
 
-            if !message.text.isEmpty {
+            // Karta pytania NIESIE treść wypowiedzi, więc pokazanie obok niej
+            // jeszcze `text` znaczyłoby to samo pytanie dwa razy pod rząd.
+            if !message.text.isEmpty, message.card?.replacesText != true {
                 AssistantAnswer(text: message.text)
             }
 
@@ -682,6 +686,15 @@ private struct MessageBubble: View {
                 onApply: { onApply(planWeek.proposalId) },
                 onRevise: onRevise
             )
+        case .planDay(let planDay):
+            AssistantPlanDayCard(
+                card: planDay,
+                isBusy: isBusy,
+                onApply: { onApply(planDay.proposalId) },
+                onRevise: onRevise
+            )
+        case .clarify(let clarify):
+            AssistantClarifyCard(card: clarify, onAsk: onAsk)
         case .applied(let applied):
             AssistantAppliedCard(
                 card: applied,

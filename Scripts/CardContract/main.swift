@@ -3,9 +3,14 @@ import Foundation
 // Sprawdzian kontraktu: JSON policzony przez SERWER wchodzi w struktury iOS.
 // Cichy rozjazd nazwy pola nie wywala niczego — karta po prostu staje się
 // `.unknown` i znika z ekranu. Ten skrypt zamienia to w twardy błąd.
+//
+// Wzorce pochodzą z `scripts/dump-card-fixtures.ts` w backendzie i są
+// DOSŁOWNĄ odpowiedzią builderów, nie ręcznie pisanym JSON-em.
 
-let planWeekJSON = #"{"kind": "PLAN_WEEK", "v": 1, "proposalId": "55555555-5555-4555-8555-555555555555", "weekStart": "2026-08-31", "title": "Obiad i kolacja na tydzień", "subtitle": "Nic się nie powtarza, a wtorek jest szybki.", "days": [{"dayOfWeek": "MON", "dayLabel": "Poniedziałek", "date": "2026-08-31", "slots": [{"mealType": "LUNCH", "mealLabel": "Obiad", "recipeId": "r-1", "title": "Kurczak z ryżem", "kcalPerServing": 620, "prepTimeMinutes": 30, "participantIds": [], "change": "NEW"}, {"mealType": "DINNER", "mealLabel": "Kolacja", "recipeId": "r-2", "title": "Sałatka z tuńczykiem", "kcalPerServing": 380, "prepTimeMinutes": 12, "participantIds": ["u1"], "change": "KEPT"}], "kcalTotal": 1000}, {"dayOfWeek": "TUE", "dayLabel": "Wtorek", "date": "2026-09-01", "slots": [{"mealType": "DINNER", "mealLabel": "Kolacja", "recipeId": "r-3", "title": "Placki ziemniaczane", "kcalPerServing": 540, "prepTimeMinutes": 40, "participantIds": [], "change": "NEW"}], "kcalTotal": 540}], "removed": [{"dayLabel": "Środa", "mealLabel": "Kolacja", "title": "Zupa pomidorowa"}], "summary": {"meals": 3, "created": 2, "updated": 0, "removed": 1, "averageKcalPerDay": 770, "targetKcalPerDay": 2100}, "actions": [{"type": "APPLY", "proposalId": "55555555-5555-4555-8555-555555555555", "label": "Dodaj do planu", "style": "PRIMARY"}], "state": {"status": "PENDING", "canApply": true, "canUndo": false, "until": "2026-09-03T10:00:00.000Z"}}"#
-let appliedJSON = #"{"kind": "APPLIED", "v": 1, "proposalId": "55555555-5555-4555-8555-555555555555", "weekStart": "2026-08-31", "title": "Zapisano plan na tydzień od 31 sierpnia", "summary": {"created": 2, "updated": 0, "removed": 1}, "notes": ["Cofnięcie przywróci usunięte posiłki, ale nie odhaczenia „zjedzone”."], "actions": [{"type": "UNDO", "proposalId": "55555555-5555-4555-8555-555555555555", "label": "Cofnij", "style": "SECONDARY"}, {"type": "OPEN_PLAN", "proposalId": null, "label": "Otwórz Plan tygodnia", "style": "PRIMARY"}], "state": {"status": "APPLIED", "canApply": false, "canUndo": true, "until": "2026-08-31T11:00:00.000Z"}}"#
+let planWeekJSON = #"{"kind": "PLAN_WEEK", "v": 1, "proposalId": "55555555-5555-4555-8555-555555555555", "weekStart": "2026-08-31", "eyebrow": "Propozycja planu · 31 sierpnia – 6 września", "title": "Obiad i kolacja na tydzień", "subtitle": "Nic się nie powtarza, a wtorek jest szybki.", "days": [{"dayOfWeek": "MON", "dayLabel": "Poniedziałek", "dayShort": "Pon", "date": "2026-08-31", "dateLabel": "31.08", "slots": [{"mealType": "LUNCH", "mealLabel": "Obiad", "recipeId": "r-1", "title": "Kurczak z ryżem", "kcalPerServing": 620, "prepTimeMinutes": 30, "participantIds": [], "change": "NEW"}, {"mealType": "DINNER", "mealLabel": "Kolacja", "recipeId": "r-2", "title": "Sałatka z tuńczykiem", "kcalPerServing": 380, "prepTimeMinutes": 12, "participantIds": ["u1"], "change": "KEPT"}], "kcalTotal": 1000}, {"dayOfWeek": "TUE", "dayLabel": "Wtorek", "dayShort": "Wt", "date": "2026-09-01", "dateLabel": "1.09", "slots": [{"mealType": "DINNER", "mealLabel": "Kolacja", "recipeId": "r-3", "title": "Placki ziemniaczane", "kcalPerServing": 540, "prepTimeMinutes": 40, "participantIds": [], "change": "NEW"}], "kcalTotal": 540}], "removed": [{"dayLabel": "Środa", "mealLabel": "Kolacja", "title": "Zupa pomidorowa"}], "summary": {"meals": 3, "created": 2, "updated": 0, "removed": 1, "averageKcalPerDay": 770, "targetKcalPerDay": 2100, "goalNote": "1330 kcal poniżej celu"}, "actions": [{"type": "APPLY", "proposalId": "55555555-5555-4555-8555-555555555555", "label": "Dodaj do planu", "style": "PRIMARY"}], "state": {"status": "PENDING", "canApply": true, "canUndo": false, "until": "2026-09-03T10:00:00.000Z"}}"#
+let planDayJSON = #"{"kind": "PLAN_DAY", "v": 1, "proposalId": "66666666-6666-4666-8666-666666666666", "weekStart": "2026-08-31", "date": "2026-09-01", "eyebrow": "Propozycja · wtorek 1 września", "title": "Cały dzień pod cel 2100 kcal", "subtitle": "Lekki wieczór po ciężkim obiedzie.", "slots": [{"mealType": "BREAKFAST", "mealLabel": "Śniadanie", "recipeId": "r-4", "title": "Owsianka z bananem", "kcalPerServing": 447, "prepTimeMinutes": 12, "participantIds": [], "change": "NEW"}, {"mealType": "LUNCH", "mealLabel": "Obiad", "recipeId": "r-1", "title": "Kurczak w sosie curry z ryżem", "kcalPerServing": 620, "prepTimeMinutes": 35, "participantIds": [], "change": "KEPT"}, {"mealType": "DINNER", "mealLabel": "Kolacja", "recipeId": "r-5", "title": "Omlet ze szpinakiem i fetą", "kcalPerServing": 393, "prepTimeMinutes": 12, "participantIds": [], "change": "NEW"}], "removed": [{"dayLabel": "Wtorek", "mealLabel": "Kolacja", "title": "Pizza mrożona"}], "summary": {"meals": 3, "kcalTotal": 1460, "targetKcalPerDay": 2100, "goalNote": "zostaje 640"}, "actions": [{"type": "APPLY", "proposalId": "66666666-6666-4666-8666-666666666666", "label": "Zapisz wtorek", "style": "PRIMARY"}], "state": {"status": "PENDING", "canApply": true, "canUndo": false, "until": "2026-09-03T10:00:00.000Z"}}"#
+let clarifyJSON = #"{"kind": "CLARIFY", "v": 1, "question": "Dla ilu osób mam planować ten tydzień?", "hint": "W profilu są cztery osoby, ale wspominałeś o weekendzie we dwoje.", "actions": [{"type": "ASK", "proposalId": null, "label": "Dla czterech", "style": "PRIMARY", "prompt": "Dla czterech"}, {"type": "ASK", "proposalId": null, "label": "Dla dwóch", "style": "SECONDARY", "prompt": "Dla dwóch"}, {"type": "ASK", "proposalId": null, "label": "Inaczej w weekend", "style": "SECONDARY", "prompt": "Inaczej w weekend"}]}"#
+let appliedJSON = #"{"kind": "APPLIED", "v": 1, "proposalId": "55555555-5555-4555-8555-555555555555", "weekStart": "2026-08-31", "title": "Zapisano w planie", "subtitle": "2 nowe pozycje, 1 usunięta · 31 sierpnia – 6 września", "summary": {"created": 2, "updated": 0, "removed": 1}, "notes": ["Cofnięcie przywróci usunięte posiłki, ale nie odhaczenia „zjedzone”."], "actions": [{"type": "UNDO", "proposalId": "55555555-5555-4555-8555-555555555555", "label": "Cofnij", "style": "SECONDARY"}, {"type": "OPEN_PLAN", "proposalId": null, "label": "Otwórz Plan tygodnia", "style": "PRIMARY"}], "state": {"status": "APPLIED", "canApply": false, "canUndo": true, "until": "2026-08-31T11:00:00.000Z"}}"#
 let unknownJSON = #"{"kind":"MACRO_GAP","v":1,"cokolwiek":true}"#
 let brokenJSON = #"{"kind":"PLAN_WEEK","v":1}"#
 
@@ -15,42 +20,71 @@ func check(_ label: String, _ condition: Bool) {
 }
 
 let decoder = JSONDecoder()
-
-let plan = try decoder.decode(AgentCardDTO.self, from: Data(planWeekJSON.utf8))
-guard case .planWeek(let week) = plan else {
-    print("  BŁĄD  karta propozycji nie zdekodowała się"); exit(1)
+func card(_ json: String) -> AgentCardDTO {
+    // swiftlint:disable:next force_try
+    try! decoder.decode(AgentCardDTO.self, from: Data(json.utf8))
 }
+
+print("PLAN_WEEK")
+guard case .planWeek(let week) = card(planWeekJSON) else {
+    print("  BŁĄD  karta propozycji tygodnia nie zdekodowała się"); exit(1)
+}
+check("nadtytuł z serwera", week.eyebrow?.hasPrefix("Propozycja planu · ") == true)
 check("tytuł liczy serwer", week.title == "Obiad i kolacja na tydzień")
 check("dni w kolejności tygodnia", week.days.map(\.dayLabel) == ["Poniedziałek", "Wtorek"])
+check("skrót dnia i krótka data", week.days[0].shortName == "Pon" && week.days[0].dateLabel == "31.08")
 check("etykiety posiłków przychodzą gotowe", week.days[0].slots.map(\.mealLabel) == ["Obiad", "Kolacja"])
 check("kalorie dnia policzone", week.days[0].kcalTotal == 1000)
 check("zmiana odróżniona od tego, co zostaje", week.days[0].slots[0].isNew && !week.days[0].slots[1].isNew)
 check("co zniknie z planu", week.removed.first?.title == "Zupa pomidorowa")
 check("cel z preferencji domownika", week.summary.targetKcalPerDay == 2100)
-check("średnia dzienna", week.summary.averageKcalPerDay > 0)
+check("zdanie o celu, nie sama liczba", week.summary.goalNote?.isEmpty == false)
 check("przycisk zatwierdzenia", week.actions.contains { $0.type == .apply })
 check("stan pozwala kliknąć", week.state.canApply && !week.state.canUndo)
 check("akcja niesie id propozycji", week.actions.first { $0.type == .apply }?.proposalId == week.proposalId)
 
-let done = try decoder.decode(AgentCardDTO.self, from: Data(appliedJSON.utf8))
-guard case .applied(let applied) = done else {
+print("PLAN_DAY")
+guard case .planDay(let day) = card(planDayJSON) else {
+    print("  BŁĄD  karta dnia nie zdekodowała się"); exit(1)
+}
+check("wyłącznie ten dzień", day.slots.count == 3)
+check("posiłki w porządku dnia", day.slots.map(\.mealLabel) == ["Śniadanie", "Obiad", "Kolacja"])
+check("suma dnia", day.summary.kcalTotal == 1460)
+check("ile jeszcze wchodzi w cel", day.summary.goalNote == "zostaje 640")
+check("usunięcia tylko z tego dnia", day.removed.count == 1)
+check("przycisk nazywa dzień", day.actions.first { $0.type == .apply }?.label == "Zapisz wtorek")
+
+print("CLARIFY")
+guard case .clarify(let clarify) = card(clarifyJSON) else {
+    print("  BŁĄD  karta pytania nie zdekodowała się"); exit(1)
+}
+check("pytanie i powód", !clarify.question.isEmpty && clarify.hint?.isEmpty == false)
+check("odpowiedzi to zwykłe wiadomości", clarify.actions.allSatisfy { $0.type == .ask })
+check("każda odpowiedź niesie treść do wysłania", clarify.actions.allSatisfy { ($0.prompt ?? "").isEmpty == false })
+check("pierwsza odpowiedź wyróżniona", clarify.actions.first?.isPrimary == true)
+check("pytanie ZASTĘPUJE tekst wiadomości", card(clarifyJSON).replacesText)
+check("propozycja NIE zastępuje tekstu", !card(planWeekJSON).replacesText)
+
+print("APPLIED")
+guard case .applied(let applied) = card(appliedJSON) else {
     print("  BŁĄD  karta potwierdzenia nie zdekodowała się"); exit(1)
 }
+check("podtytuł mówi, co się stało", applied.subtitle?.contains("nowe pozycje") == true)
 check("„Cofnij” jest w wiadomości, nie w toaście", applied.actions.contains { $0.type == .undo })
 check("skrót do planu tygodnia", applied.actions.contains { $0.type == .openPlan })
 check("ostrzeżenie o odhaczonych posiłkach", applied.notes.contains { $0.contains("zjedzone") })
 check("stan pozwala cofnąć", applied.state.canUndo && !applied.state.canApply)
 
-let unknown = try decoder.decode(AgentCardDTO.self, from: Data(unknownJSON.utf8))
-check("nieznany rodzaj karty NIE wywraca rozmowy", unknown == .unknown)
-let broken = try decoder.decode(AgentCardDTO.self, from: Data(brokenJSON.utf8))
-check("kaleka karta NIE wywraca rozmowy", broken == .unknown)
+print("zgodność wstecz")
+check("nieznany rodzaj karty NIE wywraca rozmowy", card(unknownJSON) == .unknown)
+check("kaleka karta NIE wywraca rozmowy", card(brokenJSON) == .unknown)
 
 let after = AgentCardStateDTO(status: "APPLIED", canApply: false, canUndo: true, until: nil)
-let patched = plan.withState(after)
-check("po zapisie karta propozycji gaśnie", patched.state?.canApply == false)
+check("po zapisie karta propozycji gaśnie", card(planWeekJSON).withState(after).state?.canApply == false)
+check("to samo dla karty dnia", card(planDayJSON).withState(after).state?.canApply == false)
+check("pytanie nie ma stanu i nie udaje, że ma", card(clarifyJSON).withState(after).state == nil)
 check("podmiana stanu nie gubi treści", {
-    if case .planWeek(let card) = patched { return card.days.count == 2 }
+    if case .planWeek(let c) = card(planWeekJSON).withState(after) { return c.days.count == 2 }
     return false
 }())
 
