@@ -693,6 +693,15 @@ private struct MessageBubble: View {
                 onApply: { onApply(planDay.proposalId) },
                 onRevise: onRevise
             )
+        case .options(let options):
+            AssistantOptionsCard(card: options, onAsk: onAsk)
+        case .swap(let swap):
+            AssistantSwapCard(
+                card: swap,
+                isBusy: isBusy,
+                onApply: { onApply(swap.proposalId) },
+                onRevise: onRevise
+            )
         case .clarify(let clarify):
             AssistantClarifyCard(card: clarify, onAsk: onAsk)
         case .applied(let applied):

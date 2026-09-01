@@ -812,3 +812,270 @@ struct AssistantAppliedCard: View {
         card.actions.first { $0.type == .openPlan }?.label ?? "Otwórz Plan tygodnia"
     }
 }
+
+// MARK: - Dania do wyboru
+
+/// Kilka dań jako kafelki — pytanie zadane obrazkami.
+///
+/// Karuzela, a nie lista: wybór z trzech zdjęć trwa sekundę, a ta sama treść
+/// w pionie zajmuje pół ekranu i zmusza do czytania. Karta nie ma stanu —
+/// dotknięcie wysyła wiadomość, a nie zapisuje plan.
+struct AssistantOptionsCard: View {
+    let card: OptionsCardDTO
+    let onAsk: (String) -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(card.eyebrow)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(WMPalette.terracotta)
+
+                Text(card.title)
+                    .font(.system(size: 17, weight: .bold))
+                    .tracking(-0.35)
+                    .foregroundStyle(Color.wmLabel(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(card.options) { option in
+                        OptionTile(option: option) { onAsk(option.prompt) }
+                    }
+                }
+                // Karuzela sięga poza margines rozmowy, żeby ostatni kafelek
+                // był ucięty krawędzią ekranu — to jedyny sygnał, że da się
+                // przewinąć, jaki działa bez paska przewijania.
+                .padding(.horizontal, 2)
+            }
+            .scrollClipDisabled()
+
+            if !card.actions.isEmpty {
+                AssistantAnswerChips(actions: card.actions, onAsk: onAsk)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private struct OptionTile: View {
+        let option: OptionsCardItemDTO
+        let onTap: () -> Void
+
+        @Environment(\.colorScheme) private var scheme
+
+        var body: some View {
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 0) {
+                    cover
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(option.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .tracking(-0.2)
+                            .foregroundStyle(Color.wmLabel(scheme))
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                            .frame(height: 34, alignment: .top)
+
+                        HStack(spacing: 8) {
+                            Label {
+                                Text("\(option.kcalPerServing)")
+                                    .monospacedDigit()
+                            } icon: {
+                                Image(systemName: "flame")
+                                    .foregroundStyle(WMPalette.terracotta)
+                            }
+
+                            if option.prepTimeMinutes > 0 {
+                                Label {
+                                    Text("\(option.prepTimeMinutes)′")
+                                        .monospacedDigit()
+                                } icon: {
+                                    Image(systemName: "clock")
+                                        .foregroundStyle(Color.wmMuted(scheme))
+                                }
+                            }
+                        }
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.wmMuted(scheme))
+
+                        if let tag = option.tag, !tag.isEmpty {
+                            Text(tag)
+                                .font(.system(size: 10.5, weight: .bold))
+                                .foregroundStyle(WMPalette.sage)
+                                .padding(.horizontal, 8)
+                                .frame(height: 22)
+                                .background(Capsule().fill(Color.wmSageTint(scheme)))
+                        }
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.top, 9)
+                    .padding(.bottom, 11)
+                }
+                .frame(width: 152, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.wmCardSurface(scheme))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.wmCardStroke(scheme), lineWidth: 1.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+
+        @ViewBuilder
+        private var cover: some View {
+            let url = option.imageUrl.flatMap(URL.init(string:))
+            CachedAsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    // Bez zdjęcia kafelek nie zapada się do samego tekstu:
+                    // wysokość zostaje, żeby karuzela nie skakała w pionie.
+                    ZStack {
+                        Color.wmInsetSurface(scheme)
+                        Image(systemName: "fork.knife")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Color.wmFaint(scheme))
+                    }
+                }
+            }
+            .frame(width: 152, height: 92)
+            .clipped()
+        }
+    }
+}
+
+// MARK: - Podmiana
+
+/// Co znika i co wchodzi — z różnicą, dla której o podmianę poproszono.
+struct AssistantSwapCard: View {
+    let card: SwapCardDTO
+    let isBusy: Bool
+    let onApply: () -> Void
+    let onRevise: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        AssistantCard(tone: .neutral) {
+            AssistantCardHead(eyebrow: card.eyebrow, title: card.title) {
+                EmptyView()
+            }
+
+            VStack(spacing: 0) {
+                if let from = card.from {
+                    SideRow(side: from, isOutgoing: true)
+                }
+                SideRow(side: card.to, isOutgoing: false)
+            }
+            .padding(.horizontal, 16)
+
+            if !card.deltas.isEmpty {
+                deltas
+            }
+
+            footer
+        }
+    }
+
+    private var deltas: some View {
+        AllergenChipFlow(spacing: 6) {
+            ForEach(card.deltas) { delta in
+                HStack(spacing: 5) {
+                    Text(delta.value)
+                        .font(.system(size: 12, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(delta.good ? WMPalette.sage : Color.wmMuted(scheme))
+                    Text(delta.label)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(
+                            delta.good ? WMPalette.sage.opacity(0.8) : Color.wmFaint(scheme)
+                        )
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(
+                    Capsule().fill(
+                        delta.good ? Color.wmSageTint(scheme) : Color.wmChipBg(scheme)
+                    )
+                )
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        if card.state.canApply {
+            AssistantCardActions(
+                primaryTitle: applyLabel,
+                primaryIcon: "arrow.triangle.2.circlepath",
+                isBusy: isBusy,
+                secondaryTitle: "Inne",
+                secondaryIcon: "ellipsis",
+                onSecondary: onRevise,
+                onPrimary: onApply
+            )
+        } else {
+            AssistantCardStatusFooter(state: card.state)
+        }
+    }
+
+    private var applyLabel: String {
+        card.actions.first { $0.type == .apply }?.label ?? "Podmień"
+    }
+
+    /// Wiersz jednej strony podmiany. To, co znika, jest przekreślone
+    /// i wyszarzone — inaczej obie linie wyglądają jak dwa dania do wyboru.
+    private struct SideRow: View {
+        let side: SwapCardSideDTO
+        let isOutgoing: Bool
+
+        @Environment(\.colorScheme) private var scheme
+
+        var body: some View {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: isOutgoing ? "xmark" : "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(isOutgoing ? Color.wmFaint(scheme) : WMPalette.sage)
+                    .frame(width: 16)
+
+                Text(side.title)
+                    .font(.system(size: 14, weight: isOutgoing ? .regular : .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(isOutgoing ? Color.wmFaint(scheme) : Color.wmLabel(scheme))
+                    .strikethrough(isOutgoing, color: Color.wmStrike(scheme))
+                    .lineLimit(2)
+
+                Spacer(minLength: 8)
+
+                Text(detail)
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(isOutgoing ? Color.wmFaint(scheme) : Color.wmLabel(scheme))
+            }
+            .padding(.vertical, 10)
+            .overlay(alignment: .top) {
+                Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            }
+        }
+
+        private var detail: String {
+            side.prepTimeMinutes > 0
+                ? "\(side.kcalPerServing) · \(side.prepTimeMinutes)′"
+                : "\(side.kcalPerServing)"
+        }
+    }
+}

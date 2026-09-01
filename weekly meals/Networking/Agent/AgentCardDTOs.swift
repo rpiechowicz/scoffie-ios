@@ -173,6 +173,68 @@ struct ClarifyCardDTO: Decodable, Equatable {
     let actions: [AgentCardActionDTO]
 }
 
+/// Jedna pozycja karuzeli wyboru.
+struct OptionsCardItemDTO: Decodable, Equatable, Identifiable {
+    let recipeId: String
+    let title: String
+    let kcalPerServing: Int
+    let prepTimeMinutes: Int
+    /// Zdjęcie z katalogu; `nil`, gdy przepis go nie ma.
+    let imageUrl: String?
+    /// „Najszybsze" — jedno słowo, czym to danie się wyróżnia.
+    let tag: String?
+    /// Gotowe zdanie do wysłania po dotknięciu.
+    let prompt: String
+
+    var id: String { recipeId }
+}
+
+/// Kilka dań do wyboru — pytanie zadane obrazkami.
+///
+/// Bez propozycji i bez stanu: dotknięcie wysyła wiadomość, a dopiero
+/// odpowiedź modelu kończy się czymś, co da się zatwierdzić.
+struct OptionsCardDTO: Decodable, Equatable {
+    let v: Int
+    let eyebrow: String
+    let title: String
+    let options: [OptionsCardItemDTO]
+    let actions: [AgentCardActionDTO]
+}
+
+/// Danie po jednej stronie podmiany.
+struct SwapCardSideDTO: Decodable, Equatable {
+    let recipeId: String
+    let title: String
+    let kcalPerServing: Int
+    let prepTimeMinutes: Int
+}
+
+/// Różnica warta pokazania: „−18 min", „−230 kcal".
+struct SwapCardDeltaDTO: Decodable, Equatable, Identifiable {
+    let value: String
+    let label: String
+    /// Czy ta zmiana idzie w stronę, o którą prosił użytkownik.
+    let good: Bool
+
+    var id: String { "\(value)-\(label)" }
+}
+
+/// Podmiana jednego dania: PRZED i PO w jednej ramce.
+struct SwapCardDTO: Decodable, Equatable {
+    let v: Int
+    let proposalId: String
+    let weekStart: String
+    let date: String
+    let eyebrow: String
+    let title: String
+    /// `nil`, gdy slot był pusty — wtedy to nie podmiana, tylko dołożenie.
+    let from: SwapCardSideDTO?
+    let to: SwapCardSideDTO
+    let deltas: [SwapCardDeltaDTO]
+    let actions: [AgentCardActionDTO]
+    var state: AgentCardStateDTO
+}
+
 struct AppliedCardSummaryDTO: Decodable, Equatable {
     let created: Int
     let updated: Int
@@ -204,6 +266,8 @@ struct AppliedCardDTO: Decodable, Equatable {
 enum AgentCardDTO: Decodable, Equatable {
     case planWeek(PlanWeekCardDTO)
     case planDay(PlanDayCardDTO)
+    case options(OptionsCardDTO)
+    case swap(SwapCardDTO)
     case clarify(ClarifyCardDTO)
     case applied(AppliedCardDTO)
     case unknown
@@ -232,6 +296,18 @@ enum AgentCardDTO: Decodable, Equatable {
             } else {
                 self = .unknown
             }
+        case "OPTIONS":
+            if let card = try? OptionsCardDTO(from: decoder) {
+                self = .options(card)
+            } else {
+                self = .unknown
+            }
+        case "SWAP":
+            if let card = try? SwapCardDTO(from: decoder) {
+                self = .swap(card)
+            } else {
+                self = .unknown
+            }
         case "CLARIFY":
             if let card = try? ClarifyCardDTO(from: decoder) {
                 self = .clarify(card)
@@ -255,8 +331,9 @@ enum AgentCardDTO: Decodable, Equatable {
         switch self {
         case .planWeek(let card): return card.proposalId
         case .planDay(let card): return card.proposalId
+        case .swap(let card): return card.proposalId
         case .applied(let card): return card.proposalId
-        case .clarify, .unknown: return nil
+        case .options, .clarify, .unknown: return nil
         }
     }
 
@@ -274,8 +351,9 @@ enum AgentCardDTO: Decodable, Equatable {
         switch self {
         case .planWeek(let card): return card.state
         case .planDay(let card): return card.state
+        case .swap(let card): return card.state
         case .applied(let card): return card.state
-        case .clarify, .unknown: return nil
+        case .options, .clarify, .unknown: return nil
         }
     }
 
@@ -293,10 +371,13 @@ enum AgentCardDTO: Decodable, Equatable {
         case .planDay(var card):
             card.state = state
             return .planDay(card)
+        case .swap(var card):
+            card.state = state
+            return .swap(card)
         case .applied(var card):
             card.state = state
             return .applied(card)
-        case .clarify, .unknown:
+        case .options, .clarify, .unknown:
             return self
         }
     }
