@@ -42,6 +42,7 @@ struct AssistantView: View {
     /// Kogo dotyczy pytanie; puste = całe gospodarstwo.
     @State private var scopeUserIds: Set<String> = []
     @State private var showsScopeSheet = false
+    @State private var showsRecipePicker = false
     @State private var showDeleteAlert = false
     @State private var showConversations = false
     @State private var showMemory = false
@@ -89,6 +90,15 @@ struct AssistantView: View {
             Button("Co asystent pamięta") { showMemory = true }
             Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
             Button("Anuluj", role: .cancel) {}
+        }
+        .sheet(isPresented: $showsRecipePicker) {
+            AssistantRecipePicker(recipes: recipeCatalogStore.recipes) { recipe in
+                // Wklejamy do pola, a nie wysyłamy: użytkownik ma jeszcze
+                // dopisać, o co właściwie pyta.
+                let reference = "Chodzi mi o przepis „\(recipe.name)”. "
+                draft = draft.isEmpty ? reference : draft + " " + reference
+                isComposerFocused = true
+            }
         }
         .sheet(isPresented: $showsScopeSheet) {
             AssistantScopeSheet(
@@ -536,6 +546,11 @@ struct AssistantView: View {
                 showsPhotoLibrary = true
             } label: {
                 Label("Wybierz z galerii", systemImage: "photo.on.rectangle")
+            }
+            Button {
+                showsRecipePicker = true
+            } label: {
+                Label("Wskaż przepis", systemImage: "book")
             }
         } label: {
             Image(systemName: "plus")
