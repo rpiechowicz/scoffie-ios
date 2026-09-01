@@ -11,7 +11,15 @@ struct MenuConstans {
 
     struct Plan: MenuModel {
         static let name: String = "Plan"
-        static let icon: String = "calendar.badge.clock"
+        /// Paragon — sylwetka spoza rodziny „kartka z liniami".
+        ///
+        /// Pasek ma trzy sąsiadujące zakładki o treści prostokąta:
+        /// `book.pages` (Przepisy) i `calendar` (Kalendarz). Przy 24 pt
+        /// zostaje z nich sama sylwetka, więc kolejna kartka tylko przesuwa
+        /// kolizję o jedną zakładkę dalej. Paragon ma postrzępiony dół —
+        /// to jedyny szczegół, który przy tym rozmiarze przeżywa i od razu
+        /// odróżnia go od książki i od siatki kalendarza.
+        static let icon: String = "receipt"
     }
     
     /// Produkty NIE są już zakładką — wpis zostaje, bo z tej samej nazwy

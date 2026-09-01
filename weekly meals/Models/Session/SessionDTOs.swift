@@ -203,10 +203,52 @@ struct BackendHouseholdMemberDTO: Decodable {
     let user: UserDTO
 }
 
+/// Cele i ograniczenia domownika — odpowiedź `households:memberPreferences`.
+///
+/// `BackendHouseholdMemberDTO` niesie tożsamość (imię, awatar, rola), a to
+/// niesie to, czym asystent liczy: cel kaloryczny, makro, dietę i alergeny
+/// KAŻDEGO domownika. Serwer oddaje ten sam kształt, którym karmi model
+/// (`get_household_context`), więc karta „Co wiem o Was” pokazuje dokładnie
+/// tę wiedzę, na której asystent pracuje — nie jej klienckie przybliżenie.
+///
+/// Dekodujemy pobłażliwie: pola sylwetki i makra bywają puste dla kont, które
+/// nigdy nie tknęły ustawień, a brak jednego domownika nie może położyć karty.
+struct BackendMemberContextDTO: Decodable, Identifiable, Equatable {
+    struct Targets: Decodable, Equatable {
+        struct Macros: Decodable, Equatable {
+            let proteinG: Int?
+            let fatG: Int?
+            let carbsG: Int?
+        }
+
+        let calorieGoal: Int?
+        let macros: Macros?
+    }
+
+    let userId: String
+    let displayName: String
+    let dietPreference: String?
+    let allergens: [String]?
+    let targets: Targets?
+
+    var id: String { userId }
+}
+
 struct HouseholdMembersCachePayload: Codable {
     let householdId: String
     let members: [HouseholdMemberSnapshot]
     let savedAt: Date
+}
+
+/// Jeden wynik `ingredients:search`.
+///
+/// Serwer oddaje więcej pól (alergeny, jednostki, makra); klient bierze to,
+/// czego potrzebuje lista wyboru — resztę pomija, bo `Decodable` ignoruje
+/// nieznane klucze.
+struct BackendIngredientHitDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let name: String
+    let category: String
 }
 
 // MARK: - User preferences DTO
@@ -225,6 +267,11 @@ struct BackendUserPreferencesDTO: Decodable {
     let proteinG: Int?
     let fatG: Int?
     let carbsG: Int?
+    /// Czego ten domownik nie je, choć nie jest to alergia. `nil` = backend
+    /// sprzed tej zmiany; wtedy nie ruszamy lokalnej listy.
+    let excludedIngredientIds: [String]?
+    /// Ile minut najwyżej ma zajmować gotowanie; `nil` = bez ograniczenia.
+    let maxPrepTimeMinutes: Int?
     /// Kanały powiadomień push. `nil` = backend sprzed tej zmiany; wtedy
     /// zostawiamy lokalne ustawienia w spokoju i wyślemy je przy najbliższym
     /// zapisie.

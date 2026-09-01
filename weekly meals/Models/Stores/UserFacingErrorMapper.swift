@@ -61,6 +61,20 @@ enum UserFacingErrorMapper {
             return copy
         }
 
+        // Błędy transportu NIE mają kodu, a `BackendAPIError` nie jest
+        // `LocalizedError` — bez tych dwóch przypadków użytkownik dostawał
+        // „The operation couldn't be completed. (weekly_meals.BackendAPIError
+        // error 2.)". Cookidoo miało własny switch i dlatego to nie wyszło
+        // wcześniej; asystent jest pierwszym ekranem, który idzie tędy wprost.
+        switch error {
+        case BackendAPIError.network:
+            return "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie."
+        case BackendAPIError.notAuthenticated:
+            return copyByCode["UNAUTHORIZED"]!
+        default:
+            break
+        }
+
         let baseMessage = extractMessage(from: error).trimmingCharacters(in: .whitespacesAndNewlines)
         if baseMessage.isEmpty {
             return "Wystąpił nieoczekiwany błąd. Spróbuj ponownie."
@@ -173,8 +187,16 @@ enum UserFacingErrorMapper {
         "AI_TURN_IN_PROGRESS": "Poprzednia wiadomość jest jeszcze przetwarzana.",
         "AI_CONVERSATION_NOT_FOUND": "Tej rozmowy już nie ma.",
         "AI_TURN_NOT_FOUND": "Tej odpowiedzi już nie ma.",
+        "AI_MESSAGE_NOT_FOUND": "Tej wiadomości już nie ma — odśwież rozmowę.",
         "AI_TIMEOUT": "Asystent nie zdążył odpowiedzieć. Spróbuj jeszcze raz.",
         "AI_PROVIDER_ERROR": "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.",
+        // Propozycje: użytkownik klika przycisk W KARCIE, więc kopia mówi
+        // o karcie, a nie o „żądaniu". Każda z tych trzech kończy się tak
+        // samo — poproś asystenta o nową propozycję — ale POWÓD jest inny
+        // i tylko on pozwala zrozumieć, czemu przycisk nagle nie działa.
+        "AI_PROPOSAL_NOT_FOUND": "Tej propozycji już nie ma.",
+        "AI_PROPOSAL_STALE": "Plan tygodnia zmienił się od czasu tej propozycji. Poproś asystenta o nową.",
+        "AI_PROPOSAL_EXPIRED": "Ta propozycja jest już nieaktualna. Poproś asystenta o nową.",
         // Cookidoo
         "COOKIDOO_NOT_CONNECTED": "Gospodarstwo nie ma połączonego konta Cookidoo. Połącz je w Ustawieniach.",
         "COOKIDOO_AUTH_FAILED": "Połączenie z Cookidoo wygasło. Zaloguj się ponownie w Ustawieniach.",

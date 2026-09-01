@@ -104,6 +104,11 @@ final class SessionStore {
     /// żeby Settings / Household sheet otwierało się z gotowymi danymi.
     var householdMembers: [HouseholdMemberSnapshot] = []
     var isLoadingHouseholdMembers: Bool = false
+    /// Cele i ograniczenia domowników — patrz `refreshMemberContext()`.
+    /// Puste, dopóki ktoś o nie nie poprosi; dziś pyta tylko asystent.
+    var memberContext: [BackendMemberContextDTO] = []
+    private var isLoadingMemberContext: Bool = false
+    private var memberContextLoadedAt: Date?
     private(set) var didLoadHouseholdMembers: Bool = false
     /// Kiedy skład gospodarstwa przyszedł z SERWERA (nie z pliku cache).
     ///
@@ -136,6 +141,16 @@ final class SessionStore {
     /// asystenta, obejrzeć plan i wrócić po odpowiedź.
     var agentStore: AgentStore?
     var datesViewModel = DatesViewModel()
+    /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
+    /// też asystent — skrót „Otwórz" po zapisaniu planu.
+    var dashboardTab: DashboardTab = .calendar
+    /// Prośba asystenta o otwarcie listy zakupów.
+    ///
+    /// Lista jest arkuszem WEWNĄTRZ Planu, więc samo przełączenie zakładki
+    /// zostawiłoby użytkownika o jedno dotknięcie od tego, co obiecał
+    /// przycisk. Flagę zdejmuje ekran, który ją obsłużył — inaczej arkusz
+    /// otwierałby się przy każdym powrocie na Plan.
+    var opensShoppingList = false
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
     private let appleSignInCoordinator = AppleSignInCoordinator()
@@ -1632,6 +1647,11 @@ final class SessionStore {
         defaults.removeObject(forKey: Keys.displayName)
         defaults.removeObject(forKey: Keys.email)
         defaults.removeObject(forKey: Keys.onboardingCompletedAt)
+        // Przewodnik „Poznaj aplikację" należy do konta, nie do telefonu:
+        // bez tej linii kolejna osoba logująca się na tym urządzeniu
+        // wpadałaby prosto w pytania o wzrost i alergeny, bo flaga
+        // z poprzedniej sesji nadal leżałaby w `UserDefaults`.
+        defaults.removeObject(forKey: TourCompletion.storageKey)
         clearPersistedProfileFields()
         clearPersistedPreferences()
         clearPersistedHealthIntegration()
@@ -1664,6 +1684,13 @@ final class SessionStore {
         defaults.removeObject(forKey: PreferencesKeys.proteinG)
         defaults.removeObject(forKey: PreferencesKeys.fatG)
         defaults.removeObject(forKey: PreferencesKeys.carbsG)
+        // Posiłki i ich pory należą do GOSPODARSTWA, nie do telefonu.
+        // Zostawione, wchodziły kolejnej osobie logującej się na tym
+        // urządzeniu jako jej własne — a od kroku „Ile posiłków jecie?"
+        // w kreatorze widać to wprost: podwieczorek zaznaczony przez
+        // poprzedni dom czekałby już odhaczony.
+        defaults.removeObject(forKey: MealSlotConfiguration.Keys.enabledSlots)
+        defaults.removeObject(forKey: MealSlotSchedule.Keys.times)
     }
 
     private func restoredSessionSnapshot() -> PersistedSessionSnapshot? {
@@ -1853,6 +1880,77 @@ final class SessionStore {
         await task.value
     }
 
+    /// Cele i ograniczenia WSZYSTKICH domowników — pod kartę „Co wiem o Was”
+    /// na zakładce asystenta.
+    ///
+    /// `householdMembers` mówi, KTO jest w domu; to mówi, CZEGO każdy z nich
+    /// potrzebuje. Serwer ma te dane od zawsze (`households:memberPreferences`,
+    /// ten sam kształt, którym karmiony jest model), tylko klient nigdy o nie
+    /// nie zapytał — a bez nich asystent obiecuje wiedzę, której nie widać.
+    /// Odczyt jest tani i cichy: błąd zostawia poprzednią zawartość i nie
+    /// zapala `authError`, bo to karta poboczna, nie ścieżka krytyczna.
+    func refreshMemberContext(force: Bool = false) async {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else {
+            memberContext = []
+            return
+        }
+        if isLoadingMemberContext { return }
+        if !force, !memberContext.isEmpty,
+           let loadedAt = memberContextLoadedAt,
+           Date().timeIntervalSince(loadedAt) < householdMembersFreshness {
+            return
+        }
+
+        isLoadingMemberContext = true
+        defer { isLoadingMemberContext = false }
+
+        do {
+            let socketClient = sessionSocket()
+            let envelope: WsEnvelope<[BackendMemberContextDTO]> = try await socketClient.emitWithAck(
+                event: "households:memberPreferences",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId
+                ],
+                as: WsEnvelope<[BackendMemberContextDTO]>.self
+            )
+            guard envelope.ok, let data = envelope.data else { return }
+            memberContext = data
+            memberContextLoadedAt = Date()
+        } catch {
+            // Cicho: karta pokaże to, co już ma, albo nic.
+        }
+    }
+
+    /// Wyszukiwarka składników — ta sama, z której korzysta asystent.
+    ///
+    /// Handler `ingredients:search` istniał na serwerze od Fazy 1, ale żaden
+    /// ekran go nie wołał: składniki wybierał wyłącznie model. Ekran „czego
+    /// nie jem" potrzebuje dokładnie tego samego, bo wykluczenia trzymamy
+    /// jako IDENTYFIKATORY — wpisana z ręki nazwa nie miałaby jak trafić
+    /// w skład przepisu.
+    func searchIngredients(query: String, limit: Int = 20) async -> [BackendIngredientHitDTO] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+        do {
+            let socketClient = sessionSocket()
+            let envelope: WsEnvelope<[BackendIngredientHitDTO]> = try await socketClient.emitWithAck(
+                event: "ingredients:search",
+                payload: [
+                    "userId": userId,
+                    "filters": ["query": query, "limit": limit],
+                ],
+                as: WsEnvelope<[BackendIngredientHitDTO]>.self
+            )
+            guard envelope.ok, let data = envelope.data else { return [] }
+            return data
+        } catch {
+            // Cicho: lista pokaże „nic nie znaleziono", a użytkownik spróbuje
+            // jeszcze raz. To ekran ustawień, nie ścieżka krytyczna.
+            return []
+        }
+    }
+
     // MARK: - User preferences (diet, kcal, allergens)
     //
     // Source of truth lives in `@AppStorage` so SwiftUI views read it
@@ -1870,6 +1968,10 @@ final class SessionStore {
         static let proteinG = "settings.diet.proteinG"
         static let fatG = "settings.diet.fatG"
         static let carbsG = "settings.diet.carbsG"
+        /// Identyfikatory składników po przecinku — tak samo jak alergeny.
+        static let excludedIngredients = "settings.diet.excludedIngredients"
+        /// 0 = bez ograniczenia (AppStorage nie ma `nil` dla `Int`).
+        static let maxPrepTimeMinutes = "settings.diet.maxPrepTimeMinutes"
     }
 
     /// Klucze przełączników z ekranu „Powiadomienia". Te same stringi czyta
@@ -1948,6 +2050,21 @@ final class SessionStore {
             defaults.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
             defaults.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
 
+            // Ograniczenia bywają ustawione też z rozmowy z asystentem, więc
+            // serwer jest tu źródłem prawdy. `nil` znaczy „backend sprzed tej
+            // zmiany" — wtedy nie ruszamy tego, co użytkownik ma lokalnie.
+            if let excluded = prefs.excludedIngredientIds {
+                defaults.set(
+                    excluded.sorted().joined(separator: ","),
+                    forKey: PreferencesKeys.excludedIngredients
+                )
+            }
+            // 0 = brak ograniczenia; AppStorage nie ma `nil` dla `Int`.
+            defaults.set(
+                prefs.maxPrepTimeMinutes ?? 0,
+                forKey: PreferencesKeys.maxPrepTimeMinutes
+            )
+
             // Przełączniki powiadomień są teraz danymi konta, nie ustawieniem
             // urządzenia: to serwer decyduje, czy wysłać pusha, więc to on
             // trzyma prawdę. Backend sprzed tej zmiany przysyła `nil`
@@ -1988,6 +2105,11 @@ final class SessionStore {
         proteinG: Int? = nil,
         fatG: Int? = nil,
         carbsG: Int? = nil,
+        /// Czego domownik nie je. Pusta tablica kasuje wykluczenia.
+        excludedIngredientIds: [String]? = nil,
+        /// Maksymalny czas gotowania; `clearMaxPrepTime` kasuje ograniczenie.
+        maxPrepTimeMinutes: Int? = nil,
+        clearMaxPrepTime: Bool = false,
         /// Wysyła jawne `null` na wszystkie trzy makra — czyli „przestań
         /// trzymać moje wartości i licz za mnie". Bez tego nie dałoby się
         /// wrócić do automatu, bo `nil` w parametrze znaczy „nie ruszaj".
@@ -2023,6 +2145,23 @@ final class SessionStore {
                 normalised.joined(separator: ","),
                 forKey: PreferencesKeys.allergens
             )
+        }
+        if let excludedIngredientIds {
+            let normalised = Array(Set(excludedIngredientIds)).sorted()
+            data["excludedIngredientIds"] = normalised
+            defaults.set(
+                normalised.joined(separator: ","),
+                forKey: PreferencesKeys.excludedIngredients
+            )
+        }
+        if clearMaxPrepTime {
+            // Jawny `null`, nie pominięte pole: pominięcie znaczy „nie ruszaj",
+            // więc bez tego nie dałoby się skasować ograniczenia.
+            data["maxPrepTimeMinutes"] = NSNull()
+            defaults.set(0, forKey: PreferencesKeys.maxPrepTimeMinutes)
+        } else if let maxPrepTimeMinutes {
+            data["maxPrepTimeMinutes"] = maxPrepTimeMinutes
+            defaults.set(maxPrepTimeMinutes, forKey: PreferencesKeys.maxPrepTimeMinutes)
         }
         if let goal {
             data["goal"] = goal.uppercased()

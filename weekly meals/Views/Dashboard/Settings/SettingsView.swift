@@ -23,6 +23,12 @@ struct SettingsView: View {
     @AppStorage("settings.household.name") private var persistedHouseholdName: String = ""
     @AppStorage("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
     @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
+    /// Identyfikatory składników po przecinku — tak samo jak alergeny.
+    @AppStorage("settings.diet.excludedIngredients") private var excludedIngredientsRaw: String = ""
+    /// 0 = bez ograniczenia; AppStorage nie ma `nil` dla `Int`.
+    @AppStorage("settings.diet.maxPrepTimeMinutes") private var maxPrepTimeMinutes: Int = 0
+    @State private var excludedIngredients: [BackendIngredientHitDTO] = []
+    @State private var showsExcludedSheet = false
     @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
     @AppStorage("settings.diet.goal") private var goalRaw: String = UserGoal.healthy.rawValue
     // Sylwetka z arkusza „Twoje dane" — tylko do odczytu, żeby podpowiedź
@@ -1258,6 +1264,7 @@ struct SettingsView: View {
                     goalPickerSection
                     dietPickerSection
                     allergensSection
+                    restrictionsSection
 
                     if hasCustomisedPreferences {
                         resetPreferencesButton
@@ -1291,6 +1298,9 @@ struct SettingsView: View {
                 proteinG: proteinOverride >= 0 ? proteinOverride : nil,
                 fatG: fatOverride >= 0 ? fatOverride : nil,
                 carbsG: carbsOverride >= 0 ? carbsOverride : nil,
+                excludedIngredientIds: excludedIngredients.map(\.id),
+                maxPrepTimeMinutes: maxPrepTimeMinutes > 0 ? maxPrepTimeMinutes : nil,
+                clearMaxPrepTime: maxPrepTimeMinutes == 0,
                 clearMacroOverrides: !hasMacroOverride
             )
         }
@@ -1304,6 +1314,8 @@ struct SettingsView: View {
             // Po tokenach, nie po rozpoznanych chipach: użytkownik, którego
             // jedyne alergeny pochodzą z nowszego buildu, też ma co czyścić.
             || !allergenTokens.isEmpty
+            || !excludedIngredients.isEmpty
+            || maxPrepTimeMinutes > 0
             || hasMacroOverride
     }
 
@@ -1312,7 +1324,7 @@ struct SettingsView: View {
     /// schedules a fresh one. Using a single concatenated string keeps the
     /// modifier signature simple.
     private var dietPreferencesSyncToken: String {
-        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)|\(goalRaw)|\(proteinOverride)|\(fatOverride)|\(carbsOverride)"
+        "\(dietPreferenceRaw)|\(calorieGoal)|\(allergensRaw)|\(goalRaw)|\(proteinOverride)|\(fatOverride)|\(carbsOverride)|\(excludedIngredientsRaw)|\(maxPrepTimeMinutes)"
     }
 
     // ─── Twój cel ──────────
@@ -1868,6 +1880,105 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
             )
+        }
+    }
+
+    /// Ograniczenia, których nie da się wyrazić alergenem.
+    ///
+    /// Osobna karta pod alergenami, nie w nich: alergen dotyczy zdrowia
+    /// i wynika ze składu, a to jest zwykła niechęć. Wrzucenie obu w jedno
+    /// miejsce kusi, żeby wpisać tu uczulenie — a wtedy użytkownik myśli,
+    /// że jest chroniony inaczej, niż jest.
+    private var restrictionsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetSectionLabel(title: "Czego nie jem")
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Składniki, których nie chcesz na talerzu, choć nie masz na nie uczulenia. Asystent ich nie zaproponuje, a plan ich nie przyjmie.")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    showsExcludedSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "hand.raised")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.wmMuted(scheme))
+                        Text(
+                            excludedIngredients.isEmpty
+                                ? "Wybierz składniki"
+                                : excludedIngredients.map(\.name).joined(separator: ", ")
+                        )
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.wmLabel(scheme))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.wmFaint(scheme))
+                    }
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Divider().overlay(Color.wmRule(scheme))
+
+                // Czas gotowania jest PODPOWIEDZIĄ, nie filtrem — i tak to
+                // opisujemy, żeby nikt nie szukał potem „zepsutego" filtra.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Najwyżej na danie")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.wmLabel(scheme))
+                        Spacer(minLength: 8)
+                        Text(maxPrepTimeMinutes > 0 ? "\(maxPrepTimeMinutes) min" : "bez limitu")
+                            .font(.system(size: 14, weight: .semibold))
+                            .monospacedDigit()
+                            .contentTransition(.numericText(value: Double(maxPrepTimeMinutes)))
+                            .animation(.snappy(duration: 0.25), value: maxPrepTimeMinutes)
+                            .foregroundStyle(
+                                maxPrepTimeMinutes > 0 ? WMPalette.terracotta : Color.wmMuted(scheme)
+                            )
+                    }
+
+                    // Krok 5 minut, od zera („bez limitu") do dwóch godzin.
+                    Slider(
+                        value: Binding(
+                            get: { Double(maxPrepTimeMinutes) },
+                            set: { maxPrepTimeMinutes = Int($0) }
+                        ),
+                        in: 0...120,
+                        step: 5
+                    )
+                    .tint(WMPalette.terracotta)
+
+                    Text("To podpowiedź dla asystenta na dni powszednie, nie twardy filtr — niedzielna pieczeń dalej może trwać dłużej.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.wmFaint(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+        }
+        .sheet(isPresented: $showsExcludedSheet) {
+            ExcludedIngredientsSheet(selected: $excludedIngredients)
+        }
+        .onChange(of: excludedIngredients) { _, nowe in
+            // Do AppStorage lecą IDENTYFIKATORY — one są kontraktem z serwerem.
+            // Nazwy żyją tylko w pamięci ekranu, na potrzeby tego jednego wiersza.
+            excludedIngredientsRaw = nowe.map(\.id).sorted().joined(separator: ",")
         }
     }
 

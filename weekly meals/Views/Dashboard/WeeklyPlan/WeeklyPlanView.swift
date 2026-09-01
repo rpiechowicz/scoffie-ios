@@ -277,6 +277,13 @@ struct WeeklyPlanView: View {
             .sheet(isPresented: $showProducts) {
                 ProductsView(topPadding: 24)
             }
+            // Skrót z karty asystenta: przełączenie zakładki to za mało,
+            // bo lista zakupów jest arkuszem wewnątrz tego ekranu.
+            .onChange(of: sessionStore.opensShoppingList, initial: true) { _, wants in
+                guard wants else { return }
+                showProducts = true
+                sessionStore.opensShoppingList = false
+            }
             .sheet(item: $pickerTarget) { target in
                 PlanSlotPickerSheet(
                     date: target.date,

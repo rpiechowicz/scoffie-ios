@@ -1,9 +1,9 @@
 import SwiftUI
 
-// First-login welcome flow. Four sequential pages — profile → goal →
-// preferences → household — gated by a sticky footer with a pill stepper
+// First-login welcome flow. Five sequential pages — profile → goal →
+// preferences → meals → household — gated by a sticky footer with a pill stepper
 // and primary action. Each step persists optimistically (AppStorage) and
-// pushes to the backend; the household creation in step 4 also marks
+// pushes to the backend; the household creation in step 5 also marks
 // onboarding complete server-side, which routes the app into the
 // dashboard via the standard `RootScreen` evaluator.
 //
@@ -16,7 +16,7 @@ struct WelcomeView: View {
     let errorMessage: String?
     /// Step the flow opens at. New users start at 1 (full onboarding);
     /// already-onboarded users who lost their household land directly on
-    /// step 4 (household creation) — they can't backtrack into the
+    /// step 5 (household creation) — they can't backtrack into the
     /// profile / preference steps that they already completed.
     let initialStep: Int
 
@@ -41,6 +41,10 @@ struct WelcomeView: View {
     /// Trzymamy je, żeby zapis z kreatora nie skasował ustawienia zrobionego
     /// na nowszej wersji aplikacji (patrz `SettingsView.unknownAllergens`).
     @State private var unknownAllergens: [String]
+    /// Posiłki, które gospodarstwo planuje. Zbierane w kroku 4, wysyłane
+    /// dopiero w kroku 5 — `households:updateMealTypes` potrzebuje
+    /// `householdId`, który powstaje razem z gospodarstwem.
+    @State private var mealSlots: MealSlotConfiguration
     @State private var householdName: String = ""
 
     // Whether the user has manually moved the kcal slider away from the
@@ -49,7 +53,16 @@ struct WelcomeView: View {
     // baseline appear in step 3 without having to drag it down.
     @State private var calorieAdjustedManually: Bool = false
 
-    private let totalSteps = 4
+    /// Krok, na którym ląduje ktoś po onboardingu bez gospodarstwa —
+    /// zarazem ostatni krok pełnej ścieżki.
+    ///
+    /// Stała, a nie „4" wpisane w `weekly_mealsApp` — przy dokładaniu kroku
+    /// posiłków ta liczba już raz się przesunęła, a rozjazd nie objawia się
+    /// błędem kompilacji, tylko kreatorem, który pyta o rytm dnia kogoś,
+    /// kto przyszedł tu wyłącznie założyć nowy dom.
+    static let householdOnlyStep = 5
+
+    private let totalSteps = WelcomeView.householdOnlyStep
 
     init(
         initialDisplayName: String,
@@ -116,6 +129,16 @@ struct WelcomeView: View {
         _allergens = State(initialValue: Set(storedTokens.compactMap { Allergen(rawValue: $0) }))
         _unknownAllergens = State(
             initialValue: Array(Set(storedTokens.filter { Allergen(rawValue: $0) == nil })).sorted()
+        )
+
+        // Ten sam klucz, którym żyje `SessionStore.mealSlots` — kreator
+        // przerwany w połowie i wznowiony po restarcie wraca do tego, co
+        // użytkownik już zaznaczył.
+        let storedSlots = defaults.string(forKey: MealSlotConfiguration.Keys.enabledSlots) ?? ""
+        _mealSlots = State(
+            initialValue: storedSlots.isEmpty
+                ? MealSlotConfiguration.default
+                : MealSlotConfiguration(storageValue: storedSlots)
         )
     }
 
@@ -208,6 +231,13 @@ struct WelcomeView: View {
         goal.suggestedCalories(for: bodyMetrics)
     }
 
+    /// Rozbicie celu na makro do podglądu w kroku 3. Ten sam rachunek, co
+    /// w Ustawieniach → „Dieta i alergeny" — bez nadpisań, bo w kreatorze
+    /// nie ma czym ich zrobić.
+    private var macroTargets: MacroTargets? {
+        bodyMetrics?.macroTargets(for: goal, calories: calorieGoal)
+    }
+
     /// Zmienia się przy każdej danej, która wpływa na podpowiedź.
     private var calorieSuggestionToken: String {
         "\(goal.rawValue)|\(heightCm)|\(weightKg)|\(yearOfBirth)|\(activity.rawValue)|\(sex?.rawValue ?? "")"
@@ -230,8 +260,11 @@ struct WelcomeView: View {
             WelcomeStep3PreferencesView(
                 diet: $diet,
                 calorieGoal: $calorieGoal,
-                allergens: $allergens
+                allergens: $allergens,
+                macros: macroTargets
             )
+        case 4:
+            WelcomeStep4MealsView(mealSlots: $mealSlots)
         default:
             WelcomeStep4HouseholdView(
                 householdName: $householdName,
@@ -270,9 +303,9 @@ struct WelcomeView: View {
                 && (1900...Calendar.current.component(.year, from: Date())).contains(yearOfBirth)
                 && (80...260).contains(heightCm)
                 && (30...300).contains(weightKg)
-        case 2, 3:
+        case 2, 3, 4:
             return true
-        case 4:
+        case 5:
             // Te same granice, co w Ustawieniach i na serwerze (`CreateHouseholdDto`
             // 2…64). Od Fazy 0 backend egzekwuje je także na WebSockecie —
             // 1-znakowa nazwa wracałaby jako VALIDATION_ERROR z generycznym
@@ -341,10 +374,20 @@ struct WelcomeView: View {
             }
             advance()
         case 4:
+            // Posiłki nie mają dokąd pójść, dopóki nie ma gospodarstwa —
+            // wybór czeka w `mealSlots` na krok 5.
+            advance()
+        case 5:
             let trimmedHousehold = householdName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let slots = mealSlots
             Task { @MainActor in
                 await store.createHousehold(name: trimmedHousehold)
                 if store.currentHouseholdId != nil {
+                    // Sloty PRZED domknięciem onboardingu: `completeOnboarding`
+                    // przepuszcza aplikację do pulpitu, a Plan czyta wtedy
+                    // konfigurację posiłków. Zapis po tej linii dorzucałby
+                    // podwieczorek do już narysowanego tygodnia.
+                    await store.saveMealSlotConfiguration(slots)
                     await store.completeOnboarding()
                 }
             }

@@ -16,18 +16,36 @@ struct AgentConversationDTO: Decodable, Identifiable, Equatable {
     let title: String?
     let lastMessageAt: String?
     let createdAt: String
+    /// Początek ostatniej wiadomości — bez tego lista rozmów jest listą dat.
+    let preview: String?
+    /// Tura, która JESZCZE BIEGNIE w tej rozmowie — po niej klient poznaje,
+    /// że jest do czego wrócić po zamknięciu aplikacji. Opcjonalne, bo starszy
+    /// serwer tego pola nie oddaje.
+    let activeTurnId: String?
+}
+
+/// Notatka pamięci asystenta — jedno trwałe zdanie o gospodarstwie.
+struct AgentMemoryNoteDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let text: String
+    let createdByUserId: String?
+    let createdAt: String
 }
 
 struct AgentMessageDTO: Decodable, Identifiable, Equatable {
     let id: String
     /// `USER` albo `ASSISTANT`.
     let role: String
-    /// Dziś zawsze `TEXT`; serwer rezerwuje inne rodzaje na karty w kliencie.
+    /// `TEXT` | `PLAN_WEEK` | `APPLIED` — czym JEST ta wiadomość.
     let kind: String
     let text: String
     let clientMessageId: String?
     let turnId: String?
     let createdAt: String
+    /// Karta — DODATEK do `text`, nigdy zamiennik. Starszy serwer i zwykła
+    /// odpowiedź tekstowa dają `nil`, a nieznany rodzaj `.unknown`: w obu
+    /// wypadkach zostaje zdanie, które broni się samo.
+    let card: AgentCardDTO?
 }
 
 struct AgentMessagesResponseDTO: Decodable {
@@ -51,6 +69,10 @@ struct AgentProgressStepDTO: Decodable, Equatable {
     let tool: String
     let label: String
     let at: String
+    /// Czy krok ZMIENIŁ dane gospodarstwa — po tym poznajemy, że po turze
+    /// jest co otworzyć. Opcjonalne, bo tury sprzed tego pola siedzą
+    /// w bazie i muszą się nadal dekodować.
+    let writes: Bool?
 }
 
 struct AgentTurnUsageDTO: Decodable, Equatable {
@@ -88,10 +110,32 @@ struct AgentCreateConversationRequestDTO: Encodable {
 /// użytkownika. `clientMessageId` jest kluczem idempotencji — ponowione
 /// żądanie po utraconej odpowiedzi oddaje TĘ SAMĄ turę, zamiast płacić
 /// drugi raz za ten sam prompt.
+/// Poprawienie własnego pytania.
+///
+/// Nie jest to edycja tekstu w miejscu: serwer wycofuje poprawianą wiadomość
+/// i wszystko, co po niej, a potem uruchamia nową turę. Dlatego koperta jest
+/// ta sama co przy wysyłce, z jednym polem więcej.
+struct AgentEditMessageRequestDTO: Encodable {
+    let clientMessageId: String
+    let messageId: String
+    let text: String
+    let weekStart: String
+    let clientToday: String
+    let timeZone: String
+    let clientCapabilities: [String] = [AgentClientCapability.cardsV1]
+}
+
 struct AgentPostMessageRequestDTO: Encodable {
     let clientMessageId: String
     let text: String
     let weekStart: String
     let clientToday: String
     let timeZone: String
+    /// Kogo dotyczy pytanie; `nil` albo pusta lista = całe gospodarstwo.
+    /// Wysyłamy IDENTYFIKATORY, nie imiona — model dostaje je gotowe do
+    /// wpisania w propozycję, zamiast dopasowywać „Ania" do wiersza w bazie.
+    let scopeUserIds: [String]?
+    /// Co ten build umie narysować. Serwer w trybie `soft` po tym poznaje,
+    /// że wolno mu skończyć turę propozycją zamiast zapisem.
+    let clientCapabilities: [String] = [AgentClientCapability.cardsV1]
 }

@@ -66,8 +66,74 @@ final class AgentAPIClient {
         )
     }
 
+    /// Poprawienie pytania — nowa tura zamiast zmiany tekstu w miejscu.
+    ///
+    /// Serwer wycofuje poprawianą wiadomość i wszystko, co po niej, więc po
+    /// tym wywołaniu historia w telefonie jest nieaktualna od tego miejsca
+    /// w dół.
+    func editMessage(
+        conversationId: String,
+        request: AgentEditMessageRequestDTO
+    ) async throws -> AgentAcceptedTurnDTO {
+        try await perform(
+            path: "agent/conversations/\(conversationId)/messages/edit",
+            method: "POST",
+            bodyData: try JSONEncoder().encode(request)
+        )
+    }
+
     func turn(id: String) async throws -> AgentTurnDTO {
         try await perform(path: "agent/turns/\(id)", method: "GET", bodyData: nil)
+    }
+
+    /// Zatwierdzenie propozycji — jedyny moment, w którym asystent zmienia plan.
+    ///
+    /// Bez udziału modelu, czyli bez kosztu: klient odsyła sam `proposalId`,
+    /// a serwer ma u siebie stan docelowy policzony w turze. Ponowne kliknięcie
+    /// oddaje ten sam wynik, nie drugi zapis — więc podwójne dotknięcie
+    /// przycisku nie jest sytuacją wyjątkową i nie trzeba go blokować na siłę.
+    func applyProposal(id: String) async throws -> AgentProposalActionResultDTO {
+        try await perform(path: "agent/proposals/\(id)/apply", method: "POST", bodyData: nil)
+    }
+
+    /// Cofnięcie zapisu. Serwer odmówi, jeśli ktoś w domu ruszył plan PO
+    /// zatwierdzeniu — cofnięcie nie ma prawa skasować cudzej zmiany.
+    func undoProposal(id: String) async throws -> AgentProposalActionResultDTO {
+        try await perform(path: "agent/proposals/\(id)/undo", method: "POST", bodyData: nil)
+    }
+
+    /// Kasuje JEDNĄ rozmowę — porządki na liście, nie RODO.
+    @discardableResult
+    func deleteConversation(id: String) async throws -> Int {
+        struct DeletedDTO: Decodable { let deleted: Int }
+        let response: DeletedDTO = try await perform(
+            path: "agent/conversations/\(id)",
+            method: "DELETE",
+            bodyData: nil
+        )
+        return response.deleted
+    }
+
+    /// Co asystent pamięta o gospodarstwie — pamięć jest wspólna dla domu.
+    func memory(householdId: String) async throws -> [AgentMemoryNoteDTO] {
+        try await perform(
+            path: "agent/memory",
+            method: "GET",
+            bodyData: nil,
+            query: [URLQueryItem(name: "householdId", value: householdId)]
+        )
+    }
+
+    @discardableResult
+    func forgetMemory(noteId: String) async throws -> Int {
+        // Serwer oddaje `{deleted}` — pusta odpowiedź wywróciłaby dekoder.
+        struct DeletedDTO: Decodable { let deleted: Int }
+        let response: DeletedDTO = try await perform(
+            path: "agent/memory/\(noteId)",
+            method: "DELETE",
+            bodyData: nil
+        )
+        return response.deleted
     }
 
     /// „Usuń moje rozmowy z asystentem" (RODO). Działa też przy wyłączonym
