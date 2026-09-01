@@ -36,6 +36,9 @@ struct AssistantView: View {
     @State private var showsCamera = false
     @State private var showsPhotoLibrary = false
     @State private var attachmentError: String?
+    /// Wiadomość poprawiana w tej chwili — razem z jej pierwotną treścią,
+    /// żeby dało się wrócić bez pytania serwera.
+    @State private var editing: EditingMessage?
     @State private var showDeleteAlert = false
     @State private var showConversations = false
     @State private var showMemory = false
@@ -157,7 +160,8 @@ struct AssistantView: View {
                                     Task { await store.undoProposal(id: id) }
                                 },
                                 onRevise: { revise() },
-                                onAsk: { prompt in ask(prompt) }
+                                onAsk: { prompt in ask(prompt) },
+                                onEdit: { beginEditing(message) }
                             )
                             .id(message.id)
                         }
@@ -364,6 +368,10 @@ struct AssistantView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 2)
 
+            if editing != nil {
+                editingBar
+            }
+
             if let attachment {
                 AssistantAttachmentPreview(attachment: attachment) {
                     self.attachment = nil
@@ -430,6 +438,47 @@ struct AssistantView: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 12)
+        }
+    }
+
+    /// Pasek „Poprawiasz pytanie".
+    ///
+    /// Bez niego pole z wpisanym starym tekstem wygląda jak zwykłe pole,
+    /// a wysłanie kasuje pół rozmowy bez ostrzeżenia. Pasek mówi, co się
+    /// stanie, i daje drogę odwrotu.
+    private var editingBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(WMPalette.butter)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Poprawiasz pytanie")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+                Text("Odpowiedzi po nim znikną z rozmowy")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.wmFaint(scheme))
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                draft = ""
+                editing = nil
+                isComposerFocused = false
+            } label: {
+                Text("Anuluj")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(Color.wmButterTint(scheme))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
         }
     }
 
@@ -560,6 +609,12 @@ struct AssistantView: View {
     /// Serwer wymaga treści wiadomości, a użytkownik, który zrobił zdjęcie
     /// lodówki, powiedział już wszystko. Zamiast blokować wysyłkę pustym
     /// polem, wpisujemy za niego to jedno zdanie, o które i tak by chodziło.
+    /// Poprawiana wiadomość: co poprawiamy i od czego zaczęliśmy.
+    private struct EditingMessage: Equatable {
+        let id: String
+        let originalText: String
+    }
+
     private static let photoOnlyQuestion = "Co z tego ugotuję?"
 
     private func send() {
@@ -570,17 +625,36 @@ struct AssistantView: View {
         guard !text.isEmpty, store.canSend else { return }
 
         let sentAttachment = attachment
+        let edited = editing
         draft = ""
         attachment = nil
         attachmentError = nil
+        editing = nil
         isComposerFocused = false
         Task {
-            await store.send(
-                text: text,
-                weekStart: datesViewModel.weekStartISO,
-                attachment: sentAttachment
-            )
+            if let edited {
+                await store.editMessage(
+                    messageId: edited.id,
+                    text: text,
+                    weekStart: datesViewModel.weekStartISO
+                )
+            } else {
+                await store.send(
+                    text: text,
+                    weekStart: datesViewModel.weekStartISO,
+                    attachment: sentAttachment
+                )
+            }
         }
+    }
+
+    /// Wejście w tryb poprawki: pytanie wraca do pola, gotowe do zmiany.
+    private func beginEditing(_ message: AgentChatMessage) {
+        editing = EditingMessage(id: message.id, originalText: message.text)
+        draft = message.text
+        attachment = nil
+        attachmentError = nil
+        isComposerFocused = true
     }
 
     /// Kręciołek siedzi w TEJ karcie, której przycisk został naciśnięty.
@@ -730,6 +804,7 @@ private struct MessageBubble: View {
     let onUndo: (String) -> Void
     let onRevise: () -> Void
     let onAsk: (String) -> Void
+    let onEdit: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -758,6 +833,10 @@ private struct MessageBubble: View {
         }
 
         if message.author == .user {
+            Button(action: onEdit) {
+                Label("Popraw pytanie", systemImage: "pencil")
+            }
+
             Button(action: onAskAgain) {
                 Label("Zapytaj jeszcze raz", systemImage: "arrow.clockwise")
             }

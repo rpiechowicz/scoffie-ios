@@ -121,6 +121,21 @@ struct AgentImageRequestDTO: Encodable {
     let data: String
 }
 
+/// Poprawienie własnego pytania.
+///
+/// Nie jest to edycja tekstu w miejscu: serwer wycofuje poprawianą wiadomość
+/// i wszystko, co po niej, a potem uruchamia nową turę. Dlatego koperta jest
+/// ta sama co przy wysyłce, z jednym polem więcej.
+struct AgentEditMessageRequestDTO: Encodable {
+    let clientMessageId: String
+    let messageId: String
+    let text: String
+    let weekStart: String
+    let clientToday: String
+    let timeZone: String
+    let clientCapabilities: [String] = [AgentClientCapability.cardsV1]
+}
+
 struct AgentPostMessageRequestDTO: Encodable {
     let clientMessageId: String
     let text: String

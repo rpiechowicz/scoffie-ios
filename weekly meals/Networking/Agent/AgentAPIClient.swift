@@ -66,6 +66,22 @@ final class AgentAPIClient {
         )
     }
 
+    /// Poprawienie pytania — nowa tura zamiast zmiany tekstu w miejscu.
+    ///
+    /// Serwer wycofuje poprawianą wiadomość i wszystko, co po niej, więc po
+    /// tym wywołaniu historia w telefonie jest nieaktualna od tego miejsca
+    /// w dół.
+    func editMessage(
+        conversationId: String,
+        request: AgentEditMessageRequestDTO
+    ) async throws -> AgentAcceptedTurnDTO {
+        try await perform(
+            path: "agent/conversations/\(conversationId)/messages/edit",
+            method: "POST",
+            bodyData: try JSONEncoder().encode(request)
+        )
+    }
+
     func turn(id: String) async throws -> AgentTurnDTO {
         try await perform(path: "agent/turns/\(id)", method: "GET", bodyData: nil)
     }

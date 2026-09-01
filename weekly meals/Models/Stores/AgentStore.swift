@@ -547,6 +547,75 @@ final class AgentStore {
         }
     }
 
+    // MARK: - Poprawianie pytania
+
+    /// Poprawia własne pytanie: wycofuje je razem z tym, co po nim, i pyta od nowa.
+    ///
+    /// Lokalnie robimy dokładnie to, co zrobi serwer — usuwamy wiadomości od
+    /// poprawianej w dół i dopisujemy nową. Gdyby poprawka odmówiła, historia
+    /// z serwera i tak jest nietknięta, więc po błędzie po prostu ją
+    /// przeładowujemy zamiast zgadywać, co zostało cofnięte.
+    @discardableResult
+    func editMessage(
+        messageId: String,
+        text: String,
+        weekStart: String,
+        clientMessageId: String = UUID().uuidString
+    ) async -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            !trimmed.isEmpty,
+            canSend,
+            let conversationId,
+            let index = messages.firstIndex(where: { $0.id == messageId })
+        else { return false }
+
+        errorMessage = nil
+        retryText = nil
+        retryClientMessageId = nil
+        isSending = true
+        progress = []
+        defer { isSending = false }
+
+        let withdrawn = Array(messages[index...])
+        messages.removeSubrange(index...)
+        messages.append(
+            AgentChatMessage(
+                id: clientMessageId,
+                author: .user,
+                text: trimmed,
+                createdAt: Date(),
+                isPending: true
+            )
+        )
+
+        do {
+            let accepted = try await client.editMessage(
+                conversationId: conversationId,
+                request: AgentEditMessageRequestDTO(
+                    clientMessageId: clientMessageId,
+                    messageId: messageId,
+                    text: trimmed,
+                    weekStart: weekStart,
+                    clientToday: PlanWeek.dateKey(Date()),
+                    timeZone: TimeZone.current.identifier
+                )
+            )
+            confirmPendingMessage(clientMessageId)
+            pendingTurnId = accepted.turnId
+            await follow(turnId: accepted.turnId)
+            return true
+        } catch {
+            handle(error)
+            // Serwer cofnął ukrycie, więc wracamy do stanu sprzed poprawki.
+            // Odtwarzamy go z pamięci, a nie z sieci: to jest ten sam zestaw
+            // wiadomości, a ponowne pobranie w błędzie sieci i tak by padło.
+            messages.removeAll { $0.id == clientMessageId }
+            messages.append(contentsOf: withdrawn)
+            return false
+        }
+    }
+
     // MARK: - Propozycje
 
     /// „Dodaj do planu" — jedyny moment, w którym asystent zmienia tydzień.
