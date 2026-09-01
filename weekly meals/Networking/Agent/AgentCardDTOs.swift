@@ -72,6 +72,8 @@ struct PlanWeekCardSlotDTO: Decodable, Equatable, Identifiable {
     /// Kalorie NA PORCJĘ: karta mówi o talerzu, nie o garnku.
     let kcalPerServing: Int
     let prepTimeMinutes: Int
+    /// Miniatura dania; `nil`, gdy przepis nie ma zdjęcia albo serwer jest starszy.
+    let imageUrl: String?
     /// Puste = całe gospodarstwo.
     let participantIds: [String]
     /// `NEW` | `KEPT` — po tym widać, co propozycja naprawdę zmienia.
@@ -123,8 +125,10 @@ struct PlanWeekCardDTO: Decodable, Equatable {
     let v: Int
     let proposalId: String
     let weekStart: String
-    /// „Propozycja planu · 1–7 września" — nadtytuł gotowy do pokazania.
+    /// „Propozycja planu" — nadtytuł gotowy do pokazania.
     let eyebrow: String?
+    /// „31 sierpnia – 6 września" — drugi wiersz nadtytułu.
+    let eyebrowDetail: String?
     let title: String
     /// Jedno zdanie modelu „dlaczego tak"; `nil`, gdy nic nie dopisał.
     let subtitle: String?
@@ -153,6 +157,7 @@ struct PlanDayCardDTO: Decodable, Equatable {
     let weekStart: String
     let date: String
     let eyebrow: String?
+    let eyebrowDetail: String?
     let title: String
     let subtitle: String?
     let slots: [PlanWeekCardSlotDTO]

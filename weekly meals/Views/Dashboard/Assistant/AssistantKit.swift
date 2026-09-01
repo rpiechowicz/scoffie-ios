@@ -191,7 +191,6 @@ struct AssistantProgressTrail: View {
     let startedAt: Date?
 
     @Environment(\.colorScheme) private var scheme
-    @State private var spins = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -214,7 +213,6 @@ struct AssistantProgressTrail: View {
             }
         }
         .padding(.vertical, 4)
-        .onAppear { spins = true }
     }
 
     @ViewBuilder
@@ -222,14 +220,7 @@ struct AssistantProgressTrail: View {
         HStack(alignment: .center, spacing: 10) {
             ZStack {
                 if isCurrent {
-                    Circle()
-                        .trim(from: 0, to: 0.72)
-                        .stroke(WMPalette.terracotta, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                        .rotationEffect(.degrees(spins ? 360 : 0))
-                        .animation(
-                            .linear(duration: 0.9).repeatForever(autoreverses: false),
-                            value: spins
-                        )
+                    Spinner()
                 } else {
                     Circle().fill(Color.wmSageTint(scheme))
                     Image(systemName: "checkmark")
@@ -246,6 +237,32 @@ struct AssistantProgressTrail: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
+        }
+    }
+
+    /// Kręciołek liczony z ZEGARA, nie ze stanu.
+    ///
+    /// Wersja na `@State` + `repeatForever` zatrzymywała się w połowie tury:
+    /// każdy nowy krok postępu tworzył NOWY widok kółka, którego stan był już
+    /// ustawiony na „po animacji" — `value:` nigdy się nie zmieniało, więc
+    /// animacja nie ruszała i kółko zastygało pod kątem 360°. Kąt liczony
+    /// z czasu nie ma stanu, który dałoby się zgubić przy przebudowie widoku.
+    private struct Spinner: View {
+        /// Pełny obrót; 0,9 s to tempo, przy którym oko widzi ruch, a nie miga.
+        private static let period: TimeInterval = 0.9
+
+        var body: some View {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                let phase = context.date.timeIntervalSinceReferenceDate
+                    .truncatingRemainder(dividingBy: Self.period)
+                Circle()
+                    .trim(from: 0, to: 0.72)
+                    .stroke(
+                        WMPalette.terracotta,
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(phase / Self.period * 360))
+            }
         }
     }
 
@@ -308,6 +325,12 @@ struct AssistantCard<Content: View>: View {
 /// Nagłówek karty: nadtytuł (co to jest) + tytuł (co z tego wynika).
 struct AssistantCardHead<Right: View>: View {
     let eyebrow: String
+    /// Drugi wiersz nadtytułu — data albo zakres.
+    ///
+    /// Osobno, a nie doklejone kropką do `eyebrow`: „PROPOZYCJA PLANU ·
+    /// 31 SIERPNIA – 6 WRZEŚNIA" nie mieści się w wierszu karty i łamie się
+    /// w środku nazwy miesiąca, czyli w najgorszym możliwym miejscu.
+    var eyebrowDetail: String?
     var eyebrowColor: Color = WMPalette.terracotta
     let title: String
     @ViewBuilder var right: () -> Right
@@ -322,6 +345,14 @@ struct AssistantCardHead<Right: View>: View {
                     .tracking(1.2)
                     .textCase(.uppercase)
                     .foregroundStyle(eyebrowColor)
+                    .lineLimit(1)
+
+                if let eyebrowDetail, !eyebrowDetail.isEmpty {
+                    Text(eyebrowDetail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .lineLimit(1)
+                }
 
                 Text(title)
                     .font(.system(size: 17, weight: .bold))

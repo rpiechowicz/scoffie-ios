@@ -26,28 +26,69 @@ private struct CardEyebrowFallback {
 private struct MealLine: View {
     let slot: String
     let title: String
+    var imageUrl: String?
     var dimmed: Bool = false
+
+    /// Szerokość kolumny slotu.
+    ///
+    /// Stała, bo nazwy dań mają zaczynać się w jednej linii — inaczej wzrok
+    /// szuka ich od nowa przy każdym wierszu. Musi zmieścić najdłuższą
+    /// etykietę („II ŚNIADANIE”) bez łamania: złamane „ŚNIADANI/E” wyglądało
+    /// jak błąd, a nie jak etykieta.
+    private static let slotColumn: CGFloat = 84
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
+            thumbnail
+
             Text(slot)
-                .font(.system(size: 10.5, weight: .bold))
-                .tracking(0.7)
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.5)
                 .textCase(.uppercase)
                 .foregroundStyle(Color.wmFaint(scheme))
-                .frame(width: 62, alignment: .leading)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(width: Self.slotColumn, alignment: .leading)
 
+            // Dwie linie, bo „Dorsz pieczony z ziemniakami i surówką" ucięty
+            // w połowie nie mówi, co się je — a to jedyne, po co ten wiersz jest.
             Text(title)
                 .font(.system(size: 13.5, weight: .medium))
                 .tracking(-0.2)
                 .foregroundStyle(dimmed ? Color.wmMuted(scheme) : Color.wmLabel(scheme))
-                .lineLimit(1)
-                .truncationMode(.tail)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }
+    }
+
+    /// Miniatura dania — wzrokowy skrót do „co to właściwie jest".
+    ///
+    /// 28 px: tyle, żeby rozpoznać kolor i kształt potrawy, i nie tyle, żeby
+    /// wiersz przestał być wierszem. Bez zdjęcia zostaje sam znak sztućców —
+    /// puste miejsce rozjeżdżałoby kolumnę z nazwami.
+    private var thumbnail: some View {
+        let url = imageUrl.flatMap(URL.init(string:))
+        return CachedAsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().aspectRatio(contentMode: .fill)
+            default:
+                ZStack {
+                    Color.wmInsetSurface(scheme)
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.wmFaint(scheme))
+                }
+            }
+        }
+        .frame(width: 28, height: 28)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .opacity(dimmed ? 0.55 : 1)
     }
 }
 
@@ -256,6 +297,7 @@ struct AssistantPlanWeekCard: View {
         AssistantCard(tone: .neutral) {
             AssistantCardHead(
                 eyebrow: card.eyebrow ?? CardEyebrowFallback.planWeek,
+                eyebrowDetail: card.eyebrowDetail,
                 title: card.title
             ) {
                 mealsBadge
@@ -397,6 +439,7 @@ struct AssistantPlanWeekCard: View {
                         MealLine(
                             slot: slot.mealLabel,
                             title: slot.title,
+                            imageUrl: slot.imageUrl,
                             // Wyszarzone jest to, co ZOSTAJE — wzrok ma
                             // trafiać w to, co propozycja naprawdę zmienia.
                             dimmed: !slot.isNew
@@ -436,6 +479,7 @@ struct AssistantPlanDayCard: View {
         AssistantCard(tone: .neutral) {
             AssistantCardHead(
                 eyebrow: card.eyebrow ?? CardEyebrowFallback.planDay,
+                eyebrowDetail: card.eyebrowDetail,
                 title: card.title
             ) {
                 EmptyView()
@@ -564,6 +608,22 @@ struct AssistantPlanDayCard: View {
                     .fill(rail.opacity(0.85))
                     .frame(width: 3)
 
+                CachedAsyncImage(url: slot.imageUrl.flatMap(URL.init(string:))) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        ZStack {
+                            Color.wmInsetSurface(scheme)
+                            Image(systemName: "fork.knife")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.wmFaint(scheme))
+                        }
+                    }
+                }
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(slot.mealLabel)
                         .font(.system(size: 10.5, weight: .bold))
@@ -575,8 +635,8 @@ struct AssistantPlanDayCard: View {
                         .font(.system(size: 14, weight: .semibold))
                         .tracking(-0.25)
                         .foregroundStyle(Color.wmLabel(scheme))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if slot.prepTimeMinutes > 0 {
                         Text("\(slot.prepTimeMinutes) min")

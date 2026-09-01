@@ -213,11 +213,21 @@ struct AssistantView: View {
                             followUps
                         }
 
-                        // Rozpórka: bez niej ScrollView nie ma dokąd przewinąć
-                        // i początek krótkiej odpowiedzi nie da się wypchnąć
-                        // pod górę ekranu.
+                        // Koniec TREŚCI — tu ląduje strzałka „na dół". Osobno
+                        // od rozpórki niżej, bo przewinięcie do jej dołu
+                        // wypychało ostatnią wiadomość o całą jej wysokość
+                        // w górę i zostawiało pod nią pusty ekran.
                         Color.clear
-                            .frame(height: 280)
+                            .frame(height: 1)
+                            .id(Self.tailAnchor)
+
+                        // Rozpórka: bez niej ScrollView nie ma dokąd przewinąć
+                        // i początku długiej odpowiedzi nie da się wypchnąć pod
+                        // górną krawędź. Tyle, ile trzeba na kartę i akcje —
+                        // każdy piksel ponad to jest pustką, przez którą
+                        // użytkownik musi przewijać z powrotem.
+                        Color.clear
+                            .frame(height: 120)
                             .id(Self.bottomAnchor)
                     }
                     .padding(.horizontal, WMPageMetrics.horizontal)
@@ -264,7 +274,7 @@ struct AssistantView: View {
 
     private func scrollToBottomPill(_ proxy: ScrollViewProxy) -> some View {
         Button {
-            scroll(proxy, to: Self.bottomAnchor, anchor: .bottom)
+            scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 13, weight: .bold))
@@ -785,6 +795,7 @@ struct AssistantView: View {
     private static let progressAnchor = "assistant.progress"
     private static let errorAnchor = "assistant.error"
     private static let bottomAnchor = "assistant.bottom"
+    private static let tailAnchor = "assistant.tail"
 
     private static let suggestions = [
         "Zaplanuj mi obiady i kolacje na ten tydzień",

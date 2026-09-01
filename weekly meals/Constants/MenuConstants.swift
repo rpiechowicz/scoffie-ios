@@ -11,15 +11,16 @@ struct MenuConstans {
 
     struct Plan: MenuModel {
         static let name: String = "Plan"
-        /// Sztućce — jedyna ikona w tym pasku, która nie jest prostokątem.
+        /// Patelnia — sylwetka spoza rodziny „kartka z liniami".
         ///
         /// Pasek ma trzy sąsiadujące zakładki o treści „kartka z liniami":
         /// `book.pages` (Przepisy), `menucard` (jadłospis) i `calendar`
         /// (Kalendarz). Przy 24 pt zostaje z nich sama sylwetka, a wszystkie
         /// trzy mają tę samą — więc każda kolejna „kartka" tylko przesuwa
-        /// kolizję o jedną zakładkę dalej, zamiast ją usunąć. Sztućce łamią
-        /// tę rodzinę kształtów i czytają się z odległości ręki.
-        static let icon: String = "fork.knife"
+        /// kolizję o jedną zakładkę dalej, zamiast ją usunąć. Patelnia łamie
+        /// tę rodzinę kształtów i czyta się z odległości ręki, a przy tym mówi
+        /// „gotujemy w tym tygodniu", a nie „restauracja".
+        static let icon: String = "frying.pan"
     }
     
     /// Produkty NIE są już zakładką — wpis zostaje, bo z tej samej nazwy
