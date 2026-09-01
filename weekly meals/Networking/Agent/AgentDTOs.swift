@@ -143,6 +143,10 @@ struct AgentPostMessageRequestDTO: Encodable {
     let clientToday: String
     let timeZone: String
     let image: AgentImageRequestDTO?
+    /// Kogo dotyczy pytanie; `nil` albo pusta lista = całe gospodarstwo.
+    /// Wysyłamy IDENTYFIKATORY, nie imiona — model dostaje je gotowe do
+    /// wpisania w propozycję, zamiast dopasowywać „Ania" do wiersza w bazie.
+    let scopeUserIds: [String]?
     /// Co ten build umie narysować. Serwer w trybie `soft` po tym poznaje,
     /// że wolno mu skończyć turę propozycją zamiast zapisem.
     let clientCapabilities: [String] = [AgentClientCapability.cardsV1]

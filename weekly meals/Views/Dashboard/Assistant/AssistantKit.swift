@@ -98,8 +98,10 @@ struct AssistantContextChip: Identifiable, Equatable {
     let id: String
     let icon: String
     let label: String
-    /// Chip, który da się zmienić (dziś tylko sygnalizowane chevronem).
+    /// Chip, który da się zmienić — chevron jest wtedy obietnicą, nie ozdobą.
     var adjustable: Bool = false
+    /// Zawężony przez użytkownika: wyróżniony, bo zmienia wynik odpowiedzi.
+    var isActive: Bool = false
 }
 
 /// Pasek „z czym asystent policzy odpowiedź”, zanim ją policzy.
@@ -110,6 +112,8 @@ struct AssistantContextChip: Identifiable, Equatable {
 struct AssistantContextChips: View {
     let items: [AssistantContextChip]
     var isMuted: Bool = false
+    /// Dotknięcie chipa, który da się zmienić. `nil` = chipy są etykietami.
+    var onTap: ((AssistantContextChip) -> Void)?
 
     @Environment(\.colorScheme) private var scheme
 
@@ -117,27 +121,14 @@ struct AssistantContextChips: View {
         ScrollView(.horizontal) {
             HStack(spacing: 6) {
                 ForEach(items) { chip in
-                    HStack(spacing: 5) {
-                        Image(systemName: chip.icon)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.wmMuted(scheme))
-
-                        Text(chip.label)
-                            .font(.system(size: 12, weight: .semibold))
-                            .tracking(-0.1)
-                            .foregroundStyle(Color.wmLabel(scheme))
-                            .lineLimit(1)
-
-                        if chip.adjustable {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(Color.wmFaint(scheme))
-                        }
+                    Button {
+                        guard chip.adjustable else { return }
+                        onTap?(chip)
+                    } label: {
+                        chipBody(chip)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 28)
-                    .background(Capsule().fill(Color.wmChipBg(scheme)))
-                    .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                    .buttonStyle(.plain)
+                    .disabled(!chip.adjustable || onTap == nil)
                 }
             }
             .padding(.horizontal, 14)
@@ -147,6 +138,43 @@ struct AssistantContextChips: View {
         .animation(.smooth(duration: 0.2), value: isMuted)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Zakres odpowiedzi: \(items.map(\.label).joined(separator: ", "))")
+    }
+
+    private func chipBody(_ chip: AssistantContextChip) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: chip.icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(
+                    chip.isActive ? WMPalette.terracotta : Color.wmMuted(scheme)
+                )
+
+            Text(chip.label)
+                .font(.system(size: 12, weight: .semibold))
+                .tracking(-0.1)
+                .foregroundStyle(Color.wmLabel(scheme))
+                .lineLimit(1)
+
+            if chip.adjustable {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.wmFaint(scheme))
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(
+            Capsule().fill(
+                chip.isActive ? Color.wmAccentTint(scheme) : Color.wmChipBg(scheme)
+            )
+        )
+        .overlay(
+            Capsule().stroke(
+                chip.isActive
+                    ? WMPalette.terracotta.opacity(0.4)
+                    : Color.wmTileStroke(scheme),
+                lineWidth: 1
+            )
+        )
     }
 }
 

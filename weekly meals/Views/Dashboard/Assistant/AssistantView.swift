@@ -39,6 +39,9 @@ struct AssistantView: View {
     /// Wiadomość poprawiana w tej chwili — razem z jej pierwotną treścią,
     /// żeby dało się wrócić bez pytania serwera.
     @State private var editing: EditingMessage?
+    /// Kogo dotyczy pytanie; puste = całe gospodarstwo.
+    @State private var scopeUserIds: Set<String> = []
+    @State private var showsScopeSheet = false
     @State private var showDeleteAlert = false
     @State private var showConversations = false
     @State private var showMemory = false
@@ -86,6 +89,12 @@ struct AssistantView: View {
             Button("Co asystent pamięta") { showMemory = true }
             Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
             Button("Anuluj", role: .cancel) {}
+        }
+        .sheet(isPresented: $showsScopeSheet) {
+            AssistantScopeSheet(
+                members: sessionStore.householdMembers,
+                selection: $scopeUserIds
+            )
         }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
@@ -328,6 +337,27 @@ struct AssistantView: View {
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
+    /// Etykieta zakresu: „Cały dom · 4”, „Ania i Zosia”, „3 osoby”.
+    ///
+    /// Do dwóch osób wypisujemy imiona — to jest cała informacja. Powyżej
+    /// imiona nie mieszczą się w chipie, a sama liczba wystarczy, bo listę
+    /// widać po dotknięciu.
+    private static func scopeLabel(
+        selected: [HouseholdMemberSnapshot],
+        all: [HouseholdMemberSnapshot]
+    ) -> String {
+        if selected.isEmpty {
+            return all.count > 1 ? "Cały dom · \(all.count)" : "Tylko Ty"
+        }
+        let names = selected.map(\.displayName)
+        switch names.count {
+        case 1: return names[0]
+        case 2: return "\(names[0]) i \(names[1])"
+        default:
+            return "\(names.count) \(AssistantScopeSheet.peopleWord(names.count))"
+        }
+    }
+
     /// „1–7 września” — zakres widocznego tygodnia jednym napisem.
     private static func weekLabel(for dates: [Date]) -> String {
         guard let first = dates.first, let last = dates.last else {
@@ -364,7 +394,14 @@ struct AssistantView: View {
 
             // Zakres widoczny PRZED odpowiedzią: bez tego użytkownik dowiaduje
             // się, o który tydzień i o kogo chodziło, dopiero z wyniku.
-            AssistantContextChips(items: contextChips, isMuted: store.isSending)
+            AssistantContextChips(
+                items: contextChips,
+                isMuted: store.isSending,
+                onTap: { chip in
+                    guard chip.id == "household" else { return }
+                    showsScopeSheet = true
+                }
+            )
                 .padding(.top, 10)
                 .padding(.bottom, 2)
 
@@ -571,12 +608,15 @@ struct AssistantView: View {
             )
         ]
 
-        let members = sessionStore.householdMembers.count
+        let household = sessionStore.householdMembers
+        let selected = household.filter { scopeUserIds.contains($0.id) }
         chips.append(
             AssistantContextChip(
                 id: "household",
-                icon: members > 1 ? "person.2" : "person",
-                label: members > 1 ? "Cały dom · \(members)" : "Tylko Ty"
+                icon: selected.isEmpty && household.count > 1 ? "person.2" : "person",
+                label: Self.scopeLabel(selected: selected, all: household),
+                adjustable: household.count > 1,
+                isActive: !selected.isEmpty
             )
         )
 
@@ -625,6 +665,7 @@ struct AssistantView: View {
         guard !text.isEmpty, store.canSend else { return }
 
         let sentAttachment = attachment
+        let scope = scopeUserIds
         let edited = editing
         draft = ""
         attachment = nil
@@ -642,7 +683,8 @@ struct AssistantView: View {
                 await store.send(
                     text: text,
                     weekStart: datesViewModel.weekStartISO,
-                    attachment: sentAttachment
+                    attachment: sentAttachment,
+                    scopeUserIds: Array(scope)
                 )
             }
         }

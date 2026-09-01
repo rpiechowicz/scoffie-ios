@@ -148,6 +148,7 @@ final class AgentStore {
         text: String,
         weekStart: String,
         attachment: AssistantAttachment? = nil,
+        scopeUserIds: [String] = [],
         clientMessageId: String = UUID().uuidString
     ) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -194,7 +195,8 @@ final class AgentStore {
                     timeZone: TimeZone.current.identifier,
                     image: attachment.map {
                         AgentImageRequestDTO(mediaType: $0.mediaType, data: $0.data)
-                    }
+                    },
+                    scopeUserIds: scopeUserIds.isEmpty ? nil : scopeUserIds
                 )
             )
             // Rozmowa mogła się w tym czasie przełączyć — wtedy ta tura
