@@ -231,7 +231,7 @@ struct weekly_mealsApp: App {
         }
         // No household → welcome flow. New users start at step 1 (full
         // onboarding); users who already finished onboarding but have no
-        // household land on step 4 (household creation only). Routing
+        // household land on step 5 (household creation only). Routing
         // logic in `rootScreen(_:)` decides the initial step.
         if sessionStore.currentHouseholdId?.isEmpty ?? true {
             return .welcome
@@ -253,7 +253,7 @@ struct weekly_mealsApp: App {
                 }
             )
         case .welcome:
-            WelcomeView(
+            WelcomeFlowView(
                 initialDisplayName: UserDefaults.standard.string(forKey: "settings.user.displayName") ?? "",
                 isCreatingHousehold: sessionStore.isSigningIn,
                 errorMessage: sessionStore.authError,
@@ -261,7 +261,9 @@ struct weekly_mealsApp: App {
                 // backend lost membership, etc.) → jump straight to the
                 // household-creation step instead of re-asking for
                 // profile/preferences they already filled in.
-                initialStep: sessionStore.onboardingCompletedAt != nil ? 4 : 1
+                initialStep: sessionStore.onboardingCompletedAt != nil
+                    ? WelcomeView.householdOnlyStep
+                    : 1
             )
         case .loader:
             StartupLoaderView()
