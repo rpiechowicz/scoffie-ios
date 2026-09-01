@@ -189,6 +189,13 @@ enum UserFacingErrorMapper {
         "AI_TURN_NOT_FOUND": "Tej odpowiedzi już nie ma.",
         "AI_TIMEOUT": "Asystent nie zdążył odpowiedzieć. Spróbuj jeszcze raz.",
         "AI_PROVIDER_ERROR": "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.",
+        // Propozycje: użytkownik klika przycisk W KARCIE, więc kopia mówi
+        // o karcie, a nie o „żądaniu". Każda z tych trzech kończy się tak
+        // samo — poproś asystenta o nową propozycję — ale POWÓD jest inny
+        // i tylko on pozwala zrozumieć, czemu przycisk nagle nie działa.
+        "AI_PROPOSAL_NOT_FOUND": "Tej propozycji już nie ma.",
+        "AI_PROPOSAL_STALE": "Plan tygodnia zmienił się od czasu tej propozycji. Poproś asystenta o nową.",
+        "AI_PROPOSAL_EXPIRED": "Ta propozycja jest już nieaktualna. Poproś asystenta o nową.",
         // Cookidoo
         "COOKIDOO_NOT_CONNECTED": "Gospodarstwo nie ma połączonego konta Cookidoo. Połącz je w Ustawieniach.",
         "COOKIDOO_AUTH_FAILED": "Połączenie z Cookidoo wygasło. Zaloguj się ponownie w Ustawieniach.",

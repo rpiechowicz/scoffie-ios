@@ -36,12 +36,16 @@ struct AgentMessageDTO: Decodable, Identifiable, Equatable {
     let id: String
     /// `USER` albo `ASSISTANT`.
     let role: String
-    /// Dziś zawsze `TEXT`; serwer rezerwuje inne rodzaje na karty w kliencie.
+    /// `TEXT` | `PLAN_WEEK` | `APPLIED` — czym JEST ta wiadomość.
     let kind: String
     let text: String
     let clientMessageId: String?
     let turnId: String?
     let createdAt: String
+    /// Karta — DODATEK do `text`, nigdy zamiennik. Starszy serwer i zwykła
+    /// odpowiedź tekstowa dają `nil`, a nieznany rodzaj `.unknown`: w obu
+    /// wypadkach zostaje zdanie, które broni się samo.
+    let card: AgentCardDTO?
 }
 
 struct AgentMessagesResponseDTO: Decodable {
@@ -112,4 +116,8 @@ struct AgentPostMessageRequestDTO: Encodable {
     let weekStart: String
     let clientToday: String
     let timeZone: String
+    /// Co ten build umie narysować. Serwer w trybie `soft` po tym poznaje,
+    /// że wolno mu skończyć turę propozycją zamiast zapisem — bez tego
+    /// starszy build dostałby zdanie „zaproponowałem" i ani jednego przycisku.
+    let clientCapabilities: [String] = [AgentClientCapability.cardsV1]
 }

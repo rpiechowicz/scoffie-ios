@@ -70,6 +70,22 @@ final class AgentAPIClient {
         try await perform(path: "agent/turns/\(id)", method: "GET", bodyData: nil)
     }
 
+    /// Zatwierdzenie propozycji — jedyny moment, w którym asystent zmienia plan.
+    ///
+    /// Bez udziału modelu, czyli bez kosztu: klient odsyła sam `proposalId`,
+    /// a serwer ma u siebie stan docelowy policzony w turze. Ponowne kliknięcie
+    /// oddaje ten sam wynik, nie drugi zapis — więc podwójne dotknięcie
+    /// przycisku nie jest sytuacją wyjątkową i nie trzeba go blokować na siłę.
+    func applyProposal(id: String) async throws -> AgentProposalActionResultDTO {
+        try await perform(path: "agent/proposals/\(id)/apply", method: "POST", bodyData: nil)
+    }
+
+    /// Cofnięcie zapisu. Serwer odmówi, jeśli ktoś w domu ruszył plan PO
+    /// zatwierdzeniu — cofnięcie nie ma prawa skasować cudzej zmiany.
+    func undoProposal(id: String) async throws -> AgentProposalActionResultDTO {
+        try await perform(path: "agent/proposals/\(id)/undo", method: "POST", bodyData: nil)
+    }
+
     /// Kasuje JEDNĄ rozmowę — porządki na liście, nie RODO.
     @discardableResult
     func deleteConversation(id: String) async throws -> Int {

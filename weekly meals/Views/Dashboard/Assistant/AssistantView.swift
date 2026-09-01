@@ -132,8 +132,16 @@ struct AssistantView: View {
 
                             MessageBubble(
                                 message: message,
+                                isBusy: isBusy(message),
                                 onOpenPlan: { sessionStore.dashboardTab = .plan },
-                                onAskAgain: { ask(message.text) }
+                                onAskAgain: { ask(message.text) },
+                                onApply: { id in
+                                    Task { await store.applyProposal(id: id) }
+                                },
+                                onUndo: { id in
+                                    Task { await store.undoProposal(id: id) }
+                                },
+                                onRevise: { revise() }
                             )
                             .id(message.id)
                         }
@@ -438,6 +446,22 @@ struct AssistantView: View {
         ask(draft)
     }
 
+    /// Kręciołek siedzi w TEJ karcie, której przycisk został naciśnięty.
+    private func isBusy(_ message: AgentChatMessage) -> Bool {
+        guard let proposalId = message.card?.proposalId else { return false }
+        return store.busyProposalId == proposalId
+    }
+
+    /// „Zmień" nie wysyła nic samo z siebie.
+    ///
+    /// Tura kosztuje pieniądze i pół minuty, a „zmień coś" nie mówi modelowi
+    /// nic. Zamiast tego otwieramy klawiaturę z początkiem zdania — użytkownik
+    /// dopowiada, CO zmienić, i dopiero to jedzie na serwer.
+    private func revise() {
+        draft = "Zmień w tej propozycji: "
+        isComposerFocused = true
+    }
+
     private func ask(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, store.canSend else { return }
@@ -561,8 +585,12 @@ private struct DaySeparator: View {
 /// dni) zamiast ściany tekstu wciśniętej w dymek.
 private struct MessageBubble: View {
     let message: AgentChatMessage
+    let isBusy: Bool
     let onOpenPlan: () -> Void
     let onAskAgain: () -> Void
+    let onApply: (String) -> Void
+    let onUndo: (String) -> Void
+    let onRevise: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -631,10 +659,39 @@ private struct MessageBubble: View {
                 AssistantSavedPlanCard(onOpenPlan: onOpenPlan)
             }
 
-            AssistantAnswer(text: message.text)
+            if !message.text.isEmpty {
+                AssistantAnswer(text: message.text)
+            }
+
+            card
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
+    }
+
+    /// Karta pod odpowiedzią. Nieznany rodzaj znika bez śladu — zostaje samo
+    /// zdanie, które i tak niesie sens. To jest cała zgodność wstecz: serwer
+    /// może dorzucić nowy rodzaj karty, nie czekając na wydanie aplikacji.
+    @ViewBuilder
+    private var card: some View {
+        switch message.card {
+        case .planWeek(let planWeek):
+            AssistantPlanWeekCard(
+                card: planWeek,
+                isBusy: isBusy,
+                onApply: { onApply(planWeek.proposalId) },
+                onRevise: onRevise
+            )
+        case .applied(let applied):
+            AssistantAppliedCard(
+                card: applied,
+                isBusy: isBusy,
+                onUndo: { onUndo(applied.proposalId) },
+                onOpenPlan: onOpenPlan
+            )
+        case .unknown, .none:
+            EmptyView()
+        }
     }
 }
 
