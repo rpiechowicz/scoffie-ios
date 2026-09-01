@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 import UIKit
 
 /// Zakładka „Asystent".
@@ -27,6 +29,13 @@ struct AssistantView: View {
     private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
 
     @State private var draft = ""
+    /// Zdjęcie dołączone do NASTĘPNEJ wiadomości. Nie przeżywa wysyłki —
+    /// jedno pytanie, jedno zdjęcie.
+    @State private var attachment: AssistantAttachment?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showsCamera = false
+    @State private var showsPhotoLibrary = false
+    @State private var attachmentError: String?
     @State private var showDeleteAlert = false
     @State private var showConversations = false
     @State private var showMemory = false
@@ -355,7 +364,26 @@ struct AssistantView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 2)
 
+            if let attachment {
+                AssistantAttachmentPreview(attachment: attachment) {
+                    self.attachment = nil
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+            }
+
+            if let attachmentError {
+                Text(attachmentError)
+                    .font(.system(size: 12))
+                    .foregroundStyle(WMPalette.butter)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+
             HStack(alignment: .bottom, spacing: 8) {
+                attachmentMenu
+
                 TextField(
                     store.isUnavailable ? "Asystent jest teraz niedostępny" : "Napisz do asystenta…",
                     text: $draft,
@@ -405,6 +433,81 @@ struct AssistantView: View {
         }
     }
 
+    /// Menu załączników. Dziś jedno: zdjęcie tego, co jest pod ręką.
+    ///
+    /// Aparat pokazujemy tylko tam, gdzie istnieje — na symulatorze pozycja,
+    /// która nic nie robi, wygląda jak zepsuta.
+    private var attachmentMenu: some View {
+        Menu {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button {
+                    showsCamera = true
+                } label: {
+                    Label("Zrób zdjęcie", systemImage: "camera")
+                }
+            }
+            Button {
+                showsPhotoLibrary = true
+            } label: {
+                Label("Wybierz z galerii", systemImage: "photo.on.rectangle")
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.wmLabel(scheme))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(Color.wmInsetSurface(scheme)))
+                .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+        } primaryAction: {
+            // Bez zdjęcia z aparatu (symulator) menu z jedną pozycją jest
+            // gorsze niż jej brak — wtedy „+” od razu otwiera galerię.
+            if !UIImagePickerController.isSourceTypeAvailable(.camera) {
+                showsPhotoLibrary = true
+            }
+        }
+        .menuOrder(.fixed)
+        .disabled(store.isUnavailable)
+        .accessibilityLabel("Dodaj załącznik")
+        .photosPicker(
+            isPresented: $showsPhotoLibrary,
+            selection: $photoItem,
+            matching: .images,
+            photoLibrary: .shared()
+        )
+        .fullScreenCover(isPresented: $showsCamera) {
+            AssistantCameraPicker { image in attach(image) }
+                .ignoresSafeArea()
+        }
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                defer { photoItem = nil }
+                guard
+                    let data = try? await item.loadTransferable(type: Data.self),
+                    let image = UIImage(data: data)
+                else {
+                    attachmentError = "Nie udało się odczytać tego zdjęcia."
+                    return
+                }
+                attach(image)
+            }
+        }
+    }
+
+    /// Przygotowuje zdjęcie do wysyłki: skalowanie i kompresja.
+    ///
+    /// Odmowa jest lepsza niż wysłanie czegoś, co i tak odbije się od limitu
+    /// po dwudziestu sekundach na komórce.
+    private func attach(_ image: UIImage) {
+        guard let prepared = AssistantPhotoPreparer.prepare(image) else {
+            attachmentError = "To zdjęcie jest za duże. Zrób je jeszcze raz z mniejszej odległości."
+            attachment = nil
+            return
+        }
+        attachmentError = nil
+        attachment = prepared
+    }
+
     /// Chipy mówią, z czym asystent policzy odpowiedź. Zmiana zakresu wchodzi
     /// razem z menu załączników — dziś chip jest etykietą, nie przyciskiem,
     /// więc świadomie nie udaje klikalnego chevronem.
@@ -435,7 +538,10 @@ struct AssistantView: View {
     }
 
     private var canSend: Bool {
-        store.canSend && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard store.canSend else { return false }
+        // Samo zdjęcie wystarczy: pytanie dopisujemy za użytkownika.
+        return attachment != nil
+            || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var sendTint: Color {
@@ -449,8 +555,32 @@ struct AssistantView: View {
 
     // MARK: - Akcje
 
+    /// Zdjęcie bez pytania to też pytanie.
+    ///
+    /// Serwer wymaga treści wiadomości, a użytkownik, który zrobił zdjęcie
+    /// lodówki, powiedział już wszystko. Zamiast blokować wysyłkę pustym
+    /// polem, wpisujemy za niego to jedno zdanie, o które i tak by chodziło.
+    private static let photoOnlyQuestion = "Co z tego ugotuję?"
+
     private func send() {
-        ask(draft)
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = trimmed.isEmpty && attachment != nil
+            ? Self.photoOnlyQuestion
+            : trimmed
+        guard !text.isEmpty, store.canSend else { return }
+
+        let sentAttachment = attachment
+        draft = ""
+        attachment = nil
+        attachmentError = nil
+        isComposerFocused = false
+        Task {
+            await store.send(
+                text: text,
+                weekStart: datesViewModel.weekStartISO,
+                attachment: sentAttachment
+            )
+        }
     }
 
     /// Kręciołek siedzi w TEJ karcie, której przycisk został naciśnięty.
@@ -638,7 +768,10 @@ private struct MessageBubble: View {
         HStack {
             Spacer(minLength: 40)
 
-            Text(message.text)
+            VStack(alignment: .trailing, spacing: 0) {
+                attachmentBubble
+
+                Text(message.text)
                 .font(.system(size: 15))
                 .foregroundStyle(Color.wmLabel(scheme))
                 .multilineTextAlignment(.leading)
@@ -649,10 +782,45 @@ private struct MessageBubble: View {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color.wmAccentTint(scheme))
                 )
-                // Wysłana, jeszcze niepotwierdzona — subtelnie, bo w 99 %
-                // przypadków potwierdzenie przychodzi zanim ktokolwiek zdąży
-                // to zauważyć.
-                .opacity(message.isPending ? 0.6 : 1)
+            }
+            // Wysłana, jeszcze niepotwierdzona — subtelnie, bo w 99 %
+            // przypadków potwierdzenie przychodzi zanim ktokolwiek zdąży
+            // to zauważyć.
+            .opacity(message.isPending ? 0.6 : 1)
+        }
+    }
+
+    /// Zdjęcie nad dymkiem — dopóki jest.
+    ///
+    /// Serwer go nie zapisuje, więc po ponownym wczytaniu rozmowy zostaje sam
+    /// napis. Mówimy o tym wprost zamiast pokazywać pustą ramkę: to nie jest
+    /// błąd ładowania, tylko obiecany brak.
+    @ViewBuilder
+    private var attachmentBubble: some View {
+        if let preview = message.attachment {
+            Image(uiImage: preview)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: 220, maxHeight: 160)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 16,
+                        bottomLeadingRadius: 16,
+                        bottomTrailingRadius: 4,
+                        topTrailingRadius: 16,
+                        style: .continuous
+                    )
+                )
+                .padding(.bottom, 4)
+        } else if message.hadPhoto {
+            HStack(spacing: 5) {
+                Image(systemName: "photo")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Zdjęcie — asystent widział je przy tej odpowiedzi")
+                    .font(.system(size: 11))
+            }
+            .foregroundStyle(Color.wmFaint(scheme))
+            .padding(.bottom, 4)
         }
     }
 

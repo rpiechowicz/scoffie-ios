@@ -28,6 +28,13 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Asystent AI: zdjęcie idzie WYŁĄCZNIE do modelu na czas jednej
+	     odpowiedzi i nie jest nigdzie zapisywane — ani w telefonie, ani na
+	     serwerze. Opis mówi to wprost, bo to jest cała umowa z użytkownikiem. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Aparat służy do pokazania asystentowi, co masz w lodówce albo na półce. Zdjęcie jest używane tylko do przygotowania jednej odpowiedzi i nigdzie się nie zapisuje.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Wybrane zdjęcie trafia do asystenta, żeby mógł zobaczyć, co masz pod ręką. Używamy go tylko do przygotowania jednej odpowiedzi i nigdzie go nie zapisujemy.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Aplikacja odczytuje liczbę kroków ze Zdrowia, aby pokazywać dzienny postęp w Kalendarzu i budować statystyki aktywności.</string>
 	<!-- Wymagane przez walidację App Store (kod 90683) dla samego entitlementu

@@ -110,14 +110,25 @@ struct AgentCreateConversationRequestDTO: Encodable {
 /// użytkownika. `clientMessageId` jest kluczem idempotencji — ponowione
 /// żądanie po utraconej odpowiedzi oddaje TĘ SAMĄ turę, zamiast płacić
 /// drugi raz za ten sam prompt.
+/// Zdjęcie dołączone do wiadomości.
+///
+/// Serwer go NIE ZAPISUJE — idzie prosto do modelu i znika razem z turą.
+/// Dlatego jedzie w kopercie wiadomości, a nie osobnym wysyłaniem pliku:
+/// nie ma czego wgrywać, jest tylko co pokazać.
+struct AgentImageRequestDTO: Encodable {
+    let mediaType: String
+    /// base64 bez prefiksu `data:`.
+    let data: String
+}
+
 struct AgentPostMessageRequestDTO: Encodable {
     let clientMessageId: String
     let text: String
     let weekStart: String
     let clientToday: String
     let timeZone: String
+    let image: AgentImageRequestDTO?
     /// Co ten build umie narysować. Serwer w trybie `soft` po tym poznaje,
-    /// że wolno mu skończyć turę propozycją zamiast zapisem — bez tego
-    /// starszy build dostałby zdanie „zaproponowałem" i ani jednego przycisku.
+    /// że wolno mu skończyć turę propozycją zamiast zapisem.
     let clientCapabilities: [String] = [AgentClientCapability.cardsV1]
 }

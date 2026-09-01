@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// Wiadomość w widoku czatu.
 ///
@@ -23,6 +24,14 @@ struct AgentChatMessage: Identifiable, Equatable {
     /// Karta — propozycja tygodnia albo potwierdzenie zapisu. `nil` przy
     /// zwykłej odpowiedzi i przy rodzaju, którego ten build nie zna.
     var card: AgentCardDTO?
+    /// Zdjęcie wysłane razem z pytaniem.
+    ///
+    /// Żyje tylko w pamięci tego ekranu: serwer go nie zapisuje, więc po
+    /// ponownym wczytaniu rozmowy zostaje sam `hadPhoto`. To jest widoczna
+    /// cena umowy „zdjęcie nie jest nigdzie przechowywane".
+    var attachment: UIImage?
+    /// Czy do tej wiadomości dołączono zdjęcie — także po utracie podglądu.
+    var hadPhoto: Bool = false
 }
 
 /// Stan rozmowy z asystentem AI.
@@ -138,6 +147,7 @@ final class AgentStore {
     func send(
         text: String,
         weekStart: String,
+        attachment: AssistantAttachment? = nil,
         clientMessageId: String = UUID().uuidString
     ) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -167,7 +177,9 @@ final class AgentStore {
                 author: .user,
                 text: trimmed,
                 createdAt: Date(),
-                isPending: true
+                isPending: true,
+                attachment: attachment?.preview,
+                hadPhoto: attachment != nil
             )
         )
 
@@ -179,7 +191,10 @@ final class AgentStore {
                     text: trimmed,
                     weekStart: weekStart,
                     clientToday: PlanWeek.dateKey(Date()),
-                    timeZone: TimeZone.current.identifier
+                    timeZone: TimeZone.current.identifier,
+                    image: attachment.map {
+                        AgentImageRequestDTO(mediaType: $0.mediaType, data: $0.data)
+                    }
                 )
             )
             // Rozmowa mogła się w tym czasie przełączyć — wtedy ta tura
@@ -639,7 +654,10 @@ final class AgentStore {
             author: dto.role == "USER" ? .user : .assistant,
             text: dto.text,
             createdAt: timestampParser.date(from: dto.createdAt),
-            card: dto.card
+            card: dto.card,
+            // Podglądu już nie ma — zdjęcie nie jest nigdzie zapisywane.
+            // Zostaje sam ślad, żeby pytanie nie wisiało w próżni.
+            hadPhoto: dto.kind == "PHOTO"
         )
     }
 }
