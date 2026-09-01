@@ -1,0 +1,114 @@
+import SwiftUI
+
+/// Wspólna podłoga wszystkich trzech ekranów przewodnika: kremowe/ciemne
+/// tło z ciepłą poświatą u góry.
+///
+/// Poświata jest tu, a nie w `WMPageBackground`, bo tamta wersja startuje
+/// od `wmPageBase` (o pół tonu ciemniejszego od canvasu) i pod pełną
+/// stroną bez nagłówka robiła widoczny szew przy dolnej krawędzi.
+struct TourBackground: View {
+    let scheme: ColorScheme
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color.wmCanvas(scheme)
+            RadialGradient(
+                colors: [
+                    WMPalette.terracotta.opacity(scheme == .dark ? 0.24 : 0.16),
+                    .clear,
+                ],
+                center: .top,
+                startRadius: 0,
+                endRadius: 300
+            )
+            .frame(height: 380)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// Ekran przewodnika = treść, która w razie potrzeby przewinie się sama,
+/// plus przyklejona do dołu stopka.
+///
+/// Treść ma mieścić się bez przewijania — taki jest cel projektu i dlatego
+/// każdy krok dostaje trzy punkty, a nie pięć. `ScrollView` jest tu jako
+/// zabezpieczenie: na iPhonie mini albo przy powiększonej czcionce
+/// systemowej to samo ułożenie nie zmieści się co do punktu, a wtedy
+/// lepiej przewinąć niż przyciąć. `.basedOnSize` gasi gumowanie, gdy
+/// wszystko się mieści, więc na docelowym ekranie strona stoi nieruchomo.
+struct TourScaffold<Content: View, Footer: View>: View {
+    private let content: Content
+    private let footer: Footer
+
+    init(
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.content = content()
+        self.footer = footer()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                content
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
+
+            footer
+        }
+    }
+}
+
+/// Wiersz „ikona w kafelku + tytuł + podpis" z hairline'em pod spodem.
+/// Używają go ekran powitalny i ekran domykający — w obu niesie tę samą
+/// myśl: jedna rzecz na wiersz, powód napisany wprost.
+struct TourFeatureRow: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let subtitle: String
+    var isLast: Bool = false
+    /// Ekran domykający ma dłuższe podpisy i potrzebuje wyrównania do góry.
+    var alignsTop: Bool = false
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: alignsTop ? .top : .center, spacing: 12) {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(tint.opacity(0.16))
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(tint)
+                    )
+                    .padding(.top, alignsTop ? 1 : 0)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.wmLabel(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(subtitle)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 9)
+
+            if !isLast {
+                Rectangle()
+                    .fill(Color.wmCardStroke(scheme))
+                    .frame(height: 1)
+            }
+        }
+    }
+}

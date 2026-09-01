@@ -8,6 +8,15 @@ struct WelcomeStep3PreferencesView: View {
     @Binding var diet: DietPreference
     @Binding var calorieGoal: Int
     @Binding var allergens: Set<Allergen>
+    /// Rozbicie dziennego celu na makro — policzone z sylwetki i celu
+    /// z kroków 1–2. `nil`, dopóki sylwetki nie da się złożyć (te same
+    /// warunki, co w Ustawieniach → „Dieta i alergeny").
+    ///
+    /// Do odczytu, nie do edycji: w kreatorze ma pokazać, że liczby
+    /// z poprzednich kroków do czegoś posłużyły. Stepperami przestawia się
+    /// je w Ustawieniach, gdzie jest miejsce na trzy wiersze z kontrolkami
+    /// i na przycisk powrotu do automatu.
+    var macros: MacroTargets?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -104,6 +113,13 @@ struct WelcomeStep3PreferencesView: View {
                     .background(welcomeCardBackground)
                 }
 
+                if let macros {
+                    VStack(alignment: .leading, spacing: 8) {
+                        WelcomeFieldCaption(text: "Makroskładniki")
+                        macroCard(macros)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     WelcomeFieldCaption(text: "Sposób odżywiania")
                     VStack(spacing: 0) {
@@ -158,6 +174,90 @@ struct WelcomeStep3PreferencesView: View {
             .padding(.bottom, 170)
         }
         .scrollDismissesKeyboard(.interactively)
+    }
+
+    /// Trzy paski w proporcji kalorii z każdego makro plus gramy.
+    ///
+    /// Ta karta niczego nie pyta — jest odpowiedzią na to, o co pytaliśmy
+    /// wcześniej. Bez niej krok 3 wyglądał tak, jakby wzrost i waga z kroku 1
+    /// nigdzie nie poszły.
+    private func macroCard(_ macros: MacroTargets) -> some View {
+        let total = max(macros.totalKcal, 1)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Tak rozkładamy \(calorieGoal) kcal na dzień. Dokładne wartości ustawisz w Ustawieniach.")
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.wmMuted(colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
+
+            macroRow(
+                title: "Białko",
+                grams: macros.proteinG,
+                kcal: macros.proteinKcal,
+                total: total,
+                accent: WMPalette.indigo
+            )
+            macroRow(
+                title: "Węglowodany",
+                grams: macros.carbsG,
+                kcal: macros.carbsKcal,
+                total: total,
+                accent: WMPalette.sage
+            )
+            macroRow(
+                title: "Tłuszcze",
+                grams: macros.fatG,
+                kcal: macros.fatKcal,
+                total: total,
+                accent: WMPalette.butter
+            )
+        }
+        .padding(16)
+        .background(welcomeCardBackground)
+        .animation(.smooth(duration: 0.22), value: macros)
+    }
+
+    private func macroRow(
+        title: String,
+        grams: Int,
+        kcal: Int,
+        total: Int,
+        accent: Color
+    ) -> some View {
+        let share = min(max(Double(kcal) / Double(total), 0), 1)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 7, height: 7)
+                Text(title)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(colorScheme))
+                Spacer(minLength: 8)
+                Text("\(grams) g")
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(accent)
+                    .monospacedDigit()
+                Text("· \(Int((share * 100).rounded()))%")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.wmFaint(colorScheme))
+                    .monospacedDigit()
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.wmBarTrack(colorScheme))
+                    Capsule()
+                        .fill(accent)
+                        .frame(width: proxy.size.width * share)
+                }
+            }
+            .frame(height: 6)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(grams) gramów")
     }
 
     private var welcomeCardBackground: some View {

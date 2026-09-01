@@ -1647,6 +1647,11 @@ final class SessionStore {
         defaults.removeObject(forKey: Keys.displayName)
         defaults.removeObject(forKey: Keys.email)
         defaults.removeObject(forKey: Keys.onboardingCompletedAt)
+        // Przewodnik „Poznaj aplikację" należy do konta, nie do telefonu:
+        // bez tej linii kolejna osoba logująca się na tym urządzeniu
+        // wpadałaby prosto w pytania o wzrost i alergeny, bo flaga
+        // z poprzedniej sesji nadal leżałaby w `UserDefaults`.
+        defaults.removeObject(forKey: TourCompletion.storageKey)
         clearPersistedProfileFields()
         clearPersistedPreferences()
         clearPersistedHealthIntegration()
@@ -1679,6 +1684,13 @@ final class SessionStore {
         defaults.removeObject(forKey: PreferencesKeys.proteinG)
         defaults.removeObject(forKey: PreferencesKeys.fatG)
         defaults.removeObject(forKey: PreferencesKeys.carbsG)
+        // Posiłki i ich pory należą do GOSPODARSTWA, nie do telefonu.
+        // Zostawione, wchodziły kolejnej osobie logującej się na tym
+        // urządzeniu jako jej własne — a od kroku „Ile posiłków jecie?"
+        // w kreatorze widać to wprost: podwieczorek zaznaczony przez
+        // poprzedni dom czekałby już odhaczony.
+        defaults.removeObject(forKey: MealSlotConfiguration.Keys.enabledSlots)
+        defaults.removeObject(forKey: MealSlotSchedule.Keys.times)
     }
 
     private func restoredSessionSnapshot() -> PersistedSessionSnapshot? {
