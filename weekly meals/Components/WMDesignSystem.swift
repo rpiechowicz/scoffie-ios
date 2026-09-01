@@ -132,6 +132,39 @@ extension Color {
         WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12)
     }
 
+    /// Tło pod akcent zielony — „zapisane / gotowe”.
+    ///
+    /// Te trzy tinty istniały dotąd wyłącznie jako liczby wpisywane w miejscu
+    /// użycia i zdążyły się rozjechać na cztery różne wartości
+    /// (`EditorialMealCard` 0.14/0.09, `HealthIntegrationSheet` 0.10/0.07,
+    /// `PlanDaySplitsSection` 0.22/0.16, `PlanSlotPickerSheet` 0.16/0.10).
+    /// Asystent potrzebuje ich w kartach na tyle często, że dalsze mnożenie
+    /// wariantów zrobiłoby z tego loterię — stąd jedna prawda tutaj.
+    static func wmSageTint(_ scheme: ColorScheme) -> Color {
+        WMPalette.sage.opacity(scheme == .dark ? 0.13 : 0.10)
+    }
+
+    /// Tło pod akcent niebieski — analiza, liczby, „informacyjnie”.
+    static func wmIndigoTint(_ scheme: ColorScheme) -> Color {
+        WMPalette.indigo.opacity(scheme == .dark ? 0.14 : 0.10)
+    }
+
+    /// Tło pod akcent żółty — pytanie asystenta i etykieta „nowe”.
+    static func wmButterTint(_ scheme: ColorScheme) -> Color {
+        WMPalette.butter.opacity(scheme == .dark ? 0.14 : 0.12)
+    }
+
+    /// Najgłębsze tło strony — o pół tonu ciemniejsze niż `wmCanvas`, bo pod
+    /// poświatę nagłówka potrzeba czerni, od której akcent ma się odbić.
+    /// Wcześniej ta wartość żyła wyłącznie w `WMPageBackground`; asystent
+    /// dokłada nad nią własne warstwy (composer, arkusze), więc musi umieć
+    /// nazwać ten sam kolor.
+    static func wmPageBase(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255)        // #0C0806
+            : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255)   // #FBF5EA
+    }
+
     static func wmRule(_ scheme: ColorScheme) -> Color {
         // Divider rules on cream need extra contrast — bumped 0.12 → 0.18 so
         // section dividers and ingredient hairlines are clearly visible.
@@ -171,10 +204,7 @@ struct WMPageBackground: View {
     let scheme: ColorScheme
 
     var body: some View {
-        let base = scheme == .dark
-            ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255)        // #0C0806
-            : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255)   // #FBF5EA
-
+        let base = Color.wmPageBase(scheme)
         let glow = WMPalette.terracotta.opacity(scheme == .dark ? 0.12 : 0.10)
 
         return ZStack {

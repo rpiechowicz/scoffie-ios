@@ -20,6 +20,9 @@ struct AgentChatMessage: Identifiable, Equatable {
     var isPending: Bool = false
     /// Tura, która skończyła się ZAPISEM planu — dymek dostaje skrót do Planu.
     var savedPlan: Bool = false
+    /// Karta — propozycja tygodnia albo potwierdzenie zapisu. `nil` przy
+    /// zwykłej odpowiedzi i przy rodzaju, którego ten build nie zna.
+    var card: AgentCardDTO?
 }
 
 /// Stan rozmowy z asystentem AI.
@@ -81,6 +84,12 @@ final class AgentStore {
     private(set) var conversations: [AgentConversationDTO] = []
     private(set) var isLoadingConversations = false
 
+    /// Propozycja, na której właśnie pracuje serwer — kręciołek siedzi
+    /// W KARCIE, bo to jej przycisk został naciśnięty. Blokujemy przy tym
+    /// wszystkie karty naraz: dwa zapisy tego samego tygodnia w locie to
+    /// pytanie, na które nie ma dobrej odpowiedzi.
+    private(set) var busyProposalId: String?
+
     /// Co asystent pamięta o tym domu (pamięć wspólna dla gospodarstwa).
     private(set) var memory: [AgentMemoryNoteDTO] = []
     private(set) var isLoadingMemory = false
@@ -129,6 +138,7 @@ final class AgentStore {
     func send(
         text: String,
         weekStart: String,
+        scopeUserIds: [String] = [],
         clientMessageId: String = UUID().uuidString
     ) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -170,7 +180,8 @@ final class AgentStore {
                     text: trimmed,
                     weekStart: weekStart,
                     clientToday: PlanWeek.dateKey(Date()),
-                    timeZone: TimeZone.current.identifier
+                    timeZone: TimeZone.current.identifier,
+                    scopeUserIds: scopeUserIds.isEmpty ? nil : scopeUserIds
                 )
             )
             // Rozmowa mogła się w tym czasie przełączyć — wtedy ta tura
@@ -523,6 +534,139 @@ final class AgentStore {
         }
     }
 
+    // MARK: - Poprawianie pytania
+
+    /// Poprawia własne pytanie: wycofuje je razem z tym, co po nim, i pyta od nowa.
+    ///
+    /// Lokalnie robimy dokładnie to, co zrobi serwer — usuwamy wiadomości od
+    /// poprawianej w dół i dopisujemy nową. Gdyby poprawka odmówiła, historia
+    /// z serwera i tak jest nietknięta, więc po błędzie po prostu ją
+    /// przeładowujemy zamiast zgadywać, co zostało cofnięte.
+    @discardableResult
+    func editMessage(
+        messageId: String,
+        text: String,
+        weekStart: String,
+        clientMessageId: String = UUID().uuidString
+    ) async -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            !trimmed.isEmpty,
+            canSend,
+            let conversationId,
+            let index = messages.firstIndex(where: { $0.id == messageId })
+        else { return false }
+
+        errorMessage = nil
+        retryText = nil
+        retryClientMessageId = nil
+        isSending = true
+        progress = []
+        defer { isSending = false }
+
+        let withdrawn = Array(messages[index...])
+        messages.removeSubrange(index...)
+        messages.append(
+            AgentChatMessage(
+                id: clientMessageId,
+                author: .user,
+                text: trimmed,
+                createdAt: Date(),
+                isPending: true
+            )
+        )
+
+        do {
+            let accepted = try await client.editMessage(
+                conversationId: conversationId,
+                request: AgentEditMessageRequestDTO(
+                    clientMessageId: clientMessageId,
+                    messageId: messageId,
+                    text: trimmed,
+                    weekStart: weekStart,
+                    clientToday: PlanWeek.dateKey(Date()),
+                    timeZone: TimeZone.current.identifier
+                )
+            )
+            confirmPendingMessage(clientMessageId)
+            pendingTurnId = accepted.turnId
+            await follow(turnId: accepted.turnId)
+            return true
+        } catch {
+            handle(error)
+            // Serwer cofnął ukrycie, więc wracamy do stanu sprzed poprawki.
+            // Odtwarzamy go z pamięci, a nie z sieci: to jest ten sam zestaw
+            // wiadomości, a ponowne pobranie w błędzie sieci i tak by padło.
+            messages.removeAll { $0.id == clientMessageId }
+            messages.append(contentsOf: withdrawn)
+            return false
+        }
+    }
+
+    // MARK: - Propozycje
+
+    /// „Dodaj do planu" — jedyny moment, w którym asystent zmienia tydzień.
+    ///
+    /// Bez modelu i bez tury: klient odsyła sam identyfikator, serwer ma
+    /// u siebie policzony stan docelowy. Wiadomość potwierdzającą doklejamy
+    /// z odpowiedzi, więc plan i rozmowa zmieniają się w tej samej chwili.
+    func applyProposal(id: String) async {
+        await runProposalAction(id: id) { [client] in
+            try await client.applyProposal(id: id)
+        }
+    }
+
+    /// „Cofnij". Serwer odmówi, jeśli ktoś w domu ruszył plan PO zapisie —
+    /// cofnięcie nie ma prawa skasować cudzej zmiany.
+    func undoProposal(id: String) async {
+        await runProposalAction(id: id) { [client] in
+            try await client.undoProposal(id: id)
+        }
+    }
+
+    private func runProposalAction(
+        id: String,
+        _ action: @escaping () async throws -> AgentProposalActionResultDTO
+    ) async {
+        guard busyProposalId == nil else { return }
+        busyProposalId = id
+        errorMessage = nil
+        defer { busyProposalId = nil }
+
+        do {
+            let result = try await action()
+            let message = Self.chatMessage(from: result.message)
+            // Podwójne kliknięcie oddaje TĘ SAMĄ wiadomość, nie drugą —
+            // stąd podmiana po id zamiast ślepego dopisania.
+            if let existing = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[existing] = message
+            } else {
+                messages.append(message)
+            }
+            refreshCardState(proposalId: result.proposalId, from: result.message.card?.state)
+            // Plan tygodnia właśnie się zmienił — lista rozmów pokaże to
+            // przy następnym otwarciu, a zakładka Plan dostaje broadcast
+            // z serwera (`weeklyPlans:weekChanged`).
+            Task { [weak self] in await self?.refreshConversationsQuietly() }
+        } catch {
+            handle(error)
+        }
+    }
+
+    /// Przepisuje stan na WSZYSTKIE karty tej propozycji.
+    ///
+    /// Propozycja i potwierdzenie to dwie wiadomości o jednej rzeczy: gdy
+    /// tydzień zostaje zapisany, karta propozycji w historii musi przestać
+    /// pokazywać „Dodaj do planu" natychmiast, a nie po ponownym wczytaniu
+    /// rozmowy. Stan jest z serwera — nie zgadujemy go tutaj.
+    private func refreshCardState(proposalId: String, from state: AgentCardStateDTO?) {
+        guard let state else { return }
+        for index in messages.indices
+        where messages[index].card?.proposalId == proposalId {
+            messages[index].card = messages[index].card?.withState(state)
+        }
+    }
+
     // MARK: - Błędy
 
     private func handle(_ error: Error) {
@@ -565,7 +709,8 @@ final class AgentStore {
             id: dto.id,
             author: dto.role == "USER" ? .user : .assistant,
             text: dto.text,
-            createdAt: timestampParser.date(from: dto.createdAt)
+            createdAt: timestampParser.date(from: dto.createdAt),
+            card: dto.card
         )
     }
 }

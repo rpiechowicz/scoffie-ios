@@ -104,6 +104,11 @@ final class SessionStore {
     /// żeby Settings / Household sheet otwierało się z gotowymi danymi.
     var householdMembers: [HouseholdMemberSnapshot] = []
     var isLoadingHouseholdMembers: Bool = false
+    /// Cele i ograniczenia domowników — patrz `refreshMemberContext()`.
+    /// Puste, dopóki ktoś o nie nie poprosi; dziś pyta tylko asystent.
+    var memberContext: [BackendMemberContextDTO] = []
+    private var isLoadingMemberContext: Bool = false
+    private var memberContextLoadedAt: Date?
     private(set) var didLoadHouseholdMembers: Bool = false
     /// Kiedy skład gospodarstwa przyszedł z SERWERA (nie z pliku cache).
     ///
@@ -139,6 +144,13 @@ final class SessionStore {
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
     var dashboardTab: DashboardTab = .calendar
+    /// Prośba asystenta o otwarcie listy zakupów.
+    ///
+    /// Lista jest arkuszem WEWNĄTRZ Planu, więc samo przełączenie zakładki
+    /// zostawiłoby użytkownika o jedno dotknięcie od tego, co obiecał
+    /// przycisk. Flagę zdejmuje ekran, który ją obsłużył — inaczej arkusz
+    /// otwierałby się przy każdym powrocie na Plan.
+    var opensShoppingList = false
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
     private let appleSignInCoordinator = AppleSignInCoordinator()
@@ -1854,6 +1866,49 @@ final class SessionStore {
         }
         householdMembersTask = task
         await task.value
+    }
+
+    /// Cele i ograniczenia WSZYSTKICH domowników — pod kartę „Co wiem o Was”
+    /// na zakładce asystenta.
+    ///
+    /// `householdMembers` mówi, KTO jest w domu; to mówi, CZEGO każdy z nich
+    /// potrzebuje. Serwer ma te dane od zawsze (`households:memberPreferences`,
+    /// ten sam kształt, którym karmiony jest model), tylko klient nigdy o nie
+    /// nie zapytał — a bez nich asystent obiecuje wiedzę, której nie widać.
+    /// Odczyt jest tani i cichy: błąd zostawia poprzednią zawartość i nie
+    /// zapala `authError`, bo to karta poboczna, nie ścieżka krytyczna.
+    func refreshMemberContext(force: Bool = false) async {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else {
+            memberContext = []
+            return
+        }
+        if isLoadingMemberContext { return }
+        if !force, !memberContext.isEmpty,
+           let loadedAt = memberContextLoadedAt,
+           Date().timeIntervalSince(loadedAt) < householdMembersFreshness {
+            return
+        }
+
+        isLoadingMemberContext = true
+        defer { isLoadingMemberContext = false }
+
+        do {
+            let socketClient = sessionSocket()
+            let envelope: WsEnvelope<[BackendMemberContextDTO]> = try await socketClient.emitWithAck(
+                event: "households:memberPreferences",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId
+                ],
+                as: WsEnvelope<[BackendMemberContextDTO]>.self
+            )
+            guard envelope.ok, let data = envelope.data else { return }
+            memberContext = data
+            memberContextLoadedAt = Date()
+        } catch {
+            // Cicho: karta pokaże to, co już ma, albo nic.
+        }
     }
 
     // MARK: - User preferences (diet, kcal, allergens)

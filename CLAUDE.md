@@ -9,6 +9,39 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `xcodebuild -project "weekly meals.xcodeproj" -scheme "weekly meals" -destination "generic/platform=iOS Simulator" -sdk iphonesimulator build CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES ARCHS=arm64 EXCLUDED_ARCHS=x86_64`
   (log do pliku, potem `grep -E "error:|BUILD (SUCCEEDED|FAILED)"`). Brak targetu testów — regresje
   sprawdza się ręcznie na telefonie; fizyczny iPhone łączy się po LAN IP Maca, nie `localhost`.
+- **Szybka kontrola typów bez pełnego builda (~30 s zamiast ~4 min)** — jedyny sposób, żeby
+  sprawdzić kod pisany na Windowsie (tam nie ma Xcode). Musi mieć TE SAME flagi co Xcode,
+  inaczej przepuszcza błędy (patrz niżej):
+  ```sh
+  SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
+  DD=~/Library/Developer/Xcode/DerivedData/weekly_meals-*/Build/Products/Debug-iphonesimulator
+  FEATURES="-D DEBUG -enable-testing -enable-bare-slash-regex \
+    -enable-upcoming-feature DisableOutwardActorInference \
+    -enable-upcoming-feature InferSendableFromCaptures \
+    -enable-upcoming-feature GlobalActorIsolatedTypesUsability \
+    -enable-upcoming-feature MemberImportVisibility \
+    -enable-upcoming-feature InferIsolatedConformances \
+    -enable-upcoming-feature NonisolatedNonsendingByDefault"
+  find "weekly meals" -name '*.swift' -exec xcrun swiftc -typecheck -sdk "$SDK" \
+    -target arm64-apple-ios26.0-simulator -swift-version 5 \
+    -Xfrontend -default-isolation=MainActor ${=FEATURES} \
+    -I "$DD" -F "$DD" -F "$DD/PackageFrameworks" {} +
+  ```
+  `-I/-F` wskazują zbudowane pakiety SPM (SocketIO) — bez nich leci `no such module`.
+  Pojedynczy wzorzec sprawdza się w 2 s w osobnym pliku próbnym z tymi samymi flagami.
+- **Pułapka SE-0418 (`InferSendableFromCaptures`, włączone w tym projekcie):** referencja do
+  metody obok `nil` w wyrażeniu warunkowym (`cond ? nil : metoda`) daje dwa równorzędne
+  rozwiązania typu. Kompilator NIE wskazuje tej linii — mówi `ambiguous use of 'init'`
+  o kilkadziesiąt linii wyżej, przy najbliższym kontenerze SwiftUI (np. `ScrollView`).
+  Jawny typ nie pomaga; pomaga domknięcie: `cond ? nil : { metoda() }`.
+- **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
+  z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
+  kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
+  po cichu: zmiana nazwy pola w backendzie nie da błędu, tylko karta zniknie z ekranu. Wzorzec
+  odświeża `scripts/dump-card-fixtures.ts` w backendzie.
+- Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
+  zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
+  linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.
 - Repo leży w iCloud Desktop — pliki bywają „dataless”; gdy git/xcodebuild wisi przy 0 % CPU,
   zmaterializuj: `find "weekly meals" -type f -exec cat {} + > /dev/null`.
 - Gałęzie z `develop` po `git fetch --prune`, od razu `git push -u origin <gałąź>`; PR → `develop`

@@ -13,6 +13,8 @@ struct AssistantConversationsSheet: View {
     @Environment(\.colorScheme) private var scheme
 
     @State private var pendingDeletion: AgentConversationDTO?
+    @State private var query = ""
+
 
     var body: some View {
         NavigationStack {
@@ -27,6 +29,10 @@ struct AssistantConversationsSheet: View {
             }
             .navigationTitle("Rozmowy")
             .navigationBarTitleDisplayMode(.inline)
+            // Rozmów przybywa po jednej dziennie i po miesiącu lista jest
+            // dłuższa niż ekran — szukanie po treści jest wtedy szybsze niż
+            // przewijanie po datach.
+            .searchable(text: $query, prompt: "Szukaj w rozmowach")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Zamknij") { dismiss() }
@@ -66,31 +72,103 @@ struct AssistantConversationsSheet: View {
 
     private var list: some View {
         List {
-            ForEach(store.conversations) { conversation in
-                Button {
-                    Task {
-                        await store.select(conversationId: conversation.id)
-                        dismiss()
+            ForEach(groups, id: \.label) { group in
+                Section {
+                    ForEach(group.items) { conversation in
+                        Button {
+                            Task {
+                                await store.select(conversationId: conversation.id)
+                                dismiss()
+                            }
+                        } label: {
+                            row(conversation)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Color.wmCanvas(scheme))
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                pendingDeletion = conversation
+                            } label: {
+                                Label("Usuń", systemImage: "trash")
+                            }
+                        }
                     }
-                } label: {
-                    row(conversation)
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(Color.wmCanvas(scheme))
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        pendingDeletion = conversation
-                    } label: {
-                        Label("Usuń", systemImage: "trash")
-                    }
+                } header: {
+                    Text(group.label)
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.1)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color.wmFaint(scheme))
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .overlay {
+            if groups.isEmpty && !query.isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
+        }
         .refreshable {
             await store.refreshConversations()
         }
+    }
+
+    private struct ConversationGroup {
+        let label: String
+        let items: [AgentConversationDTO]
+    }
+
+    /// Rozmowy pogrupowane po tym, KIEDY się wydarzyły.
+    ///
+    /// Płaska lista dat odpowiada na pytanie „która to była”, dopiero gdy pamięta
+    /// się datę. Grupy odpowiadają na to, jak ludzie o tym myślą: dzisiejsza,
+    /// wczorajsza, „gdzieś w tym tygodniu”.
+    private var groups: [ConversationGroup] {
+        let matching = store.conversations.filter(matches)
+        let calendar = Calendar.current
+        let now = Date()
+
+        var buckets: [(String, [AgentConversationDTO])] = [
+            ("Dziś", []), ("Wczoraj", []), ("W tym tygodniu", []), ("Wcześniej", [])
+        ]
+
+        for conversation in matching {
+            let stamp = AgentStore.parseTimestamp(conversation.lastMessageAt ?? conversation.createdAt)
+            let index: Int
+            if let stamp {
+                if calendar.isDateInToday(stamp) {
+                    index = 0
+                } else if calendar.isDateInYesterday(stamp) {
+                    index = 1
+                } else if let days = calendar.dateComponents([.day], from: stamp, to: now).day, days < 7 {
+                    index = 2
+                } else {
+                    index = 3
+                }
+            } else {
+                index = 3
+            }
+            buckets[index].1.append(conversation)
+        }
+
+        return buckets
+            .filter { !$0.1.isEmpty }
+            .map { ConversationGroup(label: $0.0, items: $0.1) }
+    }
+
+    /// Szukanie bez znaków diakrytycznych i wielkości liter — „zurek” ma
+    /// znaleźć „Żurek”.
+    private func matches(_ conversation: AgentConversationDTO) -> Bool {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return true }
+        let haystack = [conversation.title, conversation.preview]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        return haystack.range(
+            of: needle,
+            options: [.caseInsensitive, .diacriticInsensitive]
+        ) != nil
     }
 
     private func row(_ conversation: AgentConversationDTO) -> some View {

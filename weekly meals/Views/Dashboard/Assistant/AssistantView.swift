@@ -17,12 +17,27 @@ struct AssistantView: View {
 
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
 
+    // Cel czytany tak samo jak na Przepisach i w Kalendarzu — jedno źródło,
+    // żeby chip kontekstu nie obiecywał innej liczby niż reszta aplikacji.
+    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
+
     @State private var draft = ""
+    /// Wiadomość poprawiana w tej chwili — razem z jej pierwotną treścią,
+    /// żeby dało się wrócić bez pytania serwera.
+    @State private var editing: EditingMessage?
+    /// Kogo dotyczy pytanie; puste = całe gospodarstwo.
+    @State private var scopeUserIds: Set<String> = []
+    @State private var showsScopeSheet = false
+    @State private var showsRecipePicker = false
     @State private var showDeleteAlert = false
     @State private var showConversations = false
     @State private var showMemory = false
+    @State private var showMoreMenu = false
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
@@ -54,6 +69,25 @@ struct AssistantView: View {
         }
         .onAppear { store.setVisible(true) }
         .onDisappear { store.setVisible(false) }
+        .task {
+            // Cele i ograniczenia domowników pod kartę „Co wiem o Was”.
+            // Cicho i tylko raz na kwadrans — to karta poboczna.
+            await sessionStore.refreshMemberContext()
+        }
+        .confirmationDialog("Asystent", isPresented: $showMoreMenu, titleVisibility: .hidden) {
+            Button("Nowa rozmowa") {
+                Task { await store.startNewConversation() }
+            }
+            Button("Co asystent pamięta") { showMemory = true }
+            Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
+            Button("Anuluj", role: .cancel) {}
+        }
+        .sheet(isPresented: $showsScopeSheet) {
+            AssistantScopeSheet(
+                members: sessionStore.householdMembers,
+                selection: $scopeUserIds
+            )
+        }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
         }
@@ -72,47 +106,23 @@ struct AssistantView: View {
 
     // MARK: - Nagłówek
 
+    /// Duży tytuł tylko na pustym ekranie.
+    ///
+    /// W trwającej rozmowie słowo „Asystent” nie niesie nic, czego nie widać
+    /// z zakładki, a zjada wiersz treści. Kompaktowy pasek oddaje to miejsce
+    /// wiadomościom i pokazuje tytuł rozmowy nadany przez serwer.
     private var header: some View {
-        EditorialPageHeader(title: "Asystent") {
-            HStack(spacing: 8) {
-                EditorialIconButton(icon: "clock.arrow.circlepath") {
-                    showConversations = true
-                }
-                .accessibilityLabel("Historia rozmów")
+        AssistantHeader(
+            mode: store.messages.isEmpty ? .large : .compact(title: conversationTitle),
+            onNewConversation: { Task { await store.startNewConversation() } },
+            onHistory: { showConversations = true },
+            onMore: { showMoreMenu = true }
+        )
+    }
 
-                Menu {
-                    Button {
-                        Task { await store.startNewConversation() }
-                    } label: {
-                        Label("Nowa rozmowa", systemImage: "square.and.pencil")
-                    }
-                    Button {
-                        showMemory = true
-                    } label: {
-                        Label("Co asystent pamięta", systemImage: "brain")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        showDeleteAlert = true
-                    } label: {
-                        Label("Usuń historię rozmów", systemImage: "trash")
-                    }
-                } label: {
-                    // Ten sam rozmiar co `EditorialIconButton` (38 pt), żeby akcje
-                    // nagłówka wyglądały tak samo na każdej zakładce.
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
-                        .frame(width: 38, height: 38)
-                        .background(Circle().fill(Color.wmTileBg(scheme)))
-                        .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
-                }
-                .accessibilityLabel("Więcej opcji asystenta")
-            }
-        }
-        .padding(.horizontal, WMPageMetrics.horizontal)
-        .padding(.top, WMPageMetrics.top)
-        .padding(.bottom, 12)
+    private var conversationTitle: String? {
+        guard let id = store.conversationId else { return nil }
+        return store.conversations.first { $0.id == id }?.title
     }
 
     // MARK: - Rozmowa
@@ -135,14 +145,30 @@ struct AssistantView: View {
 
                             MessageBubble(
                                 message: message,
+                                isBusy: isBusy(message),
                                 onOpenPlan: { sessionStore.dashboardTab = .plan },
-                                onAskAgain: { ask(message.text) }
+                                onOpenShopping: {
+                                    // Lista zakupów jest arkuszem w Planie,
+                                    // więc sama zakładka to za mało.
+                                    sessionStore.opensShoppingList = true
+                                    sessionStore.dashboardTab = .plan
+                                },
+                                onAskAgain: { ask(message.text) },
+                                onApply: { id in
+                                    Task { await store.applyProposal(id: id) }
+                                },
+                                onUndo: { id in
+                                    Task { await store.undoProposal(id: id) }
+                                },
+                                onRevise: { revise() },
+                                onAsk: { prompt in ask(prompt) },
+                                onEdit: { beginEditing(message) }
                             )
                             .id(message.id)
                         }
 
                         if store.isSending {
-                            ProgressTrail(
+                            AssistantProgressTrail(
                                 steps: store.progress,
                                 startedAt: store.turnStartedAt
                             )
@@ -152,7 +178,15 @@ struct AssistantView: View {
                         if let errorMessage = store.errorMessage {
                             ErrorNote(
                                 text: errorMessage,
-                                onRetry: store.retryText == nil ? nil : retry
+                                // Domknięcie, a nie referencja `retry`: pod
+                                // `InferSendableFromCaptures` (SE-0418, włączone
+                                // w tym projekcie) referencja do metody obok `nil`
+                                // w wyrażeniu warunkowym daje dwa równorzędne
+                                // rozwiązania typu i CAŁY `ScrollView` przestaje
+                                // się kompilować („ambiguous use of 'init'"),
+                                // ze wskazaniem na linię 60 wierszy wyżej.
+                                // Jawny typ tu nie pomaga — tylko domknięcie.
+                                onRetry: store.retryText == nil ? nil : { retry() }
                             )
                             .id(Self.errorAnchor)
                         }
@@ -161,11 +195,21 @@ struct AssistantView: View {
                             followUps
                         }
 
-                        // Rozpórka: bez niej ScrollView nie ma dokąd przewinąć
-                        // i początek krótkiej odpowiedzi nie da się wypchnąć
-                        // pod górę ekranu.
+                        // Koniec TREŚCI — tu ląduje strzałka „na dół". Osobno
+                        // od rozpórki niżej, bo przewinięcie do jej dołu
+                        // wypychało ostatnią wiadomość o całą jej wysokość
+                        // w górę i zostawiało pod nią pusty ekran.
                         Color.clear
-                            .frame(height: 280)
+                            .frame(height: 1)
+                            .id(Self.tailAnchor)
+
+                        // Rozpórka: bez niej ScrollView nie ma dokąd przewinąć
+                        // i początku długiej odpowiedzi nie da się wypchnąć pod
+                        // górną krawędź. Tyle, ile trzeba na kartę i akcje —
+                        // każdy piksel ponad to jest pustką, przez którą
+                        // użytkownik musi przewijać z powrotem.
+                        Color.clear
+                            .frame(height: 120)
                             .id(Self.bottomAnchor)
                     }
                     .padding(.horizontal, WMPageMetrics.horizontal)
@@ -212,7 +256,7 @@ struct AssistantView: View {
 
     private func scrollToBottomPill(_ proxy: ScrollViewProxy) -> some View {
         Button {
-            scroll(proxy, to: Self.bottomAnchor, anchor: .bottom)
+            scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 13, weight: .bold))
@@ -228,62 +272,114 @@ struct AssistantView: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("O co zapytać")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
-
-            Text("Asystent zna Wasz plan tygodnia, przepisy i cele domowników. Może ułożyć tydzień, podmienić jedno danie albo dopisać przepis.")
-                .font(.system(size: 14))
-                .foregroundStyle(Color.wmMuted(scheme))
-
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(Self.suggestions, id: \.self) { suggestion in
-                    // Jedno dotknięcie zamiast dwóch: podpowiedź wysyła się od
-                    // razu, zamiast wypełniać pole i czekać na drugi ruch.
-                    Button { ask(suggestion) } label: {
-                        Text(suggestion)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Color.wmLabel(scheme))
-                            .multilineTextAlignment(.leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.wmTileBg(scheme))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(.bottom, 8)
+        AssistantEmptyState(knowledge: knowledge, onAsk: ask)
+            .padding(.bottom, 8)
     }
 
-    /// Podpowiedzi kolejnego ruchu pod ostatnią odpowiedzią — jak w dojrzałych
-    /// czatach: rozmowa nie kończy się ścianą tekstu i pustką.
-    private var followUps: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(Self.followUpSuggestions, id: \.self) { suggestion in
-                    Button { ask(suggestion) } label: {
-                        Text(suggestion)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(WMPalette.terracotta)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(Color.wmAccentTint(scheme)))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+    /// Fakty pod pusty stan — liczone tutaj, bo tylko ten widok ma naraz
+    /// dostęp do planu, katalogu i składu gospodarstwa.
+    private var knowledge: AssistantKnowledge {
+        let dates = datesViewModel.dates
+        let planned = dates.reduce(into: 0) { total, date in
+            total += mealStore.plan(for: date).allMeals.count
         }
-        .scrollIndicators(.hidden)
+        let slotsPerDay = max(1, sessionStore.mealSlots.enabled.count)
+        let recipes = recipeCatalogStore.recipes
+
+        return AssistantKnowledge(
+            weekLabel: Self.weekLabel(for: dates),
+            plannedMeals: planned,
+            totalMealSlots: slotsPerDay * max(1, dates.count),
+            calorieGoal: calorieGoal,
+            proteinTargetG: ownProteinTarget,
+            recipeCount: recipes.count,
+            favouriteCount: recipes.filter(\.favourite).count,
+            members: otherMembers
+        )
+    }
+
+    private var ownProteinTarget: Int? {
+        let ownId = sessionStore.currentUserId
+        let mine = sessionStore.memberContext.first { $0.userId == ownId }
+        return mine?.targets?.macros?.proteinG
+    }
+
+    /// Domownicy poza mną — w karcie „Co wiem o Was” moje własne cele mają
+    /// osobny wiersz, więc powtarzanie ich tutaj byłoby szumem.
+    private var otherMembers: [AssistantKnowledge.Member] {
+        let ownId = sessionStore.currentUserId
+        return sessionStore.memberContext
+            .filter { $0.userId != ownId }
+            .map { context in
+                AssistantKnowledge.Member(
+                    id: context.userId,
+                    name: HouseholdMemberStyle.shortName(context.displayName),
+                    calorieGoal: context.targets?.calorieGoal,
+                    restrictions: Self.restrictions(for: context)
+                )
+            }
+    }
+
+    /// „bez laktozy”, „wegetariańska” — to samo, czym asystent zawęża katalog.
+    private static func restrictions(for context: BackendMemberContextDTO) -> String? {
+        var parts: [String] = []
+
+        let allergens = (context.allergens ?? [])
+            .compactMap { Allergen(rawValue: $0)?.title.lowercased() }
+        if !allergens.isEmpty {
+            parts.append("bez " + allergens.joined(separator: ", "))
+        }
+
+        if let raw = context.dietPreference,
+           let diet = DietPreference(backendValue: raw),
+           diet != .none {
+            parts.append(diet.title.lowercased())
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    /// Etykieta zakresu: „Cały dom · 4”, „Ania i Zosia”, „3 osoby”.
+    ///
+    /// Do dwóch osób wypisujemy imiona — to jest cała informacja. Powyżej
+    /// imiona nie mieszczą się w chipie, a sama liczba wystarczy, bo listę
+    /// widać po dotknięciu.
+    private static func scopeLabel(
+        selected: [HouseholdMemberSnapshot],
+        all: [HouseholdMemberSnapshot]
+    ) -> String {
+        if selected.isEmpty {
+            return all.count > 1 ? "Cały dom · \(all.count)" : "Tylko Ty"
+        }
+        let names = selected.map(\.displayName)
+        switch names.count {
+        case 1: return names[0]
+        case 2: return "\(names[0]) i \(names[1])"
+        default:
+            return "\(names.count) \(AssistantScopeSheet.peopleWord(names.count))"
+        }
+    }
+
+    /// „1–7 września” — zakres widocznego tygodnia jednym napisem.
+    private static func weekLabel(for dates: [Date]) -> String {
+        guard let first = dates.first, let last = dates.last else {
+            return "ten tydzień"
+        }
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "pl_PL")
+        day.dateFormat = "d"
+
+        let full = DateFormatter()
+        full.locale = Locale(identifier: "pl_PL")
+        full.dateFormat = "d MMMM"
+
+        return "\(day.string(from: first))–\(full.string(from: last))"
+    }
+
+    /// Podpowiedzi kolejnego ruchu pod ostatnią odpowiedzią — rozmowa nie
+    /// kończy się ścianą tekstu i pustym polem.
+    private var followUps: some View {
+        AssistantQuickReplies(items: Self.followUpSuggestions, onTap: ask)
     }
 
     private var showsFollowUps: Bool {
@@ -298,22 +394,49 @@ struct AssistantView: View {
         VStack(spacing: 0) {
             Divider().overlay(Color.wmRule(scheme))
 
-            HStack(alignment: .bottom, spacing: 10) {
+            // Zakres widoczny PRZED odpowiedzią: bez tego użytkownik dowiaduje
+            // się, o który tydzień i o kogo chodziło, dopiero z wyniku.
+            AssistantContextChips(
+                items: contextChips,
+                isMuted: store.isSending,
+                onTap: { chip in
+                    guard chip.id == "household" else { return }
+                    showsScopeSheet = true
+                }
+            )
+                .padding(.top, 10)
+                .padding(.bottom, 2)
+
+            if editing != nil {
+                editingBar
+            }
+
+            HStack(alignment: .bottom, spacing: 8) {
                 TextField(
                     store.isUnavailable ? "Asystent jest teraz niedostępny" : "Napisz do asystenta…",
                     text: $draft,
                     axis: .vertical
                 )
                 .lineLimit(1...5)
-                .font(.system(size: 15))
+                .font(.system(size: 15.5))
+                .tracking(-0.25)
                 .foregroundStyle(Color.wmLabel(scheme))
                 .focused($isComposerFocused)
                 .disabled(store.isUnavailable)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .fill(Color.wmInsetSurface(scheme))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            isComposerFocused
+                                ? WMPalette.terracotta.opacity(0.45)
+                                : Color.wmTileStroke(scheme),
+                            lineWidth: 1
+                        )
                 )
 
                 // W trakcie tury strzałka zamienia się w „stop": po dziesięciu
@@ -323,18 +446,92 @@ struct AssistantView: View {
                     if store.isSending { store.stopWaiting() } else { send() }
                 } label: {
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
-                        .font(.system(size: store.isSending ? 13 : 16, weight: .bold))
-                        .foregroundStyle(Color.wmCanvas(scheme))
-                        .frame(width: 38, height: 38)
+                        .font(.system(size: store.isSending ? 14 : 17, weight: .bold))
+                        .foregroundStyle(store.isSending ? Color.wmLabel(scheme) : Color.wmPageBase(scheme))
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(sendTint))
                 }
                 .buttonStyle(.plain)
                 .disabled(!store.isSending && !canSend)
                 .accessibilityLabel(store.isSending ? "Przestań czekać" : "Wyślij")
             }
-            .padding(.horizontal, WMPageMetrics.horizontal)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
+    }
+
+    /// Pasek „Poprawiasz pytanie".
+    ///
+    /// Bez niego pole z wpisanym starym tekstem wygląda jak zwykłe pole,
+    /// a wysłanie kasuje pół rozmowy bez ostrzeżenia. Pasek mówi, co się
+    /// stanie, i daje drogę odwrotu.
+    private var editingBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(WMPalette.butter)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Poprawiasz pytanie")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+                Text("Odpowiedzi po nim znikną z rozmowy")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.wmFaint(scheme))
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                draft = ""
+                editing = nil
+                isComposerFocused = false
+            } label: {
+                Text("Anuluj")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(Color.wmButterTint(scheme))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+        }
+    }
+
+    /// Chipy mówią, z czym asystent policzy odpowiedź. Zakres domowników
+    /// da się zmienić dotknięciem; pozostałe są etykietami i dlatego nie
+    /// udają klikalnych chevronem.
+    private var contextChips: [AssistantContextChip] {
+        var chips: [AssistantContextChip] = [
+            AssistantContextChip(
+                id: "week",
+                icon: "calendar",
+                label: datesViewModel.isCurrentWeek
+                    ? "Ten tydzień"
+                    : Self.weekLabel(for: datesViewModel.dates)
+            )
+        ]
+
+        let household = sessionStore.householdMembers
+        let selected = household.filter { scopeUserIds.contains($0.id) }
+        chips.append(
+            AssistantContextChip(
+                id: "household",
+                icon: selected.isEmpty && household.count > 1 ? "person.2" : "person",
+                label: Self.scopeLabel(selected: selected, all: household),
+                adjustable: household.count > 1,
+                isActive: !selected.isEmpty
+            )
+        )
+
+        chips.append(
+            AssistantContextChip(id: "goal", icon: "target", label: "Cel \(calorieGoal) kcal")
+        )
+        return chips
     }
 
     private var canSend: Bool {
@@ -352,8 +549,66 @@ struct AssistantView: View {
 
     // MARK: - Akcje
 
+    /// Zdjęcie bez pytania to też pytanie.
+    ///
+    /// Serwer wymaga treści wiadomości, a użytkownik, który zrobił zdjęcie
+    /// lodówki, powiedział już wszystko. Zamiast blokować wysyłkę pustym
+    /// polem, wpisujemy za niego to jedno zdanie, o które i tak by chodziło.
+    /// Poprawiana wiadomość: co poprawiamy i od czego zaczęliśmy.
+    private struct EditingMessage: Equatable {
+        let id: String
+        let originalText: String
+    }
+
+    private static let photoOnlyQuestion = "Co z tego ugotuję?"
+
     private func send() {
-        ask(draft)
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, store.canSend else { return }
+
+        let scope = scopeUserIds
+        let edited = editing
+        draft = ""
+        editing = nil
+        isComposerFocused = false
+        Task {
+            if let edited {
+                await store.editMessage(
+                    messageId: edited.id,
+                    text: text,
+                    weekStart: datesViewModel.weekStartISO
+                )
+            } else {
+                await store.send(
+                    text: text,
+                    weekStart: datesViewModel.weekStartISO,
+                    scopeUserIds: Array(scope)
+                )
+            }
+        }
+    }
+
+    /// Wejście w tryb poprawki: pytanie wraca do pola, gotowe do zmiany.
+    private func beginEditing(_ message: AgentChatMessage) {
+        editing = EditingMessage(id: message.id, originalText: message.text)
+        draft = message.text
+        isComposerFocused = true
+    }
+
+    /// Kręciołek siedzi w TEJ karcie, której przycisk został naciśnięty.
+    private func isBusy(_ message: AgentChatMessage) -> Bool {
+        guard let proposalId = message.card?.proposalId else { return false }
+        return store.busyProposalId == proposalId
+    }
+
+    /// „Zmień" nie wysyła nic samo z siebie.
+    ///
+    /// Tura kosztuje pieniądze i pół minuty, a „zmień coś" nie mówi modelowi
+    /// nic. Zamiast tego otwieramy klawiaturę z początkiem zdania — użytkownik
+    /// dopowiada, CO zmienić, i dopiero to jedzie na serwer.
+    private func revise() {
+        draft = "Zmień w tej propozycji: "
+        isComposerFocused = true
     }
 
     private func ask(_ text: String) {
@@ -411,6 +666,7 @@ struct AssistantView: View {
     private static let progressAnchor = "assistant.progress"
     private static let errorAnchor = "assistant.error"
     private static let bottomAnchor = "assistant.bottom"
+    private static let tailAnchor = "assistant.tail"
 
     private static let suggestions = [
         "Zaplanuj mi obiady i kolacje na ten tydzień",
@@ -479,8 +735,15 @@ private struct DaySeparator: View {
 /// dni) zamiast ściany tekstu wciśniętej w dymek.
 private struct MessageBubble: View {
     let message: AgentChatMessage
+    let isBusy: Bool
     let onOpenPlan: () -> Void
+    let onOpenShopping: () -> Void
     let onAskAgain: () -> Void
+    let onApply: (String) -> Void
+    let onUndo: (String) -> Void
+    let onRevise: () -> Void
+    let onAsk: (String) -> Void
+    let onEdit: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -509,6 +772,10 @@ private struct MessageBubble: View {
         }
 
         if message.author == .user {
+            Button(action: onEdit) {
+                Label("Popraw pytanie", systemImage: "pencil")
+            }
+
             Button(action: onAskAgain) {
                 Label("Zapytaj jeszcze raz", systemImage: "arrow.clockwise")
             }
@@ -519,7 +786,8 @@ private struct MessageBubble: View {
         HStack {
             Spacer(minLength: 40)
 
-            Text(message.text)
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(message.text)
                 .font(.system(size: 15))
                 .foregroundStyle(Color.wmLabel(scheme))
                 .multilineTextAlignment(.leading)
@@ -530,32 +798,90 @@ private struct MessageBubble: View {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color.wmAccentTint(scheme))
                 )
-                // Wysłana, jeszcze niepotwierdzona — subtelnie, bo w 99 %
-                // przypadków potwierdzenie przychodzi zanim ktokolwiek zdąży
-                // to zauważyć.
-                .opacity(message.isPending ? 0.6 : 1)
+            }
+            // Wysłana, jeszcze niepotwierdzona — subtelnie, bo w 99 %
+            // przypadków potwierdzenie przychodzi zanim ktokolwiek zdąży
+            // to zauważyć.
+            .opacity(message.isPending ? 0.6 : 1)
         }
     }
 
+    /// Odpowiedź asystenta NIE dostaje dymka.
+    ///
+    /// Dymek jest gestem konwersacyjnym dobrym dla jednego zdania, a odpowiedź
+    /// bywa całym tygodniem — w wąskiej bańce zamienia się w ścianę tekstu.
+    /// Pełna szerokość daje treści (a wkrótce kartom) miejsce, którego dymek
+    /// nie ma jak dać; rozmowę czyta się po stronie ekranu, nie po ramce.
     private var assistantCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             if message.savedPlan {
                 AssistantSavedPlanCard(onOpenPlan: onOpenPlan)
             }
 
-            AssistantAnswer(text: message.text)
+            // Karta pytania NIESIE treść wypowiedzi, więc pokazanie obok niej
+            // jeszcze `text` znaczyłoby to samo pytanie dwa razy pod rząd.
+            if !message.text.isEmpty, message.card?.replacesText != true {
+                AssistantAnswer(text: message.text)
+            }
+
+            card
         }
-        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmCardSurface(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmCardStroke(scheme), lineWidth: 1)
-        )
         .textSelection(.enabled)
+    }
+
+    /// Karta pod odpowiedzią. Nieznany rodzaj znika bez śladu — zostaje samo
+    /// zdanie, które i tak niesie sens. To jest cała zgodność wstecz: serwer
+    /// może dorzucić nowy rodzaj karty, nie czekając na wydanie aplikacji.
+    @ViewBuilder
+    private var card: some View {
+        switch message.card {
+        case .planWeek(let planWeek):
+            AssistantPlanWeekCard(
+                card: planWeek,
+                isBusy: isBusy,
+                onApply: { onApply(planWeek.proposalId) },
+                onRevise: onRevise
+            )
+        case .planDay(let planDay):
+            AssistantPlanDayCard(
+                card: planDay,
+                isBusy: isBusy,
+                onApply: { onApply(planDay.proposalId) },
+                onRevise: onRevise
+            )
+        case .options(let options):
+            AssistantOptionsCard(card: options, onAsk: onAsk)
+        case .swap(let swap):
+            AssistantSwapCard(
+                card: swap,
+                isBusy: isBusy,
+                onApply: { onApply(swap.proposalId) },
+                onRevise: onRevise
+            )
+        case .householdSplit(let split):
+            AssistantHouseholdSplitCard(
+                card: split,
+                isBusy: isBusy,
+                onApply: { onApply(split.proposalId) },
+                onRevise: onRevise
+            )
+        case .macroGap(let macro):
+            AssistantMacroGapCard(card: macro, onAsk: onAsk)
+        case .shoppingList(let shopping):
+            AssistantShoppingListCard(card: shopping, onOpenShopping: onOpenShopping)
+        case .clarify(let clarify):
+            AssistantClarifyCard(card: clarify, onAsk: onAsk)
+        case .applied(let applied):
+            AssistantAppliedCard(
+                card: applied,
+                isBusy: isBusy,
+                onUndo: { onUndo(applied.proposalId) },
+                onOpenPlan: onOpenPlan
+            )
+        case .unknown, .none:
+            EmptyView()
+        }
     }
 }
 
@@ -591,70 +917,6 @@ private struct ChatSkeleton: View {
                 .scaleEffect(x: width, anchor: isMine ? .trailing : .leading)
 
             if !isMine { Spacer(minLength: 40) }
-        }
-    }
-}
-
-// MARK: - Postęp
-
-/// Kroki tury. Ostatni jest wyróżniony, poprzednie zostają jako ślad — widać,
-/// ile już się wydarzyło, zamiast jednego migającego napisu.
-private struct ProgressTrail: View {
-    let steps: [AgentProgressStepDTO]
-    let startedAt: Date?
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            ProgressView()
-                .controlSize(.small)
-                .padding(.top, 2)
-
-            VStack(alignment: .leading, spacing: 4) {
-                if steps.isEmpty {
-                    Text("Zastanawiam się…")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
-                } else {
-                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                        Text(step.label)
-                            .font(.system(size: 14, weight: index == steps.count - 1 ? .medium : .regular))
-                            .foregroundStyle(
-                                index == steps.count - 1
-                                ? Color.wmLabel(scheme)
-                                : Color.wmMuted(scheme)
-                            )
-                    }
-                }
-
-                if let startedAt {
-                    elapsed(from: startedAt)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-    }
-
-    /// Między krokami bywa kilkanaście sekund ciszy. Licznik mówi, że
-    /// aplikacja żyje, a po minucie wprost proponuje odejście — tura przeżywa
-    /// zmianę zakładki.
-    private func elapsed(from startedAt: Date) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let seconds = max(0, Int(context.date.timeIntervalSince(startedAt)))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(seconds) s")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.wmMuted(scheme))
-
-                if seconds >= 45 {
-                    Text("Układanie całego tygodnia trwa nawet minutę — możesz przejść na inną zakładkę, odpowiedź poczeka.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(scheme))
-                }
-            }
         }
     }
 }

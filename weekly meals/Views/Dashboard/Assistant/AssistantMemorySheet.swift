@@ -80,7 +80,7 @@ struct AssistantMemorySheet: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.wmLabel(scheme))
 
-            Text("Gdy powiesz asystentowi coś trwałego o swoim domu — „w środy jemy u teściów", „Kuba nie je ryb" — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
+            Text("Gdy powiesz asystentowi coś trwałego o swoim domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
                 .font(.system(size: 14))
                 .foregroundStyle(Color.wmMuted(scheme))
                 .multilineTextAlignment(.center)
