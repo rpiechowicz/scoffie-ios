@@ -54,7 +54,7 @@ struct CookidooIntegrationSheet: View {
                     case .authFailed(let login):
                         authFailedBanner
                         connectForm(prefilledEmail: login)
-                    case .notConnected, .unknown, nil:
+                    case .notConnected, .unknown, .disabled, nil:
                         introCard
                         howItWorksLink
                         connectForm(prefilledEmail: nil)

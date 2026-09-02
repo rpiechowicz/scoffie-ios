@@ -39,6 +39,8 @@ struct AssistantView: View {
     @State private var showMemory = false
     @State private var showUsage = false
     @State private var showMoreMenu = false
+    /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
+    @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
@@ -104,6 +106,30 @@ struct AssistantView: View {
         }
         .sheet(isPresented: $showMemory) {
             AssistantMemorySheet(store: store)
+        }
+        // Bramka zgody: 403 z serwera otwiera arkusz, a po zgodzie wiadomość
+        // idzie ponownie z tego samego tekstu (`retry`).
+        .sheet(
+            isPresented: Binding(
+                get: { store.needsConsent },
+                set: { if !$0 { store.consentDismissed() } }
+            )
+        ) {
+            if let consents = sessionStore.consentStore {
+                AssistantConsentSheet(
+                    consents: consents,
+                    source: "IOS_ASSISTANT_GATE",
+                    onGranted: {
+                        store.consentGranted()
+                        retry()
+                    }
+                )
+            }
+        }
+        .sheet(item: $reporting) { message in
+            AssistantReportSheet(message: message) { reason, comment in
+                await store.report(messageId: message.id, reason: reason, comment: comment)
+            }
         }
         .alert("Usunąć historię rozmów?", isPresented: $showDeleteAlert) {
             Button("Usuń", role: .destructive) {
@@ -174,7 +200,8 @@ struct AssistantView: View {
                                 onRevise: { revise() },
                                 onAskNew: { askForFreshProposal() },
                                 onAsk: { prompt in ask(prompt) },
-                                onEdit: { beginEditing(message) }
+                                onEdit: { beginEditing(message) },
+                                onReport: { reporting = message }
                             )
                             .id(message.id)
                         }
@@ -431,7 +458,9 @@ struct AssistantView: View {
 
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(
-                    store.isUnavailable ? "Asystent jest teraz niedostępny" : "Napisz do asystenta…",
+                    store.isUnavailable
+                        ? "Asystent jest teraz niedostępny"
+                        : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…"),
                     text: $draft,
                     axis: .vertical
                 )
@@ -440,7 +469,7 @@ struct AssistantView: View {
                 .tracking(-0.25)
                 .foregroundStyle(Color.wmLabel(scheme))
                 .focused($isComposerFocused)
-                .disabled(store.isUnavailable)
+                .disabled(store.isUnavailable || store.isLocked)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
@@ -772,6 +801,7 @@ private struct MessageBubble: View {
     let onAskNew: () -> Void
     let onAsk: (String) -> Void
     let onEdit: () -> Void
+    let onReport: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -806,6 +836,12 @@ private struct MessageBubble: View {
 
             Button(action: onAskAgain) {
                 Label("Zapytaj jeszcze raz", systemImage: "arrow.clockwise")
+            }
+        } else {
+            // Obiecane w FAQ i w regulaminie („Zgłoś odpowiedź”) — idzie na
+            // `POST /agent/messages/:id/report`, nie zmienia rozmowy.
+            Button(role: .destructive, action: onReport) {
+                Label("Zgłoś odpowiedź", systemImage: "flag")
             }
         }
     }
@@ -876,7 +912,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(planWeek.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(planWeek.proposalId) }
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -884,7 +921,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(planDay.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(planDay.proposalId) }
             )
         case .options(let options):
             AssistantOptionsCard(card: options, onAsk: onAsk)
@@ -894,7 +932,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(swap.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(swap.proposalId) }
             )
         case .householdSplit(let split):
             AssistantHouseholdSplitCard(
@@ -902,7 +941,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(split.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(split.proposalId) }
             )
         case .macroGap(let macro):
             AssistantMacroGapCard(card: macro, onAsk: onAsk)

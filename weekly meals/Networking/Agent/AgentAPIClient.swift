@@ -134,6 +134,25 @@ final class AgentAPIClient {
         return try await perform(path: "agent/proposals/\(id)/apply", method: "POST", bodyData: body)
     }
 
+    /// „Zgłoś odpowiedź" — `POST /agent/messages/:id/report`. Serwer zapisuje
+    /// treść zgłoszonej odpowiedzi razem z powodem; przyjmuje także, gdy
+    /// asystent jest akurat wyłączony.
+    func reportMessage(id: String, reason: String, comment: String?) async throws {
+        struct ReportRequestDTO: Encodable {
+            let reason: String
+            let comment: String?
+        }
+        struct ReportResponseDTO: Decodable {
+            let id: String?
+        }
+        let body = try JSONEncoder().encode(ReportRequestDTO(reason: reason, comment: comment))
+        let _: ReportResponseDTO = try await perform(
+            path: "agent/messages/(id)/report",
+            method: "POST",
+            bodyData: body
+        )
+    }
+
     /// Cofnięcie zapisu. Serwer odmówi, jeśli ktoś w domu ruszył plan PO
     /// zatwierdzeniu — cofnięcie nie ma prawa skasować cudzej zmiany.
     func undoProposal(id: String) async throws -> AgentProposalActionResultDTO {

@@ -403,8 +403,13 @@ struct AssistantProgressTrail: View {
 
 /// Kontener karty w rozmowie. `tone` steruje tłem i obrysem: sage = zapisane,
 /// indigo = analiza, `nil` = zwykła karta.
+/// Ton karty i jej przycisku głównego: sage = zapisane, indigo = analiza,
+/// neutral = zwykła propozycja. Na poziomie pliku, żeby stopka i akcje mogły
+/// go przyjąć bez sięgania przez generyk `AssistantCard<EmptyView>`.
+enum AssistantTone { case neutral, sage, indigo }
+
 struct AssistantCard<Content: View>: View {
-    enum Tone { case neutral, sage, indigo }
+    typealias Tone = AssistantTone
 
     var tone: Tone = .neutral
     @ViewBuilder var content: () -> Content
@@ -502,7 +507,7 @@ extension AssistantCardHead where Right == EmptyView {
 struct AssistantCardActions: View {
     let primaryTitle: String
     var primaryIcon: String = "checkmark"
-    var primaryTone: AssistantCard<EmptyView>.Tone = .neutral
+    var primaryTone: AssistantTone = .neutral
     var isBusy: Bool = false
     var secondaryTitle: String?
     var secondaryIcon: String?
@@ -657,7 +662,7 @@ struct AssistantStatusBand: View {
 
     private var title: String {
         switch state.status {
-        case "PENDING": return "Propozycja ważna 3 dni"
+        case "PENDING": return "Propozycja czeka na decyzję"
         case "APPLIED": return "Zapisano w planie"
         case "UNDONE": return "Cofnięto"
         case "STALE": return "Plan zmienił się od tej propozycji"
@@ -678,7 +683,7 @@ struct AssistantStatusBand: View {
         case "STALE":
             return "Zapiszesz mimo to albo poprosisz o nową"
         case "EXPIRED":
-            return "Po 72 h asystent liczy od nowa"
+            return "Poproś o nową — asystent policzy od nowa"
         case "FAILED":
             return "Plan bez zmian · spróbuj ponownie"
         default:
@@ -730,6 +735,11 @@ struct AssistantProposalFooter: View {
     let onRevise: () -> Void
     /// „Poproś o nową” — wysyła gotowe zdanie, bez zapisu.
     let onAskNew: () -> Void
+    /// Cofnięcie zapisu z karty, która została ZASTOSOWANA — pasek mówił
+    /// „Cofnij możliwe jeszcze 52 min", a przycisku nie było.
+    var onUndo: (() -> Void)? = nil
+    /// Ton przycisku głównego — zielona karta zapisu dostaje zielony przycisk.
+    var tone: AssistantTone = .neutral
 
     @Environment(\.colorScheme) private var scheme
 
@@ -747,12 +757,23 @@ struct AssistantProposalFooter: View {
             AssistantCardActions(
                 primaryTitle: applyLabel,
                 primaryIcon: applyIcon,
+                primaryTone: tone,
                 isBusy: isBusy,
                 secondaryTitle: reviseLabel,
                 secondaryIcon: reviseIcon,
                 onSecondary: onRevise,
                 onPrimary: { onApply(false) }
             )
+        case "APPLIED" where state.canUndo:
+            if let onUndo {
+                AssistantCardActions(
+                    primaryTitle: "Cofnij zapis",
+                    primaryIcon: "arrow.uturn.backward",
+                    primaryTone: .sage,
+                    isBusy: isBusy,
+                    onPrimary: onUndo
+                )
+            }
         case "UNDONE" where state.canApply:
             AssistantCardActions(
                 primaryTitle: "Zastosuj ponownie",

@@ -133,8 +133,11 @@ final class HealthStepsStore {
 
     /// Tylko flaga po stronie aplikacji + czyszczenie cache. Uprawnień
     /// HealthKit nie da się cofnąć programowo (użytkownik robi to w
-    /// Ustawieniach systemu), a wiersze w bazie zostają — to historia.
+    /// Ustawieniach systemu). Kopia kroków na serwerze jest kasowana —
+    /// polityka prywatności §7 obiecuje to przy wyłączeniu.
     func disable() {
+        let client = self.client
+        Task { try? await client.deleteHealthSteps() }
         let defaults = UserDefaults.standard
         defaults.set(false, forKey: Keys.enabled)
         defaults.removeObject(forKey: Keys.enabledAt)

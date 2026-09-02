@@ -55,6 +55,10 @@ struct SettingsView: View {
     @State private var showProfileSheet = false
     @State private var showHelpSheet = false
     @State private var showCookidooSheet = false
+    @State private var showAssistantConsentSheet = false
+    @State private var showPrivacySheet = false
+    @State private var showTermsSheet = false
+    @State private var showDataExportSheet = false
     @State private var showHealthSheet = false
 
     // Stan integracji „Zdrowie" przez @AppStorage — to arkusz zmienia te
@@ -186,12 +190,12 @@ struct SettingsView: View {
             FAQItem(
                 id: "acc-export",
                 question: "Czy mogę pobrać swoje dane?",
-                answer: "Tak. Napisz na support@weekly-meals.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Pobieranie jednym przyciskiem w aplikacji jest w drodze."
+                answer: "Tak. Napisz na support@weekly-meals.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Szybciej: Ustawienia → Informacje → „Pobierz moje dane” — paczka od razu trafia do arkusza udostępniania."
             ),
             FAQItem(
                 id: "acc-allergens",
                 question: "Jakie alergeny zna aplikacja?",
-                answer: "Wszystkie 14 alergenów z listy unijnej, m.in. gluten, mleko, jajka, orzechy, ryby, skorupiaki, soję, seler, gorczycę, sezam i siarczyny. Ustawiasz je w profilu — od tej chwili ani asystent, ani ręczne wstawianie posiłku nie przepuści dania z takim składnikiem dla osoby, która go unika."
+                answer: "Wszystkie 14 alergenów z listy unijnej (gluten, mleko, jajka, orzechy, orzeszki ziemne, ryby, skorupiaki, mięczaki, soja, seler, gorczyca, sezam, łubin, siarczyny) oraz laktozę jako osobną nietolerancję. Ustawiasz je w profilu — od tej chwili ani asystent, ani ręczne wstawianie posiłku nie przepuści dania z takim składnikiem dla osoby, która go unika."
             )
         ]),
 
@@ -510,6 +514,26 @@ struct SettingsView: View {
                 }
             }
             .background(NavBarHitTestPassthrough())
+            .sheet(isPresented: $showAssistantConsentSheet) {
+                if let consents = sessionStore.consentStore {
+                    AssistantConsentSheet(consents: consents, source: "IOS_SETTINGS")
+                }
+            }
+            .sheet(isPresented: $showPrivacySheet) {
+                LegalDocumentSheet(title: "Polityka prywatności") {
+                    PrivacyPolicyContent()
+                }
+            }
+            .sheet(isPresented: $showTermsSheet) {
+                LegalDocumentSheet(title: "Warunki korzystania") {
+                    TermsOfServiceContent()
+                }
+            }
+            .sheet(isPresented: $showDataExportSheet) {
+                if let client = sessionStore.dataExportClient {
+                    DataExportSheet(client: client)
+                }
+            }
             .sheet(isPresented: $showCreateHouseholdSheet) {
                 createHouseholdSheet
                     .dashboardLiquidSheet()
@@ -634,6 +658,16 @@ struct SettingsView: View {
                     action: { showDietSheet = true }
                 )
 
+                // Zgoda na asystenta obok diety: to decyzja o TYCH danych
+                // (dieta, alergeny) — czy wolno je wysłać do modelu.
+                EditorialSettingsRow(
+                    icon: "sparkles",
+                    iconColor: WMPalette.indigo,
+                    title: "Asystent AI",
+                    value: assistantConsentRowValue,
+                    action: { showAssistantConsentSheet = true }
+                )
+
                 // Obok „Diety", a nie w Aplikacji: to decyzja o tym, jak dom
                 // jada (rytm dnia), a nie o zachowaniu aplikacji. Ta sama
                 // półka co dieta i alergeny — użytkownik szuka tego tam,
@@ -692,14 +726,16 @@ struct SettingsView: View {
             EditorialSettingsSectionHeader(title: "Integracje")
 
             EditorialSettingsCardGroup {
-                EditorialSettingsRow(
-                    icon: "app.connected.to.app.below.fill",
-                    iconColor: WMPalette.sage,
-                    title: "Cookidoo (Thermomix)",
-                    value: cookidooRowValue,
-                    isLast: false,
-                    action: { showCookidooSheet = true }
-                )
+                if showsCookidooRow {
+                    EditorialSettingsRow(
+                        icon: "app.connected.to.app.below.fill",
+                        iconColor: WMPalette.sage,
+                        title: "Cookidoo (Thermomix)",
+                        value: cookidooRowValue,
+                        isLast: false,
+                        action: { showCookidooSheet = true }
+                    )
+                }
 
                 EditorialSettingsRow(
                     icon: "figure.walk",
@@ -730,9 +766,24 @@ struct SettingsView: View {
             return "Błąd logowania"
         case .notConnected:
             return "Nie połączono"
+        case .disabled:
+            return "Wyłączone"
         case .unknown, nil:
             return nil
         }
+    }
+
+    /// Wiersz Cookidoo znika, gdy serwer ma integrację wyłączoną — każde
+    /// dotknięcie kończyło się alertem „na razie wyłączone".
+    private var showsCookidooRow: Bool {
+        if case .disabled = sessionStore.cookidooIntegrationStore?.status { return false }
+        return true
+    }
+
+    /// Prawa kolumna wiersza „Asystent AI" — stan zgody z serwera.
+    private var assistantConsentRowValue: String? {
+        guard let consents = sessionStore.consentStore, consents.isLoaded else { return nil }
+        return consents.assistantGranted ? "Zgoda włączona" : "Bez zgody"
     }
 
     private var infoSection: some View {
@@ -752,6 +803,31 @@ struct SettingsView: View {
                     iconColor: SettingsAccent.coral,
                     title: "Oceń aplikację",
                     action: { requestReview() }
+                )
+
+                // Dokumenty były dostępne tylko ze stopki logowania — nigdy
+                // później. Polityka obiecuje wgląd „w Aplikacji”, więc tu.
+                EditorialSettingsRow(
+                    icon: "hand.raised.fill",
+                    iconColor: WMPalette.indigo,
+                    title: "Polityka prywatności",
+                    value: "v\(LegalDocMeta.version)",
+                    action: { showPrivacySheet = true }
+                )
+
+                EditorialSettingsRow(
+                    icon: "doc.text.fill",
+                    iconColor: WMPalette.sage,
+                    title: "Warunki korzystania",
+                    value: "v\(LegalDocMeta.version)",
+                    action: { showTermsSheet = true }
+                )
+
+                EditorialSettingsRow(
+                    icon: "square.and.arrow.down.fill",
+                    iconColor: WMPalette.terracotta,
+                    title: "Pobierz moje dane",
+                    action: { showDataExportSheet = true }
                 )
 
                 versionRow

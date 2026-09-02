@@ -11,6 +11,9 @@ struct EditorialIconButton: View {
     /// na Przepisach używa 43 pt, żeby zgadzać się wysokością z pigułką
     /// filtra stojącą w rzędzie niżej.
     var size: CGFloat = 38
+    /// Co czyta VoiceOver. Bez tego czytał nazwę symbolu
+    /// („square dot and dot pencil”) — dla osoby niewidzącej to szum.
+    var accessibilityTitle: String? = nil
     var action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -40,6 +43,6 @@ struct EditorialIconButton: View {
             .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(icon))
+        .accessibilityLabel(Text(accessibilityTitle ?? icon))
     }
 }

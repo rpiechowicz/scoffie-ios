@@ -101,15 +101,18 @@ enum DietPreference: String, CaseIterable, Identifiable {
 // z kuratorowanych tagów składników, więc chip nie obiecuje więcej, niż
 // katalog dowozi:
 //
-//   laktoza = nabiał ZAWIERAJĄCY laktozę (nietolerancja), nie alergia na
-//             białko mleka — produkty „bez laktozy" i ghee jej nie mają;
+//   laktoza = nabiał ZAWIERAJĄCY laktozę (nietolerancja) — produkty „bez
+//             laktozy" i ghee jej nie mają; alergia na BIAŁKO mleka to
+//             osobny chip „Mleko (białko)" (ghee też jest wtedy wykluczone);
 //   ryby    = ryby i owoce morza (krewetka też);
 //   seler   — także w bulionach i przyprawie uniwersalnej;
 //   gorczyca — także w majonezie; sezam — także w hummusie i tahini.
 //
-// Lista celowo krótsza niż „14 alergenów UE": chip, którego katalog nie
-// potrafi wypełnić, obiecuje ochronę, której nie dowozimy. Nieznane id z
-// serwera zostają w zapisie (unia w `SettingsView`), ale nie renderują chipa.
+// Pełna lista serwera (`src/common/allergens.ts`, 15 pozycji: 14 alergenów
+// UE + laktoza jako nietolerancja). Kolejność i identyfikatory 1:1 —
+// serwer odrzuca nieznane id, a chip bez odpowiednika na serwerze byłby
+// ochroną, której nikt nie egzekwuje. Nieznane id z NOWSZEGO serwera zostają
+// w zapisie (unia w `SettingsView`), ale nie renderują chipa.
 //
 // Multi-select; persisted in `@AppStorage` as a sorted comma-separated
 // raw-value string (`"eggs,gluten,nuts"`).
@@ -124,13 +127,18 @@ enum Allergen: String, CaseIterable, Identifiable {
     case celery
     case mustard
     case sesame
+    case milk
+    case crustaceans
+    case molluscs
+    case lupin
+    case sulphites
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .gluten:       return "Gluten"
-        case .lactose:      return "Laktoza"
+        case .lactose:      return "Laktoza (nietolerancja)"
         case .eggs:         return "Jaja"
         case .nuts:         return "Orzechy"
         case .peanuts:      return "Orzeszki ziemne"
@@ -139,6 +147,11 @@ enum Allergen: String, CaseIterable, Identifiable {
         case .celery:       return "Seler"
         case .mustard:      return "Gorczyca"
         case .sesame:       return "Sezam"
+        case .milk:         return "Mleko (białko)"
+        case .crustaceans:  return "Skorupiaki"
+        case .molluscs:     return "Mięczaki"
+        case .lupin:        return "Łubin"
+        case .sulphites:    return "Siarczyny"
         }
     }
 }

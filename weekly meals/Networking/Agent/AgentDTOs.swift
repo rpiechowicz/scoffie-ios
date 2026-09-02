@@ -191,8 +191,10 @@ struct AgentContextDTO: Decodable, Equatable {
     let targetKcalPerDay: Int?
     let usage: AgentUsageDTO
     /// Czy tura zaczyna na tańszym modelu — wtedy kafel „biorę się za plan"
-    /// jest spodziewany, a nie oznacza awarii.
-    let handoff: Bool
+    /// jest spodziewany, a nie oznacza awarii. Opcjonalne: starszy serwer
+    /// bez tego pola wywracał dekodowanie CAŁEGO kontekstu po cichu.
+    let handoff: Bool?
+    var startsOnCheaperModel: Bool { handoff ?? false }
 }
 
 // MARK: - Żądania

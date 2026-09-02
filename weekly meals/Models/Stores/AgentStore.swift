@@ -75,6 +75,13 @@ final class AgentStore {
     /// Asystent wyłączony na serwerze (`AI_DISABLED`) — ekran mówi to wprost,
     /// zamiast udawać, że wiadomość poszła.
     private(set) var isUnavailable = false
+    /// 403 `AI_CONSENT_REQUIRED` — rozmowa czeka na zgodę (arkusz blokujący
+    /// w `AssistantView`); tekst wiadomości zostaje w `retryText`.
+    private(set) var needsConsent = false
+    /// Pole zablokowane po 429 / wyczerpanej kwocie / pauzie — do tej chwili.
+    /// Bez tego użytkownik klikał „wyślij" w kółko i za każdym razem dostawał
+    /// ten sam błąd zamiast informacji, kiedy spróbować.
+    private(set) var lockedUntil: Date?
     private(set) var isLoadingHistory = false
     /// Treść wiadomości, która NIE doszła do serwera — do ponowienia jednym
     /// przyciskiem. Ustawiana tylko wtedy, gdy wiadomość wypadła z historii;
@@ -121,7 +128,29 @@ final class AgentStore {
         self.householdId = householdId
     }
 
-    var canSend: Bool { !isSending && !isUnavailable }
+    var canSend: Bool { !isSending && !isUnavailable && !isLocked }
+    var isLocked: Bool { lockedUntil.map { $0 > Date() } ?? false }
+
+    /// Po udanej zgodzie arkusz wraca do rozmowy; tekst do ponowienia czeka.
+    func consentGranted() {
+        needsConsent = false
+        errorMessage = nil
+    }
+
+    /// Arkusz zamknięty bez zgody — błąd pod rozmową zostaje, arkusz nie wraca sam.
+    func consentDismissed() {
+        needsConsent = false
+    }
+
+    /// „Zgłoś odpowiedź" — oddaje komunikat błędu albo `nil`.
+    func report(messageId: String, reason: String, comment: String?) async -> String? {
+        do {
+            try await client.reportMessage(id: messageId, reason: reason, comment: comment)
+            return nil
+        } catch {
+            return UserFacingErrorMapper.message(from: error)
+        }
+    }
 
     /// Otwarcie zakładki: historia rozmowy i ewentualny powrót do tury w biegu.
     func openIfNeeded() async {
@@ -259,15 +288,25 @@ final class AgentStore {
             guard let self else { return }
             do {
                 let turn = try await self.client.cancelTurn(id: turnId)
+                // Strażnik tożsamości jak w `followTurn`: użytkownik mógł już
+                // wysłać NOWĄ wiadomość, a ten komunikat dotyczy poprzedniej.
+                guard self.pendingTurnId == turnId else { return }
                 if turn.isFinished {
                     self.pendingTurnId = nil
                     if turn.status == "DONE" {
                         // Zdążył przed sygnałem — odpowiedź jest, pokazujemy ją.
                         self.apply(finished: turn)
                     } else {
-                        self.errorMessage = "Zatrzymane. Plan bez zmian."
+                        self.errorMessage = UserFacingErrorMapper.copy(forCode: "AI_CANCELLED")
+                            ?? "Zatrzymane. Plan bez zmian."
                         self.suggestions = turn.suggestions ?? []
                     }
+                } else {
+                    // Runner jest w środku narzędzia i nie zdążył domknąć
+                    // (serwer mówi `stopRequested`). Mówimy to wprost i
+                    // odpytujemy dalej — inaczej „Stop" wyglądał na zignorowany.
+                    self.errorMessage = "Zatrzymuję. Asystent kończy bieżący krok — chwila."
+                    await self.follow(turnId: turnId)
                 }
             } catch {
                 self.errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
@@ -731,10 +770,23 @@ final class AgentStore {
     // MARK: - Błędy
 
     private func handle(_ error: Error) {
-        if case let BackendAPIError.backend(code, _, _) = error, code == "AI_DISABLED" {
-            isUnavailable = true
-            errorMessage = UserFacingErrorMapper.message(from: error)
-            return
+        if case let BackendAPIError.backend(code, _, _) = error {
+            switch code {
+            case "AI_DISABLED":
+                isUnavailable = true
+            case "AI_CONSENT_REQUIRED":
+                // Arkusz zgody zamiast gołego błędu — kopia błędu i tak
+                // zostaje pod rozmową na wypadek zamknięcia arkusza.
+                needsConsent = true
+            case "AI_QUOTA_EXCEEDED":
+                lockedUntil = Date().addingTimeInterval(60 * 60)
+            case "AI_BUDGET_PAUSED":
+                lockedUntil = Date().addingTimeInterval(15 * 60)
+            case "AI_UPSTREAM_PAUSED", "TOO_MANY_REQUESTS":
+                lockedUntil = Date().addingTimeInterval(60)
+            default:
+                break
+            }
         }
         errorMessage = UserFacingErrorMapper.message(from: error)
     }

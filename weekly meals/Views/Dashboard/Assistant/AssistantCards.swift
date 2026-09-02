@@ -294,6 +294,7 @@ struct AssistantPlanWeekCard: View {
     let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
     let onAskNew: () -> Void
+    var onUndo: (() -> Void)? = nil
 
     /// Ile dni widać przed rozwinięciem. Trzy, bo tyle mieści się na ekranie
     /// bez przewijania — a karta ma być do ogarnięcia jednym spojrzeniem.
@@ -411,12 +412,13 @@ struct AssistantPlanWeekCard: View {
             isBusy: isBusy,
             onApply: onApply,
             onRevise: onRevise,
-            onAskNew: onAskNew
+            onAskNew: onAskNew,
+            onUndo: onUndo
         )
     }
 
     private var applyLabel: String {
-        card.actions.first { $0.type == .apply }?.label ?? "Dodaj do planu"
+        card.actions.first { $0.kind == .apply }?.label ?? "Dodaj do planu"
     }
 
     private struct DayBlock: View {
@@ -479,6 +481,7 @@ struct AssistantPlanDayCard: View {
     let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
     let onAskNew: () -> Void
+    var onUndo: (() -> Void)? = nil
 
     /// Kolory pasków przy posiłkach — kolejność dnia, nie znaczenie.
     /// Poranek jest ciepły, wieczór chłodny; to jedyna treść tego koloru.
@@ -597,12 +600,13 @@ struct AssistantPlanDayCard: View {
             isBusy: isBusy,
             onApply: onApply,
             onRevise: onRevise,
-            onAskNew: onAskNew
+            onAskNew: onAskNew,
+            onUndo: onUndo
         )
     }
 
     private var applyLabel: String {
-        card.actions.first { $0.type == .apply }?.label ?? "Zapisz dzień"
+        card.actions.first { $0.kind == .apply }?.label ?? "Zapisz dzień"
     }
 
     private struct MealRow: View {
@@ -774,7 +778,7 @@ struct AssistantAppliedCard: View {
     @Environment(\.colorScheme) private var scheme
 
     private var undoAction: AgentCardActionDTO? {
-        card.actions.first { $0.type == .undo }
+        card.actions.first { $0.kind == .undo }
     }
 
     var body: some View {
@@ -878,7 +882,7 @@ struct AssistantAppliedCard: View {
     }
 
     private var openPlanLabel: String {
-        card.actions.first { $0.type == .openPlan }?.label ?? "Otwórz Plan tygodnia"
+        card.actions.first { $0.kind == .openPlan }?.label ?? "Otwórz Plan tygodnia"
     }
 }
 
@@ -1033,6 +1037,7 @@ struct AssistantSwapCard: View {
     let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
     let onAskNew: () -> Void
+    var onUndo: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -1096,12 +1101,13 @@ struct AssistantSwapCard: View {
             isBusy: isBusy,
             onApply: onApply,
             onRevise: onRevise,
-            onAskNew: onAskNew
+            onAskNew: onAskNew,
+            onUndo: onUndo
         )
     }
 
     private var applyLabel: String {
-        card.actions.first { $0.type == .apply }?.label ?? "Podmień"
+        card.actions.first { $0.kind == .apply }?.label ?? "Podmień"
     }
 
     /// Wiersz jednej strony podmiany. To, co znika, jest przekreślone
@@ -1161,6 +1167,7 @@ struct AssistantHouseholdSplitCard: View {
     let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
     let onAskNew: () -> Void
+    var onUndo: (() -> Void)? = nil
 
     /// Kolor osoby jest STAŁY w obrębie karty i bierze się z pozycji na
     /// liście — nie niesie znaczenia, tylko pozwala odróżnić wiersze wzrokiem.
@@ -1210,12 +1217,13 @@ struct AssistantHouseholdSplitCard: View {
     private var footer: some View {
         AssistantProposalFooter(
             state: card.state,
-            applyLabel: card.actions.first { $0.type == .apply }?.label ?? "Zapisz",
+            applyLabel: card.actions.first { $0.kind == .apply }?.label ?? "Zapisz",
             reviseLabel: "Zmień",
             isBusy: isBusy,
             onApply: onApply,
             onRevise: onRevise,
-            onAskNew: onAskNew
+            onAskNew: onAskNew,
+            onUndo: onUndo
         )
     }
 

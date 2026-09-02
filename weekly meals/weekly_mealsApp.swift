@@ -104,7 +104,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             PlanChangeNotificationService.cancelPendingFallback(
                 prefix: NotificationIdentifierPrefix.shopping
             )
-        case .householdMembers, .householdInvitation, .unknown:
+        case .householdMembers, .householdInvitation, .assistantTurn, .unknown:
             break
         }
     }
@@ -126,7 +126,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         )
         let type = Self.payloadType(of: response.notification)
         Self.cancelLocalFallbackIfRemote(response.notification, type: type)
-        handle(payloadType: type)
+        handle(payloadType: type, tapped: true)
         completionHandler()
     }
 
@@ -142,9 +142,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         completionHandler(.newData)
     }
 
-    private func handle(payloadType: PushPayloadType) {
+    private func handle(payloadType: PushPayloadType, tapped: Bool = false) {
         guard let sessionStore else { return }
         switch payloadType {
+        case .assistantTurn:
+            // „Asystent odpowiedział" ma otwierać rozmowę — ale tylko po
+            // stuknięciu; cichy push nie przełącza zakładek nikomu pod ręką.
+            if tapped {
+                Task { @MainActor in
+                    sessionStore.dashboardTab = .assistant
+                }
+            }
         case .householdMembers:
             Task { @MainActor in
                 await sessionStore.refreshHouseholdMembers(force: true)
@@ -170,6 +178,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case shoppingList
         case householdMembers
         case householdInvitation
+        /// Odpowiedź asystenta gotowa (`ASSISTANT_TURN_FINISHED`).
+        case assistantTurn
         case unknown
     }
 
@@ -192,6 +202,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case "SHOPPING_LIST_CHANGED":     return .shoppingList
         case "HOUSEHOLD_MEMBERS_CHANGED": return .householdMembers
         case "HOUSEHOLD_INVITATION":      return .householdInvitation
+        case "ASSISTANT_TURN_FINISHED":   return .assistantTurn
         default:                          return .unknown
         }
     }
