@@ -147,7 +147,7 @@ final class AgentAPIClient {
         }
         let body = try JSONEncoder().encode(ReportRequestDTO(reason: reason, comment: comment))
         let _: ReportResponseDTO = try await perform(
-            path: "agent/messages/(id)/report",
+            path: "agent/messages/\(id)/report",
             method: "POST",
             bodyData: body
         )
