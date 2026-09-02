@@ -52,7 +52,7 @@ struct AuthFooterView: View {
 private enum LegalDocMeta {
     static let version = "1.1"
     static let effectiveDate = "1 sierpnia 2026"
-    static let contactEmail = "rpiechowicz@icloud.com"
+    static let contactEmail = "support@weekly-meals.app"
 }
 
 // MARK: - Reużywalny kontener sheeta (styl Cozy Kitchen jak w Ustawieniach)

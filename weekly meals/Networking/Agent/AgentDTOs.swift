@@ -28,8 +28,30 @@ struct AgentConversationDTO: Decodable, Identifiable, Equatable {
 struct AgentMemoryNoteDTO: Decodable, Identifiable, Equatable {
     let id: String
     let text: String
+    /// `PREFERENCE` | `CONSTRAINT` | `HABIT` — grupa na ekranie pamięci.
+    /// Opcjonalne, bo starszy serwer tego pola nie oddaje (wtedy: preferencje).
+    let kind: String?
     let createdByUserId: String?
     let createdAt: String
+
+    var group: AgentMemoryGroup { AgentMemoryGroup(rawValue: kind ?? "") ?? .preference }
+}
+
+/// Grupy notatek — kolejność jak na ekranie „Co o Was pamięta".
+enum AgentMemoryGroup: String, CaseIterable, Identifiable {
+    case preference = "PREFERENCE"
+    case constraint = "CONSTRAINT"
+    case habit = "HABIT"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .preference: return "Preferencje"
+        case .constraint: return "Ograniczenia"
+        case .habit: return "Zwyczaje"
+        }
+    }
 }
 
 struct AgentMessageDTO: Decodable, Identifiable, Equatable {
@@ -46,6 +68,10 @@ struct AgentMessageDTO: Decodable, Identifiable, Equatable {
     /// odpowiedź tekstowa dają `nil`, a nieznany rodzaj `.unknown`: w obu
     /// wypadkach zostaje zdanie, które broni się samo.
     let card: AgentCardDTO?
+    /// „Uwzględniłem: …" — z czym serwer policzył TĘ odpowiedź (tydzień,
+    /// dla kogo, cel). Tylko przy odpowiedziach asystenta; starszy serwer
+    /// nie oddaje pola.
+    let usedContext: [String]?
 }
 
 struct AgentMessagesResponseDTO: Decodable {
@@ -73,6 +99,12 @@ struct AgentProgressStepDTO: Decodable, Equatable {
     /// jest co otworzyć. Opcjonalne, bo tury sprzed tego pola siedzą
     /// w bazie i muszą się nadal dekodować.
     let writes: Bool?
+    /// `PLANNING` = od tego kroku turę prowadzi dokładniejszy model
+    /// (`start_planning`). Rysowane jako osobny moment z licznikiem, nie
+    /// jako kolejna linijka.
+    let phase: String?
+
+    var isHandoff: Bool { phase == "PLANNING" }
 }
 
 struct AgentTurnUsageDTO: Decodable, Equatable {
@@ -91,16 +123,89 @@ struct AgentTurnDTO: Decodable, Equatable {
     /// Wypełnione dopiero przy `DONE`.
     let messages: [AgentMessageDTO]?
     let usage: AgentTurnUsageDTO?
+    /// Gotowe podpowiedzi pod błędem (po `AI_TIMEOUT` / `AI_CANCELLED`):
+    /// mniejszy zakres, bo to najczęstsza przyczyna 90 s.
+    let suggestions: [String]?
     let startedAt: String
     let finishedAt: String?
 
     var isFinished: Bool { status != "RUNNING" }
 }
 
+// MARK: - Kontekst chipów i limity
+
+struct AgentQuotaDTO: Decodable, Equatable {
+    let used: Int
+    let limit: Int
+    let remaining: Int
+
+    /// Ile z puli poszło; powyżej limitu pasek nie rośnie dalej.
+    var fraction: Double {
+        guard limit > 0 else { return 0 }
+        return min(Double(used) / Double(limit), 1)
+    }
+}
+
+struct AgentUsageByUserDTO: Decodable, Equatable, Identifiable {
+    let userId: String
+    let displayName: String
+    let messages: Int
+
+    var id: String { userId }
+}
+
+/// `GET /agent/usage` — „ile mi zostało" i kto ile zużył.
+struct AgentUsageDTO: Decodable, Equatable {
+    let householdId: String
+    let period: String
+    let resetsAt: String
+    /// Dziś zawsze `FREE`; pole jest, żeby paywall nie zmieniał kontraktu.
+    let tier: String
+    let messages: AgentQuotaDTO
+    let plans: AgentQuotaDTO
+    /// Rozkład na domowników w tym okresie; starszy serwer nie oddaje pola.
+    let byUser: [AgentUsageByUserDTO]?
+}
+
+/// Domownik w arkuszu „Dla kogo liczyć" — z etykietą celu prosto z profilu.
+struct AgentContextMemberDTO: Decodable, Equatable, Identifiable {
+    let userId: String
+    let displayName: String
+    /// „2 100 kcal · bez laktozy" — ta sama etykieta co na karcie porcji.
+    let goalLabel: String
+    let calorieGoal: Int
+    /// Czy dane tej osoby idą do modelu (zgoda albo bramka wyłączona).
+    let consented: Bool
+    let isSelf: Bool
+
+    var id: String { userId }
+}
+
+/// `GET /agent/context` — jedno źródło dla chipów nad polem i arkusza osób.
+struct AgentContextDTO: Decodable, Equatable {
+    let householdId: String
+    let weekStart: String?
+    let weekLabel: String?
+    let members: [AgentContextMemberDTO]
+    let memberCount: Int
+    let targetKcalPerDay: Int?
+    let usage: AgentUsageDTO
+    /// Czy tura zaczyna na tańszym modelu — wtedy kafel „biorę się za plan"
+    /// jest spodziewany, a nie oznacza awarii.
+    let handoff: Bool
+}
+
 // MARK: - Żądania
 
 struct AgentCreateConversationRequestDTO: Encodable {
     let householdId: String
+}
+
+/// Zatwierdzenie propozycji. `force` = „Zapisz mimo to" z karty STALE:
+/// plan zmienił się od propozycji, użytkownik to widzi i mimo to zapisuje.
+/// Serwer pomija wtedy porównanie z odciskiem tygodnia, ale nie walidację.
+struct AgentApplyProposalRequestDTO: Encodable {
+    let force: Bool
 }
 
 /// Wiadomość do asystenta.

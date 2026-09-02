@@ -61,6 +61,12 @@ struct AgentCardStateDTO: Decodable, Equatable {
     var isPending: Bool { status == "PENDING" }
     var isApplied: Bool { status == "APPLIED" }
     var isUndone: Bool { status == "UNDONE" }
+    var isStale: Bool { status == "STALE" }
+    var isExpired: Bool { status == "EXPIRED" }
+    var isFailed: Bool { status == "FAILED" }
+    /// STALE zapisuje się tylko z `force` — serwer pomija wtedy porównanie
+    /// z odciskiem tygodnia, walidację robi jak zawsze.
+    var requiresForce: Bool { isStale }
 }
 
 struct PlanWeekCardSlotDTO: Decodable, Equatable, Identifiable {
@@ -104,6 +110,12 @@ struct PlanWeekCardRemovalDTO: Decodable, Equatable, Identifiable {
     let dayLabel: String
     let mealLabel: String
     let title: String
+    /// Od v2: identyfikatory slotu i JEDNO słowo powodu od modelu
+    /// („powtórka", „ponad cel"). Starszy serwer ich nie oddaje.
+    let dayOfWeek: String?
+    let mealType: String?
+    let recipeId: String?
+    let reason: String?
 
     var id: String { "\(dayLabel)-\(mealLabel)-\(title)" }
 }
@@ -276,8 +288,20 @@ struct HouseholdSplitCardDTO: Decodable, Equatable {
 struct MacroGapBoosterDTO: Decodable, Equatable, Identifiable {
     let text: String
     let amount: Int
+    /// Gotowe pytanie wysyłane strzałką przy TEJ zmianie. Starszy serwer
+    /// nie oddaje pola — wtedy składamy zdanie sami z `text`.
+    let prompt: String?
 
     var id: String { text }
+
+    var askPrompt: String {
+        prompt ?? "Zastosuj w planie tę zmianę: \(text). Pokaż mi ją jako propozycję."
+    }
+
+    /// „+24 g" / „−11 g" — znak jest treścią: przy tłuszczach zmiana idzie w dół.
+    func amountLabel(unit: String) -> String {
+        amount >= 0 ? "+\(amount) \(unit)" : "−\(abs(amount)) \(unit)"
+    }
 }
 
 /// Luka między planem a celem — i zmiany, które ją domykają.
@@ -302,11 +326,34 @@ struct MacroGapCardDTO: Decodable, Equatable {
 }
 
 /// Dział sklepu z pozycjami.
+/// Jedna pozycja działu z flagą odhaczenia (v2). Odhaczone = to, co ktoś
+/// sam zaznaczył w Liście — nigdy „masz w domu".
+struct ShoppingListCardEntryDTO: Decodable, Equatable, Identifiable {
+    let label: String
+    let isChecked: Bool
+
+    var id: String { "\(isChecked ? 1 : 0)-\(label)" }
+}
+
 struct ShoppingListCardGroupDTO: Decodable, Equatable, Identifiable {
     let department: String
+    /// Klucz działu (`DAIRY`) — pod ikonę; starszy serwer go nie oddaje.
+    let departmentKey: String?
+    /// Do kupienia — gotowe napisy. Zostaje dla zgodności ze starszym serwerem.
     let items: [String]
+    /// Od v2: wszystkie pozycje działu, najpierw do kupienia, potem odhaczone.
+    let entries: [ShoppingListCardEntryDTO]?
+    /// Ile pozycji działu NIE zmieściło się w karcie.
+    let hidden: Int?
 
     var id: String { department }
+
+    /// Wpisy do narysowania: z `entries`, a bez nich — z `items` (nieodhaczone).
+    var rows: [ShoppingListCardEntryDTO] {
+        entries ?? items.map { ShoppingListCardEntryDTO(label: $0, isChecked: false) }
+    }
+
+    var remainingCount: Int { rows.filter { !$0.isChecked }.count }
 }
 
 /// Co trzeba kupić na ten tydzień.
@@ -319,6 +366,8 @@ struct ShoppingListCardDTO: Decodable, Equatable {
     let summary: ShoppingListCardSummaryDTO
     /// `nil`, gdy nic nie odhaczono — pusta linia mówiłaby o niczym.
     let checkedNote: String?
+    /// Ile z 17 działów nie ma żadnej pozycji („+ 12 działów bez pozycji").
+    let emptyDepartments: Int?
     let actions: [AgentCardActionDTO]
 }
 

@@ -23,6 +23,8 @@ struct AgentChatMessage: Identifiable, Equatable {
     /// Karta — propozycja tygodnia albo potwierdzenie zapisu. `nil` przy
     /// zwykłej odpowiedzi i przy rodzaju, którego ten build nie zna.
     var card: AgentCardDTO?
+    /// „Uwzględniłem: …" — z czym serwer policzył tę odpowiedź.
+    var usedContext: [String] = []
 }
 
 /// Stan rozmowy z asystentem AI.
@@ -64,6 +66,12 @@ final class AgentStore {
     /// bo między krokami bywa kilkanaście sekund ciszy.
     private(set) var turnStartedAt: Date?
     private(set) var errorMessage: String?
+    /// Gotowe podpowiedzi pod błędem tury (po przekroczeniu czasu albo
+    /// „Stop"): mniejszy zakres, bo to najczęstsza przyczyna 90 s. Z serwera.
+    private(set) var suggestions: [String] = []
+    /// Kontekst chipów i arkusza osób — z `GET /agent/context`; `nil`, dopóki
+    /// nie przyjdzie (wtedy chipy liczą się po staremu z cache'ów sesji).
+    private(set) var context: AgentContextDTO?
     /// Asystent wyłączony na serwerze (`AI_DISABLED`) — ekran mówi to wprost,
     /// zamiast udawać, że wiadomość poszła.
     private(set) var isUnavailable = false
@@ -145,6 +153,7 @@ final class AgentStore {
         guard !trimmed.isEmpty, canSend else { return false }
 
         errorMessage = nil
+        suggestions = []
         retryText = nil
         retryClientMessageId = nil
         isSending = true
@@ -226,19 +235,57 @@ final class AgentStore {
         return false
     }
 
-    /// Przestaje czekać na turę.
+    /// „Stop" — przerywa turę NA SERWERZE.
     ///
-    /// NIE anuluje pracy modelu — ta biegnie na serwerze i tak czy owak
-    /// zostanie policzona. Zatrzymujemy tylko odpytywanie, a identyfikator
-    /// tury zostaje: po powrocie na zakładkę odpowiedź może już czekać.
+    /// Do v2 przycisk tylko przestawał odpytywać, a model liczył dalej i
+    /// odpowiedź spadała po chwili jak grom z jasnego nieba. Teraz serwer
+    /// domyka turę jako `AI_CANCELLED`, oddaje kwotę i podpowiada mniejszy
+    /// zakres. Gdy serwer jest starszy i nie zna tej trasy, zostaje dawne
+    /// zachowanie: przestajemy czekać, identyfikator tury zostaje.
     func stopWaiting() {
         guard isSending else { return }
+        let turnId = pendingTurnId
         turnTask?.cancel()
         turnTask = nil
         isSending = false
         progress = []
         turnStartedAt = nil
-        errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
+
+        guard let turnId else {
+            errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let turn = try await self.client.cancelTurn(id: turnId)
+                if turn.isFinished {
+                    self.pendingTurnId = nil
+                    if turn.status == "DONE" {
+                        // Zdążył przed sygnałem — odpowiedź jest, pokazujemy ją.
+                        self.apply(finished: turn)
+                    } else {
+                        self.errorMessage = "Zatrzymane. Plan bez zmian."
+                        self.suggestions = turn.suggestions ?? []
+                    }
+                }
+            } catch {
+                self.errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
+            }
+        }
+    }
+
+    /// Kontekst chipów. Cicho: brak odpowiedzi zostawia chipy liczone po
+    /// staremu, a nie komunikat o błędzie pod rozmową.
+    func refreshContext(weekStart: String?) async {
+        guard let fresh = try? await client.context(householdId: householdId, weekStart: weekStart)
+        else { return }
+        context = fresh
+    }
+
+    /// „Ile mi zostało" — do arkusza limitów; nie zasłania błędów rozmowy.
+    func loadUsage() async -> AgentUsageDTO? {
+        try? await client.usage(householdId: householdId)
     }
 
     // MARK: - Rozmowy
@@ -350,6 +397,16 @@ final class AgentStore {
         }
     }
 
+    /// „Usuń wszystkie notatki" — nieodwracalne; plan i przepisy zostają.
+    func forgetAllMemory() async {
+        do {
+            try await client.forgetAllMemory(householdId: householdId)
+            memory = []
+        } catch {
+            handle(error)
+        }
+    }
+
     // MARK: - Wczytywanie rozmowy
 
     private func loadOrCreateConversation() async {
@@ -421,6 +478,7 @@ final class AgentStore {
         turnStartedAt = nil
         pendingTurnId = nil
         errorMessage = nil
+        suggestions = []
     }
 
     // MARK: - Tura
@@ -531,6 +589,9 @@ final class AgentStore {
         default:
             errorMessage = copy(forCode: turn.errorCode)
                 ?? "Asystent nie dokończył zadania. Spróbuj ponownie."
+            // Podpowiedzi z serwera („tylko obiady", „3 dni") — tylko tam,
+            // gdzie serwer je dał, czyli po czasie i po „Stop".
+            suggestions = turn.suggestions ?? []
         }
     }
 
@@ -610,9 +671,9 @@ final class AgentStore {
     /// Bez modelu i bez tury: klient odsyła sam identyfikator, serwer ma
     /// u siebie policzony stan docelowy. Wiadomość potwierdzającą doklejamy
     /// z odpowiedzi, więc plan i rozmowa zmieniają się w tej samej chwili.
-    func applyProposal(id: String) async {
+    func applyProposal(id: String, force: Bool = false) async {
         await runProposalAction(id: id) { [client] in
-            try await client.applyProposal(id: id)
+            try await client.applyProposal(id: id, force: force)
         }
     }
 
@@ -710,7 +771,8 @@ final class AgentStore {
             author: dto.role == "USER" ? .user : .assistant,
             text: dto.text,
             createdAt: timestampParser.date(from: dto.createdAt),
-            card: dto.card
+            card: dto.card,
+            usedContext: dto.usedContext ?? []
         )
     }
 }

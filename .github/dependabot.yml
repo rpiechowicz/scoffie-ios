@@ -1,0 +1,21 @@
+# Pakiety Swift (socket.io-client-swift) i akcje CI — raz w miesiącu, jako
+# PR-y do `develop`. Biblioteka socketu jest dziś przypięta do gałęzi
+# `master`; Dependabot pokaże, kiedy pojawi się wydanie, do którego można
+# przypiąć wersję.
+version: 2
+updates:
+  - package-ecosystem: swift
+    directory: '/'
+    target-branch: develop
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    target-branch: develop
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore(ci)'

@@ -11,8 +11,12 @@ import SwiftUI
 struct AssistantMemorySheet: View {
     let store: AgentStore
 
+    /// Tyle notatek trzyma serwer — kontrakt `MEMORY_LIMIT`.
+    private static let memoryLimit = 30
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @State private var showsForgetAllAlert = false
 
     var body: some View {
         NavigationStack {
@@ -25,12 +29,26 @@ struct AssistantMemorySheet: View {
                     list
                 }
             }
-            .navigationTitle("Co asystent pamięta")
+            .navigationTitle("Co o Was pamięta")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Zamknij") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Text("\(store.memory.count) z \(Self.memoryLimit)")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.wmMuted(scheme))
+                }
+            }
+            .alert("Usunąć wszystkie notatki?", isPresented: $showsForgetAllAlert) {
+                Button("Usuń", role: .destructive) {
+                    Task { await store.forgetAllMemory() }
+                }
+                Button("Anuluj", role: .cancel) {}
+            } message: {
+                Text("Nieodwracalne. Plan tygodnia i przepisy zostają; rozmowy kasujesz osobno w menu asystenta.")
             }
         }
         .task {
@@ -38,13 +56,42 @@ struct AssistantMemorySheet: View {
         }
     }
 
+    private struct GroupSection: Identifiable {
+        let group: AgentMemoryGroup
+        let notes: [AgentMemoryNoteDTO]
+        var id: String { group.id }
+    }
+
+    /// Grupy w stałej kolejności: preferencje, ograniczenia, zwyczaje.
+    private var grouped: [GroupSection] {
+        AgentMemoryGroup.allCases.compactMap { group in
+            let notes = store.memory.filter { $0.group == group }
+            return notes.isEmpty ? nil : GroupSection(group: group, notes: notes)
+        }
+    }
+
     private var list: some View {
         List {
             Section {
-                ForEach(store.memory) { note in
-                    Text(note.text)
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                Text("Notatki z rozmów, których asystent używa przy każdej odpowiedzi. Usuń to, co nieaktualne — nowe dopisuje sam, do \(Self.memoryLimit).")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .listRowBackground(Color.wmCanvas(scheme))
+            }
+
+            ForEach(grouped) { section in
+                Section(section.group.title) {
+                    ForEach(section.notes) { note in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(note.text)
+                                .font(.system(size: 15))
+                                .foregroundStyle(Color.wmLabel(scheme))
+                            if let date = AgentStore.parseTimestamp(note.createdAt) {
+                                Text("Zapamiętane \(Self.dayFormatter.string(from: date))")
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(Color.wmFaint(scheme))
+                            }
+                        }
                         .padding(.vertical, 4)
                         .listRowBackground(Color.wmCanvas(scheme))
                         .swipeActions(edge: .trailing) {
@@ -54,13 +101,26 @@ struct AssistantMemorySheet: View {
                                 Label("Zapomnij", systemImage: "trash")
                             }
                         }
+                    }
                 }
-            } header: {
-                Text("Asystent zapisuje tu tylko rzeczy trwałe — zwyczaje, niechęci, sprzęt w kuchni. Nie zapisuje planu ani niczego o wadze i zdrowiu.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.wmMuted(scheme))
-                    .textCase(nil)
-                    .padding(.bottom, 6)
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    showsForgetAllAlert = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "trash")
+                        Text("Usuń wszystkie notatki")
+                            .font(.system(size: 14.5, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .listRowBackground(Color.wmCanvas(scheme))
+            } footer: {
+                Text("Nieodwracalne · plan i przepisy zostają")
+                    .font(.system(size: 11.5))
+                    .frame(maxWidth: .infinity)
             }
         }
         .listStyle(.plain)
@@ -69,6 +129,13 @@ struct AssistantMemorySheet: View {
             await store.refreshMemory()
         }
     }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "d MMM"
+        return formatter
+    }()
 
     private var emptyState: some View {
         VStack(spacing: 10) {

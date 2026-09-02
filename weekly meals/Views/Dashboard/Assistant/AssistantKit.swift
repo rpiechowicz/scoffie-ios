@@ -204,13 +204,25 @@ struct AssistantProgressTrail: View {
                     .transition(.opacity)
             } else {
                 ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                    row(label: step.label, isCurrent: index == steps.count - 1)
-                        .transition(
-                            .asymmetric(
-                                insertion: .opacity.combined(with: .offset(y: 8)),
-                                removal: .opacity
-                            )
+                    // Przekazanie planiście to MOMENT, nie kolejna linijka:
+                    // od tej chwili dzieje się droższa i dłuższa część tury,
+                    // a użytkownik ma wiedzieć, że to normalne.
+                    if step.isHandoff {
+                        HandoffTile(
+                            label: step.label,
+                            since: AgentStore.parseTimestamp(step.at),
+                            isCurrent: index == steps.count - 1
                         )
+                        .transition(.opacity.combined(with: .offset(y: 8)))
+                    } else {
+                        row(label: step.label, isCurrent: index == steps.count - 1)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity.combined(with: .offset(y: 8)),
+                                    removal: .opacity
+                                )
+                            )
+                    }
                 }
             }
 
@@ -267,6 +279,63 @@ struct AssistantProgressTrail: View {
             }
             .padding(.leading, 28)
             .animation(.smooth(duration: 0.35), value: elapsed >= Self.patienceAfter)
+        }
+    }
+
+    /// Kafel „Biorę się za plan” — z licznikiem sekund od przekazania
+    /// i uczciwym „30–60 s”. Terakota, bo to jedyny krok, na który warto
+    /// zwrócić uwagę; reszta śladu jest szara.
+    private struct HandoffTile: View {
+        let label: String
+        let since: Date?
+        let isCurrent: Bool
+
+        @Environment(\.colorScheme) private var scheme
+
+        var body: some View {
+            HStack(alignment: .center, spacing: 10) {
+                ZStack {
+                    Circle().fill(WMPalette.terracotta.opacity(0.22))
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(WMPalette.terracotta)
+                }
+                .frame(width: 30, height: 30)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .font(.system(size: 14, weight: .bold))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.wmLabel(scheme))
+                    Text("Dokładniejszy model — ta część trwa 30–60 s")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                }
+
+                Spacer(minLength: 8)
+
+                if let since {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let seconds = max(0, Int(context.date.timeIntervalSince(since)))
+                        Text(String(format: "%d:%02d", seconds / 60, seconds % 60))
+                            .font(.system(size: 12.5, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(WMPalette.terracotta)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.wmAccentTint(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(WMPalette.terracotta.opacity(0.26), lineWidth: 1)
+            )
+            .opacity(isCurrent ? 1 : 0.8)
+            .padding(.vertical, 2)
         }
     }
 
@@ -490,6 +559,233 @@ struct AssistantCardActions: View {
         .background(Color.wmPageBase(scheme).opacity(scheme == .dark ? 0.14 : 0.04))
         .overlay(alignment: .top) {
             Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+        }
+    }
+}
+
+// MARK: - „Uwzględniłem: …”
+
+/// Jedna linia pod odpowiedzią: z czym serwer ją policzył (tydzień, dla
+/// kogo, cel). To są te same chipy, co nad polem, tylko po fakcie — i to
+/// jest miejsce, w którym łapie się, że asystent wziął złego domownika.
+struct AssistantUsedContextLine: View {
+    let items: [String]
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.wmFaint(scheme))
+                .padding(.top, 2)
+            Text("Uwzględniłem: " + items.joined(separator: " · "))
+                .font(.system(size: 12))
+                .foregroundStyle(Color.wmFaint(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+// MARK: - Pasek stanu propozycji i akcje zależne od stanu
+
+/// Pasek nad akcjami karty: sześć stanów, jedna ramka.
+///
+/// Ten sam korpus karty, zmienia się tylko ten pasek i przyciski pod nim —
+/// karta w historii jest sterownikiem, nie zdjęciem. Terminy („do piątku”,
+/// „Cofnij możliwe jeszcze 52 min”) liczymy z `until`, które serwer daje
+/// przy każdym odczycie.
+struct AssistantStatusBand: View {
+    let state: AgentCardStateDTO
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 9) {
+            ZStack {
+                Circle().fill(tint.opacity(0.16))
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 22, height: 22)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .bold))
+                    .tracking(-0.15)
+                    .foregroundStyle(tint)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.wmFaint(scheme))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(scheme == .dark ? 0.10 : 0.07))
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+        }
+    }
+
+    private var icon: String {
+        switch state.status {
+        case "APPLIED": return "checkmark"
+        case "UNDONE": return "arrow.uturn.backward"
+        case "STALE": return "info"
+        case "FAILED": return "xmark"
+        default: return "clock"
+        }
+    }
+
+    private var tint: Color {
+        switch state.status {
+        case "APPLIED": return WMPalette.sage
+        case "STALE": return WMPalette.butter
+        case "FAILED": return WMPalette.terracotta
+        case "EXPIRED", "UNDONE": return Color.wmMuted(scheme)
+        default: return Color.wmMuted(scheme)
+        }
+    }
+
+    private var title: String {
+        switch state.status {
+        case "PENDING": return "Propozycja ważna 3 dni"
+        case "APPLIED": return "Zapisano w planie"
+        case "UNDONE": return "Cofnięto"
+        case "STALE": return "Plan zmienił się od tej propozycji"
+        case "EXPIRED": return "Propozycja wygasła"
+        case "FAILED": return "Nie udało się zapisać"
+        default: return "Propozycja"
+        }
+    }
+
+    private var subtitle: String? {
+        switch state.status {
+        case "PENDING":
+            return Self.deadline(state.until).map { "do \($0)" }
+        case "APPLIED":
+            return Self.remaining(state.until).map { "Cofnij możliwe jeszcze \($0)" }
+        case "UNDONE":
+            return "Możesz zastosować ponownie"
+        case "STALE":
+            return "Zapiszesz mimo to albo poprosisz o nową"
+        case "EXPIRED":
+            return "Po 72 h asystent liczy od nowa"
+        case "FAILED":
+            return "Plan bez zmian · spróbuj ponownie"
+        default:
+            return nil
+        }
+    }
+
+    /// „piątku 5.09, 14:20” z ISO; `nil`, gdy serwer nie dał terminu.
+    private static func deadline(_ until: String?) -> String? {
+        guard let date = AgentStore.parseTimestamp(until) else { return nil }
+        return deadlineFormatter.string(from: date)
+    }
+
+    /// „52 min” / „2 h” do końca okna cofnięcia; `nil` po jego upływie.
+    private static func remaining(_ until: String?) -> String? {
+        guard let date = AgentStore.parseTimestamp(until) else { return nil }
+        let seconds = Int(date.timeIntervalSinceNow)
+        guard seconds > 0 else { return nil }
+        if seconds < 3600 { return "\(max(1, seconds / 60)) min" }
+        return "\(seconds / 3600) h"
+    }
+
+    private static let deadlineFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "EEEE d.MM, HH:mm"
+        return formatter
+    }()
+}
+
+/// Akcje propozycji zależne od stanu — to jest cała różnica między
+/// zdjęciem a sterownikiem.
+///
+/// PENDING: zapisz + zmień. UNDONE: zastosuj ponownie. FAILED: spróbuj
+/// ponownie. STALE: przelicz na nowo (główna) + zapisz mimo to (duch), bo
+/// serwer i tak przeliczy, ale użytkownik ma wiedzieć, że baza się zmieniła.
+/// EXPIRED i APPLIED nie mają „Zapisz” wcale — przycisk, który nie zadziała,
+/// jest gorszy niż brak przycisku.
+struct AssistantProposalFooter: View {
+    let state: AgentCardStateDTO
+    /// Napis zapisu z serwera („Dodaj do planu”, „Zapisz wtorek”).
+    let applyLabel: String
+    var applyIcon: String = "checkmark"
+    let reviseLabel: String
+    var reviseIcon: String = "slider.horizontal.3"
+    let isBusy: Bool
+    /// `force` = „Zapisz mimo to” przy STALE.
+    let onApply: (_ force: Bool) -> Void
+    let onRevise: () -> Void
+    /// „Poproś o nową” — wysyła gotowe zdanie, bez zapisu.
+    let onAskNew: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            AssistantStatusBand(state: state)
+            actions
+        }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        switch state.status {
+        case "PENDING" where state.canApply:
+            AssistantCardActions(
+                primaryTitle: applyLabel,
+                primaryIcon: applyIcon,
+                isBusy: isBusy,
+                secondaryTitle: reviseLabel,
+                secondaryIcon: reviseIcon,
+                onSecondary: onRevise,
+                onPrimary: { onApply(false) }
+            )
+        case "UNDONE" where state.canApply:
+            AssistantCardActions(
+                primaryTitle: "Zastosuj ponownie",
+                primaryIcon: "checkmark",
+                isBusy: isBusy,
+                onPrimary: { onApply(false) }
+            )
+        case "FAILED" where state.canApply:
+            AssistantCardActions(
+                primaryTitle: "Spróbuj ponownie",
+                primaryIcon: "arrow.uturn.backward",
+                isBusy: isBusy,
+                onPrimary: { onApply(false) }
+            )
+        case "STALE" where state.canApply:
+            AssistantCardActions(
+                primaryTitle: "Przelicz na nowo",
+                primaryIcon: "sparkles",
+                isBusy: isBusy,
+                secondaryTitle: "Zapisz mimo to",
+                secondaryIcon: nil,
+                onSecondary: { onApply(true) },
+                onPrimary: onAskNew
+            )
+        case "EXPIRED", "STALE":
+            AssistantCardActions(
+                primaryTitle: "Poproś o nową",
+                primaryIcon: "sparkles",
+                isBusy: isBusy,
+                onPrimary: onAskNew
+            )
+        default:
+            EmptyView()
         }
     }
 }
