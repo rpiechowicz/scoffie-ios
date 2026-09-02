@@ -178,24 +178,39 @@ private struct RemovalsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Zniknie z planu")
-                .font(.system(size: 10.5, weight: .bold))
-                .tracking(1.2)
-                .textCase(.uppercase)
-                .foregroundStyle(WMPalette.butter)
+            HStack(spacing: 6) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .heavy))
+                Text("Zniknie z planu · \(removals.count)")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.1)
+                    .textCase(.uppercase)
+            }
+            .foregroundStyle(WMPalette.terracotta)
 
+            // Powód po prawej („powtórka”, „ponad cel”) to jedno słowo od
+            // modelu — bez niego zniknięcie dania wygląda na przypadek.
             ForEach(removals) { item in
-                Text(line(for: item))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.wmMuted(scheme))
-                    .strikethrough(true, color: Color.wmStrike(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(line(for: item))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .strikethrough(true, color: Color.wmStrike(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if let reason = item.reason, !reason.isEmpty {
+                        Text(reason)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.wmFaint(scheme))
+                            .lineLimit(1)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.wmButterTint(scheme))
+        .background(WMPalette.terracotta.opacity(scheme == .dark ? 0.08 : 0.05))
         .overlay(alignment: .top) {
             Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
         }
@@ -275,8 +290,10 @@ struct AssistantCardStatusFooter: View {
 struct AssistantPlanWeekCard: View {
     let card: PlanWeekCardDTO
     let isBusy: Bool
-    let onApply: () -> Void
+    /// `force` = „Zapisz mimo to” przy propozycji nieaktualnej.
+    let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
+    let onAskNew: () -> Void
 
     /// Ile dni widać przed rozwinięciem. Trzy, bo tyle mieści się na ekranie
     /// bez przewijania — a karta ma być do ogarnięcia jednym spojrzeniem.
@@ -386,21 +403,16 @@ struct AssistantPlanWeekCard: View {
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
     private var footer: some View {
-        if card.state.canApply {
-            AssistantCardActions(
-                primaryTitle: applyLabel,
-                primaryIcon: "checkmark",
-                isBusy: isBusy,
-                secondaryTitle: "Zmień",
-                secondaryIcon: "slider.horizontal.3",
-                onSecondary: onRevise,
-                onPrimary: onApply
-            )
-        } else {
-            AssistantCardStatusFooter(state: card.state)
-        }
+        AssistantProposalFooter(
+            state: card.state,
+            applyLabel: applyLabel,
+            reviseLabel: "Zmień",
+            isBusy: isBusy,
+            onApply: onApply,
+            onRevise: onRevise,
+            onAskNew: onAskNew
+        )
     }
 
     private var applyLabel: String {
@@ -464,8 +476,9 @@ struct AssistantPlanWeekCard: View {
 struct AssistantPlanDayCard: View {
     let card: PlanDayCardDTO
     let isBusy: Bool
-    let onApply: () -> Void
+    let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
+    let onAskNew: () -> Void
 
     /// Kolory pasków przy posiłkach — kolejność dnia, nie znaczenie.
     /// Poranek jest ciepły, wieczór chłodny; to jedyna treść tego koloru.
@@ -575,21 +588,17 @@ struct AssistantPlanDayCard: View {
         return "Razem \(card.summary.kcalTotal) z \(target) kcal"
     }
 
-    @ViewBuilder
     private var footer: some View {
-        if card.state.canApply {
-            AssistantCardActions(
-                primaryTitle: applyLabel,
-                primaryIcon: "checkmark",
-                isBusy: isBusy,
-                secondaryTitle: "Inny zestaw",
-                secondaryIcon: "arrow.triangle.2.circlepath",
-                onSecondary: onRevise,
-                onPrimary: onApply
-            )
-        } else {
-            AssistantCardStatusFooter(state: card.state)
-        }
+        AssistantProposalFooter(
+            state: card.state,
+            applyLabel: applyLabel,
+            reviseLabel: "Inny zestaw",
+            reviseIcon: "arrow.triangle.2.circlepath",
+            isBusy: isBusy,
+            onApply: onApply,
+            onRevise: onRevise,
+            onAskNew: onAskNew
+        )
     }
 
     private var applyLabel: String {
@@ -1021,8 +1030,9 @@ struct AssistantOptionsCard: View {
 struct AssistantSwapCard: View {
     let card: SwapCardDTO
     let isBusy: Bool
-    let onApply: () -> Void
+    let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
+    let onAskNew: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -1076,21 +1086,18 @@ struct AssistantSwapCard: View {
         .padding(.bottom, 14)
     }
 
-    @ViewBuilder
     private var footer: some View {
-        if card.state.canApply {
-            AssistantCardActions(
-                primaryTitle: applyLabel,
-                primaryIcon: "arrow.triangle.2.circlepath",
-                isBusy: isBusy,
-                secondaryTitle: "Inne",
-                secondaryIcon: "ellipsis",
-                onSecondary: onRevise,
-                onPrimary: onApply
-            )
-        } else {
-            AssistantCardStatusFooter(state: card.state)
-        }
+        AssistantProposalFooter(
+            state: card.state,
+            applyLabel: applyLabel,
+            applyIcon: "arrow.triangle.2.circlepath",
+            reviseLabel: "Inne",
+            reviseIcon: "ellipsis",
+            isBusy: isBusy,
+            onApply: onApply,
+            onRevise: onRevise,
+            onAskNew: onAskNew
+        )
     }
 
     private var applyLabel: String {
@@ -1151,8 +1158,9 @@ struct AssistantSwapCard: View {
 struct AssistantHouseholdSplitCard: View {
     let card: HouseholdSplitCardDTO
     let isBusy: Bool
-    let onApply: () -> Void
+    let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
+    let onAskNew: () -> Void
 
     /// Kolor osoby jest STAŁY w obrębie karty i bierze się z pozycji na
     /// liście — nie niesie znaczenia, tylko pozwala odróżnić wiersze wzrokiem.
@@ -1199,21 +1207,16 @@ struct AssistantHouseholdSplitCard: View {
         }
     }
 
-    @ViewBuilder
     private var footer: some View {
-        if card.state.canApply {
-            AssistantCardActions(
-                primaryTitle: card.actions.first { $0.type == .apply }?.label ?? "Zapisz",
-                primaryIcon: "checkmark",
-                isBusy: isBusy,
-                secondaryTitle: "Zmień",
-                secondaryIcon: "slider.horizontal.3",
-                onSecondary: onRevise,
-                onPrimary: onApply
-            )
-        } else {
-            AssistantCardStatusFooter(state: card.state)
-        }
+        AssistantProposalFooter(
+            state: card.state,
+            applyLabel: card.actions.first { $0.type == .apply }?.label ?? "Zapisz",
+            reviseLabel: "Zmień",
+            isBusy: isBusy,
+            onApply: onApply,
+            onRevise: onRevise,
+            onAskNew: onAskNew
+        )
     }
 
     private struct PortionRow: View {
@@ -1240,8 +1243,8 @@ struct AssistantHouseholdSplitCard: View {
                             .tracking(-0.25)
                             .foregroundStyle(Color.wmLabel(scheme))
                         Text(portion.goalLabel)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(tint)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -1303,6 +1306,7 @@ struct AssistantMacroGapCard: View {
 
             if !card.boosters.isEmpty {
                 boosters
+                boosterNote
             }
 
             if let action = card.actions.first, let prompt = action.prompt {
@@ -1313,6 +1317,23 @@ struct AssistantMacroGapCard: View {
                 )
             }
         }
+    }
+
+    /// Strzałka wysyła pytanie, nic nie zapisuje — stopka mówi to wprost,
+    /// żeby nikt nie szukał w planie zmiany, której nie ma.
+    private var boosterNote: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.wmFaint(scheme))
+            Text("Każda strzałka wysyła pytanie — nic nie zapisuje się samo")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.wmFaint(scheme))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
     }
 
     private var progress: some View {
@@ -1354,7 +1375,7 @@ struct AssistantMacroGapCard: View {
 
     private var boosters: some View {
         VStack(spacing: 0) {
-            Text(card.boosters.count == 1 ? "Zmiana, która to załatwi" : "Zmiany, które to załatwią")
+            Text("Zapytaj o zmianę")
                 .font(.system(size: 10.5, weight: .bold))
                 .tracking(1.1)
                 .textCase(.uppercase)
@@ -1365,20 +1386,34 @@ struct AssistantMacroGapCard: View {
                 .padding(.bottom, 4)
 
             ForEach(Array(card.boosters.enumerated()), id: \.element.id) { index, booster in
-                HStack(alignment: .center, spacing: 11) {
-                    Text(booster.text)
-                        .font(.system(size: 13.5))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
+                Button { onAsk(booster.askPrompt) } label: {
+                    HStack(alignment: .center, spacing: 11) {
+                        Text(booster.text)
+                            .font(.system(size: 13.5))
+                            .tracking(-0.2)
+                            .foregroundStyle(Color.wmLabel(scheme))
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    Spacer(minLength: 8)
+                        Spacer(minLength: 8)
 
-                    Text("+\(booster.amount) \(card.unit)")
-                        .font(.system(size: 12.5, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(WMPalette.indigo)
+                        Text(booster.amountLabel(unit: card.unit))
+                            .font(.system(size: 12.5, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(WMPalette.indigo)
+
+                        ZStack {
+                            Circle().fill(WMPalette.indigo.opacity(0.14))
+                            Circle().stroke(WMPalette.indigo.opacity(0.28), lineWidth: 1)
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(WMPalette.indigo)
+                        }
+                        .frame(width: 30, height: 30)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .overlay(alignment: .top) {
@@ -1446,12 +1481,28 @@ struct AssistantShoppingListCard: View {
                 .padding(.bottom, 2)
             }
 
+            if let empty = card.emptyDepartments, empty > 0 {
+                Text("+ \(empty) \(Self.departmentsWord(empty)) bez pozycji")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.wmFaint(scheme))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+            }
+
             AssistantCardActions(
                 primaryTitle: card.actions.first?.label ?? "Otwórz listę zakupów",
                 primaryIcon: "cart",
                 onPrimary: onOpenShopping
             )
         }
+    }
+
+    static func departmentsWord(_ count: Int) -> String {
+        if count == 1 { return "dział" }
+        let mod100 = count % 100
+        if (12...14).contains(mod100) { return "działów" }
+        return (2...4).contains(count % 10) ? "działy" : "działów"
     }
 
     private struct GroupBlock: View {
@@ -1467,7 +1518,8 @@ struct AssistantShoppingListCard: View {
                         .tracking(0.8)
                         .textCase(.uppercase)
                         .foregroundStyle(Color.wmMuted(scheme))
-                    Text("\(group.items.count)")
+                    // „2/4” — do kupienia z wszystkich; odhaczone są tłem.
+                    Text("\(group.remainingCount)/\(group.rows.count)")
                         .font(.system(size: 11))
                         .monospacedDigit()
                         .foregroundStyle(Color.wmFaint(scheme))
@@ -1475,22 +1527,50 @@ struct AssistantShoppingListCard: View {
                 }
 
                 AllergenChipFlow(spacing: 6) {
-                    ForEach(group.items, id: \.self) { item in
-                        Text(item)
-                            .font(.system(size: 12.5))
-                            .tracking(-0.15)
-                            .foregroundStyle(Color.wmLabel(scheme))
-                            .padding(.horizontal, 10)
-                            .frame(height: 28)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(Color.wmInsetSurface(scheme))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(Color.wmCardStroke(scheme), lineWidth: 1)
-                            )
+                    ForEach(group.rows) { entry in
+                        HStack(spacing: 5) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .stroke(
+                                        entry.isChecked ? WMPalette.sage : Color.wmFaint(scheme).opacity(0.6),
+                                        lineWidth: 1.5
+                                    )
+                                if entry.isChecked {
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(WMPalette.sage)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 8, weight: .black))
+                                        .foregroundStyle(Color.wmPageBase(scheme))
+                                }
+                            }
+                            .frame(width: 13, height: 13)
+
+                            Text(entry.label)
+                                .font(.system(size: 12.5))
+                                .tracking(-0.15)
+                                .foregroundStyle(entry.isChecked ? Color.wmFaint(scheme) : Color.wmLabel(scheme))
+                                .strikethrough(entry.isChecked, color: Color.wmStrike(scheme))
+                        }
+                        .padding(.horizontal, 9)
+                        .frame(height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(entry.isChecked ? Color.clear : Color.wmInsetSurface(scheme))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(
+                                    entry.isChecked ? Color.wmRule(scheme) : Color.wmCardStroke(scheme),
+                                    lineWidth: 1
+                                )
+                        )
                     }
+                }
+
+                if let hidden = group.hidden, hidden > 0 {
+                    Text("+ \(hidden) więcej w Liście zakupów")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.wmFaint(scheme))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

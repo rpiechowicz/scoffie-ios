@@ -37,6 +37,7 @@ struct AssistantView: View {
     @State private var showDeleteAlert = false
     @State private var showConversations = false
     @State private var showMemory = false
+    @State private var showUsage = false
     @State private var showMoreMenu = false
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
@@ -74,19 +75,29 @@ struct AssistantView: View {
             // Cicho i tylko raz na kwadrans — to karta poboczna.
             await sessionStore.refreshMemberContext()
         }
+        .task(id: datesViewModel.weekStartISO) {
+            // Chipy i arkusz „Dla kogo liczyć” biorą to samo, co serwer
+            // wkłada do promptu — jedno źródło zamiast trzech cache'ów.
+            await store.refreshContext(weekStart: datesViewModel.weekStartISO)
+        }
         .confirmationDialog("Asystent", isPresented: $showMoreMenu, titleVisibility: .hidden) {
             Button("Nowa rozmowa") {
                 Task { await store.startNewConversation() }
             }
             Button("Co asystent pamięta") { showMemory = true }
+            Button("Limity asystenta") { showUsage = true }
             Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
             Button("Anuluj", role: .cancel) {}
         }
         .sheet(isPresented: $showsScopeSheet) {
             AssistantScopeSheet(
                 members: sessionStore.householdMembers,
+                context: store.context?.members ?? [],
                 selection: $scopeUserIds
             )
+        }
+        .sheet(isPresented: $showUsage) {
+            AssistantUsageSheet(store: store)
         }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
@@ -154,13 +165,14 @@ struct AssistantView: View {
                                     sessionStore.dashboardTab = .plan
                                 },
                                 onAskAgain: { ask(message.text) },
-                                onApply: { id in
-                                    Task { await store.applyProposal(id: id) }
+                                onApply: { id, force in
+                                    Task { await store.applyProposal(id: id, force: force) }
                                 },
                                 onUndo: { id in
                                     Task { await store.undoProposal(id: id) }
                                 },
                                 onRevise: { revise() },
+                                onAskNew: { askForFreshProposal() },
                                 onAsk: { prompt in ask(prompt) },
                                 onEdit: { beginEditing(message) }
                             )
@@ -189,6 +201,12 @@ struct AssistantView: View {
                                 onRetry: store.retryText == nil ? nil : { retry() }
                             )
                             .id(Self.errorAnchor)
+
+                            // Podpowiedzi z serwera po czasie albo „Stop”:
+                            // mniejszy zakres, bo to najczęstsza przyczyna 90 s.
+                            if !store.suggestions.isEmpty, !store.isSending {
+                                AssistantQuickReplies(items: store.suggestions, onTap: ask)
+                            }
                         }
 
                         if showsFollowUps {
@@ -453,7 +471,7 @@ struct AssistantView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!store.isSending && !canSend)
-                .accessibilityLabel(store.isSending ? "Przestań czekać" : "Wyślij")
+                .accessibilityLabel(store.isSending ? "Zatrzymaj turę" : "Wyślij")
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
@@ -528,8 +546,11 @@ struct AssistantView: View {
             )
         )
 
+        // Cel z serwera, gdy go dał — to nim liczą się paski celu na kartach;
+        // cel z telefonu jest tylko zapasem na starszy serwer.
+        let goal = store.context?.targetKcalPerDay ?? calorieGoal
         chips.append(
-            AssistantContextChip(id: "goal", icon: "target", label: "Cel \(calorieGoal) kcal")
+            AssistantContextChip(id: "goal", icon: "target", label: "Cel \(goal) kcal")
         )
         return chips
     }
@@ -609,6 +630,11 @@ struct AssistantView: View {
     private func revise() {
         draft = "Zmień w tej propozycji: "
         isComposerFocused = true
+    }
+
+    /// „Poproś o nową” z karty STALE/EXPIRED — gotowe zdanie, bez zapisu.
+    private func askForFreshProposal() {
+        ask("Przelicz tę propozycję na nowo na aktualnym planie")
     }
 
     private func ask(_ text: String) {
@@ -739,9 +765,11 @@ private struct MessageBubble: View {
     let onOpenPlan: () -> Void
     let onOpenShopping: () -> Void
     let onAskAgain: () -> Void
-    let onApply: (String) -> Void
+    /// `force` = „Zapisz mimo to”.
+    let onApply: (String, Bool) -> Void
     let onUndo: (String) -> Void
     let onRevise: () -> Void
+    let onAskNew: () -> Void
     let onAsk: (String) -> Void
     let onEdit: () -> Void
 
@@ -825,6 +853,12 @@ private struct MessageBubble: View {
             }
 
             card
+
+            // Po fakcie: z czym asystent to policzył. Pod kartą, żeby nie
+            // rozdzielać zdania od tego, co ono opisuje.
+            if !message.usedContext.isEmpty {
+                AssistantUsedContextLine(items: message.usedContext)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
@@ -840,15 +874,17 @@ private struct MessageBubble: View {
             AssistantPlanWeekCard(
                 card: planWeek,
                 isBusy: isBusy,
-                onApply: { onApply(planWeek.proposalId) },
-                onRevise: onRevise
+                onApply: { force in onApply(planWeek.proposalId, force) },
+                onRevise: onRevise,
+                onAskNew: onAskNew
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
                 card: planDay,
                 isBusy: isBusy,
-                onApply: { onApply(planDay.proposalId) },
-                onRevise: onRevise
+                onApply: { force in onApply(planDay.proposalId, force) },
+                onRevise: onRevise,
+                onAskNew: onAskNew
             )
         case .options(let options):
             AssistantOptionsCard(card: options, onAsk: onAsk)
@@ -856,15 +892,17 @@ private struct MessageBubble: View {
             AssistantSwapCard(
                 card: swap,
                 isBusy: isBusy,
-                onApply: { onApply(swap.proposalId) },
-                onRevise: onRevise
+                onApply: { force in onApply(swap.proposalId, force) },
+                onRevise: onRevise,
+                onAskNew: onAskNew
             )
         case .householdSplit(let split):
             AssistantHouseholdSplitCard(
                 card: split,
                 isBusy: isBusy,
-                onApply: { onApply(split.proposalId) },
-                onRevise: onRevise
+                onApply: { force in onApply(split.proposalId, force) },
+                onRevise: onRevise,
+                onAskNew: onAskNew
             )
         case .macroGap(let macro):
             AssistantMacroGapCard(card: macro, onAsk: onAsk)

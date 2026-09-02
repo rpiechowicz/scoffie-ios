@@ -181,7 +181,50 @@ struct SettingsView: View {
             FAQItem(
                 id: "acc-delete",
                 question: "Jak usunąć konto?",
-                answer: "Napisz na piechowicz.rafal98@gmail.com z prośbą o usunięcie konta. Potwierdzimy operację i wykasujemy wszystkie dane w ciągu 7 dni."
+                answer: "W Ustawieniach, w sekcji profilu, stuknij „Usuń konto”. Konto i Twoje dane znikają od razu; wspólne przepisy i plan zostają domownikom. Możesz też napisać na support@weekly-meals.app z adresu przypisanego do konta."
+            ),
+            FAQItem(
+                id: "acc-export",
+                question: "Czy mogę pobrać swoje dane?",
+                answer: "Tak. Napisz na support@weekly-meals.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Pobieranie jednym przyciskiem w aplikacji jest w drodze."
+            ),
+            FAQItem(
+                id: "acc-allergens",
+                question: "Jakie alergeny zna aplikacja?",
+                answer: "Wszystkie 14 alergenów z listy unijnej, m.in. gluten, mleko, jajka, orzechy, ryby, skorupiaki, soję, seler, gorczycę, sezam i siarczyny. Ustawiasz je w profilu — od tej chwili ani asystent, ani ręczne wstawianie posiłku nie przepuści dania z takim składnikiem dla osoby, która go unika."
+            )
+        ]),
+
+        FAQSection(id: "assistant", title: "Asystent", items: [
+            FAQItem(
+                id: "ai-what",
+                question: "Co potrafi asystent?",
+                answer: "Układa cały tydzień albo jeden dzień pod Wasze cele, podmienia pojedyncze danie, dzieli jedno danie na porcje dla domowników o różnych celach, sprawdza, czego brakuje do białka, i składa listę zakupów. Zna Wasz katalog, alergeny i preferencje z profili."
+            ),
+            FAQItem(
+                id: "ai-approve",
+                question: "Czy asystent sam zmienia mój plan?",
+                answer: "Nie. Asystent proponuje, a Ty zatwierdzasz jednym przyciskiem w karcie. Po zapisie masz godzinę na „Cofnij”. Jeśli w międzyczasie ktoś w domu zmienił plan ręcznie, karta powie o tym i zapyta, czy zapisać mimo to."
+            ),
+            FAQItem(
+                id: "ai-limits",
+                question: "Skąd biorą się limity?",
+                answer: "Każda odpowiedź kosztuje. Limit wiadomości i limit zapisanych planów liczą się na gospodarstwo w miesiącu kalendarzowym i odnawiają pierwszego dnia miesiąca. Ile zostało, widzisz w menu asystenta → Limity. Wyczerpany limit zapisów nie blokuje rozmowy."
+            ),
+            FAQItem(
+                id: "ai-data",
+                question: "Jakie dane trafiają do modelu?",
+                answer: "Plan tygodnia, przepisy, imiona domowników, ich preferencje, alergeny i cele kaloryczne — ale tylko osób, które wyraziły zgodę na asystenta. Wzrost, waga i płeć nigdy nie wychodzą poza aplikację. Rozmowy kasujemy po 90 dniach albo od razu, gdy usuniesz historię."
+            ),
+            FAQItem(
+                id: "ai-memory",
+                question: "Co asystent o nas pamięta?",
+                answer: "Krótkie notatki z rozmów — zwyczaje, niechęci, sprzęt w kuchni — do 30 naraz. Zobaczysz je i skasujesz w menu asystenta → „Co o Was pamięta”. Nie zapisuje niczego o wadze ani zdrowiu."
+            ),
+            FAQItem(
+                id: "ai-wrong",
+                question: "Asystent się pomylił. Co zrobić?",
+                answer: "Przytrzymaj odpowiedź i wybierz „Zgłoś odpowiedź” albo napisz na support@weekly-meals.app z datą i treścią. Asystent to program oparty na modelu językowym — może się mylić i nie zastępuje dietetyka ani lekarza."
             )
         ]),
 
@@ -207,12 +250,12 @@ struct SettingsView: View {
             FAQItem(
                 id: "other-idea",
                 question: "Mam pomysł na nową funkcję",
-                answer: "Świetnie! Napisz na piechowicz.rafal98@gmail.com — czytamy każdą wiadomość i wiele funkcji w aplikacji powstało właśnie z sugestii użytkowników."
+                answer: "Świetnie! Napisz na support@weekly-meals.app — czytamy każdą wiadomość i wiele funkcji w aplikacji powstało właśnie z sugestii użytkowników."
             ),
             FAQItem(
                 id: "other-bug",
                 question: "Znalazłem błąd. Gdzie zgłosić?",
-                answer: "Wyślij krótki opis na piechowicz.rafal98@gmail.com — najlepiej z screenem i nazwą urządzenia. Postaramy się odpowiedzieć i naprawić problem jak najszybciej."
+                answer: "Wyślij krótki opis na support@weekly-meals.app — najlepiej z screenem i nazwą urządzenia. Postaramy się odpowiedzieć i naprawić problem jak najszybciej."
             )
         ])
     ]
@@ -2219,7 +2262,7 @@ struct SettingsView: View {
                 }
             }
 
-            if let url = URL(string: "mailto:piechowicz.rafal98@gmail.com?subject=Weekly%20Meals%20—%20Pytanie") {
+            if let url = URL(string: "mailto:support@weekly-meals.app?subject=Weekly%20Meals%20—%20Pytanie") {
                 Link(destination: url) {
                     HStack(spacing: 8) {
                         Image(systemName: "paperplane.fill")
@@ -2243,7 +2286,7 @@ struct SettingsView: View {
                     .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
                     .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
                 }
-                .accessibilityLabel("Napisz do nas — piechowicz.rafal98@gmail.com")
+                .accessibilityLabel("Napisz do nas — support@weekly-meals.app")
             }
         }
         .padding(18)

@@ -190,6 +190,11 @@ enum UserFacingErrorMapper {
         "AI_MESSAGE_NOT_FOUND": "Tej wiadomości już nie ma — odśwież rozmowę.",
         "AI_TIMEOUT": "Asystent nie zdążył odpowiedzieć. Spróbuj jeszcze raz.",
         "AI_PROVIDER_ERROR": "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.",
+        "AI_CANCELLED": "Zatrzymane. Plan bez zmian.",
+        "AI_CONSENT_REQUIRED": "Asystent potrzebuje Twojej zgody. Włącz ją w Ustawieniach → Asystent.",
+        "AI_PLAN_QUOTA_EXCEEDED": "Zapisy planów na ten miesiąc wykorzystane. Rozmowa działa dalej — zapis wróci od nowego miesiąca.",
+        "COOKIDOO_DISABLED": "Połączenie z Cookidoo jest na razie wyłączone.",
+        "RECIPE_EXCLUDED_INGREDIENT": "Ten przepis ma składnik, którego ktoś z jedzących nie je.",
         // Propozycje: użytkownik klika przycisk W KARCIE, więc kopia mówi
         // o karcie, a nie o „żądaniu". Każda z tych trzech kończy się tak
         // samo — poproś asystenta o nową propozycję — ale POWÓD jest inny

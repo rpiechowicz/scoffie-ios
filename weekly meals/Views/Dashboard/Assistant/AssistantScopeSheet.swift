@@ -8,6 +8,9 @@ import SwiftUI
 /// w propozycji są poprawni bez zgadywania.
 struct AssistantScopeSheet: View {
     let members: [HouseholdMemberSnapshot]
+    /// Z `GET /agent/context`: etykieta celu i zgoda. Puste = starszy serwer,
+    /// wtedy wiersze są bez podtytułu, jak dotąd.
+    var context: [AgentContextMemberDTO] = []
     @Binding var selection: Set<String>
 
     @Environment(\.dismiss) private var dismiss
@@ -29,22 +32,29 @@ struct AssistantScopeSheet: View {
                     .buttonStyle(.plain)
                 }
 
-                Section("Tylko wybrane osoby") {
+                Section {
                     ForEach(members) { member in
                         Button {
                             toggle(member.id)
                         } label: {
                             row(
                                 title: member.displayName,
-                                subtitle: nil,
+                                subtitle: subtitle(for: member.id),
                                 isSelected: selection.contains(member.id)
                             )
                         }
                         .buttonStyle(.plain)
                     }
+                } header: {
+                    Text("Tylko wybrane osoby")
+                } footer: {
+                    // Serwer nie zgaduje z treści pytania — bierze dokładnie
+                    // te osoby. To jedno zdanie tłumaczy, po co jest ten arkusz.
+                    Text(footerText)
+                        .font(.system(size: 12))
                 }
             }
-            .navigationTitle("Dla kogo?")
+            .navigationTitle("Dla kogo liczyć?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -53,6 +63,25 @@ struct AssistantScopeSheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    /// „2 100 kcal · bez laktozy” z profilu; „bez zgody na asystenta”, gdy
+    /// dane tej osoby nie idą do modelu — plan i tak jej nie skrzywdzi, ale
+    /// asystent nie zna jej celu.
+    private func subtitle(for id: String) -> String? {
+        guard let entry = context.first(where: { $0.userId == id }) else { return nil }
+        return entry.consented ? entry.goalLabel : "bez zgody na asystenta"
+    }
+
+    private var footerText: String {
+        let chosen = selection.isEmpty ? members.map(\.id) : Array(selection)
+        let goals = chosen.compactMap { id in
+            context.first { $0.userId == id }?.goalLabel
+        }
+        if goals.isEmpty {
+            return "Asystent nie zgaduje z treści pytania. Bierze dokładnie te osoby."
+        }
+        return "Policzę dla \(chosen.count) \(Self.peopleWord(chosen.count)) · " + goals.joined(separator: " / ")
     }
 
     private func toggle(_ id: String) {

@@ -42,6 +42,32 @@ final class AgentAPIClient {
         try await perform(path: "agent/conversations", method: "GET", bodyData: nil)
     }
 
+    /// Jedna rozmowa z `activeTurnId` — po powrocie do rozmowy w trakcie tury
+    /// telefon wie, którą turę dalej odpytywać, bez pobierania całej listy.
+    func conversation(id: String) async throws -> AgentConversationDTO {
+        try await perform(path: "agent/conversations/\(id)", method: "GET", bodyData: nil)
+    }
+
+    /// Kontekst chipów i arkusza „Dla kogo liczyć": domownicy z etykietą celu
+    /// i zgodą, cel pytającego, zużycie. Jedno źródło zamiast trzech cache'ów.
+    func context(householdId: String, weekStart: String?) async throws -> AgentContextDTO {
+        var query = [URLQueryItem(name: "householdId", value: householdId)]
+        if let weekStart {
+            query.append(URLQueryItem(name: "weekStart", value: weekStart))
+        }
+        return try await perform(path: "agent/context", method: "GET", bodyData: nil, query: query)
+    }
+
+    /// „Ile mi zostało" — do ekranu limitów; działa też przy wyłączonym asystencie.
+    func usage(householdId: String) async throws -> AgentUsageDTO {
+        try await perform(
+            path: "agent/usage",
+            method: "GET",
+            bodyData: nil,
+            query: [URLQueryItem(name: "householdId", value: householdId)]
+        )
+    }
+
     /// Historia rozmowy. `after` to kursor po id ostatniej pokazanej
     /// wiadomości — dwie wiadomości tej samej tury potrafią mieć identyczny
     /// znacznik czasu, więc kursor po czasie gubiłby jedną z nich.
@@ -86,14 +112,26 @@ final class AgentAPIClient {
         try await perform(path: "agent/turns/\(id)", method: "GET", bodyData: nil)
     }
 
+    /// „Stop" — przerwanie biegnącej tury. Serwer domyka ją jako
+    /// `AI_CANCELLED` i oddaje kwotę; odpowiedź niesie już stan końcowy.
+    /// Idempotentne: tura domknięta wraca bez zmian.
+    func cancelTurn(id: String) async throws -> AgentTurnDTO {
+        try await perform(path: "agent/turns/\(id)/cancel", method: "POST", bodyData: nil)
+    }
+
     /// Zatwierdzenie propozycji — jedyny moment, w którym asystent zmienia plan.
     ///
     /// Bez udziału modelu, czyli bez kosztu: klient odsyła sam `proposalId`,
     /// a serwer ma u siebie stan docelowy policzony w turze. Ponowne kliknięcie
     /// oddaje ten sam wynik, nie drugi zapis — więc podwójne dotknięcie
     /// przycisku nie jest sytuacją wyjątkową i nie trzeba go blokować na siłę.
-    func applyProposal(id: String) async throws -> AgentProposalActionResultDTO {
-        try await perform(path: "agent/proposals/\(id)/apply", method: "POST", bodyData: nil)
+    func applyProposal(id: String, force: Bool = false) async throws -> AgentProposalActionResultDTO {
+        // Ciało tylko przy `force`: starszy serwer bez ciała odpowiada jak
+        // dotąd, a z pustym obiektem też — więc nic nie tracimy.
+        let body = force
+            ? try JSONEncoder().encode(AgentApplyProposalRequestDTO(force: true))
+            : nil
+        return try await perform(path: "agent/proposals/\(id)/apply", method: "POST", bodyData: body)
     }
 
     /// Cofnięcie zapisu. Serwer odmówi, jeśli ktoś w domu ruszył plan PO
@@ -132,6 +170,20 @@ final class AgentAPIClient {
             path: "agent/memory/\(noteId)",
             method: "DELETE",
             bodyData: nil
+        )
+        return response.deleted
+    }
+
+    /// „Usuń wszystkie notatki" z ekranu pamięci — notatki są wspólne dla
+    /// domu, więc kasuje je każdy domownik, tak jak może skasować pojedynczo.
+    @discardableResult
+    func forgetAllMemory(householdId: String) async throws -> Int {
+        struct DeletedDTO: Decodable { let deleted: Int }
+        let response: DeletedDTO = try await perform(
+            path: "agent/memory",
+            method: "DELETE",
+            bodyData: nil,
+            query: [URLQueryItem(name: "householdId", value: householdId)]
         )
         return response.deleted
     }
