@@ -10,7 +10,10 @@ import SwiftUI
 ///
 /// Fazy: 0 = powitanie, 1…5 = funkcje, 6 = zaproszenie do kreatora.
 /// Przejścia jak w `WelcomeView` — treść wjeżdża z krawędzi zgodnej
-/// z kierunkiem ruchu, poprzednia wyjeżdża w przeciwną.
+/// z kierunkiem ruchu, poprzednia wyjeżdża w przeciwną. Stopka (stepper
+/// i przyciski) stoi pod treścią, poza animowanym obszarem: wcześniej
+/// jechała razem z treścią i cały ekran „przewijał się" na bok, zamiast
+/// zachować się jak kreator, w którym przesuwa się tylko formularz.
 struct FeatureTourView: View {
     /// Wywoływane, gdy przewodnik ma zejść z drogi — po ostatnim kroku
     /// albo po „Pomiń".
@@ -25,33 +28,78 @@ struct FeatureTourView: View {
 
     private var lastPhase: Int { steps.count + 1 }
 
+    /// Stopka ma trzy odmiany, nie siedem: wszystkie kroki z funkcjami
+    /// dzielą jedną instancję. Dzięki temu między krokami stopka nie jest
+    /// tworzona od nowa — pigułka steppera przesuwa się sprężyście,
+    /// a przyciski nie mrugają. Odmiany zmieniają się tylko na wejściu
+    /// w kroki i na wyjściu z nich, i wtedy krzyżowo się przenikają.
+    private enum FooterKind: Hashable {
+        case intro
+        case steps
+        case done
+    }
+
+    private var footerKind: FooterKind {
+        if phase <= 0 {
+            return .intro
+        }
+        if phase >= lastPhase {
+            return .done
+        }
+        return .steps
+    }
+
+    private var stepIndex: Int {
+        min(max(phase - 1, 0), steps.count - 1)
+    }
+
     var body: some View {
         ZStack {
             TourBackground(scheme: colorScheme)
 
-            ZStack {
-                content(for: phase)
-                    .id(phase)
-                    .transition(asymmetricSlide())
+            VStack(spacing: 0) {
+                ZStack {
+                    content(for: phase)
+                        .id(phase)
+                        .transition(asymmetricSlide())
+                }
+                .animation(.easeInOut(duration: 0.34), value: phase)
+
+                ZStack {
+                    footer(for: footerKind)
+                        .id(footerKind)
+                        .transition(.opacity)
+                }
+                .animation(.easeInOut(duration: 0.34), value: footerKind)
             }
-            .animation(.easeInOut(duration: 0.34), value: phase)
         }
     }
 
     @ViewBuilder
     private func content(for phase: Int) -> some View {
         if phase <= 0 {
-            TourIntroView(onStart: advance, onSkip: onFinish)
+            TourIntroView()
         } else if phase >= lastPhase {
-            TourDoneView(onContinue: onFinish, onBack: goBack)
+            TourDoneView()
         } else {
-            TourStepView(
-                step: steps[phase - 1],
-                index: phase - 1,
+            TourStepView(step: steps[phase - 1])
+        }
+    }
+
+    @ViewBuilder
+    private func footer(for kind: FooterKind) -> some View {
+        switch kind {
+        case .intro:
+            TourIntroFooter(onStart: advance, onSkip: onFinish)
+        case .steps:
+            TourStepFooter(
+                index: stepIndex,
                 total: steps.count,
                 onBack: goBack,
                 onNext: advance
             )
+        case .done:
+            TourDoneFooter(onContinue: onFinish, onBack: goBack)
         }
     }
 
