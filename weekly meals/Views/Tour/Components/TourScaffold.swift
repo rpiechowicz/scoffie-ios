@@ -27,8 +27,7 @@ struct TourBackground: View {
     }
 }
 
-/// Ekran przewodnika = treść, która w razie potrzeby przewinie się sama,
-/// plus przyklejona do dołu stopka.
+/// Przewijalna treść jednego ekranu przewodnika.
 ///
 /// Treść ma mieścić się bez przewijania — taki jest cel projektu i dlatego
 /// każdy krok dostaje trzy punkty, a nie pięć. `ScrollView` jest tu jako
@@ -36,29 +35,24 @@ struct TourBackground: View {
 /// systemowej to samo ułożenie nie zmieści się co do punktu, a wtedy
 /// lepiej przewinąć niż przyciąć. `.basedOnSize` gasi gumowanie, gdy
 /// wszystko się mieści, więc na docelowym ekranie strona stoi nieruchomo.
-struct TourScaffold<Content: View, Footer: View>: View {
+///
+/// Stopki tu celowo nie ma. Składa ją `FeatureTourView` pod animowaną
+/// treścią, żeby stepper i przyciski stały w miejscu, gdy kroki
+/// przejeżdżają na bok — dokładnie tak, jak w kreatorze profilu.
+struct TourPage<Content: View>: View {
     private let content: Content
-    private let footer: Footer
 
-    init(
-        @ViewBuilder content: () -> Content,
-        @ViewBuilder footer: () -> Footer
-    ) {
+    init(@ViewBuilder content: () -> Content) {
         self.content = content()
-        self.footer = footer()
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                content
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.hidden)
-
-            footer
+        ScrollView {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.hidden)
     }
 }
 

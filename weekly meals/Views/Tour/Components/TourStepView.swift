@@ -77,19 +77,17 @@ private struct TourMedia: View {
     }
 }
 
-/// Jeden krok przewodnika: gdzie to jest (chip), jak wygląda (zdjęcie),
-/// co robi (tytuł i opis), co z tego macie (trzy punkty).
+/// Treść jednego kroku przewodnika: gdzie to jest (chip), jak wygląda
+/// (zdjęcie), co robi (tytuł i opis), co z tego macie (trzy punkty).
+/// Stepper i przyciski są w `TourStepFooter` — osobno, bo treść jeździ
+/// między krokami, a stopka ma stać w miejscu.
 struct TourStepView: View {
     let step: TourStep
-    let index: Int
-    let total: Int
-    let onBack: () -> Void
-    let onNext: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        TourScaffold {
+        TourPage {
             VStack(alignment: .leading, spacing: 0) {
                 TourPlaceChip(icon: step.placeIcon, place: step.place, accent: step.accent)
                     .padding(.horizontal, 22)
@@ -133,33 +131,48 @@ struct TourStepView: View {
             }
             .padding(.top, 10)
             .padding(.bottom, 8)
-        } footer: {
-            VStack(spacing: 18) {
-                WelcomeStepper(step: index + 1, total: total)
-
-                HStack(spacing: 10) {
-                    WMSoftIconButton(
-                        systemName: "chevron.left",
-                        accessibilityLabel: "Wstecz",
-                        action: onBack
-                    )
-                    WMSoftButton(
-                        title: index == total - 1 ? "Poznajmy się" : "Dalej",
-                        action: onNext
-                    )
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
-            .padding(.bottom, 20)
         }
+    }
+}
+
+/// Stopka kroków 1…5: stepper, „Wstecz" i „Dalej". Jedna instancja dla
+/// wszystkich kroków (patrz `FeatureTourView`), więc pigułka steppera
+/// przesuwa się sprężyście zamiast wjeżdżać od nowa z każdą stroną.
+struct TourStepFooter: View {
+    let index: Int
+    let total: Int
+    let onBack: () -> Void
+    let onNext: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            WelcomeStepper(step: index + 1, total: total)
+
+            HStack(spacing: 10) {
+                WMSoftIconButton(
+                    systemName: "chevron.left",
+                    accessibilityLabel: "Wstecz",
+                    action: onBack
+                )
+                WMSoftButton(
+                    title: index == total - 1 ? "Poznajmy się" : "Dalej",
+                    action: onNext
+                )
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 18)
+        .padding(.bottom, 20)
     }
 }
 
 #Preview("Krok 1 · Dark") {
     ZStack {
         TourBackground(scheme: .dark)
-        TourStepView(step: TourStep.all[0], index: 0, total: 5, onBack: {}, onNext: {})
+        VStack(spacing: 0) {
+            TourStepView(step: TourStep.all[0])
+            TourStepFooter(index: 0, total: 5, onBack: {}, onNext: {})
+        }
     }
     .preferredColorScheme(.dark)
 }
@@ -167,7 +180,10 @@ struct TourStepView: View {
 #Preview("Krok 4 · Light") {
     ZStack {
         TourBackground(scheme: .light)
-        TourStepView(step: TourStep.all[3], index: 3, total: 5, onBack: {}, onNext: {})
+        VStack(spacing: 0) {
+            TourStepView(step: TourStep.all[3])
+            TourStepFooter(index: 3, total: 5, onBack: {}, onNext: {})
+        }
     }
     .preferredColorScheme(.light)
 }

@@ -3,16 +3,16 @@ import SwiftUI
 /// Krok zerowy przewodnika — obietnica produktu, zanim padnie pierwsze
 /// pytanie. Typograficzny, bez zdjęcia: zdjęcia zaczynają się od kroku 1
 /// i gdyby jedno stało już tutaj, cała reszta straciłaby efekt wejścia.
+///
+/// Przyciski są w `TourIntroFooter` — stopkę składa `FeatureTourView`
+/// poza animowaną treścią.
 struct TourIntroView: View {
-    let onStart: () -> Void
-    let onSkip: () -> Void
-
     @Environment(\.colorScheme) private var scheme
 
     private static let logoSize: CGFloat = 56
 
     var body: some View {
-        TourScaffold {
+        TourPage {
             VStack(alignment: .leading, spacing: 0) {
                 // Promień 22% boku to ten sam narożnik, który logo rysuje
                 // sobie samo (`WMSteamingBowlLogo.drawBackground`) — przy
@@ -86,28 +86,42 @@ struct TourIntroView: View {
             .padding(.horizontal, 28)
             .padding(.top, 24)
             .padding(.bottom, 8)
-        } footer: {
-            VStack(spacing: 12) {
-                WMSoftButton(title: "Poznaj aplikację", action: onStart)
-
-                Button(action: onSkip) {
-                    Text("Pomiń i przejdź do konfiguracji")
-                        .font(.system(size: 13.5, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 28)
-            .padding(.top, 14)
-            .padding(.bottom, 20)
         }
+    }
+}
+
+/// Stopka ekranu powitalnego: wejście w przewodnik albo skok od razu do
+/// kreatora.
+struct TourIntroFooter: View {
+    let onStart: () -> Void
+    let onSkip: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 12) {
+            WMSoftButton(title: "Poznaj aplikację", action: onStart)
+
+            Button(action: onSkip) {
+                Text("Pomiń i przejdź do konfiguracji")
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 28)
+        .padding(.top, 14)
+        .padding(.bottom, 20)
     }
 }
 
 #Preview("Dark") {
     ZStack {
         TourBackground(scheme: .dark)
-        TourIntroView(onStart: {}, onSkip: {})
+        VStack(spacing: 0) {
+            TourIntroView()
+            TourIntroFooter(onStart: {}, onSkip: {})
+        }
     }
     .preferredColorScheme(.dark)
 }
@@ -115,7 +129,10 @@ struct TourIntroView: View {
 #Preview("Light") {
     ZStack {
         TourBackground(scheme: .light)
-        TourIntroView(onStart: {}, onSkip: {})
+        VStack(spacing: 0) {
+            TourIntroView()
+            TourIntroFooter(onStart: {}, onSkip: {})
+        }
     }
     .preferredColorScheme(.light)
 }

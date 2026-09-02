@@ -45,7 +45,10 @@ struct WelcomeFooter: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
-        .padding(.bottom, 48)
+        // 20 pt nad wskaźnikiem home, tyle samo co w stopce przewodnika
+        // (`TourStepFooter`). Wcześniej było 48 i przycisk kreatora stał
+        // wyraźnie wyżej niż ten sam przycisk na ekranie tuż przed nim.
+        .padding(.bottom, 20)
         // The inner `.ignoresSafeArea(edges: .bottom)` extends the canvas
         // band down through the home-indicator safe area, so scroll
         // content can't peek into that zone underneath the button.

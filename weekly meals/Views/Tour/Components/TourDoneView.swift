@@ -6,14 +6,14 @@ import SwiftUI
 /// Każdy wiersz to para: co podajesz → po co nam to. Kreator pyta o wzrost,
 /// wagę i alergeny zaraz po pierwszym uruchomieniu, więc powód musi paść
 /// zanim padnie pytanie, a nie w polityce prywatności.
+///
+/// Przyciski są w `TourDoneFooter` — stopkę składa `FeatureTourView`
+/// poza animowaną treścią.
 struct TourDoneView: View {
-    let onContinue: () -> Void
-    let onBack: () -> Void
-
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        TourScaffold {
+        TourPage {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 7) {
                     Image(systemName: "clock")
@@ -92,26 +92,38 @@ struct TourDoneView: View {
             .padding(.horizontal, 24)
             .padding(.top, 18)
             .padding(.bottom, 8)
-        } footer: {
-            HStack(spacing: 10) {
-                WMSoftIconButton(
-                    systemName: "chevron.left",
-                    accessibilityLabel: "Wstecz",
-                    action: onBack
-                )
-                WMSoftButton(title: "Opowiedz nam o sobie", action: onContinue)
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
-            .padding(.bottom, 20)
         }
+    }
+}
+
+/// Stopka ekranu domykającego: powrót do ostatniego kroku albo wejście
+/// do kreatora.
+struct TourDoneFooter: View {
+    let onContinue: () -> Void
+    let onBack: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            WMSoftIconButton(
+                systemName: "chevron.left",
+                accessibilityLabel: "Wstecz",
+                action: onBack
+            )
+            WMSoftButton(title: "Opowiedz nam o sobie", action: onContinue)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 18)
+        .padding(.bottom, 20)
     }
 }
 
 #Preview("Dark") {
     ZStack {
         TourBackground(scheme: .dark)
-        TourDoneView(onContinue: {}, onBack: {})
+        VStack(spacing: 0) {
+            TourDoneView()
+            TourDoneFooter(onContinue: {}, onBack: {})
+        }
     }
     .preferredColorScheme(.dark)
 }
@@ -119,7 +131,10 @@ struct TourDoneView: View {
 #Preview("Light") {
     ZStack {
         TourBackground(scheme: .light)
-        TourDoneView(onContinue: {}, onBack: {})
+        VStack(spacing: 0) {
+            TourDoneView()
+            TourDoneFooter(onContinue: {}, onBack: {})
+        }
     }
     .preferredColorScheme(.light)
 }
