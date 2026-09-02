@@ -17,240 +17,417 @@
         <h1>Polityka prywatności Weekly Meals</h1>
         <p>
           Dokument opisuje, jakie dane są przetwarzane w związku z korzystaniem
-          z aplikacji mobilnej Weekly Meals, w jakich celach oraz jakie prawa
-          przysługują użytkownikom.
+          z aplikacji mobilnej Weekly Meals, skąd pochodzą, komu są przekazywane,
+          jak długo są przechowywane oraz jakie prawa przysługują użytkownikom.
         </p>
       </section>
 
       <section class="card section">
         <h2>Meta</h2>
-        <p class="meta">Data wejścia w życie: 1 sierpnia 2026 · Wersja 1.1</p>
+        <p class="meta">Wersja 2.0 · obowiązuje od 15 września 2026 (zastępuje wersję 1.1 z 1 sierpnia 2026)</p>
+        <p>
+          Najważniejsze zmiany w wersji 2.0: asystent AI (nowy odbiorca danych
+          i przekazanie danych poza EOG), dane ze Zdrowia (kroki), integracja
+          z Cookidoo, dane o domownikach, okresy przechowywania per kategoria,
+          minimalny wiek użytkownika, zgody i ich cofanie.
+        </p>
       </section>
 
       <section class="card section">
         <h2>1. Administrator danych</h2>
         <p>
           Administratorem danych osobowych użytkowników aplikacji Weekly Meals
-          jest Rafał Piechowicz.
+          („Aplikacja”) jest Rafał Piechowicz („Administrator”).
         </p>
         <p>
           Kontakt w sprawach dotyczących danych osobowych:
-          <a href="mailto:rpiechowicz@icloud.com">
-            rpiechowicz@icloud.com
-          </a>
+          <a href="mailto:rpiechowicz@icloud.com">rpiechowicz@icloud.com</a>
         </p>
       </section>
 
       <section class="card section">
-        <h2>2. Zakres przetwarzanych danych</h2>
+        <h2>2. Jakie dane przetwarzamy i skąd pochodzą</h2>
+        <p><strong>Konto (od Apple, przy logowaniu):</strong></p>
         <ul>
-          <li>
-            stabilny identyfikator użytkownika Apple (tzw. sub) otrzymywany po
-            zalogowaniu,
-          </li>
+          <li>stabilny identyfikator użytkownika Apple (tzw. sub),</li>
           <li>
             adres e-mail, w tym adres relay Apple, jeśli użytkownik wybierze
-            opcję ukrywania e-maila,
+            opcję „Ukryj mój e-mail”,
           </li>
           <li>
             imię i nazwisko, wyłącznie jeśli użytkownik udostępni je przy
-            pierwszym logowaniu przez Apple,
-          </li>
-          <li>
-            dane tworzone przez użytkownika podczas korzystania z aplikacji, w
-            szczególności plany posiłków, listy zakupów, preferencje i dane
-            gospodarstwa domowego,
-          </li>
-          <li>
-            token urządzenia dla powiadomień push, jeśli użytkownik wyrazi zgodę
-            na powiadomienia,
-          </li>
-          <li>
-            techniczne logi dostępu i dane sesyjne niezbędne do bezpieczeństwa i
-            działania usługi.
+            pierwszym logowaniu.
           </li>
         </ul>
-      </section>
-
-      <section class="card section">
-        <h2>3. Cele i podstawy prawne przetwarzania</h2>
+        <p><strong>Profil (podawane przez użytkownika w kreatorze i Ustawieniach):</strong></p>
+        <ul>
+          <li>imię wyświetlane i kolor awatara,</li>
+          <li>
+            sylwetka: płeć, wzrost, waga, rok urodzenia — używane wyłącznie do
+            wyliczenia zapotrzebowania kalorycznego i makroskładników,
+          </li>
+          <li>cel (np. redukcja, utrzymanie), poziom aktywności, cele kaloryczne i makro,</li>
+          <li>
+            <strong>dieta, alergeny i wykluczone składniki</strong> — są to dane
+            dotyczące zdrowia w rozumieniu art. 9 RODO (patrz sekcja 3),
+          </li>
+          <li>maksymalny czas gotowania, liczba i pory posiłków.</li>
+        </ul>
+        <p><strong>Gospodarstwo domowe i planowanie:</strong></p>
+        <ul>
+          <li>nazwa gospodarstwa, lista domowników i ich role, zaproszenia,</li>
+          <li>
+            plany posiłków, uczestnicy posiłków, oznaczenia zjedzonych posiłków,
+            listy zakupów wraz z historią, własne przepisy i ulubione.
+          </li>
+        </ul>
+        <p><strong>Asystent AI (jeśli użytkownik z niego korzysta):</strong></p>
+        <ul>
+          <li>treść wiadomości użytkownika i odpowiedzi asystenta,</li>
+          <li>
+            propozycje planu i decyzje użytkownika (zatwierdzenie, cofnięcie),
+          </li>
+          <li>
+            notatki pamięci gospodarstwa — krótkie fakty zapisane przez
+            asystenta na prośbę użytkownika (np. „nie jemy pieczarek”),
+          </li>
+          <li>
+            dane o użyciu: liczba wiadomości i zapisanych planów, zużyte tokeny
+            i koszt każdej odpowiedzi (do rozliczeń i limitów).
+          </li>
+        </ul>
+        <p><strong>Zdrowie (Apple Health / HealthKit), jeśli użytkownik włączy tę integrację:</strong></p>
+        <ul>
+          <li>dzienna liczba kroków z ostatnich 14 dni oraz cel kroków.</li>
+        </ul>
+        <p><strong>Cookidoo (Thermomix), jeśli użytkownik połączy konto:</strong></p>
         <ul>
           <li>
-            założenie i utrzymanie konta oraz świadczenie funkcji aplikacji -
-            art. 6 ust. 1 lit. b RODO,
+            adres e-mail i hasło do konta Cookidoo użytkownika, przechowywane w
+            postaci zaszyfrowanej (patrz sekcja 8).
           </li>
+        </ul>
+        <p><strong>Techniczne:</strong></p>
+        <ul>
+          <li>token urządzenia do powiadomień push (za zgodą na powiadomienia),</li>
           <li>
-            zapewnienie bezpieczeństwa aplikacji, wykrywanie nadużyć i ochrona
-            sesji - art. 6 ust. 1 lit. f RODO,
+            logi żądań: identyfikator użytkownika, adres IP, wersja aplikacji,
+            czas i status żądania — bez treści wiadomości do asystenta,
           </li>
-          <li>
-            obsługa zgłoszeń użytkowników i próśb dotyczących danych - art. 6
-            ust. 1 lit. b i f RODO,
-          </li>
-          <li>
-            realizacja obowiązków prawnych, jeśli takie wynikają z przepisów -
-            art. 6 ust. 1 lit. c RODO.
-          </li>
+          <li>dziennik zgód: rodzaj zgody, wersja dokumentu, data, źródło.</li>
         </ul>
       </section>
 
       <section class="card section">
-        <h2>4. Sign in with Apple</h2>
-        <p>
-          Logowanie do aplikacji odbywa się wyłącznie przy użyciu Sign in with
-          Apple. Administrator nie otrzymuje hasła do konta Apple użytkownika.
-        </p>
-        <p>
-          Jeśli użytkownik wybierze opcję „Ukryj mój e-mail”, Apple może
-          przekazać adres relay, który kieruje wiadomości na prawdziwy adres
-          użytkownika.
-        </p>
-      </section>
-
-      <section class="card section">
-        <h2>5. Gospodarstwo domowe — dane współdzielone</h2>
-        <p>
-          Aplikacja umożliwia prowadzenie wspólnego gospodarstwa domowego.
-          Dołączenie do gospodarstwa jest dobrowolne.
-        </p>
-        <p>
-          Jeżeli użytkownik należy do wspólnego gospodarstwa, plan tygodnia,
-          listy zakupów i produkty oraz ustawienia gospodarstwa (np. liczba i
-          pory posiłków) są widoczne dla pozostałych jego członków i mogą być
-          przez nich modyfikowane. Imię użytkownika (lub nazwa zastępcza) może
-          być prezentowane pozostałym członkom gospodarstwa, m.in. w
-          powiadomieniach o zmianach w planie.
-        </p>
-        <p>
-          Użytkownik samodzielnie decyduje, kogo zaprasza do gospodarstwa, i
-          może je w każdej chwili opuścić w ustawieniach aplikacji.
-        </p>
-      </section>
-
-      <section class="card section">
-        <h2>6. Powiadomienia</h2>
-        <p>
-          Aplikacja może wysyłać powiadomienia push (za pośrednictwem usługi
-          Apple Push Notification service) oraz powiadomienia lokalne — np.
-          przypomnienia o posiłkach i informacje o zmianach w planie
-          gospodarstwa. Token urządzenia jest przetwarzany wyłącznie w celu
-          dostarczania powiadomień i jest usuwany wraz z kontem.
-        </p>
-        <p>
-          Powiadomienia można w każdej chwili wyłączyć w ustawieniach aplikacji
-          lub w ustawieniach systemowych iOS.
-        </p>
-      </section>
-
-      <section class="card section">
-        <h2>7. Odbiorcy danych</h2>
+        <h2>3. Cele i podstawy prawne</h2>
         <ul>
           <li>
-            dostawcy infrastruktury technicznej i hostingu, wyłącznie w zakresie
-            niezbędnym do działania usługi,
+            założenie i utrzymanie konta, gospodarstwo, planowanie posiłków,
+            listy zakupów, powiadomienia o zmianach — wykonanie umowy, art. 6
+            ust. 1 lit. b RODO,
           </li>
           <li>
-            Apple Inc. w zakresie wymaganym do realizacji Sign in with Apple i
-            powiadomień push,
+            wyliczanie zapotrzebowania i personalizacja propozycji na podstawie
+            profilu i preferencji — wykonanie umowy, art. 6 ust. 1 lit. b RODO,
           </li>
           <li>
-            członkowie gospodarstwa domowego użytkownika, w zakresie opisanym w
-            sekcji 5,
+            <strong>dieta, alergeny i wykluczone składniki</strong> (dane
+            dotyczące zdrowia): przetwarzanie w Aplikacji — na podstawie
+            wyraźnej zgody użytkownika wyrażonej przy ich podaniu (art. 9 ust.
+            2 lit. a RODO); przekazanie ich do asystenta AI — na podstawie
+            odrębnej, wyraźnej zgody każdej osoby, której dotyczą (sekcja 6),
           </li>
           <li>
-            podmioty uprawnione na podstawie przepisów prawa, jeśli taki
-            obowiązek wynika z przepisów.
+            dane ze Zdrowia (kroki) — zgoda udzielona w systemie iOS przy
+            włączaniu integracji (art. 9 ust. 2 lit. a RODO),
+          </li>
+          <li>
+            poświadczenia Cookidoo — zgoda wyrażona przy łączeniu konta (art. 6
+            ust. 1 lit. a RODO),
+          </li>
+          <li>
+            bezpieczeństwo, wykrywanie nadużyć, limity użycia i ochrona sesji —
+            prawnie uzasadniony interes, art. 6 ust. 1 lit. f RODO,
+          </li>
+          <li>
+            obsługa zgłoszeń i realizacja praw — art. 6 ust. 1 lit. b i f RODO,
+          </li>
+          <li>
+            wykazanie udzielonych zgód i akceptacji dokumentów — obowiązek
+            prawny, art. 6 ust. 1 lit. c w zw. z art. 7 ust. 1 RODO.
           </li>
         </ul>
-      </section>
-
-      <section class="card section">
-        <h2>8. Przekazywanie danych poza EOG</h2>
         <p>
-          Jeśli wybrani dostawcy infrastruktury lub Apple przetwarzają dane poza
-          Europejskim Obszarem Gospodarczym, odbywa się to wyłącznie z użyciem
-          odpowiednich mechanizmów ochrony, zgodnych z rozdziałem V RODO.
+          Zgody można cofnąć w każdej chwili w Ustawieniach Aplikacji lub
+          pisząc do Administratora; cofnięcie nie wpływa na zgodność z prawem
+          przetwarzania sprzed cofnięcia.
         </p>
       </section>
 
       <section class="card section">
-        <h2>9. Okres przechowywania</h2>
+        <h2>4. Sign in with Apple i minimalny wiek</h2>
+        <p>
+          Logowanie odbywa się wyłącznie przy użyciu Sign in with Apple.
+          Administrator nie otrzymuje hasła do konta Apple. Jeśli użytkownik
+          wybierze opcję „Ukryj mój e-mail”, Apple przekazuje adres relay
+          kierujący wiadomości na prawdziwy adres użytkownika.
+        </p>
+        <p>
+          Aplikacja jest przeznaczona dla osób, które ukończyły <strong>16 lat</strong>.
+          Osoby młodsze nie powinny zakładać konta ani podawać danych o
+          zdrowiu; użytkownik potwierdza ukończenie 16 lat przy pierwszym
+          uruchomieniu asystenta AI.
+        </p>
+      </section>
+
+      <section class="card section">
+        <h2>5. Gospodarstwo domowe — dane o domownikach</h2>
+        <p>
+          Dołączenie do gospodarstwa jest dobrowolne. Członkowie gospodarstwa
+          współdzielą plan tygodnia, listy zakupów, własne przepisy i
+          ustawienia gospodarstwa i mogą je modyfikować.
+        </p>
+        <p>
+          <strong>Co widzą o Tobie pozostali domownicy:</strong> imię i awatar,
+          dietę, alergeny, wykluczone składniki, cel kaloryczny i makro oraz
+          Twój udział w posiłkach. Te dane są potrzebne, żeby wspólny plan
+          uwzględniał każdego. Sylwetka (wzrost, waga, płeć, rok urodzenia)
+          <strong>nie jest</strong> udostępniana domownikom ani asystentowi.
+        </p>
+        <p>
+          <strong>Skąd mamy dane o innych osobach:</strong> każdy domownik
+          podaje swoje dane sam, w swoim koncie. Zapraszając kogoś do
+          gospodarstwa, poinformuj tę osobę, jakie dane będą współdzielone.
+          Gospodarstwo można w każdej chwili opuścić w Ustawieniach.
+        </p>
+      </section>
+
+      <section class="card section">
+        <h2>6. Asystent AI</h2>
+        <p>
+          Asystent planowania posiłków działa na modelu językowym Claude
+          dostarczanym przez <strong>Anthropic, PBC</strong> z siedzibą w
+          Stanach Zjednoczonych, który przetwarza dane na zlecenie Administratora
+          (podmiot przetwarzający). Asystent to program, nie człowiek; jego
+          odpowiedzi mogą zawierać błędy i nie są poradą lekarską ani
+          dietetyczną.
+        </p>
+        <p><strong>Co jest wysyłane do Anthropic przy każdej wiadomości:</strong></p>
         <ul>
-          <li>dane konta są przechowywane przez okres korzystania z aplikacji,</li>
+          <li>treść Twojej wiadomości i dotychczasowej rozmowy,</li>
           <li>
-            po usunięciu konta dane są usuwane nie później niż w ciągu 30 dni,
-            z zastrzeżeniem obowiązków prawnych i ochrony roszczeń,
+            Twoje imię, dieta, alergeny, wykluczone składniki, cel, wyliczone
+            zapotrzebowanie kaloryczne i makro, maksymalny czas gotowania,
           </li>
-          <li>logi techniczne są przechowywane nie dłużej niż 90 dni.</li>
+          <li>
+            te same dane pozostałych domowników — <strong>wyłącznie tych, którzy
+            sami wyrazili zgodę na asystenta</strong>; ograniczenia pozostałych
+            (alergeny, wykluczenia) egzekwuje serwer przy zapisie planu bez
+            przekazywania ich danych,
+          </li>
+          <li>nazwa gospodarstwa, aktualny plan tygodnia i notatki pamięci,</li>
+          <li>wspólny katalog przepisów.</li>
+        </ul>
+        <p>
+          <strong>Nie jest wysyłane:</strong> wzrost, waga, płeć, rok urodzenia,
+          kroki ze Zdrowia, adres e-mail, poświadczenia Cookidoo.
+        </p>
+        <p>
+          <strong>Podstawa:</strong> odrębna, wyraźna zgoda każdej osoby, której
+          dane są przekazywane (art. 9 ust. 2 lit. a RODO), wyrażana przed
+          pierwszą wiadomością i możliwa do cofnięcia w Ustawieniach. Po
+          cofnięciu asystent przestaje dla tej osoby działać, a jej dane nie są
+          już wysyłane; zapisane rozmowy pozostają do czasu usunięcia przez
+          użytkownika lub upływu okresu z sekcji 10.
+        </p>
+        <p>
+          <strong>Przekazanie poza EOG:</strong> Anthropic przetwarza dane w
+          Stanach Zjednoczonych. Przekazanie odbywa się na podstawie umowy
+          powierzenia zawierającej standardowe klauzule umowne przyjęte przez
+          Komisję Europejską (art. 46 ust. 2 lit. c RODO). Zgodnie z warunkami
+          usługi API Anthropic nie wykorzystuje przekazywanych danych do
+          trenowania swoich modeli.
+        </p>
+        <p>
+          <strong>Limity i rozliczenia:</strong> liczba wiadomości i zapisanych
+          planów jest liczona na gospodarstwo w miesiącu kalendarzowym; koszt
+          każdej odpowiedzi jest zapisywany do rozliczeń i pozostaje po
+          usunięciu rozmowy (bez jej treści).
+        </p>
+      </section>
+
+      <section class="card section">
+        <h2>7. Dane ze Zdrowia (Apple Health)</h2>
+        <p>
+          Jeśli włączysz integrację, Aplikacja odczytuje z Apple Health wyłącznie
+          dzienną liczbę kroków i przesyła sumy z ostatnich 14 dni na serwer,
+          aby pokazać je w kalendarzu obok posiłków. Aplikacja nie zapisuje
+          niczego do Apple Health.
+        </p>
+        <p>
+          Dane ze Zdrowia <strong>nie są</strong> używane do reklamy ani
+          marketingu, nie są sprzedawane ani udostępniane osobom trzecim, nie są
+          przekazywane do asystenta AI i nie są przechowywane w iCloud
+          Administratora. Integrację wyłączysz w Ustawieniach Aplikacji lub w
+          Ustawieniach iOS → Prywatność i bezpieczeństwo → Zdrowie; kroki są
+          usuwane razem z kontem.
+        </p>
+      </section>
+
+      <section class="card section">
+        <h2>8. Integracja z Cookidoo (opcjonalna)</h2>
+        <p>
+          Funkcja „Gotuj w Thermomixie” pozwala wysłać wybrany przepis do
+          kalendarza „Mój tydzień” w Cookidoo. Wymaga podania adresu e-mail i
+          hasła do konta Cookidoo, które są przechowywane na serwerze
+          Administratora w postaci zaszyfrowanej (AES-256-GCM) i używane
+          wyłącznie do logowania do Cookidoo w imieniu użytkownika. Hasło nigdy
+          nie jest pokazywane ani przekazywane innym domownikom; pozostali
+          domownicy mogą korzystać z połączonego konta i widzą jego adres
+          e-mail.
+        </p>
+        <p>
+          Integracja korzysta z nieoficjalnego interfejsu Cookidoo i może
+          przestać działać bez uprzedzenia. Cookidoo i Thermomix są znakami
+          towarowymi Vorwerk; Administrator nie jest powiązany z Vorwerk.
+          Połączenie można rozłączyć w Ustawieniach — poświadczenia są wtedy
+          natychmiast usuwane. Administrator może czasowo wyłączyć integrację.
+        </p>
+      </section>
+
+      <section class="card section">
+        <h2>9. Odbiorcy danych</h2>
+        <ul>
+          <li>
+            <strong>Railway Corp.</strong> — hosting serwera i bazy danych
+            (infrastruktura Aplikacji),
+          </li>
+          <li>
+            <strong>Cloudflare, Inc.</strong> — przechowywanie i serwowanie
+            zdjęć przepisów z katalogu (nie zawierają danych osobowych),
+          </li>
+          <li>
+            <strong>Apple Inc.</strong> — Sign in with Apple, powiadomienia
+            push, App Store,
+          </li>
+          <li>
+            <strong>Anthropic, PBC</strong> — model językowy asystenta AI, w
+            zakresie z sekcji 6, wyłącznie dla osób, które wyraziły zgodę,
+          </li>
+          <li>
+            <strong>Vorwerk (Cookidoo)</strong> — wyłącznie jeśli użytkownik
+            połączy konto Cookidoo, w zakresie z sekcji 8,
+          </li>
+          <li>członkowie gospodarstwa domowego użytkownika, w zakresie z sekcji 5,</li>
+          <li>podmioty uprawnione na podstawie przepisów prawa.</li>
         </ul>
       </section>
 
       <section class="card section">
-        <h2>10. Prawa użytkownika</h2>
+        <h2>10. Okresy przechowywania</h2>
+        <ul>
+          <li>dane konta, profilu i gospodarstwa — przez czas korzystania z Aplikacji,</li>
+          <li>
+            rozmowy z asystentem (wraz z propozycjami) — <strong>90 dni</strong>
+            od ostatniej wiadomości, potem usuwane automatycznie; wcześniej
+            użytkownik może usunąć każdą rozmowę lub wszystkie naraz,
+          </li>
+          <li>
+            notatki pamięci gospodarstwa — do usunięcia przez domownika w
+            Ustawieniach lub do usunięcia gospodarstwa (najwyżej 30 notatek),
+          </li>
+          <li>
+            dane o użyciu asystenta (liczba wiadomości, tokeny, koszt) — 12
+            miesięcy, bez treści rozmów,
+          </li>
+          <li>kroki ze Zdrowia — przez czas korzystania z integracji, usuwane z kontem,</li>
+          <li>poświadczenia Cookidoo — do rozłączenia lub usunięcia konta,</li>
+          <li>historia list zakupów — przez czas korzystania z Aplikacji,</li>
+          <li>dziennik zgód — przez czas korzystania z Aplikacji, usuwany z kontem,</li>
+          <li>logi techniczne — nie dłużej niż 90 dni,</li>
+          <li>
+            po usunięciu konta dane są usuwane niezwłocznie, nie później niż w
+            ciągu 30 dni, z zastrzeżeniem obowiązków prawnych i ochrony roszczeń.
+            Własne przepisy dodane do wspólnego gospodarstwa pozostają w nim
+            (bez powiązania z usuniętym kontem), bo korzystają z nich pozostali
+            domownicy.
+          </li>
+        </ul>
+      </section>
+
+      <section class="card section">
+        <h2>11. Prawa użytkownika</h2>
         <p>Użytkownik ma prawo do:</p>
         <ul>
-          <li>dostępu do danych,</li>
+          <li>dostępu do danych i otrzymania ich kopii,</li>
           <li>sprostowania danych,</li>
           <li>usunięcia danych,</li>
           <li>ograniczenia przetwarzania,</li>
           <li>przenoszenia danych,</li>
-          <li>sprzeciwu wobec przetwarzania opartego na uzasadnionym interesie.</li>
+          <li>sprzeciwu wobec przetwarzania opartego na uzasadnionym interesie,</li>
+          <li>cofnięcia każdej zgody w dowolnym momencie,</li>
+          <li>
+            wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych
+            (ul. Stawki 2, 00-193 Warszawa).
+          </li>
         </ul>
         <p>
-          W celu realizacji tych praw skontaktuj się pod adresem:
-          <a href="mailto:rpiechowicz@icloud.com">
-            rpiechowicz@icloud.com
-          </a>
+          Żądania prosimy kierować na
+          <a href="mailto:rpiechowicz@icloud.com">rpiechowicz@icloud.com</a>
+          z adresu e-mail przypisanego do konta. Odpowiadamy w ciągu 30 dni.
         </p>
       </section>
 
       <section class="card section">
-        <h2>11. Usunięcie konta</h2>
+        <h2>12. Usunięcie konta</h2>
         <p>
-          Konto można usunąć bezpośrednio w aplikacji: Ustawienia → profil
-          użytkownika → „Usuń konto”. Operacja usuwa konto wraz z powiązanymi
-          danymi osobowymi.
-        </p>
-        <p>
-          Żądanie usunięcia można również przesłać, wysyłając wiadomość z
-          adresu e-mail przypisanego do konta na adres:
-          <a href="mailto:rpiechowicz@icloud.com">
-            rpiechowicz@icloud.com
-          </a>
+          Konto można usunąć bezpośrednio w Aplikacji: Ustawienia → profil
+          użytkownika → „Usuń konto”. Operacja usuwa konto wraz z profilem,
+          preferencjami, rozmowami z asystentem, krokami, poświadczeniami
+          Cookidoo, tokenami i dziennikiem zgód. Żądanie usunięcia można też
+          przesłać e-mailem z adresu przypisanego do konta.
         </p>
       </section>
 
       <section class="card section">
-        <h2>12. Zautomatyzowane podejmowanie decyzji</h2>
+        <h2>13. Personalizacja i zautomatyzowane decyzje</h2>
         <p>
-          Dane osobowe nie są wykorzystywane do profilowania ani do
-          zautomatyzowanego podejmowania decyzji wywołujących skutki prawne.
+          Aplikacja i asystent dopasowują propozycje posiłków do podanych
+          preferencji, celów i ograniczeń (profilowanie w rozumieniu art. 4 pkt
+          4 RODO). Propozycje nie wywołują wobec użytkownika skutków prawnych
+          ani nie wpływają na niego w podobnie istotny sposób — art. 22 RODO nie
+          ma zastosowania. Każdą propozycję użytkownik zatwierdza lub odrzuca
+          sam.
         </p>
       </section>
 
       <section class="card section">
-        <h2>13. Bezpieczeństwo</h2>
+        <h2>14. Bezpieczeństwo</h2>
         <p>
-          Administrator stosuje odpowiednie środki techniczne i organizacyjne, w
-          tym szyfrowanie transmisji HTTPS/TLS, bezpieczne przechowywanie tokenów
-          sesji oraz mechanizmy ochrony logowania i autoryzacji.
+          Administrator stosuje odpowiednie środki techniczne i organizacyjne:
+          szyfrowanie transmisji (HTTPS/TLS), szyfrowanie poświadczeń Cookidoo
+          w bazie, bezpieczne przechowywanie tokenów sesji na urządzeniu,
+          uwierzytelnianie każdego żądania i połączenia, limity żądań oraz
+          ograniczenie danych przekazywanych do asystenta do niezbędnego
+          minimum.
         </p>
       </section>
 
       <section class="card section">
-        <h2>14. Zmiany polityki</h2>
+        <h2>15. Zmiany polityki</h2>
         <p>
-          Polityka prywatności może być aktualizowana w związku ze zmianami prawa
-          albo funkcjonalności aplikacji. Aktualna wersja będzie publikowana na
-          tej stronie.
+          Polityka może być aktualizowana w związku ze zmianami prawa lub
+          funkcji Aplikacji. Istotne zmiany (nowy odbiorca danych, nowy cel)
+          wymagają ponownego potwierdzenia w Aplikacji; o pozostałych
+          informujemy w Aplikacji z wyprzedzeniem. Aktualna wersja jest
+          publikowana na tej stronie.
         </p>
       </section>
 
       <p class="footer">
         W razie pytań napisz na
-        <a href="mailto:rpiechowicz@icloud.com">
-          rpiechowicz@icloud.com
-        </a>
+        <a href="mailto:rpiechowicz@icloud.com">rpiechowicz@icloud.com</a>
+        · <a href="../terms/">Warunki korzystania</a>
         · <a href="../support/">Strona wsparcia</a>
       </p>
     </main>
