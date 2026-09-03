@@ -55,11 +55,12 @@ struct AssistantView: View {
     /// zapamiętywany: po zabiciu aplikacji user wraca na początek
     /// niedokończonego etapu, nie w środek.
     @State private var introStep: IntroStep?
-    /// Ostatnio oglądana karta „Poznaj" — „Wstecz" z „Co potrafi" wraca
-    /// na nią, nie na pierwszą.
+    /// Ostatnio oglądana karta „Poznaj" i strona „Od czego zaczniemy?" —
+    /// „Wstecz" wraca na nie, nie na pierwszą.
     @State private var introCard = 0
+    @State private var introPage = 0
 
-    enum IntroStep: Equatable { case hero, consent, cards, capabilities }
+    enum IntroStep: Equatable { case hero, consent, cards, firstMessage }
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
@@ -112,15 +113,16 @@ struct AssistantView: View {
                             presentation: .inline,
                             showsStepBar: true,
                             startCard: introCard,
-                            onFinish: { goToStep(.capabilities) },
+                            onFinish: {
+                                introPage = 0
+                                goToStep(.firstMessage)
+                            },
                             onSkip: { finishIntro() },
                             onBack: { goToStep(.consent) },
                             onCardChange: { introCard = $0 }
                         )
-                    case .capabilities:
-                        AssistantCapabilitiesSheet(
-                            store: store,
-                            presentation: .inline,
+                    case .firstMessage:
+                        AssistantFirstMessageView(
                             onAsk: { text in
                                 finishIntro()
                                 ask(text)
@@ -131,7 +133,12 @@ struct AssistantView: View {
                                 // gdy już jest w hierarchii.
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
                             },
-                            onBack: { goToStep(.cards) }
+                            onBack: {
+                                introCard = AssistantCapabilities.onboarding.count - 1
+                                goToStep(.cards)
+                            },
+                            startPage: introPage,
+                            onPageChange: { introPage = $0 }
                         )
                     case nil:
                         conversation
