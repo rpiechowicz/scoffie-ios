@@ -39,6 +39,8 @@ struct AssistantView: View {
     @State private var showMemory = false
     @State private var showUsage = false
     @State private var showMoreMenu = false
+    /// „Zgoda na asystenta" z menu — włączenie i cofnięcie bez Ustawień.
+    @State private var showConsentSheet = false
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
@@ -88,6 +90,7 @@ struct AssistantView: View {
             }
             Button("Co asystent pamięta") { showMemory = true }
             Button("Limity asystenta") { showUsage = true }
+            Button("Zgoda na asystenta") { showConsentSheet = true }
             Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
             Button("Anuluj", role: .cancel) {}
         }
@@ -106,6 +109,11 @@ struct AssistantView: View {
         }
         .sheet(isPresented: $showMemory) {
             AssistantMemorySheet(store: store)
+        }
+        .sheet(isPresented: $showConsentSheet) {
+            if let consents = sessionStore.consentStore {
+                AssistantConsentSheet(consents: consents, source: "IOS_ASSISTANT_MENU")
+            }
         }
         // Bramka zgody: 403 z serwera otwiera arkusz, a po zgodzie wiadomość
         // idzie ponownie z tego samego tekstu (`retry`).

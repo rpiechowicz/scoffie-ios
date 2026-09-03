@@ -288,7 +288,7 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("bezpieczeństwo, wykrywanie nadużyć, limity użycia i ochrona sesji — prawnie uzasadniony interes, art. 6 ust. 1 lit. f RODO,")
                 LegalBullet("obsługa zgłoszeń i realizacja praw — art. 6 ust. 1 lit. b i f RODO,")
                 LegalBullet("wykazanie udzielonych zgód i akceptacji dokumentów — obowiązek prawny, art. 6 ust. 1 lit. c w zw. z art. 7 ust. 1 RODO.")
-                LegalParagraph("Zgody można cofnąć w każdej chwili w Ustawieniach Aplikacji lub pisząc do Administratora; cofnięcie nie wpływa na zgodność z prawem przetwarzania sprzed cofnięcia.")
+                LegalParagraph("Zgody można cofnąć w każdej chwili w Aplikacji (zgoda na asystenta: menu asystenta → „Zgoda na asystenta”; integracje: Ustawienia) lub pisząc do Administratora; cofnięcie nie wpływa na zgodność z prawem przetwarzania sprzed cofnięcia.")
             }
         }
 
@@ -317,7 +317,7 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("nazwa gospodarstwa, aktualny plan tygodnia i notatki pamięci,")
                 LegalBullet("wspólny katalog przepisów.")
                 LegalParagraph("Nie jest wysyłane: wzrost, waga, płeć, rok urodzenia, kroki ze Zdrowia, adres e-mail, poświadczenia Cookidoo.")
-                LegalParagraph("Podstawa: odrębna, wyraźna zgoda każdej osoby, której dane są przekazywane (art. 9 ust. 2 lit. a RODO), wyrażana przed pierwszą wiadomością i możliwa do cofnięcia w Ustawieniach. Po cofnięciu asystent przestaje dla tej osoby działać, a jej dane nie są już wysyłane; zapisane rozmowy pozostają do czasu usunięcia przez użytkownika lub upływu okresu z sekcji 10.")
+                LegalParagraph("Podstawa: odrębna, wyraźna zgoda każdej osoby, której dane są przekazywane (art. 9 ust. 2 lit. a RODO), wyrażana przed pierwszą wiadomością i możliwa do cofnięcia w menu asystenta. Po cofnięciu asystent przestaje dla tej osoby działać, a jej dane nie są już wysyłane; zapisane rozmowy pozostają do czasu usunięcia przez użytkownika lub upływu okresu z sekcji 10.")
                 LegalParagraph("Przekazanie poza EOG: Anthropic przetwarza dane w Stanach Zjednoczonych. Przekazanie odbywa się na podstawie umowy powierzenia zawierającej standardowe klauzule umowne przyjęte przez Komisję Europejską (art. 46 ust. 2 lit. c RODO). Zgodnie z warunkami usługi API Anthropic nie wykorzystuje przekazywanych danych do trenowania swoich modeli.")
                 LegalParagraph("Limity i rozliczenia: liczba wiadomości i zapisanych planów jest liczona na gospodarstwo w miesiącu kalendarzowym; koszt każdej odpowiedzi jest zapisywany do rozliczeń i pozostaje po usunięciu rozmowy (bez jej treści).")
             }

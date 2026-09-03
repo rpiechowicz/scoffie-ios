@@ -63,7 +63,7 @@ struct AssistantConsentSheet: View {
                         ]
                     )
 
-                    Text("Model językowy Claude dostarcza Anthropic, PBC (Stany Zjednoczone) na zlecenie administratora; przekazanie danych poza EOG odbywa się na podstawie standardowych klauzul umownych. Asystent to program — może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w Ustawieniach.")
+                    Text("Model językowy Claude dostarcza Anthropic, PBC (Stany Zjednoczone) na zlecenie administratora; przekazanie danych poza EOG odbywa się na podstawie standardowych klauzul umownych. Asystent to program — może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
                         .font(.system(size: 12.5))
                         .lineSpacing(2)
                         .foregroundStyle(Color.wmMuted(scheme))

@@ -20,6 +20,11 @@ struct WelcomeStep4HouseholdView: View {
     @FocusState private var isHouseholdFieldFocused: Bool
 
     var body: some View {
+        // Ten sam kontener, co pozostałe kroki (ScrollView, 140 pt od góry):
+        // krok gospodarstwa był gołym VStackiem ze 112 pt i własnym
+        // wyrównaniem, przez co treść i stopka siadały inaczej niż na
+        // krokach 1–4.
+        ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 18) {
             WelcomeStepHeader(
                 icon: "house.fill",
@@ -194,9 +199,11 @@ struct WelcomeStep4HouseholdView: View {
             }
         }
         .padding(.horizontal, 24)
-        .padding(.top, 112)
+        .padding(.top, 140)
         .padding(.bottom, 170)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 
