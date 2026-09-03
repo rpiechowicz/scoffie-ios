@@ -6,14 +6,12 @@ import SwiftUI
 
 /// Numeracja kroków przepływu startowego pod wspólny `WelcomeStepper`
 /// (ten sam pigułkowy wskaźnik, co w kreatorze „Poznajmy się" i w
-/// przewodniku). Jeden ciąg: Zgoda → 6 kart „Poznaj" → 4 strony „Od czego
-/// zaczniemy?". Hero (krok 0) wskaźnika nie ma — pojawia się, gdy user
-/// wszedł w proces.
+/// przewodniku). Pięć kroków: Zgoda → 4 karty „Poznaj". Hero (krok 0)
+/// wskaźnika nie ma — pojawia się, gdy user wszedł w proces.
 enum AssistantIntroSteps {
     static let consent = 1
     static func card(_ index: Int) -> Int { 2 + index }
-    static func firstMessagePage(_ index: Int) -> Int { 2 + AssistantCapabilities.onboarding.count + index }
-    static var total: Int { 1 + AssistantCapabilities.onboarding.count + AssistantCapabilities.groups.count }
+    static var total: Int { 1 + AssistantCapabilities.onboarding.count }
 }
 
 /// Flagi „widziane" przepływu startowego. Kasowane przy wylogowaniu

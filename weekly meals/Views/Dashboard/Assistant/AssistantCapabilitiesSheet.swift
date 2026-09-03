@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// „Co potrafi asystent" — arkusz z menu ⋯ (pełna ściąga). W przepływie
-/// startowym tę rolę pełni `AssistantFirstMessageView` — strony z gotowymi
-/// zdaniami, bez zasad i miniatur. Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
+/// „Co potrafi asystent" — arkusz z menu ⋯ (pełna ściąga); przepływ
+/// startowy pokazuje tylko 4 karty „Poznaj" i linkuje tutaj z ostatniej.
+/// Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
 /// cztery grupy umiejętności jako akordeony (wszystkie zwinięte na start),
 /// zasady gry i prywatność. Limitów tu nie ma — to ekran „co", nie „ile",
 /// i widzi go też ktoś, kto asystenta jeszcze nie włączył. Przykład

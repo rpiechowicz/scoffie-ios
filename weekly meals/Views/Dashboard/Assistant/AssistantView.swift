@@ -55,12 +55,10 @@ struct AssistantView: View {
     /// zapamiętywany: po zabiciu aplikacji user wraca na początek
     /// niedokończonego etapu, nie w środek.
     @State private var introStep: IntroStep?
-    /// Ostatnio oglądana karta „Poznaj" i strona „Od czego zaczniemy?" —
-    /// „Wstecz" wraca na nie, nie na pierwszą.
+    /// Ostatnio oglądana karta „Poznaj" — „Wstecz" ze zgody wraca na nią.
     @State private var introCard = 0
-    @State private var introPage = 0
 
-    enum IntroStep: Equatable { case hero, consent, cards, firstMessage }
+    enum IntroStep: Equatable { case hero, consent, cards }
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
@@ -109,32 +107,15 @@ struct AssistantView: View {
                             presentation: .inline,
                             showsStepBar: true,
                             startCard: introCard,
-                            onFinish: {
-                                introPage = 0
-                                goToStep(.firstMessage)
-                            },
-                            onSkip: { finishIntro() },
+                            onFinish: { startConversation() },
+                            onSkip: { startConversation() },
                             onBack: { goToStep(.consent) },
-                            onCardChange: { introCard = $0 }
-                        )
-                    case .firstMessage:
-                        AssistantFirstMessageView(
+                            onCardChange: { introCard = $0 },
                             onAsk: { text in
                                 finishIntro()
                                 ask(text)
                             },
-                            onCompose: {
-                                finishIntro()
-                                // Pole pojawia się razem z rozmową — fokus dopiero,
-                                // gdy już jest w hierarchii.
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
-                            },
-                            onBack: {
-                                introCard = AssistantCapabilities.onboarding.count - 1
-                                goToStep(.cards)
-                            },
-                            startPage: introPage,
-                            onPageChange: { introPage = $0 }
+                            onShowCapabilities: { showCapabilities = true }
                         )
                     case nil:
                         conversation
@@ -218,6 +199,7 @@ struct AssistantView: View {
             AssistantHowItWorksView(
                 presentation: .sheet,
                 onFinish: { onboardingSeen = true },
+                onAsk: { text in ask(text) },
                 onShowCapabilities: {
                     showHowItWorks = false
                     showCapabilities = true
@@ -299,6 +281,14 @@ struct AssistantView: View {
         } else {
             goToStep(.cards)
         }
+    }
+
+    /// „Zaczynajmy" / „Pomiń": rozmowa z kursorem w polu.
+    private func startConversation() {
+        finishIntro()
+        // Pole pojawia się razem z rozmową — fokus dopiero, gdy już jest
+        // w hierarchii.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
     }
 
     /// Koniec przepływu: flagi na stałe, rozmowa. „Co potrafi" i „Jak działa"
