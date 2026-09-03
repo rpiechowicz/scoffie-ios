@@ -134,15 +134,14 @@ struct AssistantConsentGateView: View {
                     dataCard
 
                     AssistantSurfaceCard {
-                        HStack {
-                            AssistantSectionLabel(text: "Dwa potwierdzenia")
+                        HStack(alignment: .center) {
+                            AssistantSectionLabel(text: "Twoje potwierdzenia")
                             Spacer()
-                            Text(isGranted ? "zapisane" : "oba wymagane")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.wmFaint(scheme))
+                            confirmationsBadge
                         }
                         .padding(.horizontal, 14)
-                        .padding(.top, 9)
+                        .padding(.top, 10)
+                        .padding(.bottom, 2)
                         confirmRow(
                             isOn: isGranted ? .constant(true) : $confirmsAge,
                             title: "Mam ukończone 16 lat",
@@ -190,6 +189,28 @@ struct AssistantConsentGateView: View {
     }
 
     // MARK: - Klocki
+
+    /// Licznik zamiast napisu „oba wymagane": 0 z 2 → 1 z 2 → 2 z 2 (zielone),
+    /// po zapisie „Zapisane” z ptaszkiem. Mówi to samo, ale zmienia się razem
+    /// z tym, co użytkownik robi, zamiast go pouczać.
+    private var confirmationsBadge: some View {
+        let done = isGranted ? 2 : (confirmsAge ? 1 : 0) + (confirmsData ? 1 : 0)
+        let complete = done == 2
+        return HStack(spacing: 4) {
+            if complete {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .heavy))
+            }
+            Text(isGranted ? "Zapisane" : "\(done) z 2")
+                .font(.system(size: 11, weight: .semibold))
+                .monospacedDigit()
+        }
+        .foregroundStyle(complete ? WMPalette.sage : Color.wmFaint(scheme))
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(Capsule().fill(complete ? Color.wmSageTint(scheme) : Color.wmChipBg(scheme)))
+        .animation(.easeInOut(duration: 0.18), value: done)
+    }
 
     private var statusBar: some View {
         HStack(spacing: 8) {

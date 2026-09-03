@@ -79,18 +79,22 @@ struct AssistantStickyFooter<Content: View>: View {
     var body: some View {
         VStack(spacing: 10) { content() }
             .padding(.horizontal, WMPageMetrics.horizontal)
-            .padding(.top, 28)
+            .padding(.top, 12)
             .padding(.bottom, 12)
             .background {
                 VStack(spacing: 0) {
                     // Ten sam kolor co `WMPageBackground` (wmPageBase), nie kanwa —
-                    // inny odcień rysował twardą linię nad przyciskiem.
+                    // inny odcień rysował twardą linię nad przyciskiem. Gradient
+                    // zaczyna się NAD stopką (ujemny offset), więc nie zjada
+                    // miejsca, a treść i tak ginie pod nim łagodnie.
                     LinearGradient(
-                        colors: [Color.wmPageBase(scheme).opacity(0), Color.wmPageBase(scheme).opacity(0.7), Color.wmPageBase(scheme)],
+                        colors: [Color.wmPageBase(scheme).opacity(0), Color.wmPageBase(scheme)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 72)
+                    .frame(height: 36)
+                    .offset(y: -36)
+                    .padding(.bottom, -36)
                     Color.wmPageBase(scheme)
                 }
                 .ignoresSafeArea(edges: .bottom)
