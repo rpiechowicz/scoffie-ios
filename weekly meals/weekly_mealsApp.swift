@@ -78,6 +78,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             completionHandler([.banner, .sound])
         case .shoppingList:
             completionHandler([.list])
+        case .assistantTurn:
+            // Odpowiedź asystenta przyszła, gdy aplikacja jest na wierzchu —
+            // baner bez dźwięku: kropka na zakładce i tak już się świeci.
+            completionHandler([.banner])
         case .unknown:
             completionHandler([.banner])
         }
