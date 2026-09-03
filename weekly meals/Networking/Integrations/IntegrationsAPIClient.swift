@@ -81,6 +81,15 @@ final class IntegrationsAPIClient {
         )
     }
 
+    /// Wyłączenie synchronizacji kasuje kopię kroków na serwerze (polityka §7).
+    func deleteHealthSteps() async throws {
+        struct DeletedResponse: Decodable { let deleted: Int? }
+        let _: DeletedResponse = try await request(
+            path: "integrations/health/steps",
+            method: "DELETE"
+        )
+    }
+
     // MARK: - Rdzeń
 
     private func request<Response: Decodable>(

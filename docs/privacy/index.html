@@ -24,12 +24,13 @@
 
       <section class="card section">
         <h2>Meta</h2>
-        <p class="meta">Wersja 2.0 · obowiązuje od 15 września 2026 (zastępuje wersję 1.1 z 1 sierpnia 2026)</p>
+        <p class="meta">Wersja 1.0 · obowiązuje od 15 września 2026</p>
         <p>
-          Najważniejsze zmiany w wersji 2.0: asystent AI (nowy odbiorca danych
-          i przekazanie danych poza EOG), dane ze Zdrowia (kroki), integracja
-          z Cookidoo, dane o domownikach, okresy przechowywania per kategoria,
-          minimalny wiek użytkownika, zgody i ich cofanie.
+          Pierwsza wersja opublikowana razem z premierą aplikacji w App Store.
+          Obejmuje: asystenta AI (odbiorca danych i przekazanie danych poza
+          EOG), dane ze Zdrowia (kroki), integrację z Cookidoo, dane o
+          domownikach, okresy przechowywania per kategoria, minimalny wiek
+          użytkownika, zgody i ich cofanie.
         </p>
       </section>
 
@@ -116,6 +117,10 @@
           </li>
           <li>dziennik zgód: rodzaj zgody, wersja dokumentu, data, źródło.</li>
         </ul>
+        <p><strong>Zgłoszenia odpowiedzi asystenta</strong> (jeśli użytkownik z nich skorzysta):</p>
+        <ul>
+          <li>treść zgłoszonej odpowiedzi, powód i komentarz użytkownika.</li>
+        </ul>
       </section>
 
       <section class="card section">
@@ -158,7 +163,8 @@
           </li>
         </ul>
         <p>
-          Zgody można cofnąć w każdej chwili w Ustawieniach Aplikacji lub
+          Zgody można cofnąć w każdej chwili w Aplikacji (zgoda na asystenta:
+          menu asystenta → „Prywatność i zgoda”; integracje: Ustawienia) lub
           pisząc do Administratora; cofnięcie nie wpływa na zgodność z prawem
           przetwarzania sprzed cofnięcia.
         </p>
@@ -235,7 +241,7 @@
         <p>
           <strong>Podstawa:</strong> odrębna, wyraźna zgoda każdej osoby, której
           dane są przekazywane (art. 9 ust. 2 lit. a RODO), wyrażana przed
-          pierwszą wiadomością i możliwa do cofnięcia w Ustawieniach. Po
+          pierwszą wiadomością i możliwa do cofnięcia w menu asystenta. Po
           cofnięciu asystent przestaje dla tej osoby działać, a jej dane nie są
           już wysyłane; zapisane rozmowy pozostają do czasu usunięcia przez
           użytkownika lub upływu okresu z sekcji 10.
@@ -269,8 +275,9 @@
           marketingu, nie są sprzedawane ani udostępniane osobom trzecim, nie są
           przekazywane do asystenta AI i nie są przechowywane w iCloud
           Administratora. Integrację wyłączysz w Ustawieniach Aplikacji lub w
-          Ustawieniach iOS → Prywatność i bezpieczeństwo → Zdrowie; kroki są
-          usuwane razem z kontem.
+          Ustawieniach iOS → Prywatność i bezpieczeństwo → Zdrowie; wyłączenie w
+          Aplikacji usuwa kopię kroków z serwera, a kroki są też usuwane razem
+          z kontem.
         </p>
       </section>
 
@@ -291,7 +298,9 @@
           przestać działać bez uprzedzenia. Cookidoo i Thermomix są znakami
           towarowymi Vorwerk; Administrator nie jest powiązany z Vorwerk.
           Połączenie można rozłączyć w Ustawieniach — poświadczenia są wtedy
-          natychmiast usuwane. Administrator może czasowo wyłączyć integrację.
+          natychmiast usuwane; są też usuwane, gdy osoba, która je podała,
+          opuści gospodarstwo lub usunie konto. Administrator może czasowo
+          wyłączyć integrację.
         </p>
       </section>
 
@@ -304,7 +313,20 @@
           </li>
           <li>
             <strong>Cloudflare, Inc.</strong> — przechowywanie i serwowanie
-            zdjęć przepisów z katalogu (nie zawierają danych osobowych),
+            zdjęć przepisów z katalogu oraz przechowywanie zaszyfrowanych
+            kopii zapasowych bazy danych (kopie zawierają dane osobowe;
+            przechowywane 30 dni),
+          </li>
+          <li>
+            <strong>GitHub, Inc. (Microsoft)</strong> — wykonanie nocnej
+            kopii zapasowej bazy: zrzut przechodzi przez środowisko GitHub
+            Actions i jest usuwany zaraz po wysłaniu do Cloudflare,
+          </li>
+          <li>
+            <strong>Functional Software, Inc. (Sentry)</strong> — zbieranie
+            błędów aplikacji i serwera: identyfikator żądania, kod i ścieżka
+            błędu, wersja, identyfikator użytkownika; bez treści wiadomości
+            i danych profilu; serwery w Unii Europejskiej,
           </li>
           <li>
             <strong>Apple Inc.</strong> — Sign in with Apple, powiadomienia
@@ -340,14 +362,17 @@
             dane o użyciu asystenta (liczba wiadomości, tokeny, koszt) — 12
             miesięcy, bez treści rozmów,
           </li>
-          <li>kroki ze Zdrowia — przez czas korzystania z integracji, usuwane z kontem,</li>
+          <li>zgłoszenia odpowiedzi asystenta — 12 miesięcy,</li>
+          <li>kroki ze Zdrowia — przez czas korzystania z integracji, usuwane przy jej wyłączeniu i z kontem,</li>
           <li>poświadczenia Cookidoo — do rozłączenia lub usunięcia konta,</li>
           <li>historia list zakupów — przez czas korzystania z Aplikacji,</li>
           <li>dziennik zgód — przez czas korzystania z Aplikacji, usuwany z kontem,</li>
+          <li>kopie zapasowe bazy — 30 dni, potem nadpisywane,</li>
           <li>logi techniczne — nie dłużej niż 90 dni,</li>
           <li>
             po usunięciu konta dane są usuwane niezwłocznie, nie później niż w
-            ciągu 30 dni, z zastrzeżeniem obowiązków prawnych i ochrony roszczeń.
+            ciągu 30 dni (w tym z kopii zapasowych po ich rotacji), z
+            zastrzeżeniem obowiązków prawnych i ochrony roszczeń.
             Własne przepisy dodane do wspólnego gospodarstwa pozostają w nim
             (bez powiązania z usuniętym kontem), bo korzystają z nich pozostali
             domownicy.
@@ -359,7 +384,7 @@
         <h2>11. Prawa użytkownika</h2>
         <p>Użytkownik ma prawo do:</p>
         <ul>
-          <li>dostępu do danych i otrzymania ich kopii,</li>
+          <li>dostępu do danych i otrzymania ich kopii (Ustawienia → Informacje → „Pobierz moje dane”),</li>
           <li>sprostowania danych,</li>
           <li>usunięcia danych,</li>
           <li>ograniczenia przetwarzania,</li>
@@ -384,7 +409,8 @@
           Konto można usunąć bezpośrednio w Aplikacji: Ustawienia → profil
           użytkownika → „Usuń konto”. Operacja usuwa konto wraz z profilem,
           preferencjami, rozmowami z asystentem, krokami, poświadczeniami
-          Cookidoo, tokenami i dziennikiem zgód. Żądanie usunięcia można też
+          Cookidoo, tokenami i dziennikiem zgód; unieważniane są także tokeny
+          Sign in with Apple. Żądanie usunięcia można też
           przesłać e-mailem z adresu przypisanego do konta.
         </p>
       </section>

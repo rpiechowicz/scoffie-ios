@@ -35,7 +35,12 @@ struct AgentCardActionDTO: Decodable, Equatable, Identifiable {
         case ask = "ASK"
     }
 
-    let type: Kind
+    /// Surowy typ z serwera. String, nie enum: szósty typ przycisku po
+    /// stronie serwera nie ma prawa wywrócić dekodera całej karty (tydzień
+    /// znikał razem z nieznanym guzikiem). Nieznane → `kind == nil` → klient
+    /// go nie rysuje, reszta karty zostaje.
+    let type: String
+    var kind: Kind? { Kind(rawValue: type) }
     let proposalId: String?
     let label: String
     /// `PRIMARY` | `SECONDARY` — o wyglądzie decyduje klient.
@@ -43,7 +48,7 @@ struct AgentCardActionDTO: Decodable, Equatable, Identifiable {
     /// Wyłącznie dla `ASK`: treść wiadomości do wysłania.
     let prompt: String?
 
-    var id: String { "\(type.rawValue)-\(proposalId ?? label)" }
+    var id: String { "\(type)-\(proposalId ?? label)" }
     var isPrimary: Bool { style == "PRIMARY" }
 }
 

@@ -1,50 +1,52 @@
 import SwiftUI
 
-/// Limity asystenta — dwie pule, nie jedna.
-///
-/// Wiadomości i zapisane plany to osobne liczniki (projekt v2): wyczerpany
-/// zapis nie blokuje rozmowy, więc pokazujemy obie belki osobno, z datą
-/// odnowienia i rozkładem na domowników — pula jest wspólna dla domu
-/// i ktoś zawsze pyta „kto to zużył”.
+/// Limity asystenta — dwa pierścienie z liczbą „zostało" (projekt „Asystent
+/// Zgoda", 3.09.2026), rozkład na domowników (pula jest wspólna, ktoś zawsze
+/// pyta „kto to zużył") i reguły, co się liczy — jedyna rzecz, która
+/// generuje zgłoszenia: „Zmień" to wiadomość, oglądanie propozycji jest
+/// darmowe. Warianty PRO / próba z projektu wejdą razem z subskrypcją.
 struct AssistantUsageSheet: View {
     let store: AgentStore
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sessionStore) private var sessionStore
     @State private var usage: AgentUsageDTO?
     @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.wmCanvas(scheme).ignoresSafeArea()
+                WMPageBackground(scheme: scheme).ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        if let usage {
-                            Text(subtitle(for: usage))
-                                .font(.system(size: 13.5))
-                                .foregroundStyle(Color.wmMuted(scheme))
-                                .fixedSize(horizontal: false, vertical: true)
+                        EditorialSheetHeader(eyebrow: "Asystent AI", title: "Limity asystenta") {
+                            dismiss()
+                        }
 
-                            QuotaBar(
-                                icon: "sparkles",
+                        if let usage {
+                            planLine(usage)
+
+                            quotaCard(
                                 label: "Wiadomości",
                                 quota: usage.messages,
-                                tint: WMPalette.terracotta,
-                                note: messagesNote(usage)
+                                color: WMPalette.terracotta,
+                                unit: "w tym miesiącu",
+                                note: (usage.byUser?.isEmpty == false)
+                                    ? "Wspólna pula całego domu. Kto ile wykorzystał:"
+                                    : "Wspólna pula całego domu.",
+                                perUser: usage.byUser?.map { ($0.userId, $0.displayName, $0.messages) } ?? []
                             )
-                            QuotaBar(
-                                icon: "calendar",
+                            quotaCard(
                                 label: "Zapisane plany",
                                 quota: usage.plans,
-                                tint: WMPalette.butter,
-                                note: plansNote(usage)
+                                color: WMPalette.sage,
+                                unit: "w tym miesiącu",
+                                note: "Każde „Dodaj do planu”: tydzień, dzień albo podmiana.",
+                                perUser: []
                             )
-
-                            if let byUser = usage.byUser, !byUser.isEmpty {
-                                perUser(byUser)
-                            }
+                            rulesCard(usage)
                         } else if isLoading {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
@@ -55,87 +57,166 @@ struct AssistantUsageSheet: View {
                                 .foregroundStyle(Color.wmMuted(scheme))
                         }
                     }
-                    .padding(.horizontal, WMPageMetrics.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 28)
                 }
+                .scrollIndicators(.hidden)
             }
-            .navigationTitle("Limity asystenta")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Zamknij") { dismiss() }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .task {
             usage = await store.loadUsage()
             isLoading = false
         }
     }
 
-    private func subtitle(for usage: AgentUsageDTO) -> String {
-        let tier = usage.tier == "FREE" ? "Plan bezpłatny" : usage.tier
-        return "\(tier) · wspólne dla całego domu · odnawiają się \(Self.resetLabel(usage.resetsAt))"
+    private func planLine(_ usage: AgentUsageDTO) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(usage.tier == "FREE" ? "Plan bezpłatny" : usage.tier)
+                .font(.system(size: 12, weight: .bold))
+                .tracking(0.2)
+                .foregroundStyle(WMPalette.sage)
+                .padding(.horizontal, 10)
+                .frame(height: 26)
+                .background(Capsule().fill(Color.wmSageTint(scheme)))
+            Text("odnowienie \(Self.resetLabel(usage.resetsAt)) · wspólnie dla domu")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.wmMuted(scheme))
+                .padding(.leading, 2)
+        }
     }
 
-    private func messagesNote(_ usage: AgentUsageDTO) -> String {
-        usage.messages.remaining == 0
-            ? "Pula wyczerpana · wraca \(Self.resetLabel(usage.resetsAt))"
-            : "Zostało \(usage.messages.remaining)"
-    }
-
-    private func plansNote(_ usage: AgentUsageDTO) -> String {
-        usage.plans.remaining == 0
-            ? "Pula wyczerpana · rozmowa działa, zapis wróci \(Self.resetLabel(usage.resetsAt))"
-            : "Zostało \(usage.plans.remaining)"
-    }
-
-    private func perUser(_ rows: [AgentUsageByUserDTO]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Wiadomości na osobę")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(1.1)
-                .textCase(.uppercase)
-                .foregroundStyle(Color.wmFaint(scheme))
-
-            ForEach(rows) { row in
-                HStack(spacing: 10) {
-                    ZStack {
-                        Circle().fill(WMPalette.terracotta.opacity(0.15))
-                        Text(String(row.displayName.prefix(1)).uppercased())
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(WMPalette.terracotta)
+    private func quotaCard(label: String, quota: AgentQuotaDTO, color: Color, unit: String, note: String, perUser: [(String, String, Int)]) -> some View {
+        AssistantSurfaceCard(padding: 14) {
+            HStack(spacing: 16) {
+                ring(fraction: quota.fraction, color: color) {
+                    VStack(spacing: 0) {
+                        Text("\(quota.remaining)")
+                            .font(.system(size: 26, weight: .bold))
+                            .tracking(-0.8)
+                            .monospacedDigit()
+                            .foregroundStyle(Color.wmLabel(scheme))
+                        Text("zostało")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(Color.wmMuted(scheme))
                     }
-                    .frame(width: 24, height: 24)
-
-                    Text(row.displayName)
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.wmLabel(scheme))
-
-                    Spacer(minLength: 8)
-
-                    Text("\(row.messages)")
-                        .font(.system(size: 14, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
                 }
+                VStack(alignment: .leading, spacing: 4) {
+                    AssistantSectionLabel(text: label, color: color)
+                    Text("\(quota.used) z \(quota.limit) \(unit)")
+                        .font(.system(size: 15, weight: .semibold))
+                        .tracking(-0.3)
+                        .monospacedDigit()
+                        .foregroundStyle(quota.remaining == 0 ? color : Color.wmLabel(scheme))
+                    Text(note)
+                        .font(.system(size: 12.5))
+                        .lineSpacing(1.5)
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if !perUser.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(perUser, id: \.0) { row in
+                        HStack(spacing: 8) {
+                            memberAvatar(userId: row.0, name: row.1)
+                            Text(HouseholdMemberStyle.shortName(row.1))
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(Color.wmLabel(scheme))
+                                .frame(width: 64, alignment: .leading)
+                                .lineLimit(1)
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.wmBarTrack(scheme))
+                                    Capsule().fill(color).frame(width: geometry.size.width * (quota.used > 0 ? Double(row.2) / Double(quota.used) : 0))
+                                }
+                            }
+                            .frame(height: 4)
+                            Text("\(row.2)")
+                                .font(.system(size: 12.5))
+                                .monospacedDigit()
+                                .foregroundStyle(row.2 > 0 ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
+                                .frame(width: 26, alignment: .trailing)
+                        }
+                    }
+                }
+                .padding(.top, 12)
+                .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1).padding(.top, 6) }
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
-        )
+    }
+
+    /// Pierścień „zostało" — minimum 3 % wypełnienia, żeby pusty stan nie
+    /// wyglądał na błąd.
+    private func ring<Content: View>(fraction: Double, color: Color, @ViewBuilder content: () -> Content) -> some View {
+        ZStack {
+            Circle().stroke(Color.wmBarTrack(scheme), lineWidth: 10)
+            Circle()
+                .trim(from: 0, to: max(0.03, min(1, fraction)))
+                .stroke(color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            content()
+        }
+        .frame(width: 112, height: 112)
+        .accessibilityHidden(true)
+    }
+
+    private func memberAvatar(userId: String, name: String) -> some View {
+        Group {
+            if let member = sessionStore.householdMembers.first(where: { $0.id == userId }) {
+                MemberAvatar(member: member, members: sessionStore.householdMembers, size: 20)
+            } else {
+                Circle().fill(WMPalette.terracotta.opacity(0.15))
+                    .overlay(Text(String(name.prefix(1)).uppercased()).font(.system(size: 10, weight: .bold)).foregroundStyle(WMPalette.terracotta))
+                    .frame(width: 20, height: 20)
+            }
+        }
+    }
+
+    private func rulesCard(_ usage: AgentUsageDTO) -> some View {
+        AssistantSurfaceCard {
+            AssistantSectionLabel(text: "Co się liczy")
+                .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 4)
+            ForEach(Array([
+                (true, "Liczy się: każda wysłana wiadomość, także „Zmień” i odpowiedzi na dopytanie."),
+                (true, "Liczy się: każde „Dodaj do planu” — tydzień, dzień albo podmiana."),
+                (false, "Nie liczy się: oglądanie propozycji, cofnięcie zapisu, tura przerwana błędem."),
+            ].enumerated()), id: \.offset) { index, rule in
+                HStack(alignment: .top, spacing: 10) {
+                    ZStack {
+                        Circle().fill(rule.0 ? Color.wmSageTint(scheme) : Color.wmInsetSurface(scheme))
+                        Image(systemName: rule.0 ? "checkmark" : "xmark")
+                            .font(.system(size: 10, weight: .heavy))
+                            .foregroundStyle(rule.0 ? WMPalette.sage : Color.wmFaint(scheme))
+                    }
+                    .frame(width: 20, height: 20)
+                    Text(rule.1)
+                        .font(.system(size: 13))
+                        .lineSpacing(2)
+                        .foregroundStyle(Color.wmMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .overlay(alignment: .top) { if index > 0 { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) } }
+            }
+            Text(usage.plans.remaining == 0
+                 ? "Pula planów wyczerpana: rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Wraca \(Self.resetLabel(usage.resetsAt))."
+                 : "Po wyczerpaniu puli planów rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Nowy miesiąc odnawia oba liczniki.")
+                .font(.system(size: 12.5))
+                .lineSpacing(1.5)
+                .foregroundStyle(Color.wmFaint(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 13)
+                .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+        }
     }
 
     /// „1 października” z ISO; sam napis ISO, gdy nie da się sparsować.
-    private static func resetLabel(_ iso: String) -> String {
+    static func resetLabel(_ iso: String) -> String {
         guard let date = AgentStore.parseTimestamp(iso) else { return iso }
         return resetFormatter.string(from: date)
     }
@@ -146,63 +227,4 @@ struct AssistantUsageSheet: View {
         formatter.dateFormat = "d MMMM"
         return formatter
     }()
-
-    private struct QuotaBar: View {
-        let icon: String
-        let label: String
-        let quota: AgentQuotaDTO
-        let tint: Color
-        let note: String
-
-        @Environment(\.colorScheme) private var scheme
-
-        private var isFull: Bool { quota.remaining == 0 }
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(tint)
-                    Text(label)
-                        .font(.system(size: 14, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
-                    Spacer(minLength: 8)
-                    HStack(spacing: 2) {
-                        Text("\(quota.used)")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(isFull ? tint : Color.wmLabel(scheme))
-                        Text("/ \(quota.limit)")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.wmFaint(scheme))
-                    }
-                    .monospacedDigit()
-                }
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.wmBarTrack(scheme))
-                        Capsule()
-                            .fill(tint)
-                            .frame(width: geometry.size.width * quota.fraction)
-                    }
-                }
-                .frame(height: 6)
-
-                Text(note)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(isFull ? tint : Color.wmFaint(scheme))
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.wmCardSurface(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.wmCardStroke(scheme), lineWidth: 1)
-            )
-        }
-    }
 }

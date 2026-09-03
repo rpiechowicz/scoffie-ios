@@ -55,6 +55,7 @@ struct SettingsView: View {
     @State private var showProfileSheet = false
     @State private var showHelpSheet = false
     @State private var showCookidooSheet = false
+    @State private var showLegalDocumentsSheet = false
     @State private var showHealthSheet = false
 
     // Stan integracji „Zdrowie" przez @AppStorage — to arkusz zmienia te
@@ -186,12 +187,12 @@ struct SettingsView: View {
             FAQItem(
                 id: "acc-export",
                 question: "Czy mogę pobrać swoje dane?",
-                answer: "Tak. Napisz na support@weekly-meals.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Pobieranie jednym przyciskiem w aplikacji jest w drodze."
+                answer: "Tak. Napisz na support@weekly-meals.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Szybciej: Ustawienia → Informacje → „Prywatność i regulamin” → „Pobierz moje dane” — paczka od razu trafia do arkusza udostępniania."
             ),
             FAQItem(
                 id: "acc-allergens",
                 question: "Jakie alergeny zna aplikacja?",
-                answer: "Wszystkie 14 alergenów z listy unijnej, m.in. gluten, mleko, jajka, orzechy, ryby, skorupiaki, soję, seler, gorczycę, sezam i siarczyny. Ustawiasz je w profilu — od tej chwili ani asystent, ani ręczne wstawianie posiłku nie przepuści dania z takim składnikiem dla osoby, która go unika."
+                answer: "Wszystkie 14 alergenów z listy unijnej (gluten, mleko, jajka, orzechy, orzeszki ziemne, ryby, skorupiaki, mięczaki, soja, seler, gorczyca, sezam, łubin, siarczyny) oraz laktozę jako osobną nietolerancję. Ustawiasz je w profilu — od tej chwili ani asystent, ani ręczne wstawianie posiłku nie przepuści dania z takim składnikiem dla osoby, która go unika."
             )
         ]),
 
@@ -510,6 +511,9 @@ struct SettingsView: View {
                 }
             }
             .background(NavBarHitTestPassthrough())
+            .sheet(isPresented: $showLegalDocumentsSheet) {
+                LegalDocumentsSheet(dataExportClient: sessionStore.dataExportClient)
+            }
             .sheet(isPresented: $showCreateHouseholdSheet) {
                 createHouseholdSheet
                     .dashboardLiquidSheet()
@@ -692,14 +696,16 @@ struct SettingsView: View {
             EditorialSettingsSectionHeader(title: "Integracje")
 
             EditorialSettingsCardGroup {
-                EditorialSettingsRow(
-                    icon: "app.connected.to.app.below.fill",
-                    iconColor: WMPalette.sage,
-                    title: "Cookidoo (Thermomix)",
-                    value: cookidooRowValue,
-                    isLast: false,
-                    action: { showCookidooSheet = true }
-                )
+                if showsCookidooRow {
+                    EditorialSettingsRow(
+                        icon: "app.connected.to.app.below.fill",
+                        iconColor: WMPalette.sage,
+                        title: "Cookidoo (Thermomix)",
+                        value: cookidooRowValue,
+                        isLast: false,
+                        action: { showCookidooSheet = true }
+                    )
+                }
 
                 EditorialSettingsRow(
                     icon: "figure.walk",
@@ -730,9 +736,18 @@ struct SettingsView: View {
             return "Błąd logowania"
         case .notConnected:
             return "Nie połączono"
+        case .disabled:
+            return "Wyłączone"
         case .unknown, nil:
             return nil
         }
+    }
+
+    /// Wiersz Cookidoo znika, gdy serwer ma integrację wyłączoną — każde
+    /// dotknięcie kończyło się alertem „na razie wyłączone".
+    private var showsCookidooRow: Bool {
+        if case .disabled = sessionStore.cookidooIntegrationStore?.status { return false }
+        return true
     }
 
     private var infoSection: some View {
@@ -752,6 +767,16 @@ struct SettingsView: View {
                     iconColor: SettingsAccent.coral,
                     title: "Oceń aplikację",
                     action: { requestReview() }
+                )
+
+                // Jedno wejście do dokumentów i eksportu danych — polityka
+                // obiecuje wgląd „w Aplikacji”, a stopka logowania to za mało.
+                EditorialSettingsRow(
+                    icon: "hand.raised.fill",
+                    iconColor: WMPalette.indigo,
+                    title: "Prywatność i regulamin",
+                    value: "v\(LegalDocMeta.version)",
+                    action: { showLegalDocumentsSheet = true }
                 )
 
                 versionRow

@@ -6,6 +6,9 @@ import Foundation
 // `IntegrationsAPIClient`.
 
 struct CookidooStatusDTO: Decodable {
+    /// `false` = integracja wyłączona flagą na serwerze (klient chowa wiersz).
+    /// Opcjonalne — starszy serwer bez pola znaczy „włączona".
+    let enabled: Bool?
     let connected: Bool
     let login: String?
     let status: String?

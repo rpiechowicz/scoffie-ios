@@ -13,6 +13,9 @@ final class CookidooIntegrationStore {
     enum Status: Equatable {
         /// Jeszcze nie wiemy — brak odpowiedzi serwera (zimny start, offline).
         case unknown
+        /// Serwer ma integrację wyłączoną (`COOKIDOO_INTEGRATION_ENABLED=false`)
+        /// i nie ma zapisanych poświadczeń — nic do pokazania, nic do zrobienia.
+        case disabled
         case notConnected
         case connected(login: String)
         /// Hasło do Cookidoo przestało działać — wiersz w Ustawieniach ma
@@ -49,14 +52,26 @@ final class CookidooIntegrationStore {
         switch status {
         case .connected(let login), .authFailed(let login):
             return login
-        case .unknown, .notConnected:
+        case .unknown, .notConnected, .disabled:
             return nil
         }
     }
 
+    var isDisabled: Bool {
+        if case .disabled = status { return true }
+        return false
+    }
+
     func refresh() async {
         do {
-            apply(try await client.fetchStatus())
+            let dto = try await client.fetchStatus()
+            // Wyłączona bez zapisanych poświadczeń → chowamy. Wyłączona Z
+            // poświadczeniami → nadal `connected`, żeby dało się rozłączyć.
+            if dto.enabled == false, !dto.connected {
+                status = .disabled
+                return
+            }
+            apply(dto)
         } catch {
             // Zostawiamy poprzedni stan: chwilowy brak sieci nie może
             // „rozłączać" integracji w oczach użytkownika.

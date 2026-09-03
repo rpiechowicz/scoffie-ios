@@ -140,6 +140,10 @@ final class SessionStore {
     /// potrafi trwać minutę — użytkownik ma prawo w tym czasie zamknąć
     /// asystenta, obejrzeć plan i wrócić po odpowiedź.
     var agentStore: AgentStore?
+    /// Zgody z serwera (`/me/consents`) — bramka asystenta i wiersz w Ustawieniach.
+    var consentStore: ConsentStore?
+    /// „Pobierz moje dane" (`GET /me/export`).
+    var dataExportClient: DataExportAPIClient?
     var datesViewModel = DatesViewModel()
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
@@ -390,10 +394,22 @@ final class SessionStore {
 
         let socket = sessionSocket()
 
+        // App Review 5.1.1(v): kasowanie konta ma unieważnić tokeny Sign in
+        // with Apple. Serwer robi to kodem autoryzacji ze ŚWIEŻEJ autoryzacji
+        // (kod z logowania żyje 5 minut), więc prosimy Apple jeszcze raz.
+        // Anulowanie okna Apple nie blokuje kasowania — konto i tak znika,
+        // a serwer unieważnia, co może.
+        var payload: [String: Any] = ["userId": userId]
+        if UserDefaults.standard.string(forKey: Keys.appleUserIdentifier) != nil,
+           let code = try? await appleSignInCoordinator.start().authorizationCode,
+           !code.isEmpty {
+            payload["appleAuthorizationCode"] = code
+        }
+
         do {
             let envelope: WsEnvelope<BackendDeletedUserDTO> = try await socket.emitWithAck(
                 event: "users:delete",
-                payload: ["userId": userId],
+                payload: payload,
                 as: WsEnvelope<BackendDeletedUserDTO>.self
             )
 
@@ -617,6 +633,21 @@ final class SessionStore {
             ),
             householdId: householdId
         )
+        let restCore = BackendRESTCore(
+            baseURL: baseURL,
+            tokenProvider: { [weak self] in self?.currentAccessToken },
+            refreshSession: { [weak self] in
+                await self?.refreshSessionTokens() == .refreshed
+            }
+        )
+        let consentStore = ConsentStore(client: ConsentsAPIClient(core: restCore))
+        self.consentStore = consentStore
+        self.dataExportClient = DataExportAPIClient(core: restCore)
+        // Stan zgód od razu: wiersz w Ustawieniach i bramka asystenta mają
+        // wiedzieć, zanim ktoś stuknie.
+        Task { @MainActor in
+            await consentStore.refresh()
+        }
         // Świeże kroki od razu przy starcie sesji + obserwacja na żywo.
         // Oba to no-opy, dopóki użytkownik nie włączy integracji w Ustawieniach.
         healthStore.startObserving()
@@ -691,6 +722,8 @@ final class SessionStore {
         // Rozmowy zostają na serwerze (użytkownik kasuje je sam, świadomie) —
         // tu znika tylko stan w pamięci telefonu.
         agentStore = nil
+        consentStore = nil
+        dataExportClient = nil
         datesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
@@ -1628,6 +1661,9 @@ final class SessionStore {
     }
 
     private func clearPersistedSession() {
+        // Hero i onboarding asystenta są per konto, nie per telefon: kolejny
+        // użytkownik (albo ten sam po usunięciu konta) ma je zobaczyć od nowa.
+        AssistantIntroState.reset()
         // Usuń tokeny z Keychain
         KeychainService.delete(forKey: Keys.accessToken)
         KeychainService.delete(forKey: Keys.refreshToken)

@@ -38,7 +38,30 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
-    @State private var showMoreMenu = false
+    /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
+    @State private var showConsentReview = false
+    /// „Co potrafi asystent" — z menu, z bramki zgody i z onboardingu.
+    @State private var showCapabilities = false
+    /// „Jak działa asystent" — te same karty co onboarding, z menu.
+    @State private var showHowItWorks = false
+    /// Hero „Poznaj asystenta" (krok 0) — raz, przed pierwszą zgodą. Po
+    /// cofnięciu zgody użytkownik wraca prosto do kroku „Zgoda". Flagi
+    /// kasuje `AssistantIntroState.reset()` przy wylogowaniu.
+    @AppStorage(AssistantIntroState.welcomeSeenKey) private var welcomeSeen = false
+    /// Onboarding pokazywany raz, tuż po włączeniu zgody.
+    @AppStorage(AssistantIntroState.onboardingSeenKey) private var onboardingSeen = false
+    /// Krok przepływu startowego wybrany ręcznie (Dalej/Wstecz). `nil` =
+    /// wyliczany ze stanu zgód i flag (`currentStep`). Nie jest
+    /// zapamiętywany: po zabiciu aplikacji user wraca na początek
+    /// niedokończonego etapu, nie w środek.
+    @State private var introStep: IntroStep?
+    /// Ostatnio oglądana karta „Poznaj" — „Wstecz" z „Co potrafi" wraca
+    /// na nią, nie na pierwszą.
+    @State private var introCard = 0
+
+    enum IntroStep: Equatable { case hero, consent, cards, capabilities }
+    /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
+    @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
@@ -51,8 +74,72 @@ struct AssistantView: View {
 
             VStack(spacing: 0) {
                 header
-                conversation
-                composer
+                // Przepływ startowy to STAN ZAKŁADKI, nie arkusze: hero →
+                // Zgoda → Poznaj → Start → rozmowa. Nagłówek i tab bar stoją,
+                // wymienia się tylko treść — użytkownik czyta to jako ten sam
+                // ekran w następnym kroku, nie nowy widok w stosie nawigacji.
+                Group {
+                    switch currentStep {
+                    case .hero:
+                        AssistantWelcomeView(
+                            onStart: {
+                                welcomeSeen = true
+                                goToStep(.consent)
+                            },
+                            onShowCapabilities: { showCapabilities = true }
+                        )
+                    case .consent:
+                        if let consents = sessionStore.consentStore {
+                            AssistantConsentGateView(
+                                consents: consents,
+                                source: "IOS_ASSISTANT_GATE",
+                                presentation: .inline,
+                                onGranted: {
+                                    store.consentGranted()
+                                    if store.retryText != nil { retry() }
+                                    goToStep(.cards)
+                                },
+                                showsStepper: true,
+                                onBack: { goToStep(.hero) },
+                                onContinue: { goToStep(.cards) }
+                            )
+                        } else {
+                            conversation
+                            composer
+                        }
+                    case .cards:
+                        AssistantHowItWorksView(
+                            presentation: .inline,
+                            showsStepBar: true,
+                            startCard: introCard,
+                            onFinish: { goToStep(.capabilities) },
+                            onSkip: { finishIntro() },
+                            onBack: { goToStep(.consent) },
+                            onCardChange: { introCard = $0 }
+                        )
+                    case .capabilities:
+                        AssistantCapabilitiesSheet(
+                            store: store,
+                            presentation: .inline,
+                            onAsk: { text in
+                                finishIntro()
+                                ask(text)
+                            },
+                            onCompose: {
+                                finishIntro()
+                                // Pole pojawia się razem z rozmową — fokus dopiero,
+                                // gdy już jest w hierarchii.
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
+                            },
+                            onBack: { goToStep(.cards) }
+                        )
+                    case nil:
+                        conversation
+                        composer
+                    }
+                }
+                .transition(.assistantIntroStep)
+                .animation(.easeOut(duration: 0.28), value: currentStep)
             }
             // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam, gdzie na
             // pozostałych zakładkach. Tam robi to ScrollView z tym samym
@@ -80,14 +167,10 @@ struct AssistantView: View {
             // wkłada do promptu — jedno źródło zamiast trzech cache'ów.
             await store.refreshContext(weekStart: datesViewModel.weekStartISO)
         }
-        .confirmationDialog("Asystent", isPresented: $showMoreMenu, titleVisibility: .hidden) {
-            Button("Nowa rozmowa") {
-                Task { await store.startNewConversation() }
-            }
-            Button("Co asystent pamięta") { showMemory = true }
-            Button("Limity asystenta") { showUsage = true }
-            Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
-            Button("Anuluj", role: .cancel) {}
+        .task {
+            // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
+            // użytkownik widział rozmowę, dopóki serwer nie odpowiedział.
+            await sessionStore.consentStore?.refresh()
         }
         .sheet(isPresented: $showsScopeSheet) {
             AssistantScopeSheet(
@@ -104,6 +187,37 @@ struct AssistantView: View {
         }
         .sheet(isPresented: $showMemory) {
             AssistantMemorySheet(store: store)
+        }
+        .sheet(isPresented: $showConsentReview) {
+            if let consents = sessionStore.consentStore {
+                AssistantConsentGateView(
+                    consents: consents,
+                    source: "IOS_ASSISTANT_MENU",
+                    presentation: .sheet
+                )
+            }
+        }
+        .sheet(isPresented: $showCapabilities) {
+            AssistantCapabilitiesSheet(
+                store: store,
+                onAsk: { text in ask(text) },
+                onCompose: { isComposerFocused = true }
+            )
+        }
+        .sheet(isPresented: $showHowItWorks) {
+            AssistantHowItWorksView(
+                presentation: .sheet,
+                onFinish: { onboardingSeen = true },
+                onShowCapabilities: {
+                    showHowItWorks = false
+                    showCapabilities = true
+                }
+            )
+        }
+        .sheet(item: $reporting) { message in
+            AssistantReportSheet(message: message) { reason, comment in
+                await store.report(messageId: message.id, reason: reason, comment: comment)
+            }
         }
         .alert("Usunąć historię rozmów?", isPresented: $showDeleteAlert) {
             Button("Usuń", role: .destructive) {
@@ -124,11 +238,65 @@ struct AssistantView: View {
     /// wiadomościom i pokazuje tytuł rozmowy nadany przez serwer.
     private var header: some View {
         AssistantHeader(
-            mode: store.messages.isEmpty ? .large : .compact(title: conversationTitle),
+            // Bramka i onboarding to nie rozmowa — nagłówek zostaje duży,
+            // nawet gdy konto ma stare rozmowy (tytuł starej rozmowy nad
+            // „Zanim zaczniemy" wyglądał na błąd).
+            mode: (store.messages.isEmpty || currentStep != nil) ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
-            onHistory: { showConversations = true },
-            onMore: { showMoreMenu = true }
-        )
+        ) {
+            Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
+            Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
+            Button { showCapabilities = true } label: { Label("Co potrafi asystent", systemImage: "sparkles") }
+            Button { showHowItWorks = true } label: { Label("Jak działa asystent", systemImage: "questionmark.bubble") }
+            Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
+            Button { showUsage = true } label: { Label("Limity asystenta", systemImage: "chart.bar") }
+            Button { showConsentReview = true } label: { Label("Prywatność i zgoda", systemImage: "lock.shield") }
+            Divider()
+            Button(role: .destructive) { showDeleteAlert = true } label: { Label("Usuń historię rozmów", systemImage: "trash") }
+        }
+    }
+
+    /// Który krok przepływu startowego pokazać. Bez zgody zawsze hero albo
+    /// zgoda (ręczny wybór tylko między nimi); ze zgodą — to, co user wybrał
+    /// przyciskami, a bez wyboru: karty, dopóki onboarding nie jest
+    /// odhaczony. `nil` = rozmowa.
+    private var currentStep: IntroStep? {
+        if gateActive {
+            switch introStep {
+            case .hero: return .hero
+            case .consent: return .consent
+            default: return welcomeSeen ? .consent : .hero
+            }
+        }
+        if let introStep { return introStep }
+        return onboardingSeen ? nil : .cards
+    }
+
+    private func goToStep(_ step: IntroStep) {
+        withAnimation(.easeOut(duration: 0.28)) { introStep = step }
+    }
+
+    /// Koniec przepływu: flagi na stałe, rozmowa. „Co potrafi" i „Jak działa"
+    /// zostają pod menu ⋯.
+    private func finishIntro() {
+        withAnimation(.easeOut(duration: 0.28)) {
+            introStep = nil
+            welcomeSeen = true
+            onboardingSeen = true
+        }
+    }
+
+    /// Bez zgody (403 z serwera albo stan z `/me/consents`) zakładka pokazuje
+    /// bramkę. Zanim stan zgód się wczyta, nie zgadujemy — pokazujemy rozmowę.
+    private var gateActive: Bool {
+        if store.needsConsent { return true }
+        guard let consents = sessionStore.consentStore else { return false }
+        // Bramka, dopóki NIE wiemy na pewno, że zgoda jest. Nowy użytkownik
+        // widział rozmowę zamiast „Zanim zaczniemy", bo stan zgód wczytywał się
+        // po pierwszym renderze, a starszy serwer bez pól wersji nie wczytywał
+        // się wcale. Ktoś ze zgodą, którego stan chwilowo nie doszedł, widzi
+        // bramkę jeszcze raz — jedno stuknięcie, bez szkody.
+        return !(consents.isLoaded && consents.assistantGranted)
     }
 
     private var conversationTitle: String? {
@@ -174,7 +342,8 @@ struct AssistantView: View {
                                 onRevise: { revise() },
                                 onAskNew: { askForFreshProposal() },
                                 onAsk: { prompt in ask(prompt) },
-                                onEdit: { beginEditing(message) }
+                                onEdit: { beginEditing(message) },
+                                onReport: { reporting = message }
                             )
                             .id(message.id)
                         }
@@ -202,15 +371,6 @@ struct AssistantView: View {
                             )
                             .id(Self.errorAnchor)
 
-                            // Podpowiedzi z serwera po czasie albo „Stop”:
-                            // mniejszy zakres, bo to najczęstsza przyczyna 90 s.
-                            if !store.suggestions.isEmpty, !store.isSending {
-                                AssistantQuickReplies(items: store.suggestions, onTap: ask)
-                            }
-                        }
-
-                        if showsFollowUps {
-                            followUps
                         }
 
                         // Koniec TREŚCI — tu ląduje strzałka „na dół". Osobno
@@ -394,22 +554,30 @@ struct AssistantView: View {
         return "\(day.string(from: first))–\(full.string(from: last))"
     }
 
-    /// Podpowiedzi kolejnego ruchu pod ostatnią odpowiedzią — rozmowa nie
-    /// kończy się ścianą tekstu i pustym polem.
-    private var followUps: some View {
-        AssistantQuickReplies(items: Self.followUpSuggestions, onTap: ask)
-    }
-
-    private var showsFollowUps: Bool {
-        !store.isSending
-            && store.errorMessage == nil
-            && store.messages.last?.author == .assistant
+    /// Podpowiedzi nad chipami zakresu, dosunięte do prawej jak dymki
+    /// użytkownika. W rozmowie najwyżej dwie: po błędzie czasu — te
+    /// z serwera (mniejszy zakres), po odpowiedzi — kolejny ruch. W scrollu
+    /// pod ostatnią wiadomością zajmowały pół ekranu.
+    private var composerHints: [String]? {
+        guard !store.isSending else { return nil }
+        if store.messages.isEmpty { return AssistantCapabilities.quickStarts }
+        if !store.suggestions.isEmpty { return Array(store.suggestions.prefix(2)) }
+        guard store.errorMessage == nil, store.messages.last?.author == .assistant else { return nil }
+        return Array(Self.followUpSuggestions.prefix(2))
     }
 
     // MARK: - Pole wiadomości
 
     private var composer: some View {
         VStack(spacing: 0) {
+            // Podpowiedzi NAD kreską pola — należą do rozmowy, nie do
+            // klawiatury; dosunięte do prawej jak dymki użytkownika.
+            if let hints = composerHints {
+                AssistantQuickReplies(items: hints, alignment: .trailing, onTap: ask)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.bottom, 10)
+            }
+
             Divider().overlay(Color.wmRule(scheme))
 
             // Zakres widoczny PRZED odpowiedzią: bez tego użytkownik dowiaduje
@@ -431,7 +599,9 @@ struct AssistantView: View {
 
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(
-                    store.isUnavailable ? "Asystent jest teraz niedostępny" : "Napisz do asystenta…",
+                    store.isUnavailable
+                        ? "Asystent jest teraz niedostępny"
+                        : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…"),
                     text: $draft,
                     axis: .vertical
                 )
@@ -440,7 +610,7 @@ struct AssistantView: View {
                 .tracking(-0.25)
                 .foregroundStyle(Color.wmLabel(scheme))
                 .focused($isComposerFocused)
-                .disabled(store.isUnavailable)
+                .disabled(store.isUnavailable || store.isLocked)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
@@ -581,8 +751,6 @@ struct AssistantView: View {
         let originalText: String
     }
 
-    private static let photoOnlyQuestion = "Co z tego ugotuję?"
-
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, store.canSend else { return }
@@ -694,12 +862,6 @@ struct AssistantView: View {
     private static let bottomAnchor = "assistant.bottom"
     private static let tailAnchor = "assistant.tail"
 
-    private static let suggestions = [
-        "Zaplanuj mi obiady i kolacje na ten tydzień",
-        "Podmień kolację we wtorek na coś do 30 minut",
-        "Czego brakuje w planie, żeby wyrobić się z białkiem?",
-    ]
-
     private static let followUpSuggestions = [
         "Podmień jedno danie",
         "Co z tego wyjdzie na liście zakupów?",
@@ -772,6 +934,7 @@ private struct MessageBubble: View {
     let onAskNew: () -> Void
     let onAsk: (String) -> Void
     let onEdit: () -> Void
+    let onReport: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -806,6 +969,12 @@ private struct MessageBubble: View {
 
             Button(action: onAskAgain) {
                 Label("Zapytaj jeszcze raz", systemImage: "arrow.clockwise")
+            }
+        } else {
+            // Obiecane w FAQ i w regulaminie („Zgłoś odpowiedź”) — idzie na
+            // `POST /agent/messages/:id/report`, nie zmienia rozmowy.
+            Button(role: .destructive, action: onReport) {
+                Label("Zgłoś odpowiedź", systemImage: "flag")
             }
         }
     }
@@ -876,7 +1045,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(planWeek.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(planWeek.proposalId) }
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -884,7 +1054,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(planDay.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(planDay.proposalId) }
             )
         case .options(let options):
             AssistantOptionsCard(card: options, onAsk: onAsk)
@@ -894,7 +1065,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(swap.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(swap.proposalId) }
             )
         case .householdSplit(let split):
             AssistantHouseholdSplitCard(
@@ -902,7 +1074,8 @@ private struct MessageBubble: View {
                 isBusy: isBusy,
                 onApply: { force in onApply(split.proposalId, force) },
                 onRevise: onRevise,
-                onAskNew: onAskNew
+                onAskNew: onAskNew,
+                onUndo: { onUndo(split.proposalId) }
             )
         case .macroGap(let macro):
             AssistantMacroGapCard(card: macro, onAsk: onAsk)

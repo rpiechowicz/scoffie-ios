@@ -177,9 +177,9 @@ enum UserFacingErrorMapper {
         "SHOPPING_LIST_ARCHIVE_NOT_FOUND": "Tej listy zakupów już nie ma. Odśwież widok.",
         "SHOPPING_ITEM_NOT_FOUND": "Tej pozycji nie ma już na liście. Odśwież widok.",
         // asystent AI
-        // `AI_PLAN_QUOTA_EXCEEDED` NIE ma tu kopii świadomie: ten kod wraca do
-        // MODELU jako wynik narzędzia, a użytkownik dostaje o tym zdanie
-        // w odpowiedzi asystenta, nie alert.
+        // `AI_PLAN_QUOTA_EXCEEDED` wraca też do MODELU jako wynik narzędzia,
+        // ale od kart zapisuje się przyciskiem — wtedy to jest odpowiedź HTTP
+        // i kopia niżej jest potrzebna.
         "AI_DISABLED": "Asystent jest teraz niedostępny.",
         "AI_QUOTA_EXCEEDED": "Limit rozmów z asystentem na ten miesiąc został wyczerpany.",
         "AI_BUDGET_PAUSED": "Asystent jest dziś niedostępny. Spróbuj jutro.",
@@ -191,7 +191,7 @@ enum UserFacingErrorMapper {
         "AI_TIMEOUT": "Asystent nie zdążył odpowiedzieć. Spróbuj jeszcze raz.",
         "AI_PROVIDER_ERROR": "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.",
         "AI_CANCELLED": "Zatrzymane. Plan bez zmian.",
-        "AI_CONSENT_REQUIRED": "Asystent potrzebuje Twojej zgody. Włącz ją w Ustawieniach → Asystent.",
+        "AI_CONSENT_REQUIRED": "Asystent potrzebuje Twojej zgody — włączysz ją w otwartym arkuszu albo w Ustawieniach → Asystent AI.",
         "AI_PLAN_QUOTA_EXCEEDED": "Zapisy planów na ten miesiąc wykorzystane. Rozmowa działa dalej — zapis wróci od nowego miesiąca.",
         "COOKIDOO_DISABLED": "Połączenie z Cookidoo jest na razie wyłączone.",
         "RECIPE_EXCLUDED_INGREDIENT": "Ten przepis ma składnik, którego ktoś z jedzących nie je.",
@@ -209,6 +209,7 @@ enum UserFacingErrorMapper {
         "COOKIDOO_RECIPE_NOT_FOUND": "Ten przepis nie ma wersji na Thermomixa.",
         "COOKIDOO_SERVICE_UNAVAILABLE": "Usługa Cookidoo jest chwilowo niedostępna. Spróbuj ponownie za kilka minut.",
         "COOKIDOO_UPSTREAM_ERROR": "Cookidoo odpowiedziało błędem. Spróbuj ponownie za chwilę.",
+        "COOKIDOO_UPSTREAM_TIMEOUT": "Cookidoo nie odpowiedziało w czasie. Spróbuj ponownie za chwilę.",
         "COOKIDOO_SUBSCRIPTION_INACTIVE": "Subskrypcja Cookidoo jest nieaktywna.",
     ]
 
