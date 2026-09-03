@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 enum RecipesMock {
@@ -810,4 +811,4 @@ enum RecipesMock {
         bakedPotatoesCottage
     ]
 }
-
+#endif

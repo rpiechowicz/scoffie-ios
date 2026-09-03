@@ -204,7 +204,7 @@ struct AssistantCapabilitiesSheet: View {
         AssistantSurfaceCard {
             AssistantSectionLabel(text: "Prywatność", color: WMPalette.sage)
                 .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
-            infoRow(icon: "checkmark.shield.fill", accent: .sage, title: "Zostaje w telefonie", detail: "Wzrost, waga, płeć, rok urodzenia, kroki, e-mail i hasło Cookidoo nigdy nie idą do modelu.", first: true)
+            infoRow(icon: "checkmark.shield.fill", accent: .sage, title: "Nie idzie do modelu", detail: "Wzrost, waga, płeć, rok urodzenia, kroki, e-mail i hasło Cookidoo nigdy nie idą do modelu.", first: true)
             infoRow(icon: "person.2.fill", accent: .sage, title: "Domownicy tylko za zgodą", detail: "Dane innych osób trafiają do planu dopiero, gdy same włączą asystenta.", first: false)
             infoRow(icon: "lock.shield.fill", accent: .sage, title: "Zgodę cofniesz w menu", detail: "Rozmowy i notatki pamięci znikają, plan i przepisy zostają.", first: false)
         }

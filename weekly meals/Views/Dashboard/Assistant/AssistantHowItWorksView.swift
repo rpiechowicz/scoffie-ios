@@ -166,7 +166,7 @@ struct AssistantHowItWorksView: View {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(WMPalette.sage)
-                    Text("Nic nie zapisuje się samo — każda zmiana to karta z „Dodaj do planu”, a zapis cofniesz w ciągu doby. Wzrost, waga, kroki i e-mail zostają w telefonie.")
+                    Text("Nic nie zapisuje się samo — każda zmiana to karta z „Dodaj do planu”, a zapis cofniesz w ciągu doby. Wzrost, waga, kroki i e-mail nie są wysyłane do modelu AI.")
                         .font(.system(size: 14))
                         .lineSpacing(3)
                         .foregroundStyle(Color.wmLabel(scheme))

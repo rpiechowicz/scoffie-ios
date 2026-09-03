@@ -105,6 +105,11 @@ struct DataExportSheet: View {
         }
         .presentationDragIndicator(.visible)
         .task { load() }
+        // Pełny eksport (profil, rozmowy, kroki) nie może leżeć w tmp po
+        // zamknięciu arkusza — kto chciał, już go zapisał albo wysłał.
+        .onDisappear {
+            if let fileURL { try? FileManager.default.removeItem(at: fileURL) }
+        }
     }
 
     private var statusLine: String {

@@ -38,6 +38,8 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
+    /// Paywall PRO — z limitów i z zablokowanego pola na próbie.
+    @State private var showPaywall = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
     /// „Co potrafi asystent" — z menu, z bramki zgody i z onboardingu.
@@ -164,7 +166,10 @@ struct AssistantView: View {
             )
         }
         .sheet(isPresented: $showUsage) {
-            AssistantUsageSheet(store: store)
+            AssistantUsageSheet(store: store, onUpgrade: { showPaywall = true })
+        }
+        .sheet(isPresented: $showPaywall) {
+            AssistantPaywallSheet()
         }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
@@ -635,11 +640,33 @@ struct AssistantView: View {
                 editingBar
             }
 
+            // Pula na próbę wyczerpana: nie ma „za moment", jest PRO.
+            if store.isLockedByTrialQuota {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(WMPalette.terracotta)
+                    Text("Darmowe wiadomości wykorzystane")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.wmLabel(scheme))
+                    Spacer(minLength: 0)
+                    Button("Odblokuj PRO") { showPaywall = true }
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(WMPalette.terracotta)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.wmAccentTint(scheme)))
+                .padding(.top, 8)
+            }
+
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(
                     store.isUnavailable
                         ? "Asystent jest teraz niedostępny"
-                        : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…"),
+                        : (store.isLockedByTrialQuota
+                            ? "Limit na próbę wykorzystany"
+                            : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…")),
                     text: $draft,
                     axis: .vertical
                 )

@@ -82,6 +82,9 @@ final class AgentStore {
     /// Bez tego użytkownik klikał „wyślij" w kółko i za każdym razem dostawał
     /// ten sam błąd zamiast informacji, kiedy spróbować.
     private(set) var lockedUntil: Date?
+    /// Ostatnio pobrane limity — po 429 pole wiadomości musi wiedzieć, czy
+    /// to próba (pokazać „Odblokuj PRO"), czy miesiąc (pokazać datę).
+    private(set) var usage: AgentUsageDTO?
     private(set) var isLoadingHistory = false
     /// Treść wiadomości, która NIE doszła do serwera — do ponowienia jednym
     /// przyciskiem. Ustawiana tylko wtedy, gdy wiadomość wypadła z historii;
@@ -324,8 +327,27 @@ final class AgentStore {
 
     /// „Ile mi zostało" — do arkusza limitów; nie zasłania błędów rozmowy.
     func loadUsage() async -> AgentUsageDTO? {
-        try? await client.usage(householdId: householdId)
+        let loaded = try? await client.usage(householdId: householdId)
+        if let loaded {
+            usage = loaded
+            // Po włączeniu PRO (albo ręcznym nadaniu) blokada „do PRO" znika
+            // bez restartu aplikacji.
+            if !loaded.isTrial, lockReason == .quota, lockedUntil == .distantFuture {
+                lockedUntil = nil
+                lockReason = nil
+            }
+        }
+        return loaded
     }
+
+    /// Pole zablokowane przez wyczerpaną pulę na PRÓBIE — bez odnowienia,
+    /// więc zamiast „spróbuj za moment" jest „Odblokuj PRO".
+    var isLockedByTrialQuota: Bool {
+        isLocked && lockReason == .quota && usage?.isTrial == true
+    }
+
+    enum LockReason { case quota, budget, pause }
+    private(set) var lockReason: LockReason?
 
     // MARK: - Rozmowy
 
@@ -779,10 +801,25 @@ final class AgentStore {
                 // zostaje pod rozmową na wypadek zamknięcia arkusza.
                 needsConsent = true
             case "AI_QUOTA_EXCEEDED":
+                lockReason = .quota
                 lockedUntil = Date().addingTimeInterval(60 * 60)
+                // Próba czy miesiąc? Tylko serwer to wie — odświeżamy limity,
+                // żeby pole pokazało właściwy krok, a nie „spróbuj za moment".
+                // W PRO blokada trwa do odnowienia puli (po godzinie ten sam
+                // błąd wracał jak bumerang), na próbie — do PRO.
+                Task {
+                    guard let loaded = await loadUsage() else { return }
+                    if let iso = loaded.resetsAt, let date = Self.parseTimestamp(iso), date > Date() {
+                        lockedUntil = date
+                    } else if loaded.isTrial {
+                        lockedUntil = .distantFuture
+                    }
+                }
             case "AI_BUDGET_PAUSED":
+                lockReason = .budget
                 lockedUntil = Date().addingTimeInterval(15 * 60)
             case "AI_UPSTREAM_PAUSED", "TOO_MANY_REQUESTS":
+                lockReason = .pause
                 lockedUntil = Date().addingTimeInterval(60)
             default:
                 break

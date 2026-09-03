@@ -1,34 +1,6 @@
 import SwiftUI
 
-struct DashboardLiquidBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    DashboardPalette.backgroundTop(for: colorScheme),
-                    DashboardPalette.backgroundBottom(for: colorScheme)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Circle()
-                .fill(Color.cyan.opacity(colorScheme == .dark ? 0.35 : 0.16))
-                .frame(width: 260, height: 260)
-                .blur(radius: 80)
-                .offset(x: -120, y: -200)
-
-            Circle()
-                .fill(Color.blue.opacity(colorScheme == .dark ? 0.3 : 0.14))
-                .frame(width: 280, height: 280)
-                .blur(radius: 90)
-                .offset(x: 140, y: 220)
-        }
-    }
-}
-
+s
 enum DashboardSurfaceLevel {
     case primary
     case secondary
@@ -167,32 +139,7 @@ enum DashboardSheetTheme {
     }
 }
 
-struct DashboardSheetBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let theme: DashboardSheetTheme
-
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    DashboardPalette.backgroundTop(for: colorScheme),
-                    DashboardPalette.backgroundBottom(for: colorScheme)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            ForEach(Array(theme.glows.enumerated()), id: \.offset) { _, glow in
-                Circle()
-                    .fill(glow.color.opacity(colorScheme == .dark ? glow.darkOpacity : glow.lightOpacity))
-                    .frame(width: glow.size, height: glow.size)
-                    .blur(radius: glow.blur)
-                    .offset(x: glow.x, y: glow.y)
-            }
-        }
-    }
-}
-
+s
 private struct DashboardLiquidCardModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     let cornerRadius: CGFloat

@@ -20,10 +20,9 @@ struct AssistantWelcomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Bez ScrollView: hero ma się mieścić na ekranie w całości, a
-            // przewijany kontener „pływał" pod palcem, choć nie było czego
-            // przewijać.
-            VStack(spacing: 0) {
+            // `basedOnSize`: przy zwykłej czcionce kontener stoi (nie pływa
+            // pod palcem), a przy dużej Dynamic Type treść daje się dosunąć.
+            ScrollView {
                 VStack(spacing: 0) {
                     // Poświata sięga ~50 pt poza ikonę, a ScrollView tnie po
                     // swojej krawędzi — bez tego zapasu górna część cienia
@@ -60,9 +59,10 @@ struct AssistantWelcomeView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, WMPageMetrics.horizontal)
-
-                Spacer(minLength: 12)
+                .padding(.bottom, 12)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
 
             AssistantStickyFooter {
                 WMSoftButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)

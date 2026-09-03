@@ -157,14 +157,24 @@ struct AgentUsageByUserDTO: Decodable, Equatable, Identifiable {
 /// `GET /agent/usage` — „ile mi zostało" i kto ile zużył.
 struct AgentUsageDTO: Decodable, Equatable {
     let householdId: String
+    /// `YYYY-MM` (PRO) albo `trial` (jednorazowa pula na próbę).
     let period: String
-    let resetsAt: String
-    /// Dziś zawsze `FREE`; pole jest, żeby paywall nie zmieniał kontraktu.
+    /// Kiedy pula wraca; `nil` na próbie — nie odnawia się.
+    let resetsAt: String?
+    /// Czy pula wraca co miesiąc; starszy serwer nie oddaje pola (= tak).
+    let renews: Bool?
+    /// `TRIAL` albo `PRO` (starszy serwer: `FREE` = pula miesięczna).
     let tier: String
+    /// Skąd PRO: `SUBSCRIPTION`, `GRANTED` (nadanie), `ENV`; `TRIAL` na próbie.
+    let source: String?
     let messages: AgentQuotaDTO
     let plans: AgentQuotaDTO
     /// Rozkład na domowników w tym okresie; starszy serwer nie oddaje pola.
     let byUser: [AgentUsageByUserDTO]?
+
+    var isTrial: Bool { tier == "TRIAL" }
+    /// „Zarządzaj subskrypcją" ma sens tylko, gdy PRO pochodzi z App Store.
+    var showsManageSubscription: Bool { !isTrial && source == "SUBSCRIPTION" }
 }
 
 /// Domownik w arkuszu „Dla kogo liczyć" — z etykietą celu prosto z profilu.
