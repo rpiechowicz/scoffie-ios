@@ -211,6 +211,16 @@ enum UserFacingErrorMapper {
         "COOKIDOO_UPSTREAM_ERROR": "Cookidoo odpowiedziało błędem. Spróbuj ponownie za chwilę.",
         "COOKIDOO_UPSTREAM_TIMEOUT": "Cookidoo nie odpowiedziało w czasie. Spróbuj ponownie za chwilę.",
         "COOKIDOO_SUBSCRIPTION_INACTIVE": "Subskrypcja Cookidoo jest nieaktywna.",
+
+        // Płatności App Store. Kopie mówią, CO ZROBIĆ, a nie co się zepsuło —
+        // człowiek na ekranie zakupu chce wiedzieć, czy pobrano mu pieniądze.
+        "BILLING_DISABLED": "Zakupy są chwilowo niedostępne. Nie pobraliśmy żadnej płatności.",
+        "BILLING_IDENTITY_MISSING": "Subskrypcję można kupić po zalogowaniu przez Apple.",
+        "BILLING_TRANSACTION_INVALID": "Nie udało się potwierdzić tego zakupu w App Store.",
+        "BILLING_TRANSACTION_UNKNOWN": "App Store nie zna tego zakupu. Spróbuj „Przywróć zakupy”.",
+        "BILLING_TRANSACTION_TAKEN": "Ten zakup jest już przypisany do innego konta.",
+        "BILLING_UPSTREAM_UNAVAILABLE": "App Store nie odpowiada. Spróbuj ponownie za chwilę — zakup nie przepadnie.",
+        "BILLING_NOTIFICATION_INVALID": "Nie udało się potwierdzić powiadomienia o płatności.",
     ]
 
     // MARK: - Pomocnicze
