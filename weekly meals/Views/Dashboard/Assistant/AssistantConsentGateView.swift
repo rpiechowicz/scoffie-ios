@@ -25,6 +25,10 @@ struct AssistantConsentGateView: View {
     /// Krok „Zgoda" przepływu startowego — pigułkowy wskaźnik nad
     /// przyciskiem, ten sam co w kreatorze. Arkusz z menu wskaźnika nie ma.
     var showsStepper = false
+    /// „Wstecz" do hero (tylko w przepływie).
+    var onBack: (() -> Void)? = nil
+    /// „Dalej" po zapisanej zgodzie — gdy user wrócił tu z kart „Poznaj".
+    var onContinue: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -76,10 +80,17 @@ struct AssistantConsentGateView: View {
                 .padding(.top, 18)
             }
 
-            if isGranted {
+            if presentation == .inline, showsStepper {
+                AssistantIntroNavRow(onBack: onBack)
+            }
+
+            // Pasek „Zgoda włączona" tylko w arkuszu: w przepływie bramka
+            // znika chwilę po zapisie i pasek wjeżdżający w trakcie animacji
+            // wyjścia szarpał całą treścią.
+            if isGranted, presentation == .sheet {
                 statusBar
                     .padding(.horizontal, WMPageMetrics.horizontal)
-                    .padding(.top, presentation == .sheet ? 12 : 0)
+                    .padding(.top, 12)
                     .padding(.bottom, 4)
             }
 
@@ -311,7 +322,16 @@ struct AssistantConsentGateView: View {
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WMPalette.terracotta.opacity(0.12)))
             }
 
-            if isGranted {
+            if isGranted, presentation == .inline, showsStepper {
+                // Ta sama geometria co przed zapisem (wskaźnik + przycisk):
+                // podmiana tylko tytułu nie szarpie stopką w animacji wyjścia.
+                // Cofnięcie zgody zostaje w menu ⋯ → „Prywatność i zgoda".
+                WelcomeStepper(step: AssistantIntroSteps.consent, total: AssistantIntroSteps.total)
+                    .padding(.bottom, 8)
+                WMSoftButton(title: "Dalej", trailingIcon: "chevron.right") {
+                    onContinue?()
+                }
+            } else if isGranted {
                 AssistantTextButton(title: consents.isBusy ? "Cofam…" : "Cofnij zgodę", role: .destructive) {
                     confirmsRevoke = true
                 }

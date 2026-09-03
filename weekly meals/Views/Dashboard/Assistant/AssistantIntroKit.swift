@@ -29,6 +29,44 @@ enum AssistantIntroState {
     }
 }
 
+/// Wiersz nawigacji kroku: „Wstecz" po lewej, opcjonalnie „Pomiń" po
+/// prawej. Kreator „Poznajmy się" ma „Wstecz" w pasku nawigacji; tu paska
+/// nie ma (nagłówek zakładki), więc wiersz siedzi tuż pod nim.
+struct AssistantIntroNavRow: View {
+    var onBack: (() -> Void)? = nil
+    var trailingTitle: String? = nil
+    var onTrailing: (() -> Void)? = nil
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack {
+            if let onBack {
+                Button(action: onBack) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Wstecz")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            if let trailingTitle, let onTrailing {
+                Button(trailingTitle, action: onTrailing)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.wmMuted(scheme))
+            }
+        }
+        .frame(minHeight: 22)
+        .padding(.horizontal, WMPageMetrics.horizontal)
+        .padding(.bottom, 6)
+    }
+}
+
 /// Duża ikona AI: kafelek z gradientem terracotta, obrysem, cieniem
 /// i poświatą pod spodem. Jedyny element w aplikacji, który wygląda jak
 /// zaproszenie — dlatego tylko na hero.

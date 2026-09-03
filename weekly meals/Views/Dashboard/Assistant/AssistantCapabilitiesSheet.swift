@@ -22,6 +22,8 @@ struct AssistantCapabilitiesSheet: View {
     let onAsk: (String) -> Void
     /// „Napisz do asystenta" — fokus na polu po zamknięciu.
     var onCompose: (() -> Void)? = nil
+    /// „Wstecz" do ostatniej karty „Poznaj" (tylko inline).
+    var onBack: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -41,6 +43,10 @@ struct AssistantCapabilitiesSheet: View {
     }
 
     private var content: some View {
+        VStack(spacing: 0) {
+            if presentation == .inline {
+                AssistantIntroNavRow(onBack: onBack)
+            }
             ZStack(alignment: .bottom) {
                 if presentation == .sheet {
                     WMPageBackground(scheme: scheme).ignoresSafeArea()
@@ -84,6 +90,7 @@ struct AssistantCapabilitiesSheet: View {
 
                 footer
             }
+        }
     }
 
     // MARK: - Jedna zasada

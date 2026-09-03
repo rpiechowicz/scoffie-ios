@@ -11,8 +11,15 @@ struct AssistantHowItWorksView: View {
     /// Krok „Poznaj" przepływu startowego — wskaźnik liczy karty jako
     /// kroki 2–7 całego przepływu; jako arkusz z menu liczy tylko karty.
     var showsStepBar = false
-    /// „Zaczynajmy" / zamknięcie arkusza.
+    /// Karta, od której zacząć — powrót z „Co potrafi" ląduje na ostatniej.
+    var startCard = 0
+    /// Ostatnia karta → dalej („Zobacz, co potrafi") / zamknięcie arkusza.
     let onFinish: () -> Void
+    /// „Pomiń" — kończy cały przepływ (domyślnie to samo, co `onFinish`).
+    var onSkip: (() -> Void)? = nil
+    /// „Wstecz" z pierwszej karty — do kroku „Zgoda".
+    var onBack: (() -> Void)? = nil
+    var onCardChange: ((Int) -> Void)? = nil
     var onShowCapabilities: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -38,23 +45,27 @@ struct AssistantHowItWorksView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            HStack {
-                if presentation == .sheet {
+            if presentation == .sheet {
+                HStack {
                     Text("Jak działa asystent")
                         .font(.system(size: 17, weight: .bold))
                         .tracking(-0.4)
                         .foregroundStyle(Color.wmLabel(scheme))
+                    Spacer()
+                    Button("Zamknij") { finish() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.wmMuted(scheme))
                 }
-                Spacer()
-                Button(presentation == .sheet ? "Zamknij" : "Pomiń") {
-                    finish()
-                }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .padding(.horizontal, WMPageMetrics.horizontal)
+                .padding(.top, 18)
+                .padding(.bottom, 6)
+            } else {
+                AssistantIntroNavRow(
+                    onBack: { back() },
+                    trailingTitle: "Pomiń",
+                    onTrailing: { (onSkip ?? onFinish)() }
+                )
             }
-            .padding(.horizontal, WMPageMetrics.horizontal)
-            .padding(.top, presentation == .sheet ? 18 : 0)
-            .padding(.bottom, 6)
 
             // Karta wypełnia całą wolną wysokość (a przewija się dopiero, gdy
             // treść jest wyższa) — mała karta na środku pustej sekcji
@@ -83,12 +94,23 @@ struct AssistantHowItWorksView: View {
                 .padding(.bottom, 8)
 
                 WMSoftButton(
-                    title: isLast ? (presentation == .sheet ? "Zamknij" : "Zaczynajmy") : "Dalej",
-                    trailingIcon: isLast ? nil : "chevron.right"
+                    title: isLast ? (presentation == .sheet ? "Zamknij" : "Zobacz, co potrafi") : "Dalej",
+                    trailingIcon: isLast && presentation == .sheet ? nil : "chevron.right"
                 ) {
                     if isLast { finish() } else { withAnimation { step += 1 } }
                 }
             }
+        }
+        .onAppear { step = min(max(0, startCard), cards.count - 1) }
+        .onChange(of: step) { _, value in onCardChange?(value) }
+    }
+
+    /// Karta wstecz; z pierwszej — do poprzedniego kroku przepływu.
+    private func back() {
+        if step > 0 {
+            withAnimation { step -= 1 }
+        } else {
+            onBack?()
         }
     }
 
