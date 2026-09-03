@@ -95,11 +95,7 @@ struct AssistantView: View {
                                 consents: consents,
                                 source: "IOS_ASSISTANT_GATE",
                                 presentation: .inline,
-                                onGranted: {
-                                    store.consentGranted()
-                                    if store.retryText != nil { retry() }
-                                    continueAfterConsent()
-                                },
+                                onGranted: { continueAfterConsent() },
                                 showsStepper: true,
                                 onBack: { goToStep(.hero) },
                                 onContinue: { continueAfterConsent() }
@@ -200,7 +196,14 @@ struct AssistantView: View {
                 AssistantConsentGateView(
                     consents: consents,
                     source: "IOS_ASSISTANT_MENU",
-                    presentation: .sheet
+                    presentation: .sheet,
+                    // Zgoda włączona z menu (np. po cofnięciu) musi zdjąć
+                    // blokadę 403 w store — inaczej zakładka dalej pokazywała
+                    // bramkę mimo zapisanej zgody.
+                    onGranted: {
+                        showConsentReview = false
+                        continueAfterConsent()
+                    }
                 )
             }
         }
@@ -287,6 +290,10 @@ struct AssistantView: View {
     /// ją ponownie (albo dostał 403 w środku rozmowy), wraca prosto do
     /// rozmowy — onboarding i „Od czego zaczniemy?" zostają pod menu ⋯.
     private func continueAfterConsent() {
+        // Zdejmuje blokadę 403 (`needsConsent`) także wtedy, gdy zgoda była
+        // już zapisana po stronie serwera, a store o tym nie wiedział.
+        store.consentGranted()
+        if store.retryText != nil { retry() }
         if onboardingSeen {
             finishIntro()
         } else {
