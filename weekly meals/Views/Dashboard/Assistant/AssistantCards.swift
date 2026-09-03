@@ -223,63 +223,6 @@ private struct RemovalsSection: View {
     }
 }
 
-/// Karta, w której nie ma już czego kliknąć — z powodem.
-///
-/// Sam wyszarzony przycisk mówiłby „nie da się" i nic więcej. Tydzień
-/// zmieniony przez kogoś w domu, wygaśnięcie i zapis to trzy różne historie
-/// i tylko po nazwie tej właściwej wiadomo, co zrobić dalej.
-struct AssistantCardStatusFooter: View {
-    let state: AgentCardStateDTO
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(tint)
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.wmMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
-        }
-    }
-
-    private var icon: String {
-        switch state.status {
-        case "APPLIED": return "checkmark.circle.fill"
-        case "UNDONE": return "arrow.uturn.backward.circle"
-        default: return "clock.badge.exclamationmark"
-        }
-    }
-
-    private var tint: Color {
-        switch state.status {
-        case "APPLIED": return WMPalette.sage
-        case "UNDONE": return Color.wmFaint(scheme)
-        default: return WMPalette.butter
-        }
-    }
-
-    private var text: String {
-        switch state.status {
-        case "APPLIED": return "Ta propozycja jest już w planie."
-        case "UNDONE": return "Zapis został cofnięty."
-        case "STALE": return "Plan zmienił się od czasu tej propozycji."
-        case "EXPIRED": return "Ta propozycja jest już nieaktualna."
-        case "FAILED": return "Tej propozycji nie udało się zapisać."
-        default: return "Tej propozycji nie da się już zatwierdzić."
-        }
-    }
-}
-
 // MARK: - Propozycja tygodnia
 
 /// Propozycja planu — tydzień do obejrzenia, zanim cokolwiek się zapisze.

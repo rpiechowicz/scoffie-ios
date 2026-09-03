@@ -610,8 +610,6 @@ struct AssistantView: View {
         let originalText: String
     }
 
-    private static let photoOnlyQuestion = "Co z tego ugotuję?"
-
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, store.canSend else { return }
@@ -722,12 +720,6 @@ struct AssistantView: View {
     private static let errorAnchor = "assistant.error"
     private static let bottomAnchor = "assistant.bottom"
     private static let tailAnchor = "assistant.tail"
-
-    private static let suggestions = [
-        "Zaplanuj mi obiady i kolacje na ten tydzień",
-        "Podmień kolację we wtorek na coś do 30 minut",
-        "Czego brakuje w planie, żeby wyrobić się z białkiem?",
-    ]
 
     private static let followUpSuggestions = [
         "Podmień jedno danie",

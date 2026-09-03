@@ -80,11 +80,11 @@ struct AssistantHeader: View {
                 // W rozmowie „nowa” jest częstsza niż menu — i to ona wygrywa
                 // miejsce przy krawędzi, bo menu zostaje pod tym samym gestem
                 // w pustym stanie.
-                EditorialIconButton(icon: "square.and.pencil", action: onNewConversation)
-                EditorialIconButton(icon: "clock.arrow.circlepath", action: onHistory)
+                EditorialIconButton(icon: "square.and.pencil", accessibilityTitle: "Nowa rozmowa", action: onNewConversation)
+                EditorialIconButton(icon: "clock.arrow.circlepath", accessibilityTitle: "Historia rozmów", action: onHistory)
             } else {
-                EditorialIconButton(icon: "clock.arrow.circlepath", action: onHistory)
-                EditorialIconButton(icon: "ellipsis", action: onMore)
+                EditorialIconButton(icon: "clock.arrow.circlepath", accessibilityTitle: "Historia rozmów", action: onHistory)
+                EditorialIconButton(icon: "ellipsis", accessibilityTitle: "Więcej opcji asystenta", action: onMore)
             }
         }
         .fixedSize(horizontal: true, vertical: false)

@@ -60,7 +60,10 @@ struct EditorialRecipesHeader: View {
             // 43 pt, nie domyślne 38 — tyle mierzy pigułka filtra w rzędzie
             // niżej (19 pt treści + 2 × 12 pt paddingu). Przy 38 pt oba
             // przyciski wyglądały na dwa różne rozmiary tej samej rzeczy.
-            size: 43
+            size: 43,
+            accessibilityTitle: isPersonalizationActive
+                ? "Personalizacja przepisów, włączona"
+                : "Personalizacja przepisów"
         ) {
             onOpenPersonalization?()
         }
