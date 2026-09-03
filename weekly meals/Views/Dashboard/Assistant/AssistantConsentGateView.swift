@@ -80,10 +80,6 @@ struct AssistantConsentGateView: View {
                 .padding(.top, 18)
             }
 
-            if presentation == .inline, showsStepper {
-                AssistantIntroNavRow(onBack: onBack)
-            }
-
             // Pasek „Zgoda włączona" tylko w arkuszu: w przepływie bramka
             // znika chwilę po zapisie i pasek wjeżdżający w trakcie animacji
             // wyjścia szarpał całą treścią.
@@ -328,8 +324,13 @@ struct AssistantConsentGateView: View {
                 // Cofnięcie zgody zostaje w menu ⋯ → „Prywatność i zgoda".
                 WelcomeStepper(step: AssistantIntroSteps.consent, total: AssistantIntroSteps.total)
                     .padding(.bottom, 8)
-                WMSoftButton(title: "Dalej", trailingIcon: "chevron.right") {
-                    onContinue?()
+                HStack(spacing: 10) {
+                    if let onBack {
+                        WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz", action: onBack)
+                    }
+                    WMSoftButton(title: "Dalej", trailingIcon: "chevron.right") {
+                        onContinue?()
+                    }
                 }
             } else if isGranted {
                 AssistantTextButton(title: consents.isBusy ? "Cofam…" : "Cofnij zgodę", role: .destructive) {
@@ -341,13 +342,18 @@ struct AssistantConsentGateView: View {
                     WelcomeStepper(step: AssistantIntroSteps.consent, total: AssistantIntroSteps.total)
                         .padding(.bottom, 8)
                 }
-                WMSoftButton(
-                    title: "Włącz asystenta",
-                    leadingIcon: "sparkles",
-                    isEnabled: canGrant && !consents.isBusy,
-                    isLoading: consents.isBusy,
-                    action: grant
-                )
+                HStack(spacing: 10) {
+                    if presentation == .inline, let onBack {
+                        WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz", action: onBack)
+                    }
+                    WMSoftButton(
+                        title: "Włącz asystenta",
+                        leadingIcon: "sparkles",
+                        isEnabled: canGrant && !consents.isBusy,
+                        isLoading: consents.isBusy,
+                        action: grant
+                    )
+                }
                 .accessibilityHint(canGrant ? "" : "Najpierw zaznacz oba potwierdzenia")
             }
         }
