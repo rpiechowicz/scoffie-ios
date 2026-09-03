@@ -191,7 +191,7 @@ struct AssistantView: View {
         .sheet(isPresented: $showCapabilities) {
             AssistantCapabilitiesSheet(
                 store: store,
-                onAsk: { text in ask(text) },
+                onAsk: { text in askFromSheet(text) },
                 onCompose: { isComposerFocused = true }
             )
         }
@@ -199,7 +199,7 @@ struct AssistantView: View {
             AssistantHowItWorksView(
                 presentation: .sheet,
                 onFinish: { onboardingSeen = true },
-                onAsk: { text in ask(text) },
+                onAsk: { text in askFromSheet(text) },
                 onShowCapabilities: {
                     showHowItWorks = false
                     showCapabilities = true
@@ -236,15 +236,25 @@ struct AssistantView: View {
             mode: (store.messages.isEmpty || currentStep != nil) ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
         ) {
-            Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
-            Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
+            // W przepływie startowym (przed zgodą albo w kartach) menu ma
+            // tylko to, co wtedy działa — „Nowa rozmowa" czy „Usuń historię"
+            // bez zgody kończyły się 403 albo pustym arkuszem.
+            let inIntro = currentStep != nil
+            if !inIntro {
+                Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
+                Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
+            }
             Button { showCapabilities = true } label: { Label("Co potrafi asystent", systemImage: "sparkles") }
             Button { showHowItWorks = true } label: { Label("Jak działa asystent", systemImage: "questionmark.bubble") }
-            Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
-            Button { showUsage = true } label: { Label("Limity asystenta", systemImage: "chart.bar") }
+            if !inIntro {
+                Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
+                Button { showUsage = true } label: { Label("Limity asystenta", systemImage: "chart.bar") }
+            }
             Button { showConsentReview = true } label: { Label("Prywatność i zgoda", systemImage: "lock.shield") }
-            Divider()
-            Button(role: .destructive) { showDeleteAlert = true } label: { Label("Usuń historię rozmów", systemImage: "trash") }
+            if !inIntro {
+                Divider()
+                Button(role: .destructive) { showDeleteAlert = true } label: { Label("Usuń historię rozmów", systemImage: "trash") }
+            }
         }
     }
 
@@ -281,6 +291,19 @@ struct AssistantView: View {
         } else {
             goToStep(.cards)
         }
+    }
+
+    /// Przykład stuknięty w arkuszu z menu. Bez zgody nie ma czego wysyłać
+    /// (serwer odpowie 403) — zamiast tego prowadzi do kroku „Zgoda";
+    /// w trakcie kart kończy przepływ i wysyła.
+    private func askFromSheet(_ text: String) {
+        if gateActive {
+            welcomeSeen = true
+            goToStep(.consent)
+            return
+        }
+        if currentStep != nil { finishIntro() }
+        ask(text)
     }
 
     /// „Zaczynajmy" / „Pomiń": rozmowa z kursorem w polu.

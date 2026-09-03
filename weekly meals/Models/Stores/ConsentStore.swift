@@ -19,6 +19,33 @@ final class ConsentStore {
 
     init(client: ConsentsAPIClient) {
         self.client = client
+        // Ostatni znany stan z telefonu: bez sieci przy starcie ktoś ze
+        // zgodą widział hero i bramkę, a „Włącz asystenta" kończyło się
+        // błędem. Serwer i tak nadpisze to przy pierwszej odpowiedzi.
+        let cached = Self.loadCache()
+        if !cached.isEmpty {
+            statuses = cached
+            isLoaded = true
+        }
+    }
+
+    // MARK: - Pamięć podręczna
+
+    private static let cacheKey = "consents.status.cache.v1"
+
+    private static func loadCache() -> [ConsentStatusDTO] {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey) else { return [] }
+        return (try? JSONDecoder().decode([ConsentStatusDTO].self, from: data)) ?? []
+    }
+
+    private func saveCache() {
+        guard let data = try? JSONEncoder().encode(statuses) else { return }
+        UserDefaults.standard.set(data, forKey: Self.cacheKey)
+    }
+
+    /// Przy wylogowaniu — stan zgód jest per konto.
+    static func clearCache() {
+        UserDefaults.standard.removeObject(forKey: cacheKey)
     }
 
     /// Wersja dokumentów, na którą użytkownik się zgadza — ta sama, co w
@@ -37,6 +64,7 @@ final class ConsentStore {
         do {
             statuses = try await client.status()
             isLoaded = true
+            saveCache()
         } catch {
             // Brak sieci nie może „cofać" zgody w oczach użytkownika —
             // zostaje poprzedni stan (albo nieznany, gdy to pierwszy odczyt).
@@ -69,6 +97,7 @@ final class ConsentStore {
                 )
             }
             isLoaded = true
+            saveCache()
             return nil
         } catch {
             // Kod błędu do komunikatu: przy diagnozie „nie zapisuje się" liczy

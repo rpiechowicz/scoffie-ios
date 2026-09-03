@@ -1664,6 +1664,7 @@ final class SessionStore {
         // Hero i onboarding asystenta są per konto, nie per telefon: kolejny
         // użytkownik (albo ten sam po usunięciu konta) ma je zobaczyć od nowa.
         AssistantIntroState.reset()
+        ConsentStore.clearCache()
         // Usuń tokeny z Keychain
         KeychainService.delete(forKey: Keys.accessToken)
         KeychainService.delete(forKey: Keys.refreshToken)
@@ -2132,6 +2133,7 @@ final class SessionStore {
     /// (`code: "VALIDATION_ERROR"`), więc nowa wartość enuma musi najpierw
     /// wyjść na backend.
     @MainActor
+    @discardableResult
     func saveUserPreferences(
         diet: String? = nil,
         calorieGoal: Int? = nil,
@@ -2150,8 +2152,8 @@ final class SessionStore {
         /// trzymać moje wartości i licz za mnie". Bez tego nie dałoby się
         /// wrócić do automatu, bo `nil` w parametrze znaczy „nie ruszaj".
         clearMacroOverrides: Bool = false
-    ) async {
-        guard let userId = currentUserId, !userId.isEmpty else { return }
+    ) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
 
         // Mirror to AppStorage so the welcome flow survives a kill-restart
         // mid-flow and SettingsView reads the latest values without a
@@ -2228,7 +2230,7 @@ final class SessionStore {
                 defaults.set(carbsG, forKey: PreferencesKeys.carbsG)
             }
         }
-        guard !data.isEmpty else { return }
+        guard !data.isEmpty else { return true }
 
         let socket = sessionSocket()
 
@@ -2246,9 +2248,11 @@ final class SessionStore {
                 print("[SessionStore] users:preferences:update odrzucone: \(envelope.code ?? "?") \(envelope.error ?? "") requestId=\(envelope.requestId ?? "-")")
                 #endif
             }
+            return envelope.ok
         } catch {
-            // Swallow — local AppStorage is already updated optimistically.
-            // We retry on the next change.
+            // AppStorage jest już zaktualizowany optymistycznie; wynik mówi
+            // wywołującemu (kreator), że serwer tego jeszcze nie ma.
+            return false
         }
     }
 
@@ -2315,6 +2319,7 @@ final class SessionStore {
     /// Persist the profile slice (display name + biometrics) for the
     /// welcome flow's step 1. Updates AppStorage immediately, then mirrors
     /// to the backend via `users:profile:update`.
+    @discardableResult
     @MainActor
     func saveProfile(
         displayName: String? = nil,
@@ -2322,8 +2327,8 @@ final class SessionStore {
         heightCm: Int? = nil,
         weightKg: Double? = nil,
         sex: String? = nil
-    ) async {
-        guard let userId = currentUserId, !userId.isEmpty else { return }
+    ) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
 
         var data: [String: Any] = [:]
         if let displayName {
@@ -2357,20 +2362,21 @@ final class SessionStore {
             data["sex"] = sex.uppercased()
             UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
         }
-        guard !data.isEmpty else { return }
+        guard !data.isEmpty else { return true }
 
         let socket = sessionSocket()
 
         do {
-            let _: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
+            let envelope: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
                 event: "users:profile:update",
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserProfileDTO>.self
             )
+            return envelope.ok
         } catch {
-            // Swallow — AppStorage is already updated optimistically. The
-            // user can keep going through the welcome flow even on flaky
-            // networks; the next `users:me` will reconcile.
+            // AppStorage jest już zaktualizowany optymistycznie; kreator
+            // pokaże ostrzeżenie i ponowi przy następnym „Dalej".
+            return false
         }
     }
 
