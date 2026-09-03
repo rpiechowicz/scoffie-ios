@@ -288,7 +288,7 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("bezpieczeństwo, wykrywanie nadużyć, limity użycia i ochrona sesji — prawnie uzasadniony interes, art. 6 ust. 1 lit. f RODO,")
                 LegalBullet("obsługa zgłoszeń i realizacja praw — art. 6 ust. 1 lit. b i f RODO,")
                 LegalBullet("wykazanie udzielonych zgód i akceptacji dokumentów — obowiązek prawny, art. 6 ust. 1 lit. c w zw. z art. 7 ust. 1 RODO.")
-                LegalParagraph("Zgody można cofnąć w każdej chwili w Aplikacji (zgoda na asystenta: menu asystenta → „Zgoda na asystenta”; integracje: Ustawienia) lub pisząc do Administratora; cofnięcie nie wpływa na zgodność z prawem przetwarzania sprzed cofnięcia.")
+                LegalParagraph("Zgody można cofnąć w każdej chwili w Aplikacji (zgoda na asystenta: menu asystenta → „Prywatność i zgoda”; integracje: Ustawienia) lub pisząc do Administratora; cofnięcie nie wpływa na zgodność z prawem przetwarzania sprzed cofnięcia.")
             }
         }
 

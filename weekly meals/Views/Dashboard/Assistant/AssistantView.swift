@@ -39,8 +39,14 @@ struct AssistantView: View {
     @State private var showMemory = false
     @State private var showUsage = false
     @State private var showMoreMenu = false
-    /// „Zgoda na asystenta" z menu — włączenie i cofnięcie bez Ustawień.
-    @State private var showConsentSheet = false
+    /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
+    @State private var showConsentReview = false
+    /// „Co potrafi asystent" — z menu, z bramki zgody i z onboardingu.
+    @State private var showCapabilities = false
+    /// „Jak działa asystent" — te same karty co onboarding, z menu.
+    @State private var showHowItWorks = false
+    /// Onboarding pokazywany raz, tuż po włączeniu zgody.
+    @AppStorage("assistant.onboarding.seen") private var onboardingSeen = false
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
@@ -55,8 +61,30 @@ struct AssistantView: View {
 
             VStack(spacing: 0) {
                 header
-                conversation
-                composer
+                // Bramka zgody to STAN ZAKŁADKI, nie arkusz: bez zgody nie ma
+                // rozmowy, więc nie ma czego zasłaniać. Po zgodzie raz karty
+                // „jak to działa", potem rozmowa.
+                if gateActive, let consents = sessionStore.consentStore {
+                    AssistantConsentGateView(
+                        consents: consents,
+                        source: "IOS_ASSISTANT_GATE",
+                        presentation: .inline,
+                        onGranted: {
+                            store.consentGranted()
+                            if store.retryText != nil { retry() }
+                        },
+                        onShowCapabilities: { showCapabilities = true }
+                    )
+                } else if !onboardingSeen {
+                    AssistantHowItWorksView(
+                        presentation: .inline,
+                        onFinish: { onboardingSeen = true },
+                        onShowCapabilities: { showCapabilities = true }
+                    )
+                } else {
+                    conversation
+                    composer
+                }
             }
             // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam, gdzie na
             // pozostałych zakładkach. Tam robi to ScrollView z tym samym
@@ -88,9 +116,12 @@ struct AssistantView: View {
             Button("Nowa rozmowa") {
                 Task { await store.startNewConversation() }
             }
-            Button("Co asystent pamięta") { showMemory = true }
+            Button("Historia rozmów") { showConversations = true }
+            Button("Co potrafi asystent") { showCapabilities = true }
+            Button("Jak działa asystent") { showHowItWorks = true }
+            Button("Pamięć domu") { showMemory = true }
             Button("Limity asystenta") { showUsage = true }
-            Button("Zgoda na asystenta") { showConsentSheet = true }
+            Button("Prywatność i zgoda") { showConsentReview = true }
             Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
             Button("Anuluj", role: .cancel) {}
         }
@@ -110,29 +141,36 @@ struct AssistantView: View {
         .sheet(isPresented: $showMemory) {
             AssistantMemorySheet(store: store)
         }
-        .sheet(isPresented: $showConsentSheet) {
+        .sheet(isPresented: $showConsentReview) {
             if let consents = sessionStore.consentStore {
-                AssistantConsentSheet(consents: consents, source: "IOS_ASSISTANT_MENU")
-            }
-        }
-        // Bramka zgody: 403 z serwera otwiera arkusz, a po zgodzie wiadomość
-        // idzie ponownie z tego samego tekstu (`retry`).
-        .sheet(
-            isPresented: Binding(
-                get: { store.needsConsent },
-                set: { if !$0 { store.consentDismissed() } }
-            )
-        ) {
-            if let consents = sessionStore.consentStore {
-                AssistantConsentSheet(
+                AssistantConsentGateView(
                     consents: consents,
-                    source: "IOS_ASSISTANT_GATE",
-                    onGranted: {
-                        store.consentGranted()
-                        retry()
+                    source: "IOS_ASSISTANT_MENU",
+                    presentation: .sheet,
+                    onShowCapabilities: {
+                        showConsentReview = false
+                        showCapabilities = true
                     }
                 )
             }
+        }
+        .sheet(isPresented: $showCapabilities) {
+            AssistantCapabilitiesSheet(
+                store: store,
+                onAsk: { text in ask(text) },
+                onCompose: { isComposerFocused = true },
+                onShowLimits: { showUsage = true }
+            )
+        }
+        .sheet(isPresented: $showHowItWorks) {
+            AssistantHowItWorksView(
+                presentation: .sheet,
+                onFinish: { onboardingSeen = true },
+                onShowCapabilities: {
+                    showHowItWorks = false
+                    showCapabilities = true
+                }
+            )
         }
         .sheet(item: $reporting) { message in
             AssistantReportSheet(message: message) { reason, comment in
@@ -163,6 +201,14 @@ struct AssistantView: View {
             onHistory: { showConversations = true },
             onMore: { showMoreMenu = true }
         )
+    }
+
+    /// Bez zgody (403 z serwera albo stan z `/me/consents`) zakładka pokazuje
+    /// bramkę. Zanim stan zgód się wczyta, nie zgadujemy — pokazujemy rozmowę.
+    private var gateActive: Bool {
+        if store.needsConsent { return true }
+        guard let consents = sessionStore.consentStore else { return false }
+        return consents.isLoaded && !consents.assistantGranted
     }
 
     private var conversationTitle: String? {
@@ -446,6 +492,13 @@ struct AssistantView: View {
     private var composer: some View {
         VStack(spacing: 0) {
             Divider().overlay(Color.wmRule(scheme))
+
+            // Cztery szybkie starty nad chipami zakresu — tylko w pustej
+            // rozmowie; znikają po pierwszej wiadomości.
+            if store.messages.isEmpty, !store.isSending {
+                AssistantQuickReplies(items: AssistantCapabilities.quickStarts, onTap: ask)
+                    .padding(.top, 10)
+            }
 
             // Zakres widoczny PRZED odpowiedzią: bez tego użytkownik dowiaduje
             // się, o który tydzień i o kogo chodziło, dopiero z wyniku.
