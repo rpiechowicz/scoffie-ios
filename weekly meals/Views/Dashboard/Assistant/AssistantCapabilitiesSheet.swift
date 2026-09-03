@@ -2,21 +2,21 @@ import SwiftUI
 
 /// „Co potrafi asystent" — arkusz z menu ⋯, z bramki zgody i z ostatniej
 /// karty onboardingu. Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
-/// cztery grupy umiejętności jako akordeony, zasady gry, limity domu
-/// i prywatność. Przykład w rozwiniętym wierszu jest przyciskiem: ekran
-/// pomocy kończy się pierwszą wiadomością, nie czytaniem.
+/// cztery grupy umiejętności jako akordeony (wszystkie zwinięte na start),
+/// zasady gry i prywatność. Limitów tu nie ma — to ekran „co", nie „ile",
+/// i widzi go też ktoś, kto asystenta jeszcze nie włączył. Przykład
+/// w rozwiniętym wierszu jest przyciskiem: ekran pomocy kończy się pierwszą
+/// wiadomością, nie czytaniem.
 struct AssistantCapabilitiesSheet: View {
     let store: AgentStore
     /// Wysyła przykład jako wiadomość (arkusz sam się zamyka).
     let onAsk: (String) -> Void
     /// „Napisz do asystenta" — fokus na polu po zamknięciu.
     var onCompose: (() -> Void)? = nil
-    var onShowLimits: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
-    @State private var openId: String? = "week"
-    @State private var usage: AgentUsageDTO?
+    @State private var openId: String?
 
     var body: some View {
         NavigationStack {
@@ -36,7 +36,6 @@ struct AssistantCapabilitiesSheet: View {
                         }
 
                         rulesCard
-                        limitsCard
                         privacyCard
                     }
                     .padding(.horizontal, 20)
@@ -50,7 +49,6 @@ struct AssistantCapabilitiesSheet: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)
-        .task { usage = await store.loadUsage() }
     }
 
     // MARK: - Jedna zasada
@@ -68,12 +66,14 @@ struct AssistantCapabilitiesSheet: View {
                 .foregroundStyle(Color.wmMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
 
+            // Trzy równe pola z „Dodaj do planu" ucinały tekst na węższych
+            // ekranach — etykiety są krótkie, a chip bierze tyle, ile potrzebuje.
             HStack(spacing: 6) {
                 ruleStep("Piszesz", icon: "arrow.up", filled: false)
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.wmFaint(scheme))
+                ruleArrow
                 ruleStep("Karta", icon: "rectangle.stack", filled: false)
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.wmFaint(scheme))
-                ruleStep("Dodaj do planu", icon: "checkmark", filled: true)
+                ruleArrow
+                ruleStep("Dodajesz", icon: "checkmark", filled: true)
             }
             .padding(.top, 8)
         }
@@ -83,11 +83,22 @@ struct AssistantCapabilitiesSheet: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(WMPalette.terracotta.opacity(0.28), lineWidth: 1))
     }
 
+    private var ruleArrow: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color.wmFaint(scheme))
+            .fixedSize()
+    }
+
     private func ruleStep(_ title: String, icon: String, filled: Bool) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 11, weight: .bold))
-            Text(title).font(.system(size: 11.5, weight: .bold)).lineLimit(1)
+            Text(title)
+                .font(.system(size: 11.5, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
+        .padding(.horizontal, 10)
         .foregroundStyle(filled ? Color.wmPageBase(scheme) : Color.wmLabel(scheme))
         .frame(maxWidth: .infinity)
         .frame(height: 34)
@@ -188,57 +199,6 @@ struct AssistantCapabilitiesSheet: View {
         }
     }
 
-    private var limitsCard: some View {
-        AssistantSurfaceCard {
-            HStack(alignment: .firstTextBaseline) {
-                AssistantSectionLabel(text: "Limity domu", color: WMPalette.indigo)
-                Spacer()
-                if let usage {
-                    Text("odnowienie \(AssistantUsageSheet.resetLabel(usage.resetsAt))")
-                        .font(.system(size: 11.5)).foregroundStyle(Color.wmFaint(scheme))
-                }
-            }
-            .padding(.horizontal, 14).padding(.top, 12)
-
-            HStack(spacing: 14) {
-                meter(n: usage?.messages.used ?? 0, of: usage?.messages.limit ?? 0, label: "wiadomości w tym miesiącu", color: WMPalette.terracotta)
-                Rectangle().fill(Color.wmRule(scheme)).frame(width: 1)
-                meter(n: usage?.plans.used ?? 0, of: usage?.plans.limit ?? 0, label: "zapisanych planów", color: WMPalette.sage)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .redacted(reason: usage == nil ? .placeholder : [])
-
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "person.2.fill").font(.system(size: 12, weight: .semibold))
-                Text("Pula wspólna dla całego domu. Oglądanie propozycji nie zużywa planów — tylko „Dodaj do planu”.")
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .font(.system(size: 12.5))
-            .foregroundStyle(Color.wmMuted(scheme))
-            .padding(.horizontal, 14).padding(.top, 9).padding(.bottom, 11)
-            .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
-        }
-    }
-
-    private func meter(n: Int, of total: Int, label: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(n)").font(.system(size: 26, weight: .bold)).tracking(-0.8).monospacedDigit().foregroundStyle(Color.wmLabel(scheme))
-                Text("z \(total)").font(.system(size: 12.5)).monospacedDigit().foregroundStyle(Color.wmMuted(scheme))
-            }
-            Text(label).font(.system(size: 12)).foregroundStyle(Color.wmMuted(scheme))
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.wmBarTrack(scheme))
-                    Capsule().fill(color).frame(width: geometry.size.width * (total > 0 ? min(1, Double(n) / Double(total)) : 0))
-                }
-            }
-            .frame(height: 5)
-            .padding(.top, 6)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var privacyCard: some View {
         AssistantSurfaceCard {
             AssistantSectionLabel(text: "Prywatność", color: WMPalette.sage)
@@ -267,13 +227,6 @@ struct AssistantCapabilitiesSheet: View {
                 dismiss()
                 onCompose?()
             }
-            if let onShowLimits {
-                AssistantTextButton(title: "Zobacz limity") {
-                    dismiss()
-                    onShowLimits()
-                }
-            }
         }
-        .padding(.bottom, 12)
     }
 }

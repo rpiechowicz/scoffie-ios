@@ -85,7 +85,6 @@ struct AssistantHowItWorksView: View {
                     if isLast { finish() } else { withAnimation { step += 1 } }
                 }
             }
-            .padding(.bottom, presentation == .sheet ? 12 : 0)
         }
     }
 

@@ -149,8 +149,7 @@ struct AssistantView: View {
             AssistantCapabilitiesSheet(
                 store: store,
                 onAsk: { text in ask(text) },
-                onCompose: { isComposerFocused = true },
-                onShowLimits: { showUsage = true }
+                onCompose: { isComposerFocused = true }
             )
         }
         .sheet(isPresented: $showHowItWorks) {
@@ -192,7 +191,6 @@ struct AssistantView: View {
             // „Zanim zaczniemy" wyglądał na błąd).
             mode: (store.messages.isEmpty || gateActive || !onboardingSeen) ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
-            onHistory: { showConversations = true }
         ) {
             Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
             Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }

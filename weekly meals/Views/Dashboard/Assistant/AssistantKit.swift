@@ -22,7 +22,6 @@ struct AssistantHeader<MenuContent: View>: View {
 
     let mode: Mode
     var onNewConversation: () -> Void
-    var onHistory: () -> Void
     /// Pozycje menu ⋯ — systemowe `Menu` z ikonami (projekt „Asystent Zgoda"),
     /// nie arkusz z dołu: siedem pozycji czyta się szybciej przy przycisku.
     @ViewBuilder var menu: () -> MenuContent
@@ -86,7 +85,7 @@ struct AssistantHeader<MenuContent: View>: View {
                 EditorialIconButton(icon: "square.and.pencil", accessibilityTitle: "Nowa rozmowa", action: onNewConversation)
                 menuButton
             } else {
-                EditorialIconButton(icon: "clock.arrow.circlepath", accessibilityTitle: "Historia rozmów", action: onHistory)
+                // Historia siedzi w menu ⋯ — drugi przycisk obok tylko dublował wejście.
                 menuButton
             }
         }
