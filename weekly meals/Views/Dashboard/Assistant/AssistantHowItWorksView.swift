@@ -61,7 +61,6 @@ struct AssistantHowItWorksView: View {
                 .padding(.bottom, 6)
             } else {
                 AssistantIntroNavRow(
-                    onBack: { back() },
                     trailingTitle: "Pomiń",
                     onTrailing: { (onSkip ?? onFinish)() }
                 )
@@ -93,11 +92,18 @@ struct AssistantHowItWorksView: View {
                 )
                 .padding(.bottom, 8)
 
-                WMSoftButton(
-                    title: isLast ? (presentation == .sheet ? "Zamknij" : "Zobacz, co potrafi") : "Dalej",
-                    trailingIcon: isLast && presentation == .sheet ? nil : "chevron.right"
-                ) {
-                    if isLast { finish() } else { withAnimation { step += 1 } }
+                HStack(spacing: 10) {
+                    // Jak w przewodniku: okrągła strzałka po lewej od „Dalej".
+                    // W arkuszu z menu — tylko między kartami.
+                    if presentation == .inline || step > 0 {
+                        WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") { back() }
+                    }
+                    WMSoftButton(
+                        title: isLast ? (presentation == .sheet ? "Zamknij" : "Zobacz, co potrafi") : "Dalej",
+                        trailingIcon: isLast && presentation == .sheet ? nil : "chevron.right"
+                    ) {
+                        if isLast { finish() } else { withAnimation { step += 1 } }
+                    }
                 }
             }
         }

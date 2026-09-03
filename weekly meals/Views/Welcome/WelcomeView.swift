@@ -169,6 +169,7 @@ struct WelcomeView: View {
                         isNextEnabled: isNextEnabled,
                         isLoading: isCreatingHousehold && step == totalSteps,
                         showsStepper: initialStep == 1,
+                        showsBack: step > initialStep,
                         onBack: handleBack,
                         onNext: handleNext
                     )
@@ -178,16 +179,8 @@ struct WelcomeView: View {
             .ignoresSafeArea(.container, edges: .top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if step > initialStep {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(action: handleBack) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(Color.wmLabel(colorScheme))
-                        }
-                        .accessibilityLabel("Wstecz")
-                    }
-                }
+                // „Wstecz" siedzi w stopce obok „Dalej" (`WelcomeFooter`),
+                // tak jak w przewodniku — w pasku został tylko „Wyloguj".
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Wyloguj") {
                         sessionStore.logout()

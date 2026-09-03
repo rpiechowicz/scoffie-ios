@@ -44,9 +44,6 @@ struct AssistantCapabilitiesSheet: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            if presentation == .inline {
-                AssistantIntroNavRow(onBack: onBack)
-            }
             ZStack(alignment: .bottom) {
                 if presentation == .sheet {
                     WMPageBackground(scheme: scheme).ignoresSafeArea()
@@ -270,12 +267,17 @@ struct AssistantCapabilitiesSheet: View {
                 WelcomeStepper(step: AssistantIntroSteps.capabilities, total: AssistantIntroSteps.total)
                     .padding(.bottom, 8)
             }
-            WMSoftButton(
-                title: presentation == .sheet ? "Napisz do asystenta" : "Napisz pierwszą wiadomość",
-                leadingIcon: "sparkles"
-            ) {
-                dismiss()
-                onCompose?()
+            HStack(spacing: 10) {
+                if presentation == .inline, let onBack {
+                    WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz", action: onBack)
+                }
+                WMSoftButton(
+                    title: presentation == .sheet ? "Napisz do asystenta" : "Napisz pierwszą wiadomość",
+                    leadingIcon: "sparkles"
+                ) {
+                    dismiss()
+                    onCompose?()
+                }
             }
         }
     }

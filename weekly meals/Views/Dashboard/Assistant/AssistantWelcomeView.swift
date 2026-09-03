@@ -20,7 +20,10 @@ struct AssistantWelcomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
+            // Bez ScrollView: hero ma się mieścić na ekranie w całości, a
+            // przewijany kontener „pływał" pod palcem, choć nie było czego
+            // przewijać.
+            VStack(spacing: 0) {
                 VStack(spacing: 0) {
                     // Poświata sięga ~50 pt poza ikonę, a ScrollView tnie po
                     // swojej krawędzi — bez tego zapasu górna część cienia
@@ -54,15 +57,12 @@ struct AssistantWelcomeView: View {
                         ForEach(ticks, id: \.self) { AssistantTickRow(text: $0) }
                     }
                     .padding(.top, 20)
-
-                    AssistantTrustPill(text: "Wzrost, waga, kroki i e-mail zostają w telefonie")
-                        .padding(.top, 18)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, WMPageMetrics.horizontal)
-                .padding(.bottom, 24)
+
+                Spacer(minLength: 12)
             }
-            .scrollIndicators(.hidden)
 
             AssistantStickyFooter {
                 WMSoftButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)

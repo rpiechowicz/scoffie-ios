@@ -1,9 +1,7 @@
 import SwiftUI
 
-// Sticky footer for the welcome flow — pill stepper + primary action
-// button. The "Wstecz" affordance lives in the navigation toolbar
-// (`topBarLeading`) so the footer stays visually focused on the single
-// forward action. A two-band background (transparent → solid canvas)
+// Sticky footer for the welcome flow — pill stepper + back icon + primary
+// action button, mirroring the tour footer so both flows feel alike. A two-band background (transparent → solid canvas)
 // gives the scrolling step content a clean fade out before it reaches
 // the button.
 struct WelcomeFooter: View {
@@ -16,6 +14,10 @@ struct WelcomeFooter: View {
     /// onboarded user landing only on the household-creation screen) —
     /// "4 of 4" doesn't make sense if the user never saw the others.
     var showsStepper: Bool = true
+    /// „Wstecz" jako okrągła ikona po lewej od „Dalej" — ten sam układ, co
+    /// w stopce przewodnika (`TourStepFooter`). Na pierwszym kroku nie ma
+    /// dokąd wracać, więc przycisk znika.
+    var showsBack: Bool = false
     let onBack: () -> Void
     let onNext: () -> Void
 
@@ -36,12 +38,21 @@ struct WelcomeFooter: View {
             // jedynym takim akcentem w aplikacji: krzyczał na ekranie,
             // którego zadaniem jest spokojnie zebrać dane, i nie zgadzał
             // się z akcją, którą użytkownik zobaczy zaraz potem.
-            WMSoftButton(
-                title: nextLabel,
-                isEnabled: isNextEnabled,
-                isLoading: isLoading,
-                action: onNext
-            )
+            HStack(spacing: 10) {
+                if showsBack {
+                    WMSoftIconButton(
+                        systemName: "chevron.left",
+                        accessibilityLabel: "Wstecz",
+                        action: onBack
+                    )
+                }
+                WMSoftButton(
+                    title: nextLabel,
+                    isEnabled: isNextEnabled,
+                    isLoading: isLoading,
+                    action: onNext
+                )
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
