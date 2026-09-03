@@ -169,12 +169,11 @@ struct AssistantCapabilitiesSheet: View {
                         .foregroundStyle(Color.wmMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     if let example = capability.example {
-                        AssistantExampleBubble(text: example) {
+                        AssistantExchangePreview(example: example, reply: capability.reply, thumb: capability.thumb) {
                             dismiss()
                             onAsk(example)
                         }
-                    }
-                    if let thumb = capability.thumb {
+                    } else if let thumb = capability.thumb {
                         AssistantThumb(kind: thumb)
                     }
                 }

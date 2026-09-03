@@ -98,11 +98,11 @@ struct AssistantView: View {
                                 onGranted: {
                                     store.consentGranted()
                                     if store.retryText != nil { retry() }
-                                    goToStep(.cards)
+                                    continueAfterConsent()
                                 },
                                 showsStepper: true,
                                 onBack: { goToStep(.hero) },
-                                onContinue: { goToStep(.cards) }
+                                onContinue: { continueAfterConsent() }
                             )
                         } else {
                             conversation
@@ -281,6 +281,17 @@ struct AssistantView: View {
 
     private func goToStep(_ step: IntroStep) {
         withAnimation(.easeOut(duration: 0.28)) { introStep = step }
+    }
+
+    /// Po zgodzie: karty tylko za pierwszym razem. Kto cofnął zgodę i włącza
+    /// ją ponownie (albo dostał 403 w środku rozmowy), wraca prosto do
+    /// rozmowy — onboarding i „Od czego zaczniemy?" zostają pod menu ⋯.
+    private func continueAfterConsent() {
+        if onboardingSeen {
+            finishIntro()
+        } else {
+            goToStep(.cards)
+        }
     }
 
     /// Koniec przepływu: flagi na stałe, rozmowa. „Co potrafi" i „Jak działa"

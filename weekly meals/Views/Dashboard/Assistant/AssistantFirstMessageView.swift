@@ -2,10 +2,10 @@ import SwiftUI
 
 /// Ostatni krok przepływu startowego — „Od czego zaczniemy?". Cztery strony,
 /// po jednej na grupę umiejętności (plan → cel i makro → dom → zakupy
-/// i przepisy), każda z gotowymi zdaniami do wysłania. Karty „Poznaj"
-/// pokazały JAK to działa (podglądy kart, zasady, prywatność), więc tu nie
-/// ma już zasad ani miniatur — tylko wybór pierwszej wiadomości. Pełna
-/// lista z akordeonami zostaje pod menu ⋯ → „Co potrafi asystent".
+/// i przepisy). Każda umiejętność to pełna wymiana: Twoje zdanie, odpowiedź
+/// asystenta i karta, którą dostaniesz — stuknięcie w zdanie wysyła je jako
+/// pierwszą wiadomość. Zasad gry i prywatności tu nie ma (były w kartach
+/// „Poznaj"); pełna ściąga zostaje pod menu ⋯ → „Co potrafi asystent".
 struct AssistantFirstMessageView: View {
     /// Stuknięty przykład — wysyłany jako pierwsza wiadomość.
     let onAsk: (String) -> Void
@@ -74,8 +74,8 @@ struct AssistantFirstMessageView: View {
                     .foregroundStyle(Color.wmLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(first
-                    ? "\(group.lead). Stuknij przykład, a wyślemy go jako Twoją pierwszą wiadomość — resztę asystent dopyta."
-                    : "Stuknij przykład, żeby zacząć od niego.")
+                    ? "\(group.lead). Pod każdym zdaniem widzisz, co odpowie asystent — stuknij zdanie, żeby zacząć od niego."
+                    : "Stuknij zdanie, żeby zacząć od niego.")
                     .font(.system(size: 14.5))
                     .lineSpacing(3)
                     .foregroundStyle(Color.wmMuted(scheme))
@@ -113,7 +113,9 @@ struct AssistantFirstMessageView: View {
                 }
             }
             if let example = capability.example {
-                AssistantExampleBubble(text: example) { onAsk(example) }
+                AssistantExchangePreview(example: example, reply: capability.reply, thumb: capability.thumb) {
+                    onAsk(example)
+                }
             }
         }
         .padding(.vertical, 14)

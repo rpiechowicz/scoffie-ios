@@ -138,10 +138,8 @@ struct AssistantHowItWorksView: View {
             }
 
             if let example = card.example {
-                AssistantExampleBubble(text: example)
-            }
-
-            if let thumb = card.thumb {
+                AssistantExchangePreview(example: example, reply: card.reply, thumb: card.thumb, weekDays: 5)
+            } else if let thumb = card.thumb {
                 AssistantThumb(kind: thumb, weekDays: 5)
             }
 
