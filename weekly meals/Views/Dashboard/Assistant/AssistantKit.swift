@@ -838,12 +838,13 @@ struct AssistantProposalFooter: View {
 /// tekstu i pustym polem.
 struct AssistantQuickReplies: View {
     let items: [String]
+    var alignment: HorizontalAlignment = .leading
     let onTap: (String) -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        AllergenChipFlow(spacing: 7) {
+        AllergenChipFlow(spacing: 7, alignment: alignment) {
             ForEach(items, id: \.self) { item in
                 Button { onTap(item) } label: {
                     Text(item)

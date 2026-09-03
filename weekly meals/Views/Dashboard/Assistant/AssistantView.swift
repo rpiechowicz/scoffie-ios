@@ -45,13 +45,14 @@ struct AssistantView: View {
     /// „Jak działa asystent" — te same karty co onboarding, z menu.
     @State private var showHowItWorks = false
     /// Hero „Poznaj asystenta" (krok 0) — raz, przed pierwszą zgodą. Po
-    /// cofnięciu zgody użytkownik wraca prosto do kroku „Zgoda".
-    @AppStorage("assistant.welcome.seen") private var welcomeSeen = false
+    /// cofnięciu zgody użytkownik wraca prosto do kroku „Zgoda". Flagi
+    /// kasuje `AssistantIntroState.reset()` przy wylogowaniu.
+    @AppStorage(AssistantIntroState.welcomeSeenKey) private var welcomeSeen = false
     /// Onboarding pokazywany raz, tuż po włączeniu zgody.
-    @AppStorage("assistant.onboarding.seen") private var onboardingSeen = false
-    /// Krok „Start" — tylko bezpośrednio po przejściu onboardingu w tej
-    /// sesji. Nie jest zapamiętywany: kto wróci po zabiciu aplikacji, ląduje
-    /// w rozmowie, a nie w „Asystent gotowy" po raz drugi.
+    @AppStorage(AssistantIntroState.onboardingSeenKey) private var onboardingSeen = false
+    /// Ostatni krok — „Co potrafi asystent" — tylko bezpośrednio po
+    /// onboardingu w tej sesji. Nie jest zapamiętywany: kto wróci po zabiciu
+    /// aplikacji, ląduje w rozmowie; ekran zostaje pod menu ⋯.
     @State private var showReady = false
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
@@ -88,8 +89,7 @@ struct AssistantView: View {
                                     store.consentGranted()
                                     if store.retryText != nil { retry() }
                                 },
-                                onShowCapabilities: { showCapabilities = true },
-                                showsStepBar: true
+                                showsStepper: true
                             )
                         }
                     } else if !onboardingSeen {
@@ -103,18 +103,19 @@ struct AssistantView: View {
                             onShowCapabilities: { showCapabilities = true }
                         )
                     } else if showReady {
-                        AssistantReadyView(
+                        AssistantCapabilitiesSheet(
+                            store: store,
+                            presentation: .inline,
+                            onAsk: { text in
+                                withAnimation(.easeOut(duration: 0.28)) { showReady = false }
+                                ask(text)
+                            },
                             onCompose: {
                                 withAnimation(.easeOut(duration: 0.28)) { showReady = false }
                                 // Pole pojawia się razem z rozmową — fokus dopiero,
                                 // gdy już jest w hierarchii.
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
-                            },
-                            onAsk: { text in
-                                withAnimation(.easeOut(duration: 0.28)) { showReady = false }
-                                ask(text)
-                            },
-                            onShowLimits: { showUsage = true }
+                            }
                         )
                     } else {
                         conversation
@@ -176,11 +177,7 @@ struct AssistantView: View {
                 AssistantConsentGateView(
                     consents: consents,
                     source: "IOS_ASSISTANT_MENU",
-                    presentation: .sheet,
-                    onShowCapabilities: {
-                        showConsentReview = false
-                        showCapabilities = true
-                    }
+                    presentation: .sheet
                 )
             }
         }
@@ -328,15 +325,6 @@ struct AssistantView: View {
                             )
                             .id(Self.errorAnchor)
 
-                            // Podpowiedzi z serwera po czasie albo „Stop”:
-                            // mniejszy zakres, bo to najczęstsza przyczyna 90 s.
-                            if !store.suggestions.isEmpty, !store.isSending {
-                                AssistantQuickReplies(items: store.suggestions, onTap: ask)
-                            }
-                        }
-
-                        if showsFollowUps {
-                            followUps
                         }
 
                         // Koniec TREŚCI — tu ląduje strzałka „na dół". Osobno
@@ -520,16 +508,16 @@ struct AssistantView: View {
         return "\(day.string(from: first))–\(full.string(from: last))"
     }
 
-    /// Podpowiedzi kolejnego ruchu pod ostatnią odpowiedzią — rozmowa nie
-    /// kończy się ścianą tekstu i pustym polem.
-    private var followUps: some View {
-        AssistantQuickReplies(items: Self.followUpSuggestions, onTap: ask)
-    }
-
-    private var showsFollowUps: Bool {
-        !store.isSending
-            && store.errorMessage == nil
-            && store.messages.last?.author == .assistant
+    /// Podpowiedzi nad chipami zakresu, dosunięte do prawej jak dymki
+    /// użytkownika. W rozmowie najwyżej dwie: po błędzie czasu — te
+    /// z serwera (mniejszy zakres), po odpowiedzi — kolejny ruch. W scrollu
+    /// pod ostatnią wiadomością zajmowały pół ekranu.
+    private var composerHints: [String]? {
+        guard !store.isSending else { return nil }
+        if store.messages.isEmpty { return AssistantCapabilities.quickStarts }
+        if !store.suggestions.isEmpty { return Array(store.suggestions.prefix(2)) }
+        guard store.errorMessage == nil, store.messages.last?.author == .assistant else { return nil }
+        return Array(Self.followUpSuggestions.prefix(2))
     }
 
     // MARK: - Pole wiadomości
@@ -538,10 +526,9 @@ struct AssistantView: View {
         VStack(spacing: 0) {
             Divider().overlay(Color.wmRule(scheme))
 
-            // Cztery szybkie starty nad chipami zakresu — tylko w pustej
-            // rozmowie; znikają po pierwszej wiadomości.
-            if store.messages.isEmpty, !store.isSending {
-                AssistantQuickReplies(items: AssistantCapabilities.quickStarts, onTap: ask)
+            if let hints = composerHints {
+                AssistantQuickReplies(items: hints, alignment: .trailing, onTap: ask)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.top, 10)
             }
 

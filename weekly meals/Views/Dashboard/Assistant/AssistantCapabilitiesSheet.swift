@@ -1,14 +1,23 @@
 import SwiftUI
 
-/// „Co potrafi asystent" — arkusz z menu ⋯, z bramki zgody i z ostatniej
-/// karty onboardingu. Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
+/// „Co potrafi asystent" — ostatni krok przepływu startowego (inline),
+/// a potem arkusz z menu ⋯ i z ostatniej karty onboardingu. Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
 /// cztery grupy umiejętności jako akordeony (wszystkie zwinięte na start),
 /// zasady gry i prywatność. Limitów tu nie ma — to ekran „co", nie „ile",
 /// i widzi go też ktoś, kto asystenta jeszcze nie włączył. Przykład
 /// w rozwiniętym wierszu jest przyciskiem: ekran pomocy kończy się pierwszą
 /// wiadomością, nie czytaniem.
 struct AssistantCapabilitiesSheet: View {
+    enum Presentation {
+        /// Arkusz z menu ⋯ — własny nagłówek, „Napisz do asystenta".
+        case sheet
+        /// Ostatni krok przepływu startowego w zakładce: tytuł strony,
+        /// wskaźnik kroków, „Napisz pierwszą wiadomość".
+        case inline
+    }
+
     let store: AgentStore
+    var presentation: Presentation = .sheet
     /// Wysyła przykład jako wiadomość (arkusz sam się zamyka).
     let onAsk: (String) -> Void
     /// „Napisz do asystenta" — fokus na polu po zamknięciu.
@@ -19,14 +28,43 @@ struct AssistantCapabilitiesSheet: View {
     @State private var openId: String?
 
     var body: some View {
-        NavigationStack {
+        switch presentation {
+        case .sheet:
+            NavigationStack {
+                content
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+            .presentationDragIndicator(.visible)
+        case .inline:
+            content
+        }
+    }
+
+    private var content: some View {
             ZStack(alignment: .bottom) {
-                WMPageBackground(scheme: scheme).ignoresSafeArea()
+                if presentation == .sheet {
+                    WMPageBackground(scheme: scheme).ignoresSafeArea()
+                }
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        EditorialSheetHeader(eyebrow: "Asystent AI", title: "Co potrafi asystent") {
-                            dismiss()
+                        if presentation == .sheet {
+                            EditorialSheetHeader(eyebrow: "Asystent AI", title: "Co potrafi asystent") {
+                                dismiss()
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                AssistantSectionLabel(text: "Asystent AI", color: WMPalette.terracotta)
+                                Text("Co potrafi asystent")
+                                    .font(.system(size: 26, weight: .bold))
+                                    .tracking(-0.6)
+                                    .foregroundStyle(Color.wmLabel(scheme))
+                                Text("Zgoda zapisana. Każdy przykład poniżej możesz od razu wysłać — resztę asystent dopyta.")
+                                    .font(.system(size: 13.5))
+                                    .lineSpacing(2)
+                                    .foregroundStyle(Color.wmMuted(scheme))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
 
                         heroRule
@@ -38,17 +76,14 @@ struct AssistantCapabilitiesSheet: View {
                         rulesCard
                         privacyCard
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
+                    .padding(.horizontal, presentation == .sheet ? 20 : WMPageMetrics.horizontal)
+                    .padding(.top, presentation == .sheet ? 18 : 4)
                     .padding(.bottom, 140)
                 }
                 .scrollIndicators(.hidden)
 
                 footer
             }
-            .toolbar(.hidden, for: .navigationBar)
-        }
-        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Jedna zasada
@@ -224,7 +259,14 @@ struct AssistantCapabilitiesSheet: View {
 
     private var footer: some View {
         AssistantStickyFooter {
-            WMSoftButton(title: "Napisz do asystenta", leadingIcon: "sparkles") {
+            if presentation == .inline {
+                WelcomeStepper(step: AssistantIntroSteps.capabilities, total: AssistantIntroSteps.total)
+                    .padding(.bottom, 8)
+            }
+            WMSoftButton(
+                title: presentation == .sheet ? "Napisz do asystenta" : "Napisz pierwszą wiadomość",
+                leadingIcon: "sparkles"
+            ) {
                 dismiss()
                 onCompose?()
             }

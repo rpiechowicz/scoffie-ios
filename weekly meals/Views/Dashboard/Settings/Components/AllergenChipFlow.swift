@@ -9,6 +9,9 @@ import SwiftUI
 // in a single pass without intermediate `GeometryReader`s.
 struct AllergenChipFlow: Layout {
     var spacing: CGFloat = 8
+    /// `.trailing` dosuwa każdy wiersz do prawej krawędzi (podpowiedzi
+    /// asystenta nad polem — jak dymki użytkownika).
+    var alignment: HorizontalAlignment = .leading
 
     func sizeThatFits(
         proposal: ProposedViewSize,
@@ -39,7 +42,7 @@ struct AllergenChipFlow: Layout {
         var y = bounds.minY
 
         for row in rows {
-            var x = bounds.minX
+            var x = alignment == .trailing ? bounds.maxX - row.width : bounds.minX
             for item in row.items {
                 let size = item.size
                 subviews[item.index].place(

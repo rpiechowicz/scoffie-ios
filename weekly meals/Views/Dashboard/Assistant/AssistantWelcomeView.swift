@@ -22,8 +22,11 @@ struct AssistantWelcomeView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    AssistantAIMark(size: 118)
-                        .padding(.top, 14)
+                    // Poświata sięga ~50 pt poza ikonę, a ScrollView tnie po
+                    // swojej krawędzi — bez tego zapasu górna część cienia
+                    // ginęła pod nagłówkiem.
+                    AssistantAIMark(size: 112)
+                        .padding(.top, 54)
 
                     AssistantSectionLabel(text: "Asystent AI", color: WMPalette.terracotta)
                         .padding(.top, 26)

@@ -1,69 +1,31 @@
 import SwiftUI
 
 // Klocki przepływu startowego asystenta (projekt „Asystent Powitanie",
-// 3.09.2026): pasek kroków, duża ikona AI z poświatą, wiersz i pigułka
-// zaufania. Hero (krok 0) nie ma paska — pasek pojawia się dopiero, gdy
-// użytkownik faktycznie wszedł w proces: Zgoda → Poznaj → Start.
+// 3.09.2026): numeracja kroków pod wspólny `WelcomeStepper`, duża ikona AI
+// z poświatą, wiersz i pigułka zaufania.
 
-/// Trzy segmenty z numerem i etykietą kapitalikami. Aktywny jest szerszy
-/// (1,35×) i pełny terracotta, zrobiony — przygaszony z ptaszkiem.
-struct AssistantStepBar: View {
-    let step: Int
+/// Numeracja kroków przepływu startowego pod wspólny `WelcomeStepper`
+/// (ten sam pigułkowy wskaźnik, co w kreatorze „Poznajmy się" i w
+/// przewodniku). Jeden ciąg: Zgoda → 6 kart „Poznaj" → „Co potrafi".
+/// Hero (krok 0) wskaźnika nie ma — pojawia się, gdy user wszedł w proces.
+enum AssistantIntroSteps {
+    static let consent = 1
+    static func card(_ index: Int) -> Int { 2 + index }
+    static var capabilities: Int { total }
+    static var total: Int { 2 + AssistantCapabilities.onboarding.count }
+}
 
-    @Environment(\.colorScheme) private var scheme
+/// Flagi „widziane" przepływu startowego. Kasowane przy wylogowaniu
+/// i usunięciu konta — nowy użytkownik na tym samym telefonie ma zobaczyć
+/// hero i onboarding od nowa.
+enum AssistantIntroState {
+    static let welcomeSeenKey = "assistant.welcome.seen"
+    static let onboardingSeenKey = "assistant.onboarding.seen"
 
-    private static let steps = ["Zgoda", "Poznaj", "Start"]
-    private static let activeWeight: CGFloat = 1.35
-    private static let spacing: CGFloat = 8
-
-    var body: some View {
-        GeometryReader { proxy in
-            let count = CGFloat(Self.steps.count)
-            let free = proxy.size.width - Self.spacing * (count - 1)
-            let unit = free / (count - 1 + Self.activeWeight)
-            HStack(alignment: .top, spacing: Self.spacing) {
-                ForEach(Self.steps.indices, id: \.self) { index in
-                    segment(index)
-                        .frame(width: unit * (index == step ? Self.activeWeight : 1))
-                }
-            }
-        }
-        .frame(height: 24)
-        .padding(.horizontal, WMPageMetrics.horizontal)
-        .padding(.top, 2)
-        .padding(.bottom, 10)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Krok \(step + 1) z \(Self.steps.count): \(Self.steps[min(step, Self.steps.count - 1)])")
-    }
-
-    private func segment(_ index: Int) -> some View {
-        let done = index < step
-        let on = index == step
-        return VStack(alignment: .leading, spacing: 6) {
-            Capsule()
-                .fill(done || on ? WMPalette.terracotta : Color.wmBarTrack(scheme))
-                .opacity(done ? 0.5 : 1)
-                .frame(height: 3)
-            HStack(spacing: 5) {
-                if done {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .heavy))
-                        .foregroundStyle(WMPalette.terracotta)
-                } else {
-                    Text("\(index + 1)")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(on ? WMPalette.terracotta : Color.wmFaint(scheme))
-                }
-                Text(Self.steps[index])
-                    .font(.system(size: 11, weight: on ? .bold : .semibold))
-                    .tracking(0.4)
-                    .textCase(.uppercase)
-                    .foregroundStyle(on ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
-                    .lineLimit(1)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: step)
+    static func reset() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: welcomeSeenKey)
+        defaults.removeObject(forKey: onboardingSeenKey)
     }
 }
 

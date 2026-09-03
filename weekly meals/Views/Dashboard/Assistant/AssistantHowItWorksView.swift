@@ -8,7 +8,8 @@ struct AssistantHowItWorksView: View {
     enum Presentation { case inline, sheet }
 
     var presentation: Presentation = .inline
-    /// Krok „Poznaj" przepływu startowego — pasek kroków nad kartami.
+    /// Krok „Poznaj" przepływu startowego — wskaźnik liczy karty jako
+    /// kroki 2–7 całego przepływu; jako arkusz z menu liczy tylko karty.
     var showsStepBar = false
     /// „Zaczynajmy" / zamknięcie arkusza.
     let onFinish: () -> Void
@@ -37,10 +38,6 @@ struct AssistantHowItWorksView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            if presentation == .inline, showsStepBar {
-                AssistantStepBar(step: 1)
-            }
-
             HStack {
                 if presentation == .sheet {
                     Text("Jak działa asystent")
@@ -79,15 +76,11 @@ struct AssistantHowItWorksView: View {
             }
 
             AssistantStickyFooter {
-                HStack(spacing: 6) {
-                    ForEach(cards.indices, id: \.self) { index in
-                        Capsule()
-                            .fill(index == step ? WMPalette.terracotta : Color.wmFaint(scheme))
-                            .frame(width: index == step ? 18 : 6, height: 6)
-                            .animation(.easeInOut(duration: 0.2), value: step)
-                    }
-                }
-                .accessibilityLabel("Karta \(step + 1) z \(cards.count)")
+                WelcomeStepper(
+                    step: showsStepBar ? AssistantIntroSteps.card(step) : step + 1,
+                    total: showsStepBar ? AssistantIntroSteps.total : cards.count
+                )
+                .padding(.bottom, 8)
 
                 WMSoftButton(
                     title: isLast ? (presentation == .sheet ? "Zamknij" : "Zaczynajmy") : "Dalej",

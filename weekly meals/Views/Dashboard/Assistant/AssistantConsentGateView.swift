@@ -5,9 +5,10 @@ import SwiftUI
 /// z menu ⋯ → „Prywatność i zgoda": wtedy pokazuje pasek statusu, wygaszone
 /// potwierdzenia i „Cofnij zgodę".
 ///
-/// Serwer wymaga DWÓCH zgód (wiek 16+ i przekazanie danych o diecie do
-/// Anthropic), więc „Włącz asystenta" odblokowuje się dopiero po dwóch
-/// stuknięciach. Treść „co wysyłamy / czego nie" jest przepisana z sekcji 6
+/// Serwer wymaga DWÓCH zgód (wiek 16+ i przetwarzanie danych o diecie
+/// w asystencie), więc „Włącz asystenta" odblokowuje się dopiero po dwóch
+/// stuknięciach. „Co potrafi" nie jest tu linkiem — to następny krok
+/// przepływu, po zgodzie i onboardingu. Treść „co wysyłamy / czego nie" jest przepisana z sekcji 6
 /// polityki prywatności — ekran nie obiecuje ani mniej, ani więcej.
 struct AssistantConsentGateView: View {
     enum Presentation {
@@ -21,10 +22,9 @@ struct AssistantConsentGateView: View {
     let source: String
     var presentation: Presentation = .inline
     var onGranted: (() -> Void)? = nil
-    var onShowCapabilities: (() -> Void)? = nil
-    /// Krok „Zgoda" przepływu startowego — pasek Zgoda → Poznaj → Start
-    /// nad treścią. Arkusz z menu paska nie ma.
-    var showsStepBar = false
+    /// Krok „Zgoda" przepływu startowego — pigułkowy wskaźnik nad
+    /// przyciskiem, ten sam co w kreatorze. Arkusz z menu wskaźnika nie ma.
+    var showsStepper = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -76,10 +76,6 @@ struct AssistantConsentGateView: View {
                 .padding(.top, 18)
             }
 
-            if presentation == .inline, showsStepBar {
-                AssistantStepBar(step: 0)
-            }
-
             if isGranted {
                 statusBar
                     .padding(.horizontal, WMPageMetrics.horizontal)
@@ -106,36 +102,6 @@ struct AssistantConsentGateView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                    }
-
-                    // Jeden wiersz-link zamiast trzech kafli „co potrafi" —
-                    // odzyskane miejsce trzyma potwierdzenia nad zgięciem.
-                    if let onShowCapabilities {
-                        Button(action: onShowCapabilities) {
-                            HStack(spacing: 12) {
-                                AssistantIconTile(icon: "sparkles", accent: .terracotta, size: 36, radius: 11)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text("Co potrafi asystent")
-                                        .font(.system(size: 14.5, weight: .semibold))
-                                        .tracking(-0.25)
-                                        .foregroundStyle(Color.wmLabel(scheme))
-                                    Text("Plan tygodnia, podmiany, makro, zakupy — 14 rzeczy")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(Color.wmMuted(scheme))
-                                        .lineLimit(1)
-                                }
-                                Spacer(minLength: 0)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(Color.wmFaint(scheme))
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.wmTileBg(scheme)))
-                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
                     }
 
                     dataCard
@@ -351,6 +317,10 @@ struct AssistantConsentGateView: View {
                 }
                 .disabled(consents.isBusy)
             } else {
+                if presentation == .inline, showsStepper {
+                    WelcomeStepper(step: AssistantIntroSteps.consent, total: AssistantIntroSteps.total)
+                        .padding(.bottom, 8)
+                }
                 WMSoftButton(
                     title: "Włącz asystenta",
                     leadingIcon: "sparkles",

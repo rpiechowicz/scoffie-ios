@@ -1661,6 +1661,9 @@ final class SessionStore {
     }
 
     private func clearPersistedSession() {
+        // Hero i onboarding asystenta są per konto, nie per telefon: kolejny
+        // użytkownik (albo ten sam po usunięciu konta) ma je zobaczyć od nowa.
+        AssistantIntroState.reset()
         // Usuń tokeny z Keychain
         KeychainService.delete(forKey: Keys.accessToken)
         KeychainService.delete(forKey: Keys.refreshToken)
