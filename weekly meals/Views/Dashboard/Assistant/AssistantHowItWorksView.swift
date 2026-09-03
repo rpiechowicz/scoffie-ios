@@ -53,19 +53,24 @@ struct AssistantHowItWorksView: View {
             .padding(.top, presentation == .sheet ? 18 : 0)
             .padding(.bottom, 6)
 
-            TabView(selection: $step) {
-                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                    ScrollView {
-                        onboardingCard(card)
-                            .padding(.horizontal, WMPageMetrics.horizontal)
-                            .padding(.top, 6)
-                            .padding(.bottom, 12)
+            // Karta wypełnia całą wolną wysokość (a przewija się dopiero, gdy
+            // treść jest wyższa) — mała karta na środku pustej sekcji
+            // wyglądała jak dymek, nie jak ekran wprowadzenia.
+            GeometryReader { proxy in
+                TabView(selection: $step) {
+                    ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                        ScrollView {
+                            onboardingCard(card, minHeight: max(0, proxy.size.height - 18))
+                                .padding(.horizontal, WMPageMetrics.horizontal)
+                                .padding(.top, 6)
+                                .padding(.bottom, 12)
+                        }
+                        .scrollIndicators(.hidden)
+                        .tag(index)
                     }
-                    .scrollIndicators(.hidden)
-                    .tag(index)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
 
             AssistantStickyFooter {
                 HStack(spacing: 6) {
@@ -88,19 +93,19 @@ struct AssistantHowItWorksView: View {
         }
     }
 
-    private func onboardingCard(_ card: AssistantCapabilities.OnboardingCard) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            AssistantIconTile(icon: card.icon, accent: card.accent, size: 52, radius: 15)
+    private func onboardingCard(_ card: AssistantCapabilities.OnboardingCard, minHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            AssistantIconTile(icon: card.icon, accent: card.accent, size: 64, radius: 18)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(card.title)
-                    .font(.system(size: 21, weight: .bold))
-                    .tracking(-0.5)
+                    .font(.system(size: 26, weight: .bold))
+                    .tracking(-0.6)
                     .foregroundStyle(Color.wmLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(card.body)
-                    .font(.system(size: 14))
-                    .lineSpacing(3)
+                    .font(.system(size: 16))
+                    .lineSpacing(4)
                     .foregroundStyle(Color.wmMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -110,7 +115,7 @@ struct AssistantHowItWorksView: View {
             }
 
             if let thumb = card.thumb {
-                AssistantThumb(kind: thumb, weekDays: 3)
+                AssistantThumb(kind: thumb, weekDays: 5)
             }
 
             if card.showsPrivacy {
@@ -119,8 +124,8 @@ struct AssistantHowItWorksView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(WMPalette.sage)
                     Text("Wzrost, waga, kroki i e-mail zostają w telefonie. Zgodę cofniesz w każdej chwili w menu.")
-                        .font(.system(size: 12.5))
-                        .lineSpacing(2)
+                        .font(.system(size: 14))
+                        .lineSpacing(3)
                         .foregroundStyle(Color.wmLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -134,14 +139,14 @@ struct AssistantHowItWorksView: View {
                         Text("Zobacz wszystko, co potrafi")
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
                     }
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(WMPalette.terracotta)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(22)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.wmTileBg(scheme)))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
         .shadow(color: .black.opacity(scheme == .dark ? 0.28 : 0.06), radius: 12, y: 8)

@@ -24,7 +24,7 @@ struct AssistantCapabilitiesSheet: View {
                 WMPageBackground(scheme: scheme).ignoresSafeArea()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 16) {
                         EditorialSheetHeader(eyebrow: "Asystent AI", title: "Co potrafi asystent") {
                             dismiss()
                         }
@@ -75,9 +75,9 @@ struct AssistantCapabilitiesSheet: View {
                 ruleArrow
                 ruleStep("Dodajesz", icon: "checkmark", filled: true)
             }
-            .padding(.top, 8)
+            .padding(.top, 10)
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.wmAccentTint(scheme)))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(WMPalette.terracotta.opacity(0.28), lineWidth: 1))
@@ -115,9 +115,9 @@ struct AssistantCapabilitiesSheet: View {
                 Spacer()
                 Text(group.lead).font(.system(size: 11.5)).foregroundStyle(Color.wmFaint(scheme))
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
 
             ForEach(Array(group.items.enumerated()), id: \.element) { index, id in
                 abilityRow(AssistantCapabilities.by(id), first: index == 0)
@@ -133,16 +133,16 @@ struct AssistantCapabilitiesSheet: View {
                     openId = open ? nil : capability.id
                 }
             } label: {
-                HStack(spacing: 11) {
-                    AssistantIconTile(icon: capability.icon, accent: capability.accent, size: 30, radius: 9)
-                    VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 12) {
+                    AssistantIconTile(icon: capability.icon, accent: capability.accent, size: 34, radius: 10)
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(capability.title)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .tracking(-0.3)
                             .foregroundStyle(Color.wmLabel(scheme))
                         if !open, let example = capability.example {
                             Text("„\(example)”")
-                                .font(.system(size: 12.5))
+                                .font(.system(size: 13))
                                 .foregroundStyle(Color.wmMuted(scheme))
                                 .lineLimit(1)
                         }
@@ -153,18 +153,18 @@ struct AssistantCapabilitiesSheet: View {
                         .foregroundStyle(Color.wmFaint(scheme))
                         .rotationEffect(.degrees(open ? 180 : 0))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(open ? [.isSelected] : [])
 
             if open {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text(capability.body)
-                        .font(.system(size: 13.5))
-                        .lineSpacing(2)
+                        .font(.system(size: 14.5))
+                        .lineSpacing(3)
                         .foregroundStyle(Color.wmMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     if let example = capability.example {
@@ -177,8 +177,9 @@ struct AssistantCapabilitiesSheet: View {
                         AssistantThumb(kind: thumb)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
+                .padding(.horizontal, 16)
+                .padding(.top, 2)
+                .padding(.bottom, 18)
             }
         }
         .background(open ? Color.black.opacity(scheme == .dark ? 0.18 : 0.03) : Color.clear)
@@ -192,7 +193,7 @@ struct AssistantCapabilitiesSheet: View {
     private var rulesCard: some View {
         AssistantSurfaceCard {
             AssistantSectionLabel(text: "Zasady gry")
-                .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
             ForEach(Array(AssistantCapabilities.rules.enumerated()), id: \.element.id) { index, rule in
                 infoRow(icon: rule.icon, accent: rule.accent, title: rule.title, detail: rule.detail, first: index == 0)
             }
@@ -202,7 +203,7 @@ struct AssistantCapabilitiesSheet: View {
     private var privacyCard: some View {
         AssistantSurfaceCard {
             AssistantSectionLabel(text: "Prywatność", color: WMPalette.sage)
-                .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 4)
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
             infoRow(icon: "checkmark.shield.fill", accent: .sage, title: "Zostaje w telefonie", detail: "Wzrost, waga, płeć, rok urodzenia, kroki, e-mail i hasło Cookidoo nigdy nie idą do modelu.", first: true)
             infoRow(icon: "person.2.fill", accent: .sage, title: "Domownicy tylko za zgodą", detail: "Dane innych osób trafiają do planu dopiero, gdy same włączą asystenta.", first: false)
             infoRow(icon: "lock.shield.fill", accent: .sage, title: "Zgodę cofniesz w menu", detail: "Rozmowy i notatki pamięci znikają, plan i przepisy zostają.", first: false)
@@ -210,14 +211,14 @@ struct AssistantCapabilitiesSheet: View {
     }
 
     private func infoRow(icon: String, accent: AssistantAccent, title: String, detail: String, first: Bool) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            AssistantIconTile(icon: icon, accent: accent, size: 28, radius: 8)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 14, weight: .semibold)).tracking(-0.25).foregroundStyle(Color.wmLabel(scheme))
-                Text(detail).font(.system(size: 12.5)).lineSpacing(1.5).foregroundStyle(Color.wmMuted(scheme)).fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: 12) {
+            AssistantIconTile(icon: icon, accent: accent, size: 32, radius: 9)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 15, weight: .semibold)).tracking(-0.25).foregroundStyle(Color.wmLabel(scheme))
+                Text(detail).font(.system(size: 13.5)).lineSpacing(2).foregroundStyle(Color.wmMuted(scheme)).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 9)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .overlay(alignment: .top) { if !first { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) } }
     }
 

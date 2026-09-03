@@ -140,8 +140,8 @@ struct AssistantConsentGateView: View {
                             confirmationsBadge
                         }
                         .padding(.horizontal, 14)
-                        .padding(.top, 10)
-                        .padding(.bottom, 2)
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
                         confirmRow(
                             isOn: isGranted ? .constant(true) : $confirmsAge,
                             title: "Mam ukończone 16 lat",
@@ -276,7 +276,7 @@ struct AssistantConsentGateView: View {
             isOn.wrappedValue.toggle()
         } label: {
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.system(size: 14.5, weight: .semibold))
                         .tracking(-0.25)
@@ -305,7 +305,10 @@ struct AssistantConsentGateView: View {
                 .shadow(color: isOn.wrappedValue ? WMPalette.terracotta.opacity(0.35) : .clear, radius: 6, y: 3)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .padding(.top, 14)
+            // Dół odrobinę większy: zaznaczony wiersz ma tło i bez tego
+            // wyglądał na przyklejony do krawędzi karty.
+            .padding(.bottom, 16)
             .background(isOn.wrappedValue ? WMPalette.terracotta.opacity(0.07) : Color.clear)
             .overlay(alignment: .top) {
                 if !first { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
