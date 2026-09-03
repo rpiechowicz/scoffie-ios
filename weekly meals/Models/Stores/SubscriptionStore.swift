@@ -7,7 +7,8 @@ import StoreKit
 /// Liczby MUSZĄ być identyczne z `src/config/subscription-products.ts` na
 /// serwerze i z opisem produktu w App Store Connect: Apple wymaga podania
 /// konkretnych ilości przed zakupem (3.1.2(c)), a liczba na paywallu staje
-/// się obietnicą. Serwer jest źródłem prawdy o tym, ile komu zostało —
+/// się OBIETNICĄ — podnieść ją wolno w każdej chwili, obniżyć obecnym
+/// subskrybentom nie (to zmiana warunków umowy w trakcie jej trwania). Serwer jest źródłem prawdy o tym, ile komu zostało —
 /// te wartości służą wyłącznie do opisania oferty przed zakupem.
 ///
 /// Liczba osób jest ETYKIETĄ, nie bramką: nikt nie liczy domowników. Większy
@@ -29,22 +30,22 @@ enum SubscriptionCatalog {
         id: "pl.weeklymeals.pro.solo.monthly",
         name: "Solo",
         seatsLabel: "1 osoba",
-        messages: 40,
-        plans: 6
+        messages: 30,
+        plans: 8
     )
     static let duet = SubscriptionPlan(
         id: "pl.weeklymeals.pro.duet.monthly",
-        name: "Duet",
+        name: "We dwoje",
         seatsLabel: "2 osoby",
-        messages: 60,
-        plans: 8
+        messages: 50,
+        plans: 12
     )
     static let family = SubscriptionPlan(
         id: "pl.weeklymeals.pro.family.monthly",
         name: "Rodzina",
         seatsLabel: "3 osoby i więcej",
-        messages: 100,
-        plans: 14
+        messages: 75,
+        plans: 18
     )
 
     /// Kolejność jak na paywallu; `duet` jest preselekcjonowany.
