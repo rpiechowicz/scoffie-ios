@@ -48,7 +48,7 @@ struct AgentCardActionDTO: Decodable, Equatable, Identifiable {
     /// Wyłącznie dla `ASK`: treść wiadomości do wysłania.
     let prompt: String?
 
-    var id: String { "\(type.rawValue)-\(proposalId ?? label)" }
+    var id: String { "\(type)-\(proposalId ?? label)" }
     var isPrimary: Bool { style == "PRIMARY" }
 }
 
