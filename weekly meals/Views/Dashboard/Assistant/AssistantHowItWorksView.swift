@@ -8,6 +8,8 @@ struct AssistantHowItWorksView: View {
     enum Presentation { case inline, sheet }
 
     var presentation: Presentation = .inline
+    /// Krok „Poznaj" przepływu startowego — pasek kroków nad kartami.
+    var showsStepBar = false
     /// „Zaczynajmy" / zamknięcie arkusza.
     let onFinish: () -> Void
     var onShowCapabilities: (() -> Void)? = nil
@@ -35,6 +37,10 @@ struct AssistantHowItWorksView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
+            if presentation == .inline, showsStepBar {
+                AssistantStepBar(step: 1)
+            }
+
             HStack {
                 if presentation == .sheet {
                     Text("Jak działa asystent")

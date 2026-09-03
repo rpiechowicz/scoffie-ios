@@ -22,6 +22,9 @@ struct AssistantConsentGateView: View {
     var presentation: Presentation = .inline
     var onGranted: (() -> Void)? = nil
     var onShowCapabilities: (() -> Void)? = nil
+    /// Krok „Zgoda" przepływu startowego — pasek Zgoda → Poznaj → Start
+    /// nad treścią. Arkusz z menu paska nie ma.
+    var showsStepBar = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -71,6 +74,10 @@ struct AssistantConsentGateView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
+            }
+
+            if presentation == .inline, showsStepBar {
+                AssistantStepBar(step: 0)
             }
 
             if isGranted {

@@ -44,8 +44,15 @@ struct AssistantView: View {
     @State private var showCapabilities = false
     /// „Jak działa asystent" — te same karty co onboarding, z menu.
     @State private var showHowItWorks = false
+    /// Hero „Poznaj asystenta" (krok 0) — raz, przed pierwszą zgodą. Po
+    /// cofnięciu zgody użytkownik wraca prosto do kroku „Zgoda".
+    @AppStorage("assistant.welcome.seen") private var welcomeSeen = false
     /// Onboarding pokazywany raz, tuż po włączeniu zgody.
     @AppStorage("assistant.onboarding.seen") private var onboardingSeen = false
+    /// Krok „Start" — tylko bezpośrednio po przejściu onboardingu w tej
+    /// sesji. Nie jest zapamiętywany: kto wróci po zabiciu aplikacji, ląduje
+    /// w rozmowie, a nie w „Asystent gotowy" po raz drugi.
+    @State private var showReady = false
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
@@ -60,30 +67,62 @@ struct AssistantView: View {
 
             VStack(spacing: 0) {
                 header
-                // Bramka zgody to STAN ZAKŁADKI, nie arkusz: bez zgody nie ma
-                // rozmowy, więc nie ma czego zasłaniać. Po zgodzie raz karty
-                // „jak to działa", potem rozmowa.
-                if gateActive, let consents = sessionStore.consentStore {
-                    AssistantConsentGateView(
-                        consents: consents,
-                        source: "IOS_ASSISTANT_GATE",
-                        presentation: .inline,
-                        onGranted: {
-                            store.consentGranted()
-                            if store.retryText != nil { retry() }
-                        },
-                        onShowCapabilities: { showCapabilities = true }
-                    )
-                } else if !onboardingSeen {
-                    AssistantHowItWorksView(
-                        presentation: .inline,
-                        onFinish: { onboardingSeen = true },
-                        onShowCapabilities: { showCapabilities = true }
-                    )
-                } else {
-                    conversation
-                    composer
+                // Przepływ startowy to STAN ZAKŁADKI, nie arkusze: hero →
+                // Zgoda → Poznaj → Start → rozmowa. Nagłówek i tab bar stoją,
+                // wymienia się tylko treść — użytkownik czyta to jako ten sam
+                // ekran w następnym kroku, nie nowy widok w stosie nawigacji.
+                Group {
+                    if gateActive, let consents = sessionStore.consentStore {
+                        if !welcomeSeen {
+                            AssistantWelcomeView(
+                                onStart: { withAnimation(.easeOut(duration: 0.28)) { welcomeSeen = true } },
+                                onShowCapabilities: { showCapabilities = true }
+                            )
+                        } else {
+                            AssistantConsentGateView(
+                                consents: consents,
+                                source: "IOS_ASSISTANT_GATE",
+                                presentation: .inline,
+                                onGranted: {
+                                    showReady = true
+                                    store.consentGranted()
+                                    if store.retryText != nil { retry() }
+                                },
+                                onShowCapabilities: { showCapabilities = true },
+                                showsStepBar: true
+                            )
+                        }
+                    } else if !onboardingSeen {
+                        AssistantHowItWorksView(
+                            presentation: .inline,
+                            showsStepBar: true,
+                            onFinish: {
+                                showReady = true
+                                withAnimation(.easeOut(duration: 0.28)) { onboardingSeen = true }
+                            },
+                            onShowCapabilities: { showCapabilities = true }
+                        )
+                    } else if showReady {
+                        AssistantReadyView(
+                            onCompose: {
+                                withAnimation(.easeOut(duration: 0.28)) { showReady = false }
+                                // Pole pojawia się razem z rozmową — fokus dopiero,
+                                // gdy już jest w hierarchii.
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
+                            },
+                            onAsk: { text in
+                                withAnimation(.easeOut(duration: 0.28)) { showReady = false }
+                                ask(text)
+                            },
+                            onShowLimits: { showUsage = true }
+                        )
+                    } else {
+                        conversation
+                        composer
+                    }
                 }
+                .transition(.assistantIntroStep)
+                .animation(.easeOut(duration: 0.28), value: gateActive)
             }
             // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam, gdzie na
             // pozostałych zakładkach. Tam robi to ScrollView z tym samym
@@ -189,7 +228,7 @@ struct AssistantView: View {
             // Bramka i onboarding to nie rozmowa — nagłówek zostaje duży,
             // nawet gdy konto ma stare rozmowy (tytuł starej rozmowy nad
             // „Zanim zaczniemy" wyglądał na błąd).
-            mode: (store.messages.isEmpty || gateActive || !onboardingSeen) ? .large : .compact(title: conversationTitle),
+            mode: (store.messages.isEmpty || gateActive || !onboardingSeen || showReady) ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
         ) {
             Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
