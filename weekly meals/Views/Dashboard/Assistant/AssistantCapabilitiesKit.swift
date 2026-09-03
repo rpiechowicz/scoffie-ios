@@ -62,7 +62,59 @@ struct AssistantSurfaceCard<Content: View>: View {
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.wmTileBg(scheme)))
+            // Tła wierszy (podświetlony wiersz zgody, rozwinięty wiersz
+            // akordeonu) to prostokąty — bez przycięcia wystawały z rogów.
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+    }
+}
+
+/// Stopka przyklejona do dołu: treść chowa się pod miękkim gradientem tła,
+/// jak w kreatorze „Poznajmy się". Wewnątrz przyciski w stylu `WMSoftButton`.
+struct AssistantStickyFooter<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 10) { content() }
+            .padding(.horizontal, WMPageMetrics.horizontal)
+            .padding(.top, 28)
+            .padding(.bottom, 12)
+            .background {
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        colors: [Color.wmCanvas(scheme).opacity(0), Color.wmCanvas(scheme).opacity(0.55), Color.wmCanvas(scheme)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 64)
+                    Color.wmCanvas(scheme)
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
+            }
+    }
+}
+
+/// Drugorzędny przycisk stopki — tekst bez wypełnienia, obok `WMSoftButton`.
+struct AssistantTextButton: View {
+    let title: String
+    var role: ButtonRole? = nil
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Button(role: role, action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(role == .destructive ? WMPalette.terracotta : Color.wmMuted(scheme))
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

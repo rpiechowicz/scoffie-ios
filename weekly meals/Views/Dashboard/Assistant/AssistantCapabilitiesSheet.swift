@@ -262,41 +262,18 @@ struct AssistantCapabilitiesSheet: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 8) {
-            Button {
+        AssistantStickyFooter {
+            WMSoftButton(title: "Napisz do asystenta", leadingIcon: "sparkles") {
                 dismiss()
                 onCompose?()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles").font(.system(size: 14, weight: .bold))
-                    Text("Napisz do asystenta").font(.system(size: 16, weight: .bold))
-                }
-                .foregroundStyle(Color.wmPageBase(scheme))
-                .frame(maxWidth: .infinity).frame(height: 48)
-                .background(Capsule().fill(WMPalette.terracotta))
             }
-            .buttonStyle(.plain)
-
             if let onShowLimits {
-                Button {
+                AssistantTextButton(title: "Zobacz limity") {
                     dismiss()
                     onShowLimits()
-                } label: {
-                    Text("Zobacz limity")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.wmLabel(scheme))
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1.5))
                 }
-                .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 24)
-        .background(
-            LinearGradient(colors: [Color.wmCanvas(scheme).opacity(0), Color.wmCanvas(scheme)], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.35))
-                .ignoresSafeArea()
-        )
+        .padding(.bottom, 12)
     }
 }

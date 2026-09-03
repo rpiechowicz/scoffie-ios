@@ -67,7 +67,7 @@ struct AssistantHowItWorksView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
-            VStack(spacing: 10) {
+            AssistantStickyFooter {
                 HStack(spacing: 6) {
                     ForEach(cards.indices, id: \.self) { index in
                         Capsule()
@@ -78,21 +78,14 @@ struct AssistantHowItWorksView: View {
                 }
                 .accessibilityLabel("Karta \(step + 1) z \(cards.count)")
 
-                Button {
+                WMSoftButton(
+                    title: isLast ? (presentation == .sheet ? "Zamknij" : "Zaczynajmy") : "Dalej",
+                    trailingIcon: isLast ? nil : "chevron.right"
+                ) {
                     if isLast { finish() } else { withAnimation { step += 1 } }
-                } label: {
-                    Text(isLast ? (presentation == .sheet ? "Zamknij" : "Zaczynajmy") : "Dalej")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Color.wmPageBase(scheme))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(Capsule().fill(WMPalette.terracotta))
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.horizontal, WMPageMetrics.horizontal)
-            .padding(.top, 6)
-            .padding(.bottom, presentation == .sheet ? 24 : 12)
+            .padding(.bottom, presentation == .sheet ? 12 : 0)
         }
     }
 

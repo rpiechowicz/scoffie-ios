@@ -187,7 +187,10 @@ struct AssistantView: View {
     /// wiadomościom i pokazuje tytuł rozmowy nadany przez serwer.
     private var header: some View {
         AssistantHeader(
-            mode: store.messages.isEmpty ? .large : .compact(title: conversationTitle),
+            // Bramka i onboarding to nie rozmowa — nagłówek zostaje duży,
+            // nawet gdy konto ma stare rozmowy (tytuł starej rozmowy nad
+            // „Zanim zaczniemy" wyglądał na błąd).
+            mode: (store.messages.isEmpty || gateActive || !onboardingSeen) ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
             onHistory: { showConversations = true }
         ) {

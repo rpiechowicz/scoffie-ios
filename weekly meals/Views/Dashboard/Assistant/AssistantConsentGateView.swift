@@ -183,10 +183,8 @@ struct AssistantConsentGateView: View {
             }
             .scrollIndicators(.hidden)
 
-            footer
-                .padding(.horizontal, presentation == .sheet ? 20 : WMPageMetrics.horizontal)
-                .padding(.top, 6)
-                .padding(.bottom, presentation == .sheet ? 24 : 12)
+            AssistantStickyFooter { footer }
+                .padding(.bottom, presentation == .sheet ? 12 : 0)
         }
         .background(presentation == .sheet ? AnyView(WMPageBackground(scheme: scheme).ignoresSafeArea()) : AnyView(Color.clear))
     }
@@ -317,39 +315,18 @@ struct AssistantConsentGateView: View {
             }
 
             if isGranted {
-                Button(role: .destructive) {
+                AssistantTextButton(title: consents.isBusy ? "Cofam…" : "Cofnij zgodę", role: .destructive) {
                     confirmsRevoke = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
-                        Text(consents.isBusy ? "Cofam…" : "Cofnij zgodę")
-                    }
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color.wmLabel(scheme))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1.5))
                 }
-                .buttonStyle(.plain)
                 .disabled(consents.isBusy)
             } else {
-                Button(action: grant) {
-                    HStack(spacing: 8) {
-                        if consents.isBusy {
-                            ProgressView().controlSize(.small).tint(Color.wmPageBase(scheme))
-                        }
-                        Text("Włącz asystenta")
-                            .font(.system(size: 16, weight: .bold))
-                    }
-                    .foregroundStyle(Color.wmPageBase(scheme))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Capsule().fill(WMPalette.terracotta))
-                    .shadow(color: canGrant ? WMPalette.terracotta.opacity(0.28) : .clear, radius: 11, y: 8)
-                    .opacity(canGrant ? 1 : 0.45)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canGrant || consents.isBusy)
+                WMSoftButton(
+                    title: "Włącz asystenta",
+                    leadingIcon: "sparkles",
+                    isEnabled: canGrant && !consents.isBusy,
+                    isLoading: consents.isBusy,
+                    action: grant
+                )
                 .accessibilityHint(canGrant ? "" : "Najpierw zaznacz oba potwierdzenia")
             }
         }

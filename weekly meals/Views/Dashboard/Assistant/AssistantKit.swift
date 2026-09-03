@@ -82,8 +82,9 @@ struct AssistantHeader<MenuContent: View>: View {
                 // W rozmowie „nowa” jest częstsza niż menu — i to ona wygrywa
                 // miejsce przy krawędzi, bo menu zostaje pod tym samym gestem
                 // w pustym stanie.
+                // Historia jest w menu — w kompaktowym pasku zostaje „nowa" i ⋯.
                 EditorialIconButton(icon: "square.and.pencil", accessibilityTitle: "Nowa rozmowa", action: onNewConversation)
-                EditorialIconButton(icon: "clock.arrow.circlepath", accessibilityTitle: "Historia rozmów", action: onHistory)
+                menuButton
             } else {
                 EditorialIconButton(icon: "clock.arrow.circlepath", accessibilityTitle: "Historia rozmów", action: onHistory)
                 menuButton
