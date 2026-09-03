@@ -151,8 +151,8 @@ struct AssistantConsentGateView: View {
                         )
                         confirmRow(
                             isOn: isGranted ? .constant(true) : $confirmsData,
-                            title: "Zgadzam się na przekazanie moich danych o diecie i alergiach do Anthropic",
-                            caption: "Wyraźna zgoda z art. 9 ust. 2 lit. a RODO, tylko w opisanym zakresie",
+                            title: "Zgadzam się, żeby Weekly Meals przetwarzał moje dane o diecie i alergiach w asystencie AI",
+                            caption: "Wyraźna zgoda (art. 9 ust. 2 lit. a RODO) w zakresie opisanym wyżej; model językowy dostarcza Anthropic jako podmiot przetwarzający.",
                             first: false
                         )
                     }
@@ -338,7 +338,9 @@ struct AssistantConsentGateView: View {
         errorMessage = nil
         Task { @MainActor in
             if let message = await consents.grantAssistant(source: source) {
-                errorMessage = "Nie udało się zapisać zgody. Spróbuj ponownie." + (message.isEmpty ? "" : " (\(message))")
+                // Pełny komunikat z serwera — bez niego „nie udało się" nie mówi,
+                // czy to sieć, walidacja czy stara wersja aplikacji.
+                errorMessage = message.isEmpty ? "Nie udało się zapisać zgody. Spróbuj ponownie." : "Nie udało się zapisać zgody: \(message)"
             } else {
                 onGranted?()
                 if presentation == .sheet { dismiss() }

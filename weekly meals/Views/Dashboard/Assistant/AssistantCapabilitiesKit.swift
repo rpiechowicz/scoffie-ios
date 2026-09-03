@@ -83,13 +83,15 @@ struct AssistantStickyFooter<Content: View>: View {
             .padding(.bottom, 12)
             .background {
                 VStack(spacing: 0) {
+                    // Ten sam kolor co `WMPageBackground` (wmPageBase), nie kanwa —
+                    // inny odcień rysował twardą linię nad przyciskiem.
                     LinearGradient(
-                        colors: [Color.wmCanvas(scheme).opacity(0), Color.wmCanvas(scheme).opacity(0.55), Color.wmCanvas(scheme)],
+                        colors: [Color.wmPageBase(scheme).opacity(0), Color.wmPageBase(scheme).opacity(0.7), Color.wmPageBase(scheme)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 64)
-                    Color.wmCanvas(scheme)
+                    .frame(height: 72)
+                    Color.wmPageBase(scheme)
                 }
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)

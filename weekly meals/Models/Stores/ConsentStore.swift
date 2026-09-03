@@ -71,6 +71,11 @@ final class ConsentStore {
             isLoaded = true
             return nil
         } catch {
+            // Kod błędu do komunikatu: przy diagnozie „nie zapisuje się" liczy
+            // się, czy to VALIDATION_ERROR, UNAUTHORIZED czy brak sieci.
+            if case let BackendAPIError.backend(code, status, message) = error {
+                return "\(message ?? UserFacingErrorMapper.message(from: error)) [\(code) \(status)]"
+            }
             return UserFacingErrorMapper.message(from: error)
         }
     }
