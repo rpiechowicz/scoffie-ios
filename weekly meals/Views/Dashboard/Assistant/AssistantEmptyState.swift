@@ -55,11 +55,35 @@ struct AssistantEmptyState: View {
     @State private var isKnowledgeExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            hero
-            shortcuts
-            knowledgeCard
+        // Projekt „Asystent Zgoda" (3.09.2026): pusta rozmowa to jeden
+        // wyśrodkowany kafel i zdanie, a cztery szybkie starty siedzą nad
+        // chipami zakresu przy polu — nie w treści. Karta „Co wiem o Was"
+        // i skróty zostają w kodzie na wypadek powrotu, ale nie renderują się.
+        VStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.wmAccentTint(scheme))
+                .frame(width: 64, height: 64)
+                .overlay(
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(WMPalette.terracotta)
+                )
+            VStack(spacing: 4) {
+                Text("Co dziś planujemy?")
+                    .font(.system(size: 20, weight: .bold))
+                    .tracking(-0.45)
+                    .foregroundStyle(Color.wmLabel(scheme))
+                Text("Zacznij od jednego z poleceń nad polem albo napisz własne. Zakres ustawisz chipami nad polem.")
+                    .font(.system(size: 14))
+                    .tracking(-0.15)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .frame(maxWidth: 270)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .frame(maxWidth: .infinity, minHeight: 260)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Hero

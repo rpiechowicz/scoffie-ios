@@ -38,7 +38,6 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
-    @State private var showMoreMenu = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
     /// „Co potrafi asystent" — z menu, z bramki zgody i z onboardingu.
@@ -112,18 +111,10 @@ struct AssistantView: View {
             // wkłada do promptu — jedno źródło zamiast trzech cache'ów.
             await store.refreshContext(weekStart: datesViewModel.weekStartISO)
         }
-        .confirmationDialog("Asystent", isPresented: $showMoreMenu, titleVisibility: .hidden) {
-            Button("Nowa rozmowa") {
-                Task { await store.startNewConversation() }
-            }
-            Button("Historia rozmów") { showConversations = true }
-            Button("Co potrafi asystent") { showCapabilities = true }
-            Button("Jak działa asystent") { showHowItWorks = true }
-            Button("Pamięć domu") { showMemory = true }
-            Button("Limity asystenta") { showUsage = true }
-            Button("Prywatność i zgoda") { showConsentReview = true }
-            Button("Usuń historię rozmów", role: .destructive) { showDeleteAlert = true }
-            Button("Anuluj", role: .cancel) {}
+        .task {
+            // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
+            // użytkownik widział rozmowę, dopóki serwer nie odpowiedział.
+            await sessionStore.consentStore?.refresh()
         }
         .sheet(isPresented: $showsScopeSheet) {
             AssistantScopeSheet(
@@ -198,9 +189,18 @@ struct AssistantView: View {
         AssistantHeader(
             mode: store.messages.isEmpty ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
-            onHistory: { showConversations = true },
-            onMore: { showMoreMenu = true }
-        )
+            onHistory: { showConversations = true }
+        ) {
+            Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
+            Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
+            Button { showCapabilities = true } label: { Label("Co potrafi asystent", systemImage: "sparkles") }
+            Button { showHowItWorks = true } label: { Label("Jak działa asystent", systemImage: "questionmark.bubble") }
+            Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
+            Button { showUsage = true } label: { Label("Limity asystenta", systemImage: "chart.bar") }
+            Button { showConsentReview = true } label: { Label("Prywatność i zgoda", systemImage: "lock.shield") }
+            Divider()
+            Button(role: .destructive) { showDeleteAlert = true } label: { Label("Usuń historię rozmów", systemImage: "trash") }
+        }
     }
 
     /// Bez zgody (403 z serwera albo stan z `/me/consents`) zakładka pokazuje
@@ -208,7 +208,12 @@ struct AssistantView: View {
     private var gateActive: Bool {
         if store.needsConsent { return true }
         guard let consents = sessionStore.consentStore else { return false }
-        return consents.isLoaded && !consents.assistantGranted
+        // Bramka, dopóki NIE wiemy na pewno, że zgoda jest. Nowy użytkownik
+        // widział rozmowę zamiast „Zanim zaczniemy", bo stan zgód wczytywał się
+        // po pierwszym renderze, a starszy serwer bez pól wersji nie wczytywał
+        // się wcale. Ktoś ze zgodą, którego stan chwilowo nie doszedł, widzi
+        // bramkę jeszcze raz — jedno stuknięcie, bez szkody.
+        return !(consents.isLoaded && consents.assistantGranted)
     }
 
     private var conversationTitle: String? {

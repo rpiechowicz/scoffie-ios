@@ -13,7 +13,7 @@ import SwiftUI
 /// Duży tytuł ma sens wyłącznie na pustym ekranie — w trwającej rozmowie
 /// zjada wiersz treści, a tytuł rozmowy niesie więcej informacji niż słowo
 /// „Asystent”. Kompaktowy pasek oddaje te ~40 pt strumieniowi wiadomości.
-struct AssistantHeader: View {
+struct AssistantHeader<MenuContent: View>: View {
     enum Mode: Equatable {
         case large
         /// Tytuł nadaje serwer z pierwszej wiadomości; `nil` = jeszcze nie doszedł.
@@ -23,7 +23,9 @@ struct AssistantHeader: View {
     let mode: Mode
     var onNewConversation: () -> Void
     var onHistory: () -> Void
-    var onMore: () -> Void
+    /// Pozycje menu ⋯ — systemowe `Menu` z ikonami (projekt „Asystent Zgoda"),
+    /// nie arkusz z dołu: siedem pozycji czyta się szybciej przy przycisku.
+    @ViewBuilder var menu: () -> MenuContent
 
     @Environment(\.colorScheme) private var scheme
 
@@ -84,10 +86,29 @@ struct AssistantHeader: View {
                 EditorialIconButton(icon: "clock.arrow.circlepath", accessibilityTitle: "Historia rozmów", action: onHistory)
             } else {
                 EditorialIconButton(icon: "clock.arrow.circlepath", accessibilityTitle: "Historia rozmów", action: onHistory)
-                EditorialIconButton(icon: "ellipsis", accessibilityTitle: "Więcej opcji asystenta", action: onMore)
+                menuButton
             }
         }
         .fixedSize(horizontal: true, vertical: false)
+    }
+
+    /// Ta sama pigułka co `EditorialIconButton`, ale jako etykieta `Menu`.
+    private var menuButton: some View {
+        Menu {
+            menu()
+        } label: {
+            ZStack {
+                Circle().fill(Color.wmTileBg(scheme))
+                Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+            }
+            .frame(width: 38, height: 38)
+            .contentShape(Circle())
+        }
+        .menuOrder(.fixed)
+        .accessibilityLabel("Więcej opcji asystenta")
     }
 }
 

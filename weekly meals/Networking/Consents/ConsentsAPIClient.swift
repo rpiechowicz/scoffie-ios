@@ -24,10 +24,10 @@ struct ConsentStatusDTO: Decodable, Equatable {
     let granted: Bool
     let documentVersion: String?
     let at: String?
-    /// Wersja, którą serwer uważa za bieżącą (`YYYY-MM-DD`).
-    let currentVersion: String
+    /// Wersja, którą serwer uważa za bieżącą (`YYYY-MM-DD`); starszy serwer jej nie oddaje.
+    let currentVersion: String?
     /// Najstarsza wersja, którą serwer jeszcze honoruje.
-    let minimumVersion: String
+    let minimumVersion: String?
 }
 
 struct RecordConsentRequestDTO: Encodable {
