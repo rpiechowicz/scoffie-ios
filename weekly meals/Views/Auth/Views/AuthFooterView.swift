@@ -343,6 +343,7 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("Railway Corp. — hosting serwera i bazy danych (infrastruktura Aplikacji),")
                 LegalBullet("Cloudflare, Inc. — przechowywanie i serwowanie zdjęć przepisów z katalogu oraz przechowywanie zaszyfrowanych kopii zapasowych bazy danych (kopie zawierają dane osobowe; 30 dni),")
                 LegalBullet("GitHub, Inc. (Microsoft) — wykonanie nocnej kopii zapasowej bazy: zrzut przechodzi przez środowisko GitHub Actions i jest usuwane zaraz po wysłaniu do Cloudflare,")
+                LegalBullet("Functional Software, Inc. (Sentry) — zbieranie błędów aplikacji i serwera: identyfikator żądania, kod i ścieżka błędu, wersja, identyfikator użytkownika; bez treści wiadomości i danych profilu; serwery w Unii Europejskiej,")
                 LegalBullet("Apple Inc. — Sign in with Apple, powiadomienia push, App Store,")
                 LegalBullet("Anthropic, PBC — model językowy asystenta AI, w zakresie z sekcji 6, wyłącznie dla osób, które wyraziły zgodę,")
                 LegalBullet("Vorwerk (Cookidoo) — wyłącznie jeśli użytkownik połączy konto Cookidoo, w zakresie z sekcji 8,")
