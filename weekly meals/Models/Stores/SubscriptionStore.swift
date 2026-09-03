@@ -2,12 +2,55 @@ import Foundation
 import Observation
 import StoreKit
 
-/// Produkty subskrypcji w App Store Connect. Identyfikatory są umową
-/// z panelem Apple — zmiana tutaj bez zmiany tam = pusty paywall.
+/// Plan PRO w App Store — trzy stopnie drabiny nazwanej wielkością domu.
+///
+/// Liczby MUSZĄ być identyczne z `src/config/subscription-products.ts` na
+/// serwerze i z opisem produktu w App Store Connect: Apple wymaga podania
+/// konkretnych ilości przed zakupem (3.1.2(c)), a liczba na paywallu staje
+/// się obietnicą. Serwer jest źródłem prawdy o tym, ile komu zostało —
+/// te wartości służą wyłącznie do opisania oferty przed zakupem.
+///
+/// Liczba osób jest ETYKIETĄ, nie bramką: nikt nie liczy domowników. Większy
+/// dom po prostu zużywa pulę szybciej, więc wybiera wyższy plan.
+struct SubscriptionPlan: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let seatsLabel: String
+    let messages: Int
+    let plans: Int
+
+    var quantityLine: String {
+        "\(messages) wiadomości i \(plans) zapisów planu w miesiącu"
+    }
+}
+
 enum SubscriptionCatalog {
-    /// PRO dla gospodarstwa, odnawiane co miesiąc.
-    static let proMonthly = "pl.weeklymeals.pro.monthly"
-    static let all = [proMonthly]
+    static let solo = SubscriptionPlan(
+        id: "pl.weeklymeals.pro.solo.monthly",
+        name: "Solo",
+        seatsLabel: "1 osoba",
+        messages: 40,
+        plans: 6
+    )
+    static let duet = SubscriptionPlan(
+        id: "pl.weeklymeals.pro.duet.monthly",
+        name: "Duet",
+        seatsLabel: "2 osoby",
+        messages: 60,
+        plans: 8
+    )
+    static let family = SubscriptionPlan(
+        id: "pl.weeklymeals.pro.family.monthly",
+        name: "Rodzina",
+        seatsLabel: "3 osoby i więcej",
+        messages: 100,
+        plans: 14
+    )
+
+    /// Kolejność jak na paywallu; `duet` jest preselekcjonowany.
+    static let all: [SubscriptionPlan] = [solo, duet, family]
+    static let identifiers = all.map(\.id)
+    static let recommended = duet
 
     /// Zakup przechodzi dopiero, gdy serwer umie zweryfikować transakcję
     /// i nadać PRO (App Store Server API). Do tego czasu paywall pokazuje
@@ -18,9 +61,9 @@ enum SubscriptionCatalog {
 /// StoreKit 2: produkty, zakup, przywracanie i nasłuch transakcji.
 ///
 /// Uprawnienie (PRO) NIE jest liczone na telefonie — źródłem prawdy jest
-/// serwer (`GET /agent/usage` → `tier`/`source`), bo pula jest wspólna dla
-/// domu, a subskrypcję kupuje jedna osoba. Telefon tylko zgłasza transakcję
-/// serwerowi i odświeża stan.
+/// serwer (`GET /agent/usage` → `tier`/`source`/`product`), bo pula jest
+/// wspólna dla domu, a subskrypcję kupuje jedna osoba. Telefon tylko zgłasza
+/// transakcję serwerowi i odświeża stan.
 @Observable
 @MainActor
 final class SubscriptionStore {
@@ -33,10 +76,6 @@ final class SubscriptionStore {
 
     private var updatesTask: Task<Void, Never>?
 
-    var proMonthly: StoreKit.Product? {
-        products.first { $0.id == SubscriptionCatalog.proMonthly }
-    }
-
     init() {
         updatesTask = Task { [weak self] in
             for await result in Transaction.updates {
@@ -46,12 +85,16 @@ final class SubscriptionStore {
         }
     }
 
+    func product(for plan: SubscriptionPlan) -> StoreKit.Product? {
+        products.first { $0.id == plan.id }
+    }
+
     func loadProducts() async {
         guard products.isEmpty, !isLoadingProducts else { return }
         isLoadingProducts = true
         defer { isLoadingProducts = false }
         do {
-            products = try await StoreKit.Product.products(for: SubscriptionCatalog.all)
+            products = try await StoreKit.Product.products(for: SubscriptionCatalog.identifiers)
             lastError = nil
         } catch {
             // Brak produktów to najczęściej brak konfiguracji w App Store

@@ -2,23 +2,28 @@ import StoreKit
 import SwiftUI
 
 /// Paywall PRO — otwierany z „Odblokuj PRO" (limity, zablokowane pole).
-/// Jedna oferta (PRO miesięcznie dla całego domu), cena z App Store, trzy
-/// konkrety zamiast listy marketingowej, przywracanie zakupów i linki do
-/// regulaminu i polityki (App Store 3.1.2). Dopóki serwer nie weryfikuje
-/// transakcji, przycisk zakupu jest nieaktywny i mówi dlaczego — bez
-/// pobierania pieniędzy za nic.
+///
+/// Trzy plany nazwane wielkością domu: Solo, Duet, Rodzina. Nikt nie liczy
+/// domowników — większy dom po prostu zużywa pulę szybciej, więc wybiera
+/// wyższy plan. Każdy plan podaje KONKRETNE ilości (App Store 3.1.2(c)),
+/// te same, które egzekwuje serwer.
+///
+/// Dopóki serwer nie weryfikuje transakcji, przycisk zakupu jest nieaktywny
+/// i mówi dlaczego — bez pobierania pieniędzy za coś, czego nie umiemy jeszcze
+/// włączyć.
 struct AssistantPaywallSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var subscriptions = SubscriptionStore()
+    @State private var selected = SubscriptionCatalog.recommended
     @State private var notice: String?
     @State private var showTerms = false
     @State private var showPrivacy = false
 
     private let perks: [(icon: String, accent: AssistantAccent, title: String, detail: String)] = [
-        ("sparkles", .terracotta, "200 wiadomości miesięcznie", "Plan tygodnia, podmiany, makro, zakupy — dla całego domu, nie per osoba."),
-        ("checkmark.rectangle.stack.fill", .sage, "30 zapisów planu miesięcznie", "Każde „Dodaj do planu”. Oglądanie propozycji dalej bez limitu."),
-        ("person.2.fill", .indigo, "Jedna subskrypcja, cały dom", "Kupuje jedna osoba, korzystają wszyscy domownicy ze zgodą."),
+        ("sparkles", .terracotta, "Plan tygodnia w jednym zdaniu", "Asystent zna dietę, alergeny i cele całego domu. Propozycję dodajesz Ty."),
+        ("arrow.triangle.2.circlepath", .indigo, "Podmiany i domykanie makro", "Każda zmiana ma powód i różnicę kalorii. Oglądanie propozycji bez limitu."),
+        ("person.2.fill", .sage, "Jedna subskrypcja, cały dom", "Kupuje jedna osoba, korzystają wszyscy domownicy ze zgodą."),
     ]
 
     var body: some View {
@@ -32,11 +37,17 @@ struct AssistantPaywallSheet: View {
                             dismiss()
                         }
 
-                        Text("Pula na próbę się kończy, apetyt nie. PRO odnawia limity co miesiąc dla całego gospodarstwa.")
+                        Text("Pula na próbę się kończy, apetyt nie. Wybierz plan pod wielkość domu — im więcej osób, tym szybciej znika pula wiadomości.")
                             .font(.system(size: 14.5))
                             .lineSpacing(3)
                             .foregroundStyle(Color.wmMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
+
+                        VStack(spacing: 10) {
+                            ForEach(SubscriptionCatalog.all) { plan in
+                                planRow(plan)
+                            }
+                        }
 
                         AssistantSurfaceCard {
                             ForEach(Array(perks.enumerated()), id: \.offset) { index, perk in
@@ -62,8 +73,6 @@ struct AssistantPaywallSheet: View {
                             }
                         }
 
-                        priceCard
-
                         if let notice {
                             Text(notice)
                                 .font(.system(size: 12.5, weight: .semibold))
@@ -74,7 +83,7 @@ struct AssistantPaywallSheet: View {
                                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WMPalette.terracotta.opacity(0.12)))
                         }
 
-                        Text("Subskrypcja odnawia się automatycznie co miesiąc, dopóki jej nie wyłączysz w ustawieniach App Store najpóźniej 24 h przed końcem okresu. Płatność pobiera Apple.")
+                        Text("Subskrypcja odnawia się automatycznie co miesiąc, dopóki jej nie wyłączysz w ustawieniach App Store najpóźniej 24 h przed końcem okresu. Płatność pobiera Apple. Plan zmienisz w każdej chwili — wyższy działa od razu, niższy od następnego okresu.")
                             .font(.system(size: 11.5))
                             .lineSpacing(2)
                             .foregroundStyle(Color.wmFaint(scheme))
@@ -105,10 +114,12 @@ struct AssistantPaywallSheet: View {
                         title: purchaseTitle,
                         leadingIcon: "sparkles",
                         trailingIcon: nil,
-                        isEnabled: subscriptions.proMonthly != nil && SubscriptionCatalog.purchasesEnabled && !subscriptions.isPurchasing,
+                        isEnabled: subscriptions.product(for: selected) != nil
+                            && SubscriptionCatalog.purchasesEnabled
+                            && !subscriptions.isPurchasing,
                         isLoading: subscriptions.isPurchasing
                     ) {
-                        guard let product = subscriptions.proMonthly else { return }
+                        guard let product = subscriptions.product(for: selected) else { return }
                         Task {
                             switch await subscriptions.purchase(product) {
                             case .purchased:
@@ -138,37 +149,83 @@ struct AssistantPaywallSheet: View {
 
     private var purchaseTitle: String {
         if !SubscriptionCatalog.purchasesEnabled { return "Wkrótce w App Store" }
-        if let product = subscriptions.proMonthly { return "Subskrybuj za \(product.displayPrice) / miesiąc" }
-        return "Subskrybuj"
+        if let product = subscriptions.product(for: selected) {
+            return "Wybierz \(selected.name) za \(product.displayPrice)"
+        }
+        return "Wybierz \(selected.name)"
     }
 
-    private var priceCard: some View {
-        AssistantSurfaceCard(padding: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    AssistantSectionLabel(text: "PRO · miesięcznie", color: WMPalette.sage)
-                    if let product = subscriptions.proMonthly {
-                        Text(product.displayPrice)
-                            .font(.system(size: 28, weight: .bold))
-                            .tracking(-0.8)
-                            .foregroundStyle(Color.wmLabel(scheme))
-                        Text("za gospodarstwo, odnawiane co miesiąc")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.wmMuted(scheme))
-                    } else if subscriptions.isLoadingProducts {
-                        ProgressView().padding(.vertical, 6)
-                    } else {
-                        Text("Cena widoczna w App Store")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(scheme))
-                        Text(subscriptions.lastError ?? "Oferta pojawi się, gdy PRO będzie dostępne w App Store.")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.wmMuted(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
+    /// Wiersz planu: nazwa, dla kogo, ILOŚCI (wymóg 3.1.2(c)) i cena z App Store.
+    private func planRow(_ plan: SubscriptionPlan) -> some View {
+        let isSelected = plan == selected
+        let product = subscriptions.product(for: plan)
+        return Button {
+            selected = plan
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? WMPalette.terracotta : Color.clear)
+                    Circle()
+                        .stroke(isSelected ? Color.clear : Color.wmFaint(scheme), lineWidth: 1.5)
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundStyle(Color.wmPageBase(scheme))
                     }
                 }
+                .frame(width: 22, height: 22)
+                .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(plan.name)
+                            .font(.system(size: 16, weight: .bold))
+                            .tracking(-0.3)
+                            .foregroundStyle(Color.wmLabel(scheme))
+                        if plan == SubscriptionCatalog.recommended {
+                            Text("najczęściej wybierany")
+                                .font(.system(size: 10, weight: .bold))
+                                .textCase(.uppercase)
+                                .tracking(0.4)
+                                .foregroundStyle(WMPalette.sage)
+                                .padding(.horizontal, 7)
+                                .frame(height: 18)
+                                .background(Capsule().fill(Color.wmSageTint(scheme)))
+                        }
+                    }
+                    Text(plan.seatsLabel)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                    Text(plan.quantityLine)
+                        .font(.system(size: 13))
+                        .lineSpacing(1.5)
+                        .foregroundStyle(Color.wmLabel(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Spacer(minLength: 0)
+
+                Text(product?.displayPrice ?? "—")
+                    .font(.system(size: 15, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(isSelected ? WMPalette.terracotta : Color.wmLabel(scheme))
+                    .padding(.top, 2)
             }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isSelected ? Color.wmAccentTint(scheme) : Color.wmTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(isSelected ? WMPalette.terracotta.opacity(0.45) : Color.wmTileStroke(scheme), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityLabel("\(plan.name), \(plan.seatsLabel), \(plan.quantityLine)")
     }
 }

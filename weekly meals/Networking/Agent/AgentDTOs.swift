@@ -167,6 +167,8 @@ struct AgentUsageDTO: Decodable, Equatable {
     let tier: String
     /// Skąd PRO: `SUBSCRIPTION`, `GRANTED` (nadanie), `ENV`; `TRIAL` na próbie.
     let source: String?
+    /// Nazwa kupionego planu (Solo/Duet/Rodzina); `nil` = limity z konfiguracji.
+    let product: String?
     let messages: AgentQuotaDTO
     let plans: AgentQuotaDTO
     /// Rozkład na domowników w tym okresie; starszy serwer nie oddaje pola.

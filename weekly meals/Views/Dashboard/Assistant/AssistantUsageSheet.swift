@@ -98,7 +98,9 @@ struct AssistantUsageSheet: View {
         let tone: Color = usage.isTrial ? WMPalette.butter : WMPalette.sage
         let tint: Color = usage.isTrial ? Color.wmButterTint(scheme) : Color.wmSageTint(scheme)
         return VStack(alignment: .leading, spacing: 6) {
-            Text(usage.isTrial ? "Dostęp próbny" : (sessionStore.currentHouseholdName.map { "PRO · \($0)" } ?? "PRO"))
+            Text(usage.isTrial
+                 ? "Dostęp próbny"
+                 : "PRO · \(usage.product ?? sessionStore.currentHouseholdName ?? "cały dom")")
                 .font(.system(size: 12, weight: .bold))
                 .tracking(0.2)
                 .foregroundStyle(tone)
