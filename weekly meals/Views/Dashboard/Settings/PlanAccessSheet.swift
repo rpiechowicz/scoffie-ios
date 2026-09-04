@@ -249,7 +249,10 @@ struct PlanAccessSheet: View {
             }
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: Binding(
+            // Jawny `Binding<String?>`: `scrollPosition(id:)` chce opcjonalu,
+            // a `selected.id` jest zwykłym napisem — bez adnotacji kompilator
+            // wnioskuje `Binding<String>` i `if let` niżej przestaje mieć sens.
+            .scrollPosition(id: Binding<String?>(
                 get: { selected.id },
                 set: { id in
                     if let id, let plan = SubscriptionCatalog.all.first(where: { $0.id == id }) {
@@ -316,8 +319,7 @@ struct PlanAccessSheet: View {
                     Text(usage.payerName ?? "Ktoś z domu")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.wmLabel(scheme))
-                    Text([usage.product.map { "Plan \($0)" }, sessionStore.currentHouseholdName]
-                        .compactMap { $0 }.joined(separator: " · "))
+                    Text(payerSubtitle(usage))
                         .font(.system(size: 12.5))
                         .foregroundStyle(Color.wmMuted(scheme))
                         .lineLimit(1)
@@ -338,6 +340,16 @@ struct PlanAccessSheet: View {
                 .padding(.vertical, 12)
                 .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
         }
+    }
+
+    /// „Plan Rodzina · dom Kowalskich". Osobno, bo złożenie tablicy opcjonali
+    /// z `compactMap` i `joined` w środku `Text(...)` potrafi położyć
+    /// sprawdzanie typów SwiftUI na łopatki.
+    private func payerSubtitle(_ usage: AgentUsageDTO) -> String {
+        var parts: [String] = []
+        if let product = usage.product { parts.append("Plan \(product)") }
+        if let household = sessionStore.currentHouseholdName { parts.append(household) }
+        return parts.joined(separator: " · ")
     }
 
     private func payerAvatar(_ name: String) -> some View {
@@ -389,6 +401,14 @@ struct PlanAccessSheet: View {
 
     @ViewBuilder
     private func sharedUsage(_ usage: AgentUsageDTO, color: Color, showMembers: Bool = true) -> some View {
+        // Wyliczone przed widokiem: warunek z opcjonalem i `nil` w argumencie
+        // to dokładnie ten rodzaj wyrażenia, na którym SwiftUI potrafi się
+        // zaciąć przy sprawdzaniu typów.
+        let members: [AgentUsageByUserDTO] = showMembers ? (usage.byUser ?? []) : []
+        let membersDetail: String? = members.isEmpty
+            ? nil
+            : "Kto ile wykorzystał w tym miesiącu:"
+
         PlanSectionLabel("Ten miesiąc · pula wspólna")
             .padding(.top, 20)
 
@@ -397,10 +417,8 @@ struct PlanAccessSheet: View {
                 eyebrow: "Wiadomości",
                 quota: usage.messages,
                 color: color,
-                detail: showMembers && usage.byUser?.isEmpty == false
-                    ? "Kto ile wykorzystał w tym miesiącu:"
-                    : nil,
-                members: showMembers ? (usage.byUser ?? []) : []
+                detail: membersDetail,
+                members: members
             )
             PlanUsageCard(
                 eyebrow: "Zapisy planu",
