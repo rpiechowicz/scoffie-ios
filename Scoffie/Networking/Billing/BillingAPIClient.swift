@@ -17,6 +17,9 @@ struct BillingSubscriptionDTO: Decodable, Equatable {
     let environment: String?
     let messagesLimit: Int?
     let plansLimit: Int?
+    /// Powód ręcznego odebrania dostępu przez obsługę; `nil` = bez blokady.
+    /// Bez tego pola ekran pokazywałby „nieaktywna" bez jednego słowa dlaczego.
+    let operatorHold: String?
 }
 
 /// Odpowiedź `GET /billing/subscription`.

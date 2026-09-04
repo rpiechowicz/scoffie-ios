@@ -88,6 +88,17 @@ enum SubscriptionCatalog {
 final class SubscriptionStore {
     enum PurchaseOutcome { case purchased, pending, cancelled, failed(String) }
 
+    /// Co serwer zrobił ze zgłoszoną transakcją.
+    ///
+    /// Rozróżnienie jest istotne dla DWÓCH rzeczy naraz: co pokazać człowiekowi
+    /// (zakup przeszedł czy nie) i czy domknąć transakcję w StoreKit (odmowa
+    /// trwała — tak, chwilowa — nie, bo Apple ma o niej przypomnieć).
+    enum ReportOutcome {
+        case accepted
+        case rejected(String)
+        case postponed(String)
+    }
+
     private(set) var products: [StoreKit.Product] = []
     private(set) var isLoadingProducts = false
     private(set) var isPurchasing = false
@@ -113,7 +124,9 @@ final class SubscriptionStore {
         updatesTask = Task { [weak self] in
             for await result in Transaction.updates {
                 guard let self else { return }
-                await self.handle(result)
+                // Wynik ląduje w `lastError`; tu nie ma komu go pokazać, a
+                // odmowa trwała i tak domknie transakcję w `handle`.
+                _ = await self.handle(result)
             }
         }
     }
@@ -159,8 +172,24 @@ final class SubscriptionStore {
             let result = try await product.purchase(options: options)
             switch result {
             case let .success(verification):
-                await handle(verification)
-                return .purchased
+                // „DZIĘKUJEMY" DOPIERO PO PRZYJĘCIU PRZEZ SERWER. Apple pobrało
+                // pieniądze, ale dostęp nadaje serwer — a on potrafi odmówić
+                // (Chmura Rodzinna, zakup przypisany do innego konta, sandbox
+                // na produkcji). Wcześniej ekran mówił „Dziękujemy" niezależnie
+                // od tego, co odpowiedział serwer, więc człowiek widział
+                // potwierdzenie zakupu i zero asystenta, bez żadnej wskazówki,
+                // co dalej.
+                switch await handle(verification) {
+                case .accepted:
+                    return .purchased
+                case let .rejected(message):
+                    return .failed(message)
+                case let .postponed(message):
+                    // Pieniądze poszły, dostęp jeszcze nie — transakcja została
+                    // otwarta, więc StoreKit przypomni o niej sam.
+                    lastError = message
+                    return .pending
+                }
             case .pending:
                 return .pending
             case .userCancelled:
@@ -177,7 +206,12 @@ final class SubscriptionStore {
     /// przechodzą przez `handle` jak każde inne.
     func restore() async {
         do {
+            lastError = nil
             try await AppStore.sync()
+            // `sync()` przepycha uprawnienia do `Transaction.updates`, ale nie
+            // czeka na nie. Stan i tak trzeba dociągnąć z serwera — bez tego
+            // ekran po „Przywróć zakupy" wygląda identycznie jak przed nim.
+            await refreshState()
         } catch {
             lastError = "Nie udało się przywrócić zakupów."
         }
@@ -195,16 +229,47 @@ final class SubscriptionStore {
     /// Weryfikacji NIE robimy na telefonie: `.unverified` też zgłaszamy, bo
     /// jedynym miejscem, które ma prawo rozstrzygać o podpisie, jest serwer
     /// z łańcuchem do przypiętego korzenia Apple.
-    private func handle(_ result: VerificationResult<Transaction>) async {
-        guard let client else { return }
+    private func handle(_ result: VerificationResult<Transaction>) async -> ReportOutcome {
+        guard let client else { return .postponed("Brak połączenia z serwerem.") }
         do {
             _ = try await client.register(signedTransaction: result.jwsRepresentation)
             await refreshState()
             if case let .verified(transaction) = result {
                 await transaction.finish()
             }
+            lastError = nil
+            return .accepted
         } catch {
-            lastError = "Nie udało się potwierdzić zakupu. Spróbujemy ponownie."
+            let message = UserFacingErrorMapper.message(from: error)
+            if Self.isPermanentRefusal(error) {
+                // ODMOWA TRWAŁA MUSI DOMKNĄĆ TRANSAKCJĘ. Otwarta transakcja
+                // wraca w `Transaction.updates` przy KAŻDYM starcie aplikacji,
+                // więc zgłoszenie, które serwer odrzuci i za tydzień, kręciłoby
+                // się w nieskończoność: to samo żądanie, ten sam błąd, ten sam
+                // komunikat przy każdym uruchomieniu. Domknięcie nie kasuje
+                // subskrypcji w App Store — kończy tylko nasze przypominanie.
+                if case let .verified(transaction) = result {
+                    await transaction.finish()
+                }
+                lastError = message
+                return .rejected(message)
+            }
+            // Awaria sieci albo serwera: transakcja ZOSTAJE otwarta, żeby
+            // Apple przypomniało o niej przy następnym starcie.
+            lastError = message
+            return .postponed(message)
         }
+    }
+
+    /// Czy serwer odmówił NA STAŁE. Odmowa trwała to decyzja o tym konkretnym
+    /// zakupie, która nie zmieni się od ponowienia; wszystko inne (5xx, brak
+    /// sieci, wygasła sesja) jest chwilowe i ma wrócić.
+    private static func isPermanentRefusal(_ error: Error) -> Bool {
+        guard let apiError = error as? BackendAPIError else { return false }
+        guard case let .backend(code, status, _) = apiError else { return false }
+        if code == "UNAUTHORIZED" { return false }
+        // 503 BILLING_DISABLED i 503 BILLING_UPSTREAM_UNAVAILABLE to „spróbuj
+        // później", a nie „ten zakup jest zły".
+        return (400..<500).contains(status)
     }
 }
