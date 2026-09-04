@@ -1,51 +1,35 @@
 # Scoffie Logo
 
-Aktualny kierunek (v3 "WM Steam", Recraft): **Steaming Bowl** — terakotowa
-miska (#BE4834), z której żółta para (#ECD034) układa się w litery `WM`
-(Scoffie). Wygenerowane w Recraft AI, wyczyszczone z metadanych C2PA.
-Cieplejsze i bardziej ilustracyjne niż v2, dalej czytelne w skali tiny
-(28pt) i hero (140pt+).
+## Aktualne źródło
 
-## Pliki
+`scoffie-logo.svg` — 1024×1024, trzy ścieżki wektorowe, kolory `#D2452D`
+(czerwień), `#ECB936` (żółć) i `#F1F1EC` (tło). To jest logo Scoffie i to ono
+obowiązuje.
 
-- `scoffie-logo-v3.svg` — źródło 1024×1024 na kremowym tle (#F7F7F2).
-  To jest aktualny logo source.
-- `scoffie-logo-v3-transparent.svg` — sama grafika bez tła (do użycia
-  na dowolnym tle).
-- `scoffie-logo-v3-mark.svg` — monochromatyczny znak (`currentColor`)
-  do użycia jako pojedynczy kolor (np. share-sheet glyph).
+## CO JESZCZE NIE JEST ZROBIONE
 
-App icons w `Assets.xcassets/AppIcon.appiconset/` są wyeksportowane z v3
-(przez `qlmanage`): primary (kremowe tło), dark (gradient #3A2A20→#1A1411),
-tinted (grayscale na #1C1C1C).
+**Aplikacja nadal rysuje stare logo, a ono układa parę w litery „WM".** To są
+inicjały Weekly Meals, czyli najbardziej widoczny ślad po starej nazwie —
+widzi go każdy przy pierwszym uruchomieniu i na ekranie logowania.
 
-### Legacy (zostają dla referencji, nie są aktualnym kierunkiem)
+Do zrobienia, w tej kolejności:
 
-- `scoffie-logo-bowl.svg` (+ `-light`, `-mark`) — v2 "Cozy Kitchen"
-  Steaming Bowl (miska + 3 strugi pary w abstrakcyjne `W`).
-- `scoffie-logo-icon.svg`, `scoffie-logo-mark.svg` — pierwszy
-  monogram `W`.
-- `scoffie-app-icon-v2.svg` (+ `-dark-v2`, `-tinted-v2`) — App Store
-  icon z monogramem `W` (wymienione na v3).
+1. **Ikona aplikacji.** `Assets.xcassets/AppIcon.appiconset` trzyma trzy pliki
+   PNG (`app-icon-primary`, `app-icon-dark`, `app-icon-tinted`). Xcode nie
+   przyjmuje SVG jako ikony, więc trzeba wyeksportować `scoffie-logo.svg` do
+   PNG 1024×1024 i podmienić. Tego kroku nie da się zrobić bez narzędzia
+   rasteryzującego — na Macu wystarczy podgląd albo dowolny edytor.
+2. **Logo w aplikacji.** `WMSteamingBowlLogo.swift` rysuje starą miskę
+   ścieżkami wprost w SwiftUI, razem z parą w kształcie „WM". Trzeba albo
+   przerysować nowe logo na ścieżki, albo wstawić `scoffie-logo.svg` do
+   katalogu zasobów jako obrazek wektorowy i zastąpić nim rysowanie.
+   Nazwa typu też jest do zmiany — pójdzie razem z etapem 2 rebrandingu.
+3. **Stare pliki źródłowe.** Reszta plików w tym katalogu to warianty logo
+   „WM Steam" z poprzedniej marki. Mają już nazwy `scoffie-*`, ale rysunek
+   w środku jest stary. Do skasowania, gdy nowe warianty będą gotowe.
 
-## SwiftUI
+## Historia
 
-Logo jest renderowane natywnie przez `WMSteamingBowlLogo`
-(`weekly meals/Components/WMSteamingBowlLogo.swift`) — Canvas-based,
-wektorowo, bez aliasingu i bez bundlowania PNG-ów. Ścieżki przeniesione
-1:1 z `scoffie-logo-v3.svg` (viewBox 1024 ÷ 10.24 → 100×100);
-pominięte są cztery subpikselowe ścieżki-łatki generatora
-(#F9F19F/#CC8568/#D8B7A1 — szwy antyaliasingu, na ciemnym tle
-błyszczałyby jako drobiny). Parametry:
-
-- `size` — bok kwadratu (px)
-- `mono` — true → jednokolorowy znak, tło = `bgCard` z palety
-- `palette` — `.auto` (śledzi `ColorScheme`), `.dark`, `.light`
-
-## Design intent
-
-- Misa = kuchnia, prostota, codzienność.
-- Para w kształcie liter `WM` = Scoffie; naturalna kontynuacja
-  motywu "para znad miski" z v2.
-- Terakota + żółć + krem — zgodne z "cozy kitchen" paletą (`WMPalette`
-  w `Components/WMDesignSystem.swift`).
+Poprzednie logo (v3 „WM Steam", Recraft): terakotowa miska (#BE4834),
+z której żółta para (#ECD034) układa się w litery `WM`. Zastąpione przy
+zmianie nazwy na Scoffie 4.09.2026.
