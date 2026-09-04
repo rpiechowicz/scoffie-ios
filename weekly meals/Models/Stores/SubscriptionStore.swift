@@ -40,7 +40,7 @@ struct SubscriptionPlan: Identifiable, Equatable {
 
 enum SubscriptionCatalog {
     static let solo = SubscriptionPlan(
-        id: "pl.weeklymeals.pro.solo.monthly",
+        id: "app.scoffie.pro.solo.monthly",
         name: "Solo",
         seatsLabel: "1 osoba",
         messages: 30,
@@ -48,7 +48,7 @@ enum SubscriptionCatalog {
         pricePln: 29.99
     )
     static let duet = SubscriptionPlan(
-        id: "pl.weeklymeals.pro.duet.monthly",
+        id: "app.scoffie.pro.duet.monthly",
         name: "We dwoje",
         seatsLabel: "2 osoby",
         messages: 50,
@@ -56,7 +56,7 @@ enum SubscriptionCatalog {
         pricePln: 39.99
     )
     static let family = SubscriptionPlan(
-        id: "pl.weeklymeals.pro.family.monthly",
+        id: "app.scoffie.pro.family.monthly",
         name: "Rodzina",
         seatsLabel: "3 osoby i więcej",
         messages: 75,

@@ -5,7 +5,7 @@ import Security
 /// Keychain jest szyfrowany przez system i chroniony przez Secure Enclave.
 enum KeychainService {
 
-    private static let service = "rpiechowicz.weekly-meals"
+    private static let service = "app.scoffie"
 
     // MARK: - Public API
 

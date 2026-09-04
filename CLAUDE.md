@@ -1,4 +1,4 @@
-# Weekly Meals — iOS (SwiftUI)
+# Scoffie — iOS (SwiftUI)
 
 Aplikacja iOS dla backendu `rpiechowicz/weakly-meals-backend`. Pełny kontekst projektu,
 decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-stan.md`,

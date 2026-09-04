@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Editorial top header on Przepisy v2 — W3 "Story carousel" variant.
-// Source: design/Weekly Meals - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
+// Source: design/Scoffie - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
 //   Outer block — `padding: '58px 20px 16px'` for the title row,
 //   `0 20px 18px` for the search row.
 //   Title — `EditorialPageHeader`, wspólny dla wszystkich zakładek.

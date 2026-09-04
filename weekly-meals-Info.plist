@@ -15,10 +15,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>weeklymeals</string>
+			<string>scoffie</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>weeklymeals</string>
+				<string>scoffie</string>
 			</array>
 		</dict>
 	</array>

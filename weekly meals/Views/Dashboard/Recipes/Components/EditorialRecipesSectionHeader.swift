@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Section header for the "Tasting menu" lists below the carousel on
-// Przepisy v2. Source: design/Weekly Meals - Przepisy.html → recipes-v2.jsx
+// Przepisy v2. Source: design/Scoffie - Przepisy.html → recipes-v2.jsx
 // W4SectionHeader.
 //   Outer padding `22px 20px 12px`, items aligned to flex-end.
 //   Accent rod 5×36 with `0 0 18px accent` glow.

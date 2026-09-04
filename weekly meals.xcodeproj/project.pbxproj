@@ -291,9 +291,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "weekly-meals-Info.plist";
 				INFOPLIST_KEY_API_BASE_URL = "https://weakly-meals-backend-production.up.railway.app";
-				INFOPLIST_KEY_CFBundleDisplayName = "Weekly Meals";
-				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLName = weeklymeals;
-				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLSchemes_0 = weeklymeals;
+				INFOPLIST_KEY_CFBundleDisplayName = "Scoffie";
+				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLName = scoffie;
+				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLSchemes_0 = scoffie;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -307,7 +307,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "rpiechowicz.weekly-meals";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.scoffie";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -337,9 +337,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "weekly-meals-Info.plist";
 				INFOPLIST_KEY_API_BASE_URL = "https://weakly-meals-backend-production.up.railway.app";
-				INFOPLIST_KEY_CFBundleDisplayName = "Weekly Meals";
-				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLName = weeklymeals;
-				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLSchemes_0 = weeklymeals;
+				INFOPLIST_KEY_CFBundleDisplayName = "Scoffie";
+				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLName = scoffie;
+				INFOPLIST_KEY_CFBundleURLTypes_0_CFBundleURLSchemes_0 = scoffie;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -353,7 +353,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "rpiechowicz.weekly-meals";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.scoffie";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

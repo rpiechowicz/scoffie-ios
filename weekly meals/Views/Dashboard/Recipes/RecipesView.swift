@@ -2,7 +2,7 @@ import Combine
 import SwiftUI
 
 // Przepisy v2 — "Story carousel + Tasting menu" (W3 z handoff design'u).
-// Source: design/Weekly Meals - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
+// Source: design/Scoffie - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
 //
 // Layout (top → bottom):
 //   1. EditorialRecipesHeader  — tytuł "Przepisy" + pigułka wyszukiwarki

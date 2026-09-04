@@ -22,7 +22,7 @@ import SocketIO
 final class SocketIORecipeSocketClient: RecipeSocketClient {
     private let manager: SocketManager
     private let socket: SocketIOClient
-    private let socketQueue = DispatchQueue(label: "weeklymeals.socket.io.serial")
+    private let socketQueue = DispatchQueue(label: "scoffie.socket.io.serial")
     private let ackTimeoutSeconds: Double = 6
     private let maxAckAttempts: Int = 3
     /// Token czytany per `connect`, nie trzymany — Keychain jest źródłem
@@ -30,7 +30,7 @@ final class SocketIORecipeSocketClient: RecipeSocketClient {
     private let tokenProvider: () -> String?
     private var connectionObservers: [UUID: (Bool) -> Void] = [:]
     private var authFailureObservers: [UUID: (String) -> Void] = [:]
-    private let connectionObserversQueue = DispatchQueue(label: "weeklymeals.socket.connection-observers")
+    private let connectionObserversQueue = DispatchQueue(label: "scoffie.socket.connection-observers")
     /// Po odmowie auth `connectIfNeeded` nie łączy — czeka na
     /// `reconnectWithFreshToken()` po refreshu albo na jedną próbę z foregroundu.
     private var didAuthFail = false

@@ -1,6 +1,6 @@
-# Weekly Meals iOS
+# Scoffie iOS
 
-SwiftUI client for Weekly Meals. The app covers recipes, weekly planning, calendar view, shopping list flows, household collaboration, realtime sync, and local notification handling.
+SwiftUI client for Scoffie. The app covers recipes, weekly planning, calendar view, shopping list flows, household collaboration, realtime sync, and local notification handling.
 
 ## Requirements
 
@@ -41,8 +41,8 @@ For local backend development on a physical iPhone, override `API_BASE_URL` in y
 
 ## Runtime notes
 
-- URL scheme: `weeklymeals://`
-- Bundle identifier: `rpiechowicz.weekly-meals`
+- URL scheme: `scoffie://`
+- Bundle identifier: `app.scoffie`
 - Push token registration happens automatically after app launch and login
 - APNs testing requires a physical iPhone
 

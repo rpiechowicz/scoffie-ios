@@ -22,7 +22,7 @@ struct LegalDocumentsSheet: View {
                         dismiss()
                     }
 
-                    Text("Wersja \(LegalDocMeta.version) · obowiązuje od \(LegalDocMeta.effectiveDate). Te same dokumenty, które akceptujesz przy logowaniu; aktualne wersje są też na weekly-meals.app.")
+                    Text("Wersja \(LegalDocMeta.version) · obowiązuje od \(LegalDocMeta.effectiveDate). Te same dokumenty, które akceptujesz przy logowaniu; aktualne wersje są też na scoffie.app.")
                         .font(.system(size: 13))
                         .lineSpacing(2)
                         .foregroundStyle(Color.wmMuted(scheme))

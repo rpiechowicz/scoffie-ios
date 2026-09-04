@@ -87,7 +87,7 @@ struct StartupLoaderView: View {
 
     /// Ciepłe kremowe (light) / głęboko brązowe (dark) tło z dwiema
     /// radialnymi winietami w rogach — odwzorowanie `LoaderWeek` z designu
-    /// (`Weekly Meals - Loader i Logo.html`).
+    /// (`Scoffie - Loader i Logo.html`).
     private var background: some View {
         Color.wmCanvas(colorScheme)
             .overlay(vignettes)

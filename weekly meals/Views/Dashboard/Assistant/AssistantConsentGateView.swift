@@ -147,7 +147,7 @@ struct AssistantConsentGateView: View {
                         )
                         confirmRow(
                             isOn: isGranted ? .constant(true) : $confirmsData,
-                            title: "Zgadzam się, żeby Weekly Meals przetwarzał moje dane o diecie i alergiach w asystencie AI",
+                            title: "Zgadzam się, żeby Scoffie przetwarzał moje dane o diecie i alergiach w asystencie AI",
                             caption: "Wyraźna zgoda (art. 9 ust. 2 lit. a RODO) w zakresie opisanym wyżej; model językowy dostarcza Anthropic jako podmiot przetwarzający.",
                             first: false
                         )
