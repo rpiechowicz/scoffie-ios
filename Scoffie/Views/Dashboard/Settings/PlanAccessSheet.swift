@@ -220,28 +220,28 @@ struct PlanAccessSheet: View {
                 .padding(.top, 8)
         }
 
-        Text("Liczba osób to podpowiedź, nie limit. Pula jest wspólna dla całego domu.")
-            .font(.system(size: 12))
-            .lineSpacing(2)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(Color.scFaint(scheme))
-            .frame(maxWidth: .infinity)
-            .padding(.top, 14)
-
-        // WARUNKI ODNOWIENIA MUSZĄ STAĆ PRZY PRZYCISKU ZAKUPU, a nie tylko w
-        // regulaminie — App Store 3.1.2 wymaga, żeby przed pobraniem pieniędzy
-        // widać było długość okresu, cenę, automatyczne odnawianie i miejsce,
-        // w którym się je wyłącza. Brak tego zdania to jedna z częstszych
-        // przyczyn odrzucenia aplikacji przy pierwszej recenzji.
-        Text(Self.renewalTerms)
-            .font(.system(size: 11.5))
-            .lineSpacing(2)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(Color.scFaint(scheme))
-            .frame(maxWidth: .infinity)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 4)
-            .padding(.top, 10)
+        // Dwa zdania stopki w JEDNYM kontenerze, a nie obok siebie: `@ViewBuilder`
+        // przyjmuje najwyżej dziesięcioro dzieci, a ten był już przy dziewięciu.
+        // Przekroczenie limitu daje „unable to infer complex closure return
+        // type" wskazane kilkadziesiąt linii obok właściwego miejsca.
+        VStack(spacing: 10) {
+            Text("Liczba osób to podpowiedź, nie limit. Pula jest wspólna dla całego domu.")
+                .font(.system(size: 12))
+            // WARUNKI ODNOWIENIA MUSZĄ STAĆ PRZY PRZYCISKU ZAKUPU, a nie tylko
+            // w regulaminie — App Store 3.1.2 wymaga, żeby przed pobraniem
+            // pieniędzy widać było długość okresu, cenę, automatyczne
+            // odnawianie i miejsce, w którym się je wyłącza. Brak tego zdania
+            // to jedna z częstszych przyczyn odrzucenia przy pierwszej recenzji.
+            Text(Self.renewalTerms)
+                .font(.system(size: 11.5))
+        }
+        .lineSpacing(2)
+        .multilineTextAlignment(.center)
+        .foregroundStyle(Color.scFaint(scheme))
+        .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 4)
+        .padding(.top, 14)
     }
 
     /// Jedno miejsce na warunki odnowienia — powtórzone w regulaminie (sekcja 5)
@@ -512,7 +512,7 @@ struct PlanAccessSheet: View {
             ? nil
             : "Kto ile wykorzystał w tym okresie:"
 
-        PlanSectionLabel("Ten miesiąc · pula wspólna")
+        PlanSectionLabel("Ten okres · pula wspólna")
             .padding(.top, 20)
 
         VStack(spacing: 10) {
