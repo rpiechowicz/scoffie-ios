@@ -83,7 +83,7 @@ struct EditorialMealCard: View {
                 Text(meal.recipe.name)
                     .font(.system(size: 15.5, weight: .bold))
                     .tracking(-0.25)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -99,12 +99,12 @@ struct EditorialMealCard: View {
         .padding(13)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(isEaten ? WMPalette.sage.opacity(scheme == .dark ? 0.14 : 0.09) : Color.wmTileBg(scheme))
+                .fill(isEaten ? SCPalette.sage.opacity(scheme == .dark ? 0.14 : 0.09) : Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
-                    isEaten ? WMPalette.sage.opacity(0.38) : Color.wmTileStroke(scheme),
+                    isEaten ? SCPalette.sage.opacity(0.38) : Color.scTileStroke(scheme),
                     lineWidth: 1
                 )
         )
@@ -164,16 +164,16 @@ struct EditorialMealCard: View {
             if isEaten {
                 Text("Zjedzone · \(kcalDetail(meal))")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(WMPalette.sage)
+                    .foregroundStyle(SCPalette.sage)
                     .monospacedDigit()
             } else {
                 Image(systemName: "clock")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
 
                 Text("\(meal.recipe.prepTimeMinutes) min · \(kcalDetail(meal))")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .monospacedDigit()
             }
         }
@@ -237,15 +237,15 @@ struct EditorialMealCard: View {
         HStack(alignment: .center, spacing: 13) {
             Image(systemName: slot.icon)
                 .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .frame(width: 72, height: 72)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.wmChipBg(scheme))
+                        .fill(Color.scChipBg(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.wmRule(scheme), lineWidth: 1)
+                        .stroke(Color.scRule(scheme), lineWidth: 1)
                 )
 
             VStack(alignment: .leading, spacing: 3) {
@@ -254,7 +254,7 @@ struct EditorialMealCard: View {
                 Text("Nic nie zaplanowano")
                     .font(.system(size: 15.5, weight: .bold))
                     .tracking(-0.25)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 HStack(spacing: 5) {
@@ -263,19 +263,19 @@ struct EditorialMealCard: View {
                     Text("Zaplanujesz w zakładce Plan")
                         .font(.system(size: 11.5, weight: .semibold))
                 }
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(13)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.wmTileBg(scheme).opacity(0.55))
+                .fill(Color.scTileBg(scheme).opacity(0.55))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(
-                    Color.wmTileStroke(scheme),
+                    Color.scTileStroke(scheme),
                     style: StrokeStyle(lineWidth: 1, dash: [5, 4])
                 )
         )
@@ -297,9 +297,9 @@ extension MealSlot {
     /// rozbiłoby hierarchię ekranu zamiast ją doprecyzować.
     var cozyAccent: Color {
         switch self {
-        case .breakfast, .secondBreakfast: return WMPalette.butter
-        case .lunch, .afternoonSnack:      return WMPalette.sage
-        case .dinner, .snack:              return WMPalette.indigo
+        case .breakfast, .secondBreakfast: return SCPalette.butter
+        case .lunch, .afternoonSnack:      return SCPalette.sage
+        case .dinner, .snack:              return SCPalette.indigo
         }
     }
 
@@ -321,13 +321,13 @@ private struct EyebrowRow: View {
             Text(slot.title.uppercased())
                 .font(.system(size: 10.5, weight: .bold))
                 .tracking(1.4)
-                .foregroundStyle(isEaten ? WMPalette.sage : slot.cozyAccent)
+                .foregroundStyle(isEaten ? SCPalette.sage : slot.cozyAccent)
 
             if let time = sessionStore.mealSlotSchedule.time(for: slot) {
                 Text(time)
                     .font(.system(size: 10.5, weight: .semibold))
                     .tracking(0.8)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
         }
         .lineLimit(1)
@@ -415,11 +415,11 @@ private struct EatenToggle: View {
                 if isEaten {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(WMPalette.sage)
+                        .foregroundStyle(SCPalette.sage)
                         .transition(.opacity.combined(with: .scale(scale: 0.7)))
                 } else {
                     Circle()
-                        .strokeBorder(Color.wmRule(scheme), lineWidth: 1.25)
+                        .strokeBorder(Color.scRule(scheme), lineWidth: 1.25)
                         .frame(width: 20, height: 20)
                         .transition(.opacity)
                 }

@@ -11,26 +11,26 @@ struct OnboardingHeroPattern: View {
     // Bogata paleta ikon „kuchenno-planujących" — większa różnorodność =
     // mniejsze wrażenie powtórzenia podczas scrollowania.
     private static let tiles: [Tile] = [
-        Tile(symbol: "frying.pan.fill",            color: WMPalette.terracotta),
-        Tile(symbol: "leaf.fill",                  color: WMPalette.sage),
-        Tile(symbol: "flame.fill",                 color: WMPalette.butter),
-        Tile(symbol: "cart.fill",                  color: WMPalette.indigo),
-        Tile(symbol: "heart.fill",                 color: WMPalette.terracottaDeep),
-        Tile(symbol: "fork.knife",                 color: WMPalette.sage),
-        Tile(symbol: "calendar",                   color: WMPalette.terracotta),
-        Tile(symbol: "sparkles",                   color: WMPalette.butter),
-        Tile(symbol: "clock.fill",                 color: WMPalette.indigo),
-        Tile(symbol: "bell.fill",                  color: WMPalette.terracottaDeep),
-        Tile(symbol: "carrot.fill",                color: WMPalette.terracotta),
-        Tile(symbol: "cup.and.saucer.fill",        color: WMPalette.sage),
-        Tile(symbol: "basket.fill",                color: WMPalette.butter),
-        Tile(symbol: "birthday.cake.fill",         color: WMPalette.indigo),
-        Tile(symbol: "fish.fill",                  color: WMPalette.terracottaDeep),
-        Tile(symbol: "book.closed.fill",           color: WMPalette.terracotta),
-        Tile(symbol: "list.bullet.clipboard.fill", color: WMPalette.sage),
-        Tile(symbol: "timer",                      color: WMPalette.butter),
-        Tile(symbol: "star.fill",                  color: WMPalette.indigo),
-        Tile(symbol: "bookmark.fill",              color: WMPalette.terracottaDeep)
+        Tile(symbol: "frying.pan.fill",            color: SCPalette.terracotta),
+        Tile(symbol: "leaf.fill",                  color: SCPalette.sage),
+        Tile(symbol: "flame.fill",                 color: SCPalette.butter),
+        Tile(symbol: "cart.fill",                  color: SCPalette.indigo),
+        Tile(symbol: "heart.fill",                 color: SCPalette.terracottaDeep),
+        Tile(symbol: "fork.knife",                 color: SCPalette.sage),
+        Tile(symbol: "calendar",                   color: SCPalette.terracotta),
+        Tile(symbol: "sparkles",                   color: SCPalette.butter),
+        Tile(symbol: "clock.fill",                 color: SCPalette.indigo),
+        Tile(symbol: "bell.fill",                  color: SCPalette.terracottaDeep),
+        Tile(symbol: "carrot.fill",                color: SCPalette.terracotta),
+        Tile(symbol: "cup.and.saucer.fill",        color: SCPalette.sage),
+        Tile(symbol: "basket.fill",                color: SCPalette.butter),
+        Tile(symbol: "birthday.cake.fill",         color: SCPalette.indigo),
+        Tile(symbol: "fish.fill",                  color: SCPalette.terracottaDeep),
+        Tile(symbol: "book.closed.fill",           color: SCPalette.terracotta),
+        Tile(symbol: "list.bullet.clipboard.fill", color: SCPalette.sage),
+        Tile(symbol: "timer",                      color: SCPalette.butter),
+        Tile(symbol: "star.fill",                  color: SCPalette.indigo),
+        Tile(symbol: "bookmark.fill",              color: SCPalette.terracottaDeep)
     ]
 
     // Per-row: inny `stride` (coprime z liczbą kafli = 20) powoduje, że każdy
@@ -119,10 +119,10 @@ struct OnboardingHeroPattern: View {
 
     private func tileCell(_ tile: Tile) -> some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color.wmTileBg(colorScheme))
+            .fill(Color.scTileBg(colorScheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                    .strokeBorder(Color.scTileStroke(colorScheme), lineWidth: 1)
             )
             .overlay(
                 Image(systemName: tile.symbol)
@@ -136,8 +136,8 @@ struct OnboardingHeroPattern: View {
         // 1:1 wg designu: linear-gradient(to bottom, transparent 50%, bg 95%).
         LinearGradient(
             stops: [
-                .init(color: Color.wmCanvas(colorScheme).opacity(0), location: 0.50),
-                .init(color: Color.wmCanvas(colorScheme),            location: 0.95)
+                .init(color: Color.scCanvas(colorScheme).opacity(0), location: 0.50),
+                .init(color: Color.scCanvas(colorScheme),            location: 0.95)
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -149,11 +149,11 @@ struct OnboardingHeroPattern: View {
         HStack(spacing: 8) {
             // Mini app icon (logo v3) — chip udaje systemowy notification
             // banner, więc pokazuje prawdziwą ikonę aplikacji.
-            WMSteamingBowlLogo(size: 22)
+            SCSteamingBowlLogo(size: 22)
 
             Text("Scoffie")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(colorScheme))
+                .foregroundStyle(Color.scLabel(colorScheme))
         }
         .padding(.vertical, 6)
         .padding(.leading, 8)
@@ -162,7 +162,7 @@ struct OnboardingHeroPattern: View {
             Capsule()
                 .fill(
                     colorScheme == .dark
-                        ? Color.wmCanvas(.dark).opacity(0.75)
+                        ? Color.scCanvas(.dark).opacity(0.75)
                         : Color(red: 255 / 255, green: 251 / 255, blue: 244 / 255).opacity(0.85)
                 )
                 .background(.ultraThinMaterial, in: Capsule())
@@ -172,12 +172,12 @@ struct OnboardingHeroPattern: View {
 
 #Preview("Dark") {
     OnboardingHeroPattern()
-        .background(Color.wmCanvas(.dark))
+        .background(Color.scCanvas(.dark))
         .preferredColorScheme(.dark)
 }
 
 #Preview("Light") {
     OnboardingHeroPattern()
-        .background(Color.wmCanvas(.light))
+        .background(Color.scCanvas(.light))
         .preferredColorScheme(.light)
 }

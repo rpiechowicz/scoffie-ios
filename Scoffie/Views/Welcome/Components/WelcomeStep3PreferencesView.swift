@@ -36,7 +36,7 @@ struct WelcomeStep3PreferencesView: View {
             VStack(alignment: .leading, spacing: 18) {
                 WelcomeStepHeader(
                     icon: "leaf.fill",
-                    accent: WMPalette.terracotta,
+                    accent: SCPalette.terracotta,
                     eyebrow: "Dieta i kalorie",
                     title: "Co najczęściej jadasz?",
                     subtitle: "Na podstawie Twojego celu zaproponowaliśmy dzienną liczbę kalorii — możesz ją dostosować."
@@ -52,8 +52,8 @@ struct WelcomeStep3PreferencesView: View {
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                WMPalette.terracotta,
-                                                WMPalette.terracottaDeep,
+                                                SCPalette.terracotta,
+                                                SCPalette.terracottaDeep,
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -67,10 +67,10 @@ struct WelcomeStep3PreferencesView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Dzienny cel")
                                     .font(.system(size: 15.5, weight: .semibold))
-                                    .foregroundStyle(Color.wmLabel(colorScheme))
+                                    .foregroundStyle(Color.scLabel(colorScheme))
                                 Text("Aplikacja podpowie, jak rozłożyć posiłki w ciągu dnia.")
                                     .font(.system(size: 12))
-                                    .foregroundStyle(Color.wmMuted(colorScheme))
+                                    .foregroundStyle(Color.scMuted(colorScheme))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -78,7 +78,7 @@ struct WelcomeStep3PreferencesView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("\(calorieGoal)")
                                 .font(.system(size: 38, weight: .bold))
-                                .foregroundStyle(WMPalette.terracotta)
+                                .foregroundStyle(SCPalette.terracotta)
                                 .monospacedDigit()
                                 .contentTransition(.numericText(value: Double(calorieGoal)))
                                 .animation(
@@ -87,7 +87,7 @@ struct WelcomeStep3PreferencesView: View {
                                 )
                             Text("kcal / dzień")
                                 .font(.system(size: 14))
-                                .foregroundStyle(Color.wmMuted(colorScheme))
+                                .foregroundStyle(Color.scMuted(colorScheme))
                         }
 
                         Slider(
@@ -98,7 +98,7 @@ struct WelcomeStep3PreferencesView: View {
                             in: calorieRange,
                             step: calorieStep
                         )
-                        .tint(WMPalette.terracotta)
+                        .tint(SCPalette.terracotta)
 
                         HStack {
                             Text("1 200")
@@ -106,7 +106,7 @@ struct WelcomeStep3PreferencesView: View {
                             Text("3 500")
                         }
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.wmMuted(colorScheme))
+                        .foregroundStyle(Color.scMuted(colorScheme))
                         .monospacedDigit()
                     }
                     .padding(16)
@@ -135,7 +135,7 @@ struct WelcomeStep3PreferencesView: View {
                             )
                             if index < DietPreference.allCases.count - 1 {
                                 Divider()
-                                    .background(Color.wmRule(colorScheme).opacity(0.5))
+                                    .background(Color.scRule(colorScheme).opacity(0.5))
                                     .padding(.leading, 60)
                             }
                         }
@@ -148,7 +148,7 @@ struct WelcomeStep3PreferencesView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("Stuknij, aby zaznaczyć produkty, których chcesz unikać. Możesz wybrać dowolną liczbę.")
                             .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(Color.wmMuted(colorScheme))
+                            .foregroundStyle(Color.scMuted(colorScheme))
                             .fixedSize(horizontal: false, vertical: true)
 
                         AllergenChipFlow(spacing: 8) {
@@ -187,7 +187,7 @@ struct WelcomeStep3PreferencesView: View {
         return VStack(alignment: .leading, spacing: 12) {
             Text("Tak rozkładamy \(calorieGoal) kcal na dzień. Dokładne wartości ustawisz w Ustawieniach.")
                 .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.wmMuted(colorScheme))
+                .foregroundStyle(Color.scMuted(colorScheme))
                 .fixedSize(horizontal: false, vertical: true)
 
             macroRow(
@@ -195,21 +195,21 @@ struct WelcomeStep3PreferencesView: View {
                 grams: macros.proteinG,
                 kcal: macros.proteinKcal,
                 total: total,
-                accent: WMPalette.indigo
+                accent: SCPalette.indigo
             )
             macroRow(
                 title: "Węglowodany",
                 grams: macros.carbsG,
                 kcal: macros.carbsKcal,
                 total: total,
-                accent: WMPalette.sage
+                accent: SCPalette.sage
             )
             macroRow(
                 title: "Tłuszcze",
                 grams: macros.fatG,
                 kcal: macros.fatKcal,
                 total: total,
-                accent: WMPalette.butter
+                accent: SCPalette.butter
             )
         }
         .padding(16)
@@ -233,7 +233,7 @@ struct WelcomeStep3PreferencesView: View {
                     .frame(width: 7, height: 7)
                 Text(title)
                     .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(colorScheme))
+                    .foregroundStyle(Color.scLabel(colorScheme))
                 Spacer(minLength: 8)
                 Text("\(grams) g")
                     .font(.system(size: 13.5, weight: .bold))
@@ -241,14 +241,14 @@ struct WelcomeStep3PreferencesView: View {
                     .monospacedDigit()
                 Text("· \(Int((share * 100).rounded()))%")
                     .font(.system(size: 11.5))
-                    .foregroundStyle(Color.wmFaint(colorScheme))
+                    .foregroundStyle(Color.scFaint(colorScheme))
                     .monospacedDigit()
             }
 
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.wmBarTrack(colorScheme))
+                        .fill(Color.scBarTrack(colorScheme))
                     Capsule()
                         .fill(accent)
                         .frame(width: proxy.size.width * share)
@@ -262,10 +262,10 @@ struct WelcomeStep3PreferencesView: View {
 
     private var welcomeCardBackground: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color.wmTileBg(colorScheme))
+            .fill(Color.scTileBg(colorScheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
             )
     }
 }
@@ -301,10 +301,10 @@ private struct DietRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(candidate.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(colorScheme))
+                        .foregroundStyle(Color.scLabel(colorScheme))
                     Text(candidate.subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(colorScheme))
+                        .foregroundStyle(Color.scMuted(colorScheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -328,7 +328,7 @@ private struct RadioDot: View {
         ZStack {
             if isSelected {
                 Circle()
-                    .fill(WMPalette.terracotta)
+                    .fill(SCPalette.terracotta)
                     .frame(width: 22, height: 22)
                 Circle()
                     .fill(.white)
@@ -336,7 +336,7 @@ private struct RadioDot: View {
                     .transition(.scale.combined(with: .opacity))
             } else {
                 Circle()
-                    .stroke(Color.wmFaint(colorScheme), lineWidth: 1.8)
+                    .stroke(Color.scFaint(colorScheme), lineWidth: 1.8)
                     .frame(width: 22, height: 22)
             }
         }
@@ -367,7 +367,7 @@ private struct AllergenChip: View {
                     .font(.system(size: 13, weight: .semibold))
                     .tracking(-0.1)
             }
-            .foregroundStyle(isSelected ? .white : Color.wmLabel(colorScheme))
+            .foregroundStyle(isSelected ? .white : Color.scLabel(colorScheme))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
@@ -375,24 +375,24 @@ private struct AllergenChip: View {
                     isSelected
                         ? AnyShapeStyle(
                             LinearGradient(
-                                colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        : AnyShapeStyle(Color.wmChipBg(colorScheme))
+                        : AnyShapeStyle(Color.scChipBg(colorScheme))
                 )
             )
             .overlay(
                 Capsule().stroke(
                     isSelected
-                        ? WMPalette.terracotta.opacity(0.35)
-                        : Color.wmTileStroke(colorScheme),
+                        ? SCPalette.terracotta.opacity(0.35)
+                        : Color.scTileStroke(colorScheme),
                     lineWidth: 1
                 )
             )
             .shadow(
-                color: WMPalette.terracotta.opacity(isSelected ? 0.20 : 0),
+                color: SCPalette.terracotta.opacity(isSelected ? 0.20 : 0),
                 radius: 5, x: 0, y: 2
             )
         }
@@ -405,7 +405,7 @@ private struct AllergenChip: View {
 #Preview("Dark") {
     StatefulPreviewContainer(diet: .none, kcal: 2300, allergens: []) { diet, kcal, allergens in
         ZStack {
-            WMPalette.canvasDark.ignoresSafeArea()
+            SCPalette.canvasDark.ignoresSafeArea()
             WelcomeStep3PreferencesView(diet: diet, calorieGoal: kcal, allergens: allergens)
         }
         .preferredColorScheme(.dark)
@@ -415,7 +415,7 @@ private struct AllergenChip: View {
 #Preview("Light") {
     StatefulPreviewContainer(diet: .vegetarian, kcal: 1900, allergens: [.gluten, .nuts]) { diet, kcal, allergens in
         ZStack {
-            WMPalette.canvasLight.ignoresSafeArea()
+            SCPalette.canvasLight.ignoresSafeArea()
             WelcomeStep3PreferencesView(diet: diet, calorieGoal: kcal, allergens: allergens)
         }
         .preferredColorScheme(.light)

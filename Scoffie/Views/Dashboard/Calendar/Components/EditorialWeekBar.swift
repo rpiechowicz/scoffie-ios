@@ -58,10 +58,10 @@ struct EditorialWeekBar: View {
         @Environment(\.colorScheme) private var scheme
 
         var body: some View {
-            let label = Color.wmLabel(scheme)
-            let muted = Color.wmMuted(scheme)
-            let strike = Color.wmStrike(scheme)
-            let accent = WMPalette.terracotta
+            let label = Color.scLabel(scheme)
+            let muted = Color.scMuted(scheme)
+            let strike = Color.scStrike(scheme)
+            let accent = SCPalette.terracotta
 
             VStack(spacing: 4) {
                 Text(EditorialWeekBar.shortDayFormatter.string(from: date).uppercased())
@@ -92,7 +92,7 @@ struct EditorialWeekBar: View {
                     // state of a day changes.
                     if isPlanned && !isSelected {
                         Capsule()
-                            .fill(WMPalette.sage)
+                            .fill(SCPalette.sage)
                             .frame(width: 10, height: 2)
                             .transition(.scale.combined(with: .opacity))
                     }

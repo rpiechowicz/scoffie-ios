@@ -61,23 +61,23 @@ struct AssistantEmptyState: View {
         // i skróty zostają w kodzie na wypadek powrotu, ale nie renderują się.
         VStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.wmAccentTint(scheme))
+                .fill(Color.scAccentTint(scheme))
                 .frame(width: 64, height: 64)
                 .overlay(
                     Image(systemName: "sparkles")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                 )
             VStack(spacing: 4) {
                 Text("Co dziś planujemy?")
                     .font(.system(size: 20, weight: .bold))
                     .tracking(-0.45)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 Text("Zacznij od jednego z poleceń nad polem albo napisz własne. Zakres ustawisz chipami nad polem.")
                     .font(.system(size: 14))
                     .tracking(-0.15)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .frame(maxWidth: 270)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -99,17 +99,17 @@ struct AssistantEmptyState: View {
                         .tracking(1.2)
                         .textCase(.uppercase)
                 }
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
 
                 Text(heroTitle)
                     .font(.system(size: 19, weight: .bold))
                     .tracking(-0.45)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(knowledge.heroSubtitle)
                     .font(.system(size: 13.5))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 16)
@@ -124,10 +124,10 @@ struct AssistantEmptyState: View {
                         .font(.system(size: 15.5, weight: .bold))
                         .tracking(-0.3)
                 }
-                .foregroundStyle(Color.wmPageBase(scheme))
+                .foregroundStyle(Color.scPageBase(scheme))
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .background(Capsule().fill(WMPalette.terracotta))
+                .background(Capsule().fill(SCPalette.terracotta))
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
@@ -135,11 +135,11 @@ struct AssistantEmptyState: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.wmAccentTint(scheme))
+                .fill(Color.scAccentTint(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(WMPalette.terracotta.opacity(0.26), lineWidth: 1)
+                .stroke(SCPalette.terracotta.opacity(0.26), lineWidth: 1)
         )
     }
 
@@ -168,7 +168,7 @@ struct AssistantEmptyState: View {
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.1)
                 .textCase(.uppercase)
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .padding(.leading, 2)
 
             // Trzy skróty, które asystent UMIE dziś wykonać. Makieta ma w tym
@@ -176,21 +176,21 @@ struct AssistantEmptyState: View {
             // do funkcji, której nie ma, byłby obietnicą bez pokrycia.
             row(
                 icon: "clock",
-                color: WMPalette.indigo,
+                color: SCPalette.indigo,
                 title: "Co zjeść jutro, mam 15 minut",
                 meta: "Z Waszych przepisów",
                 prompt: "Co mogę zjeść jutro, jeśli mam 15 minut na przygotowanie?"
             )
             row(
                 icon: "chart.line.uptrend.xyaxis",
-                color: WMPalette.sage,
+                color: SCPalette.sage,
                 title: "Czego brakuje, żeby wyrobić się z białkiem",
                 meta: "Analiza tygodnia",
                 prompt: "Czego brakuje w planie, żeby wyrobić się z białkiem?"
             )
             row(
                 icon: "arrow.triangle.2.circlepath",
-                color: WMPalette.butter,
+                color: SCPalette.butter,
                 title: "Podmień jedno danie w tym tygodniu",
                 meta: "Zmiana w planie",
                 prompt: "Podmień jedno danie w tym tygodniu na coś szybszego"
@@ -220,30 +220,30 @@ struct AssistantEmptyState: View {
                     Text(title)
                         .font(.system(size: 14.5, weight: .semibold))
                         .tracking(-0.25)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(meta)
                         .font(.system(size: 11.5))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
 
                 Spacer(minLength: 0)
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -259,18 +259,18 @@ struct AssistantEmptyState: View {
                 HStack(spacing: 10) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Co wiem o Was")
                             .font(.system(size: 13.5, weight: .semibold))
                             .tracking(-0.2)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
 
                         if !isKnowledgeExpanded {
                             Text(summaryLine)
                                 .font(.system(size: 11.5))
-                                .foregroundStyle(Color.wmFaint(scheme))
+                                .foregroundStyle(Color.scFaint(scheme))
                                 .lineLimit(1)
                         }
                     }
@@ -279,7 +279,7 @@ struct AssistantEmptyState: View {
 
                     Image(systemName: isKnowledgeExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 13)
@@ -288,25 +288,25 @@ struct AssistantEmptyState: View {
 
             if isKnowledgeExpanded {
                 VStack(spacing: 0) {
-                    factRow(icon: "target", color: WMPalette.terracotta, key: "Twój cel", value: goalValue)
+                    factRow(icon: "target", color: SCPalette.terracotta, key: "Twój cel", value: goalValue)
                     factRow(
                         icon: "person.2",
-                        color: WMPalette.indigo,
+                        color: SCPalette.indigo,
                         key: "Domownicy",
                         value: membersValue
                     )
                     if let restrictions = restrictionsValue {
-                        factRow(icon: "leaf", color: WMPalette.sage, key: "Ograniczenia", value: restrictions)
+                        factRow(icon: "leaf", color: SCPalette.sage, key: "Ograniczenia", value: restrictions)
                     }
                     factRow(
                         icon: "calendar",
-                        color: WMPalette.butter,
+                        color: SCPalette.butter,
                         key: "Plan \(knowledge.weekLabel)",
                         value: "\(knowledge.plannedMeals) z \(knowledge.totalMealSlots) posiłków"
                     )
                     factRow(
                         icon: "book",
-                        color: WMPalette.terracotta,
+                        color: SCPalette.terracotta,
                         key: "Wasze przepisy",
                         value: "\(knowledge.recipeCount) w katalogu, \(knowledge.favouriteCount) ulubionych"
                     )
@@ -316,11 +316,11 @@ struct AssistantEmptyState: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmInsetSurface(scheme))
+                .fill(Color.scInsetSurface(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -333,12 +333,12 @@ struct AssistantEmptyState: View {
 
             Text(key)
                 .font(.system(size: 12))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .frame(width: 92, alignment: .leading)
 
             Text(value)
                 .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
@@ -346,7 +346,7 @@ struct AssistantEmptyState: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 

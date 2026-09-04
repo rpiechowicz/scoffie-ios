@@ -51,9 +51,9 @@ struct EditorialMacroBlock: View {
     private var pendingKcal: Int { max(0, plannedKcal - kcal) }
 
     var body: some View {
-        let label = Color.wmLabel(scheme)
-        let muted = Color.wmMuted(scheme)
-        let faint = Color.wmFaint(scheme)
+        let label = Color.scLabel(scheme)
+        let muted = Color.scMuted(scheme)
+        let faint = Color.scFaint(scheme)
 
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .bottom, spacing: 28) {
@@ -112,22 +112,22 @@ struct EditorialMacroBlock: View {
                 let filled = w * fillPct
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.wmBarTrack(scheme))
+                        .fill(Color.scBarTrack(scheme))
 
                     // Widmo planu — dokąd dojedzie dzień, jeśli użytkownik
                     // zje resztę. Neutralny, przygaszony kolor: to jeszcze
                     // nie są policzone kalorie.
                     if plannedPct > fillPct {
                         Capsule()
-                            .fill(Color.wmMuted(scheme).opacity(0.32))
+                            .fill(Color.scMuted(scheme).opacity(0.32))
                             .frame(width: w * plannedPct, height: 4)
                     }
 
                     if !isEmpty {
                         HStack(spacing: 0) {
-                            Rectangle().fill(WMPalette.indigo).frame(width: filled * pPct)
-                            Rectangle().fill(WMPalette.terracottaDeep).frame(width: filled * fPct)
-                            Rectangle().fill(WMPalette.sage).frame(width: filled * cPct)
+                            Rectangle().fill(SCPalette.indigo).frame(width: filled * pPct)
+                            Rectangle().fill(SCPalette.terracottaDeep).frame(width: filled * fPct)
+                            Rectangle().fill(SCPalette.sage).frame(width: filled * cPct)
                         }
                         .frame(width: filled, height: 4, alignment: .leading)
                         .clipShape(Capsule())
@@ -201,9 +201,9 @@ private struct MacroStatGrid: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            MacroStat(label: "BIAŁKO",   value: protein, dot: WMPalette.indigo,         isEmpty: isEmpty)
-            MacroStat(label: "TŁUSZCZE", value: fat,     dot: WMPalette.terracottaDeep, isEmpty: isEmpty)
-            MacroStat(label: "WĘGLE",    value: carbs,   dot: WMPalette.sage,           isEmpty: isEmpty)
+            MacroStat(label: "BIAŁKO",   value: protein, dot: SCPalette.indigo,         isEmpty: isEmpty)
+            MacroStat(label: "TŁUSZCZE", value: fat,     dot: SCPalette.terracottaDeep, isEmpty: isEmpty)
+            MacroStat(label: "WĘGLE",    value: carbs,   dot: SCPalette.sage,           isEmpty: isEmpty)
         }
     }
 }
@@ -216,13 +216,13 @@ private struct MacroStat: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let muted = Color.wmMuted(scheme)
-        let faint = Color.wmFaint(scheme)
-        let labelColor = Color.wmLabel(scheme)
+        let muted = Color.scMuted(scheme)
+        let faint = Color.scFaint(scheme)
+        let labelColor = Color.scLabel(scheme)
 
         VStack(alignment: .leading, spacing: 2) {
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
                 .padding(.bottom, 4)
 

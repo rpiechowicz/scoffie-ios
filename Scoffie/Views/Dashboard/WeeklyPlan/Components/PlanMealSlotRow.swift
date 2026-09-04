@@ -61,19 +61,19 @@ struct PlanMealSlotRow: View {
                 .clipped()
 
             VStack(alignment: .leading, spacing: 3) {
-                eyebrow(labelColor: slot.cozyAccent, timeColor: Color.wmMuted(scheme))
+                eyebrow(labelColor: slot.cozyAccent, timeColor: Color.scMuted(scheme))
 
                 Text(recipe.name)
                     .font(.system(size: 14, weight: .bold))
                     .tracking(-0.2)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     Text(metaText(for: meal))
                         .font(.system(size: 10.5, weight: .medium))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
 
                     Spacer(minLength: 0)
 
@@ -91,11 +91,11 @@ struct PlanMealSlotRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: Self.rowHeight)
-        .background(Color.wmInsetSurface(scheme))
+        .background(Color.scInsetSurface(scheme))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture { onTap() }
@@ -232,12 +232,12 @@ struct PlanMealSlotRow: View {
                 .overlay(alignment: .trailing) { dashedDivider }
 
             VStack(alignment: .leading, spacing: 2) {
-                eyebrow(labelColor: Color.wmMuted(scheme), timeColor: Color.wmFaint(scheme))
+                eyebrow(labelColor: Color.scMuted(scheme), timeColor: Color.scFaint(scheme))
 
                 Text("Pusty slot")
                     .font(.system(size: 13.5, weight: .semibold))
                     .tracking(-0.1)
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     .padding(.top, 1)
             }
             .padding(.horizontal, 11)
@@ -248,7 +248,7 @@ struct PlanMealSlotRow: View {
                 Text("+ Dodaj")
                     .font(.system(size: 12.5, weight: .bold))
                     .tracking(-0.1)
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 12)
                     .fixedSize()
             }
@@ -259,7 +259,7 @@ struct PlanMealSlotRow: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(
-                    Color.wmTileStroke(scheme),
+                    Color.scTileStroke(scheme),
                     style: StrokeStyle(lineWidth: 1.4, dash: [5, 4])
                 )
         )
@@ -277,13 +277,13 @@ struct PlanMealSlotRow: View {
     /// reads „czegoś tu brakuje" instead of looking like three equal wells.
     /// Dark mode keeps them fully transparent, as the design has them.
     private var emptyRowBackground: Color {
-        scheme == .dark ? .clear : Color.wmInsetSurface(scheme).opacity(0.5)
+        scheme == .dark ? .clear : Color.scInsetSurface(scheme).opacity(0.5)
     }
 
     /// Vertical dashed rule separating the icon well from the text — the design
     /// carries the empty row's dashed outline through the divider too.
     private var dashedDivider: some View {
-        let stroke = Color.wmTileStroke(scheme)
+        let stroke = Color.scTileStroke(scheme)
         return Canvas { context, size in
             var path = Path()
             path.move(to: CGPoint(x: size.width / 2, y: 0))
@@ -311,7 +311,7 @@ struct PlanMealSlotRow: View {
             // żeby nie zostawić w wierszu wiszącego separatora bez treści.
             if let time = sessionStore.mealSlotSchedule.time(for: slot) {
                 Circle()
-                    .fill(Color.wmFaint(scheme))
+                    .fill(Color.scFaint(scheme))
                     .frame(width: 3, height: 3)
 
                 Text(time)

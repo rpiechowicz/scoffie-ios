@@ -29,7 +29,7 @@ struct WelcomeStep1ProfileView: View {
             VStack(alignment: .leading, spacing: 18) {
                 WelcomeStepHeader(
                     icon: "person.fill",
-                    accent: WMPalette.terracotta,
+                    accent: SCPalette.terracotta,
                     eyebrow: "Witaj w Scoffie",
                     title: "Zacznijmy od Ciebie",
                     subtitle: "Te dane pomogą nam dopasować propozycje. Zmienisz je później w ustawieniach."
@@ -40,7 +40,7 @@ struct WelcomeStep1ProfileView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 16))
-                            .foregroundStyle(Color.wmMuted(colorScheme))
+                            .foregroundStyle(Color.scMuted(colorScheme))
                         TextField("Np. Rafał", text: $name)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
@@ -53,7 +53,7 @@ struct WelcomeStep1ProfileView: View {
                             .focused($focusedField, equals: .name)
                             .submitLabel(.next)
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.wmLabel(colorScheme))
+                            .foregroundStyle(Color.scLabel(colorScheme))
                             .onSubmit { focusedField = .height }
                     }
                     .padding(.horizontal, 14)
@@ -74,11 +74,11 @@ struct WelcomeStep1ProfileView: View {
                                 .keyboardType(.numberPad)
                                 .focused($focusedField, equals: .height)
                                 .font(.system(size: 19, weight: .bold))
-                                .foregroundStyle(Color.wmLabel(colorScheme))
+                                .foregroundStyle(Color.scLabel(colorScheme))
                                 .monospacedDigit()
                             Text("cm")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.wmMuted(colorScheme))
+                                .foregroundStyle(Color.scMuted(colorScheme))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
@@ -94,11 +94,11 @@ struct WelcomeStep1ProfileView: View {
                                 .keyboardType(.decimalPad)
                                 .focused($focusedField, equals: .weight)
                                 .font(.system(size: 19, weight: .bold))
-                                .foregroundStyle(Color.wmLabel(colorScheme))
+                                .foregroundStyle(Color.scLabel(colorScheme))
                                 .monospacedDigit()
                             Text("kg")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.wmMuted(colorScheme))
+                                .foregroundStyle(Color.scMuted(colorScheme))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
@@ -125,7 +125,7 @@ struct WelcomeStep1ProfileView: View {
 
                 Text("Te dane przetwarzamy lokalnie wyłącznie do obliczeń kalorycznych — nie udostępniamy ich nikomu, ani nie wykorzystujemy do reklam.")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.wmMuted(colorScheme))
+                    .foregroundStyle(Color.scMuted(colorScheme))
                     .padding(.horizontal, 6)
                     .padding(.top, 4)
             }
@@ -138,10 +138,10 @@ struct WelcomeStep1ProfileView: View {
 
     private var welcomeCardBackground: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.wmTileBg(colorScheme))
+            .fill(Color.scTileBg(colorScheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
             )
     }
 }
@@ -170,7 +170,7 @@ private struct SexChip: View {
                 Text(candidate.title)
                     .font(.system(size: 15, weight: .semibold))
             }
-            .foregroundStyle(isSelected ? Color.white : Color.wmLabel(colorScheme))
+            .foregroundStyle(isSelected ? Color.white : Color.scLabel(colorScheme))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(
@@ -179,17 +179,17 @@ private struct SexChip: View {
                         isSelected
                             ? AnyShapeStyle(
                                 LinearGradient(
-                                    colors: [WMPalette.terracotta.opacity(0.95), WMPalette.terracotta],
+                                    colors: [SCPalette.terracotta.opacity(0.95), SCPalette.terracotta],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                            : AnyShapeStyle(Color.wmChipBg(colorScheme))
+                            : AnyShapeStyle(Color.scChipBg(colorScheme))
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.wmTileStroke(colorScheme), lineWidth: 1)
+                    .stroke(isSelected ? Color.clear : Color.scTileStroke(colorScheme), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -204,10 +204,10 @@ struct YearWheelPicker: View {
     @Binding var year: Int
     let range: ClosedRange<Int>
 
-    /// Tło pigułki. Domyślnie `wmTileBg`, czyli to, czego używa kreator na
-    /// tle kanwy. W arkuszu Ustawień picker siedzi WEWNĄTRZ karty `wmTileBg`
+    /// Tło pigułki. Domyślnie `scTileBg`, czyli to, czego używa kreator na
+    /// tle kanwy. W arkuszu Ustawień picker siedzi WEWNĄTRZ karty `scTileBg`
     /// i przy domyślnym tle zlałby się z nią w jedną plamę — tam wchodzi
-    /// `wmInsetSurface`.
+    /// `scInsetSurface`.
     var surface: Color? = nil
 
     @Environment(\.colorScheme) private var colorScheme
@@ -241,17 +241,17 @@ struct YearWheelPicker: View {
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(surface ?? Color.wmTileBg(colorScheme))
+                    .fill(surface ?? Color.scTileBg(colorScheme))
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
 
                 GeometryReader { proxy in
                     let w = (proxy.size.width - 12) / 5
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(WMPalette.terracotta.opacity(colorScheme == .dark ? 0.16 : 0.12))
+                        .fill(SCPalette.terracotta.opacity(colorScheme == .dark ? 0.16 : 0.12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(WMPalette.terracotta.opacity(0.32), lineWidth: 1)
+                                .stroke(SCPalette.terracotta.opacity(0.32), lineWidth: 1)
                         )
                         .frame(width: w, height: proxy.size.height - 12)
                         .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
@@ -311,15 +311,15 @@ struct YearWheelPicker: View {
 
     private func yearColor(for y: Int) -> Color {
         if !range.contains(y) {
-            return Color.wmFaint(colorScheme).opacity(0.4)
+            return Color.scFaint(colorScheme).opacity(0.4)
         }
         if y == year {
-            return Color.wmLabel(colorScheme)
+            return Color.scLabel(colorScheme)
         }
         if abs(y - year) == 1 {
-            return Color.wmMuted(colorScheme)
+            return Color.scMuted(colorScheme)
         }
-        return Color.wmFaint(colorScheme)
+        return Color.scFaint(colorScheme)
     }
 }
 
@@ -354,7 +354,7 @@ private struct StepPreviewWrapper<Content: View>: View {
     @ViewBuilder var content: () -> Content
     var body: some View {
         ZStack {
-            Color.wmCanvas(colorScheme).ignoresSafeArea()
+            Color.scCanvas(colorScheme).ignoresSafeArea()
             content()
         }
     }

@@ -98,7 +98,7 @@ struct AssistantConsentGateView: View {
             // wyjścia szarpał całą treścią.
             if isGranted, presentation == .sheet {
                 statusBar
-                    .padding(.horizontal, WMPageMetrics.horizontal)
+                    .padding(.horizontal, SCPageMetrics.horizontal)
                     .padding(.top, 12)
                     .padding(.bottom, 4)
             }
@@ -108,17 +108,17 @@ struct AssistantConsentGateView: View {
                     if presentation == .inline {
                         VStack(alignment: .leading, spacing: 4) {
                             if !isGranted {
-                                AssistantSectionLabel(text: "Asystent AI", color: WMPalette.terracotta)
+                                AssistantSectionLabel(text: "Asystent AI", color: SCPalette.terracotta)
                             }
                             Text("Zanim zaczniemy")
                                 .font(.system(size: 26, weight: .bold))
                                 .tracking(-0.6)
-                                .foregroundStyle(Color.wmLabel(scheme))
+                                .foregroundStyle(Color.scLabel(scheme))
                             if !isGranted, errorMessage == nil {
                                 Text("Asystent układa plan tygodnia, podmienia dania i pilnuje alergenów całego domu. Zanim wyśle cokolwiek do modelu, potrzebuje Twojej zgody.")
                                     .font(.system(size: 13.5))
                                     .lineSpacing(2)
-                                    .foregroundStyle(Color.wmMuted(scheme))
+                                    .foregroundStyle(Color.scMuted(scheme))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -158,7 +158,7 @@ struct AssistantConsentGateView: View {
                     Text("Model Claude dostarcza Anthropic, PBC (USA); przekazanie poza EOG odbywa się na podstawie standardowych klauzul umownych. Asystent to program, może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
                         .font(.system(size: 11.5))
                         .lineSpacing(2)
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     Button {
@@ -169,11 +169,11 @@ struct AssistantConsentGateView: View {
                             Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
                         }
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, presentation == .sheet ? 20 : WMPageMetrics.horizontal)
+                .padding(.horizontal, presentation == .sheet ? 20 : SCPageMetrics.horizontal)
                 .padding(.top, 4)
                 .padding(.bottom, 24)
             }
@@ -182,7 +182,7 @@ struct AssistantConsentGateView: View {
             AssistantStickyFooter { footer }
                 .padding(.bottom, presentation == .sheet ? 12 : 0)
         }
-        .background(presentation == .sheet ? AnyView(WMPageBackground(scheme: scheme).ignoresSafeArea()) : AnyView(Color.clear))
+        .background(presentation == .sheet ? AnyView(SCPageBackground(scheme: scheme).ignoresSafeArea()) : AnyView(Color.clear))
     }
 
     // MARK: - Klocki
@@ -193,21 +193,21 @@ struct AssistantConsentGateView: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "person.crop.circle.badge.exclamationmark")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Asystent jest dostępny od 16 lat")
                     .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 Text("Według roku urodzenia w Twoim profilu to jeszcze nie ten wiek. Jeśli rok jest błędny, popraw go w Ustawieniach → Profil i wróć tutaj.")
                     .font(.system(size: 12.5))
                     .lineSpacing(2)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(WMPalette.terracotta.opacity(0.10)))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(SCPalette.terracotta.opacity(0.10)))
     }
 
     /// Licznik zamiast napisu „oba wymagane": 0 z 2 → 1 z 2 → 2 z 2 (zielone),
@@ -225,10 +225,10 @@ struct AssistantConsentGateView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .monospacedDigit()
         }
-        .foregroundStyle(complete ? WMPalette.sage : Color.wmFaint(scheme))
+        .foregroundStyle(complete ? SCPalette.sage : Color.scFaint(scheme))
         .padding(.horizontal, 8)
         .frame(height: 22)
-        .background(Capsule().fill(complete ? Color.wmSageTint(scheme) : Color.wmChipBg(scheme)))
+        .background(Capsule().fill(complete ? Color.scSageTint(scheme) : Color.scChipBg(scheme)))
         .animation(.easeInOut(duration: 0.18), value: done)
     }
 
@@ -236,18 +236,18 @@ struct AssistantConsentGateView: View {
         HStack(spacing: 8) {
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
             (Text("Zgoda włączona").fontWeight(.semibold)
-                + Text(" · wersja dokumentów \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)").foregroundColor(Color.wmMuted(scheme)))
+                + Text(" · wersja dokumentów \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)").foregroundColor(Color.scMuted(scheme)))
                 .font(.system(size: 12))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.wmSageTint(scheme)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.scSageTint(scheme)))
     }
 
     private var dataCard: some View {
@@ -255,14 +255,14 @@ struct AssistantConsentGateView: View {
             HStack(alignment: .top, spacing: 14) {
                 dataList(
                     label: "Co wysyłamy do modelu",
-                    color: WMPalette.sage,
+                    color: SCPalette.sage,
                     dot: true,
                     items: ["Treść wiadomości i rozmowy", "Twoje imię, dietę, alergeny, wykluczenia", "Cel, zapotrzebowanie i makro, maks. czas gotowania", "Te same dane domowników, tylko za ich zgodą", "Nazwę domu, plan tygodnia, notatki pamięci", "Katalog przepisów"]
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
                 dataList(
                     label: "Czego nie wysyłamy",
-                    color: Color.wmFaint(scheme),
+                    color: Color.scFaint(scheme),
                     dot: false,
                     items: ["Wzrost, waga, płeć", "Rok urodzenia", "Kroki", "E-mail", "Hasło Cookidoo"]
                 )
@@ -283,7 +283,7 @@ struct AssistantConsentGateView: View {
                         Circle().fill(color).opacity(dot ? 1 : 0.55).frame(width: 5, height: 5).padding(.top, 5)
                         Text(item)
                             .font(.system(size: 11.5))
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -300,38 +300,38 @@ struct AssistantConsentGateView: View {
                     Text(title)
                         .font(.system(size: 14.5, weight: .semibold))
                         .tracking(-0.25)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     if let caption {
                         Text(caption)
                             .font(.system(size: 11.5))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)
                 ZStack {
-                    Circle().fill(isOn.wrappedValue ? WMPalette.terracotta : Color.clear)
-                    Circle().stroke(isOn.wrappedValue ? Color.clear : Color.wmFaint(scheme), lineWidth: 1.5)
+                    Circle().fill(isOn.wrappedValue ? SCPalette.terracotta : Color.clear)
+                    Circle().stroke(isOn.wrappedValue ? Color.clear : Color.scFaint(scheme), lineWidth: 1.5)
                     if isOn.wrappedValue {
                         Image(systemName: "checkmark")
                             .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(Color.wmPageBase(scheme))
+                            .foregroundStyle(Color.scPageBase(scheme))
                     }
                 }
                 .frame(width: 28, height: 28)
-                .shadow(color: isOn.wrappedValue ? WMPalette.terracotta.opacity(0.35) : .clear, radius: 6, y: 3)
+                .shadow(color: isOn.wrappedValue ? SCPalette.terracotta.opacity(0.35) : .clear, radius: 6, y: 3)
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
             // Dół odrobinę większy: zaznaczony wiersz ma tło i bez tego
             // wyglądał na przyklejony do krawędzi karty.
             .padding(.bottom, 16)
-            .background(isOn.wrappedValue ? WMPalette.terracotta.opacity(0.07) : Color.clear)
+            .background(isOn.wrappedValue ? SCPalette.terracotta.opacity(0.07) : Color.clear)
             .overlay(alignment: .top) {
-                if !first { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+                if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
             }
             .contentShape(Rectangle())
         }
@@ -351,11 +351,11 @@ struct AssistantConsentGateView: View {
                         .font(.system(size: 12.5, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WMPalette.terracotta.opacity(0.12)))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(SCPalette.terracotta.opacity(0.12)))
             }
 
             if isGranted, presentation == .inline, showsStepper {
@@ -366,9 +366,9 @@ struct AssistantConsentGateView: View {
                     .padding(.bottom, 8)
                 HStack(spacing: 10) {
                     if let onBack {
-                        WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz", action: onBack)
+                        SCSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz", action: onBack)
                     }
-                    WMSoftButton(title: "Dalej", trailingIcon: "chevron.right") {
+                    SCSoftButton(title: "Dalej", trailingIcon: "chevron.right") {
                         onContinue?()
                     }
                 }
@@ -384,9 +384,9 @@ struct AssistantConsentGateView: View {
                 }
                 HStack(spacing: 10) {
                     if presentation == .inline, let onBack {
-                        WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz", action: onBack)
+                        SCSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz", action: onBack)
                     }
-                    WMSoftButton(
+                    SCSoftButton(
                         title: "Włącz asystenta",
                         leadingIcon: "sparkles",
                         isEnabled: canGrant && !consents.isBusy,

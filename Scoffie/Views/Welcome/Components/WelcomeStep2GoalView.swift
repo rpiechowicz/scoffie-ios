@@ -16,7 +16,7 @@ struct WelcomeStep2GoalView: View {
             VStack(alignment: .leading, spacing: 18) {
                 WelcomeStepHeader(
                     icon: "target",
-                    accent: WMPalette.terracotta,
+                    accent: SCPalette.terracotta,
                     eyebrow: "Twój cel",
                     title: "Co chcesz osiągnąć?",
                     subtitle: "Wybierz to, co najbardziej do Ciebie pasuje. Pomoże nam dobrać propozycje i kalorie."
@@ -37,7 +37,7 @@ struct WelcomeStep2GoalView: View {
                             )
                             if index < UserGoal.allCases.count - 1 {
                                 Divider()
-                                    .background(Color.wmRule(colorScheme).opacity(0.5))
+                                    .background(Color.scRule(colorScheme).opacity(0.5))
                                     .padding(.leading, 56)
                             }
                         }
@@ -54,8 +54,8 @@ struct WelcomeStep2GoalView: View {
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                WMPalette.terracotta,
-                                                WMPalette.terracottaDeep,
+                                                SCPalette.terracotta,
+                                                SCPalette.terracottaDeep,
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -68,7 +68,7 @@ struct WelcomeStep2GoalView: View {
                             }
                             Text("Ile razy w tygodniu trenujesz?")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Color.wmLabel(colorScheme))
+                                .foregroundStyle(Color.scLabel(colorScheme))
                         }
 
                         HStack(spacing: 8) {
@@ -98,10 +98,10 @@ struct WelcomeStep2GoalView: View {
 
     private var welcomeCardBackground: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color.wmTileBg(colorScheme))
+            .fill(Color.scTileBg(colorScheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
             )
     }
 }
@@ -137,10 +137,10 @@ private struct GoalRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(candidate.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(colorScheme))
+                        .foregroundStyle(Color.scLabel(colorScheme))
                     Text(candidate.subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(colorScheme))
+                        .foregroundStyle(Color.scMuted(colorScheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -169,10 +169,10 @@ private struct ActivityChip: View {
                 Text(level.label)
                     .font(.system(size: 18, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? Color.white : Color.wmLabel(colorScheme))
+                    .foregroundStyle(isSelected ? Color.white : Color.scLabel(colorScheme))
                 Text(level.subtitle)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : Color.wmMuted(colorScheme))
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : Color.scMuted(colorScheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -186,19 +186,19 @@ private struct ActivityChip: View {
                         isSelected
                             ? AnyShapeStyle(
                                 LinearGradient(
-                                    colors: [WMPalette.terracotta.opacity(0.95), WMPalette.terracotta],
+                                    colors: [SCPalette.terracotta.opacity(0.95), SCPalette.terracotta],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                            : AnyShapeStyle(Color.wmChipBg(colorScheme))
+                            : AnyShapeStyle(Color.scChipBg(colorScheme))
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.wmTileStroke(colorScheme), lineWidth: 1)
+                    .stroke(isSelected ? Color.clear : Color.scTileStroke(colorScheme), lineWidth: 1)
             )
-            .shadow(color: WMPalette.terracotta.opacity(isSelected ? 0.18 : 0), radius: 8, x: 0, y: 4)
+            .shadow(color: SCPalette.terracotta.opacity(isSelected ? 0.18 : 0), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -212,7 +212,7 @@ private struct RadioDot: View {
         ZStack {
             if isSelected {
                 Circle()
-                    .fill(WMPalette.terracotta)
+                    .fill(SCPalette.terracotta)
                     .frame(width: 20, height: 20)
                 Circle()
                     .fill(.white)
@@ -220,7 +220,7 @@ private struct RadioDot: View {
                     .transition(.scale.combined(with: .opacity))
             } else {
                 Circle()
-                    .stroke(Color.wmFaint(colorScheme), lineWidth: 1.8)
+                    .stroke(Color.scFaint(colorScheme), lineWidth: 1.8)
                     .frame(width: 20, height: 20)
             }
         }
@@ -231,7 +231,7 @@ private struct RadioDot: View {
 #Preview("Dark") {
     StatefulPreviewContainer(initialGoal: .healthy, initialActivity: .active) { goal, activity in
         ZStack {
-            WMPalette.canvasDark.ignoresSafeArea()
+            SCPalette.canvasDark.ignoresSafeArea()
             WelcomeStep2GoalView(goal: goal, activity: activity)
         }
         .preferredColorScheme(.dark)
@@ -241,7 +241,7 @@ private struct RadioDot: View {
 #Preview("Light") {
     StatefulPreviewContainer(initialGoal: .lose, initialActivity: .light) { goal, activity in
         ZStack {
-            WMPalette.canvasLight.ignoresSafeArea()
+            SCPalette.canvasLight.ignoresSafeArea()
             WelcomeStep2GoalView(goal: goal, activity: activity)
         }
         .preferredColorScheme(.light)

@@ -28,7 +28,7 @@ struct WelcomeStep4HouseholdView: View {
         VStack(alignment: .leading, spacing: 18) {
             WelcomeStepHeader(
                 icon: "house.fill",
-                accent: WMPalette.terracotta,
+                accent: SCPalette.terracotta,
                 eyebrow: "Ostatni krok",
                 title: "Stwórz gospodarstwo",
                 subtitle: "Wspólna przestrzeń dla domowników: plan posiłków, lista zakupów i przepisy. Zaprosisz innych później."
@@ -41,8 +41,8 @@ struct WelcomeStep4HouseholdView: View {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        WMPalette.sage,
-                                        WMPalette.sage.opacity(0.78),
+                                        SCPalette.sage,
+                                        SCPalette.sage.opacity(0.78),
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -56,10 +56,10 @@ struct WelcomeStep4HouseholdView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Nowe gospodarstwo")
                             .font(.system(size: 15.5, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(colorScheme))
+                            .foregroundStyle(Color.scLabel(colorScheme))
                         Text("Nazwa pomoże domownikom rozpoznać wspólne menu.")
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.wmMuted(colorScheme))
+                            .foregroundStyle(Color.scMuted(colorScheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -71,16 +71,16 @@ struct WelcomeStep4HouseholdView: View {
                         .focused($isHouseholdFieldFocused)
                         .submitLabel(.done)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Color.wmLabel(colorScheme))
+                        .foregroundStyle(Color.scLabel(colorScheme))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.wmChipBg(colorScheme))
+                        .fill(Color.scChipBg(colorScheme))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                                .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
                         )
                 )
 
@@ -88,12 +88,12 @@ struct WelcomeStep4HouseholdView: View {
                     AvatarStack(initial: avatarInitial)
                     Text("Domowników zaprosisz po utworzeniu")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(colorScheme))
+                        .foregroundStyle(Color.scMuted(colorScheme))
                 }
                 .padding(.top, 8)
                 .overlay(
                     Divider()
-                        .background(Color.wmRule(colorScheme))
+                        .background(Color.scRule(colorScheme))
                         .padding(.horizontal, -2),
                     alignment: .top
                 )
@@ -101,23 +101,23 @@ struct WelcomeStep4HouseholdView: View {
             .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(colorScheme))
+                    .fill(Color.scTileBg(colorScheme))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                            .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
                     )
             )
 
             HStack(spacing: 10) {
                 Rectangle()
-                    .fill(Color.wmTileStroke(colorScheme))
+                    .fill(Color.scTileStroke(colorScheme))
                     .frame(height: 1)
                 Text("Albo".uppercased())
                     .font(.system(size: 11, weight: .semibold))
                     .tracking(0.6)
-                    .foregroundStyle(Color.wmMuted(colorScheme))
+                    .foregroundStyle(Color.scMuted(colorScheme))
                 Rectangle()
-                    .fill(Color.wmTileStroke(colorScheme))
+                    .fill(Color.scTileStroke(colorScheme))
                     .frame(height: 1)
             }
             .padding(.horizontal, 4)
@@ -128,24 +128,24 @@ struct WelcomeStep4HouseholdView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.wmLabel(colorScheme))
+                            .foregroundStyle(Color.scLabel(colorScheme))
                         Text("Dołącz z linku zaproszenia")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(colorScheme))
+                            .foregroundStyle(Color.scLabel(colorScheme))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .strokeBorder(
-                                Color.wmFaint(colorScheme),
+                                Color.scFaint(colorScheme),
                                 style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])
                             )
                     )
 
                     Text("Otwórz link otrzymany od domownika — Scoffie przejmie zaproszenie automatycznie.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(colorScheme))
+                        .foregroundStyle(Color.scMuted(colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 18)
                 } else {
@@ -156,27 +156,27 @@ struct WelcomeStep4HouseholdView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "envelope.open.fill")
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(WMPalette.terracotta)
+                                    .foregroundStyle(SCPalette.terracotta)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(invitation.householdName)
                                         .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Color.wmLabel(colorScheme))
+                                        .foregroundStyle(Color.scLabel(colorScheme))
                                     Text(invitation.subtitle)
                                         .font(.system(size: 12))
-                                        .foregroundStyle(Color.wmMuted(colorScheme))
+                                        .foregroundStyle(Color.scMuted(colorScheme))
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Text("Dołącz")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(WMPalette.terracotta)
+                                    .foregroundStyle(SCPalette.terracotta)
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 13)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .strokeBorder(WMPalette.terracotta.opacity(0.45), lineWidth: 1.5)
+                                    .strokeBorder(SCPalette.terracotta.opacity(0.45), lineWidth: 1.5)
                             )
                         }
                         .buttonStyle(.plain)
@@ -184,7 +184,7 @@ struct WelcomeStep4HouseholdView: View {
 
                     Text("Zaproszenie czeka na Ciebie — możesz dołączyć zamiast zakładać własne gospodarstwo.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(colorScheme))
+                        .foregroundStyle(Color.scMuted(colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 18)
                 }
@@ -237,8 +237,8 @@ private struct AvatarStack: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                WMPalette.terracotta,
-                                WMPalette.terracottaDeep,
+                                SCPalette.terracotta,
+                                SCPalette.terracottaDeep,
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -246,31 +246,31 @@ private struct AvatarStack: View {
                     )
             )
             .padding(ringWidth)
-            .background(Circle().fill(Color.wmCanvas(colorScheme)))
+            .background(Circle().fill(Color.scCanvas(colorScheme)))
     }
 
     private var placeholderBubble: some View {
         Image(systemName: "plus")
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color.wmMuted(colorScheme))
+            .foregroundStyle(Color.scMuted(colorScheme))
             .frame(width: bubbleSize, height: bubbleSize)
-            .background(Circle().fill(Color.wmChipBg(colorScheme)))
+            .background(Circle().fill(Color.scChipBg(colorScheme)))
             .overlay(
                 Circle()
                     .strokeBorder(
-                        Color.wmFaint(colorScheme),
+                        Color.scFaint(colorScheme),
                         style: StrokeStyle(lineWidth: 1.2, dash: [3, 2])
                     )
             )
             .padding(ringWidth)
-            .background(Circle().fill(Color.wmCanvas(colorScheme)))
+            .background(Circle().fill(Color.scCanvas(colorScheme)))
     }
 }
 
 #Preview("Dark") {
     StatefulPreviewContainer(name: "") { name in
         ZStack {
-            WMPalette.canvasDark.ignoresSafeArea()
+            SCPalette.canvasDark.ignoresSafeArea()
             WelcomeStep4HouseholdView(
                 householdName: name,
                 firstName: "Rafał",
@@ -285,7 +285,7 @@ private struct AvatarStack: View {
 #Preview("Light") {
     StatefulPreviewContainer(name: "Dom Piechowiczów") { name in
         ZStack {
-            WMPalette.canvasLight.ignoresSafeArea()
+            SCPalette.canvasLight.ignoresSafeArea()
             WelcomeStep4HouseholdView(
                 householdName: name,
                 firstName: "Rafał",

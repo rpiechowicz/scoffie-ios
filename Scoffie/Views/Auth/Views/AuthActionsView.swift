@@ -63,21 +63,21 @@ struct AuthActionsView: View {
 #Preview("Dark") {
     AuthActionsView(isLoading: false, errorMessage: nil, onSignInWithAppleTap: {})
         .padding()
-        .background(Color.wmCanvas(.dark))
+        .background(Color.scCanvas(.dark))
         .preferredColorScheme(.dark)
 }
 
 #Preview("Light") {
     AuthActionsView(isLoading: false, errorMessage: nil, onSignInWithAppleTap: {})
         .padding()
-        .background(Color.wmCanvas(.light))
+        .background(Color.scCanvas(.light))
         .preferredColorScheme(.light)
 }
 
 #Preview("Loading") {
     AuthActionsView(isLoading: true, errorMessage: nil, onSignInWithAppleTap: {})
         .padding()
-        .background(Color.wmCanvas(.dark))
+        .background(Color.scCanvas(.dark))
         .preferredColorScheme(.dark)
 }
 
@@ -88,6 +88,6 @@ struct AuthActionsView: View {
         onSignInWithAppleTap: {}
     )
     .padding()
-    .background(Color.wmCanvas(.dark))
+    .background(Color.scCanvas(.dark))
     .preferredColorScheme(.dark)
 }

@@ -157,7 +157,7 @@ struct WelcomeView: View {
         // a real title — `Wyloguj` lives as the only toolbar item.
         NavigationStack {
             ZStack {
-                Color.wmCanvas(colorScheme)
+                Color.scCanvas(colorScheme)
                     .ignoresSafeArea()
 
                 ZStack {
@@ -194,7 +194,7 @@ struct WelcomeView: View {
                         sessionStore.logout()
                     }
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(colorScheme))
+                    .foregroundStyle(Color.scMuted(colorScheme))
                     .accessibilityHint("Powrót do ekranu logowania")
                 }
             }

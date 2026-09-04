@@ -19,11 +19,11 @@ struct EditorialSettingsCardGroup<Content: View>: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -41,7 +41,7 @@ struct EditorialSettingsSectionHeader: View {
         Text(title.uppercased())
             .font(.system(size: 11, weight: .semibold))
             .tracking(0.7)
-            .foregroundStyle(Color.wmFaint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)
             .padding(.top, 20)

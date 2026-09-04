@@ -43,7 +43,7 @@ struct StartupLoaderView: View {
 
     @ViewBuilder
     private func content(elapsed: Double) -> some View {
-        // wm-pot-breathe: 0/100 % scale=1, 50 % scale=1.015, ease-in-out 2.4 s.
+        // oddech-garnka: 0/100 % scale=1, 50 % scale=1.015, ease-in-out 2.4 s.
         // sin-shape (1-cos) daje krzywą bardzo zbliżoną do CSS ease-in-out
         // bez state'a + repeatForever animation'a.
         let breatheT = (1 - cos(2 * .pi * elapsed / 2.4)) / 2
@@ -51,7 +51,7 @@ struct StartupLoaderView: View {
 
         VStack(spacing: 0) {
             ZStack {
-                WMSteamingBowlLogo(size: Self.logoSize)
+                SCSteamingBowlLogo(size: Self.logoSize)
                 steamWispsOverlay(elapsed: elapsed)
             }
             .frame(width: Self.logoSize, height: Self.logoSize)
@@ -65,13 +65,13 @@ struct StartupLoaderView: View {
             VStack(spacing: 0) {
                 Text("Przygotowujemy Twój tydzień")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(colorScheme))
+                    .foregroundStyle(Color.scLabel(colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.bottom, 8)
 
                 Text("Układamy plan na każdy dzień…")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.wmMuted(colorScheme))
+                    .foregroundStyle(Color.scMuted(colorScheme))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 18)
@@ -89,7 +89,7 @@ struct StartupLoaderView: View {
     /// radialnymi winietami w rogach — odwzorowanie `LoaderWeek` z designu
     /// (`Scoffie - Loader i Logo.html`).
     private var background: some View {
-        Color.wmCanvas(colorScheme)
+        Color.scCanvas(colorScheme)
             .overlay(vignettes)
             .ignoresSafeArea()
     }
@@ -117,7 +117,7 @@ struct StartupLoaderView: View {
 
     /// `oklch(0.32 0.06 40 / 0.55)` (dark) / `oklch(0.92 0.06 70 / 0.7)` (light).
     /// Konwersje przybliżone do sRGB; subtelność > literalność OKLCH,
-    /// wartości dobrane pod kompozycję z `Color.wmCanvas`.
+    /// wartości dobrane pod kompozycję z `Color.scCanvas`.
     private var vignetteWarm: Color {
         colorScheme == .dark
             ? Color(red: 78 / 255, green: 56 / 255, blue: 42 / 255).opacity(0.55)
@@ -138,7 +138,7 @@ struct StartupLoaderView: View {
 
     // MARK: - Logo + steam
 
-    /// 3 cząstki pary kontynuujące ruch żółtej pary "WM" z logo v3.
+    /// 3 cząstki pary kontynuujące ruch żółtej pary z logo.
     /// `position(x:y:)` w przestrzeni 84-coord (logo size). Startują tuż nad
     /// wierzchołkami narysowanej pary (y≈11–17 w 84-coord) i unoszą się
     /// ponad kafelek logo (ZStack nie clipuje, więc ujemne y są widoczne).
@@ -196,13 +196,13 @@ struct StartupLoaderView: View {
 
     private var tileColors: [Color] {
         [
-            WMPalette.terracotta,
-            WMPalette.butter,
-            WMPalette.sage,
-            WMPalette.terracotta,
-            WMPalette.butter,
-            WMPalette.sage,
-            WMPalette.terracottaDeep
+            SCPalette.terracotta,
+            SCPalette.butter,
+            SCPalette.sage,
+            SCPalette.terracotta,
+            SCPalette.butter,
+            SCPalette.sage,
+            SCPalette.terracottaDeep
         ]
     }
 
@@ -212,7 +212,7 @@ struct StartupLoaderView: View {
         HStack(spacing: 6) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(WMPalette.terracotta)
+                    .fill(SCPalette.terracotta)
                     .frame(width: 6, height: 6)
                     .opacity(LoaderDotPhase.opacity(
                         elapsed: elapsed,
@@ -332,7 +332,7 @@ private struct SteamWisp: Identifiable {
         SteamWisp(id: 2, x: 60, startY: 15, baseOpacity: 0.5, delay: 1.0),
     ]
 
-    /// `wm-steam-rise`: 0 % → opacity 0, 20 % → 0.9, 100 % → 0,
+    /// `unoszenie-pary`: 0 % → opacity 0, 20 % → 0.9, 100 % → 0,
     /// translate 0 → −22 px, scale 1 → 1.4. 2.2 s ease-out infinite.
     /// Pre-delay guard zapobiega "wraparoundowi" przy elapsed < delay
     /// (modulo z ujemnych liczb wprowadzało wisp'y w środku cyklu).
@@ -354,7 +354,7 @@ private struct SteamWisp: Identifiable {
 // MARK: - Phase helpers
 
 private enum LoaderTilePhase {
-    /// `wm-day-fill`: 0–14 % → puste, 14–20 % → ramp do pełnego, 20–100 % → pełne.
+    /// `wypelnienie-dnia`: 0–14 % → puste, 14–20 % → ramp do pełnego, 20–100 % → pełne.
     /// Pre-stagger guard (`raw < 0`) eliminuje fałszywe pełne kafelki na końcu
     /// rzędu w pierwszym cyklu — bez tego wave'a nie da się odpalić od lewej.
     static func fillProgress(
@@ -375,7 +375,7 @@ private enum LoaderTilePhase {
 }
 
 private enum LoaderDotPhase {
-    /// `wm-dots`: 0–20 % → 0.25, 20–50 % → ramp do 1, 50–80 % → ramp do 0.25,
+    /// `kropki`: 0–20 % → 0.25, 20–50 % → ramp do 1, 50–80 % → ramp do 0.25,
     /// 80–100 % → 0.25. Smoothstep odzwierciedla CSS ease-in-out na keyframach.
     static func opacity(
         elapsed: Double,

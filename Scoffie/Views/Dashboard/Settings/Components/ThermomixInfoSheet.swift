@@ -15,7 +15,7 @@ struct ThermomixInfoSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -29,28 +29,28 @@ struct ThermomixInfoSheet: View {
 
                     infoCard(
                         icon: "fork.knife.circle.fill",
-                        tint: WMPalette.terracotta,
+                        tint: SCPalette.terracotta,
                         title: "Co to jest?",
                         body: "Część przepisów w Scoffie ma swój odpowiednik w Cookidoo — oficjalnej bibliotece przepisów Thermomixa. Takie przepisy poznasz po znaczku Thermomix."
                     )
 
                     infoCard(
                         icon: "paperplane.circle.fill",
-                        tint: WMPalette.sage,
+                        tint: SCPalette.sage,
                         title: "Jak to działa?",
                         body: "Gdy stukniesz \u{201E}Gotuj w Thermomixie\u{201D}, przepis trafi do planu \u{201E}Mój tydzień\u{201D} w Cookidoo na dzisiejszy dzień. Thermomix sam pobierze go z chmury — znajdziesz go na ekranie urządzenia, gotowego do rozpoczęcia gotowania."
                     )
 
                     infoCard(
                         icon: "hand.raised.circle.fill",
-                        tint: WMPalette.indigo,
+                        tint: SCPalette.indigo,
                         title: "Czego się spodziewać?",
                         body: "Przepis czeka w Twoim tygodniu na Thermomixie — nie otworzy się sam na jego ekranie. Tego nie potrafi nawet oficjalna aplikacja Cookidoo: gotowanie zawsze zatwierdzasz na urządzeniu."
                     )
 
                     infoCard(
                         icon: "lock.circle.fill",
-                        tint: WMPalette.butter,
+                        tint: SCPalette.butter,
                         title: "Bezpieczeństwo",
                         body: "Dane logowania do Cookidoo są przechowywane na naszym serwerze w postaci zaszyfrowanej i używane wyłącznie do połączenia z Cookidoo. Nigdy nie wracają do aplikacji — w każdej chwili możesz się rozłączyć."
                     )
@@ -73,11 +73,11 @@ struct ThermomixInfoSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14.5, weight: .bold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 Text(body)
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -85,11 +85,11 @@ struct ThermomixInfoSheet: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
     }

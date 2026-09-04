@@ -1,10 +1,10 @@
 import SwiftUI
 
 // Scoffie v2 "Cozy Kitchen" design tokens.
-// Source of truth: v2-design/Scoffie - Onboarding.html (WM_TOKENS).
+// Źródło: v2-design/Scoffie - Onboarding.html (tokeny kolorów).
 // Dark-first; light mirrors. Colors converted from OKLCH → sRGB.
 
-enum WMPalette {
+enum SCPalette {
     // Warm terracotta family — primary brand accent. Reads as food + warmth
     // without going saturated red.
     //
@@ -63,15 +63,15 @@ enum WMPalette {
 }
 
 extension Color {
-    static func wmCanvas(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? WMPalette.canvasDark : WMPalette.canvasLight
+    static func scCanvas(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? SCPalette.canvasDark : SCPalette.canvasLight
     }
 
-    static func wmLabel(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? WMPalette.labelDark : WMPalette.labelLight
+    static func scLabel(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? SCPalette.labelDark : SCPalette.labelLight
     }
 
-    static func wmMuted(_ scheme: ColorScheme) -> Color {
+    static func scMuted(_ scheme: ColorScheme) -> Color {
         // Light mode opacity bumped from 0.56 → 0.66 to match the design's
         // `rgba(26,15,10,0.68)` muted token — captions and meta rows on the
         // cream canvas were reading too washed-out at 0.56.
@@ -80,7 +80,7 @@ extension Color {
             : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).opacity(0.66)
     }
 
-    static func wmTileBg(_ scheme: ColorScheme) -> Color {
+    static func scTileBg(_ scheme: ColorScheme) -> Color {
         // Cards on cream need slightly more body than the dark-first 0.04 to
         // visibly separate from the canvas — bumped to 0.06.
         scheme == .dark
@@ -88,7 +88,7 @@ extension Color {
             : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).opacity(0.06)
     }
 
-    static func wmTileStroke(_ scheme: ColorScheme) -> Color {
+    static func scTileStroke(_ scheme: ColorScheme) -> Color {
         // Hairline strokes on light mode go from 0.06 → 0.12 so card edges
         // and circular xmark wells remain visible against the cream canvas.
         scheme == .dark
@@ -99,37 +99,37 @@ extension Color {
     /// Elevated card surface. In light mode it goes *lighter* than the cream
     /// canvas — a darker-tinted card there reads as a stain, not as elevation —
     /// and leans on a shadow for separation. Dark mode keeps the dark-first
-    /// translucent fill, identical to `wmTileBg`.
-    static func wmCardSurface(_ scheme: ColorScheme) -> Color {
+    /// translucent fill, identical to `scTileBg`.
+    static func scCardSurface(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.04)
             : Color(red: 255 / 255, green: 252 / 255, blue: 246 / 255)  // #FFFCF6 warm white
     }
 
     /// Recessed surface *inside* a card — meal rows, date tiles. Sits one step
-    /// below `wmCardSurface`, which is how a well reads on a white card.
-    static func wmInsetSurface(_ scheme: ColorScheme) -> Color {
+    /// below `scCardSurface`, which is how a well reads on a white card.
+    static func scInsetSurface(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.025)
             : Color(red: 246 / 255, green: 239 / 255, blue: 228 / 255)  // #F6EFE4 cream well
     }
 
-    /// Hairline for elevated cards — softer than `wmTileStroke`, because the
+    /// Hairline for elevated cards — softer than `scTileStroke`, because the
     /// shadow is already doing the separating.
-    static func wmCardStroke(_ scheme: ColorScheme) -> Color {
+    static func scCardStroke(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.06)
             : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).opacity(0.07)
     }
 
-    static func wmFeatureRowBg(_ scheme: ColorScheme) -> Color {
+    static func scFeatureRowBg(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.08)
             : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).opacity(0.04)
     }
 
-    static func wmAccentTint(_ scheme: ColorScheme) -> Color {
-        WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12)
+    static func scAccentTint(_ scheme: ColorScheme) -> Color {
+        SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12)
     }
 
     /// Tło pod akcent zielony — „zapisane / gotowe”.
@@ -140,72 +140,72 @@ extension Color {
     /// `PlanDaySplitsSection` 0.22/0.16, `PlanSlotPickerSheet` 0.16/0.10).
     /// Asystent potrzebuje ich w kartach na tyle często, że dalsze mnożenie
     /// wariantów zrobiłoby z tego loterię — stąd jedna prawda tutaj.
-    static func wmSageTint(_ scheme: ColorScheme) -> Color {
-        WMPalette.sage.opacity(scheme == .dark ? 0.13 : 0.10)
+    static func scSageTint(_ scheme: ColorScheme) -> Color {
+        SCPalette.sage.opacity(scheme == .dark ? 0.13 : 0.10)
     }
 
     /// Tło pod akcent niebieski — analiza, liczby, „informacyjnie”.
-    static func wmIndigoTint(_ scheme: ColorScheme) -> Color {
-        WMPalette.indigo.opacity(scheme == .dark ? 0.14 : 0.10)
+    static func scIndigoTint(_ scheme: ColorScheme) -> Color {
+        SCPalette.indigo.opacity(scheme == .dark ? 0.14 : 0.10)
     }
 
     /// Tło pod akcent żółty — pytanie asystenta i etykieta „nowe”.
-    static func wmButterTint(_ scheme: ColorScheme) -> Color {
-        WMPalette.butter.opacity(scheme == .dark ? 0.14 : 0.12)
+    static func scButterTint(_ scheme: ColorScheme) -> Color {
+        SCPalette.butter.opacity(scheme == .dark ? 0.14 : 0.12)
     }
 
-    /// Najgłębsze tło strony — o pół tonu ciemniejsze niż `wmCanvas`, bo pod
+    /// Najgłębsze tło strony — o pół tonu ciemniejsze niż `scCanvas`, bo pod
     /// poświatę nagłówka potrzeba czerni, od której akcent ma się odbić.
-    /// Wcześniej ta wartość żyła wyłącznie w `WMPageBackground`; asystent
+    /// Wcześniej ta wartość żyła wyłącznie w `SCPageBackground`; asystent
     /// dokłada nad nią własne warstwy (composer, arkusze), więc musi umieć
     /// nazwać ten sam kolor.
-    static func wmPageBase(_ scheme: ColorScheme) -> Color {
+    static func scPageBase(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255)        // #0C0806
             : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255)   // #FBF5EA
     }
 
-    static func wmRule(_ scheme: ColorScheme) -> Color {
+    static func scRule(_ scheme: ColorScheme) -> Color {
         // Divider rules on cream need extra contrast — bumped 0.12 → 0.18 so
         // section dividers and ingredient hairlines are clearly visible.
         scheme == .dark
-            ? WMPalette.labelDark.opacity(0.12)
-            : WMPalette.labelLight.opacity(0.18)
+            ? SCPalette.labelDark.opacity(0.12)
+            : SCPalette.labelLight.opacity(0.18)
     }
 
-    static func wmFaint(_ scheme: ColorScheme) -> Color {
+    static func scFaint(_ scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? WMPalette.labelDark.opacity(0.32)
-            : WMPalette.labelLight.opacity(0.32)
+            ? SCPalette.labelDark.opacity(0.32)
+            : SCPalette.labelLight.opacity(0.32)
     }
 
-    static func wmStrike(_ scheme: ColorScheme) -> Color {
+    static func scStrike(_ scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? WMPalette.labelDark.opacity(0.30)
-            : WMPalette.labelLight.opacity(0.30)
+            ? SCPalette.labelDark.opacity(0.30)
+            : SCPalette.labelLight.opacity(0.30)
     }
 
-    static func wmBarTrack(_ scheme: ColorScheme) -> Color {
+    static func scBarTrack(_ scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? WMPalette.labelDark.opacity(0.07)
-            : WMPalette.labelLight.opacity(0.07)
+            ? SCPalette.labelDark.opacity(0.07)
+            : SCPalette.labelLight.opacity(0.07)
     }
 
-    static func wmChipBg(_ scheme: ColorScheme) -> Color {
+    static func scChipBg(_ scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? WMPalette.labelDark.opacity(0.08)
-            : WMPalette.labelLight.opacity(0.05)
+            ? SCPalette.labelDark.opacity(0.08)
+            : SCPalette.labelLight.opacity(0.05)
     }
 }
 
 // Page background — warm canvas with a soft terracotta glow at the top.
 // Used as the root of editorial screens (Kalendarz v2).
-struct WMPageBackground: View {
+struct SCPageBackground: View {
     let scheme: ColorScheme
 
     var body: some View {
-        let base = Color.wmPageBase(scheme)
-        let glow = WMPalette.terracotta.opacity(scheme == .dark ? 0.12 : 0.10)
+        let base = Color.scPageBase(scheme)
+        let glow = SCPalette.terracotta.opacity(scheme == .dark ? 0.12 : 0.10)
 
         return ZStack {
             base

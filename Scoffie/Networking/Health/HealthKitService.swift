@@ -10,7 +10,7 @@ enum StepsSource: String, CaseIterable {
 }
 
 struct DailyStepsSample: Equatable {
-    /// Klucz dnia w formacie `WeeklyMealStore.dateKey` (yyyy-MM-dd, strefa telefonu).
+    /// Klucz dnia w formacie `MealCalendarStore.dateKey` (yyyy-MM-dd, strefa telefonu).
     let dateKey: String
     let steps: Int
 }
@@ -78,7 +78,7 @@ final class HealthKitService {
             let total = Int(stats.sumQuantity()?.doubleValue(for: .count()) ?? 0)
             guard total > 0 else { return }
             samples.append(DailyStepsSample(
-                dateKey: WeeklyMealStore.dateKey(for: stats.startDate),
+                dateKey: MealCalendarStore.dateKey(for: stats.startDate),
                 // Sufit z kontraktu backendu (@Max w DTO) — śmieciowa próbka
                 // z aplikacji trzeciej powyżej limitu wywalałaby walidację
                 // całego batcha i po cichu zatrzymała sync (błędy połykamy).

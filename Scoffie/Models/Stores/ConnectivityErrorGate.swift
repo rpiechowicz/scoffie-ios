@@ -19,7 +19,7 @@ final class ConnectivityErrorGate {
     private let delay: Duration
 
     // `nonisolated`, bo bramkę tworzą w property initializerach także store'y,
-    // które same nie są przypięte do MainActora (WeeklyMealStore, katalog).
+    // które same nie są przypięte do MainActora (MealCalendarStore, katalog).
     nonisolated init(delay: Duration = .seconds(2)) {
         self.delay = delay
     }

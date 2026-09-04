@@ -14,7 +14,7 @@ import Observation
 /// `weeklyPlans:getSavedPlan`) została wycofana: żaden widok jej nie czytał,
 /// a każda zmiana tygodnia kosztowała dodatkowy round-trip po sockecie.
 @Observable
-class WeeklyMealStore {
+class MealCalendarStore {
 
     // MARK: - Storage
 
@@ -451,7 +451,7 @@ class WeeklyMealStore {
             let data = try JSONEncoder().encode(plans)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            debugLog("WeeklyMealStore save error: \(error)")
+            debugLog("MealCalendarStore save error: \(error)")
         }
     }
 
@@ -460,7 +460,7 @@ class WeeklyMealStore {
         do {
             plans = try JSONDecoder().decode([String: DayMealPlan].self, from: data)
         } catch {
-            debugLog("WeeklyMealStore load error: \(error)")
+            debugLog("MealCalendarStore load error: \(error)")
         }
     }
 

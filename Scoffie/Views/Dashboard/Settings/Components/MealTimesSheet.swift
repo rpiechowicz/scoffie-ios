@@ -27,7 +27,7 @@ struct MealTimesSheet: View {
     var onClose: () -> Void
 
     @Environment(\.sessionStore) private var sessionStore
-    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.colorScheme) private var scheme
 
@@ -53,7 +53,7 @@ struct MealTimesSheet: View {
         let rows = self.rows
 
         return ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -66,7 +66,7 @@ struct MealTimesSheet: View {
 
                     Text("Godziny podpisują posiłki w planie i kalendarzu. Obowiązują wszystkich domowników — zmiana pojawi się od razu u każdego.")
                         .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 6)
 
@@ -88,7 +88,7 @@ struct MealTimesSheet: View {
                             save(.default)
                         }
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 6)
                     }
                 }
@@ -133,7 +133,7 @@ struct MealTimesSheet: View {
                 if let lastFailed {
                     Button("Spróbuj ponownie") { save(lastFailed) }
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -181,15 +181,15 @@ struct MealTimesSheet: View {
 
                     Text(slot.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isEnabledInPlan ? Color.wmLabel(scheme) : Color.wmMuted(scheme))
+                        .foregroundStyle(isEnabledInPlan ? Color.scLabel(scheme) : Color.scMuted(scheme))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .frame(width: 22, height: 22)
-                        .background(Circle().fill(Color.wmChipBg(scheme)))
+                        .background(Circle().fill(Color.scChipBg(scheme)))
                 }
                 .frame(height: 56)
                 .padding(.horizontal, 16)
@@ -201,7 +201,7 @@ struct MealTimesSheet: View {
 
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.horizontal, 16)
             }
@@ -209,8 +209,8 @@ struct MealTimesSheet: View {
     }
 
     private func timeColor(_ slot: MealSlot, isEnabledInPlan: Bool) -> Color {
-        if schedule.minutes(for: slot) == nil { return Color.wmFaint(scheme) }
-        return isEnabledInPlan ? Color.wmLabel(scheme) : Color.wmMuted(scheme)
+        if schedule.minutes(for: slot) == nil { return Color.scFaint(scheme) }
+        return isEnabledInPlan ? Color.scLabel(scheme) : Color.scMuted(scheme)
     }
 
     private func slotTile(_ slot: MealSlot, isEnabledInPlan: Bool) -> some View {
@@ -237,11 +237,11 @@ struct MealTimesSheet: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
 
                 Text(outOfOrderText(pair))
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 6)
@@ -304,7 +304,7 @@ private struct MealTimeEditorSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -329,7 +329,7 @@ private struct MealTimeEditorSheet: View {
                 if !MealSlotSchedule.slotsRequiringTime.contains(slot) {
                     Button("Bez stałej pory", action: onClearTime)
                         .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .padding(.bottom, 6)
                 }
@@ -358,19 +358,19 @@ private struct MealTimeEditorSheet: View {
                 Text("Pora posiłku")
                     .font(.system(size: 10.5, weight: .bold))
                     .tracking(1.4)
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
 
                 Text(slot.title)
                     .font(.system(size: 19, weight: .heavy))
                     .tracking(-0.3)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
             }
 
             Spacer(minLength: 8)
 
             Button("Gotowe", action: onClose)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
         }
         .padding(.horizontal, 20)
         .padding(.top, 26)

@@ -230,7 +230,7 @@ struct RecipePersonalization: Equatable {
                 Chip(
                     icon: "exclamationmark.shield.fill",
                     title: "Bez: " + ordered.map(\.title).joined(separator: ", ").lowercased(),
-                    accent: WMPalette.terracotta
+                    accent: SCPalette.terracotta
                 )
             )
         }

@@ -25,27 +25,27 @@ struct DataExportSheet: View {
                     Text("Paczka JSON z Twoim profilem, preferencjami, przepisami, posiłkami, krokami, zgodami i rozmowami z asystentem. Bez danych innych domowników.")
                         .font(.system(size: 13.5))
                         .lineSpacing(2)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(spacing: 12) {
                             ZStack {
-                                Circle().fill(WMPalette.indigo.opacity(0.18))
+                                Circle().fill(SCPalette.indigo.opacity(0.18))
                                 Image(systemName: "doc.zipper")
                                     .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(WMPalette.indigo)
+                                    .foregroundStyle(SCPalette.indigo)
                             }
                             .frame(width: 36, height: 36)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(fileURL?.lastPathComponent ?? "scoffie-dane.json")
                                     .font(.system(size: 14.5, weight: .semibold))
-                                    .foregroundStyle(Color.wmLabel(scheme))
+                                    .foregroundStyle(Color.scLabel(scheme))
                                     .lineLimit(1)
                                 Text(statusLine)
                                     .font(.system(size: 12.5))
-                                    .foregroundStyle(Color.wmMuted(scheme))
+                                    .foregroundStyle(Color.scMuted(scheme))
                             }
                             Spacer(minLength: 0)
                             if isLoading {
@@ -61,20 +61,20 @@ struct DataExportSheet: View {
                                     Text("Zapisz albo wyślij")
                                         .font(.system(size: 15, weight: .bold))
                                 }
-                                .foregroundStyle(Color.wmPageBase(scheme))
+                                .foregroundStyle(Color.scPageBase(scheme))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
-                                .background(Capsule().fill(WMPalette.terracotta))
+                                .background(Capsule().fill(SCPalette.terracotta))
                             }
                             .buttonStyle(.plain)
                         } else if !isLoading {
                             Button(action: load) {
                                 Text(errorMessage == nil ? "Przygotuj paczkę" : "Spróbuj ponownie")
                                     .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(Color.wmPageBase(scheme))
+                                    .foregroundStyle(Color.scPageBase(scheme))
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 48)
-                                    .background(Capsule().fill(WMPalette.terracotta))
+                                    .background(Capsule().fill(SCPalette.terracotta))
                             }
                             .buttonStyle(.plain)
                         }
@@ -82,17 +82,17 @@ struct DataExportSheet: View {
                         if let errorMessage {
                             Text(errorMessage)
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(WMPalette.terracotta)
+                                .foregroundStyle(SCPalette.terracotta)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .padding(16)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.wmTileBg(scheme)))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
 
                     Text("Żądanie e-mailem działa dalej: \(LegalDocMeta.contactEmail), z adresu przypisanego do konta. Odpowiadamy w ciągu 30 dni.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 20)
@@ -100,7 +100,7 @@ struct DataExportSheet: View {
                 .padding(.bottom, 28)
             }
             .scrollIndicators(.hidden)
-            .background(WMPageBackground(scheme: scheme).ignoresSafeArea())
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)

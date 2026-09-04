@@ -56,11 +56,11 @@ struct EditorialAisleSection: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -106,39 +106,39 @@ struct EditorialAisleSection: View {
                     CountingNumber(target: bought)
                         .font(.system(size: 12, weight: .heavy))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text("/")
                         .font(.system(size: 12, weight: .heavy))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     CountingNumber(target: total)
                         .font(.system(size: 12, weight: .heavy))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text(verbatim: " · ")
                         .font(.system(size: 12, weight: .medium))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
 
                     CountingNumber(target: percent)
                         .font(.system(size: 12, weight: .medium))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
 
                     Text("%")
                         .font(.system(size: 12, weight: .medium))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.wmBarTrack(scheme))
+                        .fill(Color.scBarTrack(scheme))
                         .frame(width: 64, height: 5)
 
                     Capsule()

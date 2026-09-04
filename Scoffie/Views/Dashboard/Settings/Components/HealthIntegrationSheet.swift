@@ -30,7 +30,7 @@ struct HealthIntegrationSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -90,24 +90,24 @@ struct HealthIntegrationSheet: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "figure.walk")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
+                .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
 
             Text("Połącz aplikację ze Zdrowiem, aby widzieć dzienne kroki w Kalendarzu pod kaloriami i zbierać statystyki aktywności. Kroki są tylko odczytywane — aplikacja niczego nie zapisuje do Zdrowia.")
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -133,7 +133,7 @@ struct HealthIntegrationSheet: View {
 
             Text("iOS zapyta o zgodę na odczyt kroków. Zgodą zarządzasz potem w Ustawienia → Prywatność i bezpieczeństwo → Zdrowie.")
                 .font(.system(size: 11.5, weight: .regular))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6)
         }
@@ -186,16 +186,16 @@ struct HealthIntegrationSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(isSelected ? WMPalette.terracotta : Color.wmMuted(scheme))
+                    .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scMuted(scheme))
 
                 Text(title)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 Text(subtitle)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -203,15 +203,15 @@ struct HealthIntegrationSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(isSelected
-                        ? WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)
-                        : Color.wmTileBg(scheme))
+                        ? SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)
+                        : Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(
                         isSelected
-                            ? WMPalette.terracotta.opacity(scheme == .dark ? 0.55 : 0.45)
-                            : Color.wmTileStroke(scheme),
+                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.55 : 0.45)
+                            : Color.scTileStroke(scheme),
                         lineWidth: isSelected ? 1.4 : 1
                     )
             )
@@ -236,17 +236,17 @@ struct HealthIntegrationSheet: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "arrow.triangle.2.circlepath")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
 
             Text("Kroki z Garmina czytamy przez Zdrowie. W aplikacji Garmin Connect włącz zapisywanie kroków do Apple Health: Więcej → Ustawienia → Zdrowie użytkownika → Apple Health.")
                 .font(.system(size: 12.5, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(WMPalette.sage.opacity(scheme == .dark ? 0.10 : 0.07))
+                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.10 : 0.07))
         )
     }
 
@@ -256,7 +256,7 @@ struct HealthIntegrationSheet: View {
         HStack(spacing: 14) {
             EditorialSettingsTileIcon(
                 icon: "checkmark",
-                color: WMPalette.sage,
+                color: SCPalette.sage,
                 size: 44,
                 radius: 12
             )
@@ -264,16 +264,16 @@ struct HealthIntegrationSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Połączono ze Zdrowiem")
                     .font(.system(size: 15.5, weight: .heavy))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 if let todaySteps = store?.todaySteps {
                     Text("Dzisiaj: \(todaySteps) kroków")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 } else if let since = store?.enabledAtKey {
                     Text("Synchronizacja od \(since)")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -281,11 +281,11 @@ struct HealthIntegrationSheet: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(WMPalette.sage.opacity(scheme == .dark ? 0.10 : 0.07))
+                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.10 : 0.07))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(WMPalette.sage.opacity(scheme == .dark ? 0.45 : 0.36), lineWidth: 1.4)
+                .stroke(SCPalette.sage.opacity(scheme == .dark ? 0.45 : 0.36), lineWidth: 1.4)
         )
         .accessibilityElement(children: .combine)
     }
@@ -300,19 +300,19 @@ struct HealthIntegrationSheet: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(WMPalette.butter)
+                    .foregroundStyle(SCPalette.butter)
 
                 Text(selectedSource == .garmin
                     ? "Zdrowie nie zwraca żadnych kroków z Garmina. Upewnij się, że Garmin Connect zapisuje kroki do Apple Health i że zegarek się zsynchronizował."
                     : "Zdrowie nie zwraca żadnych kroków. Jeśli licznik stoi pusty, sprawdź Ustawienia → Prywatność i bezpieczeństwo → Zdrowie → Scoffie i włącz odczyt Kroków.")
                     .font(.system(size: 12.5, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(WMPalette.butter.opacity(scheme == .dark ? 0.12 : 0.10))
+                    .fill(SCPalette.butter.opacity(scheme == .dark ? 0.12 : 0.10))
             )
         }
     }
@@ -325,15 +325,15 @@ struct HealthIntegrationSheet: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .center, spacing: 14) {
-                    EditorialSettingsTileIcon(icon: "figure.walk", color: WMPalette.terracotta)
+                    EditorialSettingsTileIcon(icon: "figure.walk", color: SCPalette.terracotta)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Dzienny cel")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                         Text("Pasek w Kalendarzu pokazuje postęp względem tej liczby.")
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -344,11 +344,11 @@ struct HealthIntegrationSheet: View {
             .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
     }
@@ -361,14 +361,14 @@ struct HealthIntegrationSheet: View {
                 Text(stepsGoal, format: .number.grouping(.never))
                     .font(.system(size: 44, weight: .heavy))
                     .tracking(-1.4)
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(stepsGoal)))
 
                 Text("kroków / dzień")
                     .font(.system(size: 13, weight: .semibold))
                     .tracking(-0.1)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.smooth(duration: 0.18), value: stepsGoal)
@@ -382,7 +382,7 @@ struct HealthIntegrationSheet: View {
                     in: Double(Self.stepsGoalMin)...Double(Self.stepsGoalMax),
                     step: Double(Self.stepsGoalStep)
                 )
-                .tint(WMPalette.terracotta)
+                .tint(SCPalette.terracotta)
 
                 HStack {
                     Text("\(Self.stepsGoalMin)")
@@ -391,7 +391,7 @@ struct HealthIntegrationSheet: View {
                 }
                 .font(.system(size: 11, weight: .medium))
                 .monospacedDigit()
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
             }
         }
     }
@@ -418,7 +418,7 @@ struct HealthIntegrationSheet: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 13)
             .background(
-                Capsule().fill(Color.wmChipBg(scheme))
+                Capsule().fill(Color.scChipBg(scheme))
             )
             .overlay(
                 Capsule().stroke(Color.red.opacity(0.35), lineWidth: 1)
@@ -434,21 +434,21 @@ struct HealthIntegrationSheet: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "heart.slash.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
 
             Text("Zdrowie nie jest dostępne na tym urządzeniu.")
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 }

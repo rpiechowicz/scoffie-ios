@@ -81,13 +81,13 @@ enum DietPreference: String, CaseIterable, Identifiable {
 
     var accent: Color {
         switch self {
-        case .none:         return WMPalette.terracotta
-        case .vegetarian:   return WMPalette.sage
-        case .vegan:        return WMPalette.sage
-        case .pescatarian:  return WMPalette.indigo
-        case .keto:         return WMPalette.terracotta
-        case .paleo:        return WMPalette.butter
-        case .highProtein:  return WMPalette.indigo
+        case .none:         return SCPalette.terracotta
+        case .vegetarian:   return SCPalette.sage
+        case .vegan:        return SCPalette.sage
+        case .pescatarian:  return SCPalette.indigo
+        case .keto:         return SCPalette.terracotta
+        case .paleo:        return SCPalette.butter
+        case .highProtein:  return SCPalette.indigo
         }
     }
 }

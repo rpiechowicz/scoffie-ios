@@ -32,10 +32,10 @@ struct WelcomeStepper: View {
 
     private func fill(for n: Int) -> Color {
         let label = colorScheme == .dark
-            ? WMPalette.labelDark
-            : WMPalette.labelLight
+            ? SCPalette.labelDark
+            : SCPalette.labelLight
         if n == step {
-            return WMPalette.terracotta
+            return SCPalette.terracotta
         }
         if n < step {
             return label.opacity(0.5)
@@ -52,7 +52,7 @@ struct WelcomeStepper: View {
         WelcomeStepper(step: 4, total: 4)
     }
     .padding()
-    .background(WMPalette.canvasDark)
+    .background(SCPalette.canvasDark)
     .preferredColorScheme(.dark)
 }
 
@@ -62,6 +62,6 @@ struct WelcomeStepper: View {
         WelcomeStepper(step: 2, total: 4)
     }
     .padding()
-    .background(WMPalette.canvasLight)
+    .background(SCPalette.canvasLight)
     .preferredColorScheme(.light)
 }

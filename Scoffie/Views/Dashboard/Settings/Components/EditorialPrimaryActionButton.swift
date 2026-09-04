@@ -39,8 +39,8 @@ struct EditorialPrimaryActionButton: View {
                     .fill(
                         LinearGradient(
                             colors: isInteractive
-                                ? [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)]
-                                : [Color.wmFaint(scheme), Color.wmFaint(scheme)],
+                                ? [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)]
+                                : [Color.scFaint(scheme), Color.scFaint(scheme)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -48,7 +48,7 @@ struct EditorialPrimaryActionButton: View {
             )
             .overlay(Capsule().stroke(.white.opacity(isInteractive ? 0.22 : 0), lineWidth: 1))
             .shadow(
-                color: WMPalette.terracotta.opacity(isInteractive ? 0.28 : 0),
+                color: SCPalette.terracotta.opacity(isInteractive ? 0.28 : 0),
                 radius: 8, x: 0, y: 4
             )
         }

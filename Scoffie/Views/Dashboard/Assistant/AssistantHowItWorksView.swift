@@ -40,7 +40,7 @@ struct AssistantHowItWorksView: View {
             NavigationStack {
                 content
                     .toolbar(.hidden, for: .navigationBar)
-                    .background(WMPageBackground(scheme: scheme).ignoresSafeArea())
+                    .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             }
             .presentationDragIndicator(.visible)
         }
@@ -53,13 +53,13 @@ struct AssistantHowItWorksView: View {
                     Text("Jak działa asystent")
                         .font(.system(size: 17, weight: .bold))
                         .tracking(-0.4)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Spacer()
                     Button("Zamknij") { finish() }
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
-                .padding(.horizontal, WMPageMetrics.horizontal)
+                .padding(.horizontal, SCPageMetrics.horizontal)
                 .padding(.top, 18)
                 .padding(.bottom, 6)
             } else {
@@ -77,7 +77,7 @@ struct AssistantHowItWorksView: View {
                     ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
                         ScrollView {
                             onboardingCard(card, minHeight: max(0, proxy.size.height - 18))
-                                .padding(.horizontal, WMPageMetrics.horizontal)
+                                .padding(.horizontal, SCPageMetrics.horizontal)
                                 .padding(.top, 6)
                                 .padding(.bottom, 12)
                         }
@@ -99,9 +99,9 @@ struct AssistantHowItWorksView: View {
                     // Jak w przewodniku: okrągła strzałka po lewej od „Dalej".
                     // W arkuszu z menu — tylko między kartami.
                     if presentation == .inline || step > 0 {
-                        WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") { back() }
+                        SCSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") { back() }
                     }
-                    WMSoftButton(
+                    SCSoftButton(
                         title: isLast ? (presentation == .sheet ? "Zamknij" : "Zaczynajmy") : "Dalej",
                         trailingIcon: isLast ? nil : "chevron.right"
                     ) {
@@ -140,12 +140,12 @@ struct AssistantHowItWorksView: View {
                 Text(card.title)
                     .font(.system(size: 26, weight: .bold))
                     .tracking(-0.6)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(card.body)
                     .font(.system(size: 16))
                     .lineSpacing(4)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -165,15 +165,15 @@ struct AssistantHowItWorksView: View {
                 HStack(alignment: .top, spacing: 9) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(WMPalette.sage)
+                        .foregroundStyle(SCPalette.sage)
                     Text("Nic nie zapisuje się samo — każda zmiana to karta z „Dodaj do planu”, a zapis cofniesz w ciągu doby. Wzrost, waga, kroki i e-mail nie są wysyłane do modelu AI.")
                         .font(.system(size: 14))
                         .lineSpacing(3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(12)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.wmSageTint(scheme)))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.scSageTint(scheme)))
             }
 
             if card.showsCapabilitiesLink, let onShowCapabilities {
@@ -183,15 +183,15 @@ struct AssistantHowItWorksView: View {
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
                     }
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.wmTileBg(scheme)))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.scTileBg(scheme)))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
         .shadow(color: .black.opacity(scheme == .dark ? 0.28 : 0.06), radius: 12, y: 8)
     }
 

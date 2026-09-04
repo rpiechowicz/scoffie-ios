@@ -36,7 +36,7 @@ struct EditorialRecipesSectionHeader: View {
                 Text(title)
                     .font(.system(size: 22, weight: .bold))
                     .tracking(-0.3)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,36 +68,36 @@ struct EditorialRecipesSectionHeader: View {
 enum RecipeAccent {
     static func accent(for category: RecipesCategory) -> Color {
         switch category {
-        case .breakfast: return WMPalette.butter
-        case .lunch:     return WMPalette.sage
-        case .dinner:    return WMPalette.indigo
+        case .breakfast: return SCPalette.butter
+        case .lunch:     return SCPalette.sage
+        case .dinner:    return SCPalette.indigo
         // Terakota była dotąd zarezerwowana dla pseudo-kategorii, które nigdy
         // nie rysują sekcji — paleta „Cozy Kitchen" ma dokładnie cztery
         // akcenty, więc czwarta realna kategoria domyka komplet zamiast
         // dokładać piąty kolor spoza tokenów.
-        case .snacks:    return WMPalette.terracotta
-        case .favourite: return WMPalette.terracotta
-        case .all:       return WMPalette.terracotta
+        case .snacks:    return SCPalette.terracotta
+        case .favourite: return SCPalette.terracotta
+        case .all:       return SCPalette.terracotta
         }
     }
 
     /// Akcent dla poziomu trudności — używany przez chipy w arkuszu filtrów.
     static func accent(for difficulty: Difficulty) -> Color {
         switch difficulty {
-        case .easy:   return WMPalette.sage
-        case .medium: return WMPalette.butter
-        case .hard:   return WMPalette.terracotta
+        case .easy:   return SCPalette.sage
+        case .medium: return SCPalette.butter
+        case .hard:   return SCPalette.terracotta
         }
     }
 
     /// Akcent dla tagu profilu odżywczego — chipy w arkuszu filtrów.
     static func accent(for tag: RecipeNutritionTag) -> Color {
         switch tag {
-        case .highProtein: return WMPalette.terracotta
-        case .lowCarb:     return WMPalette.indigo
-        case .lowFat:      return WMPalette.butter
-        case .highFiber:   return WMPalette.sage
-        case .lowSalt:     return WMPalette.indigo
+        case .highProtein: return SCPalette.terracotta
+        case .lowCarb:     return SCPalette.indigo
+        case .lowFat:      return SCPalette.butter
+        case .highFiber:   return SCPalette.sage
+        case .lowSalt:     return SCPalette.indigo
         }
     }
 

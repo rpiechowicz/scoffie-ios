@@ -283,11 +283,11 @@ struct ScoffieApp: App {
         case .loader:
             StartupLoaderView()
         case .dashboard:
-            if let mealStore = sessionStore.weeklyMealStore,
+            if let mealStore = sessionStore.mealCalendarStore,
                let recipeCatalogStore = sessionStore.recipeCatalogStore,
                let shoppingListStore = sessionStore.shoppingListStore {
                 DashboardView()
-                    .environment(\.weeklyMealStore, mealStore)
+                    .environment(\.mealCalendarStore, mealStore)
                     .environment(\.datesViewModel, sessionStore.datesViewModel)
                     .environment(\.recipeCatalogStore, recipeCatalogStore)
                     .environment(\.shoppingListStore, shoppingListStore)

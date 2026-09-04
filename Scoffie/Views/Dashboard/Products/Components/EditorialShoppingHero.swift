@@ -60,7 +60,7 @@ struct EditorialShoppingHero: View {
         .background(heroBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(scheme == .dark ? 0.35 : 0.12),
@@ -74,7 +74,7 @@ struct EditorialShoppingHero: View {
             Text(subtitleOverride ?? "LISTA ZAKUPÓW")
                 .font(.system(size: 10.5, weight: .bold))
                 .tracking(1.4)
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
@@ -117,9 +117,9 @@ struct EditorialShoppingHero: View {
                         LinearGradient(
                             colors: [
                                 // Design: `color-mix(in oklch, sage, transparent 30%)` — sage @ 70% opacity.
-                                WMPalette.sage.opacity(0.70),
+                                SCPalette.sage.opacity(0.70),
                                 // Design: `color-mix(in oklch, sage, #000 14%)` — sage darkened 14%.
-                                WMPalette.sage.mix(black: 0.14)
+                                SCPalette.sage.mix(black: 0.14)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -130,7 +130,7 @@ struct EditorialShoppingHero: View {
                 Capsule()
                     .stroke(.white.opacity(0.24), lineWidth: 1)
             )
-            .shadow(color: WMPalette.sage.opacity(0.28), radius: 6, x: 0, y: 4)
+            .shadow(color: SCPalette.sage.opacity(0.28), radius: 6, x: 0, y: 4)
             .opacity(isPrimaryActionDisabled ? 0.45 : 1)
             // The HStack width animates with the title swap so the capsule
             // grows / shrinks smoothly between "Kupione" and "Zamknij"
@@ -151,13 +151,13 @@ struct EditorialShoppingHero: View {
         // breathing room between the gauge and the fraction.
         ZStack(alignment: .top) {
             ArcShape(percent: 100)
-                .stroke(Color.wmFaint(scheme).opacity(0.35),
+                .stroke(Color.scFaint(scheme).opacity(0.35),
                         style: StrokeStyle(lineWidth: arcStroke, lineCap: .round))
 
             ArcShape(percent: percent)
-                .stroke(WMPalette.sage,
+                .stroke(SCPalette.sage,
                         style: StrokeStyle(lineWidth: arcStroke, lineCap: .round))
-                .shadow(color: WMPalette.sage.opacity(0.60), radius: 6, x: 0, y: 0)
+                .shadow(color: SCPalette.sage.opacity(0.60), radius: 6, x: 0, y: 0)
                 .animation(.easeInOut(duration: 0.32), value: percent)
 
             // Centered overlay — distance from the top of the gauge to the
@@ -168,18 +168,18 @@ struct EditorialShoppingHero: View {
                     CountingNumber(target: bought)
                         .font(.system(size: 36, weight: .heavy))
                         .tracking(-1.0)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
                         .fixedSize()
 
                     Text("/")
                         .font(.system(size: 36, weight: .medium))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
 
                     CountingNumber(target: total)
                         .font(.system(size: 36, weight: .heavy))
                         .tracking(-1.0)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -190,12 +190,12 @@ struct EditorialShoppingHero: View {
                     CountingNumber(target: percent)
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(1.4)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
 
                     Text("% KUPIONE")
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(1.4)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
             }
             .padding(.top, 50)
@@ -208,8 +208,8 @@ struct EditorialShoppingHero: View {
 
     private var footerStats: some View {
         HStack(spacing: 18) {
-            statBullet(value: remaining, label: "do kupienia", color: WMPalette.terracotta)
-            statBullet(value: bought, label: "kupione", color: WMPalette.sage)
+            statBullet(value: remaining, label: "do kupienia", color: SCPalette.terracotta)
+            statBullet(value: bought, label: "kupione", color: SCPalette.sage)
         }
         .frame(maxWidth: .infinity)
     }
@@ -223,11 +223,11 @@ struct EditorialShoppingHero: View {
             CountingNumber(target: value)
                 .font(.system(size: 13, weight: .bold))
                 .tracking(-0.1)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text(label)
                 .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .lineLimit(1)
         }
     }
@@ -241,8 +241,8 @@ struct EditorialShoppingHero: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.wmTileBg(scheme).opacity(scheme == .dark ? 1.4 : 1.0),
-                            Color.wmTileBg(scheme).opacity(scheme == .dark ? 0.55 : 0.4)
+                            Color.scTileBg(scheme).opacity(scheme == .dark ? 1.4 : 1.0),
+                            Color.scTileBg(scheme).opacity(scheme == .dark ? 0.55 : 0.4)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -252,7 +252,7 @@ struct EditorialShoppingHero: View {
             // Sage radial glow centered at the top — design's
             // `radial-gradient(100% 80% at 50% 0%, sage@20%, transparent 65%)`.
             RadialGradient(
-                colors: [WMPalette.sage.opacity(scheme == .dark ? 0.18 : 0.12), .clear],
+                colors: [SCPalette.sage.opacity(scheme == .dark ? 0.18 : 0.12), .clear],
                 center: UnitPoint(x: 0.5, y: 0.0),
                 startRadius: 0,
                 endRadius: 260

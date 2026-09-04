@@ -4,7 +4,7 @@ struct ProductsView: View {
     /// Odsunięcie tytułu od góry. Na pełnym ekranie odsuwa go od Dynamic
     /// Island; w arkuszu (wejście z nagłówka Planu tygodnia) taki margines
     /// zostawiałby pod uchwytem pustą, niczym nieuzasadnioną przestrzeń.
-    var topPadding: CGFloat = WMPageMetrics.top
+    var topPadding: CGFloat = SCPageMetrics.top
 
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.datesViewModel) private var datesViewModel
@@ -197,8 +197,8 @@ struct ProductsView: View {
         return { shoppingListStore.markAllChecked() }
     }
 
-    private var pageBottomPadding: CGFloat { WMPageMetrics.bottom }
-    private var pageHorizontalPadding: CGFloat { WMPageMetrics.horizontal }
+    private var pageBottomPadding: CGFloat { SCPageMetrics.bottom }
+    private var pageHorizontalPadding: CGFloat { SCPageMetrics.horizontal }
     private var pageTopPadding: CGFloat { topPadding }
 
     /// Który wariant treści pokazuje strona. Wyliczany raz na render i używany
@@ -225,7 +225,7 @@ struct ProductsView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                WMPageBackground(scheme: scheme)
+                SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
                 // JEDEN ScrollView na wszystkie stany. Wcześniej każda gałąź
@@ -407,21 +407,21 @@ struct ProductsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Przygotowuję listę zakupów")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Text("Pobieram aktualny stan dla tego tygodnia. Przy kolejnych wejściach aplikacja pokaże zapisany stan od razu.")
                         .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(18)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.wmTileBg(scheme))
+                        .fill(Color.scTileBg(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                        .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -429,10 +429,10 @@ struct ProductsView: View {
                 VStack(spacing: 12) {
                     ForEach(0..<6, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color.wmTileBg(scheme))
+                            .fill(Color.scTileBg(scheme))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                             )
                             .frame(height: 64)
                     }
@@ -450,10 +450,10 @@ struct ProductsView: View {
                 VStack(spacing: 16) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10))
+                            .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10))
                         Image(systemName: "basket.fill")
                             .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                     }
                     .frame(width: 78, height: 78)
 
@@ -461,12 +461,12 @@ struct ProductsView: View {
                         Text("Lista zakupów jest jeszcze pusta")
                             .font(.system(size: 18, weight: .heavy))
                             .tracking(-0.4)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                             .multilineTextAlignment(.center)
 
                         Text("Dodaj posiłki do planu tygodniowego, a produkty pojawią się tutaj automatycznie.")
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .multilineTextAlignment(.center)
                     }
 
@@ -480,11 +480,11 @@ struct ProductsView: View {
                 .padding(.vertical, 28)
                 .background(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.wmTileBg(scheme))
+                        .fill(Color.scTileBg(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                        .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -500,10 +500,10 @@ struct ProductsView: View {
                 .tracking(0.2)
                 .lineLimit(1)
         }
-        .foregroundStyle(Color.wmMuted(scheme))
+        .foregroundStyle(Color.scMuted(scheme))
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Capsule().fill(Color.wmChipBg(scheme)))
+        .background(Capsule().fill(Color.scChipBg(scheme)))
     }
 
     // MARK: - Archived state
@@ -564,19 +564,19 @@ struct ProductsView: View {
     private var weekClosedRule: some View {
         HStack(spacing: 10) {
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
                 .frame(maxWidth: .infinity)
 
             Text("\(weekRangeText.uppercased()) · ZAMKNIĘTE")
                 .font(.system(size: 9, weight: .bold))
                 .tracking(2)
-                .foregroundStyle(WMPalette.indigo)
+                .foregroundStyle(SCPalette.indigo)
                 .lineLimit(1)
                 .fixedSize()
 
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
                 .frame(maxWidth: .infinity)
         }
@@ -588,26 +588,26 @@ struct ProductsView: View {
         VStack(spacing: 8) {
             Image(systemName: "basket")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
 
             Text("Brak aktywnej listy")
                 .font(.system(size: 14, weight: .heavy))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text("Zapisz plan tygodniowy, aby wygenerować produkty.")
                 .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 22)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -615,15 +615,15 @@ struct ProductsView: View {
         VStack(spacing: 8) {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
 
             Text("Brak nowych produktów do kupienia")
                 .font(.system(size: 14, weight: .heavy))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text("Zmiany w planie nie dodały nowych zakupów na ten tydzień.")
                 .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -631,11 +631,11 @@ struct ProductsView: View {
         .padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -655,7 +655,7 @@ struct ProductsView: View {
 
                 if idx < archives.count - 1 {
                     Rectangle()
-                        .fill(Color.wmRule(scheme))
+                        .fill(Color.scRule(scheme))
                         .frame(height: 1)
                         .padding(.leading, 60)
                 }
@@ -663,11 +663,11 @@ struct ProductsView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -696,7 +696,7 @@ struct ProductsView: View {
 
     private var historySheet: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -706,10 +706,10 @@ struct ProductsView: View {
                             Text("HISTORIA LIST")
                                 .font(.system(size: 10.5, weight: .bold))
                                 .tracking(1.4)
-                                .foregroundStyle(WMPalette.terracotta)
+                                .foregroundStyle(SCPalette.terracotta)
                             Text("Zamknięte listy")
                                 .font(.system(size: 22, weight: .heavy))
-                                .foregroundStyle(Color.wmLabel(scheme))
+                                .foregroundStyle(Color.scLabel(scheme))
                         }
                         Spacer()
                         Button {
@@ -717,9 +717,9 @@ struct ProductsView: View {
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
                                 .frame(width: 36, height: 36)
-                                .background(Circle().fill(Color.wmChipBg(scheme)))
+                                .background(Circle().fill(Color.scChipBg(scheme)))
                         }
                         .buttonStyle(.plain)
                     }
@@ -727,7 +727,7 @@ struct ProductsView: View {
                     if shoppingListStore.archivedLists.isEmpty {
                         Text("Brak zapisanych list.")
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 24)
                     } else {
@@ -773,7 +773,7 @@ struct ProductsView: View {
                         .font(.system(size: 24, weight: .heavy))
                         .italic()
                         .tracking(-0.8)
-                        .foregroundStyle(WMPalette.indigo.opacity(scheme == .dark ? 0.65 : 0.55))
+                        .foregroundStyle(SCPalette.indigo.opacity(scheme == .dark ? 0.65 : 0.55))
                         .monospacedDigit()
                         .lineLimit(1)
                         .fixedSize()
@@ -784,15 +784,15 @@ struct ProductsView: View {
                             Text("Lista \(archive.revision)")
                                 .font(.system(size: 15, weight: .heavy))
                                 .tracking(-0.3)
-                                .foregroundStyle(Color.wmLabel(scheme))
+                                .foregroundStyle(Color.scLabel(scheme))
 
                             Text(verbatim: " · ")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
 
                             Text("\(counts.bought)/\(counts.total) kupione")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
                                 .monospacedDigit()
                         }
                         .lineLimit(1)
@@ -803,7 +803,7 @@ struct ProductsView: View {
                         if !isCurrentWeek {
                             Text(archive.weekLabel)
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.wmMuted(scheme).opacity(0.8))
+                                .foregroundStyle(Color.scMuted(scheme).opacity(0.8))
                                 .lineLimit(1)
                         }
                     }
@@ -818,8 +818,8 @@ struct ProductsView: View {
             HStack(spacing: 6) {
                 archiveIconButton(
                     icon: "eye",
-                    tint: Color.wmMuted(scheme),
-                    fill: Color.wmChipBg(scheme),
+                    tint: Color.scMuted(scheme),
+                    fill: Color.scChipBg(scheme),
                     label: "Pokaż listę \(archive.revision)"
                 ) {
                     previewArchiveId = archive.archiveId
@@ -862,7 +862,7 @@ struct ProductsView: View {
 
     private func archivePreview(_ archive: ArchivedShoppingList) -> some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -872,10 +872,10 @@ struct ProductsView: View {
                             Text("LISTA \(archive.revision)".uppercased())
                                 .font(.system(size: 10.5, weight: .bold))
                                 .tracking(1.4)
-                                .foregroundStyle(WMPalette.terracotta)
+                                .foregroundStyle(SCPalette.terracotta)
                             Text(archive.weekLabel)
                                 .font(.system(size: 22, weight: .heavy))
-                                .foregroundStyle(Color.wmLabel(scheme))
+                                .foregroundStyle(Color.scLabel(scheme))
                         }
                         Spacer()
                         Button {
@@ -883,9 +883,9 @@ struct ProductsView: View {
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
                                 .frame(width: 36, height: 36)
-                                .background(Circle().fill(Color.wmChipBg(scheme)))
+                                .background(Circle().fill(Color.scChipBg(scheme)))
                         }
                         .buttonStyle(.plain)
                     }

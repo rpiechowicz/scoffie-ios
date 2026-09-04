@@ -25,21 +25,21 @@ struct LegalDocumentsSheet: View {
                     Text("Wersja \(LegalDocMeta.version) · obowiązuje od \(LegalDocMeta.effectiveDate). Te same dokumenty, które akceptujesz przy logowaniu; aktualne wersje są też na scoffie.app.")
                         .font(.system(size: 13))
                         .lineSpacing(2)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     EditorialSheetSectionLabel(title: "Dokumenty")
                     EditorialSettingsCardGroup {
                         EditorialSettingsRow(
                             icon: "hand.raised.fill",
-                            iconColor: WMPalette.indigo,
+                            iconColor: SCPalette.indigo,
                             title: "Polityka prywatności",
                             value: "v\(LegalDocMeta.version)",
                             action: { showPrivacy = true }
                         )
                         EditorialSettingsRow(
                             icon: "doc.text.fill",
-                            iconColor: WMPalette.sage,
+                            iconColor: SCPalette.sage,
                             title: "Warunki korzystania",
                             value: "v\(LegalDocMeta.version)",
                             isLast: true,
@@ -51,7 +51,7 @@ struct LegalDocumentsSheet: View {
                     EditorialSettingsCardGroup {
                         EditorialSettingsRow(
                             icon: "square.and.arrow.down.fill",
-                            iconColor: WMPalette.terracotta,
+                            iconColor: SCPalette.terracotta,
                             title: "Pobierz moje dane",
                             value: "JSON",
                             isLast: true,
@@ -61,19 +61,19 @@ struct LegalDocumentsSheet: View {
 
                     Text("Paczka z Twoim profilem, preferencjami, przepisami, posiłkami, krokami, zgodami i rozmowami z asystentem — prawo dostępu i przenoszenia danych (art. 15 i 20 RODO). Bez danych innych domowników.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text("Pytania i żądania: \(LegalDocMeta.contactEmail)")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
                 .padding(.bottom, 28)
             }
             .scrollIndicators(.hidden)
-            .background(WMPageBackground(scheme: scheme).ignoresSafeArea())
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)

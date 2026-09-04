@@ -21,7 +21,7 @@ struct AssistantMemorySheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.wmCanvas(scheme).ignoresSafeArea()
+                Color.scCanvas(scheme).ignoresSafeArea()
 
                 if store.memory.isEmpty && !store.isLoadingMemory {
                     emptyState
@@ -39,7 +39,7 @@ struct AssistantMemorySheet: View {
                     Text("\(store.memory.count) z \(Self.memoryLimit)")
                         .font(.system(size: 12.5, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
             }
             .alert("Usunąć wszystkie notatki?", isPresented: $showsForgetAllAlert) {
@@ -75,8 +75,8 @@ struct AssistantMemorySheet: View {
             Section {
                 Text("Notatki z rozmów, których asystent używa przy każdej odpowiedzi. Usuń to, co nieaktualne — nowe dopisuje sam, do \(Self.memoryLimit).")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.wmMuted(scheme))
-                    .listRowBackground(Color.wmCanvas(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .listRowBackground(Color.scCanvas(scheme))
             }
 
             ForEach(grouped) { section in
@@ -85,15 +85,15 @@ struct AssistantMemorySheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(note.text)
                                 .font(.system(size: 15))
-                                .foregroundStyle(Color.wmLabel(scheme))
+                                .foregroundStyle(Color.scLabel(scheme))
                             if let date = AgentStore.parseTimestamp(note.createdAt) {
                                 Text("Zapamiętane \(Self.dayFormatter.string(from: date))")
                                     .font(.system(size: 11.5))
-                                    .foregroundStyle(Color.wmFaint(scheme))
+                                    .foregroundStyle(Color.scFaint(scheme))
                             }
                         }
                         .padding(.vertical, 4)
-                        .listRowBackground(Color.wmCanvas(scheme))
+                        .listRowBackground(Color.scCanvas(scheme))
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 Task { await store.forgetMemory(noteId: note.id) }
@@ -116,7 +116,7 @@ struct AssistantMemorySheet: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .listRowBackground(Color.wmCanvas(scheme))
+                .listRowBackground(Color.scCanvas(scheme))
             } footer: {
                 Text("Nieodwracalne · plan i przepisy zostają")
                     .font(.system(size: 11.5))
@@ -141,15 +141,15 @@ struct AssistantMemorySheet: View {
         VStack(spacing: 10) {
             Image(systemName: "brain")
                 .font(.system(size: 28, weight: .light))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
 
             Text("Na razie nic")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text("Gdy powiesz asystentowi coś trwałego o swoim domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
         }
         .padding(32)

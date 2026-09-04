@@ -83,7 +83,7 @@ struct ProfileDetailsSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -94,7 +94,7 @@ struct ProfileDetailsSheet: View {
 
                     Text("Na podstawie tych danych aplikacja podpowiada zapotrzebowanie kaloryczne. Zostają na Twoim koncie — nie trafiają nigdzie dalej.")
                         .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     identitySection
@@ -175,7 +175,7 @@ struct ProfileDetailsSheet: View {
                             .submitLabel(.done)
                             .font(.system(size: 19, weight: .bold))
                             .tracking(-0.3)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                             .onSubmit { focusedField = nil }
                             .onChange(of: nameDraft) { _, newValue in
                                 // Limit serwera (`UpdateProfileDto`, 64) — przycinamy
@@ -194,22 +194,22 @@ struct ProfileDetailsSheet: View {
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(
                                 focusedField == .name
-                                    ? WMPalette.terracotta
-                                    : Color.wmFaint(scheme)
+                                    ? SCPalette.terracotta
+                                    : Color.scFaint(scheme)
                             )
                     }
 
                     Rectangle()
                         .fill(
                             focusedField == .name
-                                ? WMPalette.terracotta
-                                : Color.wmRule(scheme)
+                                ? SCPalette.terracotta
+                                : Color.scRule(scheme)
                         )
                         .frame(height: focusedField == .name ? 1.5 : 1)
 
                     Text(email.isEmpty ? "Brak e-maila" : email)
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .truncationMode(.middle)
@@ -242,13 +242,13 @@ struct ProfileDetailsSheet: View {
                         Spacer(minLength: 8)
                         Text(ageLabel)
                             .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                     }
 
                     YearWheelPicker(
                         year: $yearOfBirth,
                         range: yearRange,
-                        surface: Color.wmInsetSurface(scheme)
+                        surface: Color.scInsetSurface(scheme)
                     )
                 }
 
@@ -307,12 +307,12 @@ struct ProfileDetailsSheet: View {
                         .font(.system(size: 20, weight: .heavy))
                         .tracking(-0.4)
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text("BMI")
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(1.2)
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
 
                 Text(category.title)
@@ -321,7 +321,7 @@ struct ProfileDetailsSheet: View {
             }
 
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(width: 1, height: 34)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -330,17 +330,17 @@ struct ProfileDetailsSheet: View {
                         .font(.system(size: 20, weight: .heavy))
                         .tracking(-0.4)
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text("KCAL")
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(1.2)
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
 
                 Text("Na utrzymanie wagi")
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
 
             Spacer(minLength: 0)
@@ -349,7 +349,7 @@ struct ProfileDetailsSheet: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.wmInsetSurface(scheme))
+                .fill(Color.scInsetSurface(scheme))
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("BMI \(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? ""), \(category.title). Na utrzymanie wagi \(metrics.maintenanceCalories) kilokalorii dziennie.")
@@ -394,7 +394,7 @@ struct ProfileDetailsSheet: View {
                     .keyboardType(allowsDecimal ? .decimalPad : .numberPad)
                     .focused($focusedField, equals: field)
                     .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .monospacedDigit()
                     .onChange(of: draft.wrappedValue) { _, newValue in
                         // Numberpad przepuszcza wklejenie — zostawiamy same
@@ -418,7 +418,7 @@ struct ProfileDetailsSheet: View {
 
                 Text(unit)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -434,16 +434,16 @@ struct ProfileDetailsSheet: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
-                    EditorialSettingsTileIcon(icon: "figure.run", color: WMPalette.terracotta)
+                    EditorialSettingsTileIcon(icon: "figure.run", color: SCPalette.terracotta)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Treningi w tygodniu")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
 
                         Text("Im więcej ruchu, tym wyższe zapotrzebowanie.")
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -472,11 +472,11 @@ struct ProfileDetailsSheet: View {
                 Text(level.label)
                     .font(.system(size: 17, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? .white : Color.wmLabel(scheme))
+                    .foregroundStyle(isSelected ? .white : Color.scLabel(scheme))
 
                 Text(level.subtitle)
                     .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(isSelected ? .white.opacity(0.9) : Color.wmMuted(scheme))
+                    .foregroundStyle(isSelected ? .white.opacity(0.9) : Color.scMuted(scheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -490,17 +490,17 @@ struct ProfileDetailsSheet: View {
                         isSelected
                             ? AnyShapeStyle(
                                 LinearGradient(
-                                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                            : AnyShapeStyle(Color.wmChipBg(scheme))
+                            : AnyShapeStyle(Color.scChipBg(scheme))
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(isSelected ? Color.clear : Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -763,7 +763,7 @@ struct ProfileDetailsSheet: View {
                     .font(.system(size: 14, weight: .semibold))
                     .tracking(-0.1)
             }
-            .foregroundStyle(isSelected ? .white : Color.wmLabel(scheme))
+            .foregroundStyle(isSelected ? .white : Color.scLabel(scheme))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
             .background(
@@ -772,17 +772,17 @@ struct ProfileDetailsSheet: View {
                         isSelected
                             ? AnyShapeStyle(
                                 LinearGradient(
-                                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                            : AnyShapeStyle(Color.wmChipBg(scheme))
+                            : AnyShapeStyle(Color.scChipBg(scheme))
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(isSelected ? Color.clear : Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -840,24 +840,24 @@ struct ProfileDetailsSheet: View {
         Text(text.uppercased())
             .font(.system(size: 10.5, weight: .bold))
             .tracking(1.2)
-            .foregroundStyle(Color.wmFaint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
     }
 
     private var card: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color.wmTileBg(scheme))
+            .fill(Color.scTileBg(scheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
     }
 
     private var insetField: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.wmInsetSurface(scheme))
+            .fill(Color.scInsetSurface(scheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
     }
 }

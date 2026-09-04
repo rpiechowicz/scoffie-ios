@@ -5,7 +5,7 @@ import SwiftUI
 // Wzorcem jest Przepisy: sam tytuł — 32pt heavy, tracking -0.5, kolor label,
 // wyrównany do lewej — bez eyebrow („№ X · …"), bez drugiej linii i bez
 // zmiennego, dziennego copy. Każda zakładka używa tego samego komponentu i
-// tych samych marginesów (`WMPageMetrics`), więc tytuły siadają w tym samym
+// tych samych marginesów (`SCPageMetrics`), więc tytuły siadają w tym samym
 // miejscu przy przełączaniu tabów.
 //
 // Akcje po prawej (np. „…" i pigułka profilu na Planie) wchodzą przez
@@ -22,7 +22,7 @@ struct EditorialPageHeader<Trailing: View>: View {
             Text(title)
                 .font(.system(size: 32, weight: .heavy))
                 .tracking(-0.5)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
                 // Skalowanie zostaje wyłącznie jako zabezpieczenie na bardzo
                 // wąskie ekrany. Przy zwykłym układzie nie odpala się, bo
@@ -64,7 +64,7 @@ extension EditorialPageHeader where Trailing == EmptyView {
 // urządzenia. Tak wpadł ekran asystenta, dodany jako ostatni. Wyjątek: ekran
 // pokazywany jako arkusz podaje własny, mniejszy `topPadding` (patrz
 // `ProductsView`), bo tam mierzy się od uchwytu arkusza, nie od Dynamic Island.
-enum WMPageMetrics {
+enum SCPageMetrics {
     static let top: CGFloat = 78
     static let horizontal: CGFloat = 20
     static let bottom: CGFloat = 40
@@ -72,12 +72,12 @@ enum WMPageMetrics {
 
 #Preview("Sam tytuł") {
     EditorialPageHeader("Przepisy")
-        .padding(.horizontal, WMPageMetrics.horizontal)
+        .padding(.horizontal, SCPageMetrics.horizontal)
 }
 
 #Preview("Z akcjami") {
     EditorialPageHeader(title: "Plan tygodnia") {
         EditorialIconButton(icon: "ellipsis", highlighted: false) {}
     }
-    .padding(.horizontal, WMPageMetrics.horizontal)
+    .padding(.horizontal, SCPageMetrics.horizontal)
 }

@@ -50,7 +50,7 @@ struct NavigationMenu: View {
                 SettingsView()
             }
         }
-        .tint(WMPalette.terracotta)
+        .tint(SCPalette.terracotta)
     }
 }
 

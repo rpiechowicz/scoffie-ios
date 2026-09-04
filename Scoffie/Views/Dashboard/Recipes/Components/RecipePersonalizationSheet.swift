@@ -40,7 +40,7 @@ struct RecipePersonalizationSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -77,7 +77,7 @@ struct RecipePersonalizationSheet: View {
     private var lead: some View {
         Text("Tę listę układają Twoje ustawienia. **Dieta i alergeny ukrywają** dania, których nie zjesz, a **cel tylko przestawia kolejność** — niczego nie chowa.")
             .font(.system(size: 13.5, weight: .regular))
-            .foregroundStyle(Color.wmMuted(scheme))
+            .foregroundStyle(Color.scMuted(scheme))
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -97,11 +97,11 @@ struct RecipePersonalizationSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isEnabled ? "Dopasowanie włączone" : "Dopasowanie wyłączone")
                         .font(.system(size: 15.5, weight: .bold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text(statusLine)
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,14 +116,14 @@ struct RecipePersonalizationSheet: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(isEnabled
-                      ? WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.09)
-                      : Color.wmTileBg(scheme))
+                      ? SCPalette.sage.opacity(scheme == .dark ? 0.16 : 0.09)
+                      : Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(isEnabled
-                        ? WMPalette.sage.opacity(scheme == .dark ? 0.30 : 0.42)
-                        : Color.wmTileStroke(scheme), lineWidth: 1)
+                        ? SCPalette.sage.opacity(scheme == .dark ? 0.30 : 0.42)
+                        : Color.scTileStroke(scheme), lineWidth: 1)
         )
         .accessibilityLabel("Dopasowanie przepisów")
         .accessibilityValue(isEnabled ? "Włączone" : "Wyłączone")
@@ -139,21 +139,21 @@ struct RecipePersonalizationSheet: View {
         if isEnabled {
             EditorialSettingsTileIcon(
                 icon: "wand.and.stars",
-                color: WMPalette.sage,
+                color: SCPalette.sage,
                 size: 38,
                 radius: 11
             )
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(Color.wmChipBg(scheme))
+                    .fill(Color.scChipBg(scheme))
 
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
 
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(width: 38, height: 38)
         }
@@ -201,7 +201,7 @@ struct RecipePersonalizationSheet: View {
     private var settingsHint: some View {
         Text("Dietę, alergeny i cel zmienisz w Ustawieniach → Dieta i alergeny.")
             .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(Color.wmFaint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
             .fixedSize(horizontal: false, vertical: true)
     }
 }

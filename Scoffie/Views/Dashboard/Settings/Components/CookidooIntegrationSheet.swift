@@ -34,7 +34,7 @@ struct CookidooIntegrationSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -95,24 +95,24 @@ struct CookidooIntegrationSheet: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "flame.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
+                .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
 
             Text("Połącz konto Cookidoo, aby wysyłać przepisy prosto na swojego Thermomixa. Przepis wyląduje w \u{201E}Mój tydzień\u{201D} i będzie czekał na ekranie urządzenia.")
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -126,7 +126,7 @@ struct CookidooIntegrationSheet: View {
                 Text("Jak to działa?")
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundStyle(WMPalette.terracotta)
+            .foregroundStyle(SCPalette.terracotta)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 6)
@@ -152,7 +152,7 @@ struct CookidooIntegrationSheet: View {
                     .padding(.vertical, 13)
 
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 14)
 
@@ -177,7 +177,7 @@ struct CookidooIntegrationSheet: View {
                     } label: {
                         Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(isPasswordVisible ? "Ukryj hasło" : "Pokaż hasło")
@@ -187,12 +187,12 @@ struct CookidooIntegrationSheet: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.wmChipBg(scheme))
+                    .fill(Color.scChipBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(
-                        errorMessage == nil ? Color.wmTileStroke(scheme) : Color.red.opacity(0.55),
+                        errorMessage == nil ? Color.scTileStroke(scheme) : Color.red.opacity(0.55),
                         lineWidth: 1
                     )
             )
@@ -217,7 +217,7 @@ struct CookidooIntegrationSheet: View {
 
             Text("Dane logowania są przechowywane w postaci zaszyfrowanej i używane wyłącznie do połączenia z Cookidoo.")
                 .font(.system(size: 11.5, weight: .regular))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6)
         }
@@ -248,7 +248,7 @@ struct CookidooIntegrationSheet: View {
         HStack(spacing: 14) {
             EditorialSettingsTileIcon(
                 icon: "checkmark",
-                color: WMPalette.sage,
+                color: SCPalette.sage,
                 size: 44,
                 radius: 12
             )
@@ -256,17 +256,17 @@ struct CookidooIntegrationSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Połączono z Cookidoo")
                     .font(.system(size: 15.5, weight: .heavy))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 Text(login)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
 
                 if let verified = store?.lastVerifiedAt {
                     Text("Ostatnia weryfikacja: \(Self.verifiedFormatter.string(from: verified))")
                         .font(.system(size: 11.5, weight: .regular))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -274,11 +274,11 @@ struct CookidooIntegrationSheet: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(WMPalette.sage.opacity(scheme == .dark ? 0.10 : 0.07))
+                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.10 : 0.07))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(WMPalette.sage.opacity(scheme == .dark ? 0.45 : 0.36), lineWidth: 1.4)
+                .stroke(SCPalette.sage.opacity(scheme == .dark ? 0.45 : 0.36), lineWidth: 1.4)
         )
         .accessibilityElement(children: .combine)
     }
@@ -289,17 +289,17 @@ struct CookidooIntegrationSheet: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(WMPalette.butter)
+                    .foregroundStyle(SCPalette.butter)
 
                 Text("Subskrypcja Cookidoo wygląda na nieaktywną — połączenie działa, ale Thermomix może nie pozwolić na gotowanie z przepisów.")
                     .font(.system(size: 12.5, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(WMPalette.butter.opacity(scheme == .dark ? 0.12 : 0.10))
+                    .fill(SCPalette.butter.opacity(scheme == .dark ? 0.12 : 0.10))
             )
         }
     }
@@ -327,7 +327,7 @@ struct CookidooIntegrationSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 13)
                 .background(
-                    Capsule().fill(Color.wmChipBg(scheme))
+                    Capsule().fill(Color.scChipBg(scheme))
                 )
                 .overlay(
                     Capsule().stroke(Color.red.opacity(0.35), lineWidth: 1)
@@ -348,7 +348,7 @@ struct CookidooIntegrationSheet: View {
 
             Text("Hasło do Cookidoo się zmieniło albo sesja wygasła. Zaloguj się ponownie, aby przywrócić wysyłanie na Thermomixa.")
                 .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)

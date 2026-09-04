@@ -468,16 +468,16 @@ struct SettingsView: View {
     }
 
     // Marginesy strony wspólne dla wszystkich zakładek v2.
-    private var pageTopPadding: CGFloat { WMPageMetrics.top }
-    private var pageHorizontalPadding: CGFloat { WMPageMetrics.horizontal }
-    private var pageBottomPadding: CGFloat { WMPageMetrics.bottom }
+    private var pageTopPadding: CGFloat { SCPageMetrics.top }
+    private var pageHorizontalPadding: CGFloat { SCPageMetrics.horizontal }
+    private var pageBottomPadding: CGFloat { SCPageMetrics.bottom }
 
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                WMPageBackground(scheme: scheme)
+                SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
                 ScrollView {
@@ -629,7 +629,7 @@ struct SettingsView: View {
             EditorialSettingsCardGroup {
                 EditorialSettingsRow(
                     icon: "house.fill",
-                    iconColor: WMPalette.sage,
+                    iconColor: SCPalette.sage,
                     title: "Gospodarstwo",
                     value: householdRowValue,
                     action: openHousehold
@@ -637,7 +637,7 @@ struct SettingsView: View {
 
                 EditorialSettingsRow(
                     icon: "leaf.fill",
-                    iconColor: WMPalette.sage,
+                    iconColor: SCPalette.sage,
                     title: "Dieta i alergeny",
                     value: dietRowValue,
                     action: { showDietSheet = true }
@@ -649,7 +649,7 @@ struct SettingsView: View {
                 // różnicy między dwiema decyzjami, zanim ktokolwiek w nie wejdzie.
                 EditorialSettingsRow(
                     icon: "fork.knife",
-                    iconColor: WMPalette.terracotta,
+                    iconColor: SCPalette.terracotta,
                     title: "Posiłki w planie",
                     value: mealSlotsRowValue,
                     action: { showMealSlotsSheet = true }
@@ -660,7 +660,7 @@ struct SettingsView: View {
                 // prawej jest szara jak każda inna — wiersz nie zaczepia.
                 EditorialSettingsRow(
                     icon: "sparkles",
-                    iconColor: WMPalette.terracotta,
+                    iconColor: SCPalette.terracotta,
                     title: "Asystent i plan",
                     value: planAccessRowValue,
                     isLast: true,
@@ -684,7 +684,7 @@ struct SettingsView: View {
 
                 EditorialSettingsRow(
                     icon: "slider.horizontal.3",
-                    iconColor: WMPalette.indigo,
+                    iconColor: SCPalette.indigo,
                     title: "Wygląd",
                     value: appearanceRowValue,
                     isLast: true,
@@ -702,7 +702,7 @@ struct SettingsView: View {
                 if showsCookidooRow {
                     EditorialSettingsRow(
                         icon: "app.connected.to.app.below.fill",
-                        iconColor: WMPalette.sage,
+                        iconColor: SCPalette.sage,
                         title: "Cookidoo (Thermomix)",
                         value: cookidooRowValue,
                         isLast: false,
@@ -712,7 +712,7 @@ struct SettingsView: View {
 
                 EditorialSettingsRow(
                     icon: "figure.walk",
-                    iconColor: WMPalette.terracotta,
+                    iconColor: SCPalette.terracotta,
                     title: "Zdrowie",
                     value: healthRowValue,
                     isLast: true,
@@ -760,7 +760,7 @@ struct SettingsView: View {
             EditorialSettingsCardGroup {
                 EditorialSettingsRow(
                     icon: "book.fill",
-                    iconColor: WMPalette.terracotta,
+                    iconColor: SCPalette.terracotta,
                     title: "Pomoc i FAQ",
                     action: { showHelpSheet = true }
                 )
@@ -776,7 +776,7 @@ struct SettingsView: View {
                 // obiecuje wgląd „w Aplikacji”, a stopka logowania to za mało.
                 EditorialSettingsRow(
                     icon: "hand.raised.fill",
-                    iconColor: WMPalette.indigo,
+                    iconColor: SCPalette.indigo,
                     title: "Prywatność i regulamin",
                     value: "v\(LegalDocMeta.version)",
                     action: { showLegalDocumentsSheet = true }
@@ -796,12 +796,12 @@ struct SettingsView: View {
 
             Text("Wersja")
                 .font(.system(size: 15.5, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(appVersionLabel)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -810,8 +810,8 @@ struct SettingsView: View {
     // MARK: - Sheets
     //
     // Every sheet shares the same chassis as the main settings list — warm
-    // `WMPageBackground` canvas, editorial header (eyebrow + title + xmark),
-    // and `Color.wmTileBg` cards with `Color.wmTileStroke` hairlines. The
+    // `SCPageBackground` canvas, editorial header (eyebrow + title + xmark),
+    // and `Color.scTileBg` cards with `Color.scTileStroke` hairlines. The
     // existing data wiring (createHousehold / leaveCurrentHousehold /
     // createInvitationLink, AppStorage flags) is preserved unchanged.
 
@@ -828,7 +828,7 @@ struct SettingsView: View {
 
                     Text("Nadaj nazwę miejscu, w którym domownicy planują posiłki i robią zakupy razem.")
                         .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     editorialNameInputCard
@@ -948,7 +948,7 @@ struct SettingsView: View {
                     if !notificationsEnabled {
                         Text("Wszystkie powiadomienia są wyciszone. Włącz główny przełącznik, aby zarządzać typami przypomnień.")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 6)
                             .padding(.top, 4)
@@ -987,13 +987,13 @@ struct SettingsView: View {
                 Text(notificationsEnabled ? "Włączone" : "Wyciszone")
                     .font(.system(size: 17, weight: .heavy))
                     .tracking(-0.3)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .contentTransition(.opacity)
                     .id(notificationsEnabled)
 
                 Text("Główny przełącznik dla wszystkich przypomnień aplikacji.")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -1001,18 +1001,18 @@ struct SettingsView: View {
 
             Toggle("", isOn: $notificationsEnabled)
                 .labelsHidden()
-                .tint(WMPalette.sage)
+                .tint(SCPalette.sage)
                 .scaleEffect(0.95)
                 .fixedSize()
         }
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -1036,7 +1036,7 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 channelToggleRow(
                     icon: "calendar.badge.clock",
-                    accent: WMPalette.indigo,
+                    accent: SCPalette.indigo,
                     title: "Plan tygodniowy",
                     subtitle: "Jedno podsumowanie, gdy domownik skończy zmieniać plan.",
                     isOn: $planRemindersEnabled,
@@ -1045,7 +1045,7 @@ struct SettingsView: View {
 
                 channelToggleRow(
                     icon: "cart.fill",
-                    accent: WMPalette.sage,
+                    accent: SCPalette.sage,
                     title: "Lista zakupów",
                     subtitle: "Jedno podsumowanie, gdy domownik odhaczy zakupy.",
                     isOn: $shoppingRemindersEnabled,
@@ -1054,11 +1054,11 @@ struct SettingsView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -1079,18 +1079,18 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 Text(subtitle)
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Toggle("", isOn: isOn)
                 .labelsHidden()
-                .tint(WMPalette.sage)
+                .tint(SCPalette.sage)
                 .scaleEffect(0.85)
                 .fixedSize()
         }
@@ -1099,7 +1099,7 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 16 + 32 + 14)
             }
@@ -1125,7 +1125,7 @@ struct SettingsView: View {
 
                     Text("Wybierz motyw, którego aplikacja będzie używać domyślnie. Auto przełącza się razem z systemem.")
                         .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     VStack(spacing: 12) {
@@ -1156,23 +1156,23 @@ struct SettingsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                            .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                     )
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(themeEyebrow(for: theme).uppercased())
                         .font(.system(size: 10, weight: .bold))
                         .tracking(1.6)
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
 
                     Text(theme.title)
                         .font(.system(size: 20, weight: .heavy))
                         .tracking(-0.4)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text(themeDescription(for: theme))
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1184,21 +1184,21 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(
                         selected
-                            ? WMPalette.terracotta.opacity(scheme == .dark ? 0.10 : 0.07)
-                            : Color.wmTileBg(scheme)
+                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.10 : 0.07)
+                            : Color.scTileBg(scheme)
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(
                         selected
-                            ? WMPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.36)
-                            : Color.wmTileStroke(scheme),
+                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.36)
+                            : Color.scTileStroke(scheme),
                         lineWidth: selected ? 1.4 : 1
                     )
             )
             .shadow(
-                color: WMPalette.terracotta.opacity(selected ? 0.18 : 0),
+                color: SCPalette.terracotta.opacity(selected ? 0.18 : 0),
                 radius: 14, x: 0, y: 8
             )
             .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -1208,7 +1208,7 @@ struct SettingsView: View {
     }
 
     /// Mini canvas — paints the actual base + glow stack used by
-    /// `WMPageBackground` so the user sees what the live screen will look
+    /// `SCPageBackground` so the user sees what the live screen will look
     /// like. Auto splits left/right for light/dark.
     @ViewBuilder
     private func themeCanvasPreview(_ theme: AppTheme) -> some View {
@@ -1229,7 +1229,7 @@ struct SettingsView: View {
         let base = scheme == .dark
             ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255)
             : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255)
-        let glow = WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.14)
+        let glow = SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.14)
         let label = scheme == .dark
             ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255)
             : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255)
@@ -1258,7 +1258,7 @@ struct SettingsView: View {
                     .frame(height: 10)
                     .overlay(
                         Capsule()
-                            .fill(WMPalette.terracotta)
+                            .fill(SCPalette.terracotta)
                             .frame(width: 14, height: 4),
                         alignment: .leading
                     )
@@ -1271,12 +1271,12 @@ struct SettingsView: View {
     private func themeSelectionIndicator(selected: Bool) -> some View {
         ZStack {
             Circle()
-                .fill(selected ? WMPalette.terracotta : Color.wmChipBg(scheme))
+                .fill(selected ? SCPalette.terracotta : Color.scChipBg(scheme))
             Circle()
                 .stroke(
                     selected
-                        ? WMPalette.terracotta
-                        : Color.wmFaint(scheme),
+                        ? SCPalette.terracotta
+                        : Color.scFaint(scheme),
                     lineWidth: selected ? 0 : 1.4
                 )
 
@@ -1327,7 +1327,7 @@ struct SettingsView: View {
 
                     Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
                         .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     calorieGoalSection
@@ -1424,11 +1424,11 @@ struct SettingsView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -1448,11 +1448,11 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(goal.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text(goal.subtitle)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1467,7 +1467,7 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 16 + 32 + 14)
             }
@@ -1498,12 +1498,12 @@ struct SettingsView: View {
         HStack(spacing: 12) {
             Image(systemName: "lightbulb.fill")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(WMPalette.butter)
+                .foregroundStyle(SCPalette.butter)
                 .frame(width: 22)
 
             Text(calorieSuggestionText)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1514,21 +1514,21 @@ struct SettingsView: View {
             } label: {
                 Text("Ustaw")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
-                    .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.30), lineWidth: 1))
+                    .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
+                    .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.30), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Ustaw \(suggestedCalories) kcal")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.wmChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
+        .background(Color.scChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
         }
     }
@@ -1544,11 +1544,11 @@ struct SettingsView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -1568,11 +1568,11 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(diet.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text(diet.subtitle)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1591,7 +1591,7 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 16 + 32 + 14)
             }
@@ -1607,15 +1607,15 @@ struct SettingsView: View {
             Circle()
                 .stroke(
                     selected
-                        ? WMPalette.terracotta
-                        : Color.wmFaint(scheme),
+                        ? SCPalette.terracotta
+                        : Color.scFaint(scheme),
                     lineWidth: 1.6
                 )
                 .frame(width: 22, height: 22)
 
             if selected {
                 Circle()
-                    .fill(WMPalette.terracotta)
+                    .fill(SCPalette.terracotta)
                     .frame(width: 12, height: 12)
                     .transition(.scale.combined(with: .opacity))
             }
@@ -1647,24 +1647,24 @@ struct SettingsView: View {
                     // wcięta kreska kończyła się w innym miejscu niż kolor
                     // pod nią i wyglądało to na niedoróbkę.
                     Rectangle()
-                        .fill(Color.wmRule(scheme))
+                        .fill(Color.scRule(scheme))
                         .frame(height: 1)
                     macroFooter(macros)
                 } else {
                     Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(16)
                 }
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -1672,7 +1672,7 @@ struct SettingsView: View {
 
     private var macroDivider: some View {
         Rectangle()
-            .fill(Color.wmRule(scheme))
+            .fill(Color.scRule(scheme))
             .frame(height: 1)
             .padding(.leading, 16)
     }
@@ -1690,9 +1690,9 @@ struct SettingsView: View {
 
         var accent: Color {
             switch self {
-            case .protein: return WMPalette.indigo
-            case .carbs:   return WMPalette.sage
-            case .fat:     return WMPalette.butter
+            case .protein: return SCPalette.indigo
+            case .carbs:   return SCPalette.sage
+            case .fat:     return SCPalette.butter
             }
         }
 
@@ -1721,11 +1721,11 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(macro.title)
                     .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 Text(isOverridden ? "Twoja wartość" : "Wyliczone")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isOverridden ? macro.accent : Color.wmFaint(scheme))
+                    .foregroundStyle(isOverridden ? macro.accent : Color.scFaint(scheme))
             }
 
             Spacer(minLength: 8)
@@ -1734,12 +1734,12 @@ struct SettingsView: View {
                 Text("\(value)")
                     .font(.system(size: 17, weight: .heavy))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .contentTransition(.numericText(value: Double(value)))
 
                 Text("g")
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(minWidth: 58, alignment: .trailing)
 
@@ -1760,7 +1760,7 @@ struct SettingsView: View {
             }
 
             Rectangle()
-                .fill(Color.wmTileStroke(scheme))
+                .fill(Color.scTileStroke(scheme))
                 .frame(width: 1, height: 18)
 
             macroStepButton(systemName: "plus", accent: macro.accent) {
@@ -1768,8 +1768,8 @@ struct SettingsView: View {
                 override.wrappedValue = min(next, macro.upperBound)
             }
         }
-        .background(Capsule().fill(Color.wmChipBg(scheme)))
-        .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+        .background(Capsule().fill(Color.scChipBg(scheme)))
+        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
         .accessibilityLabel(macro.title)
         .accessibilityValue("\(value) gramów")
     }
@@ -1802,11 +1802,11 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Z makr wychodzi \(macros.totalKcal) kcal")
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 Text(macroFooterNote(diff: diff))
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(abs(diff) > 60 ? WMPalette.terracotta : Color.wmMuted(scheme))
+                    .foregroundStyle(abs(diff) > 60 ? SCPalette.terracotta : Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1817,11 +1817,11 @@ struct SettingsView: View {
                 } label: {
                     Text("Policz")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
-                        .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.30), lineWidth: 1))
+                        .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
+                        .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.30), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Policz makra od nowa")
@@ -1829,7 +1829,7 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.wmChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
+        .background(Color.scChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
     }
 
     private func macroFooterNote(diff: Int) -> String {
@@ -1850,15 +1850,15 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .center, spacing: 14) {
-                    EditorialSettingsTileIcon(icon: "flame.fill", color: WMPalette.terracotta)
+                    EditorialSettingsTileIcon(icon: "flame.fill", color: SCPalette.terracotta)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Dzienny cel")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                         Text("Aplikacja podpowie, jak rozłożyć posiłki w ciągu dnia.")
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1869,11 +1869,11 @@ struct SettingsView: View {
             .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
     }
@@ -1887,14 +1887,14 @@ struct SettingsView: View {
                 Text(calorieGoal, format: .number.grouping(.never))
                     .font(.system(size: 44, weight: .heavy))
                     .tracking(-1.4)
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(calorieGoal)))
 
                 Text("kcal / dzień")
                     .font(.system(size: 13, weight: .semibold))
                     .tracking(-0.1)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.smooth(duration: 0.18), value: calorieGoal)
@@ -1908,7 +1908,7 @@ struct SettingsView: View {
                     in: Double(Self.calorieGoalMin)...Double(Self.calorieGoalMax),
                     step: Double(Self.calorieGoalStep)
                 )
-                .tint(WMPalette.terracotta)
+                .tint(SCPalette.terracotta)
 
                 HStack {
                     Text("\(Self.calorieGoalMin)")
@@ -1917,7 +1917,7 @@ struct SettingsView: View {
                 }
                 .font(.system(size: 11, weight: .medium))
                 .monospacedDigit()
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
             }
         }
     }
@@ -1937,7 +1937,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Stuknij, aby zaznaczyć produkty, których chcesz unikać. Możesz wybrać dowolną liczbę.")
                     .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
 
                 allergenChipCloud
@@ -1945,11 +1945,11 @@ struct SettingsView: View {
             .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
     }
@@ -1967,7 +1967,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Składniki, których nie chcesz na talerzu, choć nie masz na nie uczulenia. Asystent ich nie zaproponuje, a plan ich nie przyjmie.")
                     .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
 
                 Button {
@@ -1976,27 +1976,27 @@ struct SettingsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "hand.raised")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                         Text(
                             excludedIngredients.isEmpty
                                 ? "Wybierz składniki"
                                 : excludedIngredients.map(\.name).joined(separator: ", ")
                         )
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         Spacer(minLength: 8)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
-                Divider().overlay(Color.wmRule(scheme))
+                Divider().overlay(Color.scRule(scheme))
 
                 // Czas gotowania jest PODPOWIEDZIĄ, nie filtrem — i tak to
                 // opisujemy, żeby nikt nie szukał potem „zepsutego" filtra.
@@ -2004,7 +2004,7 @@ struct SettingsView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Najwyżej na danie")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                         Spacer(minLength: 8)
                         Text(maxPrepTimeMinutes > 0 ? "\(maxPrepTimeMinutes) min" : "bez limitu")
                             .font(.system(size: 14, weight: .semibold))
@@ -2012,7 +2012,7 @@ struct SettingsView: View {
                             .contentTransition(.numericText(value: Double(maxPrepTimeMinutes)))
                             .animation(.snappy(duration: 0.25), value: maxPrepTimeMinutes)
                             .foregroundStyle(
-                                maxPrepTimeMinutes > 0 ? WMPalette.terracotta : Color.wmMuted(scheme)
+                                maxPrepTimeMinutes > 0 ? SCPalette.terracotta : Color.scMuted(scheme)
                             )
                     }
 
@@ -2025,22 +2025,22 @@ struct SettingsView: View {
                         in: 0...120,
                         step: 5
                     )
-                    .tint(WMPalette.terracotta)
+                    .tint(SCPalette.terracotta)
 
                     Text("To podpowiedź dla asystenta na dni powszednie, nie twardy filtr — niedzielna pieczeń dalej może trwać dłużej.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
         .sheet(isPresented: $showsExcludedSheet) {
@@ -2086,7 +2086,7 @@ struct SettingsView: View {
             .foregroundStyle(
                 isSelected
                     ? .white
-                    : Color.wmLabel(scheme)
+                    : Color.scLabel(scheme)
             )
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -2095,24 +2095,24 @@ struct SettingsView: View {
                     isSelected
                         ? AnyShapeStyle(
                             LinearGradient(
-                                colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        : AnyShapeStyle(Color.wmChipBg(scheme))
+                        : AnyShapeStyle(Color.scChipBg(scheme))
                 )
             )
             .overlay(
                 Capsule().stroke(
                     isSelected
-                        ? WMPalette.terracotta.opacity(0.35)
-                        : Color.wmTileStroke(scheme),
+                        ? SCPalette.terracotta.opacity(0.35)
+                        : Color.scTileStroke(scheme),
                     lineWidth: 1
                 )
             )
             .shadow(
-                color: WMPalette.terracotta.opacity(isSelected ? 0.20 : 0),
+                color: SCPalette.terracotta.opacity(isSelected ? 0.20 : 0),
                 radius: 5, x: 0, y: 2
             )
         }
@@ -2166,7 +2166,7 @@ struct SettingsView: View {
 
                     Text("Najczęściej zadawane pytania o planowanie posiłków, listę zakupów i wspólne gospodarstwo. Nie znalazłeś odpowiedzi? Napisz do nas.")
                         .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     ForEach(Self.faqSections) { section in
@@ -2195,11 +2195,11 @@ struct SettingsView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -2218,7 +2218,7 @@ struct SettingsView: View {
                     Text(item.question)
                         .font(.system(size: 14.5, weight: .semibold))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2227,16 +2227,16 @@ struct SettingsView: View {
                         .font(.system(size: 11, weight: .heavy))
                         .foregroundStyle(
                             isExpanded
-                                ? WMPalette.terracotta
-                                : Color.wmFaint(scheme)
+                                ? SCPalette.terracotta
+                                : Color.scFaint(scheme)
                         )
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         .frame(width: 22, height: 22)
                         .background(
                             Circle().fill(
                                 isExpanded
-                                    ? WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)
-                                    : Color.wmChipBg(scheme)
+                                    ? SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)
+                                    : Color.scChipBg(scheme)
                             )
                         )
                         .padding(.top, 1)
@@ -2252,7 +2252,7 @@ struct SettingsView: View {
             if isExpanded {
                 Text(item.answer)
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -2266,7 +2266,7 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 16)
             }
@@ -2276,16 +2276,16 @@ struct SettingsView: View {
     private var contactCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "envelope.fill", color: WMPalette.terracotta, size: 44, radius: 12)
+                EditorialSettingsTileIcon(icon: "envelope.fill", color: SCPalette.terracotta, size: 44, radius: 12)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Nadal masz pytanie?")
                         .font(.system(size: 16, weight: .heavy))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Text("Czytamy każdą wiadomość. Odpowiadamy zwykle w ciągu kilku dni.")
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -2305,14 +2305,14 @@ struct SettingsView: View {
                     .background(
                         Capsule().fill(
                             LinearGradient(
-                                colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                     )
                     .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-                    .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
+                    .shadow(color: SCPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
                 }
                 .accessibilityLabel("Napisz do nas — support@scoffie.app")
             }
@@ -2320,24 +2320,24 @@ struct SettingsView: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
     // MARK: - Sheet building blocks
 
     /// Wraps each sheet's content in the shared editorial chassis — warm
-    /// `WMPageBackground` behind a transparent `presentationBackground`,
+    /// `SCPageBackground` behind a transparent `presentationBackground`,
     /// so the sheet card itself adopts the cozy canvas instead of the
     /// system grey.
     @ViewBuilder
     private func editorialSheet<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             content()
@@ -2351,20 +2351,20 @@ struct SettingsView: View {
             TextField("Np. Dom", text: $createHouseholdName)
                 .textInputAutocapitalization(.words)
                 .font(.system(size: 15.5, weight: .medium))
-                .foregroundStyle(Color.wmLabel(scheme))
-                .tint(WMPalette.terracotta)
+                .foregroundStyle(Color.scLabel(scheme))
+                .tint(SCPalette.terracotta)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.wmChipBg(scheme))
+                        .fill(Color.scChipBg(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             householdNameError != nil
                                 ? Color.red.opacity(0.6)
-                                : Color.wmTileStroke(scheme),
+                                : Color.scTileStroke(scheme),
                             lineWidth: householdNameError != nil ? 1.5 : 1
                         )
                 )
@@ -2387,35 +2387,35 @@ struct SettingsView: View {
                     .foregroundStyle(
                         trimmedCreateHouseholdName.count > Self.householdNameMaxLength
                             ? .red
-                            : Color.wmFaint(scheme)
+                            : Color.scFaint(scheme)
                     )
             }
         }
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
     private var householdOverviewCard: some View {
         HStack(alignment: .center, spacing: 14) {
-            EditorialSettingsTileIcon(icon: "house.fill", color: WMPalette.sage, size: 44, radius: 12)
+            EditorialSettingsTileIcon(icon: "house.fill", color: SCPalette.sage, size: 44, radius: 12)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(persistedHouseholdName)
                     .font(.system(size: 17, weight: .heavy))
                     .tracking(-0.3)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(2)
 
                 Text("\(householdMembers.count) \(membersLabel(for: householdMembers.count)) w gospodarstwie")
                     .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -2424,11 +2424,11 @@ struct SettingsView: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -2459,7 +2459,7 @@ struct SettingsView: View {
                 Text("Domownicy")
                     .font(.system(size: 18, weight: .heavy))
                     .tracking(-0.3)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 Spacer(minLength: 0)
 
@@ -2491,13 +2491,13 @@ struct SettingsView: View {
                         .controlSize(.small)
                     Text("Ładowanie...")
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
                 .padding(.vertical, 4)
             } else if householdMembers.isEmpty {
                 Text("Brak członków do wyświetlenia.")
                     .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(householdMembers.enumerated()), id: \.element.id) { idx, member in
@@ -2515,11 +2515,11 @@ struct SettingsView: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -2528,10 +2528,10 @@ struct SettingsView: View {
     private var inviteIcon: some View {
         Image(systemName: "plus")
             .font(.system(size: 13, weight: .heavy))
-            .foregroundStyle(WMPalette.terracotta)
+            .foregroundStyle(SCPalette.terracotta)
             .frame(width: 32, height: 32)
-            .background(Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
-            .overlay(Circle().stroke(WMPalette.terracotta.opacity(scheme == .dark ? 0.34 : 0.28), lineWidth: 1))
+            .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
+            .overlay(Circle().stroke(SCPalette.terracotta.opacity(scheme == .dark ? 0.34 : 0.28), lineWidth: 1))
     }
 
     /// Zaproszenia czekające na użytkownika.
@@ -2554,11 +2554,11 @@ struct SettingsView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -2570,21 +2570,21 @@ struct SettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "envelope.open.fill", color: WMPalette.butter)
+                EditorialSettingsTileIcon(icon: "envelope.open.fill", color: SCPalette.butter)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(invitation.householdName)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text(invitation.subtitle)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
 
                     if let expiry = invitation.expiresAtText {
                         Text("Ważne do: \(expiry)")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2598,11 +2598,11 @@ struct SettingsView: View {
                 } label: {
                     Text("Odrzuć")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                         .background(
-                            Capsule().fill(Color.wmFaint(scheme))
+                            Capsule().fill(Color.scFaint(scheme))
                         )
                 }
                 .buttonStyle(.plain)
@@ -2626,7 +2626,7 @@ struct SettingsView: View {
                         .background(
                             Capsule().fill(
                                 LinearGradient(
-                                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -2641,7 +2641,7 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 16 + 32 + 14)
             }
@@ -2651,16 +2651,16 @@ struct SettingsView: View {
     private var householdEmptyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "house.badge.plus", color: WMPalette.sage, size: 44, radius: 12)
+                EditorialSettingsTileIcon(icon: "house.badge.plus", color: SCPalette.sage, size: 44, radius: 12)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Brak gospodarstwa")
                         .font(.system(size: 17, weight: .heavy))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Text("Utwórz wspólne miejsce do planowania posiłków i listy zakupów.")
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -2679,11 +2679,11 @@ struct SettingsView: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -2712,15 +2712,15 @@ struct SettingsView: View {
                     .fill(
                         LinearGradient(
                             colors: isEnabled
-                                ? [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)]
-                                : [Color.wmFaint(scheme), Color.wmFaint(scheme)],
+                                ? [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)]
+                                : [Color.scFaint(scheme), Color.scFaint(scheme)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
             )
             .overlay(Capsule().stroke(.white.opacity(isEnabled ? 0.22 : 0), lineWidth: 1))
-            .shadow(color: WMPalette.terracotta.opacity(isEnabled ? 0.28 : 0), radius: 8, x: 0, y: 4)
+            .shadow(color: SCPalette.terracotta.opacity(isEnabled ? 0.28 : 0), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
@@ -2747,22 +2747,22 @@ struct SettingsView: View {
                 HStack(spacing: 6) {
                     Text(member.displayName)
                         .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
                     if member.id == sessionStore.currentUserId {
                         Text("TY")
                             .font(.system(size: 9.5, weight: .heavy))
                             .tracking(0.8)
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
+                            .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
                     }
                 }
                 Text(member.email ?? "Brak e-maila")
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -2784,7 +2784,7 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 50)
             }
@@ -2804,10 +2804,10 @@ struct SettingsView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .heavy))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .frame(width: 32, height: 32)
-                .background(Circle().fill(Color.wmChipBg(scheme)))
-                .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                .background(Circle().fill(Color.scChipBg(scheme)))
+                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -2939,7 +2939,7 @@ fileprivate struct FAQItem: Identifiable, Equatable {
 
 // Bell + heart rows in the design use `oklch(0.70 0.14 22)` — a warm coral
 // that's distinct from the brand terracotta but still in the same family.
-// Defined here (not in WMPalette) because it's only used by Settings v2.
+// Defined here (not in SCPalette) because it's only used by Settings v2.
 private enum SettingsAccent {
     static let coral = Color(uiColor: UIColor { trait in
         trait.userInterfaceStyle == .dark
@@ -3007,7 +3007,7 @@ struct ProfileAvatar: View {
     private var initialsFallback: some View {
         // Gradient dobierany deterministycznie z ziarna — nie losowany przy
         // każdym renderze, bo avatar zmieniający kolor po scrollu wyglądałby
-        // na usterkę. Paleta jest zamknięta i wzięta z `WMPalette`, więc
+        // na usterkę. Paleta jest zamknięta i wzięta z `SCPalette`, więc
         // każdy wariant siedzi w tej samej rodzinie kolorów co reszta
         // aplikacji, zamiast wpadać w przypadkowy odcień z całego koła barw.
         Self.gradient(index: colorIndex, seed: seed.isEmpty ? displayName : seed)
@@ -3033,18 +3033,18 @@ struct ProfileAvatar: View {
         // między odcieniami jednej. Warianty tonalne (terakota → ciemniejsza
         // terakota) na kółku 48 pt wyglądały po prostu na jednolitą plamę
         // z cieniem — dopiero zmiana barwy widać jako gradient.
-        (WMPalette.terracotta,               WMPalette.butter.mix(black: 0.06)),
-        (WMPalette.sage,                     WMPalette.indigo.mix(black: 0.10)),
-        (WMPalette.indigo,                   WMPalette.terracottaDeep),
-        (WMPalette.butter,                   WMPalette.terracottaDeep.mix(black: 0.10)),
-        (WMPalette.sage,                     WMPalette.butter.mix(black: 0.04)),
-        (WMPalette.terracotta,               WMPalette.indigo.mix(black: 0.22)),
-        (WMPalette.indigo,                   WMPalette.sage.mix(black: 0.04)),
-        (WMPalette.butter,                   WMPalette.sage.mix(black: 0.40)),
-        (WMPalette.terracottaDeep,           WMPalette.butter.mix(black: 0.02)),
-        (WMPalette.indigo.mix(black: 0.40),  WMPalette.indigo.mix(black: 0.02)),
-        (WMPalette.sage.mix(black: 0.44),    WMPalette.butter.mix(black: 0.08)),
-        (WMPalette.terracotta.mix(black: 0.34), WMPalette.terracotta.mix(black: 0.02)),
+        (SCPalette.terracotta,               SCPalette.butter.mix(black: 0.06)),
+        (SCPalette.sage,                     SCPalette.indigo.mix(black: 0.10)),
+        (SCPalette.indigo,                   SCPalette.terracottaDeep),
+        (SCPalette.butter,                   SCPalette.terracottaDeep.mix(black: 0.10)),
+        (SCPalette.sage,                     SCPalette.butter.mix(black: 0.04)),
+        (SCPalette.terracotta,               SCPalette.indigo.mix(black: 0.22)),
+        (SCPalette.indigo,                   SCPalette.sage.mix(black: 0.04)),
+        (SCPalette.butter,                   SCPalette.sage.mix(black: 0.40)),
+        (SCPalette.terracottaDeep,           SCPalette.butter.mix(black: 0.02)),
+        (SCPalette.indigo.mix(black: 0.40),  SCPalette.indigo.mix(black: 0.02)),
+        (SCPalette.sage.mix(black: 0.44),    SCPalette.butter.mix(black: 0.08)),
+        (SCPalette.terracotta.mix(black: 0.34), SCPalette.terracotta.mix(black: 0.02)),
     ]
 
     /// Przejście po przekątnej, od krawędzi do krawędzi. Bez punktu

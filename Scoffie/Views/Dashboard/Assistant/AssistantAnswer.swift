@@ -191,7 +191,7 @@ struct AssistantAnswer: View {
                     Text(title.uppercased())
                         .font(.system(size: 11, weight: .semibold))
                         .tracking(0.8)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         // Nagłówek rozdziela sekcje, więc potrzebuje powietrza
                         // NAD sobą — ale nie wtedy, gdy stoi na samej górze.
                         .padding(.top, index == 0 ? 0 : 8)
@@ -199,7 +199,7 @@ struct AssistantAnswer: View {
                 case let .paragraph(paragraph):
                     Text(AssistantAnswerParser.inline(paragraph))
                         .font(.system(size: 15))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                 case let .list(items):
@@ -222,7 +222,7 @@ private struct AssistantListCard: View {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 if index > 0 {
                     Rectangle()
-                        .fill(Color.wmRule(scheme))
+                        .fill(Color.scRule(scheme))
                         .frame(height: 0.5)
                         .padding(
                             .leading,
@@ -234,22 +234,22 @@ private struct AssistantListCard: View {
                     if let badge = item.day ?? item.ordinal.map({ "\($0)." }) {
                         Text(badge)
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                             .frame(width: 36, height: 22)
                             .background(
                                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .fill(Color.wmAccentTint(scheme))
+                                    .fill(Color.scAccentTint(scheme))
                             )
                     } else {
                         Circle()
-                            .fill(Color.wmMuted(scheme).opacity(0.5))
+                            .fill(Color.scMuted(scheme).opacity(0.5))
                             .frame(width: 4, height: 4)
                             .padding(.top, 8)
                     }
 
                     Text(AssistantAnswerParser.inline(item.text))
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -260,7 +260,7 @@ private struct AssistantListCard: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.wmInsetSurface(scheme))
+                .fill(Color.scInsetSurface(scheme))
         )
     }
 }
@@ -278,22 +278,22 @@ struct AssistantSavedPlanCard: View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
 
             Text("Plan tygodnia zapisany")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Spacer(minLength: 8)
 
             Button(action: onOpenPlan) {
                 Text("Otwórz")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
-                        Capsule().fill(Color.wmAccentTint(scheme))
+                        Capsule().fill(Color.scAccentTint(scheme))
                     )
             }
             .buttonStyle(.plain)
@@ -302,7 +302,7 @@ struct AssistantSavedPlanCard: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.wmInsetSurface(scheme))
+                .fill(Color.scInsetSurface(scheme))
         )
     }
 }

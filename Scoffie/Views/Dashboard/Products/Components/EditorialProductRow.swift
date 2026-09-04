@@ -31,7 +31,7 @@ struct EditorialProductRow: View {
                     // Read-only "done" look — muted (60%) instead of faint
                     // (32%) + no strikethrough, so the product name stays
                     // readable on the cream canvas.
-                    .foregroundStyle(bought ? Color.wmMuted(scheme) : Color.wmLabel(scheme))
+                    .foregroundStyle(bought ? Color.scMuted(scheme) : Color.scLabel(scheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -48,7 +48,7 @@ struct EditorialProductRow: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.leading, 50)
             }
@@ -60,20 +60,20 @@ struct EditorialProductRow: View {
             .font(.system(size: 11.5, weight: .bold))
             .tracking(0.1)
             .monospacedDigit()
-            .foregroundStyle(bought ? Color.wmMuted(scheme) : accent)
+            .foregroundStyle(bought ? Color.scMuted(scheme) : accent)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(
                 Capsule().fill(
                     bought
-                    ? Color.wmTileBg(scheme)
+                    ? Color.scTileBg(scheme)
                     : accent.opacity(scheme == .dark ? 0.20 : 0.12)
                 )
             )
             .overlay(
                 Capsule().stroke(
                     bought
-                    ? Color.wmTileStroke(scheme)
+                    ? Color.scTileStroke(scheme)
                     : accent.opacity(scheme == .dark ? 0.42 : 0.32),
                     lineWidth: 1
                 )
@@ -86,7 +86,7 @@ struct EditorialProductRow: View {
 // border when off. Mirrors `ProdCheck` from the design.
 struct EditorialCheckCircle: View {
     let on: Bool
-    var accent: Color = WMPalette.sage
+    var accent: Color = SCPalette.sage
     var size: CGFloat = 24
 
     @Environment(\.colorScheme) private var scheme
@@ -112,7 +112,7 @@ struct EditorialCheckCircle: View {
                     .shadow(color: .black.opacity(0.18), radius: 1, x: 0, y: 1)
             } else {
                 Circle()
-                    .stroke(Color.wmFaint(scheme), lineWidth: 1.6)
+                    .stroke(Color.scFaint(scheme), lineWidth: 1.6)
             }
         }
         .frame(width: size, height: size)

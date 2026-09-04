@@ -17,7 +17,7 @@ import SwiftUI
 // w Ustawieniach → „Posiłki w planie", plus te, w których mimo wyłączenia coś
 // stoi (`visibleSlots(on:)`). Kolejność zawsze porą dnia.
 struct WeeklyPlanView: View {
-    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.shoppingListStore) private var shoppingListStore
@@ -52,7 +52,7 @@ struct WeeklyPlanView: View {
         var recipe: Recipe
 
         var id: String {
-            "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue).\(meal.id)"
+            "\(MealCalendarStore.dateKey(for: date)).\(slot.rawValue).\(meal.id)"
         }
     }
 
@@ -63,7 +63,7 @@ struct WeeklyPlanView: View {
         let editing: PlanMeal?
 
         var id: String {
-            let base = "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue)"
+            let base = "\(MealCalendarStore.dateKey(for: date)).\(slot.rawValue)"
             return editing.map { "\(base).\($0.id)" } ?? base
         }
     }
@@ -89,11 +89,11 @@ struct WeeklyPlanView: View {
     }
 
     private var planDays: [PlanDay] {
-        datesViewModel.dates.map { PlanDay(id: WeeklyMealStore.dateKey(for: $0), date: $0) }
+        datesViewModel.dates.map { PlanDay(id: MealCalendarStore.dateKey(for: $0), date: $0) }
     }
 
     private var selectedDayKey: String {
-        WeeklyMealStore.dateKey(for: selectedDate)
+        MealCalendarStore.dateKey(for: selectedDate)
     }
 
     /// Index of the day in view. Falls back to the selected day while the
@@ -151,7 +151,7 @@ struct WeeklyPlanView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                WMPageBackground(scheme: scheme)
+                SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
                 ScrollView {
@@ -159,8 +159,8 @@ struct WeeklyPlanView: View {
                         // Marginesy wspólne z pozostałymi zakładkami —
                         // tytuł siada w tym samym miejscu co „Przepisy".
                         headerRow
-                            .padding(.horizontal, WMPageMetrics.horizontal)
-                            .padding(.top, WMPageMetrics.top)
+                            .padding(.horizontal, SCPageMetrics.horizontal)
+                            .padding(.top, SCPageMetrics.top)
                             // 22 zamiast 14 — pasek dni to osobna kontrolka,
                             // a nie podtytuł nagłówka; przy 14 pt skrót „PON.
                             // WT. ŚR." wyglądał na przyklejony do tytułu.
@@ -175,12 +175,12 @@ struct WeeklyPlanView: View {
                             selectedDate: $selectedDate,
                             plannedDates: plannedDates
                         )
-                        .padding(.horizontal, WMPageMetrics.horizontal)
+                        .padding(.horizontal, SCPageMetrics.horizontal)
 
                         Rectangle()
-                            .fill(Color.wmRule(scheme))
+                            .fill(Color.scRule(scheme))
                             .frame(height: 1)
-                            .padding(.horizontal, WMPageMetrics.horizontal)
+                            .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.top, 6)
                             .padding(.bottom, 16)
 
@@ -188,7 +188,7 @@ struct WeeklyPlanView: View {
                             Text(errorMessage)
                                 .font(.footnote)
                                 .foregroundStyle(.red)
-                                .padding(.horizontal, WMPageMetrics.horizontal)
+                                .padding(.horizontal, SCPageMetrics.horizontal)
                                 .padding(.bottom, 10)
                         }
 
@@ -397,10 +397,10 @@ struct WeeklyPlanView: View {
             // nagłówka wyglądały tak samo na każdej zakładce.
             Image(systemName: "ellipsis")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 38, height: 38)
-                .background(Circle().fill(Color.wmTileBg(scheme)))
-                .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                .background(Circle().fill(Color.scTileBg(scheme)))
+                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
         }
         .accessibilityLabel("Więcej opcji planu")
     }
@@ -454,7 +454,7 @@ struct WeeklyPlanView: View {
                         }
                     }
                     // Strona karuzeli trzyma wspólny margines strony.
-                    .padding(.horizontal, WMPageMetrics.horizontal)
+                    .padding(.horizontal, SCPageMetrics.horizontal)
                     .containerRelativeFrame(.horizontal)
                 }
             }

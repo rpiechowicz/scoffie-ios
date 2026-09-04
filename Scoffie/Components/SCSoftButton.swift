@@ -11,13 +11,13 @@ import SwiftUI
 ///
 /// Wysokość 56 pt (a nie 14 pt paddingu jak w pasku przepisu), bo tutaj
 /// przycisk jest jedyną akcją na ekranie i musi utrzymać dolną strefę.
-struct WMSoftButton: View {
+struct SCSoftButton: View {
     let title: String
     /// Glif po lewej — domyślnie brak, bo strzałka po prawej wystarcza.
     var leadingIcon: String?
     /// Glif po prawej. `nil` gasi strzałkę na akcjach, które nie prowadzą dalej.
     var trailingIcon: String? = "chevron.right"
-    var accent: Color = WMPalette.terracotta
+    var accent: Color = SCPalette.terracotta
     var isEnabled: Bool = true
     var isLoading: Bool = false
     let action: () -> Void
@@ -67,11 +67,11 @@ struct WMSoftButton: View {
     }
 }
 
-/// Okrągły towarzysz `WMSoftButton` na akcję poboczną („Wstecz").
+/// Okrągły towarzysz `SCSoftButton` na akcję poboczną („Wstecz").
 ///
 /// Neutralny, nie akcentowy: dwa terakotowe przyciski obok siebie kłóciłyby
 /// się o to, który jest tym głównym.
-struct WMSoftIconButton: View {
+struct SCSoftIconButton: View {
     let systemName: String
     let accessibilityLabel: String
     let action: () -> Void
@@ -82,10 +82,10 @@ struct WMSoftIconButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 56, height: 56)
-                .background(Circle().fill(Color.wmTileBg(scheme)))
-                .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                .background(Circle().fill(Color.scTileBg(scheme)))
+                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -94,15 +94,15 @@ struct WMSoftIconButton: View {
 
 #Preview("Dark") {
     ZStack {
-        WMPalette.canvasDark.ignoresSafeArea()
+        SCPalette.canvasDark.ignoresSafeArea()
         VStack(spacing: 14) {
-            WMSoftButton(title: "Poznaj aplikację") {}
+            SCSoftButton(title: "Poznaj aplikację") {}
             HStack(spacing: 10) {
-                WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") {}
-                WMSoftButton(title: "Dalej") {}
+                SCSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") {}
+                SCSoftButton(title: "Dalej") {}
             }
-            WMSoftButton(title: "Utwórz gospodarstwo", isLoading: true) {}
-            WMSoftButton(title: "Dalej", isEnabled: false) {}
+            SCSoftButton(title: "Utwórz gospodarstwo", isLoading: true) {}
+            SCSoftButton(title: "Dalej", isEnabled: false) {}
         }
         .padding(24)
     }
@@ -111,12 +111,12 @@ struct WMSoftIconButton: View {
 
 #Preview("Light") {
     ZStack {
-        WMPalette.canvasLight.ignoresSafeArea()
+        SCPalette.canvasLight.ignoresSafeArea()
         VStack(spacing: 14) {
-            WMSoftButton(title: "Poznaj aplikację") {}
+            SCSoftButton(title: "Poznaj aplikację") {}
             HStack(spacing: 10) {
-                WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") {}
-                WMSoftButton(title: "Dalej") {}
+                SCSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") {}
+                SCSoftButton(title: "Dalej") {}
             }
         }
         .padding(24)

@@ -29,7 +29,7 @@ final class HealthStepsStore {
 
     static let defaultStepsGoal = 10_000
 
-    /// Klucz = `WeeklyMealStore.dateKey` — ten sam adres dnia, którym
+    /// Klucz = `MealCalendarStore.dateKey` — ten sam adres dnia, którym
     /// posługuje się cały Kalendarz.
     private(set) var stepsByDay: [String: DaySteps] = [:]
     private(set) var isBusy = false
@@ -79,7 +79,7 @@ final class HealthStepsStore {
     }
 
     func steps(for date: Date) -> DaySteps? {
-        stepsByDay[WeeklyMealStore.dateKey(for: date)]
+        stepsByDay[MealCalendarStore.dateKey(for: date)]
     }
 
     var todaySteps: Int? {
@@ -111,7 +111,7 @@ final class HealthStepsStore {
         defaults.set(source.rawValue, forKey: Keys.source)
         // Bez backfillu: synchronizujemy od dnia włączenia. Ponowne włączenie
         // zaczyna od nowa — dni przerwy przepadają świadomie.
-        defaults.set(WeeklyMealStore.dateKey(for: Date()), forKey: Keys.enabledAt)
+        defaults.set(MealCalendarStore.dateKey(for: Date()), forKey: Keys.enabledAt)
         isEnabled = true
         self.source = source
 
@@ -184,7 +184,7 @@ final class HealthStepsStore {
     /// kroczące okno od dnia włączenia.
     func refreshIfNeeded(for date: Date) async {
         guard isEnabled, HealthKitService.isAvailable else { return }
-        let key = WeeklyMealStore.dateKey(for: date)
+        let key = MealCalendarStore.dateKey(for: date)
         guard stepsByDay[key] == nil else { return }
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: date)
@@ -272,7 +272,7 @@ final class HealthStepsStore {
         var entries: [HealthStepsEntryDTO] = []
         var day = window.from
         while day <= window.to {
-            let key = WeeklyMealStore.dateKey(for: day)
+            let key = MealCalendarStore.dateKey(for: day)
             if let sample = stepsByDay[key] {
                 entries.append(HealthStepsEntryDTO(
                     date: key,
@@ -287,7 +287,7 @@ final class HealthStepsStore {
         return entries
     }
 
-    /// Odwrotność `WeeklyMealStore.dateKey` — ta sama konfiguracja formattera
+    /// Odwrotność `MealCalendarStore.dateKey` — ta sama konfiguracja formattera
     /// (en_US_POSIX + strefa telefonu), inaczej klucze by się rozjechały.
     private static let dateKeyParser: DateFormatter = {
         let formatter = DateFormatter()

@@ -10,8 +10,8 @@ private struct SessionStoreKey: EnvironmentKey {
     @MainActor static let defaultValue = SessionStore()
 }
 
-private struct WeeklyMealStoreKey: EnvironmentKey {
-    static let defaultValue = WeeklyMealStore()
+private struct MealCalendarStoreKey: EnvironmentKey {
+    static let defaultValue = MealCalendarStore()
 }
 
 private struct DatesViewModelKey: EnvironmentKey {
@@ -36,9 +36,9 @@ extension EnvironmentValues {
         set { self[SessionStoreKey.self] = newValue }
     }
 
-    var weeklyMealStore: WeeklyMealStore {
-        get { self[WeeklyMealStoreKey.self] }
-        set { self[WeeklyMealStoreKey.self] = newValue }
+    var mealCalendarStore: MealCalendarStore {
+        get { self[MealCalendarStoreKey.self] }
+        set { self[MealCalendarStoreKey.self] = newValue }
     }
 
     var datesViewModel: DatesViewModel {

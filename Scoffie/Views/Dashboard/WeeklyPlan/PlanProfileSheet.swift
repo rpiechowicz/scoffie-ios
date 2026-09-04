@@ -12,7 +12,7 @@ struct PlanProfileSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -20,12 +20,12 @@ struct PlanProfileSheet: View {
                     Text("DLA KOGO PLANUJESZ")
                         .font(.system(size: 10, weight: .bold))
                         .tracking(2)
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
 
                     Text("Wybierz profil")
                         .font(.system(size: 22, weight: .bold))
                         .tracking(-0.4)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .padding(.top, 3)
                         .padding(.bottom, 16)
 
@@ -34,7 +34,7 @@ struct PlanProfileSheet: View {
                         avatar: AnyView(houseAvatar),
                         title: "Gospodarstwo",
                         subtitle: "Wszystkie posiłki domowników",
-                        tint: WMPalette.terracotta
+                        tint: SCPalette.terracotta
                     ) {
                         select(.household)
                     }
@@ -88,12 +88,12 @@ struct PlanProfileSheet: View {
                     Text(title)
                         .font(.system(size: 16, weight: .bold))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
                     Text(subtitle)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                 }
 
@@ -108,12 +108,12 @@ struct PlanProfileSheet: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isSelected ? tint.opacity(scheme == .dark ? 0.16 : 0.12) : Color.wmTileBg(scheme))
+                    .fill(isSelected ? tint.opacity(scheme == .dark ? 0.16 : 0.12) : Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
-                        isSelected ? tint.opacity(scheme == .dark ? 0.5 : 0.4) : Color.wmTileStroke(scheme),
+                        isSelected ? tint.opacity(scheme == .dark ? 0.5 : 0.4) : Color.scTileStroke(scheme),
                         lineWidth: isSelected ? 1.4 : 1
                     )
             )
@@ -129,7 +129,7 @@ struct PlanProfileSheet: View {
             .frame(width: 40, height: 40)
             .background(
                 LinearGradient(
-                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.22)],
+                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.22)],
                     startPoint: .top,
                     endPoint: .bottom
                 ),
@@ -143,7 +143,7 @@ struct PlanProfileSheet: View {
     private var emptyMembersNote: some View {
         Text("Zaproś domowników w Ustawieniach, żeby planować posiłki osobno dla każdego.")
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(Color.wmMuted(scheme))
+            .foregroundStyle(Color.scMuted(scheme))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 4)
     }

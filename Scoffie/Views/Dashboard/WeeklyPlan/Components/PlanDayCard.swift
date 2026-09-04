@@ -55,8 +55,8 @@ struct PlanDayCard: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(
                     isToday
-                        ? WMPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.30)
-                        : Color.wmCardStroke(scheme),
+                        ? SCPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.30)
+                        : Color.scCardStroke(scheme),
                     lineWidth: 1
                 )
         )
@@ -109,18 +109,18 @@ struct PlanDayCard: View {
     private var cardBackground: some View {
         if isToday {
             ZStack {
-                Color.wmCardSurface(scheme)
+                Color.scCardSurface(scheme)
                 // Kept faint in light mode — over a white surface anything
                 // stronger turns the card pink instead of warm.
                 RadialGradient(
-                    colors: [WMPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.09), .clear],
+                    colors: [SCPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.09), .clear],
                     center: .topTrailing,
                     startRadius: 0,
                     endRadius: 320
                 )
             }
         } else {
-            Color.wmCardSurface(scheme)
+            Color.scCardSurface(scheme)
         }
     }
 
@@ -135,7 +135,7 @@ struct PlanDayCard: View {
                     Text(Self.longDayFormatter.string(from: date).capitalized)
                         .font(.system(size: 19, weight: .bold))
                         .tracking(-0.4)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
@@ -145,7 +145,7 @@ struct PlanDayCard: View {
                 Text(summaryText)
                     .font(.system(size: 12.5, weight: .medium))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
 
             Spacer(minLength: 0)
@@ -157,12 +157,12 @@ struct PlanDayCard: View {
             Text(shortDayLabel)
                 .font(.system(size: 10, weight: .bold))
                 .tracking(0.6)
-                .foregroundStyle(isToday ? .white.opacity(0.85) : Color.wmMuted(scheme))
+                .foregroundStyle(isToday ? .white.opacity(0.85) : Color.scMuted(scheme))
 
             Text(Self.dayNumberFormatter.string(from: date))
                 .font(.system(size: 24, weight: .heavy))
                 .tracking(-0.4)
-                .foregroundStyle(isToday ? .white : Color.wmLabel(scheme))
+                .foregroundStyle(isToday ? .white : Color.scLabel(scheme))
         }
         .frame(width: 56, height: 64)
         .background(dateTileBackground)
@@ -170,7 +170,7 @@ struct PlanDayCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(
-                    isToday ? .white.opacity(0.18) : Color.wmTileStroke(scheme),
+                    isToday ? .white.opacity(0.18) : Color.scTileStroke(scheme),
                     lineWidth: 1
                 )
         )
@@ -180,14 +180,14 @@ struct PlanDayCard: View {
     private var dateTileBackground: some View {
         if isToday {
             LinearGradient(
-                colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.14)],
+                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.14)],
                 startPoint: .top,
                 endPoint: .bottom
             )
         } else {
             scheme == .dark
-                ? Color.wmLabel(scheme).opacity(0.06)
-                : Color.wmInsetSurface(scheme)
+                ? Color.scLabel(scheme).opacity(0.06)
+                : Color.scInsetSurface(scheme)
         }
     }
 
@@ -195,11 +195,11 @@ struct PlanDayCard: View {
         Text("DZIŚ")
             .font(.system(size: 10, weight: .bold))
             .tracking(0.4)
-            .foregroundStyle(WMPalette.terracotta)
+            .foregroundStyle(SCPalette.terracotta)
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
             .background(
-                Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.16))
+                Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.16))
             )
     }
 

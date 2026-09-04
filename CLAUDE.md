@@ -1,6 +1,6 @@
 # Scoffie — iOS (SwiftUI)
 
-Aplikacja iOS dla backendu `rpiechowicz/weakly-meals-backend`. Pełny kontekst projektu,
+Aplikacja iOS dla backendu `rpiechowicz/scoffie-backend`. Pełny kontekst projektu,
 decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-stan.md`,
 `docs/handover/memory/`. Rozmawiamy po polsku, na „ty”.
 

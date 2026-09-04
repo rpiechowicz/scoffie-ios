@@ -12,7 +12,7 @@ import SwiftUI
 enum HouseholdMemberStyle {
     static func color(for memberId: String, in members: [HouseholdMemberSnapshot]) -> Color {
         guard let member = members.first(where: { $0.id == memberId }) else {
-            return WMPalette.terracotta
+            return SCPalette.terracotta
         }
         return color(for: member)
     }
@@ -69,7 +69,7 @@ struct PlanWhoBadge: View {
                 ForEach(Array(named.prefix(3).enumerated()), id: \.element.id) { index, member in
                     MemberAvatar(member: member, members: members, size: size)
                         .overlay(
-                            Circle().stroke(Color.wmCanvas(scheme), lineWidth: 1.5)
+                            Circle().stroke(Color.scCanvas(scheme), lineWidth: 1.5)
                         )
                         .zIndex(Double(3 - index))
                 }
@@ -84,7 +84,7 @@ struct PlanWhoBadge: View {
             .frame(width: size, height: size)
             .background(
                 LinearGradient(
-                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                     startPoint: .top,
                     endPoint: .bottom
                 ),

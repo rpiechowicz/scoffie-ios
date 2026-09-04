@@ -21,57 +21,57 @@ struct TourDoneView: View {
                     Text("Zostały dwie minuty")
                         .font(.system(size: 12.5, weight: .semibold))
                 }
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(Color.wmAccentTint(scheme)))
+                .background(Capsule().fill(Color.scAccentTint(scheme)))
                 .padding(.bottom, 14)
 
                 Text("Znasz już nas.\nTeraz my poznajmy Ciebie.")
                     .font(.system(size: 28, weight: .bold))
                     .tracking(-0.5)
                     .lineSpacing(3)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 8)
 
                 Text("Kilka pytań — każde ma konkretny powód:")
                     .font(.system(size: 15))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .padding(.bottom, 12)
 
                 VStack(spacing: 0) {
                     TourFeatureRow(
                         icon: "slider.horizontal.3",
-                        tint: WMPalette.terracotta,
+                        tint: SCPalette.terracotta,
                         title: "Wzrost, waga, wiek i aktywność",
                         subtitle: "Liczymy dzienne zapotrzebowanie i rozkładamy je na posiłki",
                         alignsTop: true
                     )
                     TourFeatureRow(
                         icon: "leaf",
-                        tint: WMPalette.sage,
+                        tint: SCPalette.sage,
                         title: "Alergeny",
                         subtitle: "Przepisy z tymi składnikami nie pokażą się nigdzie — ani w planie, ani na liście zakupów",
                         alignsTop: true
                     )
                     TourFeatureRow(
                         icon: "fork.knife",
-                        tint: WMPalette.indigo,
+                        tint: SCPalette.indigo,
                         title: "Dieta i cel kaloryczny",
                         subtitle: "Zawężamy katalog i pilnujemy, żeby dzień się spinał: wege, bez laktozy, bez wieprzowiny",
                         alignsTop: true
                     )
                     TourFeatureRow(
                         icon: "clock",
-                        tint: WMPalette.butter,
+                        tint: SCPalette.butter,
                         title: "Posiłki i ich pory",
                         subtitle: "Dobieramy liczbę dań i takie przepisy, które zdążycie ugotować",
                         alignsTop: true
                     )
                     TourFeatureRow(
                         icon: "house",
-                        tint: WMPalette.terracottaDeep,
+                        tint: SCPalette.terracottaDeep,
                         title: "Gospodarstwo",
                         subtitle: "Plan i lista zakupów są wspólne — zaprosisz do nich domowników",
                         isLast: true,
@@ -87,7 +87,7 @@ struct TourDoneView: View {
                         .font(.system(size: 12))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
             }
             .padding(.horizontal, 24)
             .padding(.top, 18)
@@ -104,12 +104,12 @@ struct TourDoneFooter: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            WMSoftIconButton(
+            SCSoftIconButton(
                 systemName: "chevron.left",
                 accessibilityLabel: "Wstecz",
                 action: onBack
             )
-            WMSoftButton(title: "Opowiedz nam o sobie", action: onContinue)
+            SCSoftButton(title: "Opowiedz nam o sobie", action: onContinue)
         }
         .padding(.horizontal, 24)
         .padding(.top, 18)

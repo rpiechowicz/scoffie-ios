@@ -27,7 +27,7 @@ struct MealSlotsSheet: View {
     var onClose: () -> Void
 
     @Environment(\.sessionStore) private var sessionStore
-    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.colorScheme) private var scheme
 
@@ -58,7 +58,7 @@ struct MealSlotsSheet: View {
         let counts = plannedCounts()
 
         return ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -86,7 +86,7 @@ struct MealSlotsSheet: View {
                         EditorialSettingsCardGroup {
                             EditorialSettingsRow(
                                 icon: "clock.fill",
-                                iconColor: WMPalette.indigo,
+                                iconColor: SCPalette.indigo,
                                 title: "Pory posiłków",
                                 value: mealTimesRowValue,
                                 isLast: true,
@@ -100,7 +100,7 @@ struct MealSlotsSheet: View {
 
                     Text("Wyłączony posiłek znika z planu, ale zaplanowane dania w nim zostają.")
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 6)
                 }
@@ -150,12 +150,12 @@ struct MealSlotsSheet: View {
 
         return (
             Text("Dzień w planie ma teraz ")
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
             + Text("\(count) \(Self.mealsPlural(count))")
                 .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
             + Text(". Śniadanie, obiad i kolację jecie zawsze — resztę dokładacie tutaj.")
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
         )
         .font(.system(size: 13.5, weight: .regular))
         .fixedSize(horizontal: false, vertical: true)
@@ -181,13 +181,13 @@ struct MealSlotsSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(MealSlot.core.map(\.title).joined(separator: " · "))
                     .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
                 Text("Zawsze w planie — na nich stoi lista zakupów.")
                     .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -195,11 +195,11 @@ struct MealSlotsSheet: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
     }
@@ -225,11 +225,11 @@ struct MealSlotsSheet: View {
                     Text(slot.title)
                         .font(.system(size: 17, weight: .heavy))
                         .tracking(-0.3)
-                        .foregroundStyle(isEnabled ? Color.wmLabel(scheme) : Color.wmMuted(scheme))
+                        .foregroundStyle(isEnabled ? Color.scLabel(scheme) : Color.scMuted(scheme))
 
                     Text(slot.settingsSubtitle)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -238,7 +238,7 @@ struct MealSlotsSheet: View {
                     if !isEnabled, planned > 0 {
                         Text("W tym tygodniu stoją tu \(planned) \(Self.mealsPlural(planned))")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -251,16 +251,16 @@ struct MealSlotsSheet: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(
                         isEnabled
-                            ? WMPalette.terracotta.opacity(scheme == .dark ? 0.10 : 0.07)
-                            : Color.wmTileBg(scheme)
+                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.10 : 0.07)
+                            : Color.scTileBg(scheme)
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
                         isEnabled
-                            ? WMPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.36)
-                            : Color.wmTileStroke(scheme),
+                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.36)
+                            : Color.scTileStroke(scheme),
                         lineWidth: isEnabled ? 1.4 : 1
                     )
             )
@@ -283,7 +283,7 @@ struct MealSlotsSheet: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -294,7 +294,7 @@ struct MealSlotsSheet: View {
                     .foregroundStyle(.white)
             } else {
                 Circle()
-                    .stroke(Color.wmRule(scheme), lineWidth: 1.5)
+                    .stroke(Color.scRule(scheme), lineWidth: 1.5)
             }
         }
         .frame(width: 26, height: 26)
@@ -306,24 +306,24 @@ struct MealSlotsSheet: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "person.2.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(WMPalette.sage.opacity(scheme == .dark ? 0.18 : 0.12)))
+                .background(Circle().fill(SCPalette.sage.opacity(scheme == .dark ? 0.18 : 0.12)))
 
             Text("Lista posiłków jest wspólna dla całego gospodarstwa — plan tygodnia i lista zakupów są jedne dla wszystkich domowników.")
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -346,7 +346,7 @@ struct MealSlotsSheet: View {
                 if let lastFailed {
                     Button("Spróbuj ponownie") { apply(lastFailed) }
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

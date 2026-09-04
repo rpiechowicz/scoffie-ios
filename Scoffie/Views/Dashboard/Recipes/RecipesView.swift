@@ -13,7 +13,7 @@ import SwiftUI
 //      EditorialRecipesSectionHeader nad listą EditorialRecipeRow
 //
 // Stylistyka i paddings idą za pozostałymi widokami v2 (Ustawienia, Produkty,
-// Kalendarz): `WMPageBackground`, `pageTopPadding=78`, `pageHorizontalPadding=20`,
+// Kalendarz): `SCPageBackground`, `pageTopPadding=78`, `pageHorizontalPadding=20`,
 // `pageBottomPadding=40`, hide-and-passthrough na NavigationBar.
 struct RecipesView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
@@ -210,7 +210,7 @@ struct RecipesView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                WMPageBackground(scheme: scheme)
+                SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
                 content
@@ -482,7 +482,7 @@ struct RecipesView: View {
 
                         if idx < section.recipes.count - 1 {
                             Rectangle()
-                                .fill(Color.wmRule(scheme))
+                                .fill(Color.scRule(scheme))
                                 .frame(height: 1)
                                 .padding(.leading, pageHorizontalPadding + 48 + 14)
                                 .padding(.trailing, pageHorizontalPadding)
@@ -496,17 +496,17 @@ struct RecipesView: View {
     private var emptySectionCard: some View {
         Text("Brak przepisów w tej sekcji.")
             .font(.system(size: 13))
-            .foregroundStyle(Color.wmMuted(scheme))
+            .foregroundStyle(Color.scMuted(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
     }
 
@@ -516,10 +516,10 @@ struct RecipesView: View {
         VStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10))
+                    .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10))
                 Image(systemName: "fork.knife.circle")
                     .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
             }
             .frame(width: 78, height: 78)
 
@@ -527,12 +527,12 @@ struct RecipesView: View {
                 Text(isNarrowed ? "Brak wyników" : "Brak przepisów")
                     .font(.system(size: 18, weight: .heavy))
                     .tracking(-0.4)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .multilineTextAlignment(.center)
 
                 Text(emptyStateMessage)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .multilineTextAlignment(.center)
             }
 
@@ -542,11 +542,11 @@ struct RecipesView: View {
                 } label: {
                     Text("Wyczyść filtry")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
-                        .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10)))
-                        .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.32), lineWidth: 1))
+                        .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10)))
+                        .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.32), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
@@ -556,11 +556,11 @@ struct RecipesView: View {
         .padding(.vertical, 28)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -604,14 +604,14 @@ struct RecipesView: View {
             // Hero placeholder
             HStack(alignment: .center, spacing: 14) {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
                     .frame(width: 6, height: 44)
                 VStack(alignment: .leading, spacing: 6) {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Color.wmTileBg(scheme))
+                        .fill(Color.scTileBg(scheme))
                         .frame(width: 90, height: 11)
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.wmTileBg(scheme))
+                        .fill(Color.scTileBg(scheme))
                         .frame(width: 200, height: 24)
                 }
                 Spacer(minLength: 0)
@@ -620,10 +620,10 @@ struct RecipesView: View {
 
             // Story card placeholder
             RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
                 .overlay(
                     RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                        .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                 )
                 .frame(height: 420)
                 .padding(.horizontal, pageHorizontalPadding)
@@ -636,15 +636,15 @@ struct RecipesView: View {
                         ForEach(0..<3, id: \.self) { _ in
                             HStack(spacing: 14) {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.wmTileBg(scheme))
+                                    .fill(Color.scTileBg(scheme))
                                     .frame(width: 48, height: 48)
                                 VStack(alignment: .leading, spacing: 6) {
                                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(Color.wmTileBg(scheme))
+                                        .fill(Color.scTileBg(scheme))
                                         .frame(maxWidth: .infinity, maxHeight: 14, alignment: .leading)
                                         .frame(height: 14)
                                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(Color.wmTileBg(scheme))
+                                        .fill(Color.scTileBg(scheme))
                                         .frame(width: 120, height: 10)
                                 }
                                 Spacer(minLength: 0)
@@ -710,7 +710,7 @@ struct RecipesView: View {
 // MARK: - Page dots
 
 // Kropki paginujące pod karuzelą — `8pt` cienki passive, `22pt` szerszy
-// aktywny pill w `wmLabel`. Source: recipes-v2.jsx W3Dots.
+// aktywny pill w `scLabel`. Source: recipes-v2.jsx W3Dots.
 struct EditorialRecipesPageDots: View {
     let count: Int
     let activeId: UUID?
@@ -723,7 +723,7 @@ struct EditorialRecipesPageDots: View {
             ForEach(0..<count, id: \.self) { idx in
                 let isActive = ids.indices.contains(idx) && ids[idx] == activeId
                 Capsule(style: .continuous)
-                    .fill(isActive ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
+                    .fill(isActive ? Color.scLabel(scheme) : Color.scFaint(scheme))
                     .frame(width: isActive ? 22 : 6, height: 6)
                     .animation(.easeInOut(duration: 0.22), value: activeId)
             }
@@ -773,7 +773,7 @@ private struct RecipeCategorySheetView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
@@ -811,7 +811,7 @@ private struct RecipeCategorySheetView: View {
 
                                 if idx < filteredRecipes.count - 1 {
                                     Rectangle()
-                                        .fill(Color.wmRule(scheme))
+                                        .fill(Color.scRule(scheme))
                                         .frame(height: 1)
                                         .padding(.leading, 20 + 48 + 14)
                                         .padding(.trailing, 20)
@@ -867,7 +867,7 @@ private struct RecipeCategorySheetView: View {
                 Text(RecipesConstants.displayName(for: category))
                     .font(.system(size: 24, weight: .bold))
                     .tracking(-0.4)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -876,10 +876,10 @@ private struct RecipeCategorySheetView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .heavy))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .frame(width: 32, height: 32)
-                    .background(Circle().fill(Color.wmFeatureRowBg(scheme)))
-                    .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                    .background(Circle().fill(Color.scFeatureRowBg(scheme)))
+                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Zamknij")
@@ -903,23 +903,23 @@ private struct RecipeCategorySheetView: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .heavy))
                         .frame(width: 22, height: 22)
-                        .background(Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.22 : 0.14)))
+                        .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.22 : 0.14)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Wyczyść filtry")
             }
         }
-        .foregroundStyle(WMPalette.terracotta)
+        .foregroundStyle(SCPalette.terracotta)
         .padding(.leading, 12)
         .padding(.trailing, 8)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.09))
+                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.09))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(WMPalette.terracotta.opacity(0.28), lineWidth: 1)
+                .stroke(SCPalette.terracotta.opacity(0.28), lineWidth: 1)
         )
     }
 
@@ -935,15 +935,15 @@ private struct RecipeCategorySheetView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.wmMuted(scheme).opacity(0.7))
+                .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
 
             TextField(text: $searchText) {
                 Text("Szukaj w \(RecipesConstants.displayName(for: category).lowercased())")
-                    .foregroundStyle(Color.wmMuted(scheme).opacity(0.7))
+                    .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
             }
             .font(.system(size: 15))
             .tracking(-0.2)
-            .foregroundStyle(Color.wmLabel(scheme))
+            .foregroundStyle(Color.scLabel(scheme))
             .submitLabel(.search)
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
@@ -951,10 +951,10 @@ private struct RecipeCategorySheetView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            Capsule(style: .continuous).fill(Color.wmTileBg(scheme))
+            Capsule(style: .continuous).fill(Color.scTileBg(scheme))
         )
         .overlay(
-            Capsule(style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+            Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -962,18 +962,18 @@ private struct RecipeCategorySheetView: View {
         VStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
 
             Text("Brak wyników")
                 .font(.system(size: 16, weight: .heavy))
                 .tracking(-0.3)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text((hasActiveFilters || isPersonalized) && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                  ? "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoje preferencje."
                  : "Spróbuj innej frazy wyszukiwania.")
                 .font(.system(size: 13))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -981,11 +981,11 @@ private struct RecipeCategorySheetView: View {
         .padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 }

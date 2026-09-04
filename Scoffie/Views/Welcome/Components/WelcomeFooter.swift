@@ -27,7 +27,7 @@ struct WelcomeFooter: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var canvas: Color {
-        Color.wmCanvas(colorScheme)
+        Color.scCanvas(colorScheme)
     }
 
     var body: some View {
@@ -40,11 +40,11 @@ struct WelcomeFooter: View {
                         .font(.system(size: 12.5, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WMPalette.terracotta.opacity(0.12)))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(SCPalette.terracotta.opacity(0.12)))
                 .transition(.opacity)
             }
 
@@ -59,13 +59,13 @@ struct WelcomeFooter: View {
             // się z akcją, którą użytkownik zobaczy zaraz potem.
             HStack(spacing: 10) {
                 if showsBack {
-                    WMSoftIconButton(
+                    SCSoftIconButton(
                         systemName: "chevron.left",
                         accessibilityLabel: "Wstecz",
                         action: onBack
                     )
                 }
-                WMSoftButton(
+                SCSoftButton(
                     title: nextLabel,
                     isEnabled: isNextEnabled,
                     isLoading: isLoading,
@@ -115,7 +115,7 @@ struct WelcomeFooter: View {
 
 #Preview("Step 1") {
     ZStack(alignment: .bottom) {
-        WMPalette.canvasDark.ignoresSafeArea()
+        SCPalette.canvasDark.ignoresSafeArea()
         WelcomeFooter(
             step: 1,
             total: 4,
@@ -131,7 +131,7 @@ struct WelcomeFooter: View {
 
 #Preview("Step 4 light") {
     ZStack(alignment: .bottom) {
-        WMPalette.canvasLight.ignoresSafeArea()
+        SCPalette.canvasLight.ignoresSafeArea()
         WelcomeFooter(
             step: 4,
             total: 4,

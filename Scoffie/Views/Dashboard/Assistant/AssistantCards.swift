@@ -47,7 +47,7 @@ private struct MealLine: View {
                 .font(.system(size: 10, weight: .bold))
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(width: Self.slotColumn, alignment: .leading)
@@ -57,7 +57,7 @@ private struct MealLine: View {
             Text(title)
                 .font(.system(size: 13.5, weight: .medium))
                 .tracking(-0.2)
-                .foregroundStyle(dimmed ? Color.wmMuted(scheme) : Color.wmLabel(scheme))
+                .foregroundStyle(dimmed ? Color.scMuted(scheme) : Color.scLabel(scheme))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -79,10 +79,10 @@ private struct MealLine: View {
                 image.resizable().aspectRatio(contentMode: .fill)
             default:
                 ZStack {
-                    Color.wmInsetSurface(scheme)
+                    Color.scInsetSurface(scheme)
                     Image(systemName: "fork.knife")
                         .font(.system(size: 10))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
             }
         }
@@ -114,31 +114,31 @@ private struct TargetBar: View {
                 Text(label)
                     .font(.system(size: 12.5))
                     .tracking(-0.15)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                 Spacer(minLength: 8)
                 Text("\(value)")
                     .font(.system(size: 15, weight: .bold))
                     .tracking(-0.3)
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
             }
 
             if let target, target > 0 {
                 GeometryReader { geometry in
                     let full = Double(target) * Self.headroom
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.wmBarTrack(scheme))
+                        Capsule().fill(Color.scBarTrack(scheme))
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [WMPalette.terracottaDeep, WMPalette.terracotta],
+                                    colors: [SCPalette.terracottaDeep, SCPalette.terracotta],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
                             .frame(width: geometry.size.width * min(Double(value) / full, 1))
                         Rectangle()
-                            .fill(Color.wmLabel(scheme).opacity(0.85))
+                            .fill(Color.scLabel(scheme).opacity(0.85))
                             .frame(width: 2)
                             .offset(x: geometry.size.width / Self.headroom)
                     }
@@ -149,12 +149,12 @@ private struct TargetBar: View {
                     Text("Twój cel \(target) kcal")
                         .font(.system(size: 11))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                     Spacer(minLength: 8)
                     if let note {
                         Text(note)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(WMPalette.sage)
+                            .foregroundStyle(SCPalette.sage)
                     }
                 }
             }
@@ -162,7 +162,7 @@ private struct TargetBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 }
@@ -186,7 +186,7 @@ private struct RemovalsSection: View {
                     .tracking(1.1)
                     .textCase(.uppercase)
             }
-            .foregroundStyle(WMPalette.terracotta)
+            .foregroundStyle(SCPalette.terracotta)
 
             // Powód po prawej („powtórka”, „ponad cel”) to jedno słowo od
             // modelu — bez niego zniknięcie dania wygląda na przypadek.
@@ -194,14 +194,14 @@ private struct RemovalsSection: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(line(for: item))
                         .font(.system(size: 13))
-                        .foregroundStyle(Color.wmMuted(scheme))
-                        .strikethrough(true, color: Color.wmStrike(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .strikethrough(true, color: Color.scStrike(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     if let reason = item.reason, !reason.isEmpty {
                         Text(reason)
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                             .lineLimit(1)
                     }
                 }
@@ -210,9 +210,9 @@ private struct RemovalsSection: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(WMPalette.terracotta.opacity(scheme == .dark ? 0.08 : 0.05))
+        .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.08 : 0.05))
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 
@@ -267,7 +267,7 @@ struct AssistantPlanWeekCard: View {
             if let subtitle = card.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
@@ -279,7 +279,7 @@ struct AssistantPlanWeekCard: View {
                         .overlay(alignment: .top) {
                             if day.id != visibleDays.first?.id {
                                 Rectangle()
-                                    .fill(Color.wmRule(scheme))
+                                    .fill(Color.scRule(scheme))
                                     .frame(height: 1)
                                     .padding(.leading, 16)
                             }
@@ -314,10 +314,10 @@ struct AssistantPlanWeekCard: View {
                 .font(.system(size: 11.5, weight: .semibold))
                 .monospacedDigit()
         }
-        .foregroundStyle(Color.wmMuted(scheme))
+        .foregroundStyle(Color.scMuted(scheme))
         .padding(.horizontal, 9)
         .frame(height: 26)
-        .background(Capsule().fill(Color.wmChipBg(scheme)))
+        .background(Capsule().fill(Color.scChipBg(scheme)))
     }
 
     private var expandButton: some View {
@@ -337,11 +337,11 @@ struct AssistantPlanWeekCard: View {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 11, weight: .bold))
             }
-            .foregroundStyle(WMPalette.terracotta)
+            .foregroundStyle(SCPalette.terracotta)
             .frame(maxWidth: .infinity)
             .frame(height: 42)
             .overlay(alignment: .top) {
-                Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+                Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
             }
         }
         .buttonStyle(.plain)
@@ -375,19 +375,19 @@ struct AssistantPlanWeekCard: View {
                     Text(day.shortName)
                         .font(.system(size: 12, weight: .bold))
                         .tracking(-0.1)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     if let dateLabel = day.dateLabel {
                         Text(dateLabel)
                             .font(.system(size: 12, weight: .medium))
                             .monospacedDigit()
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                     Spacer(minLength: 8)
                     if day.kcalTotal > 0 {
                         Text("\(day.kcalTotal) kcal")
                             .font(.system(size: 12))
                             .monospacedDigit()
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                 }
 
@@ -429,7 +429,7 @@ struct AssistantPlanDayCard: View {
     /// Kolory pasków przy posiłkach — kolejność dnia, nie znaczenie.
     /// Poranek jest ciepły, wieczór chłodny; to jedyna treść tego koloru.
     private static let rails: [Color] = [
-        WMPalette.butter, WMPalette.terracotta, WMPalette.indigo, WMPalette.sage,
+        SCPalette.butter, SCPalette.terracotta, SCPalette.indigo, SCPalette.sage,
     ]
 
     @Environment(\.colorScheme) private var scheme
@@ -447,7 +447,7 @@ struct AssistantPlanDayCard: View {
             if let subtitle = card.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
@@ -461,7 +461,7 @@ struct AssistantPlanDayCard: View {
                     )
                     .overlay(alignment: .top) {
                         Rectangle()
-                            .fill(Color.wmRule(scheme))
+                            .fill(Color.scRule(scheme))
                             .frame(height: 1)
                             .padding(.leading, 16)
                     }
@@ -486,16 +486,16 @@ struct AssistantPlanDayCard: View {
                 Text(totalLabel)
                     .font(.system(size: 12.5))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
 
                 if let target = card.summary.targetKcalPerDay, target > 0 {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
-                            Capsule().fill(Color.wmBarTrack(scheme))
+                            Capsule().fill(Color.scBarTrack(scheme))
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [WMPalette.terracottaDeep, WMPalette.terracotta],
+                                        colors: [SCPalette.terracottaDeep, SCPalette.terracotta],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
@@ -513,17 +513,17 @@ struct AssistantPlanDayCard: View {
             if let note = card.summary.goalNote {
                 Text(note)
                     .font(.system(size: 11.5, weight: .bold))
-                    .foregroundStyle(WMPalette.sage)
+                    .foregroundStyle(SCPalette.sage)
                     .padding(.horizontal, 10)
                     .frame(height: 26)
-                    .background(Capsule().fill(Color.wmSageTint(scheme)))
-                    .overlay(Capsule().stroke(WMPalette.sage.opacity(0.24), lineWidth: 1))
+                    .background(Capsule().fill(Color.scSageTint(scheme)))
+                    .overlay(Capsule().stroke(SCPalette.sage.opacity(0.24), lineWidth: 1))
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 
@@ -570,10 +570,10 @@ struct AssistantPlanDayCard: View {
                         image.resizable().aspectRatio(contentMode: .fill)
                     default:
                         ZStack {
-                            Color.wmInsetSurface(scheme)
+                            Color.scInsetSurface(scheme)
                             Image(systemName: "fork.knife")
                                 .font(.system(size: 12))
-                                .foregroundStyle(Color.wmFaint(scheme))
+                                .foregroundStyle(Color.scFaint(scheme))
                         }
                     }
                 }
@@ -585,19 +585,19 @@ struct AssistantPlanDayCard: View {
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(0.7)
                         .textCase(.uppercase)
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
 
                     Text(slot.title)
                         .font(.system(size: 14, weight: .semibold))
                         .tracking(-0.25)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
                     if slot.prepTimeMinutes > 0 {
                         Text("\(slot.prepTimeMinutes) min")
                             .font(.system(size: 11.5))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                     }
                 }
 
@@ -607,7 +607,7 @@ struct AssistantPlanDayCard: View {
                     Text("\(slot.kcalPerServing)")
                         .font(.system(size: 14, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                 }
             }
             .padding(.horizontal, 16)
@@ -634,20 +634,20 @@ struct AssistantClarifyCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 Capsule()
-                    .fill(WMPalette.butter.opacity(0.8))
+                    .fill(SCPalette.butter.opacity(0.8))
                     .frame(width: 3)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(card.question)
                         .font(.system(size: 15.5))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     if let hint = card.hint, !hint.isEmpty {
                         Text(hint)
                             .font(.system(size: 13))
                             .tracking(-0.15)
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -679,22 +679,22 @@ struct AssistantAnswerChips: View {
                         .font(.system(size: 14, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(
-                            action.isPrimary ? WMPalette.butter : Color.wmLabel(scheme)
+                            action.isPrimary ? SCPalette.butter : Color.scLabel(scheme)
                         )
                         .padding(.horizontal, 16)
                         .frame(height: 40)
                         .background(
                             Capsule().fill(
                                 action.isPrimary
-                                    ? Color.wmButterTint(scheme)
-                                    : Color.wmTileBg(scheme)
+                                    ? Color.scButterTint(scheme)
+                                    : Color.scTileBg(scheme)
                             )
                         )
                         .overlay(
                             Capsule().stroke(
                                 action.isPrimary
-                                    ? WMPalette.butter.opacity(0.34)
-                                    : Color.wmTileStroke(scheme),
+                                    ? SCPalette.butter.opacity(0.34)
+                                    : Color.scTileStroke(scheme),
                                 lineWidth: 1
                             )
                         )
@@ -728,10 +728,10 @@ struct AssistantAppliedCard: View {
         AssistantCard(tone: .sage) {
             HStack(alignment: .center, spacing: 12) {
                 ZStack {
-                    Circle().fill(WMPalette.sage.opacity(0.22))
+                    Circle().fill(SCPalette.sage.opacity(0.22))
                     Image(systemName: "checkmark")
                         .font(.system(size: 16, weight: .heavy))
-                        .foregroundStyle(WMPalette.sage)
+                        .foregroundStyle(SCPalette.sage)
                 }
                 .frame(width: 36, height: 36)
 
@@ -739,13 +739,13 @@ struct AssistantAppliedCard: View {
                     Text(card.title)
                         .font(.system(size: 15, weight: .bold))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     if let subtitle = card.subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.system(size: 12.5))
                             .tracking(-0.15)
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -759,11 +759,11 @@ struct AssistantAppliedCard: View {
                 HStack(alignment: .top, spacing: 7) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .padding(.top, 1)
                     Text(note)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
@@ -784,21 +784,21 @@ struct AssistantAppliedCard: View {
                 Button(action: onUndo) {
                     HStack(spacing: 6) {
                         if isBusy {
-                            ProgressView().controlSize(.small).tint(Color.wmMuted(scheme))
+                            ProgressView().controlSize(.small).tint(Color.scMuted(scheme))
                         } else {
                             Image(systemName: "arrow.uturn.backward")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
                         }
                         Text(undoAction.label)
                             .font(.system(size: 14, weight: .semibold))
                             .tracking(-0.2)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                     }
                     .padding(.horizontal, 14)
                     .frame(height: 40)
-                    .background(Capsule().fill(Color.wmTileBg(scheme)))
-                    .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                    .background(Capsule().fill(Color.scTileBg(scheme)))
+                    .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .disabled(isBusy)
@@ -812,11 +812,11 @@ struct AssistantAppliedCard: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .bold))
                 }
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
-                .background(Capsule().fill(WMPalette.sage.opacity(0.18)))
-                .overlay(Capsule().stroke(WMPalette.sage.opacity(0.34), lineWidth: 1))
+                .background(Capsule().fill(SCPalette.sage.opacity(0.18)))
+                .overlay(Capsule().stroke(SCPalette.sage.opacity(0.34), lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
@@ -849,12 +849,12 @@ struct AssistantOptionsCard: View {
                     .font(.system(size: 10.5, weight: .bold))
                     .tracking(1.2)
                     .textCase(.uppercase)
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
 
                 Text(card.title)
                     .font(.system(size: 17, weight: .bold))
                     .tracking(-0.35)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -893,7 +893,7 @@ struct AssistantOptionsCard: View {
                         Text(option.title)
                             .font(.system(size: 13, weight: .semibold))
                             .tracking(-0.2)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                             .multilineTextAlignment(.leading)
                             .lineLimit(2)
                             .frame(height: 34, alignment: .top)
@@ -904,7 +904,7 @@ struct AssistantOptionsCard: View {
                                     .monospacedDigit()
                             } icon: {
                                 Image(systemName: "flame")
-                                    .foregroundStyle(WMPalette.terracotta)
+                                    .foregroundStyle(SCPalette.terracotta)
                             }
 
                             if option.prepTimeMinutes > 0 {
@@ -913,20 +913,20 @@ struct AssistantOptionsCard: View {
                                         .monospacedDigit()
                                 } icon: {
                                     Image(systemName: "clock")
-                                        .foregroundStyle(Color.wmMuted(scheme))
+                                        .foregroundStyle(Color.scMuted(scheme))
                                 }
                             }
                         }
                         .font(.system(size: 11.5))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
 
                         if let tag = option.tag, !tag.isEmpty {
                             Text(tag)
                                 .font(.system(size: 10.5, weight: .bold))
-                                .foregroundStyle(WMPalette.sage)
+                                .foregroundStyle(SCPalette.sage)
                                 .padding(.horizontal, 8)
                                 .frame(height: 22)
-                                .background(Capsule().fill(Color.wmSageTint(scheme)))
+                                .background(Capsule().fill(Color.scSageTint(scheme)))
                         }
                     }
                     .padding(.horizontal, 11)
@@ -936,11 +936,11 @@ struct AssistantOptionsCard: View {
                 .frame(width: 152, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.wmCardSurface(scheme))
+                        .fill(Color.scCardSurface(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.wmCardStroke(scheme), lineWidth: 1.5)
+                        .stroke(Color.scCardStroke(scheme), lineWidth: 1.5)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
@@ -958,10 +958,10 @@ struct AssistantOptionsCard: View {
                     // Bez zdjęcia kafelek nie zapada się do samego tekstu:
                     // wysokość zostaje, żeby karuzela nie skakała w pionie.
                     ZStack {
-                        Color.wmInsetSurface(scheme)
+                        Color.scInsetSurface(scheme)
                         Image(systemName: "fork.knife")
                             .font(.system(size: 20))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                 }
             }
@@ -1013,18 +1013,18 @@ struct AssistantSwapCard: View {
                     Text(delta.value)
                         .font(.system(size: 12, weight: .bold))
                         .monospacedDigit()
-                        .foregroundStyle(delta.good ? WMPalette.sage : Color.wmMuted(scheme))
+                        .foregroundStyle(delta.good ? SCPalette.sage : Color.scMuted(scheme))
                     Text(delta.label)
                         .font(.system(size: 11.5))
                         .foregroundStyle(
-                            delta.good ? WMPalette.sage.opacity(0.8) : Color.wmFaint(scheme)
+                            delta.good ? SCPalette.sage.opacity(0.8) : Color.scFaint(scheme)
                         )
                 }
                 .padding(.horizontal, 10)
                 .frame(height: 28)
                 .background(
                     Capsule().fill(
-                        delta.good ? Color.wmSageTint(scheme) : Color.wmChipBg(scheme)
+                        delta.good ? Color.scSageTint(scheme) : Color.scChipBg(scheme)
                     )
                 )
             }
@@ -1065,14 +1065,14 @@ struct AssistantSwapCard: View {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: isOutgoing ? "xmark" : "checkmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(isOutgoing ? Color.wmFaint(scheme) : WMPalette.sage)
+                    .foregroundStyle(isOutgoing ? Color.scFaint(scheme) : SCPalette.sage)
                     .frame(width: 16)
 
                 Text(side.title)
                     .font(.system(size: 14, weight: isOutgoing ? .regular : .semibold))
                     .tracking(-0.2)
-                    .foregroundStyle(isOutgoing ? Color.wmFaint(scheme) : Color.wmLabel(scheme))
-                    .strikethrough(isOutgoing, color: Color.wmStrike(scheme))
+                    .foregroundStyle(isOutgoing ? Color.scFaint(scheme) : Color.scLabel(scheme))
+                    .strikethrough(isOutgoing, color: Color.scStrike(scheme))
                     .lineLimit(2)
 
                 Spacer(minLength: 8)
@@ -1080,11 +1080,11 @@ struct AssistantSwapCard: View {
                 Text(detail)
                     .font(.system(size: 12))
                     .monospacedDigit()
-                    .foregroundStyle(isOutgoing ? Color.wmFaint(scheme) : Color.wmLabel(scheme))
+                    .foregroundStyle(isOutgoing ? Color.scFaint(scheme) : Color.scLabel(scheme))
             }
             .padding(.vertical, 10)
             .overlay(alignment: .top) {
-                Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+                Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
             }
         }
 
@@ -1115,7 +1115,7 @@ struct AssistantHouseholdSplitCard: View {
     /// Kolor osoby jest STAŁY w obrębie karty i bierze się z pozycji na
     /// liście — nie niesie znaczenia, tylko pozwala odróżnić wiersze wzrokiem.
     private static let avatarColors: [Color] = [
-        WMPalette.terracotta, WMPalette.indigo, WMPalette.sage, WMPalette.butter,
+        SCPalette.terracotta, SCPalette.indigo, SCPalette.sage, SCPalette.butter,
     ]
 
     @Environment(\.colorScheme) private var scheme
@@ -1131,10 +1131,10 @@ struct AssistantHouseholdSplitCard: View {
                             .font(.system(size: 11.5, weight: .semibold))
                             .monospacedDigit()
                     }
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .padding(.horizontal, 9)
                     .frame(height: 26)
-                    .background(Capsule().fill(Color.wmChipBg(scheme)))
+                    .background(Capsule().fill(Color.scChipBg(scheme)))
                 }
             }
 
@@ -1146,7 +1146,7 @@ struct AssistantHouseholdSplitCard: View {
                     )
                     .overlay(alignment: .top) {
                         Rectangle()
-                            .fill(Color.wmRule(scheme))
+                            .fill(Color.scRule(scheme))
                             .frame(height: 1)
                             .padding(.leading, 16)
                     }
@@ -1192,7 +1192,7 @@ struct AssistantHouseholdSplitCard: View {
                         Text(portion.displayName)
                             .font(.system(size: 14, weight: .semibold))
                             .tracking(-0.25)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                         Text(portion.goalLabel)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(tint)
@@ -1204,7 +1204,7 @@ struct AssistantHouseholdSplitCard: View {
                         Text(note)
                             .font(.system(size: 12.5))
                             .tracking(-0.15)
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -1216,7 +1216,7 @@ struct AssistantHouseholdSplitCard: View {
                     Text("\(portion.kcal)")
                         .font(.system(size: 13.5, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                 }
             }
             .padding(.horizontal, 16)
@@ -1241,14 +1241,14 @@ struct AssistantMacroGapCard: View {
         AssistantCard(tone: .indigo) {
             AssistantCardHead(
                 eyebrow: card.eyebrow,
-                eyebrowColor: WMPalette.indigo,
+                eyebrowColor: SCPalette.indigo,
                 title: card.title
             ) {
                 ZStack {
-                    Circle().fill(WMPalette.indigo.opacity(0.2))
+                    Circle().fill(SCPalette.indigo.opacity(0.2))
                     Image(systemName: "chart.bar.fill")
                         .font(.system(size: 15))
-                        .foregroundStyle(WMPalette.indigo)
+                        .foregroundStyle(SCPalette.indigo)
                 }
                 .frame(width: 34, height: 34)
             }
@@ -1276,10 +1276,10 @@ struct AssistantMacroGapCard: View {
         HStack(spacing: 6) {
             Image(systemName: "info.circle")
                 .font(.system(size: 11))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
             Text("Każda strzałka wysyła pytanie — nic nie zapisuje się samo")
                 .font(.system(size: 11.5))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
@@ -1291,12 +1291,12 @@ struct AssistantMacroGapCard: View {
         VStack(alignment: .leading, spacing: 7) {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.wmBarTrack(scheme))
+                    Capsule().fill(Color.scBarTrack(scheme))
                     Capsule()
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    WMPalette.indigo.opacity(0.65), WMPalette.indigo,
+                                    SCPalette.indigo.opacity(0.65), SCPalette.indigo,
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -1311,12 +1311,12 @@ struct AssistantMacroGapCard: View {
                 Text("\(card.current) \(card.unit) z planu")
                     .font(.system(size: 12, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 Spacer(minLength: 8)
                 Text("cel \(card.target) \(card.unit)")
                     .font(.system(size: 12))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
         }
         .padding(.horizontal, 16)
@@ -1330,7 +1330,7 @@ struct AssistantMacroGapCard: View {
                 .font(.system(size: 10.5, weight: .bold))
                 .tracking(1.1)
                 .textCase(.uppercase)
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.top, 11)
@@ -1342,7 +1342,7 @@ struct AssistantMacroGapCard: View {
                         Text(booster.text)
                             .font(.system(size: 13.5))
                             .tracking(-0.2)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -1351,14 +1351,14 @@ struct AssistantMacroGapCard: View {
                         Text(booster.amountLabel(unit: card.unit))
                             .font(.system(size: 12.5, weight: .bold))
                             .monospacedDigit()
-                            .foregroundStyle(WMPalette.indigo)
+                            .foregroundStyle(SCPalette.indigo)
 
                         ZStack {
-                            Circle().fill(WMPalette.indigo.opacity(0.14))
-                            Circle().stroke(WMPalette.indigo.opacity(0.28), lineWidth: 1)
+                            Circle().fill(SCPalette.indigo.opacity(0.14))
+                            Circle().stroke(SCPalette.indigo.opacity(0.28), lineWidth: 1)
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(WMPalette.indigo)
+                                .foregroundStyle(SCPalette.indigo)
                         }
                         .frame(width: 30, height: 30)
                     }
@@ -1370,7 +1370,7 @@ struct AssistantMacroGapCard: View {
                 .overlay(alignment: .top) {
                     if index > 0 {
                         Rectangle()
-                            .fill(Color.wmRule(scheme))
+                            .fill(Color.scRule(scheme))
                             .frame(height: 1)
                             .padding(.leading, 16)
                     }
@@ -1378,7 +1378,7 @@ struct AssistantMacroGapCard: View {
             }
         }
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 }
@@ -1399,10 +1399,10 @@ struct AssistantShoppingListCard: View {
         AssistantCard(tone: .neutral) {
             AssistantCardHead(eyebrow: card.eyebrow, title: card.title) {
                 ZStack {
-                    Circle().fill(WMPalette.terracotta.opacity(0.16))
+                    Circle().fill(SCPalette.terracotta.opacity(0.16))
                     Image(systemName: "cart")
                         .font(.system(size: 15))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                 }
                 .frame(width: 34, height: 34)
             }
@@ -1411,7 +1411,7 @@ struct AssistantShoppingListCard: View {
                 ForEach(card.groups) { group in
                     GroupBlock(group: group)
                         .overlay(alignment: .top) {
-                            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+                            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
                         }
                 }
             }
@@ -1421,10 +1421,10 @@ struct AssistantShoppingListCard: View {
                 HStack(spacing: 7) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(WMPalette.sage)
+                        .foregroundStyle(SCPalette.sage)
                     Text(note)
                         .font(.system(size: 12.5))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 16)
@@ -1435,7 +1435,7 @@ struct AssistantShoppingListCard: View {
             if let empty = card.emptyDepartments, empty > 0 {
                 Text("+ \(empty) \(Self.departmentsWord(empty)) bez pozycji")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
                     .padding(.bottom, 2)
@@ -1468,12 +1468,12 @@ struct AssistantShoppingListCard: View {
                         .font(.system(size: 11, weight: .bold))
                         .tracking(0.8)
                         .textCase(.uppercase)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                     // „2/4” — do kupienia z wszystkich; odhaczone są tłem.
                     Text("\(group.remainingCount)/\(group.rows.count)")
                         .font(.system(size: 11))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                     Spacer(minLength: 0)
                 }
 
@@ -1483,15 +1483,15 @@ struct AssistantShoppingListCard: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                                     .stroke(
-                                        entry.isChecked ? WMPalette.sage : Color.wmFaint(scheme).opacity(0.6),
+                                        entry.isChecked ? SCPalette.sage : Color.scFaint(scheme).opacity(0.6),
                                         lineWidth: 1.5
                                     )
                                 if entry.isChecked {
                                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(WMPalette.sage)
+                                        .fill(SCPalette.sage)
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 8, weight: .black))
-                                        .foregroundStyle(Color.wmPageBase(scheme))
+                                        .foregroundStyle(Color.scPageBase(scheme))
                                 }
                             }
                             .frame(width: 13, height: 13)
@@ -1499,19 +1499,19 @@ struct AssistantShoppingListCard: View {
                             Text(entry.label)
                                 .font(.system(size: 12.5))
                                 .tracking(-0.15)
-                                .foregroundStyle(entry.isChecked ? Color.wmFaint(scheme) : Color.wmLabel(scheme))
-                                .strikethrough(entry.isChecked, color: Color.wmStrike(scheme))
+                                .foregroundStyle(entry.isChecked ? Color.scFaint(scheme) : Color.scLabel(scheme))
+                                .strikethrough(entry.isChecked, color: Color.scStrike(scheme))
                         }
                         .padding(.horizontal, 9)
                         .frame(height: 28)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(entry.isChecked ? Color.clear : Color.wmInsetSurface(scheme))
+                                .fill(entry.isChecked ? Color.clear : Color.scInsetSurface(scheme))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .stroke(
-                                    entry.isChecked ? Color.wmRule(scheme) : Color.wmCardStroke(scheme),
+                                    entry.isChecked ? Color.scRule(scheme) : Color.scCardStroke(scheme),
                                     lineWidth: 1
                                 )
                         )
@@ -1521,7 +1521,7 @@ struct AssistantShoppingListCard: View {
                 if let hidden = group.hidden, hidden > 0 {
                     Text("+ \(hidden) więcej w Liście zakupów")
                         .font(.system(size: 11.5))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

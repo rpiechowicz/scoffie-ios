@@ -10,7 +10,7 @@ struct WelcomeFieldCaption: View {
         Text(text.uppercased())
             .font(.system(size: 11, weight: .semibold))
             .tracking(0.7)
-            .foregroundStyle(Color.wmFaint(colorScheme))
+            .foregroundStyle(Color.scFaint(colorScheme))
             .padding(.horizontal, 6)
     }
 }

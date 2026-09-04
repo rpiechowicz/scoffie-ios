@@ -45,7 +45,7 @@ struct PlanAccessSheet: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                WMPageBackground(scheme: scheme).ignoresSafeArea()
+                SCPageBackground(scheme: scheme).ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -70,7 +70,7 @@ struct PlanAccessSheet: View {
                         } else {
                             Text("Nie udało się pobrać stanu planu. Spróbuj ponownie za chwilę.")
                                 .font(.system(size: 14))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
                                 .padding(.top, 24)
                         }
                     }
@@ -82,7 +82,7 @@ struct PlanAccessSheet: View {
 
                 if let usage, accessState(for: usage) == .trial {
                     AssistantStickyFooter {
-                        WMSoftButton(
+                        SCSoftButton(
                             title: purchaseTitle,
                             leadingIcon: "sparkles",
                             trailingIcon: nil,
@@ -144,9 +144,9 @@ struct PlanAccessSheet: View {
 
     private func badgeColor(_ usage: AgentUsageDTO) -> Color {
         switch accessState(for: usage) {
-        case .trial: return WMPalette.butter
-        case .granted: return WMPalette.indigo
-        case .paying, .member: return WMPalette.sage
+        case .trial: return SCPalette.butter
+        case .granted: return SCPalette.indigo
+        case .paying, .member: return SCPalette.sage
         }
     }
 
@@ -165,7 +165,7 @@ struct PlanAccessSheet: View {
             HStack(spacing: 0) {
                 trialRing(title: "Wiadomości", quota: usage.messages)
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(width: 1)
                     .padding(.vertical, 12)
                 trialRing(title: "Zapisy planu", quota: usage.plans)
@@ -177,7 +177,7 @@ struct PlanAccessSheet: View {
         Text("Kiedy pula się skończy, rozmowy i zapisane plany zostają w aplikacji. Nowe wiadomości wracają z planem.")
             .font(.system(size: 13.5))
             .lineSpacing(3)
-            .foregroundStyle(Color.wmMuted(scheme))
+            .foregroundStyle(Color.scMuted(scheme))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)
             .padding(.top, 11)
@@ -200,14 +200,14 @@ struct PlanAccessSheet: View {
             Button("Prywatność") { showPrivacy = true }
         }
         .font(.system(size: 12.5, weight: .semibold))
-        .foregroundStyle(WMPalette.terracotta)
+        .foregroundStyle(SCPalette.terracotta)
         .padding(.horizontal, 4)
         .padding(.top, 16)
 
         if let notice {
             Text(notice)
                 .font(.system(size: 12.5))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
         }
@@ -216,22 +216,22 @@ struct PlanAccessSheet: View {
             .font(.system(size: 12))
             .lineSpacing(2)
             .multilineTextAlignment(.center)
-            .foregroundStyle(Color.wmFaint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity)
             .padding(.top, 14)
     }
 
     private func trialRing(title: String, quota: AgentQuotaDTO) -> some View {
         VStack(spacing: 9) {
-            PlanRing(remaining: quota.remaining, limit: quota.limit, color: WMPalette.butter, size: 84)
+            PlanRing(remaining: quota.remaining, limit: quota.limit, color: SCPalette.butter, size: 84)
             VStack(spacing: 2) {
                 Text(title)
                     .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 Text("\(quota.used) z \(quota.limit) użyte")
                     .font(.system(size: 12))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
             }
         }
         .frame(maxWidth: .infinity)
@@ -278,7 +278,7 @@ struct PlanAccessSheet: View {
 
     @ViewBuilder
     private func payingBody(_ usage: AgentUsageDTO) -> some View {
-        sharedUsage(usage, color: WMPalette.sage)
+        sharedUsage(usage, color: SCPalette.sage)
 
         PlanSectionLabel("Subskrypcja")
             .padding(.top, 20)
@@ -293,15 +293,15 @@ struct PlanAccessSheet: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Zarządzaj subskrypcją")
                             .font(.system(size: 15.5, weight: .semibold))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                         Text("Otworzy się w Ustawieniach iOS")
                             .font(.system(size: 12.5))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -314,7 +314,7 @@ struct PlanAccessSheet: View {
 
     @ViewBuilder
     private func memberBody(_ usage: AgentUsageDTO) -> some View {
-        sharedUsage(usage, color: WMPalette.sage)
+        sharedUsage(usage, color: SCPalette.sage)
 
         PlanSectionLabel("Kto opłaca")
             .padding(.top, 20)
@@ -325,10 +325,10 @@ struct PlanAccessSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(usage.payerName ?? "Ktoś z domu")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Text(payerSubtitle(usage))
                         .font(.system(size: 12.5))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -341,11 +341,11 @@ struct PlanAccessSheet: View {
             Text("Pula jest wspólna — masz do niej pełny dostęp i nie musisz nic dokupować.")
                 .font(.system(size: 13.5))
                 .lineSpacing(3)
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+                .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
         }
     }
 
@@ -369,11 +369,11 @@ struct PlanAccessSheet: View {
                 MemberAvatar(member: member, members: sessionStore.householdMembers, size: 38)
             } else {
                 Circle()
-                    .fill(Color.wmSageTint(scheme))
+                    .fill(Color.scSageTint(scheme))
                     .overlay(
                         Text(String(name.prefix(1)).uppercased())
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(WMPalette.sage)
+                            .foregroundStyle(SCPalette.sage)
                     )
                     .frame(width: 38, height: 38)
             }
@@ -384,23 +384,23 @@ struct PlanAccessSheet: View {
 
     @ViewBuilder
     private func grantedBody(_ usage: AgentUsageDTO) -> some View {
-        sharedUsage(usage, color: WMPalette.indigo, showMembers: false)
+        sharedUsage(usage, color: SCPalette.indigo, showMembers: false)
 
         HStack(alignment: .top, spacing: 11) {
             Image(systemName: "person.2.fill")
                 .font(.system(size: 14))
-                .foregroundStyle(WMPalette.indigo)
+                .foregroundStyle(SCPalette.indigo)
                 .padding(.top, 1)
             Text("Dostęp do asystenta jest nadany przez Scoffie. Nic nie płacisz w aplikacji.")
                 .font(.system(size: 13.5))
                 .lineSpacing(3)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Color.wmIndigoTint(scheme)))
+        .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Color.scIndigoTint(scheme)))
         .padding(.top, 20)
     }
 
@@ -438,7 +438,7 @@ struct PlanAccessSheet: View {
 
         Text("Pula odnawia się \(usage.resetsAt.map(AssistantUsageSheet.resetLabel) ?? "w nowym miesiącu").")
             .font(.system(size: 13))
-            .foregroundStyle(Color.wmFaint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
             .padding(.horizontal, 4)
             .padding(.top, 11)
     }
@@ -509,7 +509,7 @@ struct PlanSectionLabel: View {
         Text(text.uppercased())
             .font(.system(size: 11, weight: .bold))
             .tracking(0.8)
-            .foregroundStyle(Color.wmFaint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
             .padding(.bottom, 9)
@@ -533,7 +533,7 @@ struct PlanRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.wmBarTrack(scheme), lineWidth: size * 0.1)
+            Circle().stroke(Color.scBarTrack(scheme), lineWidth: size * 0.1)
             Circle()
                 .trim(from: 0, to: fraction)
                 .stroke(color, style: StrokeStyle(lineWidth: size * 0.1, lineCap: .round))
@@ -543,11 +543,11 @@ struct PlanRing: View {
                     .font(.system(size: size > 88 ? 26 : 21, weight: .bold))
                     .tracking(-0.6)
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 Text("ZOSTAŁO")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(0.6)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
         }
         .frame(width: size, height: size)
@@ -579,12 +579,12 @@ struct PlanUsageCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .tracking(-0.35)
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     if let detail {
                         Text(detail)
                             .font(.system(size: 12.5))
                             .lineSpacing(2)
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -604,7 +604,7 @@ struct PlanUsageCard: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 14)
-                .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+                .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
             }
         }
     }
@@ -634,12 +634,12 @@ struct PlanMemberBar: View {
             }
             Text(HouseholdMemberStyle.shortName(member.displayName))
                 .font(.system(size: 12.5))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 58, alignment: .leading)
                 .lineLimit(1)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.wmBarTrack(scheme))
+                    Capsule().fill(Color.scBarTrack(scheme))
                     Capsule()
                         .fill(color)
                         .frame(width: geometry.size.width * (total > 0 ? Double(member.messages) / Double(total) : 0))
@@ -649,7 +649,7 @@ struct PlanMemberBar: View {
             Text("\(member.messages)")
                 .font(.system(size: 12.5, weight: .semibold))
                 .monospacedDigit()
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .frame(width: 22, alignment: .trailing)
         }
     }
@@ -671,35 +671,35 @@ struct PlanCarouselCard: View {
                     Text("Plan \(plan.name)")
                         .font(.system(size: 15.5, weight: .bold))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Spacer(minLength: 0)
                     ZStack {
                         Circle()
-                            .fill(isSelected ? WMPalette.terracotta : Color.clear)
+                            .fill(isSelected ? SCPalette.terracotta : Color.clear)
                         if !isSelected {
-                            Circle().stroke(Color.wmRule(scheme), lineWidth: 1.5)
+                            Circle().stroke(Color.scRule(scheme), lineWidth: 1.5)
                         }
                         if isSelected {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .heavy))
-                                .foregroundStyle(Color.wmCanvas(scheme))
+                                .foregroundStyle(Color.scCanvas(scheme))
                         }
                     }
                     .frame(width: 20, height: 20)
                 }
                 Text(plan.seatsLabel)
                     .font(.system(size: 12.5))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     .padding(.top, 2)
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(price)
                         .font(.system(size: 25, weight: .bold))
                         .tracking(-0.8)
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Text("/ mies.")
                         .font(.system(size: 12.5))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
                 .padding(.top, 12)
             }
@@ -715,16 +715,16 @@ struct PlanCarouselCard: View {
             .padding(.top, 12)
             .padding(.bottom, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+            .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
         }
         .frame(width: 232, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(isSelected ? Color.wmAccentTint(scheme) : Color.wmTileBg(scheme))
+                .fill(isSelected ? Color.scAccentTint(scheme) : Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(isSelected ? WMPalette.terracotta : Color.wmTileStroke(scheme),
+                .stroke(isSelected ? SCPalette.terracotta : Color.scTileStroke(scheme),
                         lineWidth: isSelected ? 1.5 : 1)
         )
         .accessibilityElement(children: .combine)
@@ -744,11 +744,11 @@ struct PlanCarouselCard: View {
                 .font(.system(size: 15, weight: .bold))
                 .tracking(-0.3)
                 .monospacedDigit()
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 26, alignment: .leading)
             Text(label)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
         }
     }
 }
@@ -763,7 +763,7 @@ struct PlanCarouselDots: View {
         HStack(spacing: 5) {
             ForEach(0..<count, id: \.self) { index in
                 Capsule()
-                    .fill(index == active ? WMPalette.terracotta : Color.wmBarTrack(scheme))
+                    .fill(index == active ? SCPalette.terracotta : Color.scBarTrack(scheme))
                     .frame(width: index == active ? 16 : 6, height: 6)
             }
         }
@@ -783,7 +783,7 @@ struct AssistantQuotaPips: View {
     @Environment(\.colorScheme) private var scheme
 
     private var isEmpty: Bool { remaining <= 0 }
-    private var color: Color { isEmpty ? WMPalette.terracotta : WMPalette.butter }
+    private var color: Color { isEmpty ? SCPalette.terracotta : SCPalette.butter }
 
     private var label: String {
         if isEmpty { return "pula wyczerpana" }

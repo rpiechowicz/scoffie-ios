@@ -53,7 +53,7 @@ struct AddToPlanSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.colorScheme) private var scheme
@@ -161,7 +161,7 @@ struct AddToPlanSheet: View {
         let visibleSlots = sessionStore.mealSlots.visibleSlots(planned: overview.plannedSlots)
 
         return ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -252,7 +252,7 @@ struct AddToPlanSheet: View {
                     Text(weekCaption)
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(1.2)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .frame(minWidth: 74)
@@ -296,11 +296,11 @@ struct AddToPlanSheet: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
     }
@@ -316,10 +316,10 @@ struct AddToPlanSheet: View {
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(Color.wmChipBg(scheme)))
-                .overlay(Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                .background(Circle().fill(Color.scChipBg(scheme)))
+                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
@@ -403,7 +403,7 @@ struct AddToPlanSheet: View {
                     Text(slot.title)
                         .font(.system(size: 13.5, weight: .bold))
                         .tracking(-0.2)
-                        .foregroundStyle(isSelected ? Color.wmLabel(scheme) : Color.wmMuted(scheme))
+                        .foregroundStyle(isSelected ? Color.scLabel(scheme) : Color.scMuted(scheme))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
@@ -413,7 +413,7 @@ struct AddToPlanSheet: View {
                     if let taken = occupiedBy(slot) {
                         Text(taken)
                             .font(.system(size: 10.5, weight: .medium))
-                            .foregroundStyle(Color.wmFaint(scheme))
+                            .foregroundStyle(Color.scFaint(scheme))
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -427,16 +427,16 @@ struct AddToPlanSheet: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(
                         isSelected
-                            ? WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)
-                            : Color.wmTileBg(scheme)
+                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)
+                            : Color.scTileBg(scheme)
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
                         isSelected
-                            ? WMPalette.terracotta.opacity(scheme == .dark ? 0.55 : 0.42)
-                            : Color.wmTileStroke(scheme),
+                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.55 : 0.42)
+                            : Color.scTileStroke(scheme),
                         lineWidth: isSelected ? 1.4 : 1
                     )
             )
@@ -456,7 +456,7 @@ struct AddToPlanSheet: View {
     private var offSlotNote: some View {
         Text("Przygaszone posiłki też możesz wybrać — przepis po prostu nie jest pod nie oznaczony.")
             .font(.system(size: 11.5, weight: .regular))
-            .foregroundStyle(Color.wmFaint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 6)
     }
@@ -473,16 +473,16 @@ struct AddToPlanSheet: View {
                         .font(.system(size: 16, weight: .heavy))
                         .tracking(-0.3)
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text(servingsHint)
                         .font(.system(size: 11.5, weight: .regular))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                WMStepper(
+                SCStepper(
                     value: $servings,
                     accessibilityTitle: "Liczba porcji",
                     accessibilityValue: PolishPlural.servings(servings),
@@ -492,11 +492,11 @@ struct AddToPlanSheet: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.wmTileBg(scheme))
+                    .fill(Color.scTileBg(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
     }
@@ -553,14 +553,14 @@ struct AddToPlanSheet: View {
                 .background(
                     Capsule().fill(
                         LinearGradient(
-                            colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
                 )
                 .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-                .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
+                .shadow(color: SCPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
             }
             .buttonStyle(.plain)
             .disabled(isSaving || !canSave)
@@ -571,10 +571,10 @@ struct AddToPlanSheet: View {
         .padding(.bottom, 8)
         .background(
             Rectangle()
-                .fill(Color.wmCanvas(scheme).opacity(0.94))
+                .fill(Color.scCanvas(scheme).opacity(0.94))
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(Color.wmRule(scheme))
+                        .fill(Color.scRule(scheme))
                         .frame(height: 1)
                 }
                 .ignoresSafeArea(edges: .bottom)
@@ -733,8 +733,8 @@ struct AddToPlanSheet: View {
         }()
 
         var body: some View {
-            let label = Color.wmLabel(scheme)
-            let muted = Color.wmMuted(scheme)
+            let label = Color.scLabel(scheme)
+            let muted = Color.scMuted(scheme)
 
             VStack(spacing: 4) {
                 Text(Self.shortDayFormatter.string(from: date).uppercased())
@@ -747,7 +747,7 @@ struct AddToPlanSheet: View {
                     .tracking(-0.3)
                     .monospacedDigit()
                     .foregroundStyle(isPast ? muted : label)
-                    .strikethrough(isPast, color: Color.wmStrike(scheme))
+                    .strikethrough(isPast, color: Color.scStrike(scheme))
 
                 ZStack {
                     // Wysokość rezerwowana z góry, żeby układ nie skakał, gdy
@@ -756,14 +756,14 @@ struct AddToPlanSheet: View {
 
                     if isPlanned && !isSelected {
                         Capsule()
-                            .fill(WMPalette.sage)
+                            .fill(SCPalette.sage)
                             .frame(width: 10, height: 2)
                             .transition(.scale.combined(with: .opacity))
                     }
 
                     if isSelected {
                         Capsule()
-                            .fill(WMPalette.terracotta)
+                            .fill(SCPalette.terracotta)
                             .frame(width: 18, height: 2)
                             .matchedGeometryEffect(id: "addToPlan.dayIndicator", in: indicatorNS)
                     }

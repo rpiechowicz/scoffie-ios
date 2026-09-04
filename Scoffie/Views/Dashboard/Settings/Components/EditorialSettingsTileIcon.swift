@@ -54,15 +54,15 @@ struct EditorialSettingsInfoTile: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.wmFeatureRowBg(scheme))
+                .fill(Color.scFeatureRowBg(scheme))
 
             Circle()
-                .stroke(Color.wmFaint(scheme), lineWidth: 1.4)
+                .stroke(Color.scFaint(scheme), lineWidth: 1.4)
 
             Text("i")
                 .font(.system(size: 14, weight: .semibold, design: .serif))
                 .italic()
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
         }
         .frame(width: 32, height: 32)
     }

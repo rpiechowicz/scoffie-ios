@@ -20,7 +20,7 @@ struct WelcomeStep4MealsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 WelcomeStepHeader(
                     icon: "clock.fill",
-                    accent: WMPalette.terracotta,
+                    accent: SCPalette.terracotta,
                     eyebrow: "Rytm dnia",
                     title: "Ile posiłków jecie?",
                     subtitle: "Tyle miejsc dostanie każdy dzień w planie — i tyle dań policzymy do dziennego celu."
@@ -68,13 +68,13 @@ struct WelcomeStep4MealsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(MealSlot.core.map(\.title).joined(separator: " · "))
                     .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(colorScheme))
+                    .foregroundStyle(Color.scLabel(colorScheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
                 Text("Zawsze w planie — na nich stoi lista zakupów.")
                     .font(.system(size: 11.5))
-                    .foregroundStyle(Color.wmFaint(colorScheme))
+                    .foregroundStyle(Color.scFaint(colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -82,11 +82,11 @@ struct WelcomeStep4MealsView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(colorScheme))
+                .fill(Color.scTileBg(colorScheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
     }
@@ -114,11 +114,11 @@ struct WelcomeStep4MealsView: View {
                     Text(slot.title)
                         .font(.system(size: 17, weight: .heavy))
                         .tracking(-0.3)
-                        .foregroundStyle(isEnabled ? Color.wmLabel(colorScheme) : Color.wmMuted(colorScheme))
+                        .foregroundStyle(isEnabled ? Color.scLabel(colorScheme) : Color.scMuted(colorScheme))
 
                     Text(slot.settingsSubtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(colorScheme))
+                        .foregroundStyle(Color.scMuted(colorScheme))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -132,16 +132,16 @@ struct WelcomeStep4MealsView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(
                         isEnabled
-                            ? WMPalette.terracotta.opacity(colorScheme == .dark ? 0.10 : 0.07)
-                            : Color.wmTileBg(colorScheme)
+                            ? SCPalette.terracotta.opacity(colorScheme == .dark ? 0.10 : 0.07)
+                            : Color.scTileBg(colorScheme)
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
                         isEnabled
-                            ? WMPalette.terracotta.opacity(colorScheme == .dark ? 0.45 : 0.36)
-                            : Color.wmTileStroke(colorScheme),
+                            ? SCPalette.terracotta.opacity(colorScheme == .dark ? 0.45 : 0.36)
+                            : Color.scTileStroke(colorScheme),
                         lineWidth: isEnabled ? 1.4 : 1
                     )
             )
@@ -161,7 +161,7 @@ struct WelcomeStep4MealsView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -171,7 +171,7 @@ struct WelcomeStep4MealsView: View {
                     .foregroundStyle(.white)
             } else {
                 Circle()
-                    .stroke(Color.wmFaint(colorScheme), lineWidth: 1.8)
+                    .stroke(Color.scFaint(colorScheme), lineWidth: 1.8)
             }
         }
         .frame(width: 24, height: 24)
@@ -196,30 +196,30 @@ struct WelcomeStep4MealsView: View {
             HStack(spacing: 8) {
                 Image(systemName: "clock")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(WMPalette.indigo)
+                    .foregroundStyle(SCPalette.indigo)
                 Text("Domyślne pory")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(colorScheme))
+                    .foregroundStyle(Color.scLabel(colorScheme))
             }
 
             Text(summary)
                 .font(.system(size: 12))
-                .foregroundStyle(Color.wmMuted(colorScheme))
+                .foregroundStyle(Color.scMuted(colorScheme))
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Zmienisz je w Ustawieniach → Pory posiłków.")
                 .font(.system(size: 11.5))
-                .foregroundStyle(Color.wmFaint(colorScheme))
+                .foregroundStyle(Color.scFaint(colorScheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(colorScheme))
+                .fill(Color.scTileBg(colorScheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.wmTileStroke(colorScheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
         )
     }
 }
@@ -227,7 +227,7 @@ struct WelcomeStep4MealsView: View {
 #Preview("Dark") {
     MealsStepPreview(configuration: .default) { slots in
         ZStack {
-            WMPalette.canvasDark.ignoresSafeArea()
+            SCPalette.canvasDark.ignoresSafeArea()
             WelcomeStep4MealsView(mealSlots: slots)
         }
         .preferredColorScheme(.dark)
@@ -237,7 +237,7 @@ struct WelcomeStep4MealsView: View {
 #Preview("Light") {
     MealsStepPreview(configuration: MealSlotConfiguration(enabled: MealSlot.allCases)) { slots in
         ZStack {
-            WMPalette.canvasLight.ignoresSafeArea()
+            SCPalette.canvasLight.ignoresSafeArea()
             WelcomeStep4MealsView(mealSlots: slots)
         }
         .preferredColorScheme(.light)

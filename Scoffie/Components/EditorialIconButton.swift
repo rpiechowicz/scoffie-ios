@@ -5,7 +5,7 @@ import SwiftUI
 // obwódka biorą kolor akcentu.
 struct EditorialIconButton: View {
     let icon: String
-    var accent: Color = WMPalette.terracotta
+    var accent: Color = SCPalette.terracotta
     var highlighted: Bool = false
     /// Średnica pigułki. 38 pt to domyślny rozmiar w wierszu tytułu; różdżka
     /// na Przepisach używa 43 pt, żeby zgadzać się wysokością z pigułką
@@ -25,20 +25,20 @@ struct EditorialIconButton: View {
                     .fill(
                         highlighted
                         ? accent.opacity(0.20)
-                        : Color.wmTileBg(scheme)
+                        : Color.scTileBg(scheme)
                     )
 
                 Circle()
                     .stroke(
                         highlighted
                         ? accent.opacity(0.40)
-                        : Color.wmTileStroke(scheme),
+                        : Color.scTileStroke(scheme),
                         lineWidth: 1
                     )
 
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(highlighted ? accent : Color.wmLabel(scheme))
+                    .foregroundStyle(highlighted ? accent : Color.scLabel(scheme))
             }
             .frame(width: size, height: size)
         }

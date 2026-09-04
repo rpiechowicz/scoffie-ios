@@ -19,7 +19,7 @@ struct AssistantConversationsSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.wmCanvas(scheme).ignoresSafeArea()
+                Color.scCanvas(scheme).ignoresSafeArea()
 
                 if store.conversations.isEmpty {
                     emptyState
@@ -84,7 +84,7 @@ struct AssistantConversationsSheet: View {
                             row(conversation)
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(Color.wmCanvas(scheme))
+                        .listRowBackground(Color.scCanvas(scheme))
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 pendingDeletion = conversation
@@ -98,7 +98,7 @@ struct AssistantConversationsSheet: View {
                         .font(.system(size: 11, weight: .bold))
                         .tracking(1.1)
                         .textCase(.uppercase)
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
             }
         }
@@ -177,7 +177,7 @@ struct AssistantConversationsSheet: View {
                 HStack(spacing: 6) {
                     Text(conversation.title ?? "Nowa rozmowa")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
                     // Rozmowa z turą w biegu — bez tego znaku wygląda jak
@@ -185,14 +185,14 @@ struct AssistantConversationsSheet: View {
                     if conversation.activeTurnId != nil {
                         Image(systemName: "clock")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                     }
                 }
 
                 if let preview = conversation.preview, !preview.isEmpty {
                     Text(preview)
                         .font(.system(size: 13))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
@@ -200,7 +200,7 @@ struct AssistantConversationsSheet: View {
                 if let stamp = Self.stamp(conversation) {
                     Text(stamp)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
             }
 
@@ -209,7 +209,7 @@ struct AssistantConversationsSheet: View {
             if conversation.id == store.conversationId {
                 Image(systemName: "checkmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                     .padding(.top, 2)
             }
         }
@@ -221,15 +221,15 @@ struct AssistantConversationsSheet: View {
         VStack(spacing: 10) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 28, weight: .light))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
 
             Text("Nie ma jeszcze żadnej rozmowy")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text("Zapytaj asystenta o plan tygodnia — rozmowa zapisze się tutaj i będziesz mógł do niej wrócić.")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
         }
         .padding(32)

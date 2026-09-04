@@ -59,7 +59,7 @@ private struct PolishPluralPreviewHost: View {
 
     var body: some View {
         ZStack {
-            Color.wmCanvas(scheme).ignoresSafeArea()
+            Color.scCanvas(scheme).ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
@@ -79,7 +79,7 @@ private struct PolishPluralPreviewHost: View {
                         }
                         .font(.system(size: 14, weight: .medium))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     }
                 }
                 .padding(24)

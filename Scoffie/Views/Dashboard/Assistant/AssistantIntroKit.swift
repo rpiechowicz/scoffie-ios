@@ -48,7 +48,7 @@ struct AssistantIntroNavRow: View {
                         Text("Wstecz")
                     }
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -57,11 +57,11 @@ struct AssistantIntroNavRow: View {
             if let trailingTitle, let onTrailing {
                 Button(trailingTitle, action: onTrailing)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
         }
         .frame(minHeight: 22)
-        .padding(.horizontal, WMPageMetrics.horizontal)
+        .padding(.horizontal, SCPageMetrics.horizontal)
         .padding(.bottom, 6)
     }
 }
@@ -79,7 +79,7 @@ struct AssistantAIMark: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [WMPalette.terracotta.opacity(0.30), WMPalette.terracotta.opacity(0.10), .clear],
+                        colors: [SCPalette.terracotta.opacity(0.30), SCPalette.terracotta.opacity(0.10), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: size * 0.92
@@ -91,9 +91,9 @@ struct AssistantAIMark: View {
                 .fill(
                     LinearGradient(
                         stops: [
-                            .init(color: WMPalette.terracotta.opacity(0.30), location: 0),
-                            .init(color: WMPalette.terracotta.opacity(0.10), location: 0.52),
-                            .init(color: Color.wmLabel(scheme).opacity(0.04), location: 1),
+                            .init(color: SCPalette.terracotta.opacity(0.30), location: 0),
+                            .init(color: SCPalette.terracotta.opacity(0.10), location: 0.52),
+                            .init(color: Color.scLabel(scheme).opacity(0.04), location: 1),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -101,7 +101,7 @@ struct AssistantAIMark: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                        .stroke(WMPalette.terracotta.opacity(0.34), lineWidth: 1)
+                        .stroke(SCPalette.terracotta.opacity(0.34), lineWidth: 1)
                 )
                 .overlay(alignment: .top) {
                     // Cienki jasny „highlight" u góry, jak na przyciskach soft.
@@ -111,12 +111,12 @@ struct AssistantAIMark: View {
                         .padding(.horizontal, size * 0.22)
                         .padding(.top, 1)
                 }
-                .shadow(color: WMPalette.terracotta.opacity(0.22), radius: 23, y: 20)
+                .shadow(color: SCPalette.terracotta.opacity(0.22), radius: 23, y: 20)
                 .frame(width: size, height: size)
 
             Image(systemName: "sparkles")
                 .font(.system(size: size * 0.5, weight: .light))
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -132,16 +132,16 @@ struct AssistantTickRow: View {
     var body: some View {
         HStack(spacing: 9) {
             ZStack {
-                Circle().fill(Color.wmSageTint(scheme))
+                Circle().fill(Color.scSageTint(scheme))
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .heavy))
-                    .foregroundStyle(WMPalette.sage)
+                    .foregroundStyle(SCPalette.sage)
             }
             .frame(width: 17, height: 17)
             Text(text)
                 .font(.system(size: 13.5))
                 .tracking(-0.15)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
         }
     }
 }

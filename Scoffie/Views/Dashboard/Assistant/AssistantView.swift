@@ -17,7 +17,7 @@ struct AssistantView: View {
 
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.sessionStore) private var sessionStore
-    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
 
@@ -71,7 +71,7 @@ struct AssistantView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -455,7 +455,7 @@ struct AssistantView: View {
                             .frame(height: 120)
                             .id(Self.bottomAnchor)
                     }
-                    .padding(.horizontal, WMPageMetrics.horizontal)
+                    .padding(.horizontal, SCPageMetrics.horizontal)
                     .padding(.bottom, 12)
                 }
                 .scrollIndicators(.hidden)
@@ -503,10 +503,10 @@ struct AssistantView: View {
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.wmCardSurface(scheme)))
-                .overlay(Circle().stroke(Color.wmCardStroke(scheme), lineWidth: 1))
+                .background(Circle().fill(Color.scCardSurface(scheme)))
+                .overlay(Circle().stroke(Color.scCardStroke(scheme), lineWidth: 1))
                 .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
         }
         .buttonStyle(.plain)
@@ -643,7 +643,7 @@ struct AssistantView: View {
                     .padding(.bottom, 10)
             }
 
-            Divider().overlay(Color.wmRule(scheme))
+            Divider().overlay(Color.scRule(scheme))
 
             // Zakres widoczny PRZED odpowiedzią: bez tego użytkownik dowiaduje
             // się, o który tydzień i o kogo chodziło, dopiero z wyniku.
@@ -669,11 +669,11 @@ struct AssistantView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Darmowe wiadomości wykorzystane.")
                         .font(.system(size: 12.5))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                     Button { showPaywall = true } label: {
                         Text("Zobacz plany")
                             .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                             .underline()
                     }
                     .buttonStyle(.plain)
@@ -689,7 +689,7 @@ struct AssistantView: View {
                      ? "Została 1 wiadomość na próbę"
                      : "Zostały \(left) wiadomości na próbę")
                     .font(.system(size: 12.5))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
                     .padding(.top, 8)
@@ -708,21 +708,21 @@ struct AssistantView: View {
                 .lineLimit(1...5)
                 .font(.system(size: 15.5))
                 .tracking(-0.25)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .focused($isComposerFocused)
                 .disabled(store.isUnavailable || store.isLocked)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.wmInsetSurface(scheme))
+                        .fill(Color.scInsetSurface(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(
                             isComposerFocused
-                                ? WMPalette.terracotta.opacity(0.45)
-                                : Color.wmTileStroke(scheme),
+                                ? SCPalette.terracotta.opacity(0.45)
+                                : Color.scTileStroke(scheme),
                             lineWidth: 1
                         )
                 )
@@ -735,7 +735,7 @@ struct AssistantView: View {
                 } label: {
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 14 : 17, weight: .bold))
-                        .foregroundStyle(store.isSending ? Color.wmLabel(scheme) : Color.wmPageBase(scheme))
+                        .foregroundStyle(store.isSending ? Color.scLabel(scheme) : Color.scPageBase(scheme))
                         .frame(width: 44, height: 44)
                         .background(Circle().fill(sendTint))
                 }
@@ -758,15 +758,15 @@ struct AssistantView: View {
         HStack(spacing: 8) {
             Image(systemName: "pencil")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(WMPalette.butter)
+                .foregroundStyle(SCPalette.butter)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Poprawiasz pytanie")
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 Text("Odpowiedzi po nim znikną z rozmowy")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
             }
 
             Spacer(minLength: 0)
@@ -778,15 +778,15 @@ struct AssistantView: View {
             } label: {
                 Text("Anuluj")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(Color.wmButterTint(scheme))
+        .background(Color.scButterTint(scheme))
         .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 
@@ -830,8 +830,8 @@ struct AssistantView: View {
     }
 
     private var sendTint: Color {
-        if store.isSending { return WMPalette.terracotta }
-        return canSend ? WMPalette.terracotta : Color.wmMuted(scheme).opacity(0.4)
+        if store.isSending { return SCPalette.terracotta }
+        return canSend ? SCPalette.terracotta : Color.scMuted(scheme).opacity(0.4)
     }
 
     private var answerCount: Int {
@@ -976,7 +976,7 @@ struct AssistantUnavailableView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 12) {
@@ -984,12 +984,12 @@ struct AssistantUnavailableView: View {
 
                 Text("Asystent będzie dostępny, gdy wczyta się gospodarstwo.")
                     .font(.system(size: 15))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
 
                 Spacer()
             }
-            .padding(.horizontal, WMPageMetrics.horizontal)
-            .padding(.top, WMPageMetrics.top)
+            .padding(.horizontal, SCPageMetrics.horizontal)
+            .padding(.top, SCPageMetrics.top)
             // Ten sam warunek co w `AssistantView` — inaczej tytuł podskakuje
             // o wysokość paska statusu w chwili, gdy gospodarstwo się wczyta.
             .ignoresSafeArea(.container, edges: .top)
@@ -1007,7 +1007,7 @@ private struct DaySeparator: View {
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Color.wmMuted(scheme))
+            .foregroundStyle(Color.scMuted(scheme))
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
     }
@@ -1086,14 +1086,14 @@ private struct MessageBubble: View {
             VStack(alignment: .trailing, spacing: 0) {
                 Text(message.text)
                 .font(.system(size: 15))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.leading)
                 .textSelection(.enabled)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.wmAccentTint(scheme))
+                        .fill(Color.scAccentTint(scheme))
                 )
             }
             // Wysłana, jeszcze niepotwierdzona — subtelnie, bo w 99 %
@@ -1222,7 +1222,7 @@ private struct ChatSkeleton: View {
             if isMine { Spacer(minLength: 40) }
 
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
                 .frame(height: height)
                 .frame(maxWidth: .infinity)
                 .scaleEffect(x: width, anchor: isMine ? .trailing : .leading)
@@ -1247,12 +1247,12 @@ private struct ErrorNote: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
                     .padding(.top, 1)
 
                 Text(text)
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .multilineTextAlignment(.leading)
 
                 Spacer(minLength: 0)
@@ -1262,10 +1262,10 @@ private struct ErrorNote: View {
                 Button(action: onRetry) {
                     Text("Spróbuj ponownie")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.wmTileBg(scheme)))
+                        .background(Capsule().fill(Color.scTileBg(scheme)))
                 }
                 .buttonStyle(.plain)
             }
@@ -1274,7 +1274,7 @@ private struct ErrorNote: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.wmAccentTint(scheme))
+                .fill(Color.scAccentTint(scheme))
         )
     }
 }

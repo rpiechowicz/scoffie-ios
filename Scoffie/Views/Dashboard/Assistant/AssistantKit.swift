@@ -39,7 +39,7 @@ struct AssistantHeader<MenuContent: View>: View {
                 Text("Asystent")
                     .font(.system(size: 32, weight: .heavy))
                     .tracking(-0.5)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.9)
 
@@ -48,8 +48,8 @@ struct AssistantHeader<MenuContent: View>: View {
                 accessory
                 actions(compact: false)
             }
-            .padding(.horizontal, WMPageMetrics.horizontal)
-            .padding(.top, WMPageMetrics.top)
+            .padding(.horizontal, SCPageMetrics.horizontal)
+            .padding(.top, SCPageMetrics.top)
             .padding(.bottom, 12)
 
         case let .compact(title):
@@ -59,12 +59,12 @@ struct AssistantHeader<MenuContent: View>: View {
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(1.2)
                         .textCase(.uppercase)
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
 
                     Text(title ?? "Nowa rozmowa")
                         .font(.system(size: 15, weight: .semibold))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -74,7 +74,7 @@ struct AssistantHeader<MenuContent: View>: View {
                 accessory
                 actions(compact: true)
             }
-            .padding(.horizontal, WMPageMetrics.horizontal)
+            .padding(.horizontal, SCPageMetrics.horizontal)
             .padding(.top, 58)
             .padding(.bottom, 10)
         }
@@ -104,11 +104,11 @@ struct AssistantHeader<MenuContent: View>: View {
             menu()
         } label: {
             ZStack {
-                Circle().fill(Color.wmTileBg(scheme))
-                Circle().stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                Circle().fill(Color.scTileBg(scheme))
+                Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1)
                 Image(systemName: "ellipsis")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
             }
             .frame(width: 38, height: 38)
             .contentShape(Circle())
@@ -172,33 +172,33 @@ struct AssistantContextChips: View {
             Image(systemName: chip.icon)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(
-                    chip.isActive ? WMPalette.terracotta : Color.wmMuted(scheme)
+                    chip.isActive ? SCPalette.terracotta : Color.scMuted(scheme)
                 )
 
             Text(chip.label)
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(-0.1)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
 
             if chip.adjustable {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
             }
         }
         .padding(.horizontal, 10)
         .frame(height: 28)
         .background(
             Capsule().fill(
-                chip.isActive ? Color.wmAccentTint(scheme) : Color.wmChipBg(scheme)
+                chip.isActive ? Color.scAccentTint(scheme) : Color.scChipBg(scheme)
             )
         )
         .overlay(
             Capsule().stroke(
                 chip.isActive
-                    ? WMPalette.terracotta.opacity(0.4)
-                    : Color.wmTileStroke(scheme),
+                    ? SCPalette.terracotta.opacity(0.4)
+                    : Color.scTileStroke(scheme),
                 lineWidth: 1
             )
         )
@@ -272,7 +272,7 @@ struct AssistantProgressTrail: View {
             Text(label)
                 .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
                 .tracking(-0.15)
-                .foregroundStyle(isCurrent ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
+                .foregroundStyle(isCurrent ? Color.scLabel(scheme) : Color.scFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .contentTransition(.opacity)
 
@@ -291,7 +291,7 @@ struct AssistantProgressTrail: View {
                 Text("\(seconds) s")
                     .font(.system(size: 12))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     // Ta sama animacja liczby co przy kaloriach w szczegółach
                     // przepisu: cyfra przewija się, zamiast podmieniać skokiem.
                     .contentTransition(.numericText(value: Double(seconds)))
@@ -300,7 +300,7 @@ struct AssistantProgressTrail: View {
                 if elapsed >= Self.patienceAfter {
                     Text("Możesz wyjść — wrócę z odpowiedzią.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .transition(.opacity.combined(with: .offset(y: -4)))
                 }
             }
@@ -322,10 +322,10 @@ struct AssistantProgressTrail: View {
         var body: some View {
             HStack(alignment: .center, spacing: 10) {
                 ZStack {
-                    Circle().fill(WMPalette.terracotta.opacity(0.22))
+                    Circle().fill(SCPalette.terracotta.opacity(0.22))
                     Image(systemName: "sparkles")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                 }
                 .frame(width: 30, height: 30)
 
@@ -333,10 +333,10 @@ struct AssistantProgressTrail: View {
                     Text(label)
                         .font(.system(size: 14, weight: .bold))
                         .tracking(-0.2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                     Text("Dokładniejszy model — ta część trwa 30–60 s")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
 
                 Spacer(minLength: 8)
@@ -347,7 +347,7 @@ struct AssistantProgressTrail: View {
                         Text(String(format: "%d:%02d", seconds / 60, seconds % 60))
                             .font(.system(size: 12.5, weight: .bold))
                             .monospacedDigit()
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                     }
                 }
             }
@@ -355,11 +355,11 @@ struct AssistantProgressTrail: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.wmAccentTint(scheme))
+                    .fill(Color.scAccentTint(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(WMPalette.terracotta.opacity(0.26), lineWidth: 1)
+                    .stroke(SCPalette.terracotta.opacity(0.26), lineWidth: 1)
             )
             .opacity(isCurrent ? 1 : 0.8)
             .padding(.vertical, 2)
@@ -386,10 +386,10 @@ struct AssistantProgressTrail: View {
                     Spinner(lineWidth: Self.lineWidth)
                         .padding(Self.lineWidth / 2)
                 } else {
-                    Circle().fill(Color.wmSageTint(scheme))
+                    Circle().fill(Color.scSageTint(scheme))
                     Image(systemName: "checkmark")
                         .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(WMPalette.sage)
+                        .foregroundStyle(SCPalette.sage)
                 }
             }
             .frame(width: Self.diameter, height: Self.diameter)
@@ -417,7 +417,7 @@ struct AssistantProgressTrail: View {
                 Circle()
                     .trim(from: 0, to: 0.72)
                     .stroke(
-                        WMPalette.terracotta,
+                        SCPalette.terracotta,
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(phase / Self.period * 360))
@@ -458,17 +458,17 @@ struct AssistantCard<Content: View>: View {
 
     private var fill: Color {
         switch tone {
-        case .neutral: return Color.wmCardSurface(scheme)
-        case .sage: return Color.wmSageTint(scheme)
-        case .indigo: return Color.wmIndigoTint(scheme)
+        case .neutral: return Color.scCardSurface(scheme)
+        case .sage: return Color.scSageTint(scheme)
+        case .indigo: return Color.scIndigoTint(scheme)
         }
     }
 
     private var stroke: Color {
         switch tone {
-        case .neutral: return Color.wmCardStroke(scheme)
-        case .sage: return WMPalette.sage.opacity(0.24)
-        case .indigo: return WMPalette.indigo.opacity(0.26)
+        case .neutral: return Color.scCardStroke(scheme)
+        case .sage: return SCPalette.sage.opacity(0.24)
+        case .indigo: return SCPalette.indigo.opacity(0.26)
         }
     }
 }
@@ -482,7 +482,7 @@ struct AssistantCardHead<Right: View>: View {
     /// 31 SIERPNIA – 6 WRZEŚNIA" nie mieści się w wierszu karty i łamie się
     /// w środku nazwy miesiąca, czyli w najgorszym możliwym miejscu.
     var eyebrowDetail: String?
-    var eyebrowColor: Color = WMPalette.terracotta
+    var eyebrowColor: Color = SCPalette.terracotta
     let title: String
     @ViewBuilder var right: () -> Right
 
@@ -501,14 +501,14 @@ struct AssistantCardHead<Right: View>: View {
                 if let eyebrowDetail, !eyebrowDetail.isEmpty {
                     Text(eyebrowDetail)
                         .font(.system(size: 11.5))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                 }
 
                 Text(title)
                     .font(.system(size: 17, weight: .bold))
                     .tracking(-0.35)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -522,7 +522,7 @@ struct AssistantCardHead<Right: View>: View {
 }
 
 extension AssistantCardHead where Right == EmptyView {
-    init(eyebrow: String, eyebrowColor: Color = WMPalette.terracotta, title: String) {
+    init(eyebrow: String, eyebrowColor: Color = SCPalette.terracotta, title: String) {
         self.init(eyebrow: eyebrow, eyebrowColor: eyebrowColor, title: title) { EmptyView() }
     }
 }
@@ -551,17 +551,17 @@ struct AssistantCardActions: View {
                         if let secondaryIcon {
                             Image(systemName: secondaryIcon)
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
                         }
                         Text(secondaryTitle)
                             .font(.system(size: 14, weight: .semibold))
                             .tracking(-0.2)
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 44)
-                    .background(Capsule().fill(Color.wmTileBg(scheme)))
-                    .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                    .background(Capsule().fill(Color.scTileBg(scheme)))
+                    .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .disabled(isBusy)
@@ -570,7 +570,7 @@ struct AssistantCardActions: View {
             Button(action: onPrimary) {
                 HStack(spacing: 7) {
                     if isBusy {
-                        ProgressView().controlSize(.small).tint(Color.wmPageBase(scheme))
+                        ProgressView().controlSize(.small).tint(Color.scPageBase(scheme))
                     } else {
                         Image(systemName: primaryIcon)
                             .font(.system(size: 14, weight: .bold))
@@ -579,18 +579,18 @@ struct AssistantCardActions: View {
                         .font(.system(size: 15, weight: .bold))
                         .tracking(-0.25)
                 }
-                .foregroundStyle(Color.wmPageBase(scheme))
+                .foregroundStyle(Color.scPageBase(scheme))
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
-                .background(Capsule().fill(primaryTone == .sage ? WMPalette.sage : WMPalette.terracotta))
+                .background(Capsule().fill(primaryTone == .sage ? SCPalette.sage : SCPalette.terracotta))
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
         }
         .padding(12)
-        .background(Color.wmPageBase(scheme).opacity(scheme == .dark ? 0.14 : 0.04))
+        .background(Color.scPageBase(scheme).opacity(scheme == .dark ? 0.14 : 0.04))
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 }
@@ -609,11 +609,11 @@ struct AssistantUsedContextLine: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .padding(.top, 2)
             Text("Uwzględniłem: " + items.joined(separator: " · "))
                 .font(.system(size: 12))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -651,7 +651,7 @@ struct AssistantStatusBand: View {
                 if let subtitle {
                     Text(subtitle)
                         .font(.system(size: 11.5))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .lineLimit(1)
                 }
             }
@@ -663,7 +663,7 @@ struct AssistantStatusBand: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(tint.opacity(scheme == .dark ? 0.10 : 0.07))
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
     }
 
@@ -679,11 +679,11 @@ struct AssistantStatusBand: View {
 
     private var tint: Color {
         switch state.status {
-        case "APPLIED": return WMPalette.sage
-        case "STALE": return WMPalette.butter
-        case "FAILED": return WMPalette.terracotta
-        case "EXPIRED", "UNDONE": return Color.wmMuted(scheme)
-        default: return Color.wmMuted(scheme)
+        case "APPLIED": return SCPalette.sage
+        case "STALE": return SCPalette.butter
+        case "FAILED": return SCPalette.terracotta
+        case "EXPIRED", "UNDONE": return Color.scMuted(scheme)
+        default: return Color.scMuted(scheme)
         }
     }
 
@@ -856,11 +856,11 @@ struct AssistantQuickReplies: View {
                     Text(item)
                         .font(.system(size: 13.5, weight: .semibold))
                         .tracking(-0.2)
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 14)
                         .frame(height: 36)
-                        .background(Capsule().fill(Color.wmAccentTint(scheme).opacity(0.5)))
-                        .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.3), lineWidth: 1))
+                        .background(Capsule().fill(Color.scAccentTint(scheme).opacity(0.5)))
+                        .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.3), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }

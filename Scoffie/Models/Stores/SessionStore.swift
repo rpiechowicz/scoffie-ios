@@ -127,7 +127,7 @@ final class SessionStore {
     /// byłby to drugi banner o tej samej treści, tylko innym tytułem.
     private(set) var isPushDeliveryActive: Bool = false
 
-    var weeklyMealStore: WeeklyMealStore?
+    var mealCalendarStore: MealCalendarStore?
     var recipeCatalogStore: RecipeCatalogStore?
     var shoppingListStore: ShoppingListStore?
     /// Integracja Cookidoo (Thermomix) — jedyny store gadający z backendem
@@ -247,7 +247,7 @@ final class SessionStore {
         Task { @MainActor [weak self] in
             await self?.refreshSessionTokensIfExpiringSoon()
         }
-        weeklyMealStore?.refreshObservedState()
+        mealCalendarStore?.refreshObservedState()
         shoppingListStore?.refreshCurrentWeek()
         // Skład gospodarstwa też — zmiany, które zaszły, gdy aplikacja spała,
         // nie mają innej drogi do ekranu. Bez tego nowy domownik czekał na
@@ -590,7 +590,7 @@ final class SessionStore {
             householdId: householdId
         )
 
-        self.weeklyMealStore = WeeklyMealStore(
+        self.mealCalendarStore = MealCalendarStore(
             weeklyPlanRepository: ApiWeeklyPlanRepository(client: weeklyPlanTransport),
             currentUserId: userId,
             cacheNamespace: "\(userId)_\(householdId)"
@@ -739,10 +739,10 @@ final class SessionStore {
         // Socket sesji zostaje: to sprzątanie po gospodarstwie, nie po koncie
         // (wyjście z domu, usunięcie z domu). Serwer sam przepina pokoje;
         // wylogowanie zamyka go w `tearDownSessionSocket()`.
-        weeklyMealStore = nil
+        mealCalendarStore = nil
         // Plan i lista zakupów leżą na dysku per konto+dom — po wyjściu z domu
         // albo wylogowaniu nie mają prawa zostać dla następnej osoby.
-        WeeklyMealStore.clearCache()
+        MealCalendarStore.clearCache()
         ShoppingListStore.clearCache()
         // Plik cache katalogu nie jest przypisany do konta: bez tego następna
         // osoba zalogowana na tym telefonie widziała przez 12 h katalog
@@ -834,7 +834,7 @@ final class SessionStore {
         // Rozgłoszenie po sockecie jest jednorazowe i nie ma powtórek: jeśli
         // aplikacja była w tle albo bez sieci, gdy ktoś dołączał, zdarzenie
         // przepada bezpowrotnie. Odzyskujemy je przy każdym (re)połączeniu —
-        // ten sam wzorzec, którego używają już `WeeklyMealStore`
+        // ten sam wzorzec, którego używają już `MealCalendarStore`
         // i `ShoppingListStore`.
         realtimeSocket?.observeConnection { [weak self] isConnected in
             guard isConnected else { return }
@@ -1115,7 +1115,7 @@ final class SessionStore {
 
             persistHousehold(id: household.id, name: household.name)
             bootstrapSession(userId: userId, householdId: household.id, householdName: household.name)
-            weeklyMealStore?.resetLocalPlanningState()
+            mealCalendarStore?.resetLocalPlanningState()
             await registerPushDeviceIfPossible()
             isAuthenticated = true
         } catch {
@@ -1315,7 +1315,7 @@ final class SessionStore {
 
         persistHousehold(id: household.id, name: household.name)
         bootstrapSession(userId: userId, householdId: household.id, householdName: household.name)
-        weeklyMealStore?.resetLocalPlanningState()
+        mealCalendarStore?.resetLocalPlanningState()
         await registerPushDeviceIfPossible()
         isAuthenticated = true
         // Przyjęte zaproszenie znika ze skrzynki, a razem z nim wszystkie inne

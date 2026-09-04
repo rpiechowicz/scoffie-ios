@@ -44,7 +44,7 @@ struct ExcludedIngredientsSheet: View {
                             ProgressView().controlSize(.small)
                             Text("Szukam…")
                                 .font(.system(size: 14))
-                                .foregroundStyle(Color.wmMuted(scheme))
+                                .foregroundStyle(Color.scMuted(scheme))
                         }
                     } else if hits.isEmpty {
                         Text(
@@ -53,7 +53,7 @@ struct ExcludedIngredientsSheet: View {
                                 : "Nic nie pasuje. Spróbuj innego słowa."
                         )
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                     } else {
                         ForEach(hits) { item in
                             Button {
@@ -106,15 +106,15 @@ struct ExcludedIngredientsSheet: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.name)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 Text(item.category)
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             Spacer(minLength: 8)
             Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle")
                 .font(.system(size: 18))
-                .foregroundStyle(isSelected ? WMPalette.terracotta : Color.wmFaint(scheme))
+                .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scFaint(scheme))
         }
         .contentShape(Rectangle())
     }

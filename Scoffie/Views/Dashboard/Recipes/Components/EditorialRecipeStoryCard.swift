@@ -149,7 +149,7 @@ struct EditorialRecipeStoryCard: View {
 
             Image(systemName: liked ? "heart.fill" : "heart")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(liked ? WMPalette.terracotta : Color.white.opacity(0.95))
+                .foregroundStyle(liked ? SCPalette.terracotta : Color.white.opacity(0.95))
         }
         .frame(width: 32, height: 32)
         .padding(.top, 14)

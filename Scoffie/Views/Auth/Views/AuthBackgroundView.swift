@@ -4,7 +4,7 @@ struct AuthBackgroundView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Color.wmCanvas(colorScheme)
+        Color.scCanvas(colorScheme)
             .ignoresSafeArea()
     }
 }

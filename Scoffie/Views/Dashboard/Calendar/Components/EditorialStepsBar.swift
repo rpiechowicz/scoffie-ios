@@ -29,9 +29,9 @@ struct EditorialStepsBar: View {
     private var hasData: Bool { (steps ?? 0) > 0 }
 
     var body: some View {
-        let label = Color.wmLabel(scheme)
-        let muted = Color.wmMuted(scheme)
-        let faint = Color.wmFaint(scheme)
+        let label = Color.scLabel(scheme)
+        let muted = Color.scMuted(scheme)
+        let faint = Color.scFaint(scheme)
 
         VStack(alignment: .leading, spacing: 6) {
             Text("KROKI")
@@ -58,11 +58,11 @@ struct EditorialStepsBar: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.wmBarTrack(scheme))
+                        .fill(Color.scBarTrack(scheme))
 
                     if hasData {
                         Capsule()
-                            .fill(WMPalette.sage)
+                            .fill(SCPalette.sage)
                             .frame(width: geo.size.width * fillPct, height: 4)
                     }
                 }

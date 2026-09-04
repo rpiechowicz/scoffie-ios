@@ -101,18 +101,18 @@ struct AssistantScopeSheet: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                 if let subtitle {
                     Text(subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
             }
             Spacer(minLength: 8)
             if isSelected {
                 Image(systemName: "checkmark")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
             }
         }
         .contentShape(Rectangle())

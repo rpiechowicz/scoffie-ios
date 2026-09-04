@@ -1,7 +1,12 @@
 import SwiftUI
 
-/// Cozy Kitchen "Steaming Bowl" — wektorowe logo v3 (Recraft "WM Steam").
-/// Terakotowa miska, z której para układa się w litery "WM"
+/// Miska z parą — logo rysowane ścieżkami, bez bundlowania PNG-ów.
+///
+/// UWAGA: TO JEST JESZCZE RYSUNEK POPRZEDNIEJ MARKI. Para układa się w
+/// litery poprzedniej nazwy i jest to najbardziej widoczny ślad po niej —
+/// widzi go każdy na ekranie startowym, przy logowaniu i w dokumentach
+/// prawnych. Nowe logo leży w `branding/scoffie-logo.svg`; podmiana ścieżek
+/// wymaga Maca (rasteryzacja ikon) i jest opisana w `branding/LOGO_NOTES.md`.
 /// (Scoffie). Źródło: `branding/scoffie-logo-v3.svg`.
 ///
 /// Renderowane przez `Canvas`, żeby precyzyjnie oddać krzywe Béziera ze
@@ -10,7 +15,7 @@ import SwiftUI
 /// subpikselowe ścieżki-łatki z generatora (#F9F19F/#CC8568/#D8B7A1,
 /// szwy antyaliasingu w oryginale) są celowo pominięte — na innym tle
 /// niż kremowe pokazywałyby się jako jasne drobiny.
-struct WMSteamingBowlLogo: View {
+struct SCSteamingBowlLogo: View {
     enum Palette {
         case auto
         case dark
@@ -253,11 +258,11 @@ private enum Artwork {
     ZStack {
         Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).ignoresSafeArea()
         VStack(spacing: 16) {
-            WMSteamingBowlLogo(size: 140, palette: .dark)
+            SCSteamingBowlLogo(size: 140, palette: .dark)
             HStack(spacing: 12) {
-                WMSteamingBowlLogo(size: 64, palette: .dark)
-                WMSteamingBowlLogo(size: 44, palette: .dark)
-                WMSteamingBowlLogo(size: 28, palette: .dark)
+                SCSteamingBowlLogo(size: 64, palette: .dark)
+                SCSteamingBowlLogo(size: 44, palette: .dark)
+                SCSteamingBowlLogo(size: 28, palette: .dark)
             }
         }
     }
@@ -267,10 +272,10 @@ private enum Artwork {
     ZStack {
         Color(red: 250 / 255, green: 243 / 255, blue: 232 / 255).ignoresSafeArea()
         VStack(spacing: 16) {
-            WMSteamingBowlLogo(size: 140, palette: .light)
+            SCSteamingBowlLogo(size: 140, palette: .light)
             HStack(spacing: 12) {
-                WMSteamingBowlLogo(size: 52, mono: true, palette: .light)
-                WMSteamingBowlLogo(size: 52, mono: true, palette: .dark)
+                SCSteamingBowlLogo(size: 52, mono: true, palette: .light)
+                SCSteamingBowlLogo(size: 52, mono: true, palette: .dark)
             }
         }
     }

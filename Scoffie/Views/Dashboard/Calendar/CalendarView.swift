@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CalendarView: View {
-    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.sessionStore) private var sessionStore
@@ -39,7 +39,7 @@ struct CalendarView: View {
         var recipe: Recipe
 
         var id: String {
-            "\(WeeklyMealStore.dateKey(for: date)).\(slot.rawValue).\(meal.id)"
+            "\(MealCalendarStore.dateKey(for: date)).\(slot.rawValue).\(meal.id)"
         }
     }
 
@@ -173,7 +173,7 @@ struct CalendarView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                WMPageBackground(scheme: scheme)
+                SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
                 ScrollView {
@@ -188,14 +188,14 @@ struct CalendarView: View {
                             selectedDate: $selectedDate,
                             plannedDates: plannedDates
                         )
-                        .padding(.horizontal, WMPageMetrics.horizontal)
-                        .padding(.top, WMPageMetrics.top)
+                        .padding(.horizontal, SCPageMetrics.horizontal)
+                        .padding(.top, SCPageMetrics.top)
 
                         // Kreska pod paskiem dni — `margin: 14px … 18px` z projektu.
                         Rectangle()
-                            .fill(Color.wmRule(scheme))
+                            .fill(Color.scRule(scheme))
                             .frame(height: 1)
-                            .padding(.horizontal, WMPageMetrics.horizontal)
+                            .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.top, 14)
                             .padding(.bottom, 18)
 
@@ -208,7 +208,7 @@ struct CalendarView: View {
                             carbs: dayCarbs,
                             target: calorieGoal
                         )
-                        .padding(.horizontal, WMPageMetrics.horizontal)
+                        .padding(.horizontal, SCPageMetrics.horizontal)
                         .padding(.bottom, stepsBarVisible ? 16 : 22)
 
                         // Kroki zHealthKit — tylko gdy integracja „Zdrowie"
@@ -222,13 +222,13 @@ struct CalendarView: View {
                                 goal: stepsGoal,
                                 source: day?.source
                             )
-                            .padding(.horizontal, WMPageMetrics.horizontal)
+                            .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.bottom, 22)
                         }
 
                         // Kreska "W MENU" — dolny odstęp 18pt z projektu.
                         menuRule
-                            .padding(.horizontal, WMPageMetrics.horizontal)
+                            .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.bottom, 18)
 
                         if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
@@ -236,7 +236,7 @@ struct CalendarView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, WMPageMetrics.horizontal)
+                                .padding(.horizontal, SCPageMetrics.horizontal)
                                 .padding(.bottom, 12)
                         }
 
@@ -256,7 +256,7 @@ struct CalendarView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, WMPageMetrics.horizontal)
+                        .padding(.horizontal, SCPageMetrics.horizontal)
                         .padding(.bottom, 40)
                     }
                 }
@@ -302,7 +302,7 @@ struct CalendarView: View {
             }
             // Kroki dnia spoza kroczącego okna (przeglądanie przeszłości) —
             // leniwy, czysto lokalny odczyt z HealthKit, bez wysyłki.
-            .task(id: WeeklyMealStore.dateKey(for: selectedDate)) {
+            .task(id: MealCalendarStore.dateKey(for: selectedDate)) {
                 await sessionStore.healthStepsStore?
                     .refreshIfNeeded(for: selectedDate)
             }
@@ -352,17 +352,17 @@ struct CalendarView: View {
     private var menuRule: some View {
         HStack(spacing: 10) {
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
                 .frame(maxWidth: .infinity)
 
             Text("W MENU")
                 .font(.system(size: 9, weight: .bold))
                 .tracking(2)
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
 
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
                 .frame(maxWidth: .infinity)
         }

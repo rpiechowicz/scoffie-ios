@@ -68,13 +68,13 @@ struct PlanAudienceChips: View {
             Text(sectionLabel)
                 .font(.system(size: 9, weight: .bold))
                 .tracking(2)
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
 
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     chip(
                         title: "Wspólne",
-                        tint: WMPalette.terracotta,
+                        tint: SCPalette.terracotta,
                         isOn: selection.isEmpty,
                         avatar: AnyView(houseGlyph)
                     ) {
@@ -112,18 +112,18 @@ struct PlanAudienceChips: View {
 
                 Text(title)
                     .font(.system(size: 13, weight: isOn ? .bold : .semibold))
-                    .foregroundStyle(isOn ? Color.wmLabel(scheme) : Color.wmMuted(scheme))
+                    .foregroundStyle(isOn ? Color.scLabel(scheme) : Color.scMuted(scheme))
                     .lineLimit(1)
             }
             .padding(.leading, 5)
             .padding(.trailing, 12)
             .padding(.vertical, 5)
             .background(
-                Capsule().fill(isOn ? tint.opacity(scheme == .dark ? 0.22 : 0.16) : Color.wmTileBg(scheme))
+                Capsule().fill(isOn ? tint.opacity(scheme == .dark ? 0.22 : 0.16) : Color.scTileBg(scheme))
             )
             .overlay(
                 Capsule().stroke(
-                    isOn ? tint.opacity(scheme == .dark ? 0.55 : 0.45) : Color.wmTileStroke(scheme),
+                    isOn ? tint.opacity(scheme == .dark ? 0.55 : 0.45) : Color.scTileStroke(scheme),
                     lineWidth: isOn ? 1.4 : 1
                 )
             )
@@ -139,7 +139,7 @@ struct PlanAudienceChips: View {
             .frame(width: 20, height: 20)
             .background(
                 LinearGradient(
-                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.22)],
+                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.22)],
                     startPoint: .top,
                     endPoint: .bottom
                 ),
@@ -204,7 +204,7 @@ private struct PlanAudienceChipsPreviewHost: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 16) {
@@ -213,7 +213,7 @@ private struct PlanAudienceChipsPreviewHost: View {
                 Text("Jedzących: \(PlanAudienceChips.eaterCount(selection, memberCount: members.count))")
                     .font(.system(size: 12, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
             .padding(.horizontal, 22)
         }

@@ -6,7 +6,7 @@ import SwiftUI
 //
 // Wygląd jest przeniesiony jeden do jednego ze steppera makr w ustawieniach:
 // dwa przyciski 34x30 rozdzielone hairline'em, całość na pigułce z obwódką.
-struct WMStepper: View {
+struct SCStepper: View {
     @Binding var value: Int
     var range: ClosedRange<Int> = 1...12
     var step: Int = 1
@@ -25,15 +25,15 @@ struct WMStepper: View {
             }
 
             Rectangle()
-                .fill(Color.wmTileStroke(scheme))
+                .fill(Color.scTileStroke(scheme))
                 .frame(width: 1, height: 18)
 
             stepButton(systemName: "plus", enabled: canIncrement) {
                 adjust(by: step)
             }
         }
-        .background(Capsule().fill(Color.wmChipBg(scheme)))
-        .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+        .background(Capsule().fill(Color.scChipBg(scheme)))
+        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
         .accessibilityLabel(accessibilityTitle)
         .accessibilityValue(accessibilityValue)
     }
@@ -60,7 +60,7 @@ struct WMStepper: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 34, height: 30)
                 .contentShape(Rectangle())
         }
@@ -70,9 +70,9 @@ struct WMStepper: View {
     }
 }
 
-/// Preview trzyma wartość u siebie, bo `WMStepper` bierze `Binding` i bez
+/// Preview trzyma wartość u siebie, bo `SCStepper` bierze `Binding` i bez
 /// właściciela stanu w podglądzie nic by się nie ruszało.
-private struct WMStepperPreviewHost: View {
+private struct SCStepperPreviewHost: View {
     @State private var servings = 2
     @State private var atUpperBound = 12
     @State private var protein = 140
@@ -81,11 +81,11 @@ private struct WMStepperPreviewHost: View {
 
     var body: some View {
         ZStack {
-            Color.wmCanvas(scheme).ignoresSafeArea()
+            Color.scCanvas(scheme).ignoresSafeArea()
 
             VStack(spacing: 24) {
                 row(title: "Liczba porcji") {
-                    WMStepper(
+                    SCStepper(
                         value: $servings,
                         accessibilityTitle: "Liczba porcji",
                         accessibilityValue: PolishPlural.servings(servings)
@@ -93,7 +93,7 @@ private struct WMStepperPreviewHost: View {
                 }
 
                 row(title: "Na krańcu zakresu") {
-                    WMStepper(
+                    SCStepper(
                         value: $atUpperBound,
                         accessibilityTitle: "Liczba porcji",
                         accessibilityValue: PolishPlural.servings(atUpperBound)
@@ -101,7 +101,7 @@ private struct WMStepperPreviewHost: View {
                 }
 
                 row(title: "Krok co 5 g") {
-                    WMStepper(
+                    SCStepper(
                         value: $protein,
                         range: 0...300,
                         step: 5,
@@ -121,7 +121,7 @@ private struct WMStepperPreviewHost: View {
         HStack(spacing: 12) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             content()
@@ -129,12 +129,12 @@ private struct WMStepperPreviewHost: View {
     }
 }
 
-#Preview("WMStepper — dark") {
-    WMStepperPreviewHost()
+#Preview("SCStepper — dark") {
+    SCStepperPreviewHost()
         .preferredColorScheme(.dark)
 }
 
-#Preview("WMStepper — light") {
-    WMStepperPreviewHost()
+#Preview("SCStepper — light") {
+    SCStepperPreviewHost()
         .preferredColorScheme(.light)
 }

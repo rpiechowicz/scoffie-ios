@@ -55,7 +55,7 @@ struct EditorialRecipesHeader: View {
     private var personalizationButton: some View {
         EditorialIconButton(
             icon: "wand.and.stars",
-            accent: WMPalette.sage,
+            accent: SCPalette.sage,
             highlighted: isPersonalizationActive,
             // 43 pt, nie domyślne 38 — tyle mierzy pigułka filtra w rzędzie
             // niżej (19 pt treści + 2 × 12 pt paddingu). Przy 38 pt oba
@@ -70,9 +70,9 @@ struct EditorialRecipesHeader: View {
         .overlay(alignment: .topTrailing) {
             if hiddenRecipeCount > 0 {
                 Circle()
-                    .fill(WMPalette.terracotta)
+                    .fill(SCPalette.terracotta)
                     .frame(width: 8, height: 8)
-                    .overlay(Circle().stroke(Color.wmCanvas(scheme), lineWidth: 1.5))
+                    .overlay(Circle().stroke(Color.scCanvas(scheme), lineWidth: 1.5))
                     .offset(x: 1, y: -1)
                     .allowsHitTesting(false)
                     .transition(.scale.combined(with: .opacity))
@@ -112,7 +112,7 @@ struct EditorialRecipesHeader: View {
                         .transition(.scale.combined(with: .opacity))
                 }
             }
-            .foregroundStyle(hasActiveFilters ? .white : Color.wmLabel(scheme))
+            .foregroundStyle(hasActiveFilters ? .white : Color.scLabel(scheme))
             .frame(minWidth: 20)
             .frame(height: 19)
             .padding(.horizontal, hasActiveFilters ? 14 : 13)
@@ -122,21 +122,21 @@ struct EditorialRecipesHeader: View {
                     hasActiveFilters
                         ? AnyShapeStyle(
                             LinearGradient(
-                                colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        : AnyShapeStyle(Color.wmTileBg(scheme))
+                        : AnyShapeStyle(Color.scTileBg(scheme))
                 )
             )
             .overlay(
                 Capsule(style: .continuous).stroke(
-                    hasActiveFilters ? WMPalette.terracotta.opacity(0.35) : Color.wmTileStroke(scheme),
+                    hasActiveFilters ? SCPalette.terracotta.opacity(0.35) : Color.scTileStroke(scheme),
                     lineWidth: 1
                 )
             )
-            .shadow(color: WMPalette.terracotta.opacity(hasActiveFilters ? 0.24 : 0), radius: 8, x: 0, y: 4)
+            .shadow(color: SCPalette.terracotta.opacity(hasActiveFilters ? 0.24 : 0), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .animation(.smooth(duration: 0.2), value: hasActiveFilters)
@@ -151,15 +151,15 @@ struct EditorialRecipesHeader: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.wmMuted(scheme).opacity(0.7))
+                .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
 
             TextField(text: $searchText) {
                 Text("Szukaj przepisów")
-                    .foregroundStyle(Color.wmMuted(scheme).opacity(0.7))
+                    .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
             }
             .font(.system(size: 16))
             .tracking(-0.2)
-            .foregroundStyle(Color.wmLabel(scheme))
+            .foregroundStyle(Color.scLabel(scheme))
             .focused($isSearchFocused)
             .submitLabel(.search)
             .onSubmit { onSubmit?() }
@@ -172,7 +172,7 @@ struct EditorialRecipesHeader: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Wyczyść wyszukiwanie")
@@ -183,11 +183,11 @@ struct EditorialRecipesHeader: View {
         .padding(.vertical, 12)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             Capsule(style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .contentShape(Capsule(style: .continuous))
         .onTapGesture { isSearchFocused = true }

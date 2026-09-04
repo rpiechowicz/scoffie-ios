@@ -12,19 +12,19 @@ enum AssistantAccent {
 
     var color: Color {
         switch self {
-        case .terracotta: return WMPalette.terracotta
-        case .sage: return WMPalette.sage
-        case .indigo: return WMPalette.indigo
-        case .butter: return WMPalette.butter
+        case .terracotta: return SCPalette.terracotta
+        case .sage: return SCPalette.sage
+        case .indigo: return SCPalette.indigo
+        case .butter: return SCPalette.butter
         }
     }
 
     func tint(_ scheme: ColorScheme) -> Color {
         switch self {
-        case .terracotta: return Color.wmAccentTint(scheme)
-        case .sage: return Color.wmSageTint(scheme)
-        case .indigo: return Color.wmIndigoTint(scheme)
-        case .butter: return Color.wmButterTint(scheme)
+        case .terracotta: return Color.scAccentTint(scheme)
+        case .sage: return Color.scSageTint(scheme)
+        case .indigo: return Color.scIndigoTint(scheme)
+        case .butter: return Color.scButterTint(scheme)
         }
     }
 }
@@ -61,16 +61,16 @@ struct AssistantSurfaceCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.wmTileBg(scheme)))
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.scTileBg(scheme)))
             // Tła wierszy (podświetlony wiersz zgody, rozwinięty wiersz
             // akordeonu) to prostokąty — bez przycięcia wystawały z rogów.
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
     }
 }
 
 /// Stopka przyklejona do dołu: treść chowa się pod miękkim gradientem tła,
-/// jak w kreatorze „Poznajmy się". Wewnątrz przyciski w stylu `WMSoftButton`.
+/// jak w kreatorze „Poznajmy się". Wewnątrz przyciski w stylu `SCSoftButton`.
 struct AssistantStickyFooter<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
@@ -78,24 +78,24 @@ struct AssistantStickyFooter<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 10) { content() }
-            .padding(.horizontal, WMPageMetrics.horizontal)
+            .padding(.horizontal, SCPageMetrics.horizontal)
             .padding(.top, 12)
             .padding(.bottom, 12)
             .background {
                 VStack(spacing: 0) {
-                    // Ten sam kolor co `WMPageBackground` (wmPageBase), nie kanwa —
+                    // Ten sam kolor co `SCPageBackground` (scPageBase), nie kanwa —
                     // inny odcień rysował twardą linię nad przyciskiem. Gradient
                     // zaczyna się NAD stopką (ujemny offset), więc nie zjada
                     // miejsca, a treść i tak ginie pod nim łagodnie.
                     LinearGradient(
-                        colors: [Color.wmPageBase(scheme).opacity(0), Color.wmPageBase(scheme)],
+                        colors: [Color.scPageBase(scheme).opacity(0), Color.scPageBase(scheme)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                     .frame(height: 36)
                     .offset(y: -36)
                     .padding(.bottom, -36)
-                    Color.wmPageBase(scheme)
+                    Color.scPageBase(scheme)
                 }
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
@@ -103,7 +103,7 @@ struct AssistantStickyFooter<Content: View>: View {
     }
 }
 
-/// Drugorzędny przycisk stopki — tekst bez wypełnienia, obok `WMSoftButton`.
+/// Drugorzędny przycisk stopki — tekst bez wypełnienia, obok `SCSoftButton`.
 struct AssistantTextButton: View {
     let title: String
     var role: ButtonRole? = nil
@@ -115,7 +115,7 @@ struct AssistantTextButton: View {
         Button(role: role, action: action) {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(role == .destructive ? WMPalette.terracotta : Color.wmMuted(scheme))
+                .foregroundStyle(role == .destructive ? SCPalette.terracotta : Color.scMuted(scheme))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
                 .contentShape(Rectangle())
@@ -136,7 +136,7 @@ struct AssistantSectionLabel: View {
             .font(.system(size: 11, weight: .bold))
             .tracking(0.6)
             .textCase(.uppercase)
-            .foregroundStyle(color ?? Color.wmMuted(scheme))
+            .foregroundStyle(color ?? Color.scMuted(scheme))
     }
 }
 
@@ -159,24 +159,24 @@ struct AssistantExampleBubble: View {
                         .font(.system(size: 13.5))
                         .tracking(-0.2)
                         .lineSpacing(2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     if onTap != nil {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 12, weight: .heavy))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                     }
                 }
                 .padding(.horizontal, 13)
                 .padding(.vertical, 8)
                 .background(
                     UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6, topTrailingRadius: 18, style: .continuous)
-                        .fill(Color.wmAccentTint(scheme))
+                        .fill(Color.scAccentTint(scheme))
                 )
                 .overlay(
                     UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6, topTrailingRadius: 18, style: .continuous)
-                        .stroke(WMPalette.terracotta.opacity(0.25), lineWidth: 1)
+                        .stroke(SCPalette.terracotta.opacity(0.25), lineWidth: 1)
                 )
                 .frame(maxWidth: 260, alignment: .trailing)
             }
@@ -210,7 +210,7 @@ struct AssistantExchangePreview: View {
                     Text(reply)
                         .font(.system(size: 14))
                         .lineSpacing(3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
@@ -361,8 +361,8 @@ struct AssistantThumb: View {
     private func mini<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.wmInsetSurface(scheme)))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scInsetSurface(scheme)))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
             .accessibilityElement(children: .combine)
     }
 
@@ -373,17 +373,17 @@ struct AssistantThumb: View {
                     .font(.system(size: 13, weight: .bold))
                     .tracking(0.6)
                     .textCase(.uppercase)
-                    .foregroundStyle(color ?? WMPalette.terracotta)
+                    .foregroundStyle(color ?? SCPalette.terracotta)
                 Text(title)
                     .font(.system(size: 14, weight: .bold))
                     .tracking(-0.2)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
             }
             Spacer(minLength: 0)
             if let right {
                 Text(right)
                     .font(.system(size: 13.5))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
         }
         .padding(.horizontal, 14)
@@ -396,20 +396,20 @@ struct AssistantThumb: View {
             if let left {
                 Text(left)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .frame(width: 34, alignment: .leading)
             }
             Text(middle)
                 .font(.system(size: 13))
                 .strikethrough(strike)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
             Spacer(minLength: 4)
             if let right {
                 Text(right)
                     .font(.system(size: 13))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
         }
         .padding(.horizontal, 14)
@@ -420,11 +420,11 @@ struct AssistantThumb: View {
     private func bar(_ fraction: Double, color: Color, target: Double? = nil) -> some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.wmBarTrack(scheme))
+                Capsule().fill(Color.scBarTrack(scheme))
                 Capsule().fill(color).frame(width: geometry.size.width * min(1, fraction))
                 if let target {
                     Rectangle()
-                        .fill(Color.wmLabel(scheme))
+                        .fill(Color.scLabel(scheme))
                         .frame(width: 2, height: 12)
                         .offset(x: geometry.size.width * min(1, target) - 1)
                 }
@@ -433,19 +433,19 @@ struct AssistantThumb: View {
         .frame(height: 7)
     }
 
-    private func foot(primary: String = "Dodaj do planu", ghost: String = "Zmień", tone: Color = WMPalette.terracotta) -> some View {
+    private func foot(primary: String = "Dodaj do planu", ghost: String = "Zmień", tone: Color = SCPalette.terracotta) -> some View {
         HStack(spacing: 6) {
             Text(ghost)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .padding(.horizontal, 11)
                 .frame(height: 36)
-                .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
             HStack(spacing: 5) {
                 Image(systemName: "plus").font(.system(size: 13, weight: .heavy))
                 Text(primary).font(.system(size: 13, weight: .bold))
             }
-            .foregroundStyle(Color.wmPageBase(scheme))
+            .foregroundStyle(Color.scPageBase(scheme))
             .frame(maxWidth: .infinity)
             .frame(height: 36)
             .background(Capsule().fill(tone))
@@ -453,21 +453,21 @@ struct AssistantThumb: View {
         .padding(.horizontal, 12)
         .padding(.top, 13)
         .padding(.bottom, 12)
-        .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+        .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
     }
 
     private func chip(_ text: String, accent: Bool = false) -> some View {
         Text(text)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(accent ? WMPalette.terracotta : Color.wmMuted(scheme))
+            .foregroundStyle(accent ? SCPalette.terracotta : Color.scMuted(scheme))
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
-            .background(Capsule().fill(accent ? Color.wmAccentTint(scheme) : Color.wmChipBg(scheme)))
+            .background(Capsule().fill(accent ? Color.scAccentTint(scheme) : Color.scChipBg(scheme)))
     }
 
     private func avatar(_ initial: String, _ color: Color, size: CGFloat = 24) -> some View {
         Circle().fill(color).frame(width: size, height: size)
-            .overlay(Text(initial).font(.system(size: size * 0.45, weight: .bold)).foregroundStyle(Color.wmPageBase(scheme)))
+            .overlay(Text(initial).font(.system(size: size * 0.45, weight: .bold)).foregroundStyle(Color.scPageBase(scheme)))
     }
 
     // ─── miniatury
@@ -478,9 +478,9 @@ struct AssistantThumb: View {
             head("Propozycja · Tydzień", "12–18 września · 14 posiłków", right: "cel 2 100 kcal/dzień")
             ForEach(Array(days), id: \.0) { d in row(d.0, d.1, "\(d.2) kcal") }
             VStack(alignment: .leading, spacing: 5) {
-                bar(0.96, color: WMPalette.sage, target: 1)
+                bar(0.96, color: SCPalette.sage, target: 1)
                 HStack { Text("Średnio 2 023 kcal"); Spacer(); Text("−77 do celu") }
-                    .font(.system(size: 13)).foregroundStyle(Color.wmMuted(scheme))
+                    .font(.system(size: 13)).foregroundStyle(Color.scMuted(scheme))
             }
             .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 4)
             foot()
@@ -495,9 +495,9 @@ struct AssistantThumb: View {
             row("Kol.", "Sałatka z jajkiem", "380")
             row("Prz.", "Jogurt z jagodami", "190")
             VStack(alignment: .leading, spacing: 5) {
-                bar(0.89, color: WMPalette.terracotta, target: 1)
-                HStack { Text("1 600 kcal"); Spacer(); Text("zostaje 200 do celu").foregroundStyle(WMPalette.sage).fontWeight(.semibold) }
-                    .font(.system(size: 13)).foregroundStyle(Color.wmMuted(scheme))
+                bar(0.89, color: SCPalette.terracotta, target: 1)
+                HStack { Text("1 600 kcal"); Spacer(); Text("zostaje 200 do celu").foregroundStyle(SCPalette.sage).fontWeight(.semibold) }
+                    .font(.system(size: 13)).foregroundStyle(Color.scMuted(scheme))
             }
             .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 4)
             foot()
@@ -512,7 +512,7 @@ struct AssistantThumb: View {
                 Image(systemName: "arrow.right").font(.system(size: 13, weight: .bold))
                 Text("powód: laktoza, 55 min")
             }
-            .font(.system(size: 11)).foregroundStyle(WMPalette.sage).padding(.horizontal, 14)
+            .font(.system(size: 11)).foregroundStyle(SCPalette.sage).padding(.horizontal, 14)
             row(nil, "Tofu z warzywami i ryżem", "640 kcal")
             HStack(spacing: 5) { chip("−25 min"); chip("−80 kcal"); chip("0 zł do dokupienia") }
                 .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 10)
@@ -524,25 +524,25 @@ struct AssistantThumb: View {
         mini {
             head("Makro · Białko", "Brakuje średnio 24 g dziennie")
             VStack(alignment: .leading, spacing: 5) {
-                bar(0.69, color: WMPalette.indigo, target: 1)
+                bar(0.69, color: SCPalette.indigo, target: 1)
                 HStack { Text("116 g / dzień"); Spacer(); Text("cel 140 g") }
-                    .font(.system(size: 13)).foregroundStyle(Color.wmMuted(scheme))
+                    .font(.system(size: 13)).foregroundStyle(Color.scMuted(scheme))
             }
             .padding(.horizontal, 14).padding(.top, 2).padding(.bottom, 10)
             ForEach([("Wt · kolacja", "+ jogurt grecki 200 g", "+18 g"), ("Czw · obiad", "zamień makaron na soczewicę", "+22 g")], id: \.0) { b in
                 HStack(spacing: 8) {
-                    Text(b.0).foregroundStyle(Color.wmMuted(scheme)).frame(width: 86, alignment: .leading)
-                    Text(b.1).lineLimit(1).foregroundStyle(Color.wmLabel(scheme))
+                    Text(b.0).foregroundStyle(Color.scMuted(scheme)).frame(width: 86, alignment: .leading)
+                    Text(b.1).lineLimit(1).foregroundStyle(Color.scLabel(scheme))
                     Spacer(minLength: 4)
-                    Text(b.2).fontWeight(.bold).foregroundStyle(WMPalette.indigo)
-                    Image(systemName: "arrow.up").font(.system(size: 13, weight: .bold)).foregroundStyle(WMPalette.indigo)
+                    Text(b.2).fontWeight(.bold).foregroundStyle(SCPalette.indigo)
+                    Image(systemName: "arrow.up").font(.system(size: 13, weight: .bold)).foregroundStyle(SCPalette.indigo)
                 }
                 .font(.system(size: 13))
                 .padding(.horizontal, 14).padding(.vertical, 7)
-                .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+                .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
             }
             Text("Stuknięcie wysyła pytanie o booster, nic nie zapisuje.")
-                .font(.system(size: 13)).foregroundStyle(Color.wmFaint(scheme))
+                .font(.system(size: 13)).foregroundStyle(Color.scFaint(scheme))
                 .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 12)
         }
     }
@@ -550,13 +550,13 @@ struct AssistantThumb: View {
     private var split: some View {
         mini {
             head("Podział · Piątek, obiad", "Jedna baza, dwie wersje")
-            ForEach([("M", WMPalette.terracotta, "Marek", "Pstrąg z warzywami", "640"), ("Z", WMPalette.indigo, "Zosia", "Pstrąg z warzywami · pół porcji", "380"), ("A", WMPalette.sage, "Ania", "Kurczak z warzywami · bez ryby", "610")], id: \.2) { p in
+            ForEach([("M", SCPalette.terracotta, "Marek", "Pstrąg z warzywami", "640"), ("Z", SCPalette.indigo, "Zosia", "Pstrąg z warzywami · pół porcji", "380"), ("A", SCPalette.sage, "Ania", "Kurczak z warzywami · bez ryby", "610")], id: \.2) { p in
                 HStack(spacing: 8) {
                     avatar(p.0, p.1)
-                    Text(p.2).fontWeight(.semibold).foregroundStyle(Color.wmLabel(scheme)).frame(width: 54, alignment: .leading)
-                    Text(p.3).lineLimit(1).foregroundStyle(Color.wmMuted(scheme))
+                    Text(p.2).fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme)).frame(width: 54, alignment: .leading)
+                    Text(p.3).lineLimit(1).foregroundStyle(Color.scMuted(scheme))
                     Spacer(minLength: 4)
-                    Text(p.4).monospacedDigit().foregroundStyle(Color.wmMuted(scheme))
+                    Text(p.4).monospacedDigit().foregroundStyle(Color.scMuted(scheme))
                 }
                 .font(.system(size: 13))
                 .padding(.horizontal, 14).padding(.vertical, 7)
@@ -571,16 +571,16 @@ struct AssistantThumb: View {
             ForEach(Array([("Omlet z pieczarkami i szpinakiem", "12 min · 410"), ("Tosty z awokado i jajkiem", "10 min · 460"), ("Sałatka z tuńczykiem", "8 min · 390")].enumerated()), id: \.offset) { i, o in
                 HStack(spacing: 8) {
                     Circle()
-                        .strokeBorder(i == 0 ? WMPalette.butter : Color.wmFaint(scheme), lineWidth: 1.5)
-                        .background(Circle().fill(i == 0 ? WMPalette.butter : Color.clear))
+                        .strokeBorder(i == 0 ? SCPalette.butter : Color.scFaint(scheme), lineWidth: 1.5)
+                        .background(Circle().fill(i == 0 ? SCPalette.butter : Color.clear))
                         .frame(width: 18, height: 18)
-                    Text(o.0).lineLimit(1).foregroundStyle(Color.wmLabel(scheme))
+                    Text(o.0).lineLimit(1).foregroundStyle(Color.scLabel(scheme))
                     Spacer(minLength: 4)
-                    Text(o.1).foregroundStyle(Color.wmMuted(scheme))
+                    Text(o.1).foregroundStyle(Color.scMuted(scheme))
                 }
                 .font(.system(size: 13))
                 .padding(.horizontal, 14).padding(.vertical, 7)
-                .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) } }
+                .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) } }
             }
             foot(primary: "Wybierz tę", ghost: "Inne")
         }
@@ -588,11 +588,11 @@ struct AssistantThumb: View {
 
     private var shopping: some View {
         mini {
-            head("Zakupy · Ten tydzień", "23 pozycje · 5 działów", right: "4 odhaczone", color: WMPalette.terracotta)
+            head("Zakupy · Ten tydzień", "23 pozycje · 5 działów", right: "4 odhaczone", color: SCPalette.terracotta)
             ForEach([("Warzywa i owoce", "cukinia 2 szt. · szpinak 200 g · cytryna"), ("Mięso i ryby", "indyk mielony 400 g · łosoś 2 × 150 g"), ("Nabiał", "jogurt grecki 400 g · tofu 300 g")], id: \.0) { d in
                 VStack(alignment: .leading, spacing: 2) {
-                    AssistantSectionLabel(text: d.0, color: WMPalette.sage).font(.system(size: 13, weight: .bold))
-                    Text(d.1).font(.system(size: 13)).foregroundStyle(Color.wmMuted(scheme)).lineLimit(1)
+                    AssistantSectionLabel(text: d.0, color: SCPalette.sage).font(.system(size: 13, weight: .bold))
+                    Text(d.1).font(.system(size: 13)).foregroundStyle(Color.scMuted(scheme)).lineLimit(1)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 7)
             }
@@ -600,9 +600,9 @@ struct AssistantThumb: View {
                 Image(systemName: "plus").font(.system(size: 13, weight: .heavy))
                 Text("Dodaj do listy zakupów").font(.system(size: 13, weight: .bold))
             }
-            .foregroundStyle(Color.wmPageBase(scheme))
+            .foregroundStyle(Color.scPageBase(scheme))
             .frame(maxWidth: .infinity).frame(height: 36)
-            .background(Capsule().fill(WMPalette.sage))
+            .background(Capsule().fill(SCPalette.sage))
             .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 12)
         }
     }
@@ -611,13 +611,13 @@ struct AssistantThumb: View {
         HStack(spacing: 6) {
             ForEach(Array([("Ten tydzień", true, false), ("Tylko ja", true, true), ("Cel 2 100 kcal", false, false)].enumerated()), id: \.offset) { _, c in
                 HStack(spacing: 5) {
-                    if c.2 { avatar("M", WMPalette.terracotta, size: 16) }
-                    Text(c.0).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.wmLabel(scheme))
-                    if c.1 { Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.wmFaint(scheme)) }
+                    if c.2 { avatar("M", SCPalette.terracotta, size: 16) }
+                    Text(c.0).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.scLabel(scheme))
+                    if c.1 { Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.scFaint(scheme)) }
                 }
                 .padding(.horizontal, 12).frame(height: 32)
-                .background(Capsule().fill(Color.wmChipBg(scheme)))
-                .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                .background(Capsule().fill(Color.scChipBg(scheme)))
+                .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
             }
         }
     }
@@ -625,7 +625,7 @@ struct AssistantThumb: View {
     private var clarify: some View {
         mini {
             Text("W piątek o 18:00 masz w kalendarzu trening. Kolacja przed nim czy po?")
-                .font(.system(size: 14)).lineSpacing(2).foregroundStyle(Color.wmLabel(scheme))
+                .font(.system(size: 14)).lineSpacing(2).foregroundStyle(Color.scLabel(scheme))
                 .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 10)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) { chip("Przed, lekka", accent: true); chip("Po, do 20 min", accent: true); chip("Pomiń kolację", accent: true) }
@@ -635,22 +635,22 @@ struct AssistantThumb: View {
 
     private var decide: some View {
         mini {
-            head("Zapisano · 14:02", "Kolacja we wtorek podmieniona", color: WMPalette.sage)
+            head("Zapisano · 14:02", "Kolacja we wtorek podmieniona", color: SCPalette.sage)
             VStack(alignment: .leading, spacing: 5) {
                 Label("Cofnij zapis możliwy jeszcze 23 h 40 min", systemImage: "arrow.uturn.backward")
                 Label("Propozycja ważna 3 dni od otrzymania", systemImage: "clock")
-                Label { Text("Plan zmieniony po propozycji → ") + Text("Przelicz na nowo").fontWeight(.bold).foregroundColor(Color.wmLabel(scheme)) } icon: { Image(systemName: "exclamationmark.triangle").foregroundStyle(WMPalette.butter) }
+                Label { Text("Plan zmieniony po propozycji → ") + Text("Przelicz na nowo").fontWeight(.bold).foregroundColor(Color.scLabel(scheme)) } icon: { Image(systemName: "exclamationmark.triangle").foregroundStyle(SCPalette.butter) }
             }
-            .font(.system(size: 13)).foregroundStyle(Color.wmMuted(scheme))
+            .font(.system(size: 13)).foregroundStyle(Color.scMuted(scheme))
             .padding(.horizontal, 14).padding(.top, 2).padding(.bottom, 10)
             HStack(spacing: 6) {
-                Label("Cofnij zapis", systemImage: "arrow.uturn.backward").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.wmLabel(scheme))
-                    .padding(.horizontal, 11).frame(height: 36).overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
-                Text("Otwórz plan").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.wmLabel(scheme))
-                    .frame(maxWidth: .infinity).frame(height: 36).overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                Label("Cofnij zapis", systemImage: "arrow.uturn.backward").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.scLabel(scheme))
+                    .padding(.horizontal, 11).frame(height: 36).overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                Text("Otwórz plan").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.scLabel(scheme))
+                    .frame(maxWidth: .infinity).frame(height: 36).overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
             }
             .padding(.horizontal, 12).padding(.top, 13).padding(.bottom, 12)
-            .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+            .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
         }
     }
 
@@ -658,13 +658,13 @@ struct AssistantThumb: View {
         HStack(spacing: 8) {
             ForEach([("Twoje pytanie", ["Popraw", "Zadaj jeszcze raz"]), ("Odpowiedź", ["Zgłoś odpowiedź", "Kopiuj"])], id: \.0) { g in
                 mini {
-                    Text(g.0).font(.system(size: 13, weight: .bold)).tracking(0.6).textCase(.uppercase).foregroundStyle(Color.wmFaint(scheme))
+                    Text(g.0).font(.system(size: 13, weight: .bold)).tracking(0.6).textCase(.uppercase).foregroundStyle(Color.scFaint(scheme))
                         .padding(.horizontal, 12).padding(.top, 13).padding(.bottom, 3)
                     ForEach(g.1, id: \.self) { m in
-                        Text(m).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.wmLabel(scheme))
+                        Text(m).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.scLabel(scheme))
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+                            .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
                     }
                 }
             }
@@ -674,11 +674,11 @@ struct AssistantThumb: View {
     private var limits: some View {
         mini {
             VStack(alignment: .leading, spacing: 6) {
-                HStack { Text("Wiadomości").fontWeight(.semibold).foregroundStyle(Color.wmLabel(scheme)); Spacer(); (Text("12").bold().foregroundColor(Color.wmLabel(scheme)) + Text(" z 200")).foregroundStyle(Color.wmMuted(scheme)) }.font(.system(size: 13.5))
-                bar(0.06, color: WMPalette.terracotta)
-                HStack { Text("Zapisane plany").fontWeight(.semibold).foregroundStyle(Color.wmLabel(scheme)); Spacer(); (Text("2").bold().foregroundColor(Color.wmLabel(scheme)) + Text(" z 30")).foregroundStyle(Color.wmMuted(scheme)) }.font(.system(size: 13.5)).padding(.top, 4)
-                bar(0.07, color: WMPalette.sage)
-                Text("Wspólne dla całego domu · odnowienie 1 października").font(.system(size: 13.5)).foregroundStyle(Color.wmFaint(scheme)).padding(.top, 2)
+                HStack { Text("Wiadomości").fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme)); Spacer(); (Text("12").bold().foregroundColor(Color.scLabel(scheme)) + Text(" z 200")).foregroundStyle(Color.scMuted(scheme)) }.font(.system(size: 13.5))
+                bar(0.06, color: SCPalette.terracotta)
+                HStack { Text("Zapisane plany").fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme)); Spacer(); (Text("2").bold().foregroundColor(Color.scLabel(scheme)) + Text(" z 30")).foregroundStyle(Color.scMuted(scheme)) }.font(.system(size: 13.5)).padding(.top, 4)
+                bar(0.07, color: SCPalette.sage)
+                Text("Wspólne dla całego domu · odnowienie 1 października").font(.system(size: 13.5)).foregroundStyle(Color.scFaint(scheme)).padding(.top, 2)
             }
             .padding(.horizontal, 14).padding(.vertical, 13)
         }

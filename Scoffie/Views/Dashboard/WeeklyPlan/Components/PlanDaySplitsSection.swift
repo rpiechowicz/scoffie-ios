@@ -90,16 +90,16 @@ struct PlanDaySplitsSection: View {
             HStack(spacing: 6) {
                 Image(systemName: "person.2.fill")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
 
                 Text("KAŻDY JE INACZEJ")
                     .font(.system(size: 10.5, weight: .bold))
                     .tracking(0.7)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
 
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
                 .frame(maxWidth: .infinity)
 
@@ -107,7 +107,7 @@ struct PlanDaySplitsSection: View {
                 Text(PolishPlural.meals(groups.count))
                     .font(.system(size: 10.5, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
             }
         }
     }
@@ -124,7 +124,7 @@ struct PlanDaySplitsSection: View {
                 personRow(slot: group.slot, row: row)
                     .overlay(alignment: .top) {
                         Rectangle()
-                            .fill(Color.wmTileStroke(scheme))
+                            .fill(Color.scTileStroke(scheme))
                             .frame(height: 1)
                     }
             }
@@ -133,7 +133,7 @@ struct PlanDaySplitsSection: View {
             LinearGradient(
                 colors: [
                     group.slot.cozyAccent.opacity(scheme == .dark ? 0.10 : 0.08),
-                    Color.wmTileBg(scheme)
+                    Color.scTileBg(scheme)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -142,7 +142,7 @@ struct PlanDaySplitsSection: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 
@@ -164,12 +164,12 @@ struct PlanDaySplitsSection: View {
             Text(group.slot.title.uppercased())
                 .font(.system(size: 11, weight: .bold))
                 .tracking(0.4)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             if let time = sessionStore.mealSlotSchedule.time(for: group.slot) {
                 Text("· \(time)")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
 
             Spacer(minLength: 4)
@@ -177,7 +177,7 @@ struct PlanDaySplitsSection: View {
             Text("\(group.rows.count) \(Self.variantsPlural(group.rows.count))".uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .tracking(0.4)
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -187,7 +187,7 @@ struct PlanDaySplitsSection: View {
         let meal = row.meal
         let named = members.filter { row.audience.contains($0.id) }
         let tint = named.first.map { HouseholdMemberStyle.color(for: $0.id, in: members) }
-            ?? Color.wmMuted(scheme)
+            ?? Color.scMuted(scheme)
 
         return HStack(spacing: 10) {
             if let first = named.first {
@@ -198,13 +198,13 @@ struct PlanDaySplitsSection: View {
                 Text(meal.recipe.name)
                     .font(.system(size: 13.5, weight: .semibold))
                     .tracking(-0.15)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 Text(metaLine(named: named, meal: meal))
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
             }
 
@@ -307,16 +307,16 @@ struct PlanDaySplitsSection: View {
         HStack(spacing: 12) {
             Image(systemName: hasAnyMeal ? "checkmark" : "calendar.badge.plus")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(WMPalette.sage.opacity(scheme == .dark ? 0.22 : 0.16)))
-                .overlay(Circle().stroke(WMPalette.sage.opacity(0.4), lineWidth: 1))
+                .background(Circle().fill(SCPalette.sage.opacity(scheme == .dark ? 0.22 : 0.16)))
+                .overlay(Circle().stroke(SCPalette.sage.opacity(0.4), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(hasAnyMeal ? "Wszyscy jedzą to samo" : "Nic jeszcze nie zaplanowane")
                     .font(.system(size: 13.5, weight: .bold))
                     .tracking(-0.15)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
 
                 Text(
                     hasAnyMeal
@@ -324,7 +324,7 @@ struct PlanDaySplitsSection: View {
                         : "Dodaj posiłek i wskaż, dla kogo jest"
                 )
                 .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -333,12 +333,12 @@ struct PlanDaySplitsSection: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(
-                    Color.wmTileStroke(scheme),
+                    Color.scTileStroke(scheme),
                     style: StrokeStyle(lineWidth: 1, dash: [5, 4])
                 )
         )

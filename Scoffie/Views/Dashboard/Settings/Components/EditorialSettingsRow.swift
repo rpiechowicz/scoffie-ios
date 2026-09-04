@@ -31,7 +31,7 @@ struct EditorialSettingsRow<Trailing: View>: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme))
+                    .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     // Indent matches the icon width + gap so the rule
                     // visually starts under the title, not the tile.
@@ -47,7 +47,7 @@ struct EditorialSettingsRow<Trailing: View>: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
                     .font(.system(size: 15.5, weight: .semibold))
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,7 +55,7 @@ struct EditorialSettingsRow<Trailing: View>: View {
             if let value, !value.isEmpty {
                 Text(value)
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
             }
 
@@ -98,8 +98,8 @@ struct EditorialSettingsChevron: View {
             .font(.system(size: 12, weight: .heavy))
             .foregroundStyle(
                 scheme == .dark
-                ? WMPalette.labelDark.opacity(0.35)
-                : WMPalette.labelLight.opacity(0.30)
+                ? SCPalette.labelDark.opacity(0.35)
+                : SCPalette.labelLight.opacity(0.30)
             )
     }
 }

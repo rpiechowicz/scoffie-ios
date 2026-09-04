@@ -35,11 +35,11 @@ struct AssistantReportSheet: View {
                     Text(message.text)
                         .font(.system(size: 13))
                         .lineLimit(4)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.wmTileBg(scheme)))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
 
                     EditorialSheetSectionLabel(title: "Co jest nie tak")
                     VStack(spacing: 0) {
@@ -51,15 +51,15 @@ struct AssistantReportSheet: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(item.title)
                                             .font(.system(size: 14.5, weight: .semibold))
-                                            .foregroundStyle(Color.wmLabel(scheme))
+                                            .foregroundStyle(Color.scLabel(scheme))
                                         Text(item.detail)
                                             .font(.system(size: 12.5))
-                                            .foregroundStyle(Color.wmMuted(scheme))
+                                            .foregroundStyle(Color.scMuted(scheme))
                                     }
                                     Spacer(minLength: 0)
                                     Image(systemName: reason == item.code ? "largecircle.fill.circle" : "circle")
                                         .font(.system(size: 18, weight: .semibold))
-                                        .foregroundStyle(reason == item.code ? WMPalette.terracotta : Color.wmTileStroke(scheme))
+                                        .foregroundStyle(reason == item.code ? SCPalette.terracotta : Color.scTileStroke(scheme))
                                 }
                                 .padding(14)
                                 .contentShape(Rectangle())
@@ -67,31 +67,31 @@ struct AssistantReportSheet: View {
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(reason == item.code ? [.isSelected] : [])
                             if index < Self.reasons.count - 1 {
-                                Rectangle().fill(Color.wmRule(scheme)).frame(height: 1)
+                                Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
                             }
                         }
                     }
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.wmTileBg(scheme)))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
 
                     EditorialSheetSectionLabel(title: "Komentarz (opcjonalnie)")
                     TextField("Co powinno być inaczej?", text: $comment, axis: .vertical)
                         .lineLimit(3...6)
                         .font(.system(size: 14.5))
                         .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.wmTileBg(scheme)))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
 
                     if let errorMessage {
                         Text(errorMessage)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(WMPalette.terracotta)
+                            .foregroundStyle(SCPalette.terracotta)
                     }
 
                     Button(action: submit) {
                         HStack(spacing: 8) {
                             if isSending {
-                                ProgressView().controlSize(.small).tint(Color.wmPageBase(scheme))
+                                ProgressView().controlSize(.small).tint(Color.scPageBase(scheme))
                             } else {
                                 Image(systemName: isDone ? "checkmark" : "flag.fill")
                                     .font(.system(size: 14, weight: .bold))
@@ -99,17 +99,17 @@ struct AssistantReportSheet: View {
                             Text(isDone ? "Zgłoszono" : "Wyślij zgłoszenie")
                                 .font(.system(size: 15, weight: .bold))
                         }
-                        .foregroundStyle(Color.wmPageBase(scheme))
+                        .foregroundStyle(Color.scPageBase(scheme))
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(Capsule().fill(isDone ? WMPalette.sage : WMPalette.terracotta))
+                        .background(Capsule().fill(isDone ? SCPalette.sage : SCPalette.terracotta))
                     }
                     .buttonStyle(.plain)
                     .disabled(isSending || isDone)
 
                     Text("Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 20)
@@ -118,7 +118,7 @@ struct AssistantReportSheet: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .background(WMPageBackground(scheme: scheme).ignoresSafeArea())
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)

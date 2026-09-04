@@ -30,7 +30,7 @@ extension TourStep {
             id: "plan",
             place: "Zakładce Plan",
             placeIcon: MenuConstans.Plan.icon,
-            accent: WMPalette.terracotta,
+            accent: SCPalette.terracotta,
             title: "Zaplanuj tydzień w pięć minut",
             summary: "Wybierz przepis, wskaż dzień i porę. Zmiana pojawia się u wszystkich domowników od razu.",
             points: [
@@ -44,7 +44,7 @@ extension TourStep {
             id: "recipes",
             place: "Zakładce Przepisy",
             placeIcon: MenuConstans.Recipes.icon,
-            accent: WMPalette.sage,
+            accent: SCPalette.sage,
             title: "Przepisy dopasowane do Was",
             summary: "Filtruj po czasie, diecie i kaloriach. Ulubione zostają pod ręką w osobnej kolekcji.",
             points: [
@@ -58,7 +58,7 @@ extension TourStep {
             id: "shopping",
             place: "Planie, pod koszykiem",
             placeIcon: MenuConstans.Products.icon,
-            accent: WMPalette.indigo,
+            accent: SCPalette.indigo,
             title: "Lista zakupów robi się sama",
             summary: "Z planu tygodnia składamy jedną listę, pogrupowaną po działach sklepu. Odhaczacie ją razem, na żywo.",
             points: [
@@ -72,7 +72,7 @@ extension TourStep {
             id: "assistant",
             place: "Zakładce Asystent",
             placeIcon: MenuConstans.Assistant.icon,
-            accent: WMPalette.butter,
+            accent: SCPalette.butter,
             title: "Zapytaj, gdy brakuje pomysłu",
             summary: "Napisz, na kiedy i ile masz czasu. Asystent zaproponuje plan albo podmianę jako kartę — dodajesz ją Ty, nic nie zapisuje się samo.",
             points: [
@@ -86,7 +86,7 @@ extension TourStep {
             id: "settings",
             place: "Ustawieniach",
             placeIcon: MenuConstans.Settings.icon,
-            accent: WMPalette.terracottaDeep,
+            accent: SCPalette.terracottaDeep,
             title: "Ustaw wszystko pod siebie",
             summary: "Cel kaloryczny, dieta, alergeny i pory posiłków — plan i przepisy dopasowują się do tych ustawień.",
             points: [

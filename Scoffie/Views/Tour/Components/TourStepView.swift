@@ -23,9 +23,9 @@ private struct TourPlaceChip: View {
 
             (
                 Text("Znajdziesz w ")
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                 + Text(place)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .fontWeight(.semibold)
             )
             .font(.system(size: 13))
@@ -34,8 +34,8 @@ private struct TourPlaceChip: View {
         .padding(.leading, 7)
         .padding(.trailing, 13)
         .padding(.vertical, 6)
-        .background(Capsule(style: .continuous).fill(Color.wmTileBg(scheme)))
-        .overlay(Capsule(style: .continuous).stroke(Color.wmCardStroke(scheme), lineWidth: 1))
+        .background(Capsule(style: .continuous).fill(Color.scTileBg(scheme)))
+        .overlay(Capsule(style: .continuous).stroke(Color.scCardStroke(scheme), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 }
@@ -71,7 +71,7 @@ private struct TourMedia: View {
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(Color.wmCardStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scCardStroke(scheme), lineWidth: 1)
             )
             .accessibilityHidden(true)
     }
@@ -102,13 +102,13 @@ struct TourStepView: View {
                         .font(.system(size: 27, weight: .bold))
                         .tracking(-0.4)
                         .lineSpacing(2)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(step.summary)
                         .font(.system(size: 15))
                         .lineSpacing(3)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 24)
@@ -119,10 +119,10 @@ struct TourStepView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 9) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 12, weight: .heavy))
-                                .foregroundStyle(WMPalette.terracotta)
+                                .foregroundStyle(SCPalette.terracotta)
                             Text(point)
                                 .font(.system(size: 13.5))
-                                .foregroundStyle(Color.wmLabel(scheme).opacity(0.9))
+                                .foregroundStyle(Color.scLabel(scheme).opacity(0.9))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -149,12 +149,12 @@ struct TourStepFooter: View {
             WelcomeStepper(step: index + 1, total: total)
 
             HStack(spacing: 10) {
-                WMSoftIconButton(
+                SCSoftIconButton(
                     systemName: "chevron.left",
                     accessibilityLabel: "Wstecz",
                     action: onBack
                 )
-                WMSoftButton(
+                SCSoftButton(
                     title: index == total - 1 ? "Poznajmy się" : "Dalej",
                     action: onNext
                 )

@@ -43,16 +43,16 @@ struct WelcomeStepHeader: View {
                 Text(eyebrow.uppercased())
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.2)
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
 
                 Text(title)
                     .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(Color.wmLabel(colorScheme))
+                    .foregroundStyle(Color.scLabel(colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(subtitle)
                     .font(.system(size: 15))
-                    .foregroundStyle(Color.wmMuted(colorScheme))
+                    .foregroundStyle(Color.scMuted(colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -63,7 +63,7 @@ struct WelcomeStepHeader: View {
     VStack(alignment: .leading, spacing: 32) {
         WelcomeStepHeader(
             icon: "person.fill",
-            accent: WMPalette.terracotta,
+            accent: SCPalette.terracotta,
             eyebrow: "Witaj w Scoffie",
             title: "Zacznijmy od Ciebie",
             subtitle: "Te dane pomogą nam dopasować propozycje. Zmienisz je później w ustawieniach."
@@ -71,6 +71,6 @@ struct WelcomeStepHeader: View {
     }
     .padding(24)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(WMPalette.canvasDark)
+    .background(SCPalette.canvasDark)
     .preferredColorScheme(.dark)
 }

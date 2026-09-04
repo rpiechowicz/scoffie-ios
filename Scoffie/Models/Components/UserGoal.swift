@@ -58,11 +58,11 @@ enum UserGoal: String, CaseIterable, Identifiable {
 
     var accent: Color {
         switch self {
-        case .healthy:  return WMPalette.sage
-        case .lose:     return WMPalette.terracotta
-        case .gain:     return WMPalette.butter
-        case .maintain: return WMPalette.indigo
-        case .plan:     return WMPalette.terracotta
+        case .healthy:  return SCPalette.sage
+        case .lose:     return SCPalette.terracotta
+        case .gain:     return SCPalette.butter
+        case .maintain: return SCPalette.indigo
+        case .plan:     return SCPalette.terracotta
         }
     }
 

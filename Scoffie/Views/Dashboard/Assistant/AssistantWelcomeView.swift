@@ -30,7 +30,7 @@ struct AssistantWelcomeView: View {
                     AssistantAIMark(size: 112)
                         .padding(.top, 54)
 
-                    AssistantSectionLabel(text: "Asystent AI", color: WMPalette.terracotta)
+                    AssistantSectionLabel(text: "Asystent AI", color: SCPalette.terracotta)
                         .padding(.top, 26)
 
                     Text("Poznaj\nasystenta")
@@ -38,7 +38,7 @@ struct AssistantWelcomeView: View {
                         .tracking(-1)
                         .lineSpacing(0)
                         .multilineTextAlignment(.center)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .padding(.top, 6)
 
                     Text("Układa plan tygodnia, podmienia dania i pilnuje alergenów całego domu. Każdą propozycję pokazuje jako kartę, którą zatwierdzasz Ty.")
@@ -46,7 +46,7 @@ struct AssistantWelcomeView: View {
                         .tracking(-0.2)
                         .lineSpacing(3)
                         .multilineTextAlignment(.center)
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .frame(maxWidth: 300)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10)
@@ -58,14 +58,14 @@ struct AssistantWelcomeView: View {
                     .padding(.top, 20)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, WMPageMetrics.horizontal)
+                .padding(.horizontal, SCPageMetrics.horizontal)
                 .padding(.bottom, 12)
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.hidden)
 
             AssistantStickyFooter {
-                WMSoftButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
+                SCSoftButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
                 if let onShowCapabilities {
                     AssistantTextButton(title: "Zobacz wszystko, co potrafi", action: onShowCapabilities)
                 }

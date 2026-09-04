@@ -120,10 +120,10 @@ enum BMICategory {
 
     var accent: Color {
         switch self {
-        case .underweight: return WMPalette.butter
-        case .healthy:     return WMPalette.sage
-        case .overweight:  return WMPalette.butter
-        case .obese:       return WMPalette.terracotta
+        case .underweight: return SCPalette.butter
+        case .healthy:     return SCPalette.sage
+        case .overweight:  return SCPalette.butter
+        case .obese:       return SCPalette.terracotta
         }
     }
 }

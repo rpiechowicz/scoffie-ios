@@ -11,24 +11,24 @@ struct AuthFooterView: View {
         VStack(spacing: 6) {
             Text("Kontynuując, akceptujesz")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.wmMuted(colorScheme))
+                .foregroundStyle(Color.scMuted(colorScheme))
 
             HStack(spacing: 4) {
                 Button("Warunki") { showTermsOfService = true }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
                     .underline()
-                    .foregroundStyle(Color.wmLabel(colorScheme))
+                    .foregroundStyle(Color.scLabel(colorScheme))
 
                 Text("oraz")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.wmMuted(colorScheme))
+                    .foregroundStyle(Color.scMuted(colorScheme))
 
                 Button("Politykę prywatności.") { showPrivacyPolicy = true }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
                     .underline()
-                    .foregroundStyle(Color.wmLabel(colorScheme))
+                    .foregroundStyle(Color.scLabel(colorScheme))
             }
         }
         .multilineTextAlignment(.center)
@@ -82,16 +82,16 @@ struct LegalDocumentSheet<Content: View>: View {
             }
             .scrollIndicators(.hidden)
             .scrollContentBackground(.hidden)
-            .background(Color.wmCanvas(colorScheme))
+            .background(Color.scCanvas(colorScheme))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.wmCanvas(colorScheme), for: .navigationBar)
+            .toolbarBackground(Color.scCanvas(colorScheme), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Zamknij") { dismiss() }
                         .fontWeight(.semibold)
-                        .tint(WMPalette.terracotta)
+                        .tint(SCPalette.terracotta)
                 }
             }
         }
@@ -111,36 +111,36 @@ private struct LegalHeaderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
-                WMSteamingBowlLogo(size: 44)
+                SCSteamingBowlLogo(size: 44)
                     .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Scoffie")
                         .font(.system(size: 16, weight: .heavy))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
 
                     Text("Wersja \(LegalDocMeta.version) · Obowiązuje od: \(LegalDocMeta.effectiveDate)")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                 }
             }
 
             Text(intro)
                 .font(.system(size: 13))
                 .lineSpacing(2.5)
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 }
@@ -158,7 +158,7 @@ private struct LegalSection<Content: View>: View {
     // Akcenty rotują jak wiersze w Ustawieniach — deterministycznie po
     // numerze sekcji, żeby kolory nie skakały między otwarciami.
     private static var accents: [Color] {
-        [WMPalette.terracotta, WMPalette.sage, WMPalette.indigo, WMPalette.butter]
+        [SCPalette.terracotta, SCPalette.sage, SCPalette.indigo, SCPalette.butter]
     }
 
     var body: some View {
@@ -172,24 +172,24 @@ private struct LegalSection<Content: View>: View {
                 Text("\(number). \(title)")
                     .font(.system(size: 15.5, weight: .semibold))
                     .tracking(-0.2)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             content()
                 .font(.system(size: 13))
                 .lineSpacing(2.5)
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 }
@@ -215,7 +215,7 @@ private struct LegalBullet: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Circle()
-                .fill(WMPalette.terracotta)
+                .fill(SCPalette.terracotta)
                 .frame(width: 5, height: 5)
                 .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
 

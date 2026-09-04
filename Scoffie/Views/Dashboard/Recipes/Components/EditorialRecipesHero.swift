@@ -13,7 +13,7 @@ import SwiftUI
 struct EditorialRecipesHero: View {
     let eyebrow: String
     let title: String
-    var accent: Color = WMPalette.terracotta
+    var accent: Color = SCPalette.terracotta
 
     @Environment(\.colorScheme) private var scheme
 
@@ -34,7 +34,7 @@ struct EditorialRecipesHero: View {
                 Text(title)
                     .font(.system(size: 28, weight: .bold))
                     .tracking(-0.5)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

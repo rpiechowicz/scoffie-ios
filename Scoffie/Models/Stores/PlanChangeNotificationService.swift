@@ -75,7 +75,7 @@ enum PlanChangeNotificationService {
     /// Czy backend potwierdził, że umie wysyłać pushe.
     ///
     /// Ustawiane przez `SessionStore` po `notifications:registerDevice`.
-    /// Statyczne, a nie przekazywane parametrem, bo pytają o to `WeeklyMealStore`
+    /// Statyczne, a nie przekazywane parametrem, bo pytają o to `MealCalendarStore`
     /// i `ShoppingListStore` — a one z założenia nie znają sesji ani jej
     /// preferencji. Domyślne `false` jest ostrożne: dopóki nie wiadomo, czy
     /// push dojedzie, lepiej pokazać powiadomienie lokalne niż nie pokazać

@@ -122,7 +122,7 @@ struct RecipeDetailView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             ScrollView {
@@ -291,7 +291,7 @@ struct RecipeDetailView: View {
     }
 
     private var bottomFade: some View {
-        // Matches the WMPageBackground base color at Y≈320 so the photo
+        // Matches the SCPageBackground base color at Y≈320 so the photo
         // melts into the canvas — no visible boundary line.
         let target = scheme == .dark
             ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255)
@@ -319,11 +319,11 @@ struct RecipeDetailView: View {
         return Button(action: { onToggleFavorite?() }) {
             Image(systemName: liked ? "heart.fill" : "heart")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(liked ? WMPalette.terracotta : Color.wmLabel(scheme))
+                .foregroundStyle(liked ? SCPalette.terracotta : Color.scLabel(scheme))
                 .frame(width: 44, height: 44)
                 .background {
                     if liked {
-                        Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.22))
+                        Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.22))
                     } else {
                         Circle()
                             .fill(.ultraThinMaterial)
@@ -332,7 +332,7 @@ struct RecipeDetailView: View {
                 }
                 .overlay(
                     Circle().stroke(
-                        liked ? WMPalette.terracotta.opacity(0.55) : glassStroke,
+                        liked ? SCPalette.terracotta.opacity(0.55) : glassStroke,
                         lineWidth: 1
                     )
                 )
@@ -348,7 +348,7 @@ struct RecipeDetailView: View {
         Button(action: { onClose?() }) {
             Image(systemName: "xmark")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 36, height: 36)
                 .background {
                     Circle()
@@ -378,7 +378,7 @@ struct RecipeDetailView: View {
             Text(recipe.name)
                 .font(.system(size: 30, weight: .heavy))
                 .tracking(-0.8)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(nil)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -386,7 +386,7 @@ struct RecipeDetailView: View {
             if !recipe.description.isEmpty {
                 Text(recipe.description)
                     .font(.system(size: 14.5))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -405,7 +405,7 @@ struct RecipeDetailView: View {
             EditorialSectionTitle(
                 title: "Porcje",
                 eyebrow: "Ile gotujesz",
-                accent: WMPalette.butter
+                accent: SCPalette.butter
             )
 
             VStack(alignment: .leading, spacing: 6) {
@@ -413,7 +413,7 @@ struct RecipeDetailView: View {
                     Text(PolishPlural.servings(servings))
                         .font(.system(size: 22, weight: .heavy))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .monospacedDigit()
                         .contentTransition(.numericText(value: Double(servings)))
                         .lineLimit(1)
@@ -421,7 +421,7 @@ struct RecipeDetailView: View {
 
                     Spacer(minLength: 8)
 
-                    WMStepper(
+                    SCStepper(
                         value: $servings,
                         range: Self.servingsRange,
                         accessibilityTitle: "Liczba porcji",
@@ -435,16 +435,16 @@ struct RecipeDetailView: View {
                 // gramatury składników są o połowę mniejsze niż w przepisie.
                 Text("Przepis bazowy: \(PolishPlural.servings(recipe.servings))")
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     .monospacedDigit()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.wmTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color.scTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
             .animation(.smooth(duration: 0.18), value: servings)
         }
@@ -456,7 +456,7 @@ struct RecipeDetailView: View {
             EditorialSectionTitle(
                 title: "Wartości odżywcze",
                 eyebrow: nil,
-                accent: WMPalette.terracotta
+                accent: SCPalette.terracotta
             )
 
             EditorialNutritionGrid(
@@ -474,7 +474,7 @@ struct RecipeDetailView: View {
             EditorialSectionTitle(
                 title: "Przygotowanie",
                 eyebrow: "Krok po kroku",
-                accent: WMPalette.sage
+                accent: SCPalette.sage
             )
 
             VStack(spacing: 0) {
@@ -487,10 +487,10 @@ struct RecipeDetailView: View {
                     )
                 }
             }
-            .background(Color.wmTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color.scTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -509,7 +509,7 @@ struct RecipeDetailView: View {
                 // porcji i CTA zostają na mianowniku — tam liczba stoi sama,
                 // bez przyimka.
                 eyebrow: "Na \(PolishPlural.servingsAccusative(servings))",
-                accent: WMPalette.indigo
+                accent: SCPalette.indigo
             )
 
             VStack(spacing: 0) {
@@ -520,10 +520,10 @@ struct RecipeDetailView: View {
                     )
                 }
             }
-            .background(Color.wmTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color.scTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -557,10 +557,10 @@ struct RecipeDetailView: View {
         .padding(.bottom, 8)
         .background(
             Rectangle()
-                .fill(Color.wmCanvas(scheme))
+                .fill(Color.scCanvas(scheme))
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(Color.wmRule(scheme))
+                        .fill(Color.scRule(scheme))
                         .frame(height: 1)
                 }
                 .ignoresSafeArea(edges: .bottom)
@@ -586,7 +586,7 @@ struct RecipeDetailView: View {
                     .font(.system(size: 12.5, weight: .semibold))
                     .lineLimit(2)
             }
-            .foregroundStyle(WMPalette.sage)
+            .foregroundStyle(SCPalette.sage)
             .frame(maxWidth: .infinity, alignment: .leading)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         } else if let thermomixError {
@@ -617,11 +617,11 @@ struct RecipeDetailView: View {
                     .tracking(-0.1)
                     .lineLimit(1)
             }
-            .foregroundStyle(WMPalette.terracotta)
+            .foregroundStyle(SCPalette.terracotta)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Capsule().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)))
-            .overlay(Capsule().stroke(WMPalette.terracotta.opacity(0.45), lineWidth: 1.2))
+            .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)))
+            .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.45), lineWidth: 1.2))
         }
         .buttonStyle(.plain)
         .disabled(!isPrimaryActionEnabled || isSavingServings)
@@ -651,7 +651,7 @@ struct RecipeDetailView: View {
                     if isSendingToThermomix {
                         ProgressView()
                             .controlSize(.small)
-                            .tint(WMPalette.sage)
+                            .tint(SCPalette.sage)
                     } else if showThermomixSuccess {
                         Image(systemName: "checkmark")
                             .font(.system(size: 13, weight: .heavy))
@@ -667,11 +667,11 @@ struct RecipeDetailView: View {
                     .tracking(-0.1)
                     .lineLimit(1)
             }
-            .foregroundStyle(WMPalette.sage)
+            .foregroundStyle(SCPalette.sage)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Capsule().fill(WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10)))
-            .overlay(Capsule().stroke(WMPalette.sage.opacity(0.45), lineWidth: 1.2))
+            .background(Capsule().fill(SCPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10)))
+            .overlay(Capsule().stroke(SCPalette.sage.opacity(0.45), lineWidth: 1.2))
         }
         .buttonStyle(.plain)
         .disabled(isSendingToThermomix)
@@ -776,7 +776,7 @@ struct RecipeDetailView: View {
         HStack(alignment: .center, spacing: 8) {
             Text("Pasuje też na")
                 .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(Color.wmFaint(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize()
 
             ScrollView(.horizontal) {
@@ -830,7 +830,7 @@ private struct EditorialEyebrowRow: View {
             }
 
             Rectangle()
-                .fill(Color.wmRule(scheme))
+                .fill(Color.scRule(scheme))
                 .frame(height: 1)
                 .frame(maxWidth: .infinity)
 
@@ -842,7 +842,7 @@ private struct EditorialEyebrowRow: View {
                     .tracking(0.8)
                     .monospacedDigit()
             }
-            .foregroundStyle(Color.wmMuted(scheme))
+            .foregroundStyle(Color.scMuted(scheme))
             // Bez tego HStack łamał „40 MIN" na dwie linie, gdy dwa chipy
             // zjadły szerokość — tekst jest ściśliwy, a kreska nie ma
             // minimalnej szerokości, więc to ona ma się kurczyć, nie czas.
@@ -859,7 +859,7 @@ private struct EditorialEyebrowRow: View {
     }
 
     private var thermomixPill: some View {
-        pill(icon: "cooktop.fill", text: "THERMOMIX", accent: WMPalette.sage)
+        pill(icon: "cooktop.fill", text: "THERMOMIX", accent: SCPalette.sage)
     }
 
     private func pill(icon: String, text: String, accent: Color) -> some View {
@@ -910,7 +910,7 @@ private struct EditorialSectionTitle: View {
                 Text(title)
                     .font(.system(size: 22, weight: .heavy))
                     .tracking(-0.3)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
             }
 
             Spacer(minLength: 0)
@@ -949,21 +949,21 @@ private struct EditorialNutritionGrid: View {
                         value: nutrition.protein,
                         unit: "g",
                         icon: "sparkles",
-                        accent: WMPalette.indigo
+                        accent: SCPalette.indigo
                     )
                     EditorialMacroTile(
                         label: "Węglowodany",
                         value: nutrition.carbs,
                         unit: "g",
                         icon: "leaf.fill",
-                        accent: WMPalette.sage
+                        accent: SCPalette.sage
                     )
                     EditorialMacroTile(
                         label: "Tłuszcze",
                         value: nutrition.fat,
                         unit: "g",
                         icon: "drop.fill",
-                        accent: WMPalette.terracottaDeep
+                        accent: SCPalette.terracottaDeep
                     )
                 }
                 .frame(width: smallW, height: 168)
@@ -988,7 +988,7 @@ private struct EditorialKcalTile: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let accent = WMPalette.terracotta
+        let accent = SCPalette.terracotta
         let formatted = RecipeDetailFormat.integer(value)
 
         VStack(alignment: .leading, spacing: 0) {
@@ -1020,7 +1020,7 @@ private struct EditorialKcalTile: View {
                 Text(formatted)
                     .font(.system(size: 44, weight: .heavy))
                     .tracking(-1.4)
-                    .foregroundStyle(Color.wmLabel(scheme))
+                    .foregroundStyle(Color.scLabel(scheme))
                     .monospacedDigit()
                     // Zapas skalowania zszedł z 0.7 do 0.5, bo stepper porcji
                     // dowozi tu teraz pięć cyfr z separatorem tysięcy
@@ -1033,7 +1033,7 @@ private struct EditorialKcalTile: View {
 
                 Text("kcal")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     // Jednostka nie negocjuje o miejsce: bez `fixedSize` HStack
                     // rozkłada deficyt szerokości na oba teksty i przy pięciu
                     // cyfrach urywa „kcal" do „kc…", zamiast oddać całe zwężenie
@@ -1045,7 +1045,7 @@ private struct EditorialKcalTile: View {
             if let perServing {
                 Text("\(RecipeDetailFormat.integer(perServing)) kcal / porcja")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -1144,7 +1144,7 @@ private struct EditorialMacroTile: View {
                 Text(label.uppercased())
                     .font(.system(size: 9, weight: .heavy))
                     .tracking(0.5)
-                    .foregroundStyle(Color.wmMuted(scheme))
+                    .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .allowsTightening(true)
                     .minimumScaleFactor(0.7)
@@ -1153,7 +1153,7 @@ private struct EditorialMacroTile: View {
                     Text(RecipeDetailFormat.macro(value))
                         .font(.system(size: 16, weight: .heavy))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .monospacedDigit()
                         // Kafel makra jest o połowę węższy od kalorycznego,
                         // a stepper porcji potrafi zrobić z „30" cztery cyfry
@@ -1163,7 +1163,7 @@ private struct EditorialMacroTile: View {
                         .contentTransition(.numericText(value: value))
                     Text(unit)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         // Ten sam powód, co przy „kcal": kafel makra jest
                         // węższy, więc urwane „g" pokazałoby się tu jeszcze
                         // wcześniej. Całe zwężenie ma iść w liczbę obok.
@@ -1180,11 +1180,11 @@ private struct EditorialMacroTile: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.wmTileBg(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 }
@@ -1202,17 +1202,17 @@ private struct EditorialStepRow: View {
         HStack(alignment: .top, spacing: 14) {
             Text("\(index)")
                 .font(.system(size: 13, weight: .heavy))
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(SCPalette.sage)
                 .monospacedDigit()
                 .frame(width: 30, height: 30)
                 .overlay(
                     Circle()
-                        .stroke(WMPalette.sage.opacity(scheme == .dark ? 0.55 : 0.40), lineWidth: 1.5)
+                        .stroke(SCPalette.sage.opacity(scheme == .dark ? 0.55 : 0.40), lineWidth: 1.5)
                 )
 
             Text(text)
                 .font(.system(size: 14.5))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineSpacing(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 5)
@@ -1222,7 +1222,7 @@ private struct EditorialStepRow: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme).opacity(0.6))
+                    .fill(Color.scRule(scheme).opacity(0.6))
                     .frame(height: 1)
                     .padding(.horizontal, 16)
             }
@@ -1240,14 +1240,14 @@ private struct EditorialIngredientRow: View {
         HStack(alignment: .center, spacing: 12) {
             Text(RecipeDetailFormat.ingredientName(ingredient.name))
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(2)
 
             Spacer(minLength: 8)
 
             Text(RecipeDetailFormat.ingredientAmount(ingredient))
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .monospacedDigit()
         }
         .padding(.horizontal, 16)
@@ -1255,7 +1255,7 @@ private struct EditorialIngredientRow: View {
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmRule(scheme).opacity(0.6))
+                    .fill(Color.scRule(scheme).opacity(0.6))
                     .frame(height: 1)
                     .padding(.horizontal, 16)
             }
@@ -1312,12 +1312,12 @@ private enum RecipeDetailPalette {
     /// in butter, lunch in sage, dinner in indigo across both screens.
     static func accent(for category: RecipesCategory) -> Color {
         switch category {
-        case .breakfast: return WMPalette.butter
-        case .lunch:     return WMPalette.sage
-        case .dinner:    return WMPalette.indigo
-        case .snacks:    return WMPalette.terracotta
-        case .favourite: return WMPalette.terracotta
-        case .all:       return WMPalette.terracotta
+        case .breakfast: return SCPalette.butter
+        case .lunch:     return SCPalette.sage
+        case .dinner:    return SCPalette.indigo
+        case .snacks:    return SCPalette.terracotta
+        case .favourite: return SCPalette.terracotta
+        case .all:       return SCPalette.terracotta
         }
     }
 }

@@ -72,14 +72,14 @@ struct PlanProfileChip: View {
 
             Image(systemName: "chevron.down")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
         }
         .padding(.leading, 7)
         .padding(.trailing, 9)
         // 6pt → wysokość 38pt, tyle co `EditorialIconButton` obok.
         .padding(.vertical, 6)
-        .background(Capsule().fill(Color.wmTileBg(scheme)))
-        .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+        .background(Capsule().fill(Color.scTileBg(scheme)))
+        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
     }
 
     private var houseAvatar: some View {
@@ -89,7 +89,7 @@ struct PlanProfileChip: View {
             .frame(width: 26, height: 26)
             .background(
                 LinearGradient(
-                    colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.22)],
+                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.22)],
                     startPoint: .top,
                     endPoint: .bottom
                 ),

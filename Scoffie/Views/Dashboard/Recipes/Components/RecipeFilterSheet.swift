@@ -3,8 +3,8 @@ import SwiftUI
 // Arkusz „Filtry” otwierany z przycisku obok wyszukiwarki na Przepisach.
 //
 // Chassis jak w pozostałych arkuszach v2 (Ustawienia, Produkty): warstwa
-// `WMPageBackground`, `EditorialSheetHeader` (eyebrow + tytuł + xmark),
-// karty `wmTileBg` z hairline'em `wmTileStroke`, chipy w terakocie.
+// `SCPageBackground`, `EditorialSheetHeader` (eyebrow + tytuł + xmark),
+// karty `scTileBg` z hairline'em `scTileStroke`, chipy w terakocie.
 //
 // Zmiany idą na kopię roboczą (`draft`) — dopiero „Pokaż przepisy” zapisuje
 // je do bindingu widoku. Dzięki temu zamknięcie arkusza gestem nie zostawia
@@ -34,7 +34,7 @@ struct RecipeFilterSheet: View {
 
     var body: some View {
         ZStack {
-            WMPageBackground(scheme: scheme)
+            SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -162,7 +162,7 @@ struct RecipeFilterSheet: View {
                 if draft.maxCaloriesPerServing != nil {
                     Text("Przepisy bez policzonych makr zostają na liście.")
                         .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(Color.wmFaint(scheme))
+                        .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -196,7 +196,7 @@ struct RecipeFilterSheet: View {
                         Text("Przepisy bez policzonych makr nie wchodzą.")
                     }
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -213,18 +213,18 @@ struct RecipeFilterSheet: View {
                 HStack(spacing: 12) {
                     Image(systemName: draft.favouritesOnly ? "heart.fill" : "heart")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
+                        .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Tylko ulubione")
                             .font(.system(size: 14.5, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
 
                         Text("Pokaż wyłącznie przepisy z serduszkiem")
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -246,18 +246,18 @@ struct RecipeFilterSheet: View {
                 HStack(spacing: 12) {
                     Image(systemName: "cooktop.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(WMPalette.sage)
+                        .foregroundStyle(SCPalette.sage)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(WMPalette.sage.opacity(scheme == .dark ? 0.20 : 0.12)))
+                        .background(Circle().fill(SCPalette.sage.opacity(scheme == .dark ? 0.20 : 0.12)))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Tylko przepisy na Thermomix")
                             .font(.system(size: 14.5, weight: .semibold))
-                            .foregroundStyle(Color.wmLabel(scheme))
+                            .foregroundStyle(Color.scLabel(scheme))
 
                         Text("Przepisy z odpowiednikiem w Cookidoo")
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.wmMuted(scheme))
+                            .foregroundStyle(Color.scMuted(scheme))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -281,11 +281,11 @@ struct RecipeFilterSheet: View {
                 Text("Wyczyść")
                     .font(.system(size: 14, weight: .bold))
                     .tracking(-0.1)
-                    .foregroundStyle(draft.isActive ? Color.wmLabel(scheme) : Color.wmFaint(scheme))
+                    .foregroundStyle(draft.isActive ? Color.scLabel(scheme) : Color.scFaint(scheme))
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
-                    .background(Capsule().fill(Color.wmChipBg(scheme)))
-                    .overlay(Capsule().stroke(Color.wmTileStroke(scheme), lineWidth: 1))
+                    .background(Capsule().fill(Color.scChipBg(scheme)))
+                    .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .disabled(!draft.isActive)
@@ -303,14 +303,14 @@ struct RecipeFilterSheet: View {
                     .background(
                         Capsule().fill(
                             LinearGradient(
-                                colors: [WMPalette.terracotta, WMPalette.terracotta.mix(black: 0.18)],
+                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                     )
                     .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-                    .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
+                    .shadow(color: SCPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
             }
             .buttonStyle(.plain)
         }
@@ -319,10 +319,10 @@ struct RecipeFilterSheet: View {
         .padding(.bottom, 8)
         .background(
             Rectangle()
-                .fill(Color.wmCanvas(scheme).opacity(0.94))
+                .fill(Color.scCanvas(scheme).opacity(0.94))
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(Color.wmRule(scheme))
+                        .fill(Color.scRule(scheme))
                         .frame(height: 1)
                 }
                 .ignoresSafeArea(edges: .bottom)
@@ -362,11 +362,11 @@ struct RecipeFilterSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.wmTileBg(scheme))
+                        .fill(Color.scTileBg(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.wmTileStroke(scheme), lineWidth: 1)
+                        .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                 )
         }
     }
@@ -375,11 +375,11 @@ struct RecipeFilterSheet: View {
 // MARK: - Chip
 
 // Zaznaczony chip dostaje pełny akcent (gradient + biały tekst), niezaznaczony
-// siedzi na `wmChipBg` — ten sam język co chipy alergenów w Ustawieniach.
+// siedzi na `scChipBg` — ten sam język co chipy alergenów w Ustawieniach.
 struct RecipeFilterChip: View {
     let title: String
     var icon: String? = nil
-    var accent: Color = WMPalette.terracotta
+    var accent: Color = SCPalette.terracotta
     let isSelected: Bool
     let action: () -> Void
 
@@ -398,7 +398,7 @@ struct RecipeFilterChip: View {
                     .tracking(-0.1)
                     .lineLimit(1)
             }
-            .foregroundStyle(isSelected ? .white : Color.wmLabel(scheme))
+            .foregroundStyle(isSelected ? .white : Color.scLabel(scheme))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
@@ -411,12 +411,12 @@ struct RecipeFilterChip: View {
                                 endPoint: .bottom
                             )
                         )
-                        : AnyShapeStyle(Color.wmChipBg(scheme))
+                        : AnyShapeStyle(Color.scChipBg(scheme))
                 )
             )
             .overlay(
                 Capsule().stroke(
-                    isSelected ? accent.opacity(0.35) : Color.wmTileStroke(scheme),
+                    isSelected ? accent.opacity(0.35) : Color.scTileStroke(scheme),
                     lineWidth: 1
                 )
             )
@@ -448,7 +448,7 @@ struct RecipeFilterToggleIndicator: View {
 
     var body: some View {
         Capsule()
-            .fill(isOn ? AnyShapeStyle(WMPalette.terracotta) : AnyShapeStyle(Color.wmBarTrack(scheme)))
+            .fill(isOn ? AnyShapeStyle(SCPalette.terracotta) : AnyShapeStyle(Color.scBarTrack(scheme)))
             .frame(width: 44, height: 26)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()

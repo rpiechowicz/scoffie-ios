@@ -26,7 +26,7 @@ struct EditorialRecipeRow: View {
                     Text(recipe.name)
                         .font(.system(size: 17, weight: .semibold))
                         .tracking(-0.3)
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -34,7 +34,7 @@ struct EditorialRecipeRow: View {
                     Text(metaText)
                         .font(.system(size: 12, weight: .medium))
                         .monospacedDigit()
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,20 +45,20 @@ struct EditorialRecipeRow: View {
                 if recipe.isThermomix {
                     Image(systemName: "cooktop.fill")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(WMPalette.sage)
+                        .foregroundStyle(SCPalette.sage)
                         .accessibilityLabel("Przepis na Thermomix")
                 }
 
                 if recipe.favourite {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .accessibilityHidden(true)
                 }
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(Color.wmFaint(scheme))
+                    .foregroundStyle(Color.scFaint(scheme))
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
@@ -112,7 +112,7 @@ struct EditorialRecipeCover: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.wmTileStroke(scheme), lineWidth: 1)
+                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 

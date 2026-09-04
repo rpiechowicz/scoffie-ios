@@ -3,18 +3,18 @@ import SwiftUI
 /// Wspólna podłoga wszystkich trzech ekranów przewodnika: kremowe/ciemne
 /// tło z ciepłą poświatą u góry.
 ///
-/// Poświata jest tu, a nie w `WMPageBackground`, bo tamta wersja startuje
-/// od `wmPageBase` (o pół tonu ciemniejszego od canvasu) i pod pełną
+/// Poświata jest tu, a nie w `SCPageBackground`, bo tamta wersja startuje
+/// od `scPageBase` (o pół tonu ciemniejszego od canvasu) i pod pełną
 /// stroną bez nagłówka robiła widoczny szew przy dolnej krawędzi.
 struct TourBackground: View {
     let scheme: ColorScheme
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.wmCanvas(scheme)
+            Color.scCanvas(scheme)
             RadialGradient(
                 colors: [
-                    WMPalette.terracotta.opacity(scheme == .dark ? 0.24 : 0.16),
+                    SCPalette.terracotta.opacity(scheme == .dark ? 0.24 : 0.16),
                     .clear,
                 ],
                 center: .top,
@@ -86,11 +86,11 @@ struct TourFeatureRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     Text(subtitle)
                         .font(.system(size: 12.5))
-                        .foregroundStyle(Color.wmMuted(scheme))
+                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -100,7 +100,7 @@ struct TourFeatureRow: View {
 
             if !isLast {
                 Rectangle()
-                    .fill(Color.wmCardStroke(scheme))
+                    .fill(Color.scCardStroke(scheme))
                     .frame(height: 1)
             }
         }

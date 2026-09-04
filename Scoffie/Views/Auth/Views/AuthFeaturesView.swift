@@ -27,16 +27,16 @@ struct AuthFeaturesView: View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Color.wmAccentTint(colorScheme))
+                    .fill(Color.scAccentTint(colorScheme))
                 Image(systemName: feature.symbol)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(WMPalette.terracotta)
+                    .foregroundStyle(SCPalette.terracotta)
             }
             .frame(width: 28, height: 28)
 
             Text(feature.text)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.wmLabel(colorScheme))
+                .foregroundStyle(Color.scLabel(colorScheme))
 
             Spacer(minLength: 0)
         }
@@ -44,7 +44,7 @@ struct AuthFeaturesView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.wmFeatureRowBg(colorScheme))
+                .fill(Color.scFeatureRowBg(colorScheme))
         )
     }
 }
@@ -52,13 +52,13 @@ struct AuthFeaturesView: View {
 #Preview("Dark") {
     AuthFeaturesView()
         .padding()
-        .background(Color.wmCanvas(.dark))
+        .background(Color.scCanvas(.dark))
         .preferredColorScheme(.dark)
 }
 
 #Preview("Light") {
     AuthFeaturesView()
         .padding()
-        .background(Color.wmCanvas(.light))
+        .background(Color.scCanvas(.light))
         .preferredColorScheme(.light)
 }

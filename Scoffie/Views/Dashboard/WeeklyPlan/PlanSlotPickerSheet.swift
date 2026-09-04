@@ -50,7 +50,7 @@ struct PlanSlotPickerSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.weeklyMealStore) private var mealStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
 
     // Te same klucze, co na widoku Przepisów. Bez nich wybór posiłku do planu
@@ -166,7 +166,7 @@ struct PlanSlotPickerSheet: View {
         NavigationStack {
             GeometryReader { proxy in
                 ZStack {
-                    WMPageBackground(scheme: scheme)
+                    SCPageBackground(scheme: scheme)
                         .ignoresSafeArea()
 
                     ScrollView {
@@ -261,7 +261,7 @@ struct PlanSlotPickerSheet: View {
             Text(editing == nil ? "Wybierz przepis" : "Zmień przepis")
                 .font(.system(size: 26, weight: .bold))
                 .tracking(-0.5)
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text(
                 members.count > 1
@@ -269,7 +269,7 @@ struct PlanSlotPickerSheet: View {
                     : "Jedno stuknięcie przypisuje przepis do tego dnia."
             )
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(Color.wmMuted(scheme))
+            .foregroundStyle(Color.scMuted(scheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -280,7 +280,7 @@ struct PlanSlotPickerSheet: View {
         } label: {
             Image(systemName: onlyFavourites ? "heart.fill" : "heart")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(onlyFavourites ? WMPalette.terracotta : Color.wmMuted(scheme))
+                .foregroundStyle(onlyFavourites ? SCPalette.terracotta : Color.scMuted(scheme))
         }
         .accessibilityLabel(onlyFavourites ? "Pokaż wszystkie przepisy" : "Pokaż tylko ulubione")
     }
@@ -316,17 +316,17 @@ struct PlanSlotPickerSheet: View {
 
             Spacer(minLength: 0)
         }
-        .foregroundStyle(WMPalette.sage.mix(black: 0.20))
+        .foregroundStyle(SCPalette.sage.mix(black: 0.20))
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(WMPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10))
+                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(WMPalette.sage.opacity(0.28), lineWidth: 1)
+                .stroke(SCPalette.sage.opacity(0.28), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
     }
@@ -358,17 +358,17 @@ struct PlanSlotPickerSheet: View {
             .font(.system(size: 12, weight: .bold))
             .buttonStyle(.plain)
         }
-        .foregroundStyle(WMPalette.terracotta)
+        .foregroundStyle(SCPalette.terracotta)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10))
+                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(WMPalette.terracotta.opacity(0.28), lineWidth: 1)
+                .stroke(SCPalette.terracotta.opacity(0.28), lineWidth: 1)
         )
     }
 
@@ -376,15 +376,15 @@ struct PlanSlotPickerSheet: View {
         VStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
 
             Text("Brak wyników")
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(Color.wmLabel(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
 
             Text(emptyStateHint)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.wmMuted(scheme))
+                .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
 
             if hiddenBySlotCount > 0 {
@@ -393,12 +393,12 @@ struct PlanSlotPickerSheet: View {
                 } label: {
                     Text("Pokaż wszystkie przepisy")
                         .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
+                        .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(WMPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10))
+                                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10))
                         )
                 }
                 .buttonStyle(.plain)

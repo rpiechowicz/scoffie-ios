@@ -70,6 +70,6 @@ Release versioning policy:
 
 ## Related backend docs
 
-- [Backend README](../weakly-meals-backend/README.md)
-- [`APNS_SETUP.md`](../weakly-meals-backend/APNS_SETUP.md)
-- [`DEPLOYMENT.md`](../weakly-meals-backend/DEPLOYMENT.md)
+- [Backend README](../scoffie-backend/README.md)
+- [`APNS_SETUP.md`](../scoffie-backend/APNS_SETUP.md)
+- [`DEPLOYMENT.md`](../scoffie-backend/DEPLOYMENT.md)

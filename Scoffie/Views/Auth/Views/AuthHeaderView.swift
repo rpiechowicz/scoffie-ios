@@ -10,7 +10,7 @@ struct AuthHeaderView: View {
             title
             Text("Plan posiłków, lista zakupów i zdrowe pomysły na cały tydzień — w jednej aplikacji.")
                 .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(Color.wmMuted(colorScheme))
+                .foregroundStyle(Color.scMuted(colorScheme))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -24,13 +24,13 @@ struct AuthHeaderView: View {
         (
             Text("Gotujcie ")
                 .font(.system(size: 32, weight: .bold))
-                .foregroundStyle(Color.wmLabel(colorScheme))
+                .foregroundStyle(Color.scLabel(colorScheme))
             + Text("razem")
                 .font(.system(size: 32, weight: .medium).italic())
-                .foregroundStyle(WMPalette.terracotta)
+                .foregroundStyle(SCPalette.terracotta)
             + Text(", planujcie raz.")
                 .font(.system(size: 32, weight: .bold))
-                .foregroundStyle(Color.wmLabel(colorScheme))
+                .foregroundStyle(Color.scLabel(colorScheme))
         )
         .lineSpacing(8)
         .fixedSize(horizontal: false, vertical: true)
@@ -40,13 +40,13 @@ struct AuthHeaderView: View {
 #Preview("Dark") {
     AuthHeaderView()
         .padding()
-        .background(Color.wmCanvas(.dark))
+        .background(Color.scCanvas(.dark))
         .preferredColorScheme(.dark)
 }
 
 #Preview("Light") {
     AuthHeaderView()
         .padding()
-        .background(Color.wmCanvas(.light))
+        .background(Color.scCanvas(.light))
         .preferredColorScheme(.light)
 }
