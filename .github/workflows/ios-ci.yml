@@ -54,6 +54,21 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks | grep iphonesimulator
 
+      # Runner macOS liczy się DZIESIĘCIOKROTNIE. Pobieranie zależności SPM od
+      # zera przy każdym biegu to około minuty realnego czasu, czyli dziesięć
+      # minut z rachunku — przy dwóch tysiącach minut miesięcznie w planie
+      # darmowym to nie jest drobiazg. Klucz na `Package.resolved`, więc cache
+      # unieważnia się dokładnie wtedy, gdy zmienia się wersja zależności.
+      - name: Cache zależności SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
       - name: Resolve Swift packages
         run: xcodebuild -resolvePackageDependencies -project "Scoffie.xcodeproj"
 
