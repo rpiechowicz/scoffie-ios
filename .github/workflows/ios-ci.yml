@@ -51,7 +51,7 @@ jobs:
           xcodebuild -showsdks | grep iphonesimulator
 
       - name: Resolve Swift packages
-        run: xcodebuild -resolvePackageDependencies -project "weekly meals.xcodeproj"
+        run: xcodebuild -resolvePackageDependencies -project "Scoffie.xcodeproj"
 
       - name: Build app
         run: |
@@ -59,8 +59,8 @@ jobs:
           # Avoid universal simulator binaries on arm64 runners.
           # Xcode 26.3 on GitHub Actions fails while lipo-ing preview dylibs for x86_64 + arm64.
           xcodebuild \
-            -project "weekly meals.xcodeproj" \
-            -scheme "weekly meals" \
+            -project "Scoffie.xcodeproj" \
+            -scheme "Scoffie" \
             -destination "generic/platform=iOS Simulator" \
             -sdk iphonesimulator \
             build \

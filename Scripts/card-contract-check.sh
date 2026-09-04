@@ -10,14 +10,14 @@
 #
 # Wzorzec (`Scripts/CardContract/main.swift`) trzyma odpowiedź serwera
 # dosłownie. Po zmianie kart w backendzie odśwież go:
-#   docker exec weeklymeals-api sh -c 'cd /app && npx tsx scripts/dump-card-fixtures.ts'
+#   docker exec scoffie-api sh -c 'cd /app && npx tsx scripts/dump-card-fixtures.ts'
 #
 # Uruchomienie:  sh Scripts/card-contract-check.sh
 set -e
 cd "$(dirname "$0")/.."
 OUT=$(mktemp -d)/cardcheck
 xcrun swiftc -o "$OUT" \
-  "weekly meals/Networking/Agent/AgentCardDTOs.swift" \
-  "weekly meals/Networking/Agent/AgentDTOs.swift" \
+  "Scoffie/Networking/Agent/AgentCardDTOs.swift" \
+  "Scoffie/Networking/Agent/AgentDTOs.swift" \
   "Scripts/CardContract/main.swift"
 "$OUT"

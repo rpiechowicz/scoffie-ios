@@ -1,4 +1,4 @@
-# Weekly Meals — iOS (SwiftUI)
+# Scoffie — iOS (SwiftUI)
 
 Aplikacja iOS dla backendu `rpiechowicz/weakly-meals-backend`. Pełny kontekst projektu,
 decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-stan.md`,
@@ -6,7 +6,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 
 ## Build i praca
 - Tylko Mac. Build bez Xcode GUI:
-  `xcodebuild -project "weekly meals.xcodeproj" -scheme "weekly meals" -destination "generic/platform=iOS Simulator" -sdk iphonesimulator build CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES ARCHS=arm64 EXCLUDED_ARCHS=x86_64`
+  `xcodebuild -project "Scoffie.xcodeproj" -scheme "Scoffie" -destination "generic/platform=iOS Simulator" -sdk iphonesimulator build CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES ARCHS=arm64 EXCLUDED_ARCHS=x86_64`
   (log do pliku, potem `grep -E "error:|BUILD (SUCCEEDED|FAILED)"`). Brak targetu testów — regresje
   sprawdza się ręcznie na telefonie; fizyczny iPhone łączy się po LAN IP Maca, nie `localhost`.
 - **Szybka kontrola typów bez pełnego builda (~30 s zamiast ~4 min)** — jedyny sposób, żeby
@@ -14,7 +14,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   inaczej przepuszcza błędy (patrz niżej):
   ```sh
   SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-  DD=~/Library/Developer/Xcode/DerivedData/weekly_meals-*/Build/Products/Debug-iphonesimulator
+  DD=~/Library/Developer/Xcode/DerivedData/Scoffie-*/Build/Products/Debug-iphonesimulator
   FEATURES="-D DEBUG -enable-testing -enable-bare-slash-regex \
     -enable-upcoming-feature DisableOutwardActorInference \
     -enable-upcoming-feature InferSendableFromCaptures \
@@ -22,7 +22,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
     -enable-upcoming-feature MemberImportVisibility \
     -enable-upcoming-feature InferIsolatedConformances \
     -enable-upcoming-feature NonisolatedNonsendingByDefault"
-  find "weekly meals" -name '*.swift' -exec xcrun swiftc -typecheck -sdk "$SDK" \
+  find Scoffie -name '*.swift' -exec xcrun swiftc -typecheck -sdk "$SDK" \
     -target arm64-apple-ios26.0-simulator -swift-version 5 \
     -Xfrontend -default-isolation=MainActor ${=FEATURES} \
     -I "$DD" -F "$DD" -F "$DD/PackageFrameworks" {} +
@@ -43,7 +43,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.
 - Repo leży w iCloud Desktop — pliki bywają „dataless”; gdy git/xcodebuild wisi przy 0 % CPU,
-  zmaterializuj: `find "weekly meals" -type f -exec cat {} + > /dev/null`.
+  zmaterializuj: `find Scoffie -type f -exec cat {} + > /dev/null`.
 - Gałęzie z `develop` po `git fetch --prune`, od razu `git push -u origin <gałąź>`; PR → `develop`
   → `main` → TestFlight (po stronie Rafała). Commity po polsku, `Co-Authored-By: Claude <noreply@anthropic.com>`.
 
