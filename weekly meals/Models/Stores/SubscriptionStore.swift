@@ -69,10 +69,12 @@ enum SubscriptionCatalog {
     static let identifiers = all.map(\.id)
     static let recommended = duet
 
-    /// Zakup przechodzi dopiero, gdy serwer umie zweryfikować transakcję
-    /// i nadać dostęp (App Store Server API). Do tego czasu ekran „Asystent
-    /// i plan" pokazuje ofertę i cenę, ale nie pobiera pieniędzy za nic.
-    static let purchasesEnabled = false
+    /// Lokalny bezpiecznik. Prawdziwą bramką jest `SubscriptionStore.
+    /// purchasesEnabled`, którą oddaje SERWER — dopóki backend nie ma klucza
+    /// do App Store Server API, przyjęcie pieniędzy skończyłoby się płatnością
+    /// bez nadanego dostępu. Ta stała pozwala wyłączyć zakupy z aplikacji
+    /// nawet wtedy, gdy serwer jest gotowy.
+    static let purchasesEnabled = true
 }
 
 /// StoreKit 2: produkty, zakup, przywracanie i nasłuch transakcji.
@@ -90,16 +92,39 @@ final class SubscriptionStore {
     private(set) var isLoadingProducts = false
     private(set) var isPurchasing = false
     private(set) var lastError: String?
+    /// Stan z serwera: czy zakupy są włączone i co ta osoba już ma.
+    private(set) var state: BillingStateDTO?
+
+    /// Czy wolno pobrać pieniądze. Decyduje SERWER, bo tylko on wie, czy umie
+    /// potwierdzić transakcję w App Store. Brak odpowiedzi = nie wolno.
+    var purchasesEnabled: Bool { state?.purchasesEnabled == true }
+
+    private let client: BillingAPIClient?
+    /// Identyfikator konta wkładany w transakcję (`appAccountToken`). Dzięki
+    /// niemu powiadomienie od Apple o subskrypcji, której serwer jeszcze nie
+    /// zna, da się przypisać do właściciela bez czekania na telefon.
+    private let accountToken: UUID?
 
     private var updatesTask: Task<Void, Never>?
 
-    init() {
+    init(client: BillingAPIClient? = nil, userId: String? = nil) {
+        self.client = client
+        self.accountToken = userId.flatMap(UUID.init(uuidString:))
         updatesTask = Task { [weak self] in
             for await result in Transaction.updates {
                 guard let self else { return }
                 await self.handle(result)
             }
         }
+    }
+
+    /// Stan subskrypcji i zgoda serwera na zakupy. Wołane przy każdym
+    /// otwarciu ekranu „Asystent i plan".
+    @discardableResult
+    func refreshState() async -> BillingStateDTO? {
+        guard let client else { return nil }
+        state = try? await client.state()
+        return state
     }
 
     func product(for plan: SubscriptionPlan) -> StoreKit.Product? {
@@ -121,13 +146,17 @@ final class SubscriptionStore {
     }
 
     func purchase(_ product: StoreKit.Product) async -> PurchaseOutcome {
-        guard SubscriptionCatalog.purchasesEnabled else {
+        guard purchasesEnabled else {
             return .failed("Zakupy pojawią się, gdy serwer zacznie potwierdzać płatności.")
         }
         isPurchasing = true
         defer { isPurchasing = false }
         do {
-            let result = try await product.purchase()
+            var options: Set<StoreKit.Product.PurchaseOption> = []
+            if let accountToken {
+                options.insert(.appAccountToken(accountToken))
+            }
+            let result = try await product.purchase(options: options)
             switch result {
             case let .success(verification):
                 await handle(verification)
@@ -154,11 +183,28 @@ final class SubscriptionStore {
         }
     }
 
+    /// Każda transakcja ze StoreKit — zakup, odnowienie, przywrócenie,
+    /// zatwierdzenie „Poproś o zakup".
+    ///
+    /// KOLEJNOŚĆ JEST WAŻNA: najpierw zgłoszenie serwerowi, dopiero potem
+    /// `finish()`. Domknięta transakcja nie wróci w `Transaction.updates`, więc
+    /// domknięcie przed zgłoszeniem zamienia awarię sieci w opłacony dostęp,
+    /// którego nikt nie włączył. Gdy zgłoszenie się nie uda, zostawiamy
+    /// transakcję otwartą — Apple przypomni o niej przy następnym starcie.
+    ///
+    /// Weryfikacji NIE robimy na telefonie: `.unverified` też zgłaszamy, bo
+    /// jedynym miejscem, które ma prawo rozstrzygać o podpisie, jest serwer
+    /// z łańcuchem do przypiętego korzenia Apple.
     private func handle(_ result: VerificationResult<Transaction>) async {
-        guard case let .verified(transaction) = result else { return }
-        // Zgłoszenie transakcji serwerowi (nadanie PRO gospodarstwu) dojdzie
-        // razem z weryfikacją po stronie backendu; do tego czasu transakcja
-        // jest tylko domykana, żeby nie wracała przy każdym starcie.
-        await transaction.finish()
+        guard let client else { return }
+        do {
+            _ = try await client.register(signedTransaction: result.jwsRepresentation)
+            await refreshState()
+            if case let .verified(transaction) = result {
+                await transaction.finish()
+            }
+        } catch {
+            lastError = "Nie udało się potwierdzić zakupu. Spróbujemy ponownie."
+        }
     }
 }

@@ -2,13 +2,12 @@ import SwiftUI
 
 /// Ustawienia → „Posiłki w planie".
 ///
-/// Odpowiada na jedno pytanie: **które** posiłki gospodarstwo planuje.
-/// O której się je, ustawia sąsiedni arkusz „Pory posiłków" — i to
-/// rozdzielenie nie jest kosmetyczne. Lista posiłków jedzie po WebSocket na
-/// backend i obowiązuje cały dom; godziny siedzą w `UserDefaults` tego
-/// telefonu. Dopóki obie rzeczy stały na jednym ekranie, arkusz musiał
-/// w stopce prostować sam siebie dwoma zdaniami, które sobie przeczyły.
-/// Teraz zasięg niesie nagłówek każdego z ekranów.
+/// Odpowiada na dwa pytania po kolei: **które** posiłki gospodarstwo planuje
+/// i **o której** się je. Drugie ma własny ekran, otwierany stąd — obie
+/// decyzje obowiązują cały dom, ale to osobne decyzje i osobne zapisy, więc
+/// mieszanie ich w jednej liście kończyło się stopką prostującą samą siebie.
+/// W Ustawieniach jest jeden wiersz, bo nikt nie szuka „pór posiłków" gdzie
+/// indziej niż przy „posiłkach w planie".
 ///
 /// Trzy decyzje projektowe:
 ///
@@ -32,6 +31,7 @@ struct MealSlotsSheet: View {
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.colorScheme) private var scheme
 
+    @State private var showTimes = false
     @State private var pendingDisable: MealSlot?
     @State private var errorMessage: String?
     /// Konfiguracja, której nie udało się zapisać — zasila „Spróbuj ponownie".
@@ -39,6 +39,17 @@ struct MealSlotsSheet: View {
     @State private var lastFailed: MealSlotConfiguration?
 
     private var configuration: MealSlotConfiguration { sessionStore.mealSlots }
+    private var mealTimesRowValue: String {
+        let schedule = sessionStore.mealSlotSchedule
+        guard !schedule.isDefault else { return "Domyślne" }
+
+        let times = sessionStore.mealSlots.enabled.compactMap { schedule.minutes(for: $0) }
+        guard let first = times.min(), let last = times.max(), first != last else {
+            return "Własne"
+        }
+        return "\(MealSlotSchedule.format(first)) – \(MealSlotSchedule.format(last))"
+    }
+
 
     var body: some View {
         // Liczone raz na przemalowanie: `plannedCount` przechodzi po całym
@@ -69,6 +80,21 @@ struct MealSlotsSheet: View {
                         }
                     }
 
+                    VStack(alignment: .leading, spacing: 10) {
+                        EditorialSheetSectionLabel(title: "Rozkład dnia")
+
+                        EditorialSettingsCardGroup {
+                            EditorialSettingsRow(
+                                icon: "clock.fill",
+                                iconColor: WMPalette.indigo,
+                                title: "Pory posiłków",
+                                value: mealTimesRowValue,
+                                isLast: true,
+                                action: { showTimes = true }
+                            )
+                        }
+                    }
+
                     introCard
                     saveStatus
 
@@ -83,6 +109,9 @@ struct MealSlotsSheet: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
+        }
+        .sheet(isPresented: $showTimes) {
+            MealTimesSheet { showTimes = false }
         }
         .alert(
             disableAlertTitle,

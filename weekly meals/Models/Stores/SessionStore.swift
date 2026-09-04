@@ -144,6 +144,11 @@ final class SessionStore {
     var consentStore: ConsentStore?
     /// „Pobierz moje dane" (`GET /me/export`).
     var dataExportClient: DataExportAPIClient?
+    /// Zakupy App Store. Żyje tak długo jak sesja, a nie tyle co ekran planu:
+    /// `Transaction.updates` przynosi odnowienia i zatwierdzone „Poproś
+    /// o zakup" w dowolnym momencie, a każda taka transakcja musi trafić na
+    /// serwer. Zamknięty ekran nie może tego przegapić.
+    var subscriptionStore: SubscriptionStore?
     var datesViewModel = DatesViewModel()
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
@@ -648,6 +653,10 @@ final class SessionStore {
         let consentStore = ConsentStore(client: ConsentsAPIClient(core: restCore))
         self.consentStore = consentStore
         self.dataExportClient = DataExportAPIClient(core: restCore)
+        self.subscriptionStore = SubscriptionStore(
+            client: BillingAPIClient(core: restCore),
+            userId: currentUserId
+        )
         // Stan zgód od razu: wiersz w Ustawieniach i bramka asystenta mają
         // wiedzieć, zanim ktoś stuknie.
         Task { @MainActor in
@@ -749,6 +758,7 @@ final class SessionStore {
         agentStore = nil
         consentStore = nil
         dataExportClient = nil
+        subscriptionStore = nil
         datesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil

@@ -25,7 +25,10 @@ struct PlanAccessSheet: View {
 
     @State private var usage: AgentUsageDTO?
     @State private var isLoading = true
-    @State private var subscriptions = SubscriptionStore()
+    /// Awaryjny egzemplarz na wypadek ekranu bez sesji — bez klienta, więc
+    /// niczego nie kupi. Normalnie używamy tego z `SessionStore`, bo tylko on
+    /// żyje wystarczająco długo, żeby złapać odnowienie subskrypcji.
+    @State private var fallbackSubscriptions = SubscriptionStore()
     @State private var selected = SubscriptionCatalog.recommended
     @State private var notice: String?
     @State private var showTerms = false
@@ -34,6 +37,10 @@ struct PlanAccessSheet: View {
     /// NIE `State` — ta nazwa wewnątrz `View` przesłania `SwiftUI.State`
     /// i psuje każde `@State` w tym typie.
     enum AccessState { case trial, paying, member, granted }
+
+    private var subscriptions: SubscriptionStore {
+        sessionStore.subscriptionStore ?? fallbackSubscriptions
+    }
 
     var body: some View {
         NavigationStack {
@@ -99,6 +106,10 @@ struct PlanAccessSheet: View {
         .task {
             usage = await sessionStore.agentStore?.loadUsage()
             isLoading = false
+            // Najpierw pytamy serwer, czy zakupy są w ogóle włączone —
+            // przycisk ma być nieaktywny, dopóki nie umiemy potwierdzić
+            // płatności, a nie dopiero po jej pobraniu.
+            await subscriptions.refreshState()
             await subscriptions.loadProducts()
         }
     }
@@ -409,14 +420,18 @@ struct PlanAccessSheet: View {
 
     // MARK: - Zakup
 
+    /// Zakup wolno zacząć dopiero, gdy SERWER potwierdzi, że umie
+    /// zweryfikować transakcję. Inaczej Apple pobrałoby pieniądze za dostęp,
+    /// którego nie mielibyśmy jak nadać.
     private var canPurchase: Bool {
         SubscriptionCatalog.purchasesEnabled
+            && subscriptions.purchasesEnabled
             && subscriptions.product(for: selected) != nil
             && !subscriptions.isPurchasing
     }
 
     private var purchaseTitle: String {
-        SubscriptionCatalog.purchasesEnabled ? "Wybierz plan" : "Zakupy wkrótce"
+        canPurchase ? "Wybierz plan" : "Zakupy wkrótce"
     }
 
     private func buy() {
