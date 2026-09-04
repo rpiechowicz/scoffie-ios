@@ -217,7 +217,7 @@ enum UserFacingErrorMapper {
         "BILLING_DISABLED": "Zakupy są chwilowo niedostępne. Nie pobraliśmy żadnej płatności.",
         "BILLING_IDENTITY_MISSING": "Subskrypcję można kupić po zalogowaniu przez Apple.",
         "BILLING_TRANSACTION_INVALID": "Nie udało się potwierdzić tego zakupu w App Store.",
-        "BILLING_TRANSACTION_UNKNOWN": "App Store nie zna tego zakupu. Spróbuj „Przywróć zakupy”.",
+        "BILLING_TRANSACTION_UNKNOWN": "App Store jeszcze nie widzi tego zakupu. Sprawdzimy ponownie za chwilę — zakup nie przepadnie.",
         "BILLING_TRANSACTION_TAKEN": "Ten zakup jest już przypisany do innego konta.",
         "BILLING_UPSTREAM_UNAVAILABLE": "App Store nie odpowiada. Spróbuj ponownie za chwilę — zakup nie przepadnie.",
         "BILLING_NOTIFICATION_INVALID": "Nie udało się potwierdzić powiadomienia o płatności.",
