@@ -221,6 +221,8 @@ enum UserFacingErrorMapper {
         "BILLING_TRANSACTION_TAKEN": "Ten zakup jest już przypisany do innego konta.",
         "BILLING_UPSTREAM_UNAVAILABLE": "App Store nie odpowiada. Spróbuj ponownie za chwilę — zakup nie przepadnie.",
         "BILLING_NOTIFICATION_INVALID": "Nie udało się potwierdzić powiadomienia o płatności.",
+        "BILLING_FAMILY_SHARING_UNSUPPORTED": "Ta subskrypcja jest udostępniona przez Chmurę Rodzinną. Żeby korzystać z asystenta, wybierz własny plan.",
+        "BILLING_ENVIRONMENT_MISMATCH": "Ten zakup pochodzi ze środowiska testowego App Store i nie daje dostępu w tej wersji aplikacji.",
     ]
 
     // MARK: - Pomocnicze

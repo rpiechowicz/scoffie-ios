@@ -103,6 +103,14 @@ struct PlanAccessSheet: View {
         .sheet(isPresented: $showPrivacy) {
             LegalDocumentSheet(title: "Polityka prywatności") { PrivacyPolicyContent() }
         }
+        .onChange(of: subscriptions.state) { _, _ in
+            // TRANSAKCJA POTRAFI DOJŚĆ, GDY ARKUSZ JEST OTWARTY: odnowienie,
+            // zatwierdzone „Poproś o zakup", zgłoszenie ponowione po powrocie
+            // sieci. `SubscriptionStore` odświeża wtedy swój stan sam, a ten
+            // ekran do tej poprawki został na danych sprzed zakupu — człowiek
+            // patrzył na „próba wyczerpana" mając już opłacony plan.
+            Task { usage = await sessionStore.agentStore?.loadUsage() }
+        }
         .task {
             usage = await sessionStore.agentStore?.loadUsage()
             isLoading = false
@@ -219,7 +227,30 @@ struct PlanAccessSheet: View {
             .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity)
             .padding(.top, 14)
+
+        // WARUNKI ODNOWIENIA MUSZĄ STAĆ PRZY PRZYCISKU ZAKUPU, a nie tylko w
+        // regulaminie — App Store 3.1.2 wymaga, żeby przed pobraniem pieniędzy
+        // widać było długość okresu, cenę, automatyczne odnawianie i miejsce,
+        // w którym się je wyłącza. Brak tego zdania to jedna z częstszych
+        // przyczyn odrzucenia aplikacji przy pierwszej recenzji.
+        Text(Self.renewalTerms)
+            .font(.system(size: 11.5))
+            .lineSpacing(2)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(Color.scFaint(scheme))
+            .frame(maxWidth: .infinity)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
+            .padding(.top, 10)
     }
+
+    /// Jedno miejsce na warunki odnowienia — powtórzone w regulaminie (sekcja 5)
+    /// i w opisie produktu w App Store Connect. Trzy kopie muszą się zgadzać.
+    private static let renewalTerms =
+        "Subskrypcja odnawia się automatycznie co miesiąc, dopóki jej nie anulujesz "
+        + "co najmniej 24 godziny przed końcem okresu. Opłatę pobiera Apple. "
+        + "Możesz zrezygnować w Ustawieniach iOS → Apple ID → Subskrypcje; "
+        + "usunięcie aplikacji nie anuluje subskrypcji."
 
     private func trialRing(title: String, quota: AgentQuotaDTO) -> some View {
         VStack(spacing: 9) {
@@ -283,6 +314,21 @@ struct PlanAccessSheet: View {
         PlanSectionLabel("Subskrypcja")
             .padding(.top, 20)
 
+        // CO SERWER MÓWI O TEJ SUBSKRYPCJI. Telefon pobierał ten stan i nie
+        // pokazywał z niego ANI JEDNEGO pola — więc nieudana płatność (łaska
+        // płatnicza), wyłączone odnawianie i ręczne odebranie dostępu przez
+        // obsługę były na tym ekranie niewidoczne. Człowiek dowiadywał się
+        // o nich dopiero wtedy, gdy asystent przestawał odpowiadać.
+        if let line = subscriptionStatusLine {
+            Text(line)
+                .font(.system(size: 12.5))
+                .lineSpacing(2)
+                .foregroundStyle(Color.scMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+        }
+
         AssistantSurfaceCard {
             Button {
                 if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
@@ -308,6 +354,56 @@ struct PlanAccessSheet: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// Jedno zdanie o subskrypcji tej osoby, złożone z tego, co oddaje serwer.
+    /// Kolejność jest kolejnością pilności: blokada obsługi, łaska płatnicza,
+    /// wyłączone odnawianie, zwykłe odnowienie.
+    private var subscriptionStatusLine: String? {
+        guard let sub = subscriptions.state?.subscriptions.first(where: { $0.alive })
+            ?? subscriptions.state?.subscriptions.first
+        else { return nil }
+
+        if let hold = sub.operatorHold {
+            return hold.isEmpty
+                ? "Dostęp został wstrzymany przez obsługę. Napisz do nas, żeby to wyjaśnić."
+                : "Dostęp został wstrzymany przez obsługę: \(hold)"
+        }
+        if let grace = Self.dayMonth(sub.graceExpiresAt), sub.status == "GRACE" {
+            return "Ostatnia płatność się nie powiodła. App Store spróbuje ponownie — asystent działa do \(grace)."
+        }
+        if sub.autoRenews == false, let end = Self.dayMonth(sub.expiresAt) {
+            return "Odnawianie jest wyłączone. Plan działa do \(end)."
+        }
+        if let end = Self.dayMonth(sub.expiresAt) {
+            return sub.alive
+                ? "Odnawia się \(end)."
+                : "Plan wygasł \(end)."
+        }
+        return nil
+    }
+
+    /// „3 października" z daty ISO od serwera; `nil`, gdy nie da się odczytać.
+    ///
+    /// `withFractionalSeconds` jest konieczne: serwer oddaje `toISOString()`,
+    /// czyli z milisekundami, a goły `ISO8601DateFormatter` zwraca wtedy `nil`
+    /// — zdanie o stanie subskrypcji po prostu by się nie pokazało.
+    private static let isoParser: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let dayMonthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "d MMMM"
+        return formatter
+    }()
+
+    private static func dayMonth(_ iso: String?) -> String? {
+        guard let iso, let date = isoParser.date(from: iso) else { return nil }
+        return dayMonthFormatter.string(from: date)
     }
 
     // MARK: - 3. Domownik
@@ -464,10 +560,15 @@ struct PlanAccessSheet: View {
         Task {
             switch await subscriptions.purchase(product) {
             case .purchased:
-                notice = "Dziękujemy! Plan włączy się, gdy serwer potwierdzi zakup."
+                // Serwer JUŻ potwierdził — inaczej nie byłoby `.purchased`.
+                notice = "Dziękujemy! Plan jest włączony."
                 usage = await sessionStore.agentStore?.loadUsage()
             case .pending:
-                notice = "Zakup czeka na zatwierdzenie."
+                // „Poproś o zakup" (Chmura Rodzinna) albo zgłoszenie, którego
+                // serwer chwilowo nie przyjął. Pieniądze mogły już pójść, więc
+                // nie mówimy „nie udało się".
+                notice = subscriptions.lastError
+                    ?? "Zakup czeka na zatwierdzenie. Plan włączy się sam, gdy przejdzie."
             case .cancelled:
                 notice = nil
             case let .failed(message):
