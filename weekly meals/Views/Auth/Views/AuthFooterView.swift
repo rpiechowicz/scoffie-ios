@@ -57,7 +57,7 @@ enum LegalDocMeta {
     static let version = "1.0"
     static let effectiveDate = "15 września 2026"
     static let documentVersionISO = "2026-09-15"
-    static let contactEmail = "support@weekly-meals.app"
+    static let contactEmail = "support@scoffie.app"
 }
 
 // MARK: - Reużywalny kontener sheeta (styl Cozy Kitchen jak w Ustawieniach)
@@ -115,7 +115,7 @@ private struct LegalHeaderCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Weekly Meals")
+                    Text("Scoffie")
                         .font(.system(size: 16, weight: .heavy))
                         .tracking(-0.3)
                         .foregroundStyle(Color.wmLabel(scheme))
@@ -235,12 +235,12 @@ private struct LegalBullet: View {
 struct PrivacyPolicyContent: View {
     var body: some View {
         LegalHeaderCard(
-            intro: "Dokument opisuje, jakie dane są przetwarzane w związku z korzystaniem z aplikacji mobilnej Weekly Meals, skąd pochodzą, komu są przekazywane, jak długo są przechowywane oraz jakie prawa przysługują użytkownikom."
+            intro: "Dokument opisuje, jakie dane są przetwarzane w związku z korzystaniem z aplikacji mobilnej Scoffie, skąd pochodzą, komu są przekazywane, jak długo są przechowywane oraz jakie prawa przysługują użytkownikom."
         )
 
         LegalSection(number: 1, title: "Administrator danych", icon: "person.crop.circle.badge.checkmark") {
             VStack(alignment: .leading, spacing: 6) {
-                LegalParagraph("Administratorem danych osobowych użytkowników aplikacji Weekly Meals („Aplikacja”) jest Rafał Piechowicz („Administrator”).")
+                LegalParagraph("Administratorem danych osobowych użytkowników aplikacji Scoffie („Aplikacja”) jest Rafał Piechowicz („Administrator”).")
                 LegalParagraph("Kontakt w sprawach dotyczących danych osobowych: \(LegalDocMeta.contactEmail)")
                     .fontWeight(.medium)
             }
@@ -398,7 +398,7 @@ struct PrivacyPolicyContent: View {
 
         LegalSection(number: 15, title: "Zmiany polityki", icon: "arrow.triangle.2.circlepath") {
             VStack(alignment: .leading, spacing: 6) {
-                LegalParagraph("Polityka może być aktualizowana w związku ze zmianami prawa lub funkcji Aplikacji. Istotne zmiany (nowy odbiorca danych, nowy cel) wymagają ponownego potwierdzenia w Aplikacji; o pozostałych informujemy w Aplikacji z wyprzedzeniem. Aktualna wersja jest publikowana na stronie weekly-meals.app.")
+                LegalParagraph("Polityka może być aktualizowana w związku ze zmianami prawa lub funkcji Aplikacji. Istotne zmiany (nowy odbiorca danych, nowy cel) wymagają ponownego potwierdzenia w Aplikacji; o pozostałych informujemy w Aplikacji z wyprzedzeniem. Aktualna wersja jest publikowana na stronie scoffie.app.")
                 LegalParagraph("W razie pytań napisz na \(LegalDocMeta.contactEmail).")
             }
         }
@@ -412,7 +412,7 @@ struct PrivacyPolicyContent: View {
 struct TermsOfServiceContent: View {
     var body: some View {
         LegalHeaderCard(
-            intro: "Niniejsze Warunki korzystania („Warunki”) określają zasady świadczenia usług drogą elektroniczną w aplikacji mobilnej Weekly Meals („Aplikacja”) oraz prawa i obowiązki użytkowników. Warunki stanowią regulamin w rozumieniu art. 8 ustawy z dnia 18 lipca 2002 r. o świadczeniu usług drogą elektroniczną."
+            intro: "Niniejsze Warunki korzystania („Warunki”) określają zasady świadczenia usług drogą elektroniczną w aplikacji mobilnej Scoffie („Aplikacja”) oraz prawa i obowiązki użytkowników. Warunki stanowią regulamin w rozumieniu art. 8 ustawy z dnia 18 lipca 2002 r. o świadczeniu usług drogą elektroniczną."
         )
 
         LegalSection(number: 1, title: "Postanowienia ogólne", icon: "doc.text.fill") {

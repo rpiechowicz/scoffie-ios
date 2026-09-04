@@ -256,7 +256,7 @@ struct ProductConstants {
 
     // Editorial "Cozy Kitchen" palette — every department maps to one of the
     // five WMPalette accents (sage / terracotta / terracottaDeep / butter /
-    // indigo). Source of truth: v2-design/Weekly Meals - Produkty.html
+    // indigo). Source of truth: v2-design/Scoffie - Produkty.html
     // (PROD_CATEGORIES + WM_TOKENS.accent).
     static func departmentColor(for department: String) -> Color {
         let d = department.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

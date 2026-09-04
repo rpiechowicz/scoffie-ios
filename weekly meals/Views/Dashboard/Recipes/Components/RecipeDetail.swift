@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Recipe detail v2 — "Szczegóły Posiłku" Cozy Kitchen variant F.
-// Source: design/Weekly Meals - Szczegoly Posilku.html (RecipeDetailF).
+// Source: design/Scoffie - Szczegoly Posilku.html (RecipeDetailF).
 //
 // Zdjęcie 320pt wtapia się w płótno strony (bez widocznego szwu na granicy),
 // serce wisi w lewym górnym rogu, a xmark w prawym — ten sam wzorzec co

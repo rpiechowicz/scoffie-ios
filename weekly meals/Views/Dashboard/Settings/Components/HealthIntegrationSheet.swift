@@ -304,7 +304,7 @@ struct HealthIntegrationSheet: View {
 
                 Text(selectedSource == .garmin
                     ? "Zdrowie nie zwraca żadnych kroków z Garmina. Upewnij się, że Garmin Connect zapisuje kroki do Apple Health i że zegarek się zsynchronizował."
-                    : "Zdrowie nie zwraca żadnych kroków. Jeśli licznik stoi pusty, sprawdź Ustawienia → Prywatność i bezpieczeństwo → Zdrowie → Weekly Meals i włącz odczyt Kroków.")
+                    : "Zdrowie nie zwraca żadnych kroków. Jeśli licznik stoi pusty, sprawdź Ustawienia → Prywatność i bezpieczeństwo → Zdrowie → Scoffie i włącz odczyt Kroków.")
                     .font(.system(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.wmMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)

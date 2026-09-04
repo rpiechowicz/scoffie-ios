@@ -1227,7 +1227,7 @@ final class SessionStore {
         }
 
         var components = URLComponents()
-        components.scheme = "weeklymeals"
+        components.scheme = "scoffie"
         components.host = "invite"
         components.queryItems = [
             URLQueryItem(name: "token", value: invitation.token)
@@ -1442,7 +1442,7 @@ final class SessionStore {
     }
 
     func handleIncomingURL(_ url: URL) {
-        guard url.scheme == "weeklymeals", url.host == "invite" else { return }
+        guard url.scheme == "scoffie", url.host == "invite" else { return }
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else { return }
 
@@ -1536,7 +1536,7 @@ final class SessionStore {
                     "data": [
                         "deviceToken": token,
                         "platform": "IOS",
-                        "appBundleId": Bundle.main.bundleIdentifier ?? "weeklymeals",
+                        "appBundleId": Bundle.main.bundleIdentifier ?? "scoffie",
                         // Token z buildu debugowego jest ważny wyłącznie na
                         // sandboksowym hoście APNs, a z TestFlight/App Store
                         // wyłącznie na produkcyjnym. Serwer musi to wiedzieć,

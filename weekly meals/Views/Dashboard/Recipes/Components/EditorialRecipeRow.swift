@@ -1,7 +1,7 @@
 import SwiftUI
 
 // One recipe row inside a "Tasting menu" section on Przepisy v2.
-// Source: design/Weekly Meals - Przepisy.html → recipes-v2.jsx RowC
+// Source: design/Scoffie - Przepisy.html → recipes-v2.jsx RowC
 // (chosen as the default row variant after the chat handoff).
 //   Container — `padding: 10px 20px`, gap 14, items center.
 //   Cover — 48×48 rounded 12, photo cover/center or tinted gradient

@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Full-bleed story-style hero card used inside the featured carousel on
-// Przepisy v2. Source: design/Weekly Meals - Przepisy.html →
+// Przepisy v2. Source: design/Scoffie - Przepisy.html →
 // recipes-v2.jsx W3StoryCard.
 //   Outer card — 420pt tall, corner 26pt, photo `cover/center` or category
 //   tint gradient placeholder with the category glyph at 84pt.

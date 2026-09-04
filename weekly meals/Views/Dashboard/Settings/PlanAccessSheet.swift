@@ -391,7 +391,7 @@ struct PlanAccessSheet: View {
                 .font(.system(size: 14))
                 .foregroundStyle(WMPalette.indigo)
                 .padding(.top, 1)
-            Text("Dostęp do asystenta jest nadany przez Weekly Meals. Nic nie płacisz w aplikacji.")
+            Text("Dostęp do asystenta jest nadany przez Scoffie. Nic nie płacisz w aplikacji.")
                 .font(.system(size: 13.5))
                 .lineSpacing(3)
                 .foregroundStyle(Color.wmLabel(scheme))

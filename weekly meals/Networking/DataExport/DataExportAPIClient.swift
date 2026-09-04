@@ -18,7 +18,7 @@ final class DataExportAPIClient {
         let data = try await core.raw(path: "me/export")
         let stamp = ISO8601DateFormatter().string(from: Date()).prefix(10)
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("weekly-meals-dane-\(stamp).json")
+            .appendingPathComponent("scoffie-dane-\(stamp).json")
         try data.write(to: url, options: [.atomic])
         return url
     }

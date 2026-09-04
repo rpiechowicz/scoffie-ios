@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Weekly Meals v2 "Cozy Kitchen" design tokens.
-// Source of truth: v2-design/Weekly Meals - Onboarding.html (WM_TOKENS).
+// Scoffie v2 "Cozy Kitchen" design tokens.
+// Source of truth: v2-design/Scoffie - Onboarding.html (WM_TOKENS).
 // Dark-first; light mirrors. Colors converted from OKLCH → sRGB.
 
 enum WMPalette {

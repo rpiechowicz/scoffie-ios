@@ -50,7 +50,7 @@ struct OnboardingHeroPattern: View {
         RowConfig(stride: 13, rotation: 9, direction: -1, speed: 14)
     ]
 
-    // Wymiary zgodne z designem (Weekly Meals - Onboarding.html, B2):
+    // Wymiary zgodne z designem (Scoffie - Onboarding.html, B2):
     // tile 72, gap 10, hero 280, paddingTop 60 (pod status barem),
     // brand chip przy top 66 / left 24 (absolutne pozycjonowanie).
     private let tileSize: CGFloat = 72
@@ -91,7 +91,7 @@ struct OnboardingHeroPattern: View {
         .frame(height: heroHeight)
         .ignoresSafeArea(edges: .top)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Weekly Meals")
+        .accessibilityLabel("Scoffie")
     }
 
     @ViewBuilder
@@ -151,7 +151,7 @@ struct OnboardingHeroPattern: View {
             // banner, więc pokazuje prawdziwą ikonę aplikacji.
             WMSteamingBowlLogo(size: 22)
 
-            Text("Weekly Meals")
+            Text("Scoffie")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.wmLabel(colorScheme))
         }

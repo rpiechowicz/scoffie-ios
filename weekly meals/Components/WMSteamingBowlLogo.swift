@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Cozy Kitchen "Steaming Bowl" — wektorowe logo v3 (Recraft "WM Steam").
 /// Terakotowa miska, z której para układa się w litery "WM"
-/// (Weekly Meals). Źródło: `branding/weekly-meals-logo-v3.svg`.
+/// (Scoffie). Źródło: `branding/scoffie-logo-v3.svg`.
 ///
 /// Renderowane przez `Canvas`, żeby precyzyjnie oddać krzywe Béziera ze
 /// źródła i jednocześnie skalować się bez aliasingu. Ścieżki przeniesione
@@ -137,7 +137,7 @@ struct WMSteamingBowlLogo: View {
     }
 }
 
-// MARK: - Path data (branding/weekly-meals-logo-v3.svg, ÷10.24)
+// MARK: - Path data (branding/scoffie-logo-v3.svg, ÷10.24)
 
 private enum Artwork {
     enum Seg {

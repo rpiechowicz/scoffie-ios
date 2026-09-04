@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Editorial hero block above the featured carousel on Przepisy v2.
-// Source: design/Weekly Meals - Przepisy.html → recipes-v2.jsx RecipesV2_W3
+// Source: design/Scoffie - Przepisy.html → recipes-v2.jsx RecipesV2_W3
 // ("Polecane · Smaki na dziś" block).
 //   Outer padding `4px 20px 14px`, accent rod 6×44 with terracotta glow.
 //   Eyebrow — 11pt 700, tracking 1.4, uppercase, terracotta.

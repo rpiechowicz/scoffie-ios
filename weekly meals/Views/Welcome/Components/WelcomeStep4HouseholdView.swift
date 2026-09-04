@@ -143,7 +143,7 @@ struct WelcomeStep4HouseholdView: View {
                             )
                     )
 
-                    Text("Otwórz link otrzymany od domownika — Weekly Meals przejmie zaproszenie automatycznie.")
+                    Text("Otwórz link otrzymany od domownika — Scoffie przejmie zaproszenie automatycznie.")
                         .font(.system(size: 12))
                         .foregroundStyle(Color.wmMuted(colorScheme))
                         .multilineTextAlignment(.center)

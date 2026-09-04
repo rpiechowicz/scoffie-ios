@@ -31,7 +31,7 @@ struct ThermomixInfoSheet: View {
                         icon: "fork.knife.circle.fill",
                         tint: WMPalette.terracotta,
                         title: "Co to jest?",
-                        body: "Część przepisów w Weekly Meals ma swój odpowiednik w Cookidoo — oficjalnej bibliotece przepisów Thermomixa. Takie przepisy poznasz po znaczku Thermomix."
+                        body: "Część przepisów w Scoffie ma swój odpowiednik w Cookidoo — oficjalnej bibliotece przepisów Thermomixa. Takie przepisy poznasz po znaczku Thermomix."
                     )
 
                     infoCard(

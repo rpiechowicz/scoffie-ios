@@ -30,7 +30,7 @@ struct WelcomeStep1ProfileView: View {
                 WelcomeStepHeader(
                     icon: "person.fill",
                     accent: WMPalette.terracotta,
-                    eyebrow: "Witaj w Weekly Meals",
+                    eyebrow: "Witaj w Scoffie",
                     title: "Zacznijmy od Ciebie",
                     subtitle: "Te dane pomogą nam dopasować propozycje. Zmienisz je później w ustawieniach."
                 )

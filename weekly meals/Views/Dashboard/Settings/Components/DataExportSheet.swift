@@ -39,7 +39,7 @@ struct DataExportSheet: View {
                             .frame(width: 36, height: 36)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(fileURL?.lastPathComponent ?? "weekly-meals-dane.json")
+                                Text(fileURL?.lastPathComponent ?? "scoffie-dane.json")
                                     .font(.system(size: 14.5, weight: .semibold))
                                     .foregroundStyle(Color.wmLabel(scheme))
                                     .lineLimit(1)

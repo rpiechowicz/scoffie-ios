@@ -187,12 +187,12 @@ struct SettingsView: View {
             FAQItem(
                 id: "acc-delete",
                 question: "Jak usunąć konto?",
-                answer: "W Ustawieniach, w sekcji profilu, stuknij „Usuń konto”. Konto i Twoje dane znikają od razu; wspólne przepisy i plan zostają domownikom. Możesz też napisać na support@weekly-meals.app z adresu przypisanego do konta."
+                answer: "W Ustawieniach, w sekcji profilu, stuknij „Usuń konto”. Konto i Twoje dane znikają od razu; wspólne przepisy i plan zostają domownikom. Możesz też napisać na support@scoffie.app z adresu przypisanego do konta."
             ),
             FAQItem(
                 id: "acc-export",
                 question: "Czy mogę pobrać swoje dane?",
-                answer: "Tak. Napisz na support@weekly-meals.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Szybciej: Ustawienia → Informacje → „Prywatność i regulamin” → „Pobierz moje dane” — paczka od razu trafia do arkusza udostępniania."
+                answer: "Tak. Napisz na support@scoffie.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Szybciej: Ustawienia → Informacje → „Prywatność i regulamin” → „Pobierz moje dane” — paczka od razu trafia do arkusza udostępniania."
             ),
             FAQItem(
                 id: "acc-allergens",
@@ -230,7 +230,7 @@ struct SettingsView: View {
             FAQItem(
                 id: "ai-wrong",
                 question: "Asystent się pomylił. Co zrobić?",
-                answer: "Przytrzymaj odpowiedź i wybierz „Zgłoś odpowiedź” albo napisz na support@weekly-meals.app z datą i treścią. Asystent to program oparty na modelu językowym — może się mylić i nie zastępuje dietetyka ani lekarza."
+                answer: "Przytrzymaj odpowiedź i wybierz „Zgłoś odpowiedź” albo napisz na support@scoffie.app z datą i treścią. Asystent to program oparty na modelu językowym — może się mylić i nie zastępuje dietetyka ani lekarza."
             )
         ]),
 
@@ -238,7 +238,7 @@ struct SettingsView: View {
             FAQItem(
                 id: "notif-missing",
                 question: "Dlaczego nie dostaję powiadomień?",
-                answer: "Sprawdź dwie rzeczy: (1) główny przełącznik w Ustawienia → Powiadomienia w aplikacji, (2) uprawnienia w Ustawieniach iOS → Weekly Meals → Powiadomienia."
+                answer: "Sprawdź dwie rzeczy: (1) główny przełącznik w Ustawienia → Powiadomienia w aplikacji, (2) uprawnienia w Ustawieniach iOS → Scoffie → Powiadomienia."
             ),
             FAQItem(
                 id: "notif-when",
@@ -256,12 +256,12 @@ struct SettingsView: View {
             FAQItem(
                 id: "other-idea",
                 question: "Mam pomysł na nową funkcję",
-                answer: "Świetnie! Napisz na support@weekly-meals.app — czytamy każdą wiadomość i wiele funkcji w aplikacji powstało właśnie z sugestii użytkowników."
+                answer: "Świetnie! Napisz na support@scoffie.app — czytamy każdą wiadomość i wiele funkcji w aplikacji powstało właśnie z sugestii użytkowników."
             ),
             FAQItem(
                 id: "other-bug",
                 question: "Znalazłem błąd. Gdzie zgłosić?",
-                answer: "Wyślij krótki opis na support@weekly-meals.app — najlepiej z screenem i nazwą urządzenia. Postaramy się odpowiedzieć i naprawić problem jak najszybciej."
+                answer: "Wyślij krótki opis na support@scoffie.app — najlepiej z screenem i nazwą urządzenia. Postaramy się odpowiedzieć i naprawić problem jak najszybciej."
             )
         ])
     ]
@@ -2290,7 +2290,7 @@ struct SettingsView: View {
                 }
             }
 
-            if let url = URL(string: "mailto:support@weekly-meals.app?subject=Weekly%20Meals%20—%20Pytanie") {
+            if let url = URL(string: "mailto:support@scoffie.app?subject=Weekly%20Meals%20—%20Pytanie") {
                 Link(destination: url) {
                     HStack(spacing: 8) {
                         Image(systemName: "paperplane.fill")
@@ -2314,7 +2314,7 @@ struct SettingsView: View {
                     .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
                     .shadow(color: WMPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
                 }
-                .accessibilityLabel("Napisz do nas — support@weekly-meals.app")
+                .accessibilityLabel("Napisz do nas — support@scoffie.app")
             }
         }
         .padding(18)

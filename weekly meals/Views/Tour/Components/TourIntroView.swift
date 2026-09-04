@@ -34,7 +34,7 @@ struct TourIntroView: View {
                     .foregroundStyle(WMPalette.terracotta)
                     .padding(.bottom, 10)
 
-                Text("Witaj w\nWeekly Meals")
+                Text("Witaj w\nScoffie")
                     .font(.system(size: 32, weight: .bold))
                     .tracking(-0.6)
                     .lineSpacing(3)

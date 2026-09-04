@@ -38,7 +38,7 @@ private final class SharedImageDiskCache {
 
     private let directory: URL
     private let fileManager = FileManager.default
-    private let ioQueue = DispatchQueue(label: "com.weeklymeals.imagecache.disk", qos: .utility)
+    private let ioQueue = DispatchQueue(label: "com.scoffie.imagecache.disk", qos: .utility)
     private let maxDiskBytes: Int = 300 * 1_024 * 1_024
     private let maxAge: TimeInterval = 60 * 60 * 24 * 30
 
@@ -50,7 +50,7 @@ private final class SharedImageDiskCache {
     /// zdjęcie innego dania i telefony zdążyły je sobie zapisać. Numer w
     /// nazwie katalogu jest jedynym sposobem, żeby kazać im pobrać wszystko
     /// od nowa; sam czas nie wystarczy, bo wpis żyje 30 dni.
-    private static let directoryName = "com.weeklymeals.imagecache.v3"
+    private static let directoryName = "com.scoffie.imagecache.v3"
 
     private init() {
         let base = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -73,7 +73,7 @@ private final class SharedImageDiskCache {
         ) else { return }
 
         for url in contents
-        where url.lastPathComponent.hasPrefix("com.weeklymeals.imagecache.")
+        where url.lastPathComponent.hasPrefix("com.scoffie.imagecache.")
             && url.lastPathComponent != Self.directoryName {
             try? fileManager.removeItem(at: url)
         }
