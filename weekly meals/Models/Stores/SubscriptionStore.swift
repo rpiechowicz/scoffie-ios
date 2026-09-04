@@ -6,7 +6,7 @@ import StoreKit
 ///
 /// Liczby MUSZĄ być identyczne z `src/config/subscription-products.ts` na
 /// serwerze i z opisem produktu w App Store Connect: Apple wymaga podania
-/// konkretnych ilości przed zakupem (3.1.2(c)), a liczba na paywallu staje
+/// konkretnych ilości przed zakupem (3.1.2(c)), a liczba na ekranie staje
 /// się OBIETNICĄ — podnieść ją wolno w każdej chwili, obniżyć obecnym
 /// subskrybentom nie (to zmiana warunków umowy w trakcie jej trwania). Serwer jest źródłem prawdy o tym, ile komu zostało —
 /// te wartości służą wyłącznie do opisania oferty przed zakupem.
@@ -19,9 +19,22 @@ struct SubscriptionPlan: Identifiable, Equatable {
     let seatsLabel: String
     let messages: Int
     let plans: Int
+    /// Cena z decyzji cennikowej — WYŁĄCZNIE jako zapas, gdy App Store nie
+    /// odda produktów (brak sieci, produkt jeszcze nieopublikowany). Prawdę
+    /// o cenie mówi zawsze `StoreKit.Product.displayPrice`, bo tylko ono zna
+    /// walutę i podatek kupującego.
+    let pricePln: Double
 
     var quantityLine: String {
         "\(messages) wiadomości i \(plans) zapisów planu w miesiącu"
+    }
+
+    var fallbackPrice: String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "PLN"
+        return formatter.string(from: NSNumber(value: pricePln)) ?? "\(pricePln) zł"
     }
 }
 
@@ -31,31 +44,34 @@ enum SubscriptionCatalog {
         name: "Solo",
         seatsLabel: "1 osoba",
         messages: 30,
-        plans: 8
+        plans: 8,
+        pricePln: 29.99
     )
     static let duet = SubscriptionPlan(
         id: "pl.weeklymeals.pro.duet.monthly",
         name: "We dwoje",
         seatsLabel: "2 osoby",
         messages: 50,
-        plans: 12
+        plans: 12,
+        pricePln: 39.99
     )
     static let family = SubscriptionPlan(
         id: "pl.weeklymeals.pro.family.monthly",
         name: "Rodzina",
         seatsLabel: "3 osoby i więcej",
         messages: 75,
-        plans: 18
+        plans: 18,
+        pricePln: 49.99
     )
 
-    /// Kolejność jak na paywallu; `duet` jest preselekcjonowany.
+    /// Kolejność jak w karuzeli planów; `duet` jest preselekcjonowany.
     static let all: [SubscriptionPlan] = [solo, duet, family]
     static let identifiers = all.map(\.id)
     static let recommended = duet
 
     /// Zakup przechodzi dopiero, gdy serwer umie zweryfikować transakcję
-    /// i nadać PRO (App Store Server API). Do tego czasu paywall pokazuje
-    /// ofertę i cenę z App Store, ale nie pobiera pieniędzy za nic.
+    /// i nadać dostęp (App Store Server API). Do tego czasu ekran „Asystent
+    /// i plan" pokazuje ofertę i cenę, ale nie pobiera pieniędzy za nic.
     static let purchasesEnabled = false
 }
 
@@ -99,7 +115,7 @@ final class SubscriptionStore {
             lastError = nil
         } catch {
             // Brak produktów to najczęściej brak konfiguracji w App Store
-            // Connect albo brak sieci — paywall pokazuje ofertę bez ceny.
+            // Connect albo brak sieci — karty pokazują cenę zapasową.
             lastError = "Nie udało się pobrać ceny z App Store."
         }
     }

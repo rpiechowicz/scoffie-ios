@@ -38,7 +38,8 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
-    /// Paywall PRO — z limitów i z zablokowanego pola na próbie.
+    /// „Asystent i plan" — z limitów i z linijki nad polem po wyczerpaniu
+    /// puli. To samo miejsce, które otwiera wiersz w Ustawieniach.
     @State private var showPaywall = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
@@ -140,6 +141,9 @@ struct AssistantView: View {
         }
         .task {
             await store.openIfNeeded()
+            // Plakietka puli w nagłówku potrzebuje liczb od razu, nie dopiero
+            // po pierwszym 429. Bez zgody to żądanie po prostu nic nie zwraca.
+            _ = await store.loadUsage()
         }
         .onAppear { store.setVisible(true) }
         .onDisappear { store.setVisible(false) }
@@ -169,7 +173,10 @@ struct AssistantView: View {
             AssistantUsageSheet(store: store, onUpgrade: { showPaywall = true })
         }
         .sheet(isPresented: $showPaywall) {
-            AssistantPaywallSheet()
+            // Jedno miejsce z planami dla całej aplikacji — to samo, które
+            // otwierają Ustawienia. Dwa ekrany z tą samą ofertą rozjechałyby
+            // się przy pierwszej zmianie cennika.
+            PlanAccessSheet()
         }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
@@ -240,6 +247,7 @@ struct AssistantView: View {
             // „Zanim zaczniemy" wyglądał na błąd).
             mode: (store.messages.isEmpty || currentStep != nil) ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
+            accessory: quotaPips
         ) {
             // W przepływie startowym (przed zgodą albo w kartach) menu ma
             // tylko to, co wtedy działa — „Nowa rozmowa" czy „Usuń historię"
@@ -340,6 +348,20 @@ struct AssistantView: View {
         // się wcale. Ktoś ze zgodą, którego stan chwilowo nie doszedł, widzi
         // bramkę jeszcze raz — jedno stuknięcie, bez szkody.
         return !(consents.isLoaded && consents.assistantGranted)
+    }
+
+    /// Plakietka puli w nagłówku — tylko na próbie. W planie miesięcznym
+    /// pula jest na tyle duża, że licznik w nagłówku byłby szumem.
+    private var quotaPips: AnyView? {
+        guard let left = trialMessagesLeft else { return nil }
+        return AnyView(AssistantQuotaPips(remaining: left))
+    }
+
+    /// Ile wiadomości zostało z puli PRÓBNEJ; `nil` w planie miesięcznym
+    /// albo gdy jeszcze nie znamy liczb.
+    private var trialMessagesLeft: Int? {
+        guard let usage = store.usage, usage.isTrial else { return nil }
+        return usage.messages.remaining
     }
 
     private var conversationTitle: String? {
@@ -640,24 +662,37 @@ struct AssistantView: View {
                 editingBar
             }
 
-            // Pula na próbę wyczerpana: nie ma „za moment", jest PRO.
+            // Jedyny moment, w którym aplikacja sama zaczyna rozmowę o
+            // pieniądzach — i mówi wtedy jedną linijką, bez kafla, bez ikony
+            // i bez przycisku. Pole tekstowe zostaje na miejscu.
             if store.isLockedByTrialQuota {
-                HStack(spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(WMPalette.terracotta)
-                    Text("Darmowe wiadomości wykorzystane")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.wmLabel(scheme))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Darmowe wiadomości wykorzystane.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                    Button { showPaywall = true } label: {
+                        Text("Zobacz plany")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(WMPalette.terracotta)
+                            .underline()
+                    }
+                    .buttonStyle(.plain)
                     Spacer(minLength: 0)
-                    Button("Wybierz plan") { showPaywall = true }
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(WMPalette.terracotta)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.wmAccentTint(scheme)))
+                .padding(.horizontal, 4)
                 .padding(.top, 8)
+            } else if let left = trialMessagesLeft, left <= 2 {
+                // Uprzedzenie, nie sprzedaż: sama liczba, bez przycisku i bez
+                // zachęty. Zaskoczenie w środku rozmowy o obiedzie jest
+                // gorsze niż cicha informacja dwie wiadomości wcześniej.
+                Text(left == 1
+                     ? "Została 1 wiadomość na próbę"
+                     : "Zostały \(left) wiadomości na próbę")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 8)
             }
 
             HStack(alignment: .bottom, spacing: 8) {

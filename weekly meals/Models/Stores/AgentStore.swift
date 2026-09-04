@@ -83,7 +83,7 @@ final class AgentStore {
     /// ten sam błąd zamiast informacji, kiedy spróbować.
     private(set) var lockedUntil: Date?
     /// Ostatnio pobrane limity — po 429 pole wiadomości musi wiedzieć, czy
-    /// to próba (pokazać „Odblokuj PRO"), czy miesiąc (pokazać datę).
+    /// to próba (pokazać „Wybierz plan"), czy miesiąc (pokazać datę).
     private(set) var usage: AgentUsageDTO?
     private(set) var isLoadingHistory = false
     /// Treść wiadomości, która NIE doszła do serwera — do ponowienia jednym

@@ -57,6 +57,12 @@ struct SettingsView: View {
     @State private var showCookidooSheet = false
     @State private var showLegalDocumentsSheet = false
     @State private var showHealthSheet = false
+    @State private var showPlanAccessSheet = false
+    /// Stan dostępu do asystenta, pokazywany jako wartość wiersza. Bierzemy
+    /// go z pamięci sklepu asystenta i odświeżamy przy wejściu w Ustawienia —
+    /// wiersz bez wartości wyglądałby jak niedokończony, ale dokładanie
+    /// osobnego żądania przy każdym otwarciu byłoby marnotrawstwem.
+    @State private var planAccess: AgentUsageDTO?
 
     // Stan integracji „Zdrowie" przez @AppStorage — to arkusz zmienia te
     // klucze (via HealthStepsStore) i tylko @AppStorage odświeży wiersz.
@@ -423,6 +429,15 @@ struct SettingsView: View {
     /// Rozpiętość dnia — od pierwszej do ostatniej pory wśród planowanych
     /// posiłków. Mówi to, po co użytkownik wchodzi w ten ekran, i mieści się
     /// w wierszu. Trójka obowiązkowa ma porę zawsze, więc oba końce istnieją.
+    /// Wartość wiersza „Asystent i plan": nazwa kupionego planu albo stan
+    /// próbny. Pusto, dopóki nie wiemy — zgadywanie „Dostęp próbny" u kogoś,
+    /// kto płaci, byłoby gorsze niż brak wartości.
+    private var planAccessRowValue: String {
+        guard let planAccess else { return "" }
+        if planAccess.isTrial { return "Dostęp próbny" }
+        return planAccess.product.map { "Plan \($0)" } ?? "Plan domu"
+    }
+
     private var mealTimesRowValue: String {
         let schedule = sessionStore.mealSlotSchedule
         guard !schedule.isDefault else { return "Domyślne" }
@@ -538,6 +553,15 @@ struct SettingsView: View {
                         }
                         await sessionStore.syncNotificationPreferences()
                     }
+            }
+            .task {
+                planAccess = sessionStore.agentStore?.usage
+                if let refreshed = await sessionStore.agentStore?.loadUsage() {
+                    planAccess = refreshed
+                }
+            }
+            .sheet(isPresented: $showPlanAccessSheet) {
+                PlanAccessSheet()
             }
             .sheet(isPresented: $showAppearanceSheet) {
                 appearanceSheet
@@ -660,8 +684,19 @@ struct SettingsView: View {
                     iconColor: WMPalette.indigo,
                     title: "Pory posiłków",
                     value: mealTimesRowValue,
-                    isLast: true,
                     action: { showMealTimesSheet = true }
+                )
+
+                // Spokojny dom sprawy z planem: stan, zużycie i oferta leżą
+                // tutaj i czekają, aż ktoś sam po nie przyjdzie. Wartość po
+                // prawej jest szara jak każda inna — wiersz nie zaczepia.
+                EditorialSettingsRow(
+                    icon: "sparkles",
+                    iconColor: WMPalette.terracotta,
+                    title: "Asystent i plan",
+                    value: planAccessRowValue,
+                    isLast: true,
+                    action: { showPlanAccessSheet = true }
                 )
             }
         }

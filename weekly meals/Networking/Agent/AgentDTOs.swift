@@ -174,9 +174,25 @@ struct AgentUsageDTO: Decodable, Equatable {
     /// Rozkład na domowników w tym okresie; starszy serwer nie oddaje pola.
     let byUser: [AgentUsageByUserDTO]?
 
+    /// Imię osoby, której subskrypcja napędza ten dom; `null` poza subskrypcją.
+    let payerName: String?
+    /// Czy to pytający płaci. Opcjonalne, bo starszy serwer tego nie oddaje.
+    let isPayer: Bool?
+
     var isTrial: Bool { tier == "TRIAL" }
+    /// Domyślnie NIE płatnik: brak informacji nie może dawać komuś dostępu do
+    /// cudzej subskrypcji w Ustawieniach iOS.
+    var isThePayer: Bool { isPayer ?? false }
     /// „Zarządzaj subskrypcją" ma sens tylko, gdy PRO pochodzi z App Store.
-    var showsManageSubscription: Bool { !isTrial && source == "SUBSCRIPTION" }
+    /// „Zarządzaj subskrypcją" widzi WYŁĄCZNIE płatnik.
+    ///
+    /// Dotąd warunek brzmiał „dom ma subskrypcję", więc przycisk dostawał też
+    /// domownik, który za nic nie płaci — i lądował w Ustawieniach iOS, gdzie
+    /// nie ma żadnej subskrypcji do zarządzania. Teraz decyduje `isPayer`
+    /// z serwera, bo tylko on wie, czyj `identityHash` stoi przy umowie.
+    var showsManageSubscription: Bool {
+        !isTrial && source == "SUBSCRIPTION" && isThePayer
+    }
 }
 
 /// Domownik w arkuszu „Dla kogo liczyć" — z etykietą celu prosto z profilu.

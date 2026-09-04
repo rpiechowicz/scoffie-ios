@@ -22,6 +22,10 @@ struct AssistantHeader<MenuContent: View>: View {
 
     let mode: Mode
     var onNewConversation: () -> Void
+    /// Plakietka po lewej od akcji — stan puli w trakcie próby. Nagłówek to
+    /// miejsce, do którego wzrok i tak wraca między odpowiedziami, więc stan
+    /// jest widoczny bez otwierania czegokolwiek i nie wchodzi w treść.
+    var accessory: AnyView?
     /// Pozycje menu ⋯ — systemowe `Menu` z ikonami (projekt „Asystent Zgoda"),
     /// nie arkusz z dołu: siedem pozycji czyta się szybciej przy przycisku.
     @ViewBuilder var menu: () -> MenuContent
@@ -41,6 +45,7 @@ struct AssistantHeader<MenuContent: View>: View {
 
                 Spacer(minLength: 8)
 
+                accessory
                 actions(compact: false)
             }
             .padding(.horizontal, WMPageMetrics.horizontal)
@@ -66,6 +71,7 @@ struct AssistantHeader<MenuContent: View>: View {
 
                 Spacer(minLength: 8)
 
+                accessory
                 actions(compact: true)
             }
             .padding(.horizontal, WMPageMetrics.horizontal)

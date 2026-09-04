@@ -3,7 +3,7 @@ import SwiftUI
 /// Limity asystenta — dwa pierścienie z liczbą „zostało" (projekt „Asystent
 /// Zgoda", 3.09.2026) w dwóch wariantach z tego samego projektu:
 /// - **próba** (`tier == TRIAL`): jednorazowa pula bez odnowienia, bez
-///   rozkładu na domowników, stopka „Odblokuj PRO";
+///   rozkładu na domowników, stopka „Wybierz plan";
 /// - **PRO**: pula miesięczna, rozkład na domowników (pula jest wspólna,
 ///   ktoś zawsze pyta „kto to zużył"), „Zarządzaj subskrypcją" tylko gdy PRO
 ///   pochodzi z subskrypcji, nie z nadania.
@@ -11,7 +11,8 @@ import SwiftUI
 /// „Zmień" to wiadomość, oglądanie propozycji jest darmowe.
 struct AssistantUsageSheet: View {
     let store: AgentStore
-    /// „Odblokuj PRO" (tylko na próbie) — arkusz zamyka się, otwiera paywall.
+    /// „Wybierz plan" (tylko na próbie) — arkusz zamyka się i otwiera
+    /// „Asystent i plan", czyli to samo miejsce, co wiersz w Ustawieniach.
     var onUpgrade: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
