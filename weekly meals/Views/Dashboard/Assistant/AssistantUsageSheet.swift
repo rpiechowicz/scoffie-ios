@@ -1,22 +1,30 @@
 import SwiftUI
 
 /// Limity asystenta — dwa pierścienie z liczbą „zostało" (projekt „Asystent
-/// Zgoda", 3.09.2026), rozkład na domowników (pula jest wspólna, ktoś zawsze
-/// pyta „kto to zużył") i reguły, co się liczy — jedyna rzecz, która
-/// generuje zgłoszenia: „Zmień" to wiadomość, oglądanie propozycji jest
-/// darmowe. Warianty PRO / próba z projektu wejdą razem z subskrypcją.
+/// Zgoda", 3.09.2026) w dwóch wariantach z tego samego projektu:
+/// - **próba** (`tier == TRIAL`): jednorazowa pula bez odnowienia, bez
+///   rozkładu na domowników, stopka „Wybierz plan";
+/// - **PRO**: pula miesięczna, rozkład na domowników (pula jest wspólna,
+///   ktoś zawsze pyta „kto to zużył"), „Zarządzaj subskrypcją" tylko gdy PRO
+///   pochodzi z subskrypcji, nie z nadania.
+/// Reguły „co się liczy" są jedyną rzeczą, która generuje zgłoszenia:
+/// „Zmień" to wiadomość, oglądanie propozycji jest darmowe.
 struct AssistantUsageSheet: View {
     let store: AgentStore
+    /// „Wybierz plan" (tylko na próbie) — arkusz zamyka się i otwiera
+    /// „Asystent i plan", czyli to samo miejsce, co wiersz w Ustawieniach.
+    var onUpgrade: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.openURL) private var openURL
     @Environment(\.sessionStore) private var sessionStore
     @State private var usage: AgentUsageDTO?
     @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottom) {
                 WMPageBackground(scheme: scheme).ignoresSafeArea()
 
                 ScrollView {
@@ -32,18 +40,22 @@ struct AssistantUsageSheet: View {
                                 label: "Wiadomości",
                                 quota: usage.messages,
                                 color: WMPalette.terracotta,
-                                unit: "w tym miesiącu",
-                                note: (usage.byUser?.isEmpty == false)
-                                    ? "Wspólna pula całego domu. Kto ile wykorzystał:"
-                                    : "Wspólna pula całego domu.",
-                                perUser: usage.byUser?.map { ($0.userId, $0.displayName, $0.messages) } ?? []
+                                unit: usage.isTrial ? "darmowych" : "w tym miesiącu",
+                                note: usage.isTrial
+                                    ? "Każde pytanie do asystenta."
+                                    : ((usage.byUser?.isEmpty == false)
+                                        ? "Wspólna pula całego domu. Kto ile wykorzystał:"
+                                        : "Wspólna pula całego domu."),
+                                perUser: usage.isTrial ? [] : (usage.byUser?.map { ($0.userId, $0.displayName, $0.messages) } ?? [])
                             )
                             quotaCard(
                                 label: "Zapisane plany",
                                 quota: usage.plans,
                                 color: WMPalette.sage,
-                                unit: "w tym miesiącu",
-                                note: "Każde „Dodaj do planu”: tydzień, dzień albo podmiana.",
+                                unit: usage.isTrial ? "na próbę" : "w tym miesiącu",
+                                note: usage.isTrial
+                                    ? "Propozycje oglądasz bez limitu, zapis liczy się raz."
+                                    : "Każde „Dodaj do planu”: tydzień, dzień albo podmiana.",
                                 perUser: []
                             )
                             rulesCard(usage)
@@ -59,9 +71,13 @@ struct AssistantUsageSheet: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 18)
-                    .padding(.bottom, 28)
+                    .padding(.bottom, footerReserve)
                 }
                 .scrollIndicators(.hidden)
+
+                if let usage, usage.isTrial || usage.showsManageSubscription {
+                    footer(usage)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -72,21 +88,41 @@ struct AssistantUsageSheet: View {
         }
     }
 
+    private var footerReserve: CGFloat {
+        guard let usage else { return 28 }
+        return (usage.isTrial || usage.showsManageSubscription) ? 120 : 28
+    }
+
+    // MARK: - Nagłówek planu
+
     private func planLine(_ usage: AgentUsageDTO) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(usage.tier == "FREE" ? "Plan bezpłatny" : usage.tier)
+        let tone: Color = usage.isTrial ? WMPalette.butter : WMPalette.sage
+        let tint: Color = usage.isTrial ? Color.wmButterTint(scheme) : Color.wmSageTint(scheme)
+        return VStack(alignment: .leading, spacing: 6) {
+            // Nazwa KUPIONEGO planu (Solo / We dwoje / Rodzina). „PRO" to
+            // nazwa wewnętrzna poziomu po stronie serwera i nie pokazujemy jej
+            // nigdzie — człowiek kupił konkretny plan i tak go ma widzieć.
+            // Brak nazwy = nadanie operatora, wtedy po prostu „Plan domu".
+            Text(usage.isTrial
+                 ? "Dostęp próbny"
+                 : (usage.product.map { "Plan \($0)" } ?? "Plan domu"))
                 .font(.system(size: 12, weight: .bold))
                 .tracking(0.2)
-                .foregroundStyle(WMPalette.sage)
+                .foregroundStyle(tone)
                 .padding(.horizontal, 10)
                 .frame(height: 26)
-                .background(Capsule().fill(Color.wmSageTint(scheme)))
-            Text("odnowienie \(Self.resetLabel(usage.resetsAt)) · wspólnie dla domu")
+                .background(Capsule().fill(tint))
+                .lineLimit(1)
+            Text(usage.isTrial
+                 ? "jednorazowo, bez odnowienia"
+                 : "odnowienie \(usage.resetsAt.map(Self.resetLabel) ?? "co miesiąc") · wspólnie dla domu")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.wmMuted(scheme))
                 .padding(.leading, 2)
         }
     }
+
+    // MARK: - Karty kwot
 
     private func quotaCard(label: String, quota: AgentQuotaDTO, color: Color, unit: String, note: String, perUser: [(String, String, Int)]) -> some View {
         AssistantSurfaceCard(padding: 14) {
@@ -118,6 +154,8 @@ struct AssistantUsageSheet: View {
                 }
                 Spacer(minLength: 0)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(label): zostało \(quota.remaining) z \(quota.limit)")
 
             if !perUser.isEmpty {
                 VStack(spacing: 6) {
@@ -151,12 +189,12 @@ struct AssistantUsageSheet: View {
     }
 
     /// Pierścień „zostało" — minimum 3 % wypełnienia, żeby pusty stan nie
-    /// wyglądał na błąd.
+    /// wyglądał na błąd. Na pierścieniu jest to, co ZOSTAŁO (jak w projekcie).
     private func ring<Content: View>(fraction: Double, color: Color, @ViewBuilder content: () -> Content) -> some View {
         ZStack {
             Circle().stroke(Color.wmBarTrack(scheme), lineWidth: 10)
             Circle()
-                .trim(from: 0, to: max(0.03, min(1, fraction)))
+                .trim(from: 0, to: max(0.03, min(1, 1 - fraction)))
                 .stroke(color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             content()
@@ -176,6 +214,8 @@ struct AssistantUsageSheet: View {
             }
         }
     }
+
+    // MARK: - Zasady
 
     private func rulesCard(_ usage: AgentUsageDTO) -> some View {
         AssistantSurfaceCard {
@@ -203,15 +243,42 @@ struct AssistantUsageSheet: View {
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .overlay(alignment: .top) { if index > 0 { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) } }
             }
-            Text(usage.plans.remaining == 0
-                 ? "Pula planów wyczerpana: rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Wraca \(Self.resetLabel(usage.resetsAt))."
-                 : "Po wyczerpaniu puli planów rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Nowy miesiąc odnawia oba liczniki.")
+            Text(rulesFootnote(usage))
                 .font(.system(size: 12.5))
                 .lineSpacing(1.5)
                 .foregroundStyle(Color.wmFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 13)
                 .overlay(alignment: .top) { Rectangle().fill(Color.wmRule(scheme)).frame(height: 1) }
+        }
+    }
+
+    private func rulesFootnote(_ usage: AgentUsageDTO) -> String {
+        if usage.isTrial {
+            return "Po wyczerpaniu darmowych wiadomości rozmowa się zatrzymuje, a zapisane plany zostają w Planie tygodnia. Solo, We dwoje i Rodzina dają pulę miesięczną dla całego domu."
+        }
+        if usage.plans.remaining == 0 {
+            return "Pula planów wyczerpana: rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Wraca \(usage.resetsAt.map(Self.resetLabel) ?? "w nowym miesiącu")."
+        }
+        return "Po wyczerpaniu puli planów rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Nowy miesiąc odnawia oba liczniki."
+    }
+
+    // MARK: - Stopka
+
+    private func footer(_ usage: AgentUsageDTO) -> some View {
+        AssistantStickyFooter {
+            if usage.isTrial {
+                WMSoftButton(title: "Wybierz plan", leadingIcon: "sparkles", trailingIcon: nil) {
+                    dismiss()
+                    onUpgrade?()
+                }
+            } else if usage.showsManageSubscription {
+                WMSoftButton(title: "Zarządzaj subskrypcją", trailingIcon: "arrow.up.right") {
+                    if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                        openURL(url)
+                    }
+                }
+            }
         }
     }
 

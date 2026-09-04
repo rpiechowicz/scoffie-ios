@@ -20,6 +20,9 @@ struct AssistantHowItWorksView: View {
     /// „Wstecz" z pierwszej karty — do kroku „Zgoda".
     var onBack: (() -> Void)? = nil
     var onCardChange: ((Int) -> Void)? = nil
+    /// Stuknięty przykład z karty — wysyłany jako wiadomość (arkusz sam
+    /// się zamyka, w przepływie kończy onboarding).
+    var onAsk: ((String) -> Void)? = nil
     var onShowCapabilities: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -99,8 +102,8 @@ struct AssistantHowItWorksView: View {
                         WMSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") { back() }
                     }
                     WMSoftButton(
-                        title: isLast ? (presentation == .sheet ? "Zamknij" : "Zobacz, co potrafi") : "Dalej",
-                        trailingIcon: isLast && presentation == .sheet ? nil : "chevron.right"
+                        title: isLast ? (presentation == .sheet ? "Zamknij" : "Zaczynajmy") : "Dalej",
+                        trailingIcon: isLast ? nil : "chevron.right"
                     ) {
                         if isLast { finish() } else { withAnimation { step += 1 } }
                     }
@@ -109,6 +112,15 @@ struct AssistantHowItWorksView: View {
         }
         .onAppear { step = min(max(0, startCard), cards.count - 1) }
         .onChange(of: step) { _, value in onCardChange?(value) }
+    }
+
+    /// Dymek jest przyciskiem tylko wtedy, gdy ktoś odbiera wysłane zdanie.
+    private func sendAction(for example: String) -> (() -> Void)? {
+        guard let onAsk else { return nil }
+        return {
+            if presentation == .sheet { dismiss() }
+            onAsk(example)
+        }
     }
 
     /// Karta wstecz; z pierwszej — do poprzedniego kroku przepływu.
@@ -138,10 +150,14 @@ struct AssistantHowItWorksView: View {
             }
 
             if let example = card.example {
-                AssistantExampleBubble(text: example)
-            }
-
-            if let thumb = card.thumb {
+                AssistantExchangePreview(
+                    example: example,
+                    reply: card.reply,
+                    thumb: card.thumb,
+                    weekDays: 5,
+                    onSend: sendAction(for: example)
+                )
+            } else if let thumb = card.thumb {
                 AssistantThumb(kind: thumb, weekDays: 5)
             }
 
@@ -150,7 +166,7 @@ struct AssistantHowItWorksView: View {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(WMPalette.sage)
-                    Text("Wzrost, waga, kroki i e-mail zostają w telefonie. Zgodę cofniesz w każdej chwili w menu.")
+                    Text("Nic nie zapisuje się samo — każda zmiana to karta z „Dodaj do planu”, a zapis cofniesz w ciągu doby. Wzrost, waga, kroki i e-mail nie są wysyłane do modelu AI.")
                         .font(.system(size: 14))
                         .lineSpacing(3)
                         .foregroundStyle(Color.wmLabel(scheme))

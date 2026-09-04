@@ -40,7 +40,19 @@ struct AssistantConsentGateView: View {
     @State private var confirmsRevoke = false
 
     private var isGranted: Bool { consents.assistantGranted }
-    private var canGrant: Bool { confirmsAge && confirmsData }
+    private var canGrant: Bool { confirmsAge && confirmsData && !isUnderage }
+
+    /// Wiek po roku urodzenia z profilu (kreator, krok 1). `nil` = brak roku.
+    /// Poniżej 16 blokujemy; od 17 ptaszek „mam 16 lat" jest z góry —
+    /// dokładnie 16 po roku może jeszcze nie mieć urodzin, więc pyta.
+    private var profileAgeByYear: Int? {
+        let year = UserDefaults.standard.integer(forKey: "settings.profile.yearOfBirth")
+        guard year > 0 else { return nil }
+        return Calendar.current.component(.year, from: Date()) - year
+    }
+
+    private var isUnderage: Bool { (profileAgeByYear ?? 99) < 16 }
+    private var ageFromProfile: Bool { (profileAgeByYear ?? 0) >= 17 }
 
     var body: some View {
         Group {
@@ -56,6 +68,7 @@ struct AssistantConsentGateView: View {
             }
         }
         .interactiveDismissDisabled(consents.isBusy)
+        .onAppear { if ageFromProfile { confirmsAge = true } }
         .task { await consents.refresh() }
         .sheet(isPresented: $showPrivacyPolicy) {
             LegalDocumentSheet(title: "Polityka prywatności") {
@@ -113,11 +126,15 @@ struct AssistantConsentGateView: View {
 
                     dataCard
 
+                    if isUnderage, !isGranted {
+                        underageNotice
+                    }
+
                     AssistantSurfaceCard {
                         HStack(alignment: .center) {
                             AssistantSectionLabel(text: "Twoje potwierdzenia")
                             Spacer()
-                            confirmationsBadge
+                            if !isUnderage { confirmationsBadge }
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 12)
@@ -125,7 +142,7 @@ struct AssistantConsentGateView: View {
                         confirmRow(
                             isOn: isGranted ? .constant(true) : $confirmsAge,
                             title: "Mam ukończone 16 lat",
-                            caption: nil,
+                            caption: ageFromProfile ? "Zaznaczone według roku urodzenia z Twojego profilu" : nil,
                             first: true
                         )
                         confirmRow(
@@ -135,8 +152,8 @@ struct AssistantConsentGateView: View {
                             first: false
                         )
                     }
-                    .opacity(isGranted ? 0.85 : 1)
-                    .disabled(isGranted)
+                    .opacity(isGranted || isUnderage ? 0.85 : 1)
+                    .disabled(isGranted || isUnderage)
 
                     Text("Model Claude dostarcza Anthropic, PBC (USA); przekazanie poza EOG odbywa się na podstawie standardowych klauzul umownych. Asystent to program, może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
                         .font(.system(size: 11.5))
@@ -169,6 +186,29 @@ struct AssistantConsentGateView: View {
     }
 
     // MARK: - Klocki
+
+    /// Rok urodzenia z profilu mówi „mniej niż 16" — potwierdzenia są
+    /// wygaszone, przycisk nieaktywny. Serwer sprawdza to samo przy zapisie.
+    private var underageNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(WMPalette.terracotta)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Asystent jest dostępny od 16 lat")
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(Color.wmLabel(scheme))
+                Text("Według roku urodzenia w Twoim profilu to jeszcze nie ten wiek. Jeśli rok jest błędny, popraw go w Ustawieniach → Profil i wróć tutaj.")
+                    .font(.system(size: 12.5))
+                    .lineSpacing(2)
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(WMPalette.terracotta.opacity(0.10)))
+    }
 
     /// Licznik zamiast napisu „oba wymagane": 0 z 2 → 1 z 2 → 2 z 2 (zielone),
     /// po zapisie „Zapisane” z ptaszkiem. Mówi to samo, ale zmienia się razem

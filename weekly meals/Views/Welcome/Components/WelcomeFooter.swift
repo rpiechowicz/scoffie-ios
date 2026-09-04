@@ -18,6 +18,9 @@ struct WelcomeFooter: View {
     /// w stopce przewodnika (`TourStepFooter`). Na pierwszym kroku nie ma
     /// dokąd wracać, więc przycisk znika.
     var showsBack: Bool = false
+    /// Cichy zapis w tle się nie udał — user idzie dalej, ale wie, że
+    /// serwer tego jeszcze nie ma (ponowimy przy następnym „Dalej").
+    var warning: String? = nil
     let onBack: () -> Void
     let onNext: () -> Void
 
@@ -29,6 +32,22 @@ struct WelcomeFooter: View {
 
     var body: some View {
         VStack(spacing: 18) {
+            if let warning {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(warning)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(WMPalette.terracotta)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WMPalette.terracotta.opacity(0.12)))
+                .transition(.opacity)
+            }
+
             if showsStepper {
                 WelcomeStepper(step: step, total: total)
             }

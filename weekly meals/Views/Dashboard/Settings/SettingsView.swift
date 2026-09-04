@@ -51,12 +51,17 @@ struct SettingsView: View {
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
     @State private var showMealSlotsSheet = false
-    @State private var showMealTimesSheet = false
     @State private var showProfileSheet = false
     @State private var showHelpSheet = false
     @State private var showCookidooSheet = false
     @State private var showLegalDocumentsSheet = false
     @State private var showHealthSheet = false
+    @State private var showPlanAccessSheet = false
+    /// Stan dostępu do asystenta, pokazywany jako wartość wiersza. Bierzemy
+    /// go z pamięci sklepu asystenta i odświeżamy przy wejściu w Ustawienia —
+    /// wiersz bez wartości wyglądałby jak niedokończony, ale dokładanie
+    /// osobnego żądania przy każdym otwarciu byłoby marnotrawstwem.
+    @State private var planAccess: AgentUsageDTO?
 
     // Stan integracji „Zdrowie" przez @AppStorage — to arkusz zmienia te
     // klucze (via HealthStepsStore) i tylko @AppStorage odświeży wiersz.
@@ -423,15 +428,13 @@ struct SettingsView: View {
     /// Rozpiętość dnia — od pierwszej do ostatniej pory wśród planowanych
     /// posiłków. Mówi to, po co użytkownik wchodzi w ten ekran, i mieści się
     /// w wierszu. Trójka obowiązkowa ma porę zawsze, więc oba końce istnieją.
-    private var mealTimesRowValue: String {
-        let schedule = sessionStore.mealSlotSchedule
-        guard !schedule.isDefault else { return "Domyślne" }
-
-        let times = sessionStore.mealSlots.enabled.compactMap { schedule.minutes(for: $0) }
-        guard let first = times.min(), let last = times.max(), first != last else {
-            return "Własne"
-        }
-        return "\(MealSlotSchedule.format(first)) – \(MealSlotSchedule.format(last))"
+    /// Wartość wiersza „Asystent i plan": nazwa kupionego planu albo stan
+    /// próbny. Pusto, dopóki nie wiemy — zgadywanie „Dostęp próbny" u kogoś,
+    /// kto płaci, byłoby gorsze niż brak wartości.
+    private var planAccessRowValue: String {
+        guard let planAccess else { return "" }
+        if planAccess.isTrial { return "Dostęp próbny" }
+        return planAccess.product.map { "Plan \($0)" } ?? "Plan domu"
     }
 
     private func toggleAllergen(_ allergen: Allergen) {
@@ -539,6 +542,15 @@ struct SettingsView: View {
                         await sessionStore.syncNotificationPreferences()
                     }
             }
+            .task {
+                planAccess = sessionStore.agentStore?.usage
+                if let refreshed = await sessionStore.agentStore?.loadUsage() {
+                    planAccess = refreshed
+                }
+            }
+            .sheet(isPresented: $showPlanAccessSheet) {
+                PlanAccessSheet()
+            }
             .sheet(isPresented: $showAppearanceSheet) {
                 appearanceSheet
                     .dashboardLiquidSheet()
@@ -557,13 +569,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showMealSlotsSheet) {
                 MealSlotsSheet {
                     showMealSlotsSheet = false
-                }
-                .presentationDetents([.large])
-                .dashboardLiquidSheet()
-            }
-            .sheet(isPresented: $showMealTimesSheet) {
-                MealTimesSheet {
-                    showMealTimesSheet = false
                 }
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
@@ -638,10 +643,10 @@ struct SettingsView: View {
                     action: { showDietSheet = true }
                 )
 
-                // Obok „Diety", a nie w Aplikacji: to decyzja o tym, jak dom
-                // jada (rytm dnia), a nie o zachowaniu aplikacji. Ta sama
-                // półka co dieta i alergeny — użytkownik szuka tego tam,
-                // gdzie ustawiał resztę rzeczy o jedzeniu.
+                // Jeden wiersz na wszystko o posiłkach: które dom planuje
+                // i o której je. Pory otwierają się z tego arkusza, bo nikt
+                // nie szuka ich osobno — a Ustawienia nie muszą tłumaczyć
+                // różnicy między dwiema decyzjami, zanim ktokolwiek w nie wejdzie.
                 EditorialSettingsRow(
                     icon: "fork.knife",
                     iconColor: WMPalette.terracotta,
@@ -650,18 +655,16 @@ struct SettingsView: View {
                     action: { showMealSlotsSheet = true }
                 )
 
-                // Osobny wiersz, bo osobna decyzja i osobny zasięg zapisu:
-                // lista posiłków obowiązuje całe gospodarstwo, pory siedzą
-                // na tym telefonie. Stoją obok siebie, żeby rozdzielenie było
-                // widać przed otwarciem czegokolwiek — i żeby żaden z arkuszy
-                // nie musiał tłumaczyć w stopce, gdzie szukać drugiej połowy.
+                // Spokojny dom sprawy z planem: stan, zużycie i oferta leżą
+                // tutaj i czekają, aż ktoś sam po nie przyjdzie. Wartość po
+                // prawej jest szara jak każda inna — wiersz nie zaczepia.
                 EditorialSettingsRow(
-                    icon: "clock.fill",
-                    iconColor: WMPalette.indigo,
-                    title: "Pory posiłków",
-                    value: mealTimesRowValue,
+                    icon: "sparkles",
+                    iconColor: WMPalette.terracotta,
+                    title: "Asystent i plan",
+                    value: planAccessRowValue,
                     isLast: true,
-                    action: { showMealTimesSheet = true }
+                    action: { showPlanAccessSheet = true }
                 )
             }
         }

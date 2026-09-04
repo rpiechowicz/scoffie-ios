@@ -19,7 +19,7 @@ enum ConsentAction {
     static let revoked = "REVOKED"
 }
 
-struct ConsentStatusDTO: Decodable, Equatable {
+struct ConsentStatusDTO: Codable, Equatable {
     let kind: String
     let granted: Bool
     let documentVersion: String?

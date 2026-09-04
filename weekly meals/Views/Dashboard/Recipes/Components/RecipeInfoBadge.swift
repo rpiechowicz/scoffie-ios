@@ -273,25 +273,6 @@ struct RecipeFavoriteBadge: View {
     }
 }
 
-struct RecipeFavoriteButton: View {
-    let isFavorite: Bool
-    var action: (() -> Void)? = nil
-
-    var body: some View {
-        Group {
-            if let action {
-                Button(action: action) {
-                    RecipeFavoriteBadge(isFavorite: isFavorite)
-                }
-                .buttonStyle(.plain)
-            } else {
-                RecipeFavoriteBadge(isFavorite: isFavorite)
-            }
-        }
-        .accessibilityLabel(isFavorite ? "Ulubione" : "Dodaj do ulubionych")
-    }
-}
-
 #Preview {
     VStack(spacing: 12) {
         RecipeInfoBadge(icon: "clock", text: "30 min")

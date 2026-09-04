@@ -38,6 +38,9 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
+    /// „Asystent i plan" — z limitów i z linijki nad polem po wyczerpaniu
+    /// puli. To samo miejsce, które otwiera wiersz w Ustawieniach.
+    @State private var showPaywall = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
     /// „Co potrafi asystent" — z menu, z bramki zgody i z onboardingu.
@@ -55,12 +58,10 @@ struct AssistantView: View {
     /// zapamiętywany: po zabiciu aplikacji user wraca na początek
     /// niedokończonego etapu, nie w środek.
     @State private var introStep: IntroStep?
-    /// Ostatnio oglądana karta „Poznaj" i strona „Od czego zaczniemy?" —
-    /// „Wstecz" wraca na nie, nie na pierwszą.
+    /// Ostatnio oglądana karta „Poznaj" — „Wstecz" ze zgody wraca na nią.
     @State private var introCard = 0
-    @State private var introPage = 0
 
-    enum IntroStep: Equatable { case hero, consent, cards, firstMessage }
+    enum IntroStep: Equatable { case hero, consent, cards }
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
@@ -95,14 +96,10 @@ struct AssistantView: View {
                                 consents: consents,
                                 source: "IOS_ASSISTANT_GATE",
                                 presentation: .inline,
-                                onGranted: {
-                                    store.consentGranted()
-                                    if store.retryText != nil { retry() }
-                                    goToStep(.cards)
-                                },
+                                onGranted: { continueAfterConsent() },
                                 showsStepper: true,
                                 onBack: { goToStep(.hero) },
-                                onContinue: { goToStep(.cards) }
+                                onContinue: { continueAfterConsent() }
                             )
                         } else {
                             conversation
@@ -113,32 +110,15 @@ struct AssistantView: View {
                             presentation: .inline,
                             showsStepBar: true,
                             startCard: introCard,
-                            onFinish: {
-                                introPage = 0
-                                goToStep(.firstMessage)
-                            },
-                            onSkip: { finishIntro() },
+                            onFinish: { startConversation() },
+                            onSkip: { startConversation() },
                             onBack: { goToStep(.consent) },
-                            onCardChange: { introCard = $0 }
-                        )
-                    case .firstMessage:
-                        AssistantFirstMessageView(
+                            onCardChange: { introCard = $0 },
                             onAsk: { text in
                                 finishIntro()
                                 ask(text)
                             },
-                            onCompose: {
-                                finishIntro()
-                                // Pole pojawia się razem z rozmową — fokus dopiero,
-                                // gdy już jest w hierarchii.
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
-                            },
-                            onBack: {
-                                introCard = AssistantCapabilities.onboarding.count - 1
-                                goToStep(.cards)
-                            },
-                            startPage: introPage,
-                            onPageChange: { introPage = $0 }
+                            onShowCapabilities: { showCapabilities = true }
                         )
                     case nil:
                         conversation
@@ -161,6 +141,9 @@ struct AssistantView: View {
         }
         .task {
             await store.openIfNeeded()
+            // Plakietka puli w nagłówku potrzebuje liczb od razu, nie dopiero
+            // po pierwszym 429. Bez zgody to żądanie po prostu nic nie zwraca.
+            _ = await store.loadUsage()
         }
         .onAppear { store.setVisible(true) }
         .onDisappear { store.setVisible(false) }
@@ -187,7 +170,13 @@ struct AssistantView: View {
             )
         }
         .sheet(isPresented: $showUsage) {
-            AssistantUsageSheet(store: store)
+            AssistantUsageSheet(store: store, onUpgrade: { showPaywall = true })
+        }
+        .sheet(isPresented: $showPaywall) {
+            // Jedno miejsce z planami dla całej aplikacji — to samo, które
+            // otwierają Ustawienia. Dwa ekrany z tą samą ofertą rozjechałyby
+            // się przy pierwszej zmianie cennika.
+            PlanAccessSheet()
         }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
@@ -200,14 +189,21 @@ struct AssistantView: View {
                 AssistantConsentGateView(
                     consents: consents,
                     source: "IOS_ASSISTANT_MENU",
-                    presentation: .sheet
+                    presentation: .sheet,
+                    // Zgoda włączona z menu (np. po cofnięciu) musi zdjąć
+                    // blokadę 403 w store — inaczej zakładka dalej pokazywała
+                    // bramkę mimo zapisanej zgody.
+                    onGranted: {
+                        showConsentReview = false
+                        continueAfterConsent()
+                    }
                 )
             }
         }
         .sheet(isPresented: $showCapabilities) {
             AssistantCapabilitiesSheet(
                 store: store,
-                onAsk: { text in ask(text) },
+                onAsk: { text in askFromSheet(text) },
                 onCompose: { isComposerFocused = true }
             )
         }
@@ -215,6 +211,7 @@ struct AssistantView: View {
             AssistantHowItWorksView(
                 presentation: .sheet,
                 onFinish: { onboardingSeen = true },
+                onAsk: { text in askFromSheet(text) },
                 onShowCapabilities: {
                     showHowItWorks = false
                     showCapabilities = true
@@ -250,16 +247,27 @@ struct AssistantView: View {
             // „Zanim zaczniemy" wyglądał na błąd).
             mode: (store.messages.isEmpty || currentStep != nil) ? .large : .compact(title: conversationTitle),
             onNewConversation: { Task { await store.startNewConversation() } },
+            accessory: quotaPips
         ) {
-            Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
-            Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
+            // W przepływie startowym (przed zgodą albo w kartach) menu ma
+            // tylko to, co wtedy działa — „Nowa rozmowa" czy „Usuń historię"
+            // bez zgody kończyły się 403 albo pustym arkuszem.
+            let inIntro = currentStep != nil
+            if !inIntro {
+                Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
+                Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
+            }
             Button { showCapabilities = true } label: { Label("Co potrafi asystent", systemImage: "sparkles") }
             Button { showHowItWorks = true } label: { Label("Jak działa asystent", systemImage: "questionmark.bubble") }
-            Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
-            Button { showUsage = true } label: { Label("Limity asystenta", systemImage: "chart.bar") }
+            if !inIntro {
+                Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
+                Button { showUsage = true } label: { Label("Limity asystenta", systemImage: "chart.bar") }
+            }
             Button { showConsentReview = true } label: { Label("Prywatność i zgoda", systemImage: "lock.shield") }
-            Divider()
-            Button(role: .destructive) { showDeleteAlert = true } label: { Label("Usuń historię rozmów", systemImage: "trash") }
+            if !inIntro {
+                Divider()
+                Button(role: .destructive) { showDeleteAlert = true } label: { Label("Usuń historię rozmów", systemImage: "trash") }
+            }
         }
     }
 
@@ -283,6 +291,42 @@ struct AssistantView: View {
         withAnimation(.easeOut(duration: 0.28)) { introStep = step }
     }
 
+    /// Po zgodzie: karty tylko za pierwszym razem. Kto cofnął zgodę i włącza
+    /// ją ponownie (albo dostał 403 w środku rozmowy), wraca prosto do
+    /// rozmowy — onboarding i „Od czego zaczniemy?" zostają pod menu ⋯.
+    private func continueAfterConsent() {
+        // Zdejmuje blokadę 403 (`needsConsent`) także wtedy, gdy zgoda była
+        // już zapisana po stronie serwera, a store o tym nie wiedział.
+        store.consentGranted()
+        if store.retryText != nil { retry() }
+        if onboardingSeen {
+            finishIntro()
+        } else {
+            goToStep(.cards)
+        }
+    }
+
+    /// Przykład stuknięty w arkuszu z menu. Bez zgody nie ma czego wysyłać
+    /// (serwer odpowie 403) — zamiast tego prowadzi do kroku „Zgoda";
+    /// w trakcie kart kończy przepływ i wysyła.
+    private func askFromSheet(_ text: String) {
+        if gateActive {
+            welcomeSeen = true
+            goToStep(.consent)
+            return
+        }
+        if currentStep != nil { finishIntro() }
+        ask(text)
+    }
+
+    /// „Zaczynajmy" / „Pomiń": rozmowa z kursorem w polu.
+    private func startConversation() {
+        finishIntro()
+        // Pole pojawia się razem z rozmową — fokus dopiero, gdy już jest
+        // w hierarchii.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
+    }
+
     /// Koniec przepływu: flagi na stałe, rozmowa. „Co potrafi" i „Jak działa"
     /// zostają pod menu ⋯.
     private func finishIntro() {
@@ -304,6 +348,20 @@ struct AssistantView: View {
         // się wcale. Ktoś ze zgodą, którego stan chwilowo nie doszedł, widzi
         // bramkę jeszcze raz — jedno stuknięcie, bez szkody.
         return !(consents.isLoaded && consents.assistantGranted)
+    }
+
+    /// Plakietka puli w nagłówku — tylko na próbie. W planie miesięcznym
+    /// pula jest na tyle duża, że licznik w nagłówku byłby szumem.
+    private var quotaPips: AnyView? {
+        guard let left = trialMessagesLeft else { return nil }
+        return AnyView(AssistantQuotaPips(remaining: left))
+    }
+
+    /// Ile wiadomości zostało z puli PRÓBNEJ; `nil` w planie miesięcznym
+    /// albo gdy jeszcze nie znamy liczb.
+    private var trialMessagesLeft: Int? {
+        guard let usage = store.usage, usage.isTrial else { return nil }
+        return usage.messages.remaining
     }
 
     private var conversationTitle: String? {
@@ -604,11 +662,46 @@ struct AssistantView: View {
                 editingBar
             }
 
+            // Jedyny moment, w którym aplikacja sama zaczyna rozmowę o
+            // pieniądzach — i mówi wtedy jedną linijką, bez kafla, bez ikony
+            // i bez przycisku. Pole tekstowe zostaje na miejscu.
+            if store.isLockedByTrialQuota {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Darmowe wiadomości wykorzystane.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.wmMuted(scheme))
+                    Button { showPaywall = true } label: {
+                        Text("Zobacz plany")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(WMPalette.terracotta)
+                            .underline()
+                    }
+                    .buttonStyle(.plain)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+            } else if let left = trialMessagesLeft, left <= 2 {
+                // Uprzedzenie, nie sprzedaż: sama liczba, bez przycisku i bez
+                // zachęty. Zaskoczenie w środku rozmowy o obiedzie jest
+                // gorsze niż cicha informacja dwie wiadomości wcześniej.
+                Text(left == 1
+                     ? "Została 1 wiadomość na próbę"
+                     : "Zostały \(left) wiadomości na próbę")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.wmMuted(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 8)
+            }
+
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(
                     store.isUnavailable
                         ? "Asystent jest teraz niedostępny"
-                        : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…"),
+                        : (store.isLockedByTrialQuota
+                            ? "Limit na próbę wykorzystany"
+                            : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…")),
                     text: $draft,
                     axis: .vertical
                 )

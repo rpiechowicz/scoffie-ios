@@ -50,7 +50,7 @@ extension TourStep {
             points: [
                 "Filtry: czas, dieta, kalorie, trudność",
                 "Składniki i kroki na jednym ekranie",
-                "Przepis wyślesz prosto na Thermomix",
+                "Własne przepisy domu obok katalogu",
             ],
             imageName: "TourRecipes"
         ),
@@ -74,10 +74,10 @@ extension TourStep {
             placeIcon: MenuConstans.Assistant.icon,
             accent: WMPalette.butter,
             title: "Zapytaj, gdy brakuje pomysłu",
-            summary: "Napisz, co macie w lodówce albo ile zostało czasu. Asystent zaproponuje posiłek i doda go do planu.",
+            summary: "Napisz, na kiedy i ile masz czasu. Asystent zaproponuje plan albo podmianę jako kartę — dodajesz ją Ty, nic nie zapisuje się samo.",
             points: [
-                "Propozycje z tego, co macie pod ręką",
-                "Podmiana dania jednym tapnięciem",
+                "Plan tygodnia albo jednego dnia z Waszych przepisów",
+                "Podmiana dania z powodem i różnicą kalorii",
                 "Pamięta ustalenia — „w środy jemy u teściów”",
             ],
             imageName: "TourAssistant"

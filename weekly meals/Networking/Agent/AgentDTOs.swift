@@ -157,14 +157,42 @@ struct AgentUsageByUserDTO: Decodable, Equatable, Identifiable {
 /// `GET /agent/usage` — „ile mi zostało" i kto ile zużył.
 struct AgentUsageDTO: Decodable, Equatable {
     let householdId: String
+    /// `YYYY-MM` (PRO) albo `trial` (jednorazowa pula na próbę).
     let period: String
-    let resetsAt: String
-    /// Dziś zawsze `FREE`; pole jest, żeby paywall nie zmieniał kontraktu.
+    /// Kiedy pula wraca; `nil` na próbie — nie odnawia się.
+    let resetsAt: String?
+    /// Czy pula wraca co miesiąc; starszy serwer nie oddaje pola (= tak).
+    let renews: Bool?
+    /// `TRIAL` albo `PRO` (starszy serwer: `FREE` = pula miesięczna).
     let tier: String
+    /// Skąd PRO: `SUBSCRIPTION`, `GRANTED` (nadanie), `ENV`; `TRIAL` na próbie.
+    let source: String?
+    /// Nazwa kupionego planu (Solo/Duet/Rodzina); `nil` = limity z konfiguracji.
+    let product: String?
     let messages: AgentQuotaDTO
     let plans: AgentQuotaDTO
     /// Rozkład na domowników w tym okresie; starszy serwer nie oddaje pola.
     let byUser: [AgentUsageByUserDTO]?
+
+    /// Imię osoby, której subskrypcja napędza ten dom; `null` poza subskrypcją.
+    let payerName: String?
+    /// Czy to pytający płaci. Opcjonalne, bo starszy serwer tego nie oddaje.
+    let isPayer: Bool?
+
+    var isTrial: Bool { tier == "TRIAL" }
+    /// Domyślnie NIE płatnik: brak informacji nie może dawać komuś dostępu do
+    /// cudzej subskrypcji w Ustawieniach iOS.
+    var isThePayer: Bool { isPayer ?? false }
+    /// „Zarządzaj subskrypcją" ma sens tylko, gdy PRO pochodzi z App Store.
+    /// „Zarządzaj subskrypcją" widzi WYŁĄCZNIE płatnik.
+    ///
+    /// Dotąd warunek brzmiał „dom ma subskrypcję", więc przycisk dostawał też
+    /// domownik, który za nic nie płaci — i lądował w Ustawieniach iOS, gdzie
+    /// nie ma żadnej subskrypcji do zarządzania. Teraz decyduje `isPayer`
+    /// z serwera, bo tylko on wie, czyj `identityHash` stoi przy umowie.
+    var showsManageSubscription: Bool {
+        !isTrial && source == "SUBSCRIPTION" && isThePayer
+    }
 }
 
 /// Domownik w arkuszu „Dla kogo liczyć" — z etykietą celu prosto z profilu.

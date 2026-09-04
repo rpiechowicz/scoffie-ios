@@ -286,3 +286,9 @@ struct BackendUserPreferencesDTO: Decodable {
 struct BackendDeletedUserDTO: Decodable {
     let id: String
 }
+
+/// Odpowiedź `notifications:unregisterDevice`.
+struct PushDeviceUnregisterAckDTO: Decodable {
+    let success: Bool
+    let removed: Int?
+}

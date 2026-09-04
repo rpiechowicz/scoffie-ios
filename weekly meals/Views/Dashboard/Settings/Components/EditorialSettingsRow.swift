@@ -103,11 +103,3 @@ struct EditorialSettingsChevron: View {
             )
     }
 }
-
-// Empty trailing placeholder — used by the "Wersja" row, where the value
-// pill sits alone with no chevron / toggle to the right of it.
-struct EditorialSettingsEmptyTrailing: View {
-    var body: some View {
-        EmptyView()
-    }
-}

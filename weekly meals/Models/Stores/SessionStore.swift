@@ -144,6 +144,11 @@ final class SessionStore {
     var consentStore: ConsentStore?
     /// „Pobierz moje dane" (`GET /me/export`).
     var dataExportClient: DataExportAPIClient?
+    /// Zakupy App Store. Żyje tak długo jak sesja, a nie tyle co ekran planu:
+    /// `Transaction.updates` przynosi odnowienia i zatwierdzone „Poproś
+    /// o zakup" w dowolnym momencie, a każda taka transakcja musi trafić na
+    /// serwer. Zamknięty ekran nie może tego przegapić.
+    var subscriptionStore: SubscriptionStore?
     var datesViewModel = DatesViewModel()
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
@@ -367,6 +372,10 @@ final class SessionStore {
                 try? await client.logout(refreshToken: refreshToken)
             }
         }
+        // Token push przestaje należeć do tego konta — inaczej poprzedni
+        // użytkownik telefonu dostawał pushe cudzego domu. Best-effort, przed
+        // zamknięciem socketu sesji.
+        unregisterPushDeviceBestEffort()
         tearDownSessionSocket()
         clearPersistedSession()
         clearHouseholdMembersCache()
@@ -468,11 +477,11 @@ final class SessionStore {
 
     private func restoreSession() {
         let snapshot = restoredSessionSnapshot()
-        NSLog(
+        debugLog(
             "[SessionStore] restoreSession userId=\(snapshot?.userId ?? "<nil>") householdId=\(snapshot?.householdId ?? "<nil>")"
         )
         guard let snapshot else {
-            NSLog("[SessionStore] restoreSession EARLY RETURN — userId missing")
+            debugLog("[SessionStore] restoreSession EARLY RETURN — userId missing")
             return
         }
         // Od Fazy 0 socket i REST wymagają tokenu. `userId` w UserDefaults
@@ -481,13 +490,13 @@ final class SessionStore {
         guard let accessToken = currentAccessToken, !accessToken.isEmpty else {
             let status = KeychainService.status(forKey: Keys.accessToken)
             if status == errSecItemNotFound {
-                NSLog("[SessionStore] restoreSession EARLY RETURN — access token missing")
+                debugLog("[SessionStore] restoreSession EARLY RETURN — access token missing")
                 clearPersistedSession()
             } else {
                 // Keychain chwilowo niedostępny (proces obudzony przed pierwszym
                 // odblokowaniem po restarcie, przejściowy błąd) — sesja żyje,
                 // wrócimy do niej przy pierwszym wejściu na pierwszy plan.
-                NSLog("[SessionStore] restoreSession deferred — keychain status \(status)")
+                debugLog("[SessionStore] restoreSession deferred — keychain status \(status)")
                 restoreDeferredUntilKeychainAvailable = true
             }
             return
@@ -583,7 +592,8 @@ final class SessionStore {
 
         self.weeklyMealStore = WeeklyMealStore(
             weeklyPlanRepository: ApiWeeklyPlanRepository(client: weeklyPlanTransport),
-            currentUserId: userId
+            currentUserId: userId,
+            cacheNamespace: "\(userId)_\(householdId)"
         )
         self.recipeCatalogStore = RecipeCatalogStore(
             repository: ApiRecipeRepository(client: recipeTransport)
@@ -643,6 +653,10 @@ final class SessionStore {
         let consentStore = ConsentStore(client: ConsentsAPIClient(core: restCore))
         self.consentStore = consentStore
         self.dataExportClient = DataExportAPIClient(core: restCore)
+        self.subscriptionStore = SubscriptionStore(
+            client: BillingAPIClient(core: restCore),
+            userId: currentUserId
+        )
         // Stan zgód od razu: wiersz w Ustawieniach i bramka asystenta mają
         // wiedzieć, zanim ktoś stuknie.
         Task { @MainActor in
@@ -702,6 +716,22 @@ final class SessionStore {
         }
     }
 
+    /// `notifications:unregisterDevice` z zapamiętanym tokenem APNs.
+    /// Nie czeka na odpowiedź: wylogowanie nie może wisieć na sieci.
+    private func unregisterPushDeviceBestEffort() {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let token = UserDefaults.standard.string(forKey: Keys.pushDeviceToken), !token.isEmpty
+        else { return }
+        let socketClient = sessionSocket()
+        Task { @MainActor in
+            let _: WsEnvelope<PushDeviceUnregisterAckDTO>? = try? await socketClient.emitWithAck(
+                event: "notifications:unregisterDevice",
+                payload: ["userId": userId, "data": ["deviceToken": token]],
+                as: WsEnvelope<PushDeviceUnregisterAckDTO>.self
+            )
+        }
+    }
+
     private func clearRuntimeStores() {
         realtimeSocket?.off(event: "households:membersChanged")
         realtimeSocket?.off(event: "households:mealTypesChanged")
@@ -710,6 +740,10 @@ final class SessionStore {
         // (wyjście z domu, usunięcie z domu). Serwer sam przepina pokoje;
         // wylogowanie zamyka go w `tearDownSessionSocket()`.
         weeklyMealStore = nil
+        // Plan i lista zakupów leżą na dysku per konto+dom — po wyjściu z domu
+        // albo wylogowaniu nie mają prawa zostać dla następnej osoby.
+        WeeklyMealStore.clearCache()
+        ShoppingListStore.clearCache()
         // Plik cache katalogu nie jest przypisany do konta: bez tego następna
         // osoba zalogowana na tym telefonie widziała przez 12 h katalog
         // (ulubione, tytuły) poprzedniego gospodarstwa.
@@ -724,6 +758,7 @@ final class SessionStore {
         agentStore = nil
         consentStore = nil
         dataExportClient = nil
+        subscriptionStore = nil
         datesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
@@ -1589,19 +1624,19 @@ final class SessionStore {
             persistHousehold(id: household.id, name: household.name)
             bootstrapSession(userId: userId, householdId: household.id, householdName: household.name)
         } catch {
-            NSLog("[SessionStore] restoreHouseholdIfNeeded FAILED error=\(error.localizedDescription)")
+            debugLog("[SessionStore] restoreHouseholdIfNeeded FAILED error=\(error.localizedDescription)")
         }
     }
 
     private func persistSession(_ response: SessionResponse, appleUserIdentifier: String? = nil) {
-        NSLog("[SessionStore] persistSession START userId=\(response.user.id) household=\(response.household?.id ?? "nil")")
+        debugLog("[SessionStore] persistSession START userId=\(response.user.id) household=\(response.household?.id ?? "nil")")
 
         // Tokeny auth trafiają do Keychain (szyfrowany, chroniony przez Secure Enclave)
         let accessSaved = KeychainService.save(response.accessToken, forKey: Keys.accessToken)
         let refreshSaved = KeychainService.save(response.refreshToken, forKey: Keys.refreshToken)
         let userIdSaved = KeychainService.save(response.user.id, forKey: Keys.userId)
-        NSLog("[SessionStore] keychain saved accessToken=\(accessSaved) refreshToken=\(refreshSaved)")
-        NSLog("[SessionStore] keychain saved userId=\(userIdSaved)")
+        debugLog("[SessionStore] keychain saved accessToken=\(accessSaved) refreshToken=\(refreshSaved)")
+        debugLog("[SessionStore] keychain saved userId=\(userIdSaved)")
 
         // Legacy cleanup: wcześniejsze wersje trzymały tokeny w UserDefaults.
         // Usuwamy je, żeby nie mylić diagnostyki i nie wyciekały przy backupie.
@@ -1641,7 +1676,7 @@ final class SessionStore {
 
         let writtenUserId = defaults.string(forKey: Keys.userId) ?? "<nil>"
         let writtenHouseholdId = defaults.string(forKey: Keys.householdId) ?? "<nil>"
-        NSLog("[SessionStore] persistSession DONE readback userId=\(writtenUserId) householdId=\(writtenHouseholdId)")
+        debugLog("[SessionStore] persistSession DONE readback userId=\(writtenUserId) householdId=\(writtenHouseholdId)")
     }
 
     private func persistHousehold(id: String, name: String) {
@@ -1664,6 +1699,10 @@ final class SessionStore {
         // Hero i onboarding asystenta są per konto, nie per telefon: kolejny
         // użytkownik (albo ten sam po usunięciu konta) ma je zobaczyć od nowa.
         AssistantIntroState.reset()
+        ConsentStore.clearCache()
+        // Odłożone zaproszenie należy do osoby, która je otworzyła — następna
+        // zalogowana dostawała alert z cudzym domem i mogła do niego dołączyć.
+        storedInvitationToken = nil
         // Usuń tokeny z Keychain
         KeychainService.delete(forKey: Keys.accessToken)
         KeychainService.delete(forKey: Keys.refreshToken)
@@ -2132,6 +2171,7 @@ final class SessionStore {
     /// (`code: "VALIDATION_ERROR"`), więc nowa wartość enuma musi najpierw
     /// wyjść na backend.
     @MainActor
+    @discardableResult
     func saveUserPreferences(
         diet: String? = nil,
         calorieGoal: Int? = nil,
@@ -2150,8 +2190,8 @@ final class SessionStore {
         /// trzymać moje wartości i licz za mnie". Bez tego nie dałoby się
         /// wrócić do automatu, bo `nil` w parametrze znaczy „nie ruszaj".
         clearMacroOverrides: Bool = false
-    ) async {
-        guard let userId = currentUserId, !userId.isEmpty else { return }
+    ) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
 
         // Mirror to AppStorage so the welcome flow survives a kill-restart
         // mid-flow and SettingsView reads the latest values without a
@@ -2228,7 +2268,7 @@ final class SessionStore {
                 defaults.set(carbsG, forKey: PreferencesKeys.carbsG)
             }
         }
-        guard !data.isEmpty else { return }
+        guard !data.isEmpty else { return true }
 
         let socket = sessionSocket()
 
@@ -2246,9 +2286,11 @@ final class SessionStore {
                 print("[SessionStore] users:preferences:update odrzucone: \(envelope.code ?? "?") \(envelope.error ?? "") requestId=\(envelope.requestId ?? "-")")
                 #endif
             }
+            return envelope.ok
         } catch {
-            // Swallow — local AppStorage is already updated optimistically.
-            // We retry on the next change.
+            // AppStorage jest już zaktualizowany optymistycznie; wynik mówi
+            // wywołującemu (kreator), że serwer tego jeszcze nie ma.
+            return false
         }
     }
 
@@ -2315,6 +2357,7 @@ final class SessionStore {
     /// Persist the profile slice (display name + biometrics) for the
     /// welcome flow's step 1. Updates AppStorage immediately, then mirrors
     /// to the backend via `users:profile:update`.
+    @discardableResult
     @MainActor
     func saveProfile(
         displayName: String? = nil,
@@ -2322,8 +2365,8 @@ final class SessionStore {
         heightCm: Int? = nil,
         weightKg: Double? = nil,
         sex: String? = nil
-    ) async {
-        guard let userId = currentUserId, !userId.isEmpty else { return }
+    ) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
 
         var data: [String: Any] = [:]
         if let displayName {
@@ -2357,20 +2400,21 @@ final class SessionStore {
             data["sex"] = sex.uppercased()
             UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
         }
-        guard !data.isEmpty else { return }
+        guard !data.isEmpty else { return true }
 
         let socket = sessionSocket()
 
         do {
-            let _: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
+            let envelope: WsEnvelope<BackendUserProfileDTO> = try await socket.emitWithAck(
                 event: "users:profile:update",
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserProfileDTO>.self
             )
+            return envelope.ok
         } catch {
-            // Swallow — AppStorage is already updated optimistically. The
-            // user can keep going through the welcome flow even on flaky
-            // networks; the next `users:me` will reconcile.
+            // AppStorage jest już zaktualizowany optymistycznie; kreator
+            // pokaże ostrzeżenie i ponowi przy następnym „Dalej".
+            return false
         }
     }
 
@@ -2468,7 +2512,7 @@ final class SessionStore {
             return nil
         }
 
-        NSLog("[SessionStore] restoreSession recovered userId from access token")
+        debugLog("[SessionStore] restoreSession recovered userId from access token")
         return userId
     }
 
@@ -2579,7 +2623,7 @@ final class SessionStore {
             guard let refreshToken, !refreshToken.isEmpty else {
                 // Brak refresh tokenu nie minie sam — bez ponownego logowania
                 // sesji nie da się uratować.
-                NSLog("[SessionStore] refreshSessionTokens — refresh token missing, session unrecoverable")
+                debugLog("[SessionStore] refreshSessionTokens — refresh token missing, session unrecoverable")
                 return .rejected
             }
             let client = AuthAPIClient(baseURL: baseURL)
@@ -2638,10 +2682,10 @@ final class SessionStore {
     /// (0, 2, 4, 8, 16 s) i limit; `.unavailable` (offline) zostawia socket
     /// do następnego foregroundu (`reconnectIfNeeded` robi jedną próbę).
     private func handleSocketAuthFailure(reason: String) async {
-        NSLog("[SessionStore] socket auth failure reason=\(reason) retry=\(socketAuthRetryCount)")
+        debugLog("[SessionStore] socket auth failure reason=\(reason) retry=\(socketAuthRetryCount)")
         socketAuthRetryCount += 1
         guard socketAuthRetryCount <= Self.maxSocketAuthRetries else {
-            NSLog("[SessionStore] socket auth failure loop — waiting for next foreground")
+            debugLog("[SessionStore] socket auth failure loop — waiting for next foreground")
             return
         }
         if socketAuthRetryCount > 1 {

@@ -42,7 +42,12 @@ class WeeklyMealStore {
 
     // MARK: - Init
 
-    init(weeklyPlanRepository: WeeklyPlanRepository? = nil, currentUserId: String? = nil) {
+    /// Część nazwy pliku cache — `userId_householdId`. Bez tego plan
+    /// poprzedniego konta wczytywał się następnej osobie na tym telefonie.
+    private let cacheNamespace: String
+
+    init(weeklyPlanRepository: WeeklyPlanRepository? = nil, currentUserId: String? = nil, cacheNamespace: String = "default") {
+        self.cacheNamespace = Self.sanitizedCacheNamespace(cacheNamespace)
         self.weeklyPlanRepository = weeklyPlanRepository
         self.currentUserId = currentUserId
         self.weeklyPlanRepository?.observeWeekPlanChanges { [weak self] event in
@@ -417,9 +422,28 @@ class WeeklyMealStore {
 
     // MARK: - Persistence
 
+    private static let cacheFilePrefix = "meal_plans"
+
     private var fileURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("meal_plans.json")
+            .appendingPathComponent("\(Self.cacheFilePrefix)_\(cacheNamespace).json")
+    }
+
+    private static func sanitizedCacheNamespace(_ raw: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let cleaned = raw.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }
+        let value = String(cleaned)
+        return value.isEmpty ? "default" : value
+    }
+
+    /// Wylogowanie, usunięcie konta, zmiana domu: plik planu (także stary,
+    /// wspólny `meal_plans.json`) nie może przeżyć sesji.
+    static func clearCache() {
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasPrefix(cacheFilePrefix) && name.hasSuffix(".json") {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
     }
 
     private func save() {
@@ -427,7 +451,7 @@ class WeeklyMealStore {
             let data = try JSONEncoder().encode(plans)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("WeeklyMealStore save error: \(error)")
+            debugLog("WeeklyMealStore save error: \(error)")
         }
     }
 
@@ -436,7 +460,7 @@ class WeeklyMealStore {
         do {
             plans = try JSONDecoder().decode([String: DayMealPlan].self, from: data)
         } catch {
-            print("WeeklyMealStore load error: \(error)")
+            debugLog("WeeklyMealStore load error: \(error)")
         }
     }
 

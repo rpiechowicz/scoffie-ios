@@ -53,6 +53,13 @@ struct WelcomeView: View {
     // baseline appear in step 3 without having to drag it down.
     @State private var calorieAdjustedManually: Bool = false
 
+    /// Zapisy z kroków 1–3 idą w tle. Gdy któryś padnie, kreator nie
+    /// zatrzymuje się (dane są w AppStorage), ale mówi o tym i ponawia
+    /// przy następnym „Dalej" — wcześniej błąd wychodził dopiero w Ustawieniach.
+    @State private var pendingProfileRetry = false
+    @State private var pendingPreferencesRetry = false
+    @State private var saveWarning: String?
+
     /// Krok, na którym ląduje ktoś po onboardingu bez gospodarstwa —
     /// zarazem ostatni krok pełnej ścieżki.
     ///
@@ -170,6 +177,7 @@ struct WelcomeView: View {
                         isLoading: isCreatingHousehold && step == totalSteps,
                         showsStepper: initialStep == 1,
                         showsBack: step > initialStep,
+                        warning: saveWarning,
                         onBack: handleBack,
                         onNext: handleNext
                     )
@@ -332,43 +340,20 @@ struct WelcomeView: View {
         // delivered shifted / corrupted parameter values to the closure
         // body — using the store reference avoids the indirection.
         let store = sessionStore
+        retryPendingSaves(store)
         switch step {
         case 1:
-            let name = trimmedName
-            let year = yearOfBirth
-            let height = heightCm
-            let weight = weightKg
-            let sexValue = sex?.rawValue
-            Task { @MainActor in
-                await store.saveProfile(
-                    displayName: name,
-                    yearOfBirth: year,
-                    heightCm: height,
-                    weightKg: weight,
-                    sex: sexValue
-                )
-            }
+            Task { @MainActor in await saveProfileStep(store) }
             advance()
         case 2, 3:
-            let goalRaw = goal.rawValue
-            let activityRaw = activity.rawValue
-            let dietRaw = diet.rawValue
-            let kcal = calorieGoal
-            // Unia z nieznanymi — kreator nie kasuje alergenu z nowszego buildu.
-            let allergenRaws = Array(Set(allergens.map(\.rawValue)).union(unknownAllergens)).sorted()
-            Task { @MainActor in
-                await store.saveUserPreferences(
-                    diet: dietRaw,
-                    calorieGoal: kcal,
-                    allergens: allergenRaws,
-                    goal: goalRaw,
-                    activityLevel: activityRaw
-                )
-            }
+            Task { @MainActor in await savePreferencesStep(store) }
             advance()
         case 4:
-            // Posiłki nie mają dokąd pójść, dopóki nie ma gospodarstwa —
-            // wybór czeka w `mealSlots` na krok 5.
+            // Posiłki nie mają dokąd pójść na serwerze, dopóki nie ma
+            // gospodarstwa — wybór czeka w `mealSlots` na krok 5. Lokalnie
+            // zapisany od razu: zabicie aplikacji na kroku 5 nie cofa go
+            // do domyślnych.
+            UserDefaults.standard.set(mealSlots.storageValue, forKey: MealSlotConfiguration.Keys.enabledSlots)
             advance()
         case 5:
             let trimmedHousehold = householdName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -393,6 +378,55 @@ struct WelcomeView: View {
         guard step < totalSteps else { return }
         direction = 1
         step += 1
+    }
+
+    // MARK: - Zapisy w tle z ponowieniem
+
+    @MainActor
+    private func saveProfileStep(_ store: SessionStore) async {
+        let ok = await store.saveProfile(
+            displayName: trimmedName,
+            yearOfBirth: yearOfBirth,
+            heightCm: heightCm,
+            weightKg: weightKg,
+            sex: sex?.rawValue
+        )
+        pendingProfileRetry = !ok
+        refreshSaveWarning()
+    }
+
+    @MainActor
+    private func savePreferencesStep(_ store: SessionStore) async {
+        // Unia z nieznanymi — kreator nie kasuje alergenu z nowszego buildu.
+        let allergenRaws = Array(Set(allergens.map(\.rawValue)).union(unknownAllergens)).sorted()
+        let ok = await store.saveUserPreferences(
+            diet: diet.rawValue,
+            calorieGoal: calorieGoal,
+            allergens: allergenRaws,
+            goal: goal.rawValue,
+            activityLevel: activity.rawValue
+        )
+        pendingPreferencesRetry = !ok
+        refreshSaveWarning()
+    }
+
+    /// Nieudane zapisy wracają przy każdym kolejnym „Dalej" — bez osobnego
+    /// przycisku, bo user i tak idzie do przodu.
+    private func retryPendingSaves(_ store: SessionStore) {
+        if pendingProfileRetry {
+            Task { @MainActor in await saveProfileStep(store) }
+        }
+        if pendingPreferencesRetry {
+            Task { @MainActor in await savePreferencesStep(store) }
+        }
+    }
+
+    private func refreshSaveWarning() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            saveWarning = (pendingProfileRetry || pendingPreferencesRetry)
+                ? "Nie udało się zapisać na serwerze — dane zostały w telefonie, spróbujemy przy następnym kroku."
+                : nil
+        }
     }
 }
 

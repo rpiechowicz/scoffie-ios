@@ -58,6 +58,15 @@ final class ShoppingListStore {
             .appendingPathComponent("shopping_list_cache_\(cacheNamespace).json")
     }
 
+    /// Usunięcie konta / wylogowanie: lista z dysku nie zostaje (art. 17).
+    static func clearCache() {
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasPrefix("shopping_list_cache_") && name.hasSuffix(".json") {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
+
     init(repository: ShoppingListRepository, currentUserId: String = "", cacheNamespace: String = "default") {
         self.repository = repository
         self.currentUserId = currentUserId

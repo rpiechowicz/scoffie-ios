@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// „Co potrafi asystent" — arkusz z menu ⋯ (pełna ściąga). W przepływie
-/// startowym tę rolę pełni `AssistantFirstMessageView` — strony z gotowymi
-/// zdaniami, bez zasad i miniatur. Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
+/// „Co potrafi asystent" — arkusz z menu ⋯ (pełna ściąga); przepływ
+/// startowy pokazuje tylko 4 karty „Poznaj" i linkuje tutaj z ostatniej.
+/// Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
 /// cztery grupy umiejętności jako akordeony (wszystkie zwinięte na start),
 /// zasady gry i prywatność. Limitów tu nie ma — to ekran „co", nie „ile",
 /// i widzi go też ktoś, kto asystenta jeszcze nie włączył. Przykład
@@ -169,12 +169,11 @@ struct AssistantCapabilitiesSheet: View {
                         .foregroundStyle(Color.wmMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     if let example = capability.example {
-                        AssistantExampleBubble(text: example) {
+                        AssistantExchangePreview(example: example, reply: capability.reply, thumb: capability.thumb) {
                             dismiss()
                             onAsk(example)
                         }
-                    }
-                    if let thumb = capability.thumb {
+                    } else if let thumb = capability.thumb {
                         AssistantThumb(kind: thumb)
                     }
                 }
@@ -205,7 +204,7 @@ struct AssistantCapabilitiesSheet: View {
         AssistantSurfaceCard {
             AssistantSectionLabel(text: "Prywatność", color: WMPalette.sage)
                 .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
-            infoRow(icon: "checkmark.shield.fill", accent: .sage, title: "Zostaje w telefonie", detail: "Wzrost, waga, płeć, rok urodzenia, kroki, e-mail i hasło Cookidoo nigdy nie idą do modelu.", first: true)
+            infoRow(icon: "checkmark.shield.fill", accent: .sage, title: "Nie idzie do modelu", detail: "Wzrost, waga, płeć, rok urodzenia, kroki, e-mail i hasło Cookidoo nigdy nie idą do modelu.", first: true)
             infoRow(icon: "person.2.fill", accent: .sage, title: "Domownicy tylko za zgodą", detail: "Dane innych osób trafiają do planu dopiero, gdy same włączą asystenta.", first: false)
             infoRow(icon: "lock.shield.fill", accent: .sage, title: "Zgodę cofniesz w menu", detail: "Rozmowy i notatki pamięci znikają, plan i przepisy zostają.", first: false)
         }
