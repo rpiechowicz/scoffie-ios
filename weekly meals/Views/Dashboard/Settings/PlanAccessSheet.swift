@@ -127,16 +127,31 @@ struct PlanAccessSheet: View {
         return usage.isThePayer ? .paying : .member
     }
 
+    /// Etykieta plakietki. Osobno od widoku i bez domknięcia: `switch`
+    /// w wielolinijkowym domknięciu z wnioskowaną krotką to klasyczny powód
+    /// „unable to infer complex closure return type".
+    private func badgeText(_ usage: AgentUsageDTO) -> String {
+        switch accessState(for: usage) {
+        case .trial:
+            return "Dostęp próbny"
+        case .granted:
+            return "Plan domu"
+        case .paying, .member:
+            guard let product = usage.product else { return "Plan domu" }
+            return "Plan " + product
+        }
+    }
+
+    private func badgeColor(_ usage: AgentUsageDTO) -> Color {
+        switch accessState(for: usage) {
+        case .trial: return WMPalette.butter
+        case .granted: return WMPalette.indigo
+        case .paying, .member: return WMPalette.sage
+        }
+    }
+
     private func badge(for usage: AgentUsageDTO) -> some View {
-        let (label, color): (String, Color) = {
-            switch accessState(for: usage) {
-            case .trial: return ("Dostęp próbny", WMPalette.butter)
-            case .granted: return ("Plan domu", WMPalette.indigo)
-            case .paying, .member:
-                return (usage.product.map { "Plan \($0)" } ?? "Plan domu", WMPalette.sage)
-            }
-        }()
-        return PlanBadge(label: label, color: color)
+        PlanBadge(label: badgeText(usage), color: badgeColor(usage))
     }
 
     // MARK: - 1. Pula próbna
@@ -228,6 +243,10 @@ struct PlanAccessSheet: View {
     /// Karuzela planów: karty wystają poza krawędź, więc widać, że jest ich
     /// więcej. Żadnej nie wyróżniamy etykietą „polecany" — to lista do
     /// przejrzenia, nie ranking.
+    private var selectedIndex: Int {
+        SubscriptionCatalog.all.firstIndex(where: { $0.id == selected.id }) ?? 0
+    }
+
     private var planCarousel: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal) {
@@ -249,20 +268,8 @@ struct PlanAccessSheet: View {
             }
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned)
-            // Jawny `Binding<String?>`: `scrollPosition(id:)` chce opcjonalu,
-            // a `selected.id` jest zwykłym napisem — bez adnotacji kompilator
-            // wnioskuje `Binding<String>` i `if let` niżej przestaje mieć sens.
-            .scrollPosition(id: Binding<String?>(
-                get: { selected.id },
-                set: { id in
-                    if let id, let plan = SubscriptionCatalog.all.first(where: { $0.id == id }) {
-                        selected = plan
-                    }
-                }
-            ))
 
-            PlanCarouselDots(count: SubscriptionCatalog.all.count,
-                             active: SubscriptionCatalog.all.firstIndex(where: { $0.id == selected.id }) ?? 0)
+            PlanCarouselDots(count: SubscriptionCatalog.all.count, active: selectedIndex)
                 .padding(.top, 12)
         }
     }
@@ -722,7 +729,13 @@ struct PlanCarouselCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Plan \(plan.name), \(plan.seatsLabel), \(price) miesięcznie, \(plan.quantityLine)")
-        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityAddTraits(traits)
+    }
+
+    private var traits: AccessibilityTraits {
+        var result: AccessibilityTraits = .isButton
+        if isSelected { result.insert(.isSelected) }
+        return result
     }
 
     private func quantity(_ value: Int, _ label: String) -> some View {
