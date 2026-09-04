@@ -55,6 +55,7 @@ jobs:
 
       - name: Build app
         run: |
+          set -o pipefail
           # Avoid universal simulator binaries on arm64 runners.
           # Xcode 26.3 on GitHub Actions fails while lipo-ing preview dylibs for x86_64 + arm64.
           xcodebuild \
@@ -66,4 +67,30 @@ jobs:
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=YES \
-            EXCLUDED_ARCHS=x86_64
+            EXCLUDED_ARCHS=x86_64 \
+            2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Błędy kompilatora
+        if: failure()
+        run: |
+          LOG="$RUNNER_TEMP/build.log"
+          [ -f "$LOG" ] || exit 0
+          echo "::group::Błędy kompilatora"
+          ERRORS=$(grep -nE "error:|fatal error:|Command .* failed" "$LOG" | head -50 || true)
+          if [ -n "$ERRORS" ]; then
+            echo "$ERRORS"
+          else
+            echo "Brak linii z 'error:' — problem jest poza kompilacją."
+          fi
+          echo "::endgroup::"
+          echo "::group::Ostatnie 80 linii logu"
+          tail -80 "$LOG"
+          echo "::endgroup::"
+
+      - name: Pełny log builda
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-log
+          path: ${{ runner.temp }}/build.log
+          retention-days: 7

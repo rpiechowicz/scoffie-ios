@@ -91,6 +91,7 @@ jobs:
 
       - name: Archive release build
         run: |
+          set -o pipefail
           xcodebuild \
             -project "$PROJECT_PATH" \
             -scheme "$SCHEME" \
@@ -103,7 +104,33 @@ jobs:
             -authenticationKeyID "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
             -authenticationKeyIssuerID "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" \
             clean archive \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            2>&1 | tee "$RUNNER_TEMP/archive.log"
+
+      - name: Błędy kompilatora
+        if: failure()
+        run: |
+          LOG="$RUNNER_TEMP/archive.log"
+          [ -f "$LOG" ] || exit 0
+          echo "::group::Błędy kompilatora"
+          ERRORS=$(grep -nE "error:|fatal error:|Command .* failed" "$LOG" | head -50 || true)
+          if [ -n "$ERRORS" ]; then
+            echo "$ERRORS"
+          else
+            echo "Brak linii z 'error:' — problem jest poza kompilacją."
+          fi
+          echo "::endgroup::"
+          echo "::group::Ostatnie 80 linii logu"
+          tail -80 "$LOG"
+          echo "::endgroup::"
+
+      - name: Pełny log builda
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: archive-log
+          path: ${{ runner.temp }}/archive.log
+          retention-days: 7
 
       - name: Export IPA
         run: |
