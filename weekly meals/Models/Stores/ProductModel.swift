@@ -46,5 +46,3 @@ extension ProductCategory {
         }
     }
 }
-
-s
