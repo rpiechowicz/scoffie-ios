@@ -17,9 +17,9 @@ jobs:
     permissions:
       contents: read
     env:
-      PROJECT_PATH: weekly meals.xcodeproj
-      SCHEME: weekly meals
-      BUNDLE_ID: app.scoffie
+      PROJECT_PATH: Scoffie.xcodeproj
+      SCHEME: Scoffie
+      BUNDLE_ID: app.scoffie.ios
       TEAM_ID: 5R874L3LNP
       ARCHIVE_PATH: ${{ github.workspace }}/build/scoffie.xcarchive
       EXPORT_PATH: ${{ github.workspace }}/build/export

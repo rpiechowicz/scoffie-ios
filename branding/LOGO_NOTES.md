@@ -1,35 +1,41 @@
-# Scoffie Logo
+# Logo Scoffie
 
-## Aktualne źródło
+## Źródło
 
-`scoffie-logo.svg` — 1024×1024, trzy ścieżki wektorowe, kolory `#D2452D`
-(czerwień), `#ECB936` (żółć) i `#F1F1EC` (tło). To jest logo Scoffie i to ono
-obowiązuje.
+`scoffie-logo.svg` — 1024×1024, trzy ścieżki wektorowe, kolory `#D2452D`,
+`#ECB936` i `#F1F1EC`. To jedyny obowiązujący plik. Wszystko inne w tym
+katalogu jest historią.
 
 ## CO JESZCZE NIE JEST ZROBIONE
 
-**Aplikacja nadal rysuje stare logo, a ono układa parę w litery „WM".** To są
-inicjały Weekly Meals, czyli najbardziej widoczny ślad po starej nazwie —
-widzi go każdy przy pierwszym uruchomieniu i na ekranie logowania.
+**Aplikacja nadal rysuje logo poprzedniej marki, a ono układa parę w jej
+inicjały.** To najbardziej widoczny ślad po starej nazwie: pokazuje się na
+ekranie startowym, przy logowaniu, w nagłówku dokumentów prawnych i w ikonie
+aplikacji. Nazwy typów i plików są już poprawione, ale rysunek nie.
 
-Do zrobienia, w tej kolejności:
+Dwa kroki, oba wymagają Maca, bo na Windowsie nie ma czym zamienić wektora
+na piksele:
 
 1. **Ikona aplikacji.** `Assets.xcassets/AppIcon.appiconset` trzyma trzy pliki
-   PNG (`app-icon-primary`, `app-icon-dark`, `app-icon-tinted`). Xcode nie
-   przyjmuje SVG jako ikony, więc trzeba wyeksportować `scoffie-logo.svg` do
-   PNG 1024×1024 i podmienić. Tego kroku nie da się zrobić bez narzędzia
-   rasteryzującego — na Macu wystarczy podgląd albo dowolny edytor.
-2. **Logo w aplikacji.** `WMSteamingBowlLogo.swift` rysuje starą miskę
-   ścieżkami wprost w SwiftUI, razem z parą w kształcie „WM". Trzeba albo
-   przerysować nowe logo na ścieżki, albo wstawić `scoffie-logo.svg` do
-   katalogu zasobów jako obrazek wektorowy i zastąpić nim rysowanie.
-   Nazwa typu też jest do zmiany — pójdzie razem z etapem 2 rebrandingu.
-3. **Stare pliki źródłowe.** Reszta plików w tym katalogu to warianty logo
-   „WM Steam" z poprzedniej marki. Mają już nazwy `scoffie-*`, ale rysunek
-   w środku jest stary. Do skasowania, gdy nowe warianty będą gotowe.
+   PNG: `app-icon-primary`, `app-icon-dark`, `app-icon-tinted`. Xcode nie
+   przyjmuje SVG jako ikony. Wyeksportuj `scoffie-logo.svg` do PNG 1024×1024
+   w trzech wariantach (podstawowy bez przezroczystości, ciemny, oraz
+   jednokolorowy) i podmień pliki pod tymi samymi nazwami.
+2. **Logo w aplikacji.** `Scoffie/Components/SCSteamingBowlLogo.swift` rysuje
+   miskę ścieżkami wprost w SwiftUI. Trzeba przenieść ścieżki z nowego SVG
+   (viewBox 1024, więc dzielnik 10,24 do układu 100×100, tak jak przy
+   poprzednim logo) albo wstawić SVG do katalogu zasobów jako obrazek
+   wektorowy i zastąpić nim rysowanie.
+
+Po tych dwóch krokach zniknie ostatni widoczny ślad po poprzedniej nazwie.
 
 ## Historia
 
-Poprzednie logo (v3 „WM Steam", Recraft): terakotowa miska (#BE4834),
-z której żółta para (#ECD034) układa się w litery `WM`. Zastąpione przy
-zmianie nazwy na Scoffie 4.09.2026.
+Katalog `poprzednia-marka/` trzyma komplet wariantów logo sprzed zmiany nazwy:
+terakotowa miska, z której żółta para układa się w inicjały poprzedniej marki.
+Pliki mają przedrostek `wm-`, żeby nikt nie wziął ich za aktualny znak — przez
+chwilę leżały tu pod nazwami `scoffie-*`, mimo że rysunek był stary.
+
+Zostają, dopóki nowe logo nie doczeka się kompletu postaci: znaku
+monochromatycznego, wariantu na przezroczystym tle i wariantu do ikony.
+Wtedy można je skasować.

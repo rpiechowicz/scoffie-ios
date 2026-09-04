@@ -12,12 +12,12 @@ SwiftUI client for Scoffie. The app covers recipes, weekly planning, calendar vi
 
 Open:
 
-- [`weekly meals.xcodeproj`](./weekly%20meals.xcodeproj)
+- [`Scoffie.xcodeproj`](./Scoffie.xcodeproj)
 
 CLI build:
 
 ```bash
-xcodebuild -project "weekly meals.xcodeproj" -scheme "weekly meals" -destination "generic/platform=iOS Simulator" build CODE_SIGNING_ALLOWED=NO
+xcodebuild -project "Scoffie.xcodeproj" -scheme "Scoffie" -destination "generic/platform=iOS Simulator" build CODE_SIGNING_ALLOWED=NO
 ```
 
 ## Backend configuration
@@ -32,17 +32,17 @@ Checked-in defaults stay on production.
 
 During `Debug` builds, a build phase rewrites the built app's `Info.plist` like this:
 
-- branch `master` or `main`: `https://weakly-meals-backend-production.up.railway.app`
+- branch `master` or `main`: `https://api.scoffie.app`
 - any other local branch: `http://localhost:3000`
 
-`Release` builds always use `https://weakly-meals-backend-production.up.railway.app`.
+`Release` builds always use `https://api.scoffie.app`.
 
 For local backend development on a physical iPhone, override `API_BASE_URL` in your local Xcode scheme or launch environment and use your Mac's LAN IP (for example `http://192.168.x.x:3000`) rather than `localhost`, which resolves to the phone itself.
 
 ## Runtime notes
 
 - URL scheme: `scoffie://`
-- Bundle identifier: `app.scoffie`
+- Bundle identifier: `app.scoffie.ios`
 - Push token registration happens automatically after app launch and login
 - APNs testing requires a physical iPhone
 
@@ -70,6 +70,6 @@ Release versioning policy:
 
 ## Related backend docs
 
-- [Backend README](../weakly-meals-backend/README.md)
-- [`APNS_SETUP.md`](../weakly-meals-backend/APNS_SETUP.md)
-- [`DEPLOYMENT.md`](../weakly-meals-backend/DEPLOYMENT.md)
+- [Backend README](../scoffie-backend/README.md)
+- [`APNS_SETUP.md`](../scoffie-backend/APNS_SETUP.md)
+- [`DEPLOYMENT.md`](../scoffie-backend/DEPLOYMENT.md)
