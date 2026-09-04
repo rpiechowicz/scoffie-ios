@@ -650,7 +650,7 @@ struct AssistantView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.wmLabel(scheme))
                     Spacer(minLength: 0)
-                    Button("Odblokuj PRO") { showPaywall = true }
+                    Button("Wybierz plan") { showPaywall = true }
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(WMPalette.terracotta)
                 }

@@ -106,7 +106,7 @@ final class SubscriptionStore {
 
     func purchase(_ product: StoreKit.Product) async -> PurchaseOutcome {
         guard SubscriptionCatalog.purchasesEnabled else {
-            return .failed("Zakupy pojawią się razem z aktywacją PRO po stronie serwera.")
+            return .failed("Zakupy pojawią się, gdy serwer zacznie potwierdzać płatności.")
         }
         isPurchasing = true
         defer { isPurchasing = false }

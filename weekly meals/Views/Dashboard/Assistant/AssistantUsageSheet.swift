@@ -98,9 +98,13 @@ struct AssistantUsageSheet: View {
         let tone: Color = usage.isTrial ? WMPalette.butter : WMPalette.sage
         let tint: Color = usage.isTrial ? Color.wmButterTint(scheme) : Color.wmSageTint(scheme)
         return VStack(alignment: .leading, spacing: 6) {
+            // Nazwa KUPIONEGO planu (Solo / We dwoje / Rodzina). „PRO" to
+            // nazwa wewnętrzna poziomu po stronie serwera i nie pokazujemy jej
+            // nigdzie — człowiek kupił konkretny plan i tak go ma widzieć.
+            // Brak nazwy = nadanie operatora, wtedy po prostu „Plan domu".
             Text(usage.isTrial
                  ? "Dostęp próbny"
-                 : "PRO · \(usage.product ?? sessionStore.currentHouseholdName ?? "cały dom")")
+                 : (usage.product.map { "Plan \($0)" } ?? "Plan domu"))
                 .font(.system(size: 12, weight: .bold))
                 .tracking(0.2)
                 .foregroundStyle(tone)
@@ -250,7 +254,7 @@ struct AssistantUsageSheet: View {
 
     private func rulesFootnote(_ usage: AgentUsageDTO) -> String {
         if usage.isTrial {
-            return "Po wyczerpaniu darmowych wiadomości rozmowa się zatrzymuje, a zapisane plany zostają w Planie tygodnia. PRO daje pulę miesięczną dla całego domu."
+            return "Po wyczerpaniu darmowych wiadomości rozmowa się zatrzymuje, a zapisane plany zostają w Planie tygodnia. Solo, We dwoje i Rodzina dają pulę miesięczną dla całego domu."
         }
         if usage.plans.remaining == 0 {
             return "Pula planów wyczerpana: rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Wraca \(usage.resetsAt.map(Self.resetLabel) ?? "w nowym miesiącu")."
@@ -263,7 +267,7 @@ struct AssistantUsageSheet: View {
     private func footer(_ usage: AgentUsageDTO) -> some View {
         AssistantStickyFooter {
             if usage.isTrial {
-                WMSoftButton(title: "Odblokuj PRO", leadingIcon: "sparkles", trailingIcon: nil) {
+                WMSoftButton(title: "Wybierz plan", leadingIcon: "sparkles", trailingIcon: nil) {
                     dismiss()
                     onUpgrade?()
                 }

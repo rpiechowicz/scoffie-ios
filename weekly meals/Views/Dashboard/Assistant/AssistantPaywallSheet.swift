@@ -33,11 +33,11 @@ struct AssistantPaywallSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        EditorialSheetHeader(eyebrow: "Asystent AI", title: "Weekly Meals PRO") {
+                        EditorialSheetHeader(eyebrow: "Asystent AI", title: "Wybierz plan") {
                             dismiss()
                         }
 
-                        Text("Pula na próbę się kończy, apetyt nie. Wybierz plan pod wielkość domu — im więcej osób, tym szybciej znika pula wiadomości.")
+                        Text("Pula na próbę się kończy, apetyt nie. Plan dobiera się do wielkości domu — im więcej osób, tym szybciej znika pula wiadomości.")
                             .font(.system(size: 14.5))
                             .lineSpacing(3)
                             .foregroundStyle(Color.wmMuted(scheme))
@@ -123,7 +123,7 @@ struct AssistantPaywallSheet: View {
                         Task {
                             switch await subscriptions.purchase(product) {
                             case .purchased:
-                                notice = "Dziękujemy! PRO włączy się, gdy serwer potwierdzi zakup."
+                                notice = "Dziękujemy! Plan włączy się, gdy serwer potwierdzi zakup."
                             case .pending:
                                 notice = "Zakup czeka na zatwierdzenie (np. Poproś o zakup)."
                             case .cancelled:

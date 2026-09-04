@@ -341,7 +341,7 @@ final class AgentStore {
     }
 
     /// Pole zablokowane przez wyczerpaną pulę na PRÓBIE — bez odnowienia,
-    /// więc zamiast „spróbuj za moment" jest „Odblokuj PRO".
+    /// więc zamiast „spróbuj za moment" jest „Wybierz plan".
     var isLockedByTrialQuota: Bool {
         isLocked && lockReason == .quota && usage?.isTrial == true
     }
