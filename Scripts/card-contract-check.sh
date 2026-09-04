@@ -17,7 +17,7 @@ set -e
 cd "$(dirname "$0")/.."
 OUT=$(mktemp -d)/cardcheck
 xcrun swiftc -o "$OUT" \
-  "weekly meals/Networking/Agent/AgentCardDTOs.swift" \
-  "weekly meals/Networking/Agent/AgentDTOs.swift" \
+  "Scoffie/Networking/Agent/AgentCardDTOs.swift" \
+  "Scoffie/Networking/Agent/AgentDTOs.swift" \
   "Scripts/CardContract/main.swift"
 "$OUT"
