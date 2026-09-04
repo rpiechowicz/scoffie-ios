@@ -2,8 +2,12 @@ name: iOS CI
 
 on:
   pull_request:
+  # Tylko `main`. Wcześniej był tu też `develop`, przez co KAŻDY pull request
+  # z develop budował się dwa razy: raz ze zdarzenia push, raz z pull_request.
+  # Runnery macOS liczą się dziesięciokrotnie drożej od linuksowych, więc było
+  # to najdroższe miejsce w całym repozytorium i nic nie wnosiło.
   push:
-    branches: [develop, main]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
