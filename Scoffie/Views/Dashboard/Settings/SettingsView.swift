@@ -215,7 +215,7 @@ struct SettingsView: View {
             FAQItem(
                 id: "ai-limits",
                 question: "Skąd biorą się limity?",
-                answer: "Każda odpowiedź kosztuje. Limit wiadomości i limit zapisanych planów liczą się na gospodarstwo w miesiącu kalendarzowym i odnawiają pierwszego dnia miesiąca. Ile zostało, widzisz w menu asystenta → Limity. Wyczerpany limit zapisów nie blokuje rozmowy."
+                answer: "Każda odpowiedź kosztuje. Limit wiadomości i limit zapisanych planów liczą się na gospodarstwo i odnawiają się w dniu odnowienia planu — kupiony 15 września wraca 15 października, a nie pierwszego. Ile zostało i kiedy wraca, widzisz w menu asystenta → Limity. Wyczerpany limit zapisów nie blokuje rozmowy."
             ),
             FAQItem(
                 id: "ai-data",

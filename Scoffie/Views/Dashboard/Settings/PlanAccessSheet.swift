@@ -510,7 +510,7 @@ struct PlanAccessSheet: View {
         let members: [AgentUsageByUserDTO] = showMembers ? (usage.byUser ?? []) : []
         let membersDetail: String? = members.isEmpty
             ? nil
-            : "Kto ile wykorzystał w tym miesiącu:"
+            : "Kto ile wykorzystał w tym okresie:"
 
         PlanSectionLabel("Ten miesiąc · pula wspólna")
             .padding(.top, 20)
@@ -532,7 +532,7 @@ struct PlanAccessSheet: View {
             )
         }
 
-        Text("Pula odnawia się \(usage.resetsAt.map(AssistantUsageSheet.resetLabel) ?? "w nowym miesiącu").")
+        Text("Pula odnawia się \(usage.resetsAt.map(AssistantUsageSheet.resetLabel) ?? "przy kolejnej opłacie").")
             .font(.system(size: 13))
             .foregroundStyle(Color.scFaint(scheme))
             .padding(.horizontal, 4)
@@ -676,7 +676,7 @@ struct PlanUsageCard: View {
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(1.1)
                         .foregroundStyle(color)
-                    Text("\(quota.used) z \(quota.limit) w tym miesiącu")
+                    Text("\(quota.used) z \(quota.limit) w tym okresie")
                         .font(.system(size: 16, weight: .bold))
                         .tracking(-0.35)
                         .monospacedDigit()

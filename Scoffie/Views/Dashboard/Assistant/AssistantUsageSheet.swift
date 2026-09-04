@@ -4,7 +4,8 @@ import SwiftUI
 /// Zgoda", 3.09.2026) w dwóch wariantach z tego samego projektu:
 /// - **próba** (`tier == TRIAL`): jednorazowa pula bez odnowienia, bez
 ///   rozkładu na domowników, stopka „Wybierz plan";
-/// - **PRO**: pula miesięczna, rozkład na domowników (pula jest wspólna,
+/// - **PRO**: pula na okres rozliczeniowy (odnawia się w dniu odnowienia
+///   subskrypcji, nie pierwszego dnia miesiąca), rozkład na domowników (pula jest wspólna,
 ///   ktoś zawsze pyta „kto to zużył"), „Zarządzaj subskrypcją" tylko gdy PRO
 ///   pochodzi z subskrypcji, nie z nadania.
 /// Reguły „co się liczy" są jedyną rzeczą, która generuje zgłoszenia:
@@ -40,7 +41,7 @@ struct AssistantUsageSheet: View {
                                 label: "Wiadomości",
                                 quota: usage.messages,
                                 color: SCPalette.terracotta,
-                                unit: usage.isTrial ? "darmowych" : "w tym miesiącu",
+                                unit: usage.isTrial ? "darmowych" : "w tym okresie",
                                 note: usage.isTrial
                                     ? "Każde pytanie do asystenta."
                                     : ((usage.byUser?.isEmpty == false)
@@ -52,7 +53,7 @@ struct AssistantUsageSheet: View {
                                 label: "Zapisane plany",
                                 quota: usage.plans,
                                 color: SCPalette.sage,
-                                unit: usage.isTrial ? "na próbę" : "w tym miesiącu",
+                                unit: usage.isTrial ? "na próbę" : "w tym okresie",
                                 note: usage.isTrial
                                     ? "Propozycje oglądasz bez limitu, zapis liczy się raz."
                                     : "Każde „Dodaj do planu”: tydzień, dzień albo podmiana.",
@@ -115,7 +116,7 @@ struct AssistantUsageSheet: View {
                 .lineLimit(1)
             Text(usage.isTrial
                  ? "jednorazowo, bez odnowienia"
-                 : "odnowienie \(usage.resetsAt.map(Self.resetLabel) ?? "co miesiąc") · wspólnie dla domu")
+                 : "odnowienie \(usage.resetsAt.map(Self.resetLabel) ?? "przy kolejnej opłacie") · wspólnie dla domu")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.leading, 2)
@@ -258,9 +259,9 @@ struct AssistantUsageSheet: View {
             return "Po wyczerpaniu darmowych wiadomości rozmowa się zatrzymuje, a zapisane plany zostają w Planie tygodnia. Solo, We dwoje i Rodzina dają pulę miesięczną dla całego domu."
         }
         if usage.plans.remaining == 0 {
-            return "Pula planów wyczerpana: rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Wraca \(usage.resetsAt.map(Self.resetLabel) ?? "w nowym miesiącu")."
+            return "Pula planów wyczerpana: rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Wraca \(usage.resetsAt.map(Self.resetLabel) ?? "przy odnowieniu planu")."
         }
-        return "Po wyczerpaniu puli planów rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Nowy miesiąc odnawia oba liczniki."
+        return "Po wyczerpaniu puli planów rozmowa działa dalej, blokuje się tylko „Dodaj do planu”. Odnowienie planu odnawia oba liczniki."
     }
 
     // MARK: - Stopka

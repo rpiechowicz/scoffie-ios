@@ -192,7 +192,7 @@ enum UserFacingErrorMapper {
         "AI_PROVIDER_ERROR": "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.",
         "AI_CANCELLED": "Zatrzymane. Plan bez zmian.",
         "AI_CONSENT_REQUIRED": "Asystent potrzebuje Twojej zgody — włączysz ją w otwartym arkuszu albo w Ustawieniach → Asystent AI.",
-        "AI_PLAN_QUOTA_EXCEEDED": "Zapisy planów na ten miesiąc wykorzystane. Rozmowa działa dalej — zapis wróci od nowego miesiąca.",
+        "AI_PLAN_QUOTA_EXCEEDED": "Zapisy planów w tym okresie wykorzystane. Rozmowa działa dalej — zapis wróci przy odnowieniu planu.",
         "COOKIDOO_DISABLED": "Połączenie z Cookidoo jest na razie wyłączone.",
         "RECIPE_EXCLUDED_INGREDIENT": "Ten przepis ma składnik, którego ktoś z jedzących nie je.",
         // Propozycje: użytkownik klika przycisk W KARCIE, więc kopia mówi
