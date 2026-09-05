@@ -620,8 +620,7 @@ struct RecipeDetailView: View {
             .foregroundStyle(SCPalette.terracotta)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)))
-            .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.45), lineWidth: 1.2))
+            .scSoftCapsule()
         }
         .buttonStyle(.plain)
         .disabled(!isPrimaryActionEnabled || isSavingServings)
@@ -670,8 +669,7 @@ struct RecipeDetailView: View {
             .foregroundStyle(SCPalette.sage)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Capsule().fill(SCPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10)))
-            .overlay(Capsule().stroke(SCPalette.sage.opacity(0.45), lineWidth: 1.2))
+            .scSoftCapsule(SCPalette.sage)
         }
         .buttonStyle(.plain)
         .disabled(isSendingToThermomix)

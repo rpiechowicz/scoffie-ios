@@ -22,8 +22,6 @@ struct SCSoftButton: View {
     var isLoading: Bool = false
     let action: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -41,6 +39,11 @@ struct SCSoftButton: View {
                         .tracking(-0.3)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
+                        // „Dalej" → „Utwórz gospodarstwo" i „Poznaj aplikację"
+                        // → „Dalej" przenikają się zamiast podmieniać skokiem.
+                        // Działa tylko w animowanej transakcji — stopki mają
+                        // własne `.animation(value:)`.
+                        .contentTransition(.opacity)
                     if let trailingIcon {
                         Image(systemName: trailingIcon)
                             .font(.system(size: 15, weight: .bold))
@@ -49,14 +52,7 @@ struct SCSoftButton: View {
             }
             .foregroundStyle(accent)
             .frame(maxWidth: .infinity, minHeight: 56)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(accent.opacity(scheme == .dark ? 0.16 : 0.10))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(accent.opacity(0.45), lineWidth: 1.2)
-            )
+            .scSoftCapsule(accent)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled || isLoading)
@@ -89,6 +85,39 @@ struct SCSoftIconButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+// MARK: - Powierzchnia „soft" do użycia poza gotowymi przyciskami
+
+/// Tło i obwódka w wariancie „soft" na dowolnym kształcie — tint akcentu
+/// pod spodem, obwódka w tym samym kolorze. Ten sam zestaw liczb, co w
+/// `SCSoftButton`, wyjęty do modyfikatora, żeby przyciski o innych
+/// rozmiarach (okrągły „Wyślij", 44-punktowe akcje kart, CTA arkuszy)
+/// nie kopiowały go po swojemu i nie rozjeżdżały się w odcieniach.
+struct SCSoftSurface<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let accent: Color
+
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content
+            .background(shape.fill(accent.opacity(scheme == .dark ? 0.16 : 0.10)))
+            .overlay(shape.strokeBorder(accent.opacity(0.45), lineWidth: 1.2))
+    }
+}
+
+extension View {
+    /// Kapsuła w wariancie „soft" — domyślny kształt każdej akcji głównej.
+    func scSoftCapsule(_ accent: Color = SCPalette.terracotta) -> some View {
+        modifier(SCSoftSurface(shape: Capsule(style: .continuous), accent: accent))
+    }
+
+    /// Ten sam wariant na innym kształcie (koło pod „Wyślij", zaokrąglony
+    /// prostokąt pod kafle).
+    func scSoftSurface<S: InsettableShape>(_ shape: S, accent: Color = SCPalette.terracotta) -> some View {
+        modifier(SCSoftSurface(shape: shape, accent: accent))
     }
 }
 

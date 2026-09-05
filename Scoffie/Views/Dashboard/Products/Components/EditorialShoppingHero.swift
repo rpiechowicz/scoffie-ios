@@ -94,13 +94,13 @@ struct EditorialShoppingHero: View {
             HStack(spacing: 6) {
                 Image(systemName: iconName)
                     .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SCPalette.sage)
                     .contentTransition(.symbolEffect(.replace))
 
                 Text(primaryActionTitle)
                     .font(.system(size: 12.5, weight: .bold))
                     .tracking(-0.1)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SCPalette.sage)
                     // Cross-fades title text on change ("Kupione" →
                     // "Zaznaczanie…" → "Zamknij") instead of an instant
                     // swap that would jolt the button width.
@@ -111,26 +111,9 @@ struct EditorialShoppingHero: View {
             .padding(.leading, 12)
             .padding(.trailing, 14)
             .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                // Design: `color-mix(in oklch, sage, transparent 30%)` — sage @ 70% opacity.
-                                SCPalette.sage.opacity(0.70),
-                                // Design: `color-mix(in oklch, sage, #000 14%)` — sage darkened 14%.
-                                SCPalette.sage.mix(black: 0.14)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            )
-            .overlay(
-                Capsule()
-                    .stroke(.white.opacity(0.24), lineWidth: 1)
-            )
-            .shadow(color: SCPalette.sage.opacity(0.28), radius: 6, x: 0, y: 4)
+            // Wariant „soft" jak wszystkie akcje w aplikacji: szałwia na
+            // własnym tincie z obwódką zamiast pełnego gradientu.
+            .scSoftCapsule(SCPalette.sage)
             .opacity(isPrimaryActionDisabled ? 0.45 : 1)
             // The HStack width animates with the title swap so the capsule
             // grows / shrinks smoothly between "Kupione" and "Zamknij"

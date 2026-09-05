@@ -24,6 +24,9 @@ struct SubscriptionPlan: Identifiable, Equatable {
     /// o cenie mówi zawsze `StoreKit.Product.displayPrice`, bo tylko ono zna
     /// walutę i podatek kupującego.
     let pricePln: Double
+    /// Dla kogo ten plan — jedno zdanie na karcie wyboru. Opisuje rozmiar
+    /// domu, nie obiecuje niczego ponad limity.
+    let audience: String
 
     var quantityLine: String {
         "\(messages) wiadomości i \(plans) zapisów planu w miesiącu"
@@ -45,7 +48,8 @@ enum SubscriptionCatalog {
         seatsLabel: "1 osoba",
         messages: 30,
         plans: 8,
-        pricePln: 29.99
+        pricePln: 29.99,
+        audience: "Dla jednej osoby, która planuje tylko dla siebie."
     )
     static let duet = SubscriptionPlan(
         id: "app.scoffie.pro.duet.monthly",
@@ -53,7 +57,8 @@ enum SubscriptionCatalog {
         seatsLabel: "2 osoby",
         messages: 50,
         plans: 12,
-        pricePln: 39.99
+        pricePln: 39.99,
+        audience: "Dla dwóch osób z jednym wspólnym planem tygodnia."
     )
     static let family = SubscriptionPlan(
         id: "app.scoffie.pro.family.monthly",
@@ -61,7 +66,8 @@ enum SubscriptionCatalog {
         seatsLabel: "3 osoby i więcej",
         messages: 75,
         plans: 18,
-        pricePln: 49.99
+        pricePln: 49.99,
+        audience: "Dla domu od trzech osób, w którym plan zmienia się częściej."
     )
 
     /// Kolejność jak w karuzeli planów; `duet` jest preselekcjonowany.

@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Główne CTA arkuszy Ustawień — terakotowa kapsuła z białym napisem.
+/// Główne CTA arkuszy Ustawień — terakota w wariancie „soft" (tint +
+/// obwódka, jak `SCSoftButton`), w kompaktowej wysokości arkusza.
 /// Ten sam kształt co `editorialPrimaryButton` wewnątrz `SettingsView`
 /// (tam pozostał prywatny); wyniesiony do komponentu, żeby arkusze spoza
 /// monolitu — jak Cookidoo — nie kopiowały stylu po swojemu. Dodatkowo
@@ -12,8 +13,6 @@ struct EditorialPrimaryActionButton: View {
     var isLoading: Bool = false
     let action: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
-
     private var isInteractive: Bool { isEnabled && !isLoading }
 
     var body: some View {
@@ -22,7 +21,7 @@ struct EditorialPrimaryActionButton: View {
                 if isLoading {
                     ProgressView()
                         .controlSize(.small)
-                        .tint(.white)
+                        .tint(SCPalette.terracotta)
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 13, weight: .heavy))
@@ -31,29 +30,16 @@ struct EditorialPrimaryActionButton: View {
                     .font(.system(size: 14, weight: .bold))
                     .tracking(-0.1)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(SCPalette.terracotta)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: isInteractive
-                                ? [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)]
-                                : [Color.scFaint(scheme), Color.scFaint(scheme)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            )
-            .overlay(Capsule().stroke(.white.opacity(isInteractive ? 0.22 : 0), lineWidth: 1))
-            .shadow(
-                color: SCPalette.terracotta.opacity(isInteractive ? 0.28 : 0),
-                radius: 8, x: 0, y: 4
-            )
+            .scSoftCapsule()
         }
         .buttonStyle(.plain)
         .disabled(!isInteractive)
-        .opacity(isInteractive ? 1 : 0.7)
+        // Jak w `SCSoftButton`: wygaszamy za brak danych, spinner zostaje
+        // w pełnej mocy.
+        .opacity(isEnabled ? 1 : 0.45)
+        .animation(.smooth(duration: 0.18), value: isEnabled)
     }
 }

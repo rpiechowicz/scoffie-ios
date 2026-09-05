@@ -516,6 +516,14 @@ enum AgentCardDTO: Decodable, Equatable {
         return false
     }
 
+    /// Pytanie z gotowymi odpowiedziami — jedyna karta, której wygląd
+    /// zależy od NASTĘPNEJ wiadomości użytkownika (zaznaczona jest
+    /// stuknięta odpowiedź).
+    var isClarify: Bool {
+        if case .clarify = self { return true }
+        return false
+    }
+
     var state: AgentCardStateDTO? {
         switch self {
         case .planWeek(let card): return card.state
