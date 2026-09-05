@@ -126,7 +126,7 @@ jobs:
 
       - name: Pełny log builda
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: archive-log
           path: ${{ runner.temp }}/archive.log
@@ -158,7 +158,7 @@ jobs:
       # Podpisany IPA jest dostępny dla każdego z odczytem repo — tydzień
       # wystarczy na diagnozę nieudanego uploadu, potem artefakt znika.
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: scoffie-testflight-ipa
           path: ${{ steps.exported-ipa.outputs.path }}
