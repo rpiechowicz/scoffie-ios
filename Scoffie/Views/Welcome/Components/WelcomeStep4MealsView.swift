@@ -17,7 +17,7 @@ struct WelcomeStep4MealsView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
                 WelcomeStepHeader(
                     icon: "clock.fill",
                     accent: SCPalette.terracotta,
@@ -40,9 +40,9 @@ struct WelcomeStep4MealsView: View {
 
                 scheduleCard
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 140)
-            .padding(.bottom, 170)
+            .padding(.horizontal, WelcomeLayout.horizontal)
+            .padding(.top, WelcomeLayout.topInset)
+            .padding(.bottom, WelcomeLayout.bottomInset)
         }
     }
 
@@ -80,14 +80,7 @@ struct WelcomeStep4MealsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.scTileBg(colorScheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
-        )
+        .welcomeCard()
         .accessibilityElement(children: .combine)
     }
 
@@ -129,7 +122,7 @@ struct WelcomeStep4MealsView: View {
             .padding(14)
             .frame(minHeight: 84)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
                     .fill(
                         isEnabled
                             ? SCPalette.terracotta.opacity(colorScheme == .dark ? 0.10 : 0.07)
@@ -137,7 +130,7 @@ struct WelcomeStep4MealsView: View {
                     )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
                     .stroke(
                         isEnabled
                             ? SCPalette.terracotta.opacity(colorScheme == .dark ? 0.45 : 0.36)
@@ -145,7 +138,7 @@ struct WelcomeStep4MealsView: View {
                         lineWidth: isEnabled ? 1.4 : 1
                     )
             )
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(slot.title). \(slot.settingsSubtitle)")
@@ -213,14 +206,7 @@ struct WelcomeStep4MealsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.scTileBg(colorScheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
-        )
+        .welcomeCard()
     }
 }
 

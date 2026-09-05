@@ -88,10 +88,11 @@ struct AssistantReportSheet: View {
                             .foregroundStyle(SCPalette.terracotta)
                     }
 
+                    let reportTone: Color = isDone ? SCPalette.sage : SCPalette.terracotta
                     Button(action: submit) {
                         HStack(spacing: 8) {
                             if isSending {
-                                ProgressView().controlSize(.small).tint(Color.scPageBase(scheme))
+                                ProgressView().controlSize(.small).tint(reportTone)
                             } else {
                                 Image(systemName: isDone ? "checkmark" : "flag.fill")
                                     .font(.system(size: 14, weight: .bold))
@@ -99,10 +100,10 @@ struct AssistantReportSheet: View {
                             Text(isDone ? "Zgłoszono" : "Wyślij zgłoszenie")
                                 .font(.system(size: 15, weight: .bold))
                         }
-                        .foregroundStyle(Color.scPageBase(scheme))
+                        .foregroundStyle(reportTone)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(Capsule().fill(isDone ? SCPalette.sage : SCPalette.terracotta))
+                        .scSoftCapsule(reportTone)
                     }
                     .buttonStyle(.plain)
                     .disabled(isSending || isDone)

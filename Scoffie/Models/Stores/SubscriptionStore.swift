@@ -24,6 +24,9 @@ struct SubscriptionPlan: Identifiable, Equatable {
     /// o cenie mówi zawsze `StoreKit.Product.displayPrice`, bo tylko ono zna
     /// walutę i podatek kupującego.
     let pricePln: Double
+    /// Dla kogo ten plan — jedno zdanie na karcie wyboru. Opisuje rozmiar
+    /// domu, nie obiecuje niczego ponad limity.
+    let audience: String
 
     var quantityLine: String {
         "\(messages) wiadomości i \(plans) zapisów planu w miesiącu"
@@ -45,7 +48,8 @@ enum SubscriptionCatalog {
         seatsLabel: "1 osoba",
         messages: 30,
         plans: 8,
-        pricePln: 29.99
+        pricePln: 29.99,
+        audience: "Dla jednej osoby, która planuje tylko dla siebie."
     )
     static let duet = SubscriptionPlan(
         id: "app.scoffie.pro.duet.monthly",
@@ -53,7 +57,8 @@ enum SubscriptionCatalog {
         seatsLabel: "2 osoby",
         messages: 50,
         plans: 12,
-        pricePln: 39.99
+        pricePln: 39.99,
+        audience: "Dla dwóch osób z jednym wspólnym planem tygodnia."
     )
     static let family = SubscriptionPlan(
         id: "app.scoffie.pro.family.monthly",
@@ -61,7 +66,8 @@ enum SubscriptionCatalog {
         seatsLabel: "3 osoby i więcej",
         messages: 75,
         plans: 18,
-        pricePln: 49.99
+        pricePln: 49.99,
+        audience: "Dla domu od trzech osób, w którym plan zmienia się częściej."
     )
 
     /// Kolejność jak w karuzeli planów; `duet` jest preselekcjonowany.
@@ -208,12 +214,31 @@ final class SubscriptionStore {
         do {
             lastError = nil
             try await AppStore.sync()
-            // `sync()` przepycha uprawnienia do `Transaction.updates`, ale nie
-            // czeka na nie. Stan i tak trzeba dociągnąć z serwera — bez tego
-            // ekran po „Przywróć zakupy" wygląda identycznie jak przed nim.
-            await refreshState()
         } catch {
-            lastError = "Nie udało się przywrócić zakupów."
+            // Odmowa logowania do App Store albo brak sieci. Uprawnienia i tak
+            // warto przejrzeć — `currentEntitlements` czyta się lokalnie.
+            lastError = "Nie udało się odświeżyć zakupów w App Store."
+        }
+        await reportEntitlements()
+        await refreshState()
+    }
+
+    /// Zgłasza serwerowi WSZYSTKIE żywe uprawnienia tego Apple ID.
+    ///
+    /// TO JEST PRAWDZIWE „PRZYWRÓĆ ZAKUPY”. `Transaction.updates` oddaje
+    /// wyłącznie transakcje NIEDOMKNIĘTE — raz domknięta nie wraca tam nigdy.
+    /// Dopóki „Przywróć zakupy” opierało się tylko na `AppStore.sync()`,
+    /// każda transakcja, którą telefon zdążył domknąć po odmowie serwera,
+    /// przepadała bezpowrotnie: nie było w całej aplikacji ani jednego
+    /// odwołania do `currentEntitlements`, czyli jedynego miejsca, które ją
+    /// jeszcze widzi. Apple wprost każe czytać je po `sync()`.
+    ///
+    /// Jest to też siatka pod odmowy chwilowe: jeśli serwer nie przyjął zakupu,
+    /// bo App Store go jeszcze nie widział, wystarczy tu wrócić.
+    private func reportEntitlements() async {
+        guard client != nil else { return }
+        for await result in Transaction.currentEntitlements {
+            _ = await handle(result)
         }
     }
 
@@ -261,15 +286,30 @@ final class SubscriptionStore {
         }
     }
 
-    /// Czy serwer odmówił NA STAŁE. Odmowa trwała to decyzja o tym konkretnym
-    /// zakupie, która nie zmieni się od ponowienia; wszystko inne (5xx, brak
-    /// sieci, wygasła sesja) jest chwilowe i ma wrócić.
+    /// Kody, po których ponawianie nie ma sensu — i tylko one domykają transakcję.
+    ///
+    /// LISTA, NIE KLASA STATUSU. Wcześniej odmową trwałą było KAŻDE 4xx, a
+    /// backend odsyłał 4xx także wtedy, gdy App Store Server API przez kilka
+    /// minut nie widziało świeżo kupionej transakcji. Skutek był najgorszy
+    /// z możliwych: telefon domykał transakcję, StoreKit przestawał o niej
+    /// przypominać, a człowiek zostawał z pobraną opłatą i bez dostępu — bez
+    /// ŻADNEJ ścieżki odzysku, bo domkniętej transakcji nie widzi już nawet
+    /// „Przywróć zakupy”.
+    ///
+    /// Tutaj są wyłącznie odmowy, które są decyzją o TYM zakupie i nie zmienią
+    /// się od powtórzenia: Chmura Rodzinna, obce środowisko, cudze konto,
+    /// konto bez tożsamości zakupowej. Wszystko inne — łącznie z „Apple
+    /// jeszcze tego nie widzi” — zostawia transakcję otwartą.
+    private static let permanentRefusalCodes: Set<String> = [
+        "BILLING_FAMILY_SHARING_UNSUPPORTED",
+        "BILLING_ENVIRONMENT_MISMATCH",
+        "BILLING_TRANSACTION_TAKEN",
+        "BILLING_IDENTITY_MISSING",
+    ]
+
     private static func isPermanentRefusal(_ error: Error) -> Bool {
         guard let apiError = error as? BackendAPIError else { return false }
-        guard case let .backend(code, status, _) = apiError else { return false }
-        if code == "UNAUTHORIZED" { return false }
-        // 503 BILLING_DISABLED i 503 BILLING_UPSTREAM_UNAVAILABLE to „spróbuj
-        // później", a nie „ten zakup jest zły".
-        return (400..<500).contains(status)
+        guard case let .backend(code, _, _) = apiError else { return false }
+        return permanentRefusalCodes.contains(code)
     }
 }

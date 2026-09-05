@@ -124,10 +124,10 @@ struct AssistantEmptyState: View {
                         .font(.system(size: 15.5, weight: .bold))
                         .tracking(-0.3)
                 }
-                .foregroundStyle(Color.scPageBase(scheme))
+                .foregroundStyle(SCPalette.terracotta)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .background(Capsule().fill(SCPalette.terracotta))
+                .scSoftCapsule()
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)

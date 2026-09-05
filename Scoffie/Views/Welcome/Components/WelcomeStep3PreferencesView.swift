@@ -33,7 +33,7 @@ struct WelcomeStep3PreferencesView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
                 WelcomeStepHeader(
                     icon: "leaf.fill",
                     accent: SCPalette.terracotta,
@@ -110,7 +110,7 @@ struct WelcomeStep3PreferencesView: View {
                         .monospacedDigit()
                     }
                     .padding(16)
-                    .background(welcomeCardBackground)
+                    .welcomeCard()
                 }
 
                 if let macros {
@@ -124,8 +124,11 @@ struct WelcomeStep3PreferencesView: View {
                     WelcomeFieldCaption(text: "Sposób odżywiania")
                     VStack(spacing: 0) {
                         ForEach(Array(DietPreference.allCases.enumerated()), id: \.element.id) { index, candidate in
-                            DietRow(
-                                candidate: candidate,
+                            WelcomeOptionRow(
+                                icon: candidate.icon,
+                                accent: candidate.accent,
+                                title: candidate.title,
+                                subtitle: candidate.subtitle,
                                 isSelected: candidate == diet,
                                 onTap: {
                                     withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
@@ -134,13 +137,11 @@ struct WelcomeStep3PreferencesView: View {
                                 }
                             )
                             if index < DietPreference.allCases.count - 1 {
-                                Divider()
-                                    .background(Color.scRule(colorScheme).opacity(0.5))
-                                    .padding(.leading, 60)
+                                WelcomeOptionDivider()
                             }
                         }
                     }
-                    .background(welcomeCardBackground)
+                    .welcomeCard()
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -166,12 +167,12 @@ struct WelcomeStep3PreferencesView: View {
                         }
                     }
                     .padding(18)
-                    .background(welcomeCardBackground)
+                    .welcomeCard()
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 140)
-            .padding(.bottom, 170)
+            .padding(.horizontal, WelcomeLayout.horizontal)
+            .padding(.top, WelcomeLayout.topInset)
+            .padding(.bottom, WelcomeLayout.bottomInset)
         }
         .scrollDismissesKeyboard(.interactively)
     }
@@ -213,7 +214,7 @@ struct WelcomeStep3PreferencesView: View {
             )
         }
         .padding(16)
-        .background(welcomeCardBackground)
+        .welcomeCard()
         .animation(.smooth(duration: 0.22), value: macros)
     }
 
@@ -260,88 +261,6 @@ struct WelcomeStep3PreferencesView: View {
         .accessibilityLabel("\(title): \(grams) gramów")
     }
 
-    private var welcomeCardBackground: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color.scTileBg(colorScheme))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
-            )
-    }
-}
-
-private struct DietRow: View {
-    let candidate: DietPreference
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    candidate.accent,
-                                    candidate.accent.opacity(0.78),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 32, height: 32)
-                    Image(systemName: candidate.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(candidate.title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.scLabel(colorScheme))
-                    Text(candidate.subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.scMuted(colorScheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                RadioDot(isSelected: isSelected)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct RadioDot: View {
-    let isSelected: Bool
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        ZStack {
-            if isSelected {
-                Circle()
-                    .fill(SCPalette.terracotta)
-                    .frame(width: 22, height: 22)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 8, height: 8)
-                    .transition(.scale.combined(with: .opacity))
-            } else {
-                Circle()
-                    .stroke(Color.scFaint(colorScheme), lineWidth: 1.8)
-                    .frame(width: 22, height: 22)
-            }
-        }
-        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isSelected)
-    }
 }
 
 // Multi-select chip used by the allergens section. Mirrors Settings →

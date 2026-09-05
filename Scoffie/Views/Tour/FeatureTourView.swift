@@ -11,9 +11,11 @@ import SwiftUI
 /// Fazy: 0 = powitanie, 1…5 = funkcje, 6 = zaproszenie do kreatora.
 /// Przejścia jak w `WelcomeView` — treść wjeżdża z krawędzi zgodnej
 /// z kierunkiem ruchu, poprzednia wyjeżdża w przeciwną. Stopka (stepper
-/// i przyciski) stoi pod treścią, poza animowanym obszarem: wcześniej
-/// jechała razem z treścią i cały ekran „przewijał się" na bok, zamiast
-/// zachować się jak kreator, w którym przesuwa się tylko formularz.
+/// i przyciski) stoi pod treścią, poza animowanym obszarem, i jest JEDNĄ
+/// instancją na wszystkie fazy (`TourFooter`): wcześniej jechała razem
+/// z treścią, a potem — już osobno — miała trzy odmiany o różnej
+/// wysokości, więc przycisk główny podskakiwał przy wejściu w kroki
+/// i przy wyjściu z nich.
 struct FeatureTourView: View {
     /// Wywoływane, gdy przewodnik ma zejść z drogi — po ostatnim kroku
     /// albo po „Pomiń".
@@ -28,29 +30,14 @@ struct FeatureTourView: View {
 
     private var lastPhase: Int { steps.count + 1 }
 
-    /// Stopka ma trzy odmiany, nie siedem: wszystkie kroki z funkcjami
-    /// dzielą jedną instancję. Dzięki temu między krokami stopka nie jest
-    /// tworzona od nowa — pigułka steppera przesuwa się sprężyście,
-    /// a przyciski nie mrugają. Odmiany zmieniają się tylko na wejściu
-    /// w kroki i na wyjściu z nich, i wtedy krzyżowo się przenikają.
-    private enum FooterKind: Hashable {
-        case intro
-        case steps
-        case done
-    }
-
-    private var footerKind: FooterKind {
+    private var footerKind: TourFooter.Kind {
         if phase <= 0 {
             return .intro
         }
         if phase >= lastPhase {
             return .done
         }
-        return .steps
-    }
-
-    private var stepIndex: Int {
-        min(max(phase - 1, 0), steps.count - 1)
+        return .step(index: phase - 1, total: steps.count)
     }
 
     var body: some View {
@@ -65,14 +52,15 @@ struct FeatureTourView: View {
                 }
                 .animation(.easeInOut(duration: 0.34), value: phase)
 
-                ZStack {
-                    footer(for: footerKind)
-                        .id(footerKind)
-                        .transition(.opacity)
-                }
-                .animation(.easeInOut(duration: 0.34), value: footerKind)
+                TourFooter(
+                    kind: footerKind,
+                    onBack: goBack,
+                    onPrimary: phase >= lastPhase ? onFinish : advance,
+                    onSkip: onFinish
+                )
             }
         }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: phase)
     }
 
     @ViewBuilder
@@ -86,33 +74,27 @@ struct FeatureTourView: View {
         }
     }
 
-    @ViewBuilder
-    private func footer(for kind: FooterKind) -> some View {
-        switch kind {
-        case .intro:
-            TourIntroFooter(onStart: advance, onSkip: onFinish)
-        case .steps:
-            TourStepFooter(
-                index: stepIndex,
-                total: steps.count,
-                onBack: goBack,
-                onNext: advance
-            )
-        case .done:
-            TourDoneFooter(onContinue: onFinish, onBack: goBack)
-        }
-    }
-
     private func advance() {
         guard phase < lastPhase else { return }
-        direction = 1
-        phase += 1
+        move(to: phase + 1)
     }
 
     private func goBack() {
         guard phase > 0 else { return }
-        direction = -1
-        phase -= 1
+        move(to: phase - 1)
+    }
+
+    /// Kierunek trafia do drzewa widoków PRZED zmianą fazy, w osobnym
+    /// obiegu pętli zdarzeń. Przejście wyjścia SwiftUI bierze z ostatniego
+    /// renderu widoku, który znika — gdyby oba pola zmieniły się w jednej
+    /// transakcji, strona schodząca wyjeżdżałaby jeszcze w POPRZEDNIM
+    /// kierunku i przy pierwszym „Wstecz" po serii „Dalej" obie strony
+    /// zjeżdżały się na tej samej krawędzi.
+    private func move(to target: Int) {
+        direction = target > phase ? 1 : -1
+        DispatchQueue.main.async {
+            phase = target
+        }
     }
 
     private func asymmetricSlide() -> AnyTransition {

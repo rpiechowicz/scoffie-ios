@@ -184,6 +184,7 @@ struct WelcomeView: View {
                 }
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: step)
             .ignoresSafeArea(.container, edges: .top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -328,8 +329,20 @@ struct WelcomeView: View {
 
     private func handleBack() {
         guard step > initialStep else { return }
-        direction = -1
-        step -= 1
+        move(to: step - 1)
+    }
+
+    /// Kierunek trafia do drzewa widoków PRZED zmianą kroku, w osobnym
+    /// obiegu pętli zdarzeń. Przejście wyjścia SwiftUI bierze z ostatniego
+    /// renderu widoku, który znika — gdyby oba pola zmieniły się w jednej
+    /// transakcji, strona schodząca wyjeżdżałaby jeszcze w POPRZEDNIM
+    /// kierunku i przy pierwszym „Wstecz" po serii „Dalej" obie strony
+    /// zjeżdżały się na tej samej krawędzi. To samo w `FeatureTourView`.
+    private func move(to target: Int) {
+        direction = target > step ? 1 : -1
+        DispatchQueue.main.async {
+            step = target
+        }
     }
 
     private func handleNext() {
@@ -376,8 +389,7 @@ struct WelcomeView: View {
 
     private func advance() {
         guard step < totalSteps else { return }
-        direction = 1
-        step += 1
+        move(to: step + 1)
     }
 
     // MARK: - Zapisy w tle z ponowieniem

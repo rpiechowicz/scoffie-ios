@@ -537,34 +537,26 @@ struct AddToPlanSheet: View {
                     if isSaving {
                         ProgressView()
                             .controlSize(.small)
-                            .tint(.white)
+                            .tint(SCPalette.terracotta)
                     }
 
                     Text(ctaTitle)
                         .font(.system(size: 14, weight: .bold))
                         .tracking(-0.1)
                         .monospacedDigit()
-                        .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
+                .foregroundStyle(SCPalette.terracotta)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(
-                    Capsule().fill(
-                        LinearGradient(
-                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                )
-                .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-                .shadow(color: SCPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
+                .scSoftCapsule()
             }
             .buttonStyle(.plain)
             .disabled(isSaving || !canSave)
-            .opacity(isSaving || !canSave ? 0.6 : 1)
+            // Wygaszony za brak danych; w trakcie zapisu spinner zostaje
+            // w pełnej mocy (jak w `SCSoftButton`).
+            .opacity(canSave ? 1 : 0.45)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)

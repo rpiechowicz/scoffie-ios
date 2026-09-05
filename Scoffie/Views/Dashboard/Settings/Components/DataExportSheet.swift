@@ -61,20 +61,20 @@ struct DataExportSheet: View {
                                     Text("Zapisz albo wyślij")
                                         .font(.system(size: 15, weight: .bold))
                                 }
-                                .foregroundStyle(Color.scPageBase(scheme))
+                                .foregroundStyle(SCPalette.terracotta)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
-                                .background(Capsule().fill(SCPalette.terracotta))
+                                .scSoftCapsule()
                             }
                             .buttonStyle(.plain)
                         } else if !isLoading {
                             Button(action: load) {
                                 Text(errorMessage == nil ? "Przygotuj paczkę" : "Spróbuj ponownie")
                                     .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(Color.scPageBase(scheme))
+                                    .foregroundStyle(SCPalette.terracotta)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 48)
-                                    .background(Capsule().fill(SCPalette.terracotta))
+                                    .scSoftCapsule()
                             }
                             .buttonStyle(.plain)
                         }

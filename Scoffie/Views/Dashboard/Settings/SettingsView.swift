@@ -2299,20 +2299,10 @@ struct SettingsView: View {
                             .font(.system(size: 14, weight: .bold))
                             .tracking(-0.1)
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SCPalette.terracotta)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                    )
-                    .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
-                    .shadow(color: SCPalette.terracotta.opacity(0.28), radius: 8, x: 0, y: 4)
+                    .scSoftCapsule()
                 }
                 .accessibilityLabel("Napisz do nas — support@scoffie.app")
             }
@@ -2620,18 +2610,10 @@ struct SettingsView: View {
                 } label: {
                     Text(hasHousehold ? "Przenieś się" : "Dołącz")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(SCPalette.terracotta)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                        )
+                        .scSoftCapsule()
                 }
                 .buttonStyle(.plain)
             }
@@ -2687,9 +2669,10 @@ struct SettingsView: View {
         )
     }
 
-    /// Primary action — terracotta gradient capsule with white label.
-    /// Mirrors the editorial sage button on the Produkty hero, but tinted
-    /// with the brand accent so it reads as the main affirmative CTA.
+    /// Primary action — terracotta „soft" capsule (tint + hairline in the
+    /// accent), the same treatment as `SCSoftButton` and the recipe bar,
+    /// sized for a sheet. The filled gradient is gone app-wide: one saturated
+    /// slab per screen kept winning over the content it was meant to serve.
     private func editorialPrimaryButton(
         title: String,
         icon: String,
@@ -2704,27 +2687,15 @@ struct SettingsView: View {
                     .font(.system(size: 14, weight: .bold))
                     .tracking(-0.1)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(SCPalette.terracotta)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: isEnabled
-                                ? [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)]
-                                : [Color.scFaint(scheme), Color.scFaint(scheme)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            )
-            .overlay(Capsule().stroke(.white.opacity(isEnabled ? 0.22 : 0), lineWidth: 1))
-            .shadow(color: SCPalette.terracotta.opacity(isEnabled ? 0.28 : 0), radius: 8, x: 0, y: 4)
+            .scSoftCapsule()
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.7)
+        .opacity(isEnabled ? 1 : 0.45)
+        .animation(.smooth(duration: 0.18), value: isEnabled)
     }
 
     // MARK: - Member row

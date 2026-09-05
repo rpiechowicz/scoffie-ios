@@ -38,8 +38,7 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
-    /// „Asystent i plan" — z limitów i z linijki nad polem po wyczerpaniu
-    /// puli. To samo miejsce, które otwiera wiersz w Ustawieniach.
+    /// „Wybierz plan" — z linijki nad polem po wyczerpaniu puli.
     @State private var showPaywall = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
@@ -60,8 +59,25 @@ struct AssistantView: View {
     @State private var introStep: IntroStep?
     /// Ostatnio oglądana karta „Poznaj" — „Wstecz" ze zgody wraca na nią.
     @State private var introCard = 0
+    /// Kierunek ostatniego ruchu w przepływie: 1 = dalej, −1 = wstecz.
+    /// Treść wjeżdża z krawędzi zgodnej z kierunkiem (jak w przewodniku).
+    @State private var introDirection = 1
+    /// Potwierdzenia z kroku „Zgoda" — tu, bo „Włącz asystenta" siedzi
+    /// w stopce przepływu, poza widokiem bramki.
+    @State private var consentDraft = AssistantConsentDraft()
 
-    enum IntroStep: Equatable { case hero, consent, cards }
+    enum IntroStep: Equatable {
+        case hero, consent, cards
+
+        /// Kolejność w przepływie — z niej liczy się kierunek przejścia.
+        var order: Int {
+            switch self {
+            case .hero: return 0
+            case .consent: return 1
+            case .cards: return 2
+            }
+        }
+    }
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
@@ -80,54 +96,23 @@ struct AssistantView: View {
                 // Zgoda → Poznaj → Start → rozmowa. Nagłówek i tab bar stoją,
                 // wymienia się tylko treść — użytkownik czyta to jako ten sam
                 // ekran w następnym kroku, nie nowy widok w stosie nawigacji.
+                //
+                // Wewnątrz przepływu treść jeździ na bok jak w przewodniku
+                // „Poznaj aplikację", a stopka (`AssistantIntroFooter`) stoi
+                // pod nią poza animowanym obszarem. Pionowe przenikanie
+                // zostaje tylko na wejściu do rozmowy.
                 Group {
-                    switch currentStep {
-                    case .hero:
-                        AssistantWelcomeView(
-                            onStart: {
-                                welcomeSeen = true
-                                goToStep(.consent)
-                            },
-                            onShowCapabilities: { showCapabilities = true }
-                        )
-                    case .consent:
-                        if let consents = sessionStore.consentStore {
-                            AssistantConsentGateView(
-                                consents: consents,
-                                source: "IOS_ASSISTANT_GATE",
-                                presentation: .inline,
-                                onGranted: { continueAfterConsent() },
-                                showsStepper: true,
-                                onBack: { goToStep(.hero) },
-                                onContinue: { continueAfterConsent() }
-                            )
-                        } else {
-                            conversation
-                            composer
-                        }
-                    case .cards:
-                        AssistantHowItWorksView(
-                            presentation: .inline,
-                            showsStepBar: true,
-                            startCard: introCard,
-                            onFinish: { startConversation() },
-                            onSkip: { startConversation() },
-                            onBack: { goToStep(.consent) },
-                            onCardChange: { introCard = $0 },
-                            onAsk: { text in
-                                finishIntro()
-                                ask(text)
-                            },
-                            onShowCapabilities: { showCapabilities = true }
-                        )
-                    case nil:
+                    if let step = activeIntroStep {
+                        introFlow(step)
+                    } else {
                         conversation
                         composer
                     }
                 }
                 .transition(.assistantIntroStep)
-                .animation(.easeOut(duration: 0.28), value: currentStep)
+                .animation(.easeOut(duration: 0.28), value: activeIntroStep == nil)
             }
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: activeIntroStep)
             // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam, gdzie na
             // pozostałych zakładkach. Tam robi to ScrollView z tym samym
             // modyfikatorem; tutaj nagłówek jest przypięty poza scrollem, więc
@@ -161,6 +146,16 @@ struct AssistantView: View {
             // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
             // użytkownik widział rozmowę, dopóki serwer nie odpowiedział.
             await sessionStore.consentStore?.refresh()
+            // Zgoda już na serwerze = ta osoba przeszła hero, zgodę i karty
+            // na jakimś telefonie. Lokalne flagi (kasowane przy wylogowaniu)
+            // dostają to samo, żeby cofnięcie i ponowne włączenie zgody
+            // prowadziło prosto do rozmowy, a nie znów przez onboarding.
+            // Nowy użytkownik ma tu zgodę na `false`, więc karty po jego
+            // pierwszej zgodzie zostają.
+            if sessionStore.consentStore?.assistantGranted == true {
+                welcomeSeen = true
+                onboardingSeen = true
+            }
         }
         .sheet(isPresented: $showsScopeSheet) {
             AssistantScopeSheet(
@@ -170,13 +165,15 @@ struct AssistantView: View {
             )
         }
         .sheet(isPresented: $showUsage) {
-            AssistantUsageSheet(store: store, onUpgrade: { showPaywall = true })
+            // „Limity asystenta" to ten sam arkusz, co „Asystent i plan"
+            // w Ustawieniach — limity i plan to jedna sprawa i jedno
+            // miejsce, a nie dwa ekrany z tymi samymi liczbami.
+            PlanAccessSheet()
         }
         .sheet(isPresented: $showPaywall) {
-            // Jedno miejsce z planami dla całej aplikacji — to samo, które
-            // otwierają Ustawienia. Dwa ekrany z tą samą ofertą rozjechałyby
-            // się przy pierwszej zmianie cennika.
-            PlanAccessSheet()
+            // „Zobacz plany" po wyczerpaniu puli prowadzi PROSTO do wyboru
+            // planu — ten sam arkusz, który otwiera się z „Asystent i plan".
+            PlansSheet()
         }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
@@ -242,10 +239,7 @@ struct AssistantView: View {
     /// wiadomościom i pokazuje tytuł rozmowy nadany przez serwer.
     private var header: some View {
         AssistantHeader(
-            // Bramka i onboarding to nie rozmowa — nagłówek zostaje duży,
-            // nawet gdy konto ma stare rozmowy (tytuł starej rozmowy nad
-            // „Zanim zaczniemy" wyglądał na błąd).
-            mode: (store.messages.isEmpty || currentStep != nil) ? .large : .compact(title: conversationTitle),
+            mode: headerMode,
             onNewConversation: { Task { await store.startNewConversation() } },
             accessory: quotaPips
         ) {
@@ -271,10 +265,134 @@ struct AssistantView: View {
         }
     }
 
+    // MARK: - Przepływ startowy
+
+    /// Krok do narysowania; `nil` = rozmowa. Krok „Zgoda" bez magazynu zgód
+    /// nie ma czego pokazać — wtedy też rozmowa.
+    private var activeIntroStep: IntroStep? {
+        guard let step = currentStep else { return nil }
+        if step == .consent, sessionStore.consentStore == nil { return nil }
+        return step
+    }
+
+    @ViewBuilder
+    private func introFlow(_ step: IntroStep) -> some View {
+        ZStack {
+            introContent(step)
+                .id(step)
+                .transition(.horizontalStep(direction: introDirection))
+        }
+        .animation(.easeInOut(duration: 0.34), value: step)
+
+        introFooter(step)
+    }
+
+    @ViewBuilder
+    private func introContent(_ step: IntroStep) -> some View {
+        switch step {
+        case .hero:
+            AssistantWelcomeView()
+        case .consent:
+            if let consents = sessionStore.consentStore {
+                AssistantConsentGateView(
+                    consents: consents,
+                    source: "IOS_ASSISTANT_GATE",
+                    presentation: .inline,
+                    draft: $consentDraft
+                )
+            }
+        case .cards:
+            AssistantHowItWorksView(
+                presentation: .inline,
+                step: $introCard,
+                onFinish: { startConversation() },
+                onSkip: { startConversation() },
+                onAsk: { text in
+                    finishIntro()
+                    ask(text)
+                },
+                onShowCapabilities: { showCapabilities = true }
+            )
+        }
+    }
+
+    /// Jedna stopka na trzy kroki — ta sama geometria, zmienia się gniazdo,
+    /// tytuł i obecność „Wstecz".
+    @ViewBuilder
+    private func introFooter(_ step: IntroStep) -> some View {
+        switch step {
+        case .hero:
+            AssistantIntroFooter(
+                slot: .link("Zobacz wszystko, co potrafi"),
+                onSlotTap: { showCapabilities = true },
+                primaryTitle: "Zaczynamy",
+                primaryTrailingIcon: "arrow.right",
+                onPrimary: { goToStep(.consent) { welcomeSeen = true } }
+            )
+        case .consent:
+            let granted = sessionStore.consentStore?.assistantGranted == true
+            let busy = sessionStore.consentStore?.isBusy == true
+            let canGrant = AssistantConsentGateView.canGrant(consentDraft)
+            AssistantIntroFooter(
+                slot: .stepper(step: AssistantIntroSteps.consent, total: AssistantIntroSteps.total),
+                notice: consentDraft.errorMessage,
+                showsBack: true,
+                onBack: { goToStep(.hero) },
+                primaryTitle: granted ? "Dalej" : "Włącz asystenta",
+                primaryLeadingIcon: granted ? nil : "sparkles",
+                primaryTrailingIcon: granted ? "chevron.right" : nil,
+                isPrimaryEnabled: granted || (canGrant && !busy),
+                isPrimaryLoading: busy,
+                primaryHint: granted || canGrant ? nil : "Najpierw zaznacz oba potwierdzenia",
+                onPrimary: {
+                    if granted { continueAfterConsent() } else { grantConsent() }
+                }
+            )
+        case .cards:
+            let isLast = introCard >= AssistantCapabilities.onboarding.count - 1
+            AssistantIntroFooter(
+                slot: .stepper(step: AssistantIntroSteps.card(introCard), total: AssistantIntroSteps.total),
+                showsBack: true,
+                onBack: {
+                    if introCard > 0 {
+                        withAnimation(.easeInOut(duration: 0.3)) { introCard -= 1 }
+                    } else {
+                        goToStep(.consent)
+                    }
+                },
+                primaryTitle: isLast ? "Zaczynajmy" : "Dalej",
+                primaryTrailingIcon: isLast ? nil : "chevron.right",
+                onPrimary: {
+                    if isLast {
+                        startConversation()
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.3)) { introCard += 1 }
+                    }
+                }
+            )
+        }
+    }
+
+    /// Zapis zgody z przycisku w stopce; po sukcesie — dalej w przepływie.
+    private func grantConsent() {
+        guard let consents = sessionStore.consentStore else { return }
+        Task { @MainActor in
+            if await AssistantConsentGateView.grant(consents: consents, source: "IOS_ASSISTANT_GATE", draft: $consentDraft) {
+                continueAfterConsent()
+            }
+        }
+    }
+
     /// Który krok przepływu startowego pokazać. Bez zgody zawsze hero albo
     /// zgoda (ręczny wybór tylko między nimi); ze zgodą — to, co user wybrał
-    /// przyciskami, a bez wyboru: karty, dopóki onboarding nie jest
-    /// odhaczony. `nil` = rozmowa.
+    /// przyciskami, a bez wyboru: rozmowa. `nil` = rozmowa.
+    ///
+    /// ZGODA NA SERWERZE JEST DOWODEM PRZEJŚCIA PRZEPŁYWU. Karty „Poznaj"
+    /// pokazują się raz, tuż po włączeniu zgody — wchodzi się w nie jawnie
+    /// (`continueAfterConsent` → `goToStep(.cards)`), nigdy z tego miejsca.
+    /// Wcześniej bez lokalnej flagi wracały tu karty, a flagi kasuje
+    /// wylogowanie: każde ponowne logowanie pokazywało onboarding od nowa,
+    /// choć zgoda była zapisana na serwerze.
     private var currentStep: IntroStep? {
         if gateActive {
             switch introStep {
@@ -283,12 +401,22 @@ struct AssistantView: View {
             default: return welcomeSeen ? .consent : .hero
             }
         }
-        if let introStep { return introStep }
-        return onboardingSeen ? nil : .cards
+        return introStep
     }
 
-    private func goToStep(_ step: IntroStep) {
-        withAnimation(.easeOut(duration: 0.28)) { introStep = step }
+    /// Kierunek trafia do drzewa widoków PRZED zmianą kroku, w osobnym
+    /// obiegu pętli zdarzeń — razem ze zmianami stanu, od których zależy
+    /// `currentStep` (`sideEffects`). Przejście wyjścia SwiftUI bierze
+    /// z ostatniego renderu widoku, który znika: gdyby kierunek i krok
+    /// zmieniły się w jednej transakcji, strona schodząca wyjeżdżałaby
+    /// jeszcze w poprzednim kierunku i przy „Wstecz" obie spotykały się na
+    /// tej samej krawędzi. Ta sama sztuczka w `FeatureTourView` i `WelcomeView`.
+    private func goToStep(_ step: IntroStep, alongside sideEffects: (() -> Void)? = nil) {
+        introDirection = step.order >= (currentStep?.order ?? 0) ? 1 : -1
+        DispatchQueue.main.async {
+            sideEffects?()
+            introStep = step
+        }
     }
 
     /// Po zgodzie: karty tylko za pierwszym razem. Kto cofnął zgodę i włącza
@@ -297,12 +425,17 @@ struct AssistantView: View {
     private func continueAfterConsent() {
         // Zdejmuje blokadę 403 (`needsConsent`) także wtedy, gdy zgoda była
         // już zapisana po stronie serwera, a store o tym nie wiedział.
-        store.consentGranted()
-        if store.retryText != nil { retry() }
+        let unlock = {
+            store.consentGranted()
+            if store.retryText != nil { retry() }
+        }
         if onboardingSeen {
+            unlock()
             finishIntro()
         } else {
-            goToStep(.cards)
+            // Odblokowanie zmienia `currentStep` — musi iść razem z krokiem,
+            // po ustawieniu kierunku (patrz `goToStep`).
+            goToStep(.cards, alongside: unlock)
         }
     }
 
@@ -311,8 +444,7 @@ struct AssistantView: View {
     /// w trakcie kart kończy przepływ i wysyła.
     private func askFromSheet(_ text: String) {
         if gateActive {
-            welcomeSeen = true
-            goToStep(.consent)
+            goToStep(.consent) { welcomeSeen = true }
             return
         }
         if currentStep != nil { finishIntro() }
@@ -350,11 +482,29 @@ struct AssistantView: View {
         return !(consents.isLoaded && consents.assistantGranted)
     }
 
+    /// Bramka i onboarding to nie rozmowa — nagłówek zostaje duży, nawet
+    /// gdy konto ma stare rozmowy (tytuł starej rozmowy nad „Zanim
+    /// zaczniemy" wyglądał na błąd).
+    private var headerMode: AssistantHeaderMode {
+        (store.messages.isEmpty || currentStep != nil) ? .large : .compact(title: conversationTitle)
+    }
+
     /// Plakietka puli w nagłówku — tylko na próbie. W planie miesięcznym
     /// pula jest na tyle duża, że licznik w nagłówku byłby szumem.
+    /// W kompaktowym pasku bez etykiety — miejsce ma tytuł rozmowy.
     private var quotaPips: AnyView? {
-        guard let left = trialMessagesLeft else { return nil }
-        return AnyView(AssistantQuotaPips(remaining: left))
+        guard let usage = store.usage, usage.isTrial else { return nil }
+        return AnyView(
+            Button { showUsage = true } label: {
+                AssistantQuotaPips(
+                    remaining: usage.messages.remaining,
+                    limit: usage.messages.limit,
+                    showsLabel: headerMode == .large
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Otwiera limity asystenta")
+        )
     }
 
     /// Ile wiadomości zostało z puli PRÓBNEJ; `nil` w planie miesięcznym
@@ -390,6 +540,10 @@ struct AssistantView: View {
                             MessageBubble(
                                 message: message,
                                 isBusy: isBusy(message),
+                                // Odpowiedź użytkownika, która nastąpiła po
+                                // tej wiadomości — karta pytania zaznacza nią
+                                // wybraną opcję zamiast domyślnej z serwera.
+                                reply: reply(after: index),
                                 onOpenPlan: { sessionStore.dashboardTab = .plan },
                                 onOpenShopping: {
                                     // Lista zakupów jest arkuszem w Planie,
@@ -461,8 +615,13 @@ struct AssistantView: View {
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .onScrollGeometryChange(for: Bool.self) { geometry in
+                    // „Na końcu" liczy się od KOŃCA TREŚCI (`tailAnchor`), nie
+                    // od końca rozpórki: próg 80 pt był mniejszy niż sama
+                    // rozpórka (120 + 12), więc po stuknięciu strzałki
+                    // rozmowa stawała na końcu treści, a strzałka wciąż
+                    // wisiała, bo do dna zostawało 132 pt.
                     geometry.contentOffset.y + geometry.containerSize.height
-                        >= geometry.contentSize.height - 80
+                        >= geometry.contentSize.height - Self.bottomSlack
                 } action: { _, atBottom in
                     isPinnedToBottom = atBottom
                 }
@@ -490,10 +649,14 @@ struct AssistantView: View {
                 .sensoryFeedback(.success, trigger: answerCount)
                 .sensoryFeedback(.error, trigger: store.errorMessage)
 
+                // Jak w ChatGPT: pojawia się i znika płynnie, a nie skokiem,
+                // i tylko wtedy, gdy naprawdę jest dokąd zjechać.
                 if !isPinnedToBottom && !store.messages.isEmpty {
                     scrollToBottomPill(proxy)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
+            .animation(.smooth(duration: 0.22), value: isPinnedToBottom)
         }
     }
 
@@ -501,13 +664,13 @@ struct AssistantView: View {
         Button {
             scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
         } label: {
-            Image(systemName: "chevron.down")
-                .font(.system(size: 13, weight: .bold))
+            Image(systemName: "arrow.down")
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(Color.scCardSurface(scheme)))
                 .overlay(Circle().stroke(Color.scCardStroke(scheme), lineWidth: 1))
-                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                .shadow(color: .black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 8, y: 3)
         }
         .buttonStyle(.plain)
         .padding(.bottom, 12)
@@ -620,15 +783,12 @@ struct AssistantView: View {
     }
 
     /// Podpowiedzi nad chipami zakresu, dosunięte do prawej jak dymki
-    /// użytkownika. W rozmowie najwyżej dwie: po błędzie czasu — te
-    /// z serwera (mniejszy zakres), po odpowiedzi — kolejny ruch. W scrollu
-    /// pod ostatnią wiadomością zajmowały pół ekranu.
+    /// użytkownika. TYLKO na pustej rozmowie — pomagają zacząć. W trwającej
+    /// rozmowie ich nie ma: „Podmień jedno danie" pod każdą odpowiedzią było
+    /// szumem, a po błędzie czasu wystarczy komunikat z ponowieniem.
     private var composerHints: [String]? {
-        guard !store.isSending else { return nil }
-        if store.messages.isEmpty { return AssistantCapabilities.quickStarts }
-        if !store.suggestions.isEmpty { return Array(store.suggestions.prefix(2)) }
-        guard store.errorMessage == nil, store.messages.last?.author == .assistant else { return nil }
-        return Array(Self.followUpSuggestions.prefix(2))
+        guard !store.isSending, store.messages.isEmpty else { return nil }
+        return AssistantCapabilities.quickStarts
     }
 
     // MARK: - Pole wiadomości
@@ -681,19 +841,10 @@ struct AssistantView: View {
                 }
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
-            } else if let left = trialMessagesLeft, left <= 2 {
-                // Uprzedzenie, nie sprzedaż: sama liczba, bez przycisku i bez
-                // zachęty. Zaskoczenie w środku rozmowy o obiedzie jest
-                // gorsze niż cicha informacja dwie wiadomości wcześniej.
-                Text(left == 1
-                     ? "Została 1 wiadomość na próbę"
-                     : "Zostały \(left) wiadomości na próbę")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 8)
             }
+            // Bez linijki „Zostały 2 wiadomości" nad polem: to samo mówią
+            // kropki w nagłówku (5 z zaznaczonymi pozostałymi), a stuknięcie
+            // w nie otwiera limity.
 
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(
@@ -730,14 +881,19 @@ struct AssistantView: View {
                 // W trakcie tury strzałka zamienia się w „stop": po dziesięciu
                 // sekundach widać już, że pytanie było źle zadane, a czekanie
                 // do końca nie daje nic poza czekaniem.
+                //
+                // Wariant „soft" jak reszta akcji w aplikacji: terakota na
+                // własnym tincie z obwódką, nie pełne koło — pełne było
+                // jedynym nasyconym punktem na ekranie i ciągnęło wzrok
+                // bardziej niż sama rozmowa.
                 Button {
                     if store.isSending { store.stopWaiting() } else { send() }
                 } label: {
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 14 : 17, weight: .bold))
-                        .foregroundStyle(store.isSending ? Color.scLabel(scheme) : Color.scPageBase(scheme))
+                        .foregroundStyle(sendTint)
                         .frame(width: 44, height: 44)
-                        .background(Circle().fill(sendTint))
+                        .scSoftSurface(Circle(), accent: sendTint)
                 }
                 .buttonStyle(.plain)
                 .disabled(!store.isSending && !canSend)
@@ -829,9 +985,12 @@ struct AssistantView: View {
         store.canSend && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Akcent przycisku wysyłania. Nieaktywny schodzi na przygaszony
+    /// neutralny — tint i obwódka liczą się z tego samego koloru, więc
+    /// przycisk wygasa w całości, a nie tylko glifem.
     private var sendTint: Color {
         if store.isSending { return SCPalette.terracotta }
-        return canSend ? SCPalette.terracotta : Color.scMuted(scheme).opacity(0.4)
+        return canSend ? SCPalette.terracotta : Color.scMuted(scheme).opacity(0.55)
     }
 
     private var answerCount: Int {
@@ -932,6 +1091,18 @@ struct AssistantView: View {
         }
     }
 
+    /// Pierwsza wiadomość użytkownika PO danej pozycji — to nią odpowiedział
+    /// na pytanie asystenta. Zatrzymujemy się na kolejnej odpowiedzi
+    /// asystenta: pytanie bez odpowiedzi przed nią zostało pominięte.
+    private func reply(after index: Int) -> String? {
+        guard store.messages[index].card?.isClarify == true else { return nil }
+        for next in store.messages[(index + 1)...] {
+            if next.author == .user { return next.text }
+            return nil
+        }
+        return nil
+    }
+
     /// Napis separatora, gdy wiadomość zaczyna nowy dzień.
     private func daySeparator(at index: Int) -> String? {
         guard let date = store.messages[index].createdAt else { return nil }
@@ -961,12 +1132,9 @@ struct AssistantView: View {
     private static let errorAnchor = "assistant.error"
     private static let bottomAnchor = "assistant.bottom"
     private static let tailAnchor = "assistant.tail"
-
-    private static let followUpSuggestions = [
-        "Podmień jedno danie",
-        "Co z tego wyjdzie na liście zakupów?",
-        "Zaplanuj resztę tygodnia",
-    ]
+    /// Ile od dna treści liczy się jeszcze jako „na końcu": rozpórka
+    /// (120) + dolny padding (12) + luz na jeden gest.
+    private static let bottomSlack: CGFloat = 120 + 12 + 48
 }
 
 /// Zakładka asystenta, zanim sesja postawi store'y (zimny start, brak
@@ -1024,6 +1192,9 @@ private struct DaySeparator: View {
 private struct MessageBubble: View {
     let message: AgentChatMessage
     let isBusy: Bool
+    /// Treść następnej wiadomości użytkownika; `nil`, gdy jeszcze nie
+    /// odpowiedział. Tylko karta pytania z tego korzysta.
+    var reply: String? = nil
     let onOpenPlan: () -> Void
     let onOpenShopping: () -> Void
     let onAskAgain: () -> Void
@@ -1182,7 +1353,7 @@ private struct MessageBubble: View {
         case .shoppingList(let shopping):
             AssistantShoppingListCard(card: shopping, onOpenShopping: onOpenShopping)
         case .clarify(let clarify):
-            AssistantClarifyCard(card: clarify, onAsk: onAsk)
+            AssistantClarifyCard(card: clarify, reply: reply, onAsk: onAsk)
         case .applied(let applied):
             AssistantAppliedCard(
                 card: applied,

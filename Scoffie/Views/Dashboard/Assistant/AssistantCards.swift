@@ -626,6 +626,11 @@ struct AssistantPlanDayCard: View {
 /// zwykłe wiadomości, więc w historii zostaje to, co użytkownik „powiedział".
 struct AssistantClarifyCard: View {
     let card: ClarifyCardDTO
+    /// Co użytkownik odpowiedział (następna jego wiadomość). Po odpowiedzi
+    /// zaznaczona jest wybrana opcja, nie „najbardziej prawdopodobna" z
+    /// serwera — inaczej po stuknięciu „Wtorek" świecił się „Poniedziałek",
+    /// a dymek „Wtorek" niżej wyglądał na pomyłkę.
+    var reply: String? = nil
     let onAsk: (String) -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -654,7 +659,7 @@ struct AssistantClarifyCard: View {
             }
             .fixedSize(horizontal: false, vertical: true)
 
-            AssistantAnswerChips(actions: card.actions, onAsk: onAsk)
+            AssistantAnswerChips(actions: card.actions, reply: reply, onAsk: onAsk)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -665,13 +670,31 @@ struct AssistantClarifyCard: View {
 /// oddawałyby decyzję z powrotem użytkownikowi.
 struct AssistantAnswerChips: View {
     let actions: [AgentCardActionDTO]
+    /// Odpowiedź, która już padła — zaznacza wybraną opcję i gasi resztę.
+    var reply: String? = nil
     let onAsk: (String) -> Void
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Przed odpowiedzią wyróżniona jest opcja `PRIMARY` z serwera; po
+    /// odpowiedzi — ta, którą stuknięto (po treści wysłanej wiadomości).
+    private func isHighlighted(_ action: AgentCardActionDTO) -> Bool {
+        guard let reply else { return action.isPrimary }
+        return Self.matches(action, reply: reply)
+    }
+
+    private static func matches(_ action: AgentCardActionDTO, reply: String) -> Bool {
+        let sent = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [action.prompt, action.label].contains {
+            $0?.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(sent) == .orderedSame
+        }
+    }
+
     var body: some View {
+        let answered = reply.map { r in actions.contains { Self.matches($0, reply: r) } } ?? false
         AllergenChipFlow(spacing: 7) {
             ForEach(actions) { action in
+                let highlighted = isHighlighted(action)
                 Button {
                     onAsk(action.prompt ?? action.label)
                 } label: {
@@ -679,25 +702,28 @@ struct AssistantAnswerChips: View {
                         .font(.system(size: 14, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(
-                            action.isPrimary ? SCPalette.butter : Color.scLabel(scheme)
+                            highlighted ? SCPalette.butter : Color.scLabel(scheme)
                         )
                         .padding(.horizontal, 16)
                         .frame(height: 40)
                         .background(
                             Capsule().fill(
-                                action.isPrimary
+                                highlighted
                                     ? Color.scButterTint(scheme)
                                     : Color.scTileBg(scheme)
                             )
                         )
                         .overlay(
                             Capsule().stroke(
-                                action.isPrimary
+                                highlighted
                                     ? SCPalette.butter.opacity(0.34)
                                     : Color.scTileStroke(scheme),
                                 lineWidth: 1
                             )
                         )
+                        // Po odpowiedzi niewybrane opcje schodzą w tło —
+                        // wybór już padł, reszta jest tylko zapisem historii.
+                        .opacity(answered && !highlighted ? 0.45 : 1)
                 }
                 .buttonStyle(.plain)
             }

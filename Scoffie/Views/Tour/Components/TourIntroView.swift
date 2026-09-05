@@ -4,7 +4,7 @@ import SwiftUI
 /// pytanie. Typograficzny, bez zdjęcia: zdjęcia zaczynają się od kroku 1
 /// i gdyby jedno stało już tutaj, cała reszta straciłaby efekt wejścia.
 ///
-/// Przyciski są w `TourIntroFooter` — stopkę składa `FeatureTourView`
+/// Przyciski i „Pomiń" są w `TourFooter` — stopkę składa `FeatureTourView`
 /// poza animowaną treścią.
 struct TourIntroView: View {
     @Environment(\.colorScheme) private var scheme
@@ -83,35 +83,8 @@ struct TourIntroView: View {
                     )
                 }
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 24)
-            .padding(.bottom, 8)
+            .padding(.horizontal, TourLayout.horizontal)
         }
-    }
-}
-
-/// Stopka ekranu powitalnego: wejście w przewodnik albo skok od razu do
-/// kreatora.
-struct TourIntroFooter: View {
-    let onStart: () -> Void
-    let onSkip: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        VStack(spacing: 12) {
-            SCSoftButton(title: "Poznaj aplikację", action: onStart)
-
-            Button(action: onSkip) {
-                Text("Pomiń i przejdź do konfiguracji")
-                    .font(.system(size: 13.5, weight: .medium))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 28)
-        .padding(.top, 14)
-        .padding(.bottom, 20)
     }
 }
 
@@ -120,7 +93,7 @@ struct TourIntroFooter: View {
         TourBackground(scheme: .dark)
         VStack(spacing: 0) {
             TourIntroView()
-            TourIntroFooter(onStart: {}, onSkip: {})
+            TourFooter(kind: .intro, onBack: {}, onPrimary: {}, onSkip: {})
         }
     }
     .preferredColorScheme(.dark)
@@ -131,7 +104,7 @@ struct TourIntroFooter: View {
         TourBackground(scheme: .light)
         VStack(spacing: 0) {
             TourIntroView()
-            TourIntroFooter(onStart: {}, onSkip: {})
+            TourFooter(kind: .intro, onBack: {}, onPrimary: {}, onSkip: {})
         }
     }
     .preferredColorScheme(.light)

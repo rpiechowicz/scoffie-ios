@@ -13,12 +13,16 @@ import SwiftUI
 /// Duży tytuł ma sens wyłącznie na pustym ekranie — w trwającej rozmowie
 /// zjada wiersz treści, a tytuł rozmowy niesie więcej informacji niż słowo
 /// „Asystent”. Kompaktowy pasek oddaje te ~40 pt strumieniowi wiadomości.
+/// Poza generykiem, bo `AssistantHeader<…>.Mode` wymagałoby od wołającego
+/// podania typu menu tylko po to, żeby nazwać tryb.
+enum AssistantHeaderMode: Equatable {
+    case large
+    /// Tytuł nadaje serwer z pierwszej wiadomości; `nil` = jeszcze nie doszedł.
+    case compact(title: String?)
+}
+
 struct AssistantHeader<MenuContent: View>: View {
-    enum Mode: Equatable {
-        case large
-        /// Tytuł nadaje serwer z pierwszej wiadomości; `nil` = jeszcze nie doszedł.
-        case compact(title: String?)
-    }
+    typealias Mode = AssistantHeaderMode
 
     let mode: Mode
     var onNewConversation: () -> Void
@@ -35,17 +39,28 @@ struct AssistantHeader<MenuContent: View>: View {
     var body: some View {
         switch mode {
         case .large:
-            HStack(alignment: .top, spacing: 12) {
+            // `.center`, nie `.top`: plakietka (28 pt) i przycisk ⋯ (38 pt)
+            // mają różne wysokości, więc wyrównane do góry plakietka wisiała
+            // 5 pt nad osią przycisku.
+            //
+            // Bez `Spacer`a: HStack rozdaje miejsce dzieciom od najmniej
+            // elastycznego i dzieli resztę PO RÓWNO między te, które zostały —
+            // plakietka (tekst z `lineLimit(1)`) dostawała połowę wolnego
+            // miejsca na spółkę ze Spacerem i ucinała się do „5 wiadom…",
+            // choć obok zostawało 30 pt pustki. Teraz plakietka bierze swój
+            // naturalny rozmiar, a to tytuł rozciąga się na resztę i w razie
+            // czego schodzi do 0,9 skali.
+            HStack(alignment: .center, spacing: 10) {
                 Text("Asystent")
                     .font(.system(size: 32, weight: .heavy))
                     .tracking(-0.5)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.9)
-
-                Spacer(minLength: 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 accessory
+                    .fixedSize(horizontal: true, vertical: false)
                 actions(compact: false)
             }
             .padding(.horizontal, SCPageMetrics.horizontal)
@@ -68,10 +83,12 @@ struct AssistantHeader<MenuContent: View>: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer(minLength: 8)
-
+                // Jak wyżej: plakietka w naturalnym rozmiarze, ucina się
+                // tytuł rozmowy — to on jest tu elementem elastycznym.
                 accessory
+                    .fixedSize(horizontal: true, vertical: false)
                 actions(compact: true)
             }
             .padding(.horizontal, SCPageMetrics.horizontal)
@@ -567,10 +584,11 @@ struct AssistantCardActions: View {
                 .disabled(isBusy)
             }
 
+            let primaryAccent: Color = primaryTone == .sage ? SCPalette.sage : SCPalette.terracotta
             Button(action: onPrimary) {
                 HStack(spacing: 7) {
                     if isBusy {
-                        ProgressView().controlSize(.small).tint(Color.scPageBase(scheme))
+                        ProgressView().controlSize(.small).tint(primaryAccent)
                     } else {
                         Image(systemName: primaryIcon)
                             .font(.system(size: 14, weight: .bold))
@@ -579,10 +597,10 @@ struct AssistantCardActions: View {
                         .font(.system(size: 15, weight: .bold))
                         .tracking(-0.25)
                 }
-                .foregroundStyle(Color.scPageBase(scheme))
+                .foregroundStyle(primaryAccent)
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
-                .background(Capsule().fill(primaryTone == .sage ? SCPalette.sage : SCPalette.terracotta))
+                .scSoftCapsule(primaryAccent)
             }
             .buttonStyle(.plain)
             .disabled(isBusy)

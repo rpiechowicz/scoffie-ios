@@ -2,7 +2,14 @@ import SwiftUI
 
 // Klocki przepływu startowego asystenta (projekt „Asystent Powitanie",
 // 3.09.2026): numeracja kroków pod wspólny `WelcomeStepper`, duża ikona AI
-// z poświatą, wiersz i pigułka zaufania.
+// z poświatą, wiersz z haczykiem i JEDNA stopka na cały przepływ.
+//
+// Od 5.09.2026 przepływ ma tę samą mechanikę, co przewodnik „Poznaj
+// aplikację" (`FeatureTourView`) i kreator „Poznajmy się": treść jeździ
+// na bok zgodnie z kierunkiem ruchu, a stopka ze stepperem i przyciskami
+// stoi w miejscu poza animowanym obszarem. Wcześniej każdy krok miał
+// własną stopkę i całość przenikała się pionowo — przycisk główny
+// mrugał i przesuwał się przy każdym „Dalej".
 
 /// Numeracja kroków przepływu startowego pod wspólny `WelcomeStepper`
 /// (ten sam pigułkowy wskaźnik, co w kreatorze „Poznajmy się" i w
@@ -26,6 +33,16 @@ enum AssistantIntroState {
         defaults.removeObject(forKey: welcomeSeenKey)
         defaults.removeObject(forKey: onboardingSeenKey)
     }
+}
+
+/// Stan zgody w trakcie wypełniania — POZA widokiem bramki, bo stopka
+/// przepływu (`AssistantIntroFooter`) stoi poza animowaną treścią i musi
+/// wiedzieć, czy oba potwierdzenia są zaznaczone, zanim odblokuje „Włącz
+/// asystenta". Arkusz z menu trzyma własny egzemplarz.
+struct AssistantConsentDraft: Equatable {
+    var confirmsAge = false
+    var confirmsData = false
+    var errorMessage: String?
 }
 
 /// Wiersz nawigacji kroku: „Wstecz" po lewej, opcjonalnie „Pomiń" po
@@ -103,14 +120,8 @@ struct AssistantAIMark: View {
                     RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
                         .stroke(SCPalette.terracotta.opacity(0.34), lineWidth: 1)
                 )
-                .overlay(alignment: .top) {
-                    // Cienki jasny „highlight" u góry, jak na przyciskach soft.
-                    RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                        .fill(.white.opacity(0.16))
-                        .frame(height: 1.5)
-                        .padding(.horizontal, size * 0.22)
-                        .padding(.top, 1)
-                }
+                // Bez jasnego „highlightu" pod górną krawędzią: 1,5-punktowa
+                // kreska tuż pod obrysem czytała się jak podwójna ramka.
                 .shadow(color: SCPalette.terracotta.opacity(0.22), radius: 23, y: 20)
                 .frame(width: size, height: size)
 
@@ -123,40 +134,168 @@ struct AssistantAIMark: View {
     }
 }
 
-/// Mały ptaszek w zielonym kółku + jedno zdanie. Cztery takie na hero.
+/// Ptaszek w zielonym kółku + jedno zdanie. Cztery takie na hero.
+///
+/// Kółko 22 pt i tekst 15 pt — wcześniej 17 pt i 13,5 pt, czyli drobniej
+/// niż podpisy w przewodniku, choć to ten sam rodzaj listy. Nie większe:
+/// cztery wiersze muszą się zmieścić nad stopką bez przewijania.
 struct AssistantTickRow: View {
     let text: String
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 12) {
             ZStack {
                 Circle().fill(Color.scSageTint(scheme))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .heavy))
+                    .font(.system(size: 11, weight: .heavy))
                     .foregroundStyle(SCPalette.sage)
             }
-            .frame(width: 17, height: 17)
+            .frame(width: 22, height: 22)
             Text(text)
-                .font(.system(size: 13.5))
+                .font(.system(size: 15))
                 .tracking(-0.15)
                 .foregroundStyle(Color.scLabel(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Jedna stopka na cały przepływ startowy — ten sam szkielet, co
+/// `TourFooter` w przewodniku i `WelcomeFooter` w kreatorze: górne gniazdo
+/// o stałej wysokości (stepper, odnośnik albo nic), pod nim rząd
+/// przycisków. Wysokość nie zmienia się między krokami, więc przycisk
+/// główny stoi w miejscu; zmienia się zawartość gniazda, tytuł
+/// i obecność „Wstecz" — każde z własnym, cichym przejściem.
+struct AssistantIntroFooter: View {
+    enum Slot: Equatable {
+        case link(String)
+        case stepper(step: Int, total: Int)
+        case empty
+
+        /// Klucz przejścia gniazda: wszystkie kroki ze stepperem dzielą jedną
+        /// instancję, więc pigułka przesuwa się sprężyście, zamiast wjeżdżać
+        /// od nowa z każdą stroną.
+        var key: Int {
+            switch self {
+            case .link: return 0
+            case .stepper: return 1
+            case .empty: return 2
+            }
+        }
+    }
+
+    let slot: Slot
+    var onSlotTap: (() -> Void)? = nil
+    /// Komunikat nad przyciskami — np. błąd zapisu zgody. Przy przyciskach,
+    /// które go wywołały, a nie w treści, którą trzeba by przewinąć.
+    var notice: String? = nil
+    var showsBack = false
+    var onBack: (() -> Void)? = nil
+    let primaryTitle: String
+    var primaryLeadingIcon: String? = nil
+    var primaryTrailingIcon: String? = nil
+    var isPrimaryEnabled = true
+    var isPrimaryLoading = false
+    var primaryHint: String? = nil
+    let onPrimary: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        AssistantStickyFooter {
+            VStack(spacing: 18) {
+                if let notice {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(notice)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(SCPalette.terracotta)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(SCPalette.terracotta.opacity(0.12)))
+                    .transition(.opacity)
+                }
+
+                ZStack {
+                    slotContent
+                        .id(slot.key)
+                        .transition(.opacity)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: TourFooter.slotHeight)
+                .animation(.easeInOut(duration: 0.34), value: slot.key)
+
+                HStack(spacing: 10) {
+                    if showsBack, let onBack {
+                        SCSoftIconButton(
+                            systemName: "chevron.left",
+                            accessibilityLabel: "Wstecz",
+                            action: onBack
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    }
+                    SCSoftButton(
+                        title: primaryTitle,
+                        leadingIcon: primaryLeadingIcon,
+                        trailingIcon: primaryTrailingIcon,
+                        isEnabled: isPrimaryEnabled,
+                        isLoading: isPrimaryLoading,
+                        action: onPrimary
+                    )
+                    .accessibilityHint(primaryHint ?? "")
+                }
+                .animation(.spring(response: 0.36, dampingFraction: 0.86), value: showsBack)
+                .animation(.easeInOut(duration: 0.22), value: primaryTitle)
+            }
+            .animation(.easeInOut(duration: 0.2), value: notice)
+        }
+    }
+
+    @ViewBuilder
+    private var slotContent: some View {
+        switch slot {
+        case let .link(title):
+            Button(action: { onSlotTap?() }) {
+                Text(title)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(Color.scMuted(scheme))
+            }
+            .buttonStyle(.plain)
+        case let .stepper(step, total):
+            WelcomeStepper(step: step, total: total)
+        case .empty:
+            Color.clear
         }
     }
 }
 
-/// Kapsuła zaufania pod haczykami hero.
-
-/// Wiersz zaufania w tincie sage — na ekranie „Asystent gotowy".
-
 extension AnyTransition {
-    /// Przejście między krokami przepływu startowego: nagłówek zakładki
-    /// i tab bar stoją, wymienia się tylko treść (0,28 s, ease-out).
+    /// Przejście przepływ startowy ↔ rozmowa: nagłówek zakładki i tab bar
+    /// stoją, treść wymienia się pionowo (0,28 s, ease-out).
     static var assistantIntroStep: AnyTransition {
         .asymmetric(
             insertion: .offset(y: 22).combined(with: .opacity),
             removal: .offset(y: -18).combined(with: .opacity)
         )
+    }
+
+    /// Przejście między krokami przepływu — jak w przewodniku i kreatorze:
+    /// treść wjeżdża z krawędzi zgodnej z kierunkiem ruchu, poprzednia
+    /// wyjeżdża w przeciwną.
+    static func horizontalStep(direction: Int) -> AnyTransition {
+        let slideIn: AnyTransition = direction >= 0
+            ? .move(edge: .trailing).combined(with: .opacity)
+            : .move(edge: .leading).combined(with: .opacity)
+        let slideOut: AnyTransition = direction >= 0
+            ? .move(edge: .leading).combined(with: .opacity)
+            : .move(edge: .trailing).combined(with: .opacity)
+        return .asymmetric(insertion: slideIn, removal: slideOut)
     }
 }

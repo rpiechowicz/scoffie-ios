@@ -25,7 +25,7 @@ struct WelcomeStep4HouseholdView: View {
         // wyrównaniem, przez co treść i stopka siadały inaczej niż na
         // krokach 1–4.
         ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
             WelcomeStepHeader(
                 icon: "house.fill",
                 accent: SCPalette.terracotta,
@@ -99,14 +99,7 @@ struct WelcomeStep4HouseholdView: View {
                 )
             }
             .padding(18)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.scTileBg(colorScheme))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
-                    )
-            )
+            .welcomeCard()
 
             HStack(spacing: 10) {
                 Rectangle()
@@ -198,9 +191,9 @@ struct WelcomeStep4HouseholdView: View {
                     .padding(.top, 4)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 140)
-        .padding(.bottom, 170)
+        .padding(.horizontal, WelcomeLayout.horizontal)
+        .padding(.top, WelcomeLayout.topInset)
+        .padding(.bottom, WelcomeLayout.bottomInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollDismissesKeyboard(.interactively)
