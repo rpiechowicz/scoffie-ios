@@ -1,25 +1,30 @@
 import SwiftUI
 
-/// Onboarding asystenta — 6 kart po włączeniu zgody, pokazywane raz w
+/// Onboarding asystenta — karty po włączeniu zgody, pokazywane raz w
 /// zakładce; te same karty jako arkusz z menu ⋯ → „Jak działa asystent".
 /// Podział po tym, co user ROBI: planuje → poprawia → dzieli na dom →
-/// decyduje → kupuje i zapisuje przepisy → wie, ile ma.
+/// kupuje i zapisuje przepisy.
+///
+/// Karta ma układ kroku przewodnika „Poznaj aplikację": ikona, tytuł,
+/// opis, a pod nimi „zdjęcie" — tu podgląd prawdziwej wymiany z asystentem
+/// (dymek, odpowiedź, karta). Bez pudełka wokół całości: ramka w ramce
+/// (karta w karcie w kafelku) zjadała 44 pt szerokości i sprawiała, że
+/// wszystko wyglądało na ściśnięte.
+///
+/// W zakładce stepper i przyciski są w `AssistantIntroFooter`, którą składa
+/// `AssistantView` poza animowaną treścią; numer karty trzyma rodzic
+/// (`step`), bo to on obsługuje „Dalej" i „Wstecz". Arkusz z menu ma
+/// własną stopkę i własny licznik.
 struct AssistantHowItWorksView: View {
     enum Presentation { case inline, sheet }
 
     var presentation: Presentation = .inline
-    /// Krok „Poznaj" przepływu startowego — wskaźnik liczy karty jako
-    /// kroki 2–7 całego przepływu; jako arkusz z menu liczy tylko karty.
-    var showsStepBar = false
-    /// Karta, od której zacząć — powrót z „Co potrafi" ląduje na ostatniej.
-    var startCard = 0
-    /// Ostatnia karta → dalej („Zobacz, co potrafi") / zamknięcie arkusza.
+    /// Numer karty od rodzica (w zakładce). `nil` = własny (arkusz).
+    var step: Binding<Int>? = nil
+    /// Ostatnia karta → dalej / zamknięcie arkusza.
     let onFinish: () -> Void
     /// „Pomiń" — kończy cały przepływ (domyślnie to samo, co `onFinish`).
     var onSkip: (() -> Void)? = nil
-    /// „Wstecz" z pierwszej karty — do kroku „Zgoda".
-    var onBack: (() -> Void)? = nil
-    var onCardChange: ((Int) -> Void)? = nil
     /// Stuknięty przykład z karty — wysyłany jako wiadomość (arkusz sam
     /// się zamyka, w przepływie kończy onboarding).
     var onAsk: ((String) -> Void)? = nil
@@ -27,10 +32,12 @@ struct AssistantHowItWorksView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
-    @State private var step = 0
+    @State private var localStep = 0
 
     private let cards = AssistantCapabilities.onboarding
-    private var isLast: Bool { step == cards.count - 1 }
+    private var stepBinding: Binding<Int> { step ?? $localStep }
+    private var currentStep: Int { stepBinding.wrappedValue }
+    private var isLast: Bool { currentStep == cards.count - 1 }
 
     var body: some View {
         switch presentation {
@@ -69,49 +76,45 @@ struct AssistantHowItWorksView: View {
                 )
             }
 
-            // Karta wypełnia całą wolną wysokość (a przewija się dopiero, gdy
-            // treść jest wyższa) — mała karta na środku pustej sekcji
-            // wyglądała jak dymek, nie jak ekran wprowadzenia.
-            GeometryReader { proxy in
-                TabView(selection: $step) {
-                    ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                        ScrollView {
-                            onboardingCard(card, minHeight: max(0, proxy.size.height - 18))
-                                .padding(.horizontal, SCPageMetrics.horizontal)
-                                .padding(.top, 6)
-                                .padding(.bottom, 12)
-                        }
-                        .scrollIndicators(.hidden)
-                        .tag(index)
+            TabView(selection: stepBinding) {
+                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                    ScrollView {
+                        onboardingCard(card)
+                            .padding(.horizontal, SCPageMetrics.horizontal)
+                            .padding(.top, 8)
+                            // Zapas na gradient stopki (36 pt): bez niego
+                            // dolny przycisk miniatury albo odnośnik „Zobacz
+                            // wszystko" siadały pod nim, gdy treść mieściła
+                            // się w sam raz.
+                            .padding(.bottom, 44)
                     }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollIndicators(.hidden)
+                    .tag(index)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
 
-            AssistantStickyFooter {
-                WelcomeStepper(
-                    step: showsStepBar ? AssistantIntroSteps.card(step) : step + 1,
-                    total: showsStepBar ? AssistantIntroSteps.total : cards.count
+            if presentation == .sheet {
+                AssistantIntroFooter(
+                    slot: .stepper(step: currentStep + 1, total: cards.count),
+                    // Jak w przewodniku: okrągła strzałka po lewej od „Dalej";
+                    // w arkuszu tylko między kartami.
+                    showsBack: currentStep > 0,
+                    onBack: { withAnimation(.easeInOut(duration: 0.3)) { stepBinding.wrappedValue -= 1 } },
+                    primaryTitle: isLast ? "Zamknij" : "Dalej",
+                    primaryTrailingIcon: isLast ? nil : "chevron.right",
+                    onPrimary: {
+                        if isLast {
+                            finish()
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.3)) { stepBinding.wrappedValue += 1 }
+                        }
+                    }
                 )
-                .padding(.bottom, 8)
-
-                HStack(spacing: 10) {
-                    // Jak w przewodniku: okrągła strzałka po lewej od „Dalej".
-                    // W arkuszu z menu — tylko między kartami.
-                    if presentation == .inline || step > 0 {
-                        SCSoftIconButton(systemName: "chevron.left", accessibilityLabel: "Wstecz") { back() }
-                    }
-                    SCSoftButton(
-                        title: isLast ? (presentation == .sheet ? "Zamknij" : "Zaczynajmy") : "Dalej",
-                        trailingIcon: isLast ? nil : "chevron.right"
-                    ) {
-                        if isLast { finish() } else { withAnimation { step += 1 } }
-                    }
-                }
             }
         }
-        .onAppear { step = min(max(0, startCard), cards.count - 1) }
-        .onChange(of: step) { _, value in onCardChange?(value) }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: currentStep)
     }
 
     /// Dymek jest przyciskiem tylko wtedy, gdy ktoś odbiera wysłane zdanie.
@@ -123,32 +126,29 @@ struct AssistantHowItWorksView: View {
         }
     }
 
-    /// Karta wstecz; z pierwszej — do poprzedniego kroku przepływu.
-    private func back() {
-        if step > 0 {
-            withAnimation { step -= 1 }
-        } else {
-            onBack?()
-        }
-    }
+    private func onboardingCard(_ card: AssistantCapabilities.OnboardingCard) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            AssistantIconTile(icon: card.icon, accent: card.accent, size: 48, radius: 14)
+                .padding(.bottom, 16)
 
-    private func onboardingCard(_ card: AssistantCapabilities.OnboardingCard, minHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            AssistantIconTile(icon: card.icon, accent: card.accent, size: 64, radius: 18)
+            Text(card.title)
+                .font(.system(size: 27, weight: .bold))
+                .tracking(-0.4)
+                .lineSpacing(2)
+                .foregroundStyle(Color.scLabel(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 8)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(card.title)
-                    .font(.system(size: 26, weight: .bold))
-                    .tracking(-0.6)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(card.body)
-                    .font(.system(size: 16))
-                    .lineSpacing(4)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(card.body)
+                .font(.system(size: 15))
+                .lineSpacing(3)
+                .foregroundStyle(Color.scMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 20)
 
+            // „Zdjęcie" kroku: podgląd rozmowy wprost na stronie, tak jak
+            // wygląda prawdziwa rozmowa. Dodatkowa powierzchnia pod spodem
+            // zabierała miniaturze 28 pt szerokości i łamała jej nagłówek.
             if let example = card.example {
                 AssistantExchangePreview(
                     example: example,
@@ -162,23 +162,25 @@ struct AssistantHowItWorksView: View {
             }
 
             if card.showsPrivacy {
-                HStack(alignment: .top, spacing: 9) {
+                HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(SCPalette.sage)
+                        .padding(.top, 1)
                     Text("Nic nie zapisuje się samo — każda zmiana to karta z „Dodaj do planu”, a zapis cofniesz w ciągu doby. Wzrost, waga, kroki i e-mail nie są wysyłane do modelu AI.")
                         .font(.system(size: 14))
                         .lineSpacing(3)
                         .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.scSageTint(scheme)))
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.scSageTint(scheme)))
+                .padding(.top, 16)
             }
 
             if card.showsCapabilitiesLink, let onShowCapabilities {
                 Button(action: onShowCapabilities) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Text("Zobacz wszystko, co potrafi")
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
                     }
@@ -186,13 +188,11 @@ struct AssistantHowItWorksView: View {
                     .foregroundStyle(SCPalette.terracotta)
                 }
                 .buttonStyle(.plain)
+                .padding(.top, 16)
+                .padding(.horizontal, 2)
             }
         }
-        .padding(22)
-        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.scTileBg(scheme)))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-        .shadow(color: .black.opacity(scheme == .dark ? 0.28 : 0.06), radius: 12, y: 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func finish() {

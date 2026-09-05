@@ -26,7 +26,7 @@ struct WelcomeStep1ProfileView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
                 WelcomeStepHeader(
                     icon: "person.fill",
                     accent: SCPalette.terracotta,
@@ -58,7 +58,7 @@ struct WelcomeStep1ProfileView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(welcomeCardBackground)
+                    .welcomeCard()
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -82,7 +82,7 @@ struct WelcomeStep1ProfileView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
-                        .background(welcomeCardBackground)
+                        .welcomeCard()
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -102,7 +102,7 @@ struct WelcomeStep1ProfileView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
-                        .background(welcomeCardBackground)
+                        .welcomeCard()
                     }
                 }
 
@@ -129,20 +129,11 @@ struct WelcomeStep1ProfileView: View {
                     .padding(.horizontal, 6)
                     .padding(.top, 4)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 140)
-            .padding(.bottom, 200)
+            .padding(.horizontal, WelcomeLayout.horizontal)
+            .padding(.top, WelcomeLayout.topInset)
+            .padding(.bottom, WelcomeLayout.bottomInset)
         }
         .scrollDismissesKeyboard(.interactively)
-    }
-
-    private var welcomeCardBackground: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.scTileBg(colorScheme))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
-            )
     }
 }
 
@@ -240,9 +231,9 @@ struct YearWheelPicker: View {
         .padding(6)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
                     .fill(surface ?? Color.scTileBg(colorScheme))
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
                     .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
 
                 GeometryReader { proxy in

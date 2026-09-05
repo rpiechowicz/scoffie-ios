@@ -15,7 +15,7 @@ struct WelcomeFooter: View {
     /// "4 of 4" doesn't make sense if the user never saw the others.
     var showsStepper: Bool = true
     /// „Wstecz" jako okrągła ikona po lewej od „Dalej" — ten sam układ, co
-    /// w stopce przewodnika (`TourStepFooter`). Na pierwszym kroku nie ma
+    /// w stopce przewodnika (`TourFooter`). Na pierwszym kroku nie ma
     /// dokąd wracać, więc przycisk znika.
     var showsBack: Bool = false
     /// Cichy zapis w tle się nie udał — user idzie dalej, ale wie, że
@@ -48,8 +48,14 @@ struct WelcomeFooter: View {
                 .transition(.opacity)
             }
 
+            // Gniazdo o tej samej wysokości, co w `TourFooter`: stepper
+            // i przycisk lądują dokładnie tam, gdzie stały na ostatnim
+            // ekranie przewodnika, więc przy przejściu pigułki nie drgają
+            // — zmienia się tylko to, która świeci.
             if showsStepper {
                 WelcomeStepper(step: step, total: total)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: TourFooter.slotHeight)
             }
 
             // Wariant „soft" — ten sam przycisk, co w szczegółach przepisu
@@ -57,6 +63,9 @@ struct WelcomeFooter: View {
             // jedynym takim akcentem w aplikacji: krzyczał na ekranie,
             // którego zadaniem jest spokojnie zebrać dane, i nie zgadzał
             // się z akcją, którą użytkownik zobaczy zaraz potem.
+            //
+            // „Wstecz" wjeżdża i wyjeżdża sprężyście razem ze zwężeniem
+            // „Dalej" — wcześniej pojawiał się skokiem na drugim kroku.
             HStack(spacing: 10) {
                 if showsBack {
                     SCSoftIconButton(
@@ -64,6 +73,7 @@ struct WelcomeFooter: View {
                         accessibilityLabel: "Wstecz",
                         action: onBack
                     )
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
                 SCSoftButton(
                     title: nextLabel,
@@ -72,11 +82,12 @@ struct WelcomeFooter: View {
                     action: onNext
                 )
             }
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: step)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, WelcomeLayout.horizontal)
         .padding(.top, 28)
         // 20 pt nad wskaźnikiem home, tyle samo co w stopce przewodnika
-        // (`TourStepFooter`). Wcześniej było 48 i przycisk kreatora stał
+        // (`TourFooter`). Wcześniej było 48 i przycisk kreatora stał
         // wyraźnie wyżej niż ten sam przycisk na ekranie tuż przed nim.
         .padding(.bottom, 20)
         // The inner `.ignoresSafeArea(edges: .bottom)` extends the canvas
@@ -118,7 +129,7 @@ struct WelcomeFooter: View {
         SCPalette.canvasDark.ignoresSafeArea()
         WelcomeFooter(
             step: 1,
-            total: 4,
+            total: 5,
             nextLabel: "Dalej",
             isNextEnabled: true,
             isLoading: false,
@@ -129,15 +140,16 @@ struct WelcomeFooter: View {
     .preferredColorScheme(.dark)
 }
 
-#Preview("Step 4 light") {
+#Preview("Step 5 light") {
     ZStack(alignment: .bottom) {
         SCPalette.canvasLight.ignoresSafeArea()
         WelcomeFooter(
-            step: 4,
-            total: 4,
+            step: 5,
+            total: 5,
             nextLabel: "Utwórz gospodarstwo",
             isNextEnabled: true,
             isLoading: false,
+            showsBack: true,
             onBack: {},
             onNext: {}
         )

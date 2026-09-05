@@ -7,7 +7,7 @@ import SwiftUI
 /// wagę i alergeny zaraz po pierwszym uruchomieniu, więc powód musi paść
 /// zanim padnie pytanie, a nie w polityce prywatności.
 ///
-/// Przyciski są w `TourDoneFooter` — stopkę składa `FeatureTourView`
+/// Przyciski są w `TourFooter` — stopkę składa `FeatureTourView`
 /// poza animowaną treścią.
 struct TourDoneView: View {
     @Environment(\.colorScheme) private var scheme
@@ -15,16 +15,16 @@ struct TourDoneView: View {
     var body: some View {
         TourPage {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 7) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text("Zostały dwie minuty")
-                        .font(.system(size: 12.5, weight: .semibold))
-                }
-                .foregroundStyle(SCPalette.terracotta)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.scAccentTint(scheme)))
+                // Ten sam chip, co „Znajdziesz w…" na krokach — stoi w tym
+                // samym miejscu, więc przy wjeździe tego ekranu nie zmienia
+                // ani wysokości, ani tła.
+                TourChip(
+                    icon: "clock",
+                    accent: SCPalette.terracotta,
+                    label: Text("Zostały dwie minuty")
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .fontWeight(.semibold)
+                )
                 .padding(.bottom, 14)
 
                 Text("Znasz już nas.\nTeraz my poznajmy Ciebie.")
@@ -89,31 +89,8 @@ struct TourDoneView: View {
                 }
                 .foregroundStyle(Color.scMuted(scheme))
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
-            .padding(.bottom, 8)
+            .padding(.horizontal, TourLayout.horizontal)
         }
-    }
-}
-
-/// Stopka ekranu domykającego: powrót do ostatniego kroku albo wejście
-/// do kreatora.
-struct TourDoneFooter: View {
-    let onContinue: () -> Void
-    let onBack: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            SCSoftIconButton(
-                systemName: "chevron.left",
-                accessibilityLabel: "Wstecz",
-                action: onBack
-            )
-            SCSoftButton(title: "Opowiedz nam o sobie", action: onContinue)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
-        .padding(.bottom, 20)
     }
 }
 
@@ -122,7 +99,7 @@ struct TourDoneFooter: View {
         TourBackground(scheme: .dark)
         VStack(spacing: 0) {
             TourDoneView()
-            TourDoneFooter(onContinue: {}, onBack: {})
+            TourFooter(kind: .done, onBack: {}, onPrimary: {}, onSkip: {})
         }
     }
     .preferredColorScheme(.dark)
@@ -133,7 +110,7 @@ struct TourDoneFooter: View {
         TourBackground(scheme: .light)
         VStack(spacing: 0) {
             TourDoneView()
-            TourDoneFooter(onContinue: {}, onBack: {})
+            TourFooter(kind: .done, onBack: {}, onPrimary: {}, onSkip: {})
         }
     }
     .preferredColorScheme(.light)

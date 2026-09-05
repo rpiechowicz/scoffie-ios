@@ -46,10 +46,11 @@ struct WelcomeStepper: View {
 
 #Preview("Dark") {
     VStack(spacing: 24) {
-        WelcomeStepper(step: 1, total: 4)
-        WelcomeStepper(step: 2, total: 4)
-        WelcomeStepper(step: 3, total: 4)
-        WelcomeStepper(step: 4, total: 4)
+        WelcomeStepper(step: 1, total: 5)
+        WelcomeStepper(step: 2, total: 5)
+        WelcomeStepper(step: 3, total: 5)
+        WelcomeStepper(step: 4, total: 5)
+        WelcomeStepper(step: 5, total: 5)
     }
     .padding()
     .background(SCPalette.canvasDark)
@@ -58,8 +59,8 @@ struct WelcomeStepper: View {
 
 #Preview("Light") {
     VStack(spacing: 24) {
-        WelcomeStepper(step: 1, total: 4)
-        WelcomeStepper(step: 2, total: 4)
+        WelcomeStepper(step: 1, total: 5)
+        WelcomeStepper(step: 2, total: 5)
     }
     .padding()
     .background(SCPalette.canvasLight)
