@@ -51,7 +51,7 @@ struct StartupLoaderView: View {
 
         VStack(spacing: 0) {
             ZStack {
-                SCSteamingBowlLogo(size: Self.logoSize)
+                SCScoffieMark(size: Self.logoSize)
                 steamWispsOverlay(elapsed: elapsed)
             }
             .frame(width: Self.logoSize, height: Self.logoSize)
