@@ -846,7 +846,13 @@ struct AssistantView: View {
             // kropki w nagłówku (5 z zaznaczonymi pozostałymi), a stuknięcie
             // w nie otwiera limity.
 
-            HStack(alignment: .bottom, spacing: 8) {
+            // Pole i przycisk stoją ciaśniej niż reszta ekranu (8 pt zamiast
+            // marginesu strony, 6 pt między nimi, przycisk 40 zamiast 44) —
+            // każdy z tych punktów idzie na szerokość tekstu. Przy poprzednim
+            // układzie dłuższe pytanie („zaplanuj mi obiady na cały tydzień
+            // bez laktozy") mieściło w wierszu kilka słów i użytkownik nie
+            // widział, co pisze.
+            HStack(alignment: .bottom, spacing: 6) {
                 TextField(
                     store.isUnavailable
                         ? "Asystent jest teraz niedostępny"
@@ -856,20 +862,27 @@ struct AssistantView: View {
                     text: $draft,
                     axis: .vertical
                 )
-                .lineLimit(1...5)
+                // Do ośmiu wierszy: pytanie do asystenta bywa całym akapitem
+                // („mamy gości w sobotę, dwie osoby bez glutenu…"), a przy
+                // pięciu wierszach początek uciekał poza pole.
+                .lineLimit(1...8)
                 .font(.system(size: 15.5))
                 .tracking(-0.25)
                 .foregroundStyle(Color.scLabel(scheme))
                 .focused($isComposerFocused)
                 .disabled(store.isUnavailable || store.isLocked)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                // Jawne `maxWidth: .infinity`: bez tego pole brało szerokość
+                // wpisanego tekstu i rosło dopiero z nim, zamiast od razu
+                // zająć cały wiersz obok przycisku.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 11)
                 .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(Color.scInsetSurface(scheme))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(
                             isComposerFocused
                                 ? SCPalette.terracotta.opacity(0.45)
@@ -890,16 +903,16 @@ struct AssistantView: View {
                     if store.isSending { store.stopWaiting() } else { send() }
                 } label: {
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
-                        .font(.system(size: store.isSending ? 14 : 17, weight: .bold))
+                        .font(.system(size: store.isSending ? 13 : 16, weight: .bold))
                         .foregroundStyle(sendTint)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 40, height: 40)
                         .scSoftSurface(Circle(), accent: sendTint)
                 }
                 .buttonStyle(.plain)
                 .disabled(!store.isSending && !canSend)
                 .accessibilityLabel(store.isSending ? "Zatrzymaj turę" : "Wyślij")
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.top, 8)
             .padding(.bottom, 12)
         }

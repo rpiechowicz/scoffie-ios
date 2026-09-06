@@ -387,6 +387,9 @@ final class SessionStore {
         currentHouseholdName = nil
         startupPhase = .idle
         isRestoringSession = false
+        // Następne logowanie ma zacząć od Kalendarza, a nie od zakładki,
+        // na której ktoś zostawił poprzednią sesję.
+        dashboardTab = .calendar
     }
 
     /// Trwale usuwa konto: wypisuje z gospodarstwa, kasuje użytkownika po
@@ -566,6 +569,12 @@ final class SessionStore {
         }
         let datesViewModel = DatesViewModel()
         self.datesViewModel = datesViewModel
+        // Każde wejście do sesji (logowanie, restore po zimnym starcie,
+        // zmiana gospodarstwa) zaczyna się od Kalendarza. Bez tego zakładka
+        // zostawała tam, gdzie stała poprzednia sesja na tym telefonie —
+        // wylogowanie i ponowne logowanie wrzucało użytkownika w Plan
+        // tygodnia albo w Ustawienia zamiast na ekran „co dziś jem".
+        dashboardTab = .calendar
         // Stary warmup (katalog na starym sockecie, poprzednie gospodarstwo)
         // nie ma już czego dociągać.
         startupTask?.cancel()

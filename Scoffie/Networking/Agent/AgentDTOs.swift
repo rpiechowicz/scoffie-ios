@@ -124,7 +124,7 @@ struct AgentTurnDTO: Decodable, Equatable {
     let messages: [AgentMessageDTO]?
     let usage: AgentTurnUsageDTO?
     /// Gotowe podpowiedzi pod błędem (po `AI_TIMEOUT` / `AI_CANCELLED`):
-    /// mniejszy zakres, bo to najczęstsza przyczyna 90 s.
+    /// mniejszy zakres, bo to najczęstsza przyczyna przekroczenia czasu.
     let suggestions: [String]?
     let startedAt: String
     let finishedAt: String?

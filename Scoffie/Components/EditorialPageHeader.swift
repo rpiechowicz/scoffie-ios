@@ -19,32 +19,44 @@ struct EditorialPageHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(title)
-                .font(.system(size: 32, weight: .heavy))
-                .tracking(-0.5)
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineLimit(1)
-                // Skalowanie zostaje wyłącznie jako zabezpieczenie na bardzo
-                // wąskie ekrany. Przy zwykłym układzie nie odpala się, bo
-                // tytuł dostaje pierwszeństwo, a akcje obok są na tyle
-                // wąskie, że mieści się pełne 32 pt.
-                //
-                // `fixedSize` tu NIE działa: HStack układa wtedy dzieci przy
-                // ich idealnych szerokościach i cały wiersz wychodzi poza
-                // kontener, ciągnąc za sobą marginesy całej strony.
-                .minimumScaleFactor(0.9)
-                .layoutPriority(1)
+            // Tytuł schodzi ze stopnia pisma, zamiast się urywać.
+            //
+            // `lineLimit(1)` + `minimumScaleFactor` nie wystarczały: Text
+            // najpierw dostaje węższą propozycję, a dopiero potem skaluje,
+            // więc „Plan tygodnia" obok trzech akcji kończyło jako „Plan
+            // tygodn…". `ViewThatFits` mierzy NATURALNĄ szerokość każdego
+            // wariantu i bierze największy, który wchodzi w resztę wiersza —
+            // 32 pt tam, gdzie akcji nie ma (Przepisy, Produkty, Ustawienia),
+            // 28 pt na Planie z trzema akcjami. Skalowanie zostaje na
+            // ostatnim wariancie jako zabezpieczenie na bardzo wąskie ekrany
+            // i duże czcionki systemowe.
+            //
+            // `fixedSize` tu NIE działa: HStack układa wtedy dzieci przy
+            // ich idealnych szerokościach i cały wiersz wychodzi poza
+            // kontener, ciągnąc za sobą marginesy całej strony.
+            ViewThatFits(in: .horizontal) {
+                titleText(size: 32)
+                titleText(size: 28)
+                titleText(size: 25, allowsScaling: true)
+            }
 
             Spacer(minLength: 8)
 
-            // Akcje też biorą swój naturalny rozmiar. Sam `layoutPriority`
-            // na tytule przechylał podział za mocno w drugą stronę —
-            // pigułka gospodarstwa gubiła nazwę i zostawała z samą ikoną
-            // i strzałką.
+            // Akcje biorą swój naturalny rozmiar — to od nich odejmuje się
+            // szerokość dostępną dla tytułu, a nie odwrotnie.
             trailing()
                 .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func titleText(size: CGFloat, allowsScaling: Bool = false) -> some View {
+        Text(title)
+            .font(.system(size: size, weight: .heavy))
+            .tracking(-0.5)
+            .foregroundStyle(Color.scLabel(scheme))
+            .lineLimit(1)
+            .minimumScaleFactor(allowsScaling ? 0.75 : 1)
     }
 }
 

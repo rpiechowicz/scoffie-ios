@@ -45,9 +45,12 @@ final class AgentStore {
     /// wyższy niż limit wysyłki właśnie po to, żeby czekanie na własną turę
     /// nie kończyło się odmową.
     private static let pollInterval: Duration = .seconds(1)
-    /// Twardy sufit czekania. Serwer przerywa turę po 90 s, a leniwe domknięcie
-    /// dokłada margines; po trzech minutach dalsze pytanie nie ma sensu.
-    private static let pollTimeout: Duration = .seconds(180)
+    /// Twardy sufit czekania. Musi być WIĘKSZY niż `AI_TURN_TIMEOUT_MS`
+    /// serwera (240 s) powiększony o leniwe domknięcie (5 s) — inaczej telefon
+    /// mówi „nie zdążył" o turze, którą serwer właśnie kończy zapisywać.
+    /// 330 s to te 245 s plus margines na sieć i na telefon, który przez
+    /// chwilę leżał w tle.
+    private static let pollTimeout: Duration = .seconds(330)
     /// Ile razy z rzędu wolno nie dostać odpowiedzi, zanim uznamy, że to koniec.
     /// Jedna zgubiona odpowiedź w tunelu nie może przerywać tury, za którą
     /// użytkownik już zapłacił kwotą.
@@ -67,7 +70,8 @@ final class AgentStore {
     private(set) var turnStartedAt: Date?
     private(set) var errorMessage: String?
     /// Gotowe podpowiedzi pod błędem tury (po przekroczeniu czasu albo
-    /// „Stop"): mniejszy zakres, bo to najczęstsza przyczyna 90 s. Z serwera.
+    /// „Stop"): mniejszy zakres, bo to najczęstsza przyczyna przekroczenia
+    /// czasu tury. Z serwera.
     private(set) var suggestions: [String] = []
     /// Kontekst chipów i arkusza osób — z `GET /agent/context`; `nil`, dopóki
     /// nie przyjdzie (wtedy chipy liczą się po staremu z cache'ów sesji).
