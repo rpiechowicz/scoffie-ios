@@ -784,6 +784,10 @@ struct AddToPlanSheet: View {
 
 // MARK: - Preview
 
+// `RecipesMock` żyje w `#if DEBUG`, a makro `#Preview` rozwija się także
+// w Release — bez tej bramki archiwum nie kompiluje się.
+#if DEBUG
+
 #Preview("Add To Plan — Dark") {
     AddToPlanSheet(recipe: RecipesMock.chickenBowl, initialServings: 2)
         .preferredColorScheme(.dark)
@@ -793,3 +797,5 @@ struct AddToPlanSheet: View {
     AddToPlanSheet(recipe: RecipesMock.chickenBowl, initialServings: 2)
         .preferredColorScheme(.light)
 }
+
+#endif
