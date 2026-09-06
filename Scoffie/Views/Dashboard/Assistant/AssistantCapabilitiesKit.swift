@@ -318,11 +318,14 @@ enum AssistantCapabilities {
         .init(id: "kitchen", icon: "cart.fill", accent: .butter, title: "Zakupy i Twoje przepisy", body: "Lista zakupów z tego, co jest w planie, pogrupowana działami sklepu. Własny przepis zapiszesz jednym zdaniem — makro policzy sam.", example: "Co wyjdzie na liście zakupów z tego tygodnia?", reply: "Z planu na ten tydzień wychodzą 23 pozycje w 5 działach; 4 już masz odhaczone. Dodać całość do listy?", thumb: .shopping, showsPrivacy: true, showsCapabilitiesLink: true),
     ]
 
-    /// Cztery szybkie starty w pustej rozmowie (projekt: nad chipami zakresu).
+    /// Trzy szybkie starty w pustej rozmowie (nad chipami zakresu) — tylko
+    /// najczęstsze intencje: cały tydzień, dzisiejszy posiłek, kilka opcji do
+    /// wyboru. Domknięcie makro zostaje w kartach umiejętności, a „z tego, co
+    /// mam" celowo nie ma — asystent nie zna zawartości lodówki, więc taka
+    /// podpowiedź obiecywałaby coś, czego nie umie.
     static let quickStarts = [
         "Zaplanuj mi obiady i kolacje na ten tydzień",
-        "Co ugotować dziś z tego, co mam?",
-        "Czego brakuje w planie do białka?",
+        "Co zjeść dziś na obiad?",
         "Daj mi trzy szybkie kolacje do wyboru",
     ]
 }

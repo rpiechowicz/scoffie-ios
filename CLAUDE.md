@@ -84,5 +84,6 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   "UNAUTHORIZED"`, `auth:expired`) → `observeAuthFailure` → `refreshSessionTokens()` (single-flight,
   `POST /auth/refresh`) → `reconnectWithFreshToken()` albo `logout()`. `userId` w payloadach eventów jest
   ignorowane przez serwer dla socketu z tokenem — zostaje na jedno wydanie. REST 401 →
-  `IntegrationsAPIClient` robi jeden refresh i retry. Logout woła `POST /auth/logout`. Backend w
-  `WS_AUTH_MODE=soft` wpuszcza jeszcze stare buildy bez tokenu; `strict` po adopcji tego buildu.
+  `IntegrationsAPIClient` robi jeden refresh i retry. Logout woła `POST /auth/logout`. Produkcja
+  backendu chodzi w `WS_AUTH_MODE=strict` (od 5.09.2026 `soft` na produkcji = odmowa startu), więc
+  socket bez tokenu nie wchodzi; pole `userId` w payloadach można już zdjąć w kolejnym wydaniu.

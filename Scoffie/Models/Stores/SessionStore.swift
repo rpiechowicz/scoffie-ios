@@ -173,12 +173,12 @@ final class SessionStore {
     private let startupTimeoutSeconds: Double = 6
     private let startupImagePrefetchCount: Int = 12
     /// Loader nie znika szybciej niż po tym czasie — nawet przy cieplutkim starcie
-    /// (wszystko z cache). Wartość zsynchronizowana z animacją kafelków
-    /// w `StartupLoaderView`: niedziela (index 6) dopełnia się o
-    /// `6 * 0.28 + 0.20 * 2.8 = 2.24 s` (stagger × index + ramp end %).
-    /// Crossfade do dashboardu startuje dokładnie w momencie zakończenia
-    /// wave'a — żaden kafelek się nie urywa przed zapełnieniem.
-    private let startupMinimumDisplaySeconds: Double = 2.24
+    /// (wszystko z cache). Wartość bierze się wprost z choreografii
+    /// `StartupLoaderView` (`LoaderMotion.waveEnd`): moment, w którym niedziela
+    /// (ostatni kafelek) ma pełne wypełnienie, dorysowany ptaszek i domknięty pop.
+    /// Crossfade do dashboardu startuje dokładnie wtedy — żaden kafelek się nie
+    /// urywa przed zapełnieniem, a użytkownik widzi „pełny tydzień".
+    private let startupMinimumDisplaySeconds: Double = StartupLoaderView.waveCompletionSeconds
 
     init() {
         pendingPushDeviceToken = UserDefaults.standard.string(forKey: Keys.pushDeviceToken)

@@ -15,9 +15,9 @@ struct TourIntroView: View {
         TourPage {
             VStack(alignment: .leading, spacing: 0) {
                 // Promień 22% boku to ten sam narożnik, który logo rysuje
-                // sobie samo (`SCSteamingBowlLogo.drawBackground`) — przy
+                // sobie samo (`SCScoffieMark.drawBackground`) — przy
                 // innej wartości maska podcinałaby własne tło znaku.
-                SCSteamingBowlLogo(size: Self.logoSize)
+                SCScoffieMark(size: Self.logoSize)
                     .clipShape(
                         RoundedRectangle(
                             cornerRadius: Self.logoSize * 0.22,

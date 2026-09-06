@@ -111,7 +111,7 @@ private struct LegalHeaderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
-                SCSteamingBowlLogo(size: 44)
+                SCScoffieMark(size: 44)
                     .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {

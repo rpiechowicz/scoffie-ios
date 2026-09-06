@@ -149,7 +149,7 @@ struct OnboardingHeroPattern: View {
         HStack(spacing: 8) {
             // Mini app icon (logo v3) — chip udaje systemowy notification
             // banner, więc pokazuje prawdziwą ikonę aplikacji.
-            SCSteamingBowlLogo(size: 22)
+            SCScoffieMark(size: 22)
 
             Text("Scoffie")
                 .font(.system(size: 13, weight: .semibold))

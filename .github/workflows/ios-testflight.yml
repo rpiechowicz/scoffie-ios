@@ -155,12 +155,15 @@ jobs:
           fi
           echo "path=$ipa_path" >> "$GITHUB_OUTPUT"
 
+      # Podpisany IPA jest dostępny dla każdego z odczytem repo — tydzień
+      # wystarczy na diagnozę nieudanego uploadu, potem artefakt znika.
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v6
         with:
           name: scoffie-testflight-ipa
           path: ${{ steps.exported-ipa.outputs.path }}
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload build to TestFlight
         env:
@@ -172,5 +175,4 @@ jobs:
             -t ios \
             --apiKey "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
             --apiIssuer "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" \
-            --output-format json \
-            --verbose
+            --output-format json

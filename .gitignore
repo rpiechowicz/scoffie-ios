@@ -1,0 +1,29 @@
+# Xcode — stan użytkownika i produkty builda nie należą do repozytorium.
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcarchive
+
+# Swift Package Manager (Package.resolved w xcshareddata ZOSTAJE w repo).
+.build/
+.swiftpm/
+
+# Klucze i certyfikaty — nigdy w repo, zawsze w GitHub Secrets.
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+.env
+.env.*
+!.env.example
+
+# System i narzędzia
+.DS_Store
+*.swp
+*.orig
