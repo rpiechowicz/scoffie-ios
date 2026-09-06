@@ -1356,6 +1356,10 @@ private enum RecipeDetailFormat {
     }
 }
 
+// `RecipesMock` żyje w `#if DEBUG`, a makro `#Preview` rozwija się także
+// w Release — bez tej bramki archiwum nie kompiluje się.
+#if DEBUG
+
 #Preview("Recipe Detail v2 — Dark") {
     RecipeDetailView(recipe: RecipesMock.chickenBowl, onToggleFavorite: {})
         .preferredColorScheme(.dark)
@@ -1390,3 +1394,5 @@ private enum RecipeDetailFormat {
     )
     .preferredColorScheme(.light)
 }
+
+#endif

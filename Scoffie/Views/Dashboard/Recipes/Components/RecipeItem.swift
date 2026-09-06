@@ -144,6 +144,12 @@ struct RecipeItemView: View {
 }
 
 
+// `RecipesMock` żyje w `#if DEBUG`, a makro `#Preview` rozwija się także
+// w Release — bez tej bramki archiwum nie kompiluje się.
+#if DEBUG
+
 #Preview {
     RecipeItemView(recipe: RecipesMock.omelette)
 }
+
+#endif
