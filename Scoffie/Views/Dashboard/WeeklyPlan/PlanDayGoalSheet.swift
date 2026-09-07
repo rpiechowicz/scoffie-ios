@@ -197,7 +197,7 @@ struct PlanDayGoalSheet: View {
     private var ringsCenter: some View {
         VStack(spacing: 1) {
             CountingNumber(target: abs(remainingKcal))
-                .font(.system(size: 26, weight: .heavy))
+                .font(.system(size: centerFontSize, weight: .heavy))
                 .tracking(-0.8)
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
@@ -211,6 +211,25 @@ struct PlanDayGoalSheet: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(width: PlanGoalRings.innerDiameter)
+    }
+
+    /// Stopień pisma licznika dobrany do liczby cyfr.
+    ///
+    /// `minimumScaleFactor` tego nie załatwiał: skala wchodzi dopiero, gdy
+    /// tekst NIE MIEŚCI SIĘ w ramce, a „1707" mieściło się w niej co do
+    /// punktu — dosuwało się do pierścienia i światła w środku nie zostawało
+    /// wcale. Skok stopnia robi to, co powinien robić układ: cztery cyfry są
+    /// mniejsze niż trzy, zamiast być tak samo duże i ciasne.
+    ///
+    /// Liczy się z CELU, nie z wartości rysowanej w danej klatce — `CountingNumber`
+    /// jedzie od zera, więc rozmiar liczony z bieżącej liczby zmieniałby się
+    /// przez całe odliczanie.
+    private var centerFontSize: CGFloat {
+        switch String(abs(remainingKcal)).count {
+        case ...3:  return 26
+        case 4:     return 22
+        default:    return 18
+        }
     }
 
     private var remainingKcal: Int { targets.kcal - nutrition.kcal }
@@ -230,8 +249,17 @@ struct PlanDayGoalSheet: View {
     /// Kolory makr są te same, co w liczniku Kalendarza i w pasku pigułki
     /// (białko indygo, tłuszcz terakota, węgle szałwia) — makieta miała tu
     /// własną trójkę, ale użytkownik uczy się tych kolorów raz i ma je
-    /// rozpoznawać na każdym ekranie. Kalorie biorą podstawowy akcent marki:
-    /// to liczba, po którą przychodzi się na ten ekran.
+    /// rozpoznawać na każdym ekranie.
+    ///
+    /// Kalorie NIE biorą czwartego akcentu, tylko kolor tekstu. Terakota,
+    /// którą tu wcześniej stały, jest o pół tonu od `terracottaDeep`
+    /// tłuszczu — dwa sąsiednie pierścienie w tym samym pomarańczu i legenda,
+    /// w której trzeba było czytać podpisy, żeby wiedzieć, który jest który.
+    /// Zamiany po stronie tłuszczu zrobić się nie da, bo ten kolor obowiązuje
+    /// na trzech ekranach. A kalorie i tak nie są czwartym makrem, tylko ich
+    /// sumą: neutralny pierścień na zewnątrz trzech kolorowych mówi to
+    /// wprost i domyka się z licznikiem w środku, który ma dokładnie ten sam
+    /// kolor.
     private var legendRows: [PlanGoalLegendRow.Row] {
         let macros = targets.macros
 
@@ -239,7 +267,7 @@ struct PlanDayGoalSheet: View {
             PlanGoalLegendRow.Row(
                 id: "kcal",
                 title: "Kalorie",
-                color: SCPalette.terracotta,
+                color: Color.scLabel(scheme),
                 value: nutrition.kcal,
                 target: targets.kcal,
                 unit: "kcal"

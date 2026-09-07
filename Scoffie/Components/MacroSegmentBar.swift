@@ -3,6 +3,11 @@ import SwiftUI
 /// Pasek makro: tor, opcjonalne widmo planu i trzy segmenty w kolorach
 /// białka, tłuszczu i węglowodanów.
 ///
+/// Segmenty są osobnymi kapsułkami z prześwitem, a nie prostokątami sklejonymi
+/// w jedną obciętą kapsułę. Tamto zaokrąglało wyłącznie oba końce CAŁEGO
+/// paska, więc trzy makra rozdzielała ostra krawędź styku dwóch kolorów —
+/// czytelne to było jak szew, a nie jak podział.
+///
 /// Wyjęty z `EditorialMacroBlock` (Kalendarz), bo Plan tygodnia rysuje ten sam
 /// pasek w pigułce nad dolnym menu. Dwie kopie znaczyłyby dwa miejsca, w
 /// których trzeba pamiętać, że białko jest indygo, tłuszcz terakotowy,
@@ -22,6 +27,11 @@ struct MacroSegmentBar: View {
     /// tak jest w Planie, gdzie wszystko na pasku jest już zaplanowane.
     var ghostFraction: CGFloat?
     var height: CGFloat = 4
+    /// Prześwit między segmentami. To on robi z paska trzy osobne pigułki
+    /// zamiast jednej podzielonej kreskami: bez odstępu zaokrąglone końce
+    /// sąsiadów wchodziłyby na siebie i całość czytałaby się jak jeden
+    /// pasek w brudnym kolorze przejścia.
+    var segmentGap: CGFloat = 2.5
 
     @Environment(\.colorScheme) private var scheme
 
@@ -35,6 +45,20 @@ struct MacroSegmentBar: View {
     private var carbsShare: CGFloat { CGFloat(carbsKcal) / CGFloat(totalMacroKcal) }
 
     private var clampedFill: CGFloat { min(max(fillFraction, 0), 1) }
+
+    /// Segmenty do narysowania — bez tych o zerowym udziale.
+    ///
+    /// Zero trzeba odsiać, a nie rysować o szerokości zera: pusta kapsuła
+    /// nadal zabierałaby swój prześwit, więc dzień bez tłuszczu miałby
+    /// w pasku dziurę tam, gdzie tłuszcz by stał.
+    private var segments: [(color: Color, share: CGFloat)] {
+        [
+            (SCPalette.indigo, proteinShare),
+            (SCPalette.terracottaDeep, fatShare),
+            (SCPalette.sage, carbsShare)
+        ]
+        .filter { $0.1 > 0 }
+    }
 
     /// Wszystko, co zmienia kształt paska — jedna wartość, żeby zmiana dnia
     /// przesuwała wypełnienie i proporcje segmentów tą samą sprężyną.
@@ -58,13 +82,20 @@ struct MacroSegmentBar: View {
                 }
 
                 if clampedFill > 0 {
-                    HStack(spacing: 0) {
-                        Rectangle().fill(SCPalette.indigo).frame(width: filled * proteinShare)
-                        Rectangle().fill(SCPalette.terracottaDeep).frame(width: filled * fatShare)
-                        Rectangle().fill(SCPalette.sage).frame(width: filled * carbsShare)
+                    // Prześwity odejmujemy od szerokości DO PODZIAŁU, a nie od
+                    // gotowych segmentów: inaczej pasek rósłby o sumę odstępów
+                    // i przy pełnym celu wystawał poza tor.
+                    let list = segments
+                    let usable = max(0, filled - segmentGap * CGFloat(max(list.count - 1, 0)))
+
+                    HStack(spacing: segmentGap) {
+                        ForEach(Array(list.enumerated()), id: \.offset) { _, segment in
+                            Capsule()
+                                .fill(segment.color)
+                                .frame(width: usable * segment.share, height: height)
+                        }
                     }
                     .frame(width: filled, height: height, alignment: .leading)
-                    .clipShape(Capsule())
                 }
             }
             .frame(height: height)

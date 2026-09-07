@@ -26,6 +26,10 @@ struct PlanDayGoalBar: View {
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Promień rogu szkła i obszaru dotyku — jedna liczba, żeby te dwa
+    /// kształty nie mogły się rozjechać.
+    private static let cornerRadius: CGFloat = 22
+
     /// Ile kalorii zostaje do celu; ujemne znaczy „ponad cel".
     private var remaining: Int { targets.kcal - nutrition.kcal }
 
@@ -81,7 +85,17 @@ struct PlanDayGoalBar: View {
             // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
             // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
             // pigułka odpowiada dokładnie jak wiersz osi nad nią.
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Self.cornerRadius))
+            // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
+            // na cyfrach, na literach i na czterech punktach paska. Padding,
+            // przerwa pod `Spacer` między podpisem a makrami i całe tło szkła
+            // były martwe — pigułka otwierała arkusz tylko wtedy, gdy palec
+            // trafił w tekst, a przy trafieniu obok nie działo się nic.
+            // `glassEffect` sam obszaru dotyku nie ustawia, bo rysuje tło,
+            // a nie kształt przycisku.
+            .contentShape(
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+            )
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
         .animation(.spring(response: 0.36, dampingFraction: 0.9), value: fingerprint)
