@@ -24,6 +24,15 @@ struct PlanAssistantIntroSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+
+    /// Siedem dań pod podgląd tygodnia — losowane RAZ, przy otwarciu arkusza.
+    ///
+    /// Prawdziwe zdjęcia z katalogu, a nie kafle z ikonami: obietnica „tak może
+    /// wyglądać Twój tydzień” pokazana kolorowymi prostokątami brzmi jak zrzut
+    /// ekranu z wersji demo. Losowanie siedzi w `@State`, żeby dania nie
+    /// przetasowywały się przy każdym przerysowaniu widoku.
+    @State private var sample: [Recipe] = []
 
     /// Wejście treści: delikatny stagger po otwarciu arkusza. Sam arkusz
     /// wjeżdża systemowo, więc tu chodzi tylko o to, żeby zawartość nie
@@ -45,33 +54,33 @@ struct PlanAssistantIntroSheet: View {
                             .stagger(appeared, step: 0)
 
                         sectionLabel("JAK DOBIERAM")
-                            .padding(.top, 22)
+                            .padding(.top, 28)
                             .stagger(appeared, step: 1)
 
-                        VStack(spacing: 6) {
+                        VStack(spacing: 8) {
                             ForEach(Array(howRows.enumerated()), id: \.element.title) { index, row in
                                 howCard(row)
                                     .stagger(appeared, step: 2 + index)
                             }
                         }
-                        .padding(.top, 8)
+                        .padding(.top, 10)
 
                         previewHeader
-                            .padding(.top, 18)
+                            .padding(.top, 26)
                             .stagger(appeared, step: 5)
 
                         previewStrip
-                            .padding(.top, 8)
+                            .padding(.top, 10)
                             .stagger(appeared, step: 6)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
 
                 footer
             }
-            .padding(.top, 18)
+            .padding(.top, 24)
         }
         .task {
             // Jedna klatka opóźnienia — bez niej stan zmienia się w tej samej
@@ -79,14 +88,39 @@ struct PlanAssistantIntroSheet: View {
             try? await Task.sleep(for: .milliseconds(30))
             withAnimation { appeared = true }
         }
+        .task {
+            await recipeCatalogStore.loadIfNeeded()
+            guard sample.isEmpty else { return }
+            sample = Self.pickSample(from: recipeCatalogStore.recipes)
+        }
+    }
+
+    /// Siedem dań do podglądu — z tasowania, ale bez powtórki dwa razy pod rząd,
+    /// dopóki jest z czego wybierać. Gdy katalog ma mniej niż siedem pozycji
+    /// z okładką, worek napełnia się od nowa; przy pustym katalogu zostają
+    /// kafle schematyczne.
+    private static func pickSample(from recipes: [Recipe]) -> [Recipe] {
+        let withImages = recipes.filter { $0.imageURL != nil }
+        let pool = withImages.isEmpty ? recipes : withImages
+        guard !pool.isEmpty else { return [] }
+
+        var picked: [Recipe] = []
+        var bag: [Recipe] = []
+        while picked.count < 7 {
+            if bag.isEmpty { bag = pool.shuffled() }
+            picked.append(bag.removeFirst())
+        }
+        return picked
     }
 
     // MARK: - Nagłówek
 
     private var intro: some View {
         VStack(spacing: 0) {
+            // 72 pt, nie 52: to jedyny znak graficzny na całym arkuszu i on
+            // ma nieść „to robi asystent”, zanim ktokolwiek przeczyta tytuł.
             ZStack {
-                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.16)],
@@ -94,29 +128,30 @@ struct PlanAssistantIntroSheet: View {
                             endPoint: .bottom
                         )
                     )
-                    .shadow(color: SCPalette.terracotta.opacity(0.35), radius: 16, x: 0, y: 6)
+                    .shadow(color: SCPalette.terracotta.opacity(0.35), radius: 22, x: 0, y: 10)
 
                 Image(systemName: MenuConstans.Assistant.icon)
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(.white)
             }
-            .frame(width: 52, height: 52)
+            .frame(width: 72, height: 72)
+            .padding(.top, 6)
 
             Text(weekIsEmpty ? "Ułożę Ci ten tydzień" : "Uzupełnię ten tydzień")
                 .font(.system(size: 25, weight: .bold))
                 .tracking(-0.6)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
-                .padding(.top, 14)
+                .padding(.top, 20)
 
             Text(introSubtitle)
                 .font(.system(size: 14.5, weight: .regular))
                 .tracking(-0.2)
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
-                .lineSpacing(2)
+                .lineSpacing(2.5)
                 .frame(maxWidth: 300)
-                .padding(.top, 6)
+                .padding(.top, 8)
         }
     }
 
@@ -185,13 +220,13 @@ struct PlanAssistantIntroSheet: View {
     private func howCard(_ row: HowRow) -> some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(row.color.opacity(scheme == .dark ? 0.16 : 0.14))
                 Image(systemName: row.icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(row.color)
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 38, height: 38)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
@@ -215,8 +250,8 @@ struct PlanAssistantIntroSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.scCardSurface(scheme))
@@ -253,34 +288,26 @@ struct PlanAssistantIntroSheet: View {
         }
     }
 
-    /// Siedem kafli w akcentach pór dnia — schemat, nie zdjęcia.
+    /// Siedem dni z prawdziwymi daniami z katalogu.
     ///
-    /// Makieta ma tu wycinki prawdziwych dań, ale aplikacja nie zna jeszcze
-    /// planu, którego ten podgląd dotyczy. Wymyślone zdjęcia obiecywałyby
-    /// konkretne przepisy, więc zostaje rytm tygodnia: siedem dni, ciepłe
-    /// kafle, dzisiaj podświetlone.
+    /// Kafle z ikonami stały tu wcześniej dlatego, że aplikacja nie zna planu,
+    /// którego ten podgląd dotyczy — ale przez to obietnica „tak może wyglądać
+    /// Twój tydzień” wyglądała jak zrzut z wersji demo. Losowe dania z KATALOGU
+    /// niczego nie obiecują (podpis obok mówi „przykład”), a pokazują jedzenie,
+    /// które ta apka naprawdę ma. Kafel schematyczny zostaje jako zapas na
+    /// pusty katalog i przepis bez okładki.
     private var previewStrip: some View {
         HStack(spacing: 6) {
             ForEach(Array(days.prefix(7).enumerated()), id: \.element) { index, day in
-                VStack(spacing: 5) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Self.tileAccent(index).opacity(scheme == .dark ? 0.34 : 0.26),
-                                        Self.tileAccent(index).opacity(scheme == .dark ? 0.14 : 0.10)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-
-                        Image(systemName: Self.tileIcon(index))
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(Self.tileAccent(index))
-                    }
-                    .aspectRatio(1, contentMode: .fit)
+                VStack(spacing: 6) {
+                    // Kwadrat bierze się z przezroczystej podkładki, a nie
+                    // z `aspectRatio` nałożonego wprost na zdjęcie: zdjęcie
+                    // w trybie `fill` samo nie ma proporcji, którą da się
+                    // zmierzyć, więc kolumna nie wiedziałaby, jak wysoka być.
+                    Color.clear
+                        .aspectRatio(1, contentMode: .fit)
+                        .overlay { previewTile(index) }
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                     Text(Self.dayLabel(day))
                         .font(.system(size: 10, weight: .bold))
@@ -291,6 +318,39 @@ struct PlanAssistantIntroSheet: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func previewTile(_ index: Int) -> some View {
+        if index < sample.count, let url = sample[index].imageURL {
+            CachedAsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    schematicTile(index)
+                }
+            }
+        } else {
+            schematicTile(index)
+        }
+    }
+
+    private func schematicTile(_ index: Int) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Self.tileAccent(index).opacity(scheme == .dark ? 0.34 : 0.26),
+                    Self.tileAccent(index).opacity(scheme == .dark ? 0.14 : 0.10)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Image(systemName: Self.tileIcon(index))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Self.tileAccent(index))
         }
     }
 
@@ -338,9 +398,9 @@ struct PlanAssistantIntroSheet: View {
             }
             .buttonStyle(PlanPressStyle(scale: 0.99))
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 22)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
     }
 
     // MARK: - Wspólne

@@ -153,7 +153,7 @@ struct PlanSlotPickerSheet: View {
     /// „Wspólne” i przecięcie z aktualnym składem siedzą w `PlanAudienceChips`,
     /// żeby oba wejścia do planu wysyłały identyczny payload.
     private var participantsToSave: [String] {
-        PlanAudienceChips.collapsed(selectedParticipants, members: members)
+        PlanAudienceChips.collapsed(selectedParticipants, members: roster)
     }
 
     private var selectedRecipe: Recipe? {
@@ -188,6 +188,11 @@ struct PlanSlotPickerSheet: View {
             .padding(.top, 18)
         }
         .task { await recipeCatalogStore.loadIfNeeded() }
+        // Skład gospodarstwa dociągamy TAKŻE stąd, nie tylko z ekranu planu:
+        // to tutaj jest jedyne miejsce, w którym brak domowników coś zmienia
+        // (znikają chipy „Dla kogo”), więc arkusz nie może polegać na tym,
+        // że ktoś przed nim zdążył listę pobrać.
+        .task { await sessionStore.refreshHouseholdMembers(force: false) }
         .onChange(of: searchText) { _, newValue in
             searchDebounceTask?.cancel()
             searchDebounceTask = Task { @MainActor in
@@ -205,13 +210,8 @@ struct PlanSlotPickerSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            if members.count > 1 {
-                PlanAudienceChips(
-                    members: members,
-                    selection: $selectedParticipants
-                )
+            audienceSection
                 .padding(.top, 18)
-            }
 
             searchField
                 .padding(.top, 14)
@@ -226,6 +226,52 @@ struct PlanSlotPickerSheet: View {
                     .padding(.top, 10)
             }
         }
+    }
+
+    /// „Dla kogo” — chipy, a gdy nie ma z kogo wybierać, zdanie mówiące dlaczego.
+    ///
+    /// Cichy brak tego rzędu był najgorszą z możliwych odpowiedzi: dom
+    /// jednoosobowy dostawał arkusz bez śladu po tym, że przypisywanie dań
+    /// konkretnym osobom w ogóle istnieje, i wyglądało to jak brakująca
+    /// funkcja, a nie jak brak domowników.
+    @ViewBuilder
+    private var audienceSection: some View {
+        if roster.count > 1 {
+            PlanAudienceChips(
+                members: roster,
+                selection: $selectedParticipants
+            )
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("DLA KOGO")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(2)
+                    .foregroundStyle(Color.scMuted(scheme))
+
+                HStack(spacing: 8) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.scFaint(scheme))
+
+                    Text("Na razie planujesz dla siebie. Dodaj domownika w Ustawieniach, żeby przypisywać dania konkretnym osobom.")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    /// Skład gospodarstwa — najpierw żywy ze `SessionStore`, a dopiero potem
+    /// ten podany przy otwarciu arkusza.
+    ///
+    /// Arkusz dostaje listę jako `let`, więc gdy skład dojeżdżał z serwera
+    /// PO jego otwarciu, chipy „Dla kogo” już się nie pojawiały — arkusz
+    /// zostawał z pustą listą sprzed odpowiedzi.
+    private var roster: [HouseholdMemberSnapshot] {
+        sessionStore.householdMembers.isEmpty ? members : sessionStore.householdMembers
     }
 
     private var header: some View {
@@ -589,7 +635,7 @@ struct PlanSlotPickerSheet: View {
     /// z awatarami mówi to samo w mianowniku i przy okazji pokazuje twarze.
     private var footer: some View {
         VStack(spacing: 10) {
-            if members.count > 1 {
+            if roster.count > 1 {
                 audienceSummary
             }
 
@@ -621,7 +667,7 @@ struct PlanSlotPickerSheet: View {
 
     private var audienceSummary: some View {
         HStack(spacing: 8) {
-            PlanWhoBadge(participantIds: participantsToSave, members: members, size: 22)
+            PlanWhoBadge(participantIds: participantsToSave, members: roster, size: 22)
 
             Text(audienceText)
                 .font(.system(size: 13, weight: .semibold))
@@ -637,7 +683,7 @@ struct PlanSlotPickerSheet: View {
     private var audienceText: String {
         let ids = participantsToSave
         guard !ids.isEmpty else { return "Dla całego domu" }
-        let names = members
+        let names = roster
             .filter { ids.contains($0.id) }
             .map { HouseholdMemberStyle.shortName($0.displayName) }
         return "Tylko dla: " + names.joined(separator: ", ")
@@ -691,7 +737,7 @@ struct PlanSlotPickerSheet: View {
                 // bez niej „Wspólne" migałoby jedną porcją, zanim przyjdzie
                 // odpowiedź serwera. Pusta lista to brak odpowiedzi, nie dom
                 // jednoosobowy.
-                householdMemberCount: members.isEmpty ? nil : members.count,
+                householdMemberCount: roster.isEmpty ? nil : roster.count,
                 // W trybie edycji inny przepis PODMIENIA edytowany posiłek,
                 // zamiast dokładać do slotu drugi wariant.
                 replacingRecipeId: editing?.recipe.id,
@@ -715,7 +761,7 @@ struct PlanSlotPickerSheet: View {
                 recipe: editing.recipe,
                 participantIds: participantsToSave,
                 // Porcji nie wysyłamy z tego samego powodu, co w `assign`.
-                householdMemberCount: members.isEmpty ? nil : members.count,
+                householdMemberCount: roster.isEmpty ? nil : roster.count,
                 for: date,
                 slot: slot,
                 weekStart: weekStartISO
