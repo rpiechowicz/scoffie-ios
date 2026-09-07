@@ -57,6 +57,23 @@ struct WeeklyPlanView: View {
     /// Arkusz sam jej nie zna: `GeometryReader` w jego wnętrzu podaje wysokość
     /// AKTUALNEGO detentu, a nie tego, do ilu wolno mu urosnąć.
     @State private var pageHeight: CGFloat = 0
+    /// Szerokość obszaru zakładki — z niej liczy się szerokość pigułki.
+    @State private var pageWidth: CGFloat = 0
+
+    /// Pigułka „Cel dnia" ma dwie trzecie szerokości ekranu, przy dolnym menu
+    /// na pełnej. Ta różnica jest tu jedyną rzeczą, która mówi, co jest
+    /// nawigacją, a co podglądem: dwa pełnej szerokości paski jeden nad drugim
+    /// czytały się jak dwa poziomy tego samego menu.
+    ///
+    /// Podłoga 280 pt jest dla wąskich telefonów, gdzie czyste dwie trzecie
+    /// ściskały trzy mierniki makr poniżej czytelności; sufit trzyma pigułkę
+    /// w marginesach strony, gdyby kiedyś przyszło liczyć ją z czegoś szerszego
+    /// niż ekran telefonu.
+    private var goalBarWidth: CGFloat {
+        guard pageWidth > 0 else { return 0 }
+        let limit = pageWidth - SCPageMetrics.horizontal * 2
+        return min(max(pageWidth * 2 / 3, 280), limit)
+    }
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
     // czytamy go tymi samymi kluczami, co Kalendarz, bo tylko `@AppStorage`
@@ -285,17 +302,21 @@ struct WeeklyPlanView: View {
                     targets: dailyTargets,
                     action: { simpleSheet = .dayGoal }
                 )
-                .padding(.horizontal, SCPageMetrics.horizontal)
+                .frame(width: goalBarWidth)
                 .padding(.bottom, 8)
+                // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
+                // pigułka o zerowej szerokości mignęłaby jako kreska.
+                .opacity(goalBarWidth > 0 ? 1 : 0)
             }
-            // Wysokość obszaru zakładki — sufit dla arkusza „Cel dnia".
-            // Mierzona spod spodu, żeby pomiar nie ruszał układu.
+            // Wymiary obszaru zakładki: wysokość idzie na sufit arkusza
+            // „Cel dnia", szerokość na szerokość pigułki. Mierzone spod spodu,
+            // żeby pomiar nie ruszał układu.
             .background {
                 GeometryReader { geo in
                     Color.clear
-                        .onAppear { pageHeight = geo.size.height }
-                        .onChange(of: geo.size.height) { _, height in
-                            pageHeight = height
+                        .onChange(of: geo.size, initial: true) { _, size in
+                            pageHeight = size.height
+                            pageWidth = size.width
                         }
                 }
             }

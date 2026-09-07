@@ -19,6 +19,18 @@ import SwiftUI
 /// ostatniego wiersza osi, a mimo to jedzenie przelatuje pod szkłem i jest
 /// przez nie widać. Zwykły `overlay` dawał pierwsze i tracił drugie —
 /// „Dodaj posiłek" siedziało pod pigułką i nie dało się w nie stuknąć.
+///
+/// **Trzy osobne mierniki, nie jeden podzielony pasek.** Wcześniej stał tu
+/// `MacroSegmentBar` — jeden tor podzielony na trzy kolory w proporcji kalorii
+/// z makr. Mówił, z CZEGO SKŁADA SIĘ dzień, ale nie mówił, ile którego makra
+/// zostało: dwa razy dłuższy segment białka mógł znaczyć zarówno „zrobione",
+/// jak i „dopiero połowa". Teraz każde makro ma własny cel, własny tor
+/// i własną szarą resztę, a podpis podaje wprost „B 100/150". Składowy pasek
+/// nie znika z aplikacji — zostaje w Kalendarzu, gdzie pytanie brzmi właśnie
+/// „z czego składa się to, co zjadłem".
+///
+/// Szerokość pigułki (dwie trzecie ekranu) ustawia `WeeklyPlanView` — to ona
+/// zna wymiar zakładki, a pigułka ma tylko wypełnić to, co dostanie.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -32,10 +44,6 @@ struct PlanDayGoalBar: View {
 
     /// Ile kalorii zostaje do celu; ujemne znaczy „ponad cel".
     private var remaining: Int { targets.kcal - nutrition.kcal }
-
-    private var fillFraction: CGFloat {
-        CGFloat(nutrition.kcal) / CGFloat(max(targets.kcal, 1))
-    }
 
     /// Podpis przy liczbie. Po przekroczeniu celu pokazujemy nadwyżkę, a nie
     /// zero — „0 kcal zostało" i „230 kcal ponad cel" to dwie różne wiadomości,
@@ -52,13 +60,15 @@ struct PlanDayGoalBar: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: String(abs(remaining)))
                         .font(.system(size: 17, weight: .heavy))
                         .tracking(-0.4)
                         .monospacedDigit()
-                        .foregroundStyle(Color.scLabel(scheme))
+                        .foregroundStyle(
+                            remaining < 0 ? SCMacroPalette.calories : Color.scLabel(scheme)
+                        )
                         .contentTransition(.numericText())
 
                     Text(caption)
@@ -66,31 +76,14 @@ struct PlanDayGoalBar: View {
                         .tracking(-0.1)
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
 
-                    Spacer(minLength: 10)
+                    Spacer(minLength: 8)
 
-                    macroTriple
+                    calorieCount
                 }
 
-                // Pasek NIE idzie przez całą szerokość pigułki, tylko dzieli
-                // wiersz z licznikiem „zjedzone / cel". Dwa powody: pasek na
-                // całość ciągnął oko na sam dół i wyglądał jak kreska pod
-                // treścią, a nie jak jej część; a sama proporcja („965 zostało"
-                // to ile właściwie z ilu?) nie miała gdzie paść. Podziału nie
-                // wymuszam ułamkiem — licznik bierze tyle, ile potrzebuje na
-                // swoje cyfry, pasek resztę, i przy typowych wartościach
-                // wychodzi z tego mniej więcej dwie trzecie na pasek.
-                HStack(alignment: .center, spacing: 10) {
-                    MacroSegmentBar(
-                        protein: nutrition.protein,
-                        fat: nutrition.fat,
-                        carbs: nutrition.carbs,
-                        fillFraction: fillFraction
-                    )
-                    .frame(maxWidth: .infinity)
-
-                    progressCount
-                }
+                macroMeters
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -100,10 +93,9 @@ struct PlanDayGoalBar: View {
             // pigułka odpowiada dokładnie jak wiersz osi nad nią.
             .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Self.cornerRadius))
             // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
-            // na cyfrach, na literach i na czterech punktach paska. Padding,
-            // przerwa pod `Spacer` między podpisem a makrami i całe tło szkła
-            // były martwe — pigułka otwierała arkusz tylko wtedy, gdy palec
-            // trafił w tekst, a przy trafieniu obok nie działo się nic.
+            // na cyfrach, na literach i na kilku punktach pasków. Padding,
+            // przerwa pod `Spacer` i całe tło szkła były martwe — pigułka
+            // otwierała arkusz tylko wtedy, gdy palec trafił w tekst.
             // `glassEffect` sam obszaru dotyku nie ustawia, bo rysuje tło,
             // a nie kształt przycisku.
             .contentShape(
@@ -112,64 +104,74 @@ struct PlanDayGoalBar: View {
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
         .animation(.spring(response: 0.36, dampingFraction: 0.9), value: fingerprint)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
+        // `.contain`, nie `.ignore`: mierniki makr mają własne opisy z celami
+        // („Białko: 100 ze 150 gramów, cel przekroczony") i scalenie wszystkiego
+        // w jedno zdanie zjadałoby dokładnie tę część, dla której VoiceOver
+        // przychodzi na ten pasek.
+        .accessibilityElement(children: .contain)
         .accessibilityHint("Otwiera cel dnia")
-        .accessibilityAddTraits(.isButton)
     }
 
-    /// „1135 / 2100 kcal" na prawym końcu paska.
+    /// „1135 / 2100" na prawym końcu wiersza.
     ///
-    /// Wielka liczba u góry mówi, ile ZOSTAŁO — a to jest odpowiedź bez
-    /// pytania, dopóki nie widać, z ilu. Po przekroczeniu celu zjedzone idzie
-    /// w kolor kalorii, żeby przejście przez cel było widać także tutaj,
-    /// a nie tylko w podpisie nad paskiem.
-    private var progressCount: some View {
+    /// Wielka liczba obok mówi, ile ZOSTAŁO — a to jest odpowiedź bez pytania,
+    /// dopóki nie widać, z ilu. Bez „kcal" na końcu, bo jednostka pada
+    /// w podpisie tuż obok i drugi raz tylko zabierałaby miejsce.
+    private var calorieCount: some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             Text(verbatim: String(nutrition.kcal))
                 .font(.system(size: 11.5, weight: .bold))
                 .monospacedDigit()
-                .foregroundStyle(remaining < 0 ? SCMacroPalette.calories : Color.scLabel(scheme))
+                .foregroundStyle(
+                    remaining < 0 ? SCMacroPalette.calories : Color.scLabel(scheme)
+                )
                 .contentTransition(.numericText())
 
-            Text(verbatim: "/ \(targets.kcal) kcal")
+            Text(verbatim: "/ \(targets.kcal)")
                 .font(.system(size: 10, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
         }
         .lineLimit(1)
         .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(calorieAccessibilityLabel)
     }
 
-    /// „B 71 · T 56 · W 95" — te same trzy litery, co w liczniku pod osią
-    /// i w podsumowaniu Kalendarza, w tych samych trzech kolorach.
-    private var macroTriple: some View {
-        HStack(spacing: 10) {
-            macroChip("B", value: nutrition.protein, color: SCMacroPalette.protein)
-            macroChip("T", value: nutrition.fat, color: SCMacroPalette.fat)
-            macroChip("W", value: nutrition.carbs, color: SCMacroPalette.carbs)
+    /// Trzy równe kolumny: podpis „B 100/150" nad własnym torem makra.
+    ///
+    /// Bez policzonych celów makr (brak sylwetki w profilu) `MacroMeter`
+    /// zostawia sam skład dnia i nie rysuje toru — pusty pasek obiecywałby
+    /// cel, którego nikt nie wyznaczył.
+    private var macroMeters: some View {
+        HStack(alignment: .top, spacing: 10) {
+            MacroMeter(
+                letter: "B",
+                title: "Białko",
+                value: nutrition.protein,
+                target: targets.macros?.proteinG,
+                color: SCMacroPalette.protein
+            )
+            MacroMeter(
+                letter: "T",
+                title: "Tłuszcze",
+                value: nutrition.fat,
+                target: targets.macros?.fatG,
+                color: SCMacroPalette.fat
+            )
+            MacroMeter(
+                letter: "W",
+                title: "Węgle",
+                value: nutrition.carbs,
+                target: targets.macros?.carbsG,
+                color: SCMacroPalette.carbs
+            )
         }
-        .fixedSize()
     }
 
-    private func macroChip(_ letter: String, value: Int, color: Color) -> some View {
-        HStack(spacing: 3) {
-            Text(letter)
-                .font(.system(size: 10.5, weight: .bold))
-                .foregroundStyle(color)
-
-            Text(verbatim: String(value))
-                .font(.system(size: 12.5, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(Color.scLabel(scheme))
-                .contentTransition(.numericText())
-        }
-    }
-
-    private var accessibilityLabel: String {
-        let head = remaining >= 0
-            ? "Zostało \(remaining) kilokalorii z \(targets.kcal)"
-            : "\(abs(remaining)) kilokalorii ponad cel \(targets.kcal)"
-        return "\(head). Białko \(nutrition.protein) gramów, tłuszcze \(nutrition.fat) gramów, węglowodany \(nutrition.carbs) gramów."
+    private var calorieAccessibilityLabel: String {
+        remaining >= 0
+            ? "Kalorie: \(nutrition.kcal) z \(targets.kcal), zostało \(remaining)"
+            : "Kalorie: \(nutrition.kcal) z \(targets.kcal), \(abs(remaining)) ponad cel"
     }
 }

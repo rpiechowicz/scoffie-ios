@@ -318,6 +318,12 @@ struct PlanGoalRings: View {
     static let lineWidth: CGFloat = 10
     static let spacing: CGFloat = 4
 
+    /// Odsłonięcie wykresu: pierścienie i kreski legendy jadą tą samą krzywą
+    /// z tym samym opóźnieniem, żeby cały „Cel dnia" wypełniał się jednym
+    /// ruchem. Opóźnienie jest po to, żeby arkusz zdążył usiąść na swojej
+    /// wysokości — inaczej odsłonięcie i wjazd zjadają się nawzajem.
+    static let revealAnimation: Animation = .easeOut(duration: 0.9).delay(0.12)
+
     @State private var isRevealed = false
 
     var body: some View {
@@ -341,12 +347,7 @@ struct PlanGoalRings: View {
         }
         .frame(width: Self.size, height: Self.size)
         .onAppear {
-            // Ułamek sekundy zwłoki: arkusz musi zdążyć usiąść na swojej
-            // wysokości, inaczej pierścienie odsłaniają się w trakcie wjazdu
-            // i oba ruchy się zjadają.
-            withAnimation(.easeOut(duration: 0.9).delay(0.12)) {
-                isRevealed = true
-            }
+            withAnimation(Self.revealAnimation) { isRevealed = true }
         }
     }
 }
@@ -371,6 +372,12 @@ struct PlanGoalLegendRow: View {
         /// Cel przekroczony. Bez celu nie ma czego przekroczyć, więc `nil`
         /// jest tu równie dobre jak zero.
         var isOverTarget: Bool { (progress ?? 0) > 1 }
+
+        /// O ile ponad cel, albo `nil`, gdy mieścimy się w nim.
+        var excess: Int? {
+            guard let target, value > target else { return nil }
+            return value - target
+        }
     }
 
     let row: Row
@@ -408,50 +415,43 @@ struct PlanGoalLegendRow: View {
                         .font(.system(size: 10.5, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
+
+                    // Nadwyżka wprost, a nie do policzenia z dwóch liczb.
+                    // Kolor i przygaszona baza mówią „poza celem", ale nie
+                    // mówią o ile — a to jest właśnie ta liczba, dla której
+                    // ktoś w ogóle otwiera arkusz po przekroczeniu.
+                    if let excess = row.excess {
+                        Text(verbatim: "+\(excess)")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(row.color)
+                    }
                 }
                 .lineLimit(1)
                 .fixedSize()
             }
 
-            // Kreska postępu tylko tam, gdzie jest do czego mierzyć. Pusty tor
-            // pod wierszem bez celu obiecywałby liczbę, której nie ma.
+            // Ten sam tor, co w pigułce nad menu (`MacroProgressTrack`): szare
+            // tło na to, czego brakuje, kolor na to, co jest, i osobna pełnej
+            // mocy warstwa na nadmiar, gdy baza przygasa. Rysowany tylko tam,
+            // gdzie jest do czego mierzyć — pusty tor pod wierszem bez celu
+            // obiecywałby liczbę, której nie ma.
+            //
+            // Krzywa odsłonięcia idzie z `PlanGoalRings`, a nie z domyślnej
+            // sprężyny toru: kreska i pierścień obok mają wypełniać się jednym
+            // ruchem, a dwie podobne krzywe obok siebie widać jako dwa.
             if let progress = row.progress {
-                GeometryReader { geo in
-                    let width = geo.size.width
-                    // Odsłonięcie i wartość w jednej liczbie, żeby kreska
-                    // i pierścień obok jechały tą samą drogą.
-                    let shown = isRevealed ? CGFloat(max(progress, 0)) : 0
-
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.scBarTrack(scheme))
-
-                        Capsule()
-                            .fill(row.color)
-                            .frame(width: width * min(shown, 1), height: 3)
-
-                        // Nadmiar — druga kreska po tej samej ścieżce, z cieniem
-                        // pod spodem. Ten sam język, co w pierścieniu: pełne
-                        // koło plus warstwa na nim. Przy zerze kapsuła o
-                        // szerokości zero nie rysuje niczego, więc nie ma tu
-                        // czego chować pod `if`.
-                        Capsule()
-                            .fill(row.color)
-                            .frame(width: width * min(max(shown - 1, 0), 1), height: 3)
-                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                    }
-                    .frame(height: 3)
-                }
-                .frame(height: 3)
+                MacroProgressTrack(
+                    progress: isRevealed ? max(progress, 0) : 0,
+                    color: row.color,
+                    height: 3,
+                    animation: PlanGoalRings.revealAnimation
+                )
             }
         }
-        .onAppear {
-            // Ta sama krzywa i to samo opóźnienie, co pod pierścieniami —
-            // legenda i wykres wypełniają się jednym ruchem.
-            withAnimation(.easeOut(duration: 0.9).delay(0.12)) {
-                isRevealed = true
-            }
-        }
+        // Bez `withAnimation` — ruch prowadzi `MacroProgressTrack` własnym
+        // modyfikatorem, tą samą krzywą co pierścienie.
+        .onAppear { isRevealed = true }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -466,9 +466,8 @@ struct PlanGoalLegendRow: View {
             return "\(row.title): \(row.value) \(row.unit)"
         }
         let base = "\(row.title): \(row.value) z \(target) \(row.unit)"
-        // Kolor liczby jest jedynym znakiem przekroczenia — VoiceOver musi
-        // dostać to samo słowami.
-        return row.isOverTarget ? base + ", cel przekroczony" : base
+        guard let excess = row.excess else { return base }
+        return base + ", \(excess) \(row.unit) ponad cel"
     }
 }
 
