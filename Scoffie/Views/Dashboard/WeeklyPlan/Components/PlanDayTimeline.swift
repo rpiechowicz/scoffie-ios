@@ -34,7 +34,8 @@ struct PlanDayTimeline: View {
     let onEditMeal: (MealSlot, PlanMeal) -> Void
     let onRemoveMeal: (MealSlot, PlanMeal) -> Void
     let onAssistant: () -> Void
-    let onAddExtraMeal: () -> Void
+    /// Pora wybrana z menu „Dodaj posiłek”.
+    let onPickExtraSlot: (MealSlot) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
@@ -180,7 +181,7 @@ struct PlanDayTimeline: View {
             }
 
             if showsAddRow {
-                PlanTimelineAddRow(slots: extraSlots, action: onAddExtraMeal)
+                PlanTimelineAddRow(slots: extraSlots, onPick: onPickExtraSlot)
                     .transition(Self.rowTransition)
             }
         }
@@ -424,7 +425,22 @@ struct PlanTimelineRow: View {
         .padding(.top, PlanTimelineMetrics.rowTop)
     }
 
+    /// Menu kontekstowe dostaje TYLKO dzień edytowalny.
+    ///
+    /// Wcześniej `.contextMenu` wisiało zawsze, a pusty warunek w środku
+    /// zostawiał na dniu z przeszłości przytrzymanie, które unosiło wiersz
+    /// i pokazywało menu bez jednej pozycji.
+    @ViewBuilder
     private func dishButton(_ meal: PlanMeal, isAlternative: Bool) -> some View {
+        if isEditable {
+            dishTapTarget(meal, isAlternative: isAlternative)
+                .contextMenu { menuItems(for: meal) }
+        } else {
+            dishTapTarget(meal, isAlternative: isAlternative)
+        }
+    }
+
+    private func dishTapTarget(_ meal: PlanMeal, isAlternative: Bool) -> some View {
         Button {
             onTapMeal(meal)
         } label: {
@@ -438,18 +454,18 @@ struct PlanTimelineRow: View {
             )
         }
         .buttonStyle(PlanPressStyle())
-        .contextMenu {
-            if isEditable {
-                Button { onEditMeal(meal) } label: {
-                    Label("Zamień przepis", systemImage: "arrow.2.squarepath")
-                }
-                Button { onAddVariant() } label: {
-                    Label("Dodaj danie dla kogoś", systemImage: "person.badge.plus")
-                }
-                Button(role: .destructive) { onRemoveMeal(meal) } label: {
-                    Label("Usuń posiłek", systemImage: "trash")
-                }
-            }
+    }
+
+    @ViewBuilder
+    private func menuItems(for meal: PlanMeal) -> some View {
+        Button { onEditMeal(meal) } label: {
+            Label("Zamień przepis lub osoby", systemImage: "arrow.2.squarepath")
+        }
+        Button { onAddVariant() } label: {
+            Label("Dodaj danie dla kogoś innego", systemImage: "person.badge.plus")
+        }
+        Button(role: .destructive) { onRemoveMeal(meal) } label: {
+            Label("Usuń posiłek", systemImage: "trash")
         }
     }
 
@@ -515,7 +531,9 @@ struct PlanTimelineDish: View {
             photo
         }
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        // Bez `.accessibilityElement(children: .combine)`: danie siedzi
+        // w `Button`, a scalanie dzieci gasi cechę „przycisk” i VoiceOver
+        // przestaje mówić, że w wiersz da się stuknąć.
         .accessibilityLabel(accessibilityText)
     }
 
@@ -748,15 +766,31 @@ struct PlanTimelineEmptyRow: View {
 // MARK: - Dodaj posiłek
 
 /// Ręczne dodanie pory, której dzień jeszcze nie pokazuje — na końcu osi.
+///
+/// Wybór pory to `Menu` zaczepione o sam wiersz, a nie `confirmationDialog`.
+/// Ten drugi, wystawiany z ekranu planu, rysował się przy GÓRNEJ krawędzi
+/// zamiast wyjechać od dołu — ekran ignoruje górny safe area
+/// (`ignoresSafeArea(.container, edges: .top)`), żeby tytuł siadł 78 pt od
+/// krawędzi, i systemowa plansza liczyła swoje położenie z tej samej,
+/// przesuniętej geometrii. `Menu` zaczepia się o widok, z którego wyszło,
+/// więc nie ma czego liczyć — a przy okazji od razu widać, co się rozwija.
 struct PlanTimelineAddRow: View {
     /// Sloty do wyboru; z nich składa się podpis wiersza.
     let slots: [MealSlot]
-    let action: () -> Void
+    let onPick: (MealSlot) -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Button(action: action) {
+        Menu {
+            ForEach(slots) { slot in
+                Button {
+                    onPick(slot)
+                } label: {
+                    Label(slot.title, systemImage: slot.icon)
+                }
+            }
+        } label: {
             HStack(alignment: .top, spacing: PlanTimelineMetrics.gutter) {
                 PlanRailMark(
                     time: nil,
@@ -771,7 +805,7 @@ struct PlanTimelineAddRow: View {
             .padding(.top, PlanTimelineMetrics.rowTop)
             .contentShape(Rectangle())
         }
-        .buttonStyle(PlanPressStyle())
+        .buttonStyle(.plain)
         .accessibilityLabel("Dodaj posiłek: \(subtitle)")
     }
 

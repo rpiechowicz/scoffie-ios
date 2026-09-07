@@ -37,12 +37,20 @@ struct WeeklyPlanView: View {
     @State private var detailTarget: DetailTarget?
     @State private var showClearDayAlert = false
     @State private var showClearWeekAlert = false
-    @State private var showProducts = false
-    /// Wybór pory przy „Dodaj posiłek” — tylko te, których dzień jeszcze
-    /// nie pokazuje.
-    @State private var showAddExtraDialog = false
-    /// Arkusz zachęty asystenta. Wchodzi wyłącznie przy pustym tygodniu.
-    @State private var showAssistantIntro = false
+    /// Arkusze bez własnego celu: lista zakupów i plansza asystenta.
+    ///
+    /// Jeden `@State` na oba, a nie dwa niezależne `Bool`-e z osobnymi
+    /// `.sheet(isPresented:)`. SwiftUI potrafi zgubić wcześniejsze
+    /// `.sheet(isPresented:)` w łańcuchu modyfikatorów tego samego widoku,
+    /// a ten ekran ma ich cztery — z celami przepisu i wyboru posiłku.
+    /// Jeden `item` to jedna prezentacja, więc nie ma czego gubić.
+    @State private var simpleSheet: SimpleSheet?
+
+    private enum SimpleSheet: String, Identifiable {
+        case products
+        case assistantIntro
+        var id: String { rawValue }
+    }
 
     /// Posiłek otwarty w szczegółach, razem z miejscem, z którego przyszedł.
     ///
@@ -100,8 +108,10 @@ struct WeeklyPlanView: View {
         return set
     }
 
-    /// Cały widoczny tydzień bez jednego posiłku. To jedyny stan, w którym
-    /// asystent otwiera arkusz zachęty zamiast wchodzić od razu.
+    /// Cały widoczny tydzień bez jednego posiłku. Nie decyduje już o TYM, czy
+    /// plansza asystenta się pokaże (pokazuje się zawsze, gdy stukniesz
+    /// w przycisk) — tylko o tym, co na niej pisze: „ułożę” brzmi jak groźba
+    /// nadpisania komuś, kto ma już pół tygodnia rozpisane ręcznie.
     private var isWeekEmpty: Bool { plannedDates.isEmpty }
 
     /// Posiłki slotu, zawężone do bieżącego profilu.
@@ -252,38 +262,27 @@ struct WeeklyPlanView: View {
             } message: {
                 Text("Plan całego tygodnia zostanie usunięty razem z posiłkami przypisanymi do dni.")
             }
-            .confirmationDialog(
-                "Dodaj posiłek",
-                isPresented: $showAddExtraDialog,
-                titleVisibility: .visible
-            ) {
-                ForEach(extraSlots(on: selectedDate), id: \.self) { slot in
-                    Button(slot.title) {
-                        pickerTarget = PickerTarget(date: selectedDate, slot: slot, editing: nil)
-                    }
+            .sheet(item: $simpleSheet) { which in
+                switch which {
+                case .products:
+                    ProductsView(topPadding: 24)
+                case .assistantIntro:
+                    PlanAssistantIntroSheet(
+                        members: members,
+                        days: datesViewModel.dates,
+                        slotsPerDay: visibleSlots(on: selectedDate).count,
+                        weekIsEmpty: isWeekEmpty,
+                        onOpenAssistant: { openAssistantTabAfterSheet() }
+                    )
+                    .presentationDetents([.large])
+                    .dashboardLiquidSheet()
                 }
-                Button("Anuluj", role: .cancel) { }
-            } message: {
-                Text("Która pora dnia? Dojdzie do planu tego dnia.")
-            }
-            .sheet(isPresented: $showProducts) {
-                ProductsView(topPadding: 24)
-            }
-            .sheet(isPresented: $showAssistantIntro) {
-                PlanAssistantIntroSheet(
-                    members: members,
-                    days: datesViewModel.dates,
-                    slotsPerDay: visibleSlots(on: selectedDate).count,
-                    onOpenAssistant: { openAssistantTabAfterSheet() }
-                )
-                .presentationDetents([.large])
-                .dashboardLiquidSheet()
             }
             // Skrót z karty asystenta: przełączenie zakładki to za mało,
             // bo lista zakupów jest arkuszem wewnątrz tego ekranu.
             .onChange(of: sessionStore.opensShoppingList, initial: true) { _, wants in
                 guard wants else { return }
-                showProducts = true
+                simpleSheet = .products
                 sessionStore.opensShoppingList = false
             }
             .sheet(item: $pickerTarget) { target in
@@ -301,6 +300,8 @@ struct WeeklyPlanView: View {
                     // planu byłaby do wyrzucenia.
                     onSaveCompleted: { refreshShoppingList() }
                 )
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
             }
             .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
@@ -352,7 +353,7 @@ struct WeeklyPlanView: View {
                     icon: MenuConstans.Products.icon,
                     size: Self.headerActionSize
                 ) {
-                    showProducts = true
+                    simpleSheet = .products
                 }
                 .accessibilityLabel(MenuConstans.Products.name)
 
@@ -369,8 +370,11 @@ struct WeeklyPlanView: View {
     /// z nagłówka razem z pigułką.
     private var overflowMenu: some View {
         Menu {
+            // Prosto do asystenta, bez planszy „co on właściwie robi”.
+            // Kto szuka go w menu, ten już wie — planszę pokazuje przycisk
+            // w nagłówku dnia, na który trafia się przypadkiem.
             Button {
-                openAssistant()
+                sessionStore.dashboardTab = .assistant
             } label: {
                 Label("Zaplanuj tydzień z asystentem", systemImage: MenuConstans.Assistant.icon)
             }
@@ -471,8 +475,10 @@ struct WeeklyPlanView: View {
             onRemoveMeal: { slot, meal in
                 removeMeal(date: date, slot: slot, meal: meal)
             },
-            onAssistant: { openAssistant() },
-            onAddExtraMeal: { showAddExtraDialog = true }
+            onAssistant: { simpleSheet = .assistantIntro },
+            onPickExtraSlot: { slot in
+                pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
+            }
         )
         // Strona trzyma wspólny margines strony.
         .padding(.horizontal, SCPageMetrics.horizontal)
@@ -482,20 +488,6 @@ struct WeeklyPlanView: View {
     }
 
     // MARK: - Actions
-
-    /// Asystent z nagłówka dnia i z menu „…”.
-    ///
-    /// Przy pustym tygodniu wchodzi arkusz zachęty: ktoś, kto nie ma jeszcze
-    /// nic, potrzebuje najpierw wiedzieć, CO się stanie po stuknięciu. Przy
-    /// tygodniu, w którym coś już stoi, ta sama plansza byłaby wyłącznie
-    /// jednym stuknięciem więcej.
-    private func openAssistant() {
-        if isWeekEmpty {
-            showAssistantIntro = true
-        } else {
-            sessionStore.dashboardTab = .assistant
-        }
-    }
 
     /// Zakładka przełącza się DOPIERO po zjeździe arkusza.
     ///

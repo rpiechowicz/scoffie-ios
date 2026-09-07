@@ -16,6 +16,10 @@ struct PlanAssistantIntroSheet: View {
     /// Ile posiłków dziennie planuje to gospodarstwo — z tego liczy się
     /// obietnica „21 posiłków”, żeby nie obiecywać trzech, gdy dom planuje pięć.
     let slotsPerDay: Int
+    /// Czy w widocznym tygodniu stoi już cokolwiek. Zmienia obietnicę, a nie
+    /// samą planszę: „ułożę” brzmi jak groźba nadpisania komuś, kto ma już
+    /// pół tygodnia rozpisane ręcznie.
+    var weekIsEmpty: Bool = true
     let onOpenAssistant: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -98,7 +102,7 @@ struct PlanAssistantIntroSheet: View {
             }
             .frame(width: 52, height: 52)
 
-            Text("Ułożę Ci ten tydzień")
+            Text(weekIsEmpty ? "Ułożę Ci ten tydzień" : "Uzupełnię ten tydzień")
                 .font(.system(size: 25, weight: .bold))
                 .tracking(-0.6)
                 .foregroundStyle(Color.scLabel(scheme))
@@ -117,7 +121,13 @@ struct PlanAssistantIntroSheet: View {
     }
 
     private var introSubtitle: String {
-        isSolo
+        // Bez obietnicy „nie ruszę tego, co stoi": arkusz nie wie, co asystent
+        // zrobi z już zaplanowanym dniem, a obietnica, której nie da się tu
+        // dotrzymać, jest gorsza od jej braku.
+        guard weekIsEmpty else {
+            return "Powiedz, czego brakuje, a dopiszę resztę tygodnia. Każdy posiłek zmienisz potem jednym ruchem."
+        }
+        return isSolo
             ? "Kilka sekund i masz 7 dni posiłków. Każdy możesz potem zmienić jednym ruchem."
             : "Kilka sekund i masz 7 dni posiłków dla całego domu. Każdy możesz potem zmienić jednym ruchem."
     }
