@@ -40,7 +40,7 @@ struct PlanDayGoalBar: View {
 
     /// Promień rogu szkła i obszaru dotyku — jedna liczba, żeby te dwa
     /// kształty nie mogły się rozjechać.
-    private static let cornerRadius: CGFloat = 22
+    private static let cornerRadius: CGFloat = 20
 
     /// Ile kalorii zostaje do celu; ujemne znaczy „ponad cel".
     private var remaining: Int { targets.kcal - nutrition.kcal }
@@ -60,10 +60,10 @@ struct PlanDayGoalBar: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: String(abs(remaining)))
-                        .font(.system(size: 17, weight: .heavy))
+                        .font(.system(size: 15.5, weight: .heavy))
                         .tracking(-0.4)
                         .monospacedDigit()
                         .foregroundStyle(
@@ -72,7 +72,7 @@ struct PlanDayGoalBar: View {
                         .contentTransition(.numericText())
 
                     Text(caption)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(.system(size: 11.5, weight: .medium))
                         .tracking(-0.1)
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -85,8 +85,8 @@ struct PlanDayGoalBar: View {
 
                 macroMeters
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
             // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
             // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
@@ -120,7 +120,7 @@ struct PlanDayGoalBar: View {
     private var calorieCount: some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             Text(verbatim: String(nutrition.kcal))
-                .font(.system(size: 11.5, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(
                     remaining < 0 ? SCMacroPalette.calories : Color.scLabel(scheme)
@@ -128,7 +128,7 @@ struct PlanDayGoalBar: View {
                 .contentTransition(.numericText())
 
             Text(verbatim: "/ \(targets.kcal)")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 9.5, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
         }
@@ -144,7 +144,7 @@ struct PlanDayGoalBar: View {
     /// zostawia sam skład dnia i nie rysuje toru — pusty pasek obiecywałby
     /// cel, którego nikt nie wyznaczył.
     private var macroMeters: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             MacroMeter(
                 letter: "B",
                 title: "Białko",

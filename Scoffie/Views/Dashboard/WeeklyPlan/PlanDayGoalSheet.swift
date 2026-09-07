@@ -374,6 +374,13 @@ struct PlanGoalLegendRow: View {
         var isOverTarget: Bool { (progress ?? 0) > 1 }
 
         /// O ile ponad cel, albo `nil`, gdy mieścimy się w nim.
+        ///
+        /// Na ekranie tej liczby nie ma. Stała chwilę jako „+15" na prawym
+        /// końcu wiersza i był to trzeci element w jednej linijce obok „145"
+        /// i „/ 130 g" — trzy liczby obok siebie przestawały się czytać jako
+        /// cokolwiek. Nadwyżkę niesie teraz sam pasek (przygaszona baza,
+        /// nadmiar w pełnej mocy) i kolor liczby. Wartość zostaje dla
+        /// VoiceOver, który paska nie widzi.
         var excess: Int? {
             guard let target, value > target else { return nil }
             return value - target
@@ -415,17 +422,6 @@ struct PlanGoalLegendRow: View {
                         .font(.system(size: 10.5, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
-
-                    // Nadwyżka wprost, a nie do policzenia z dwóch liczb.
-                    // Kolor i przygaszona baza mówią „poza celem", ale nie
-                    // mówią o ile — a to jest właśnie ta liczba, dla której
-                    // ktoś w ogóle otwiera arkusz po przekroczeniu.
-                    if let excess = row.excess {
-                        Text(verbatim: "+\(excess)")
-                            .font(.system(size: 10.5, weight: .bold))
-                            .monospacedDigit()
-                            .foregroundStyle(row.color)
-                    }
                 }
                 .lineLimit(1)
                 .fixedSize()

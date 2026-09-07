@@ -20,7 +20,7 @@ struct MacroProgressTrack: View {
     /// Udział celu. Powyżej 1 znaczy „ponad cel" i rysuje drugą warstwę.
     let progress: Double
     let color: Color
-    var height: CGFloat = 4
+    var height: CGFloat = 3.5
     /// `nil` gasi animację — do miejsc, które sterują ruchem z zewnątrz.
     var animation: Animation? = .spring(response: 0.4, dampingFraction: 0.9)
 
@@ -88,14 +88,14 @@ struct MacroMeter: View {
     private var isOverTarget: Bool { (progress ?? 0) > 1 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 3) {
                 Text(letter)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9.5, weight: .bold))
                     .foregroundStyle(color)
 
                 Text(valueText)
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(isOverTarget ? color : Color.scLabel(scheme))
                     .contentTransition(.numericText())
