@@ -173,6 +173,14 @@ struct PlanSlotPickerSheet: View {
                 controls
                     .padding(.horizontal, 20)
 
+                // Kreska pod sterowaniem, żeby przewijana lista miała o co się
+                // zatrzymać. Bez niej pierwszy wiersz dojeżdżał wprost pod
+                // przełącznik zakresu i wyglądał, jakby padding się urwał.
+                Rectangle()
+                    .fill(Color.scRule(scheme))
+                    .frame(height: 1)
+                    .padding(.top, 14)
+
                 list
 
                 footer
@@ -453,7 +461,33 @@ struct PlanSlotPickerSheet: View {
         .frame(width: 26, height: 26)
     }
 
+    /// Zdjęcie albo kafel zastępczy — jedno ALBO drugie.
+    ///
+    /// Warstwowy `ZStack` ze zdjęciem dochodzącym zanikiem nad kaflem zostawiał
+    /// przepisy bez widocznego zdjęcia: zanik startował od `opacity(0)`
+    /// i sterował nim `onAppear`, więc gdy nie doszedł, na wierzchu stał
+    /// przezroczysty obrazek. Tu jest ten sam kształt, co w `RecipeCarouselCard`.
     private func thumbnail(_ recipe: Recipe) -> some View {
+        Group {
+            if let url = recipe.imageURL {
+                CachedAsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        placeholderThumb
+                    }
+                }
+            } else {
+                placeholderThumb
+            }
+        }
+        .frame(width: 56, height: 56)
+        .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+    }
+
+    private var placeholderThumb: some View {
         ZStack {
             LinearGradient(
                 colors: [slot.cozyTint, slot.cozyTint.mix(black: 0.32)],
@@ -466,17 +500,7 @@ struct PlanSlotPickerSheet: View {
             Image(systemName: slot.icon)
                 .font(.system(size: 18, weight: .light))
                 .foregroundStyle(.white.opacity(0.85))
-
-            if let url = recipe.imageURL {
-                CachedAsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        PlanFadeInImage(image: image)
-                    }
-                }
-            }
         }
-        .frame(width: 56, height: 56)
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
 
     /// Notka nad listą. Bez niej krótka lista wygląda na brak przepisów,

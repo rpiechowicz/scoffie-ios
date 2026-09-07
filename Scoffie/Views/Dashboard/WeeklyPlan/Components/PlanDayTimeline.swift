@@ -412,6 +412,8 @@ struct PlanTimelineRow: View {
                     ForEach(Array(dishes.enumerated()), id: \.element.id) { index, meal in
                         dishButton(meal, isAlternative: index > 0)
                     }
+
+                    if showsVariantAction { variantButton }
                 }
                 .padding(.bottom, PlanTimelineMetrics.rowBottom)
 
@@ -423,6 +425,40 @@ struct PlanTimelineRow: View {
             }
         }
         .padding(.top, PlanTimelineMetrics.rowTop)
+    }
+
+    /// Dołożenie osobnego dania dla domownika — wprost w wierszu pory.
+    ///
+    /// Wcześniej ta akcja żyła wyłącznie w menu z przytrzymania, czyli
+    /// praktycznie nie istniała: nikt nie przytrzymuje wiersza, żeby sprawdzić,
+    /// czy coś się pod nim kryje. A to jedyna droga do dnia z makiety D3, gdzie
+    /// pod daniem domu stoi danie Zosi — bez niej „dla kogo” dawało się ustawić
+    /// tylko przy pustej porze.
+    ///
+    /// Znika, gdy w porze stoi już tyle dań, ilu jest domowników: nie ma wtedy
+    /// dla kogo dokładać kolejnego, a wiersz nie musi tego proponować sześć
+    /// razy dziennie.
+    private var showsVariantAction: Bool {
+        showsWhoBadge && isEditable && dishes.count < members.count
+    }
+
+    private var variantButton: some View {
+        Button(action: onAddVariant) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.badge.plus")
+                    .font(.system(size: 12, weight: .bold))
+
+                Text("Osobne danie dla kogoś")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(-0.2)
+            }
+            .foregroundStyle(SCPalette.terracotta)
+            .frame(height: 30)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle())
+        .accessibilityLabel("Dodaj osobne danie dla domownika, \(slot.title)")
     }
 
     /// Menu kontekstowe dostaje TYLKO dzień edytowalny.
@@ -582,22 +618,28 @@ struct PlanTimelineDish: View {
             }
     }
 
-    /// Kafel zastępczy leży pod spodem ZAWSZE, a zdjęcie dochodzi nad nim.
+    /// Zdjęcie albo kafel zastępczy — jedno ALBO drugie, nie warstwy.
     ///
-    /// Dzięki temu wolne łącze nie zostawia w wierszu dziury, a niepowodzenie
-    /// pobrania nie wymaga osobnej gałęzi — po prostu zostaje to, co i tak
-    /// widać od pierwszej klatki.
+    /// Wcześniej stały w `ZStack`, a zdjęcie dochodziło nad kaflem z zanikiem
+    /// sterowanym `onAppear`. Zanik zaczynał się od `opacity(0)`, więc każda
+    /// klatka, w której `onAppear` nie doszło, zostawiała zdjęcie NIEWIDOCZNE
+    /// nad poprawnie narysowanym kaflem — czyli wyglądała jak przepis bez
+    /// zdjęcia. Ćwierć sekundy zaniku nie jest warta takiego ryzyka; to jest
+    /// dokładnie ten sam kształt, którym rysuje miniatury reszta aplikacji
+    /// (`RecipeCarouselCard`).
+    @ViewBuilder
     private var thumbnail: some View {
-        ZStack {
-            gradientThumb
-
-            if let url = meal.recipe.imageURL {
-                CachedAsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        PlanFadeInImage(image: image)
-                    }
+        if let url = meal.recipe.imageURL {
+            CachedAsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    gradientThumb
                 }
             }
+        } else {
+            gradientThumb
         }
     }
 
@@ -850,30 +892,6 @@ struct PlanTimelineAddRow: View {
     /// bo to skrót liczebnika, a nie początek zdania.
     private static func inSentence(_ slot: MealSlot) -> String {
         slot.title.hasPrefix("II ") ? slot.title : slot.title.lowercased()
-    }
-}
-
-// MARK: - Zanik zdjęcia
-
-/// Zdjęcie wchodzi zanikiem, a nie przeskokiem.
-///
-/// Zanik prowadzi sam obrazek, a nie `.transition` na zewnątrz:
-/// `CachedAsyncImage` podmienia fazę bez `withAnimation` (i słusznie — z pamięci
-/// oddaje zdjęcie synchronicznie, w tej samej klatce, w której powstaje widok),
-/// więc przejście zawieszone na zmianie fazy nie miałoby czego złapać.
-struct PlanFadeInImage: View {
-    let image: Image
-
-    @State private var shown = false
-
-    var body: some View {
-        image
-            .resizable()
-            .scaledToFill()
-            .opacity(shown ? 1 : 0)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.22)) { shown = true }
-            }
     }
 }
 
