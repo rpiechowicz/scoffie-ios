@@ -176,10 +176,15 @@ struct CalendarView: View {
                 SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+                // Nagłówek dnia stoi, przewijają się wyłącznie kafle
+                // posiłków. Wcześniej cała strona była jednym `ScrollView`
+                // i przy dłuższym dniu pasek dni, makro i kroki wyjeżdżały
+                // za górną krawędź — czyli to, po czym się nawiguje, znikało
+                // dokładnie wtedy, gdy było potrzebne.
+                VStack(alignment: .leading, spacing: 0) {
+                    Group {
                         // Kalendarz nie ma tytułu — pasek dni sam mówi, co
-                        // to za ekran. ScrollView ignoruje górny safe area
+                        // to za ekran. Układ ignoruje górny safe area
                         // (rozciąga się pod pasek nawigacji), więc pełne
                         // 78pt idzie tu jako jawny padding, tak jak tytuł na
                         // pozostałych zakładkach.
@@ -239,9 +244,15 @@ struct CalendarView: View {
                                 .padding(.horizontal, SCPageMetrics.horizontal)
                                 .padding(.bottom, 12)
                         }
+                    }
 
-                        // Posiłki — kompaktowe wiersze, `gap: 10`, dolny
-                        // odstęp scrolla 40pt.
+                    // Posiłki — kompaktowe wiersze, `gap: 10`. Jedyna
+                    // przewijana część ekranu; ruch palcem w bok przestawia
+                    // dzień, tak samo jak w Planie tygodnia.
+                    DayPager(
+                        datesViewModel: datesViewModel,
+                        selectedDate: $selectedDate
+                    ) { _ in
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(dayCards) { card in
                                 EditorialMealCard(
@@ -257,21 +268,17 @@ struct CalendarView: View {
                             }
                         }
                         .padding(.horizontal, SCPageMetrics.horizontal)
-                        .padding(.bottom, 40)
                     }
                 }
-                .scrollIndicators(.hidden)
-                // Extend the scroll view up under the nav-bar zone so the
-                // editorial layout sits at design-spec position (~78pt from
-                // screen top) instead of being pushed down by the nav bar's
-                // ~44pt height. The transparent nav bar still sits on top
-                // and keeps SwiftUI's native blur-on-scroll behavior live.
+                // Układ wchodzi pod pasek nawigacji, żeby siadał w miejscu
+                // z projektu (~78pt od góry ekranu) zamiast być zepchniętym
+                // o jego ~44pt. Przezroczysty pasek nadal stoi na wierzchu.
                 .ignoresSafeArea(.container, edges: .top)
             }
-            // Native Recipes-style auto-blur: the nav bar stays present but
-            // empty + transparent at rest. SwiftUI fades in its `.bar`
-            // material the moment content scrolls under the status bar.
-            // The placeholder ToolbarItem keeps the bar from collapsing.
+            // Pasek nawigacji zostaje na miejscu, ale pusty i przezroczysty:
+            // nagłówek ekranu jest przypięty, więc nie ma czego pod niego
+            // wsunąć i materiał `.bar` już się nie zapala. Pusty element
+            // trzyma pasek przed zwinięciem.
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

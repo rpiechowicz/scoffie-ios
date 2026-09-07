@@ -94,6 +94,28 @@ class DatesViewModel {
         return calendar.startOfDay(for: date) >= calendar.startOfDay(for: Date())
     }
 
+    /// Dzień o jeden do przodu albo do tyłu — także przez granicę tygodnia.
+    ///
+    /// Zwraca nową datę, bo ekrany trzymają własny wybrany dzień; przekroczenie
+    /// niedzieli przestawia przy okazji sam pasek na sąsiedni tydzień, więc gest
+    /// „dalej" nie zatrzymuje się na końcu planszy. Kolejność ma znaczenie:
+    /// `currentWeekOffset` idzie PRZED `selectedDate`, bo `dates` liczy się
+    /// z offsetu i sprawdzenie „czy dzień jest jeszcze w tym tygodniu" musi
+    /// patrzeć na planszę sprzed przesunięcia.
+    @discardableResult
+    func stepDay(from date: Date, by days: Int) -> Date {
+        let calendar = PlanWeek.calendar
+        guard days != 0,
+              let next = calendar.date(byAdding: .day, value: days, to: date)
+        else { return date }
+
+        if !dates.contains(where: { calendar.isDate($0, inSameDayAs: next) }) {
+            currentWeekOffset += days > 0 ? 1 : -1
+        }
+        selectedDate = next
+        return next
+    }
+
     /// Wraca do bieżącego tygodnia
     func goToCurrentWeek() {
         currentWeekOffset = 0

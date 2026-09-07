@@ -73,9 +73,6 @@ final class AgentStore {
     /// „Stop"): mniejszy zakres, bo to najczęstsza przyczyna przekroczenia
     /// czasu tury. Z serwera.
     private(set) var suggestions: [String] = []
-    /// Kontekst chipów i arkusza osób — z `GET /agent/context`; `nil`, dopóki
-    /// nie przyjdzie (wtedy chipy liczą się po staremu z cache'ów sesji).
-    private(set) var context: AgentContextDTO?
     /// Asystent wyłączony na serwerze (`AI_DISABLED`) — ekran mówi to wprost,
     /// zamiast udawać, że wiadomość poszła.
     private(set) var isUnavailable = false
@@ -182,7 +179,6 @@ final class AgentStore {
     func send(
         text: String,
         weekStart: String,
-        scopeUserIds: [String] = [],
         clientMessageId: String = UUID().uuidString
     ) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -225,8 +221,7 @@ final class AgentStore {
                     text: trimmed,
                     weekStart: weekStart,
                     clientToday: PlanWeek.dateKey(Date()),
-                    timeZone: TimeZone.current.identifier,
-                    scopeUserIds: scopeUserIds.isEmpty ? nil : scopeUserIds
+                    timeZone: TimeZone.current.identifier
                 )
             )
             // Rozmowa mogła się w tym czasie przełączyć — wtedy ta tura
@@ -319,14 +314,6 @@ final class AgentStore {
                 self.errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
             }
         }
-    }
-
-    /// Kontekst chipów. Cicho: brak odpowiedzi zostawia chipy liczone po
-    /// staremu, a nie komunikat o błędzie pod rozmową.
-    func refreshContext(weekStart: String?) async {
-        guard let fresh = try? await client.context(householdId: householdId, weekStart: weekStart)
-        else { return }
-        context = fresh
     }
 
     /// „Ile mi zostało" — do arkusza limitów; nie zasłania błędów rozmowy.

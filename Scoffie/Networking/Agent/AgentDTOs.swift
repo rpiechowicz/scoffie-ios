@@ -195,36 +195,6 @@ struct AgentUsageDTO: Decodable, Equatable {
     }
 }
 
-/// Domownik w arkuszu „Dla kogo liczyć" — z etykietą celu prosto z profilu.
-struct AgentContextMemberDTO: Decodable, Equatable, Identifiable {
-    let userId: String
-    let displayName: String
-    /// „2 100 kcal · bez laktozy" — ta sama etykieta co na karcie porcji.
-    let goalLabel: String
-    let calorieGoal: Int
-    /// Czy dane tej osoby idą do modelu (zgoda albo bramka wyłączona).
-    let consented: Bool
-    let isSelf: Bool
-
-    var id: String { userId }
-}
-
-/// `GET /agent/context` — jedno źródło dla chipów nad polem i arkusza osób.
-struct AgentContextDTO: Decodable, Equatable {
-    let householdId: String
-    let weekStart: String?
-    let weekLabel: String?
-    let members: [AgentContextMemberDTO]
-    let memberCount: Int
-    let targetKcalPerDay: Int?
-    let usage: AgentUsageDTO
-    /// Czy tura zaczyna na tańszym modelu — wtedy kafel „biorę się za plan"
-    /// jest spodziewany, a nie oznacza awarii. Opcjonalne: starszy serwer
-    /// bez tego pola wywracał dekodowanie CAŁEGO kontekstu po cichu.
-    let handoff: Bool?
-    var startsOnCheaperModel: Bool { handoff ?? false }
-}
-
 // MARK: - Żądania
 
 struct AgentCreateConversationRequestDTO: Encodable {
@@ -266,10 +236,6 @@ struct AgentPostMessageRequestDTO: Encodable {
     let weekStart: String
     let clientToday: String
     let timeZone: String
-    /// Kogo dotyczy pytanie; `nil` albo pusta lista = całe gospodarstwo.
-    /// Wysyłamy IDENTYFIKATORY, nie imiona — model dostaje je gotowe do
-    /// wpisania w propozycję, zamiast dopasowywać „Ania" do wiersza w bazie.
-    let scopeUserIds: [String]?
     /// Co ten build umie narysować. Serwer w trybie `soft` po tym poznaje,
     /// że wolno mu skończyć turę propozycją zamiast zapisem.
     let clientCapabilities: [String] = [AgentClientCapability.cardsV1]

@@ -56,9 +56,9 @@ struct AssistantEmptyState: View {
 
     var body: some View {
         // Projekt „Asystent Zgoda" (3.09.2026): pusta rozmowa to jeden
-        // wyśrodkowany kafel i zdanie, a cztery szybkie starty siedzą nad
-        // chipami zakresu przy polu — nie w treści. Karta „Co wiem o Was"
-        // i skróty zostają w kodzie na wypadek powrotu, ale nie renderują się.
+        // wyśrodkowany kafel i zdanie, a cztery szybkie starty siedzą tuż
+        // nad polem — nie w treści. Karta „Co wiem o Was" i skróty zostają
+        // w kodzie na wypadek powrotu, ale nie renderują się.
         VStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.scAccentTint(scheme))
@@ -73,7 +73,7 @@ struct AssistantEmptyState: View {
                     .font(.system(size: 20, weight: .bold))
                     .tracking(-0.45)
                     .foregroundStyle(Color.scLabel(scheme))
-                Text("Zacznij od jednego z poleceń nad polem albo napisz własne. Zakres ustawisz chipami nad polem.")
+                Text("Zacznij od jednego z poleceń nad polem albo napisz własne.")
                     .font(.system(size: 14))
                     .tracking(-0.15)
                     .multilineTextAlignment(.center)

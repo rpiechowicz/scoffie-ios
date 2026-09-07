@@ -227,7 +227,7 @@ struct AssistantExchangePreview: View {
 
 /// Jedna umiejętność asystenta — źródło prawdy dla trzech ekranów.
 struct AssistantCapability: Identifiable {
-    enum Thumb { case week, day, swap, macro, split, options, shopping, scope, clarify, decide, edit, limits }
+    enum Thumb { case week, day, swap, macro, split, options, shopping, clarify, decide, edit, limits }
 
     let id: String
     let icon: String
@@ -252,7 +252,7 @@ enum AssistantCapabilities {
         .init(id: "shopping", icon: "cart.fill", accent: .sage, title: "Lista zakupów z planu", body: "Składniki z tego, co jest w planie, pogrupowane działami sklepu.", example: "Co wyjdzie na liście zakupów z tego tygodnia?", thumb: .shopping, reply: "Z planu na ten tydzień wychodzą 23 pozycje w 5 działach; 4 już masz odhaczone. Dodać całość do listy?"),
         .init(id: "recipes", icon: "book.closed.fill", accent: .butter, title: "Własne przepisy", body: "Tworzy przepis domu ze składników katalogu, poprawia go i usuwa. Makro liczy sam.", example: "Zapisz mój przepis na chili: 400 g indyka mielonego, puszka fasoli, passata, papryka…", thumb: nil, reply: "Zapisałem „Chili z indykiem” w przepisach domu: 4 porcje, 610 kcal i 42 g białka na porcję. Poprawisz jednym zdaniem."),
         .init(id: "memory", icon: "brain.head.profile", accent: .indigo, title: "Pamięć domu", body: "Zapamiętuje fakty na prośbę i używa ich w każdym planie. Notatki widzisz i kasujesz w menu.", example: "Zapamiętaj, że w piątki jemy rybę", thumb: nil, reply: "Zapamiętałem: w piątki jecie rybę. Uwzględnię to w każdym kolejnym planie; notatkę znajdziesz w menu → Pamięć domu."),
-        .init(id: "scope", icon: "person.crop.circle.badge.checkmark", accent: .sage, title: "Dla kogo liczyć", body: "Pytanie może dotyczyć jednej osoby albo całego domu. Zakres ustawiasz chipem nad polem wiadomości.", example: "Policz bilans tylko dla mnie", thumb: .scope, reply: "Liczę tylko dla Ciebie: dziś 1 980 kcal przy celu 2 100. Zakres masz w chipie nad polem — zmienisz go jednym stuknięciem."),
+        .init(id: "scope", icon: "person.crop.circle.badge.checkmark", accent: .sage, title: "Dla kogo liczyć", body: "Pytanie może dotyczyć jednej osoby albo całego domu. Napisz to w zdaniu — asystent czyta to z pytania, nie z osobnego ustawienia.", example: "Policz bilans tylko dla mnie", thumb: nil, reply: "Liczę tylko dla Ciebie: dziś 1 980 kcal przy celu 2 100. Napisz „dla całego domu”, jeśli mam policzyć inaczej."),
         .init(id: "clarify", icon: "questionmark.bubble.fill", accent: .terracotta, title: "Dopytanie zamiast zgadywania", body: "Gdy brakuje informacji, asystent zadaje jedno konkretne pytanie z gotowymi odpowiedziami.", example: nil, thumb: .clarify),
         .init(id: "decide", icon: "checkmark.rectangle.stack.fill", accent: .sage, title: "Ty decydujesz", body: "Każda zmiana planu to karta z „Dodaj do planu”. Nic nie zapisuje się samo; zapis cofniesz przyciskiem „Cofnij zapis” w ciągu doby. Propozycja jest ważna 3 dni, a jeśli ktoś w domu zmienił plan po propozycji, karta prosi „Przelicz na nowo”.", example: nil, thumb: .decide),
         .init(id: "edit", icon: "pencil.and.outline", accent: .butter, title: "Poprawianie i zgłaszanie", body: "Przytrzymaj swoje pytanie, żeby je poprawić lub zadać jeszcze raz. Przytrzymaj odpowiedź, żeby ją zgłosić lub skopiować.", example: nil, thumb: .edit),
@@ -314,11 +314,11 @@ enum AssistantCapabilities {
     static let onboarding: [OnboardingCard] = [
         .init(id: "plan", icon: "sparkles", accent: .terracotta, title: "Zaplanuj tydzień albo jeden dzień", body: "Asystent zna dietę, alergeny, cele i maks. czas gotowania wszystkich domowników, którzy wyrazili zgodę. Powiedz, co i na kiedy.", example: "Zaplanuj mi obiady i kolacje na ten tydzień, w tygodniu do 30 minut", reply: "Ułożyłem obiady i kolacje na cały tydzień, w tygodniu wszystko do 30 minut. Średnio 2 023 kcal przy celu 2 100 — sprawdź i dodaj do planu.", thumb: .week),
         .init(id: "swap", icon: "arrow.triangle.2.circlepath", accent: .indigo, title: "Podmieniaj, domykaj makro, wybieraj", body: "Jedno danie, cały dzień, brakujące białko albo kilka opcji do wyboru. Każda zmiana ma powód i różnicę kalorii.", example: "Podmień kolację we wtorek na coś bez laktozy", reply: "Zapiekanka odpada przez laktozę i 55 minut. Proponuję tofu z warzywami i ryżem: 25 minut, o 80 kcal mniej, nic nie trzeba dokupować.", thumb: .swap),
-        .init(id: "home", icon: "person.2.fill", accent: .sage, title: "Cały dom albo tylko Ty", body: "Inne porcje dla osób z innymi ograniczeniami. Zakres pytania ustawiasz chipem nad polem, a fakty typu „nie jemy pieczarek” asystent zapamięta i użyje w każdym planie.", example: "Ania nie je ryb, zrób jej coś innego w piątek", reply: "Ania dostaje kurczaka z warzywami zamiast pstrąga, reszta domu bez zmian. Jedna baza, dwie wersje, te same zakupy.", thumb: .split),
+        .init(id: "home", icon: "person.2.fill", accent: .sage, title: "Cały dom albo tylko Ty", body: "Inne porcje dla osób z innymi ograniczeniami. Kogo dotyczy pytanie, mówisz w samym zdaniu, a fakty typu „nie jemy pieczarek” asystent zapamięta i użyje w każdym planie.", example: "Ania nie je ryb, zrób jej coś innego w piątek", reply: "Ania dostaje kurczaka z warzywami zamiast pstrąga, reszta domu bez zmian. Jedna baza, dwie wersje, te same zakupy.", thumb: .split),
         .init(id: "kitchen", icon: "cart.fill", accent: .butter, title: "Zakupy i Twoje przepisy", body: "Lista zakupów z tego, co jest w planie, pogrupowana działami sklepu. Własny przepis zapiszesz jednym zdaniem — makro policzy sam.", example: "Co wyjdzie na liście zakupów z tego tygodnia?", reply: "Z planu na ten tydzień wychodzą 23 pozycje w 5 działach; 4 już masz odhaczone. Dodać całość do listy?", thumb: .shopping, showsPrivacy: true, showsCapabilitiesLink: true),
     ]
 
-    /// Trzy szybkie starty w pustej rozmowie (nad chipami zakresu) — tylko
+    /// Trzy szybkie starty w pustej rozmowie (tuż nad polem) — tylko
     /// najczęstsze intencje: cały tydzień, dzisiejszy posiłek, kilka opcji do
     /// wyboru. Domknięcie makro zostaje w kartach umiejętności, a „z tego, co
     /// mam" celowo nie ma — asystent nie zna zawartości lodówki, więc taka
@@ -350,7 +350,6 @@ struct AssistantThumb: View {
         case .split: split
         case .options: options
         case .shopping: shopping
-        case .scope: scope
         case .clarify: clarify
         case .decide: decide
         case .edit: edit
@@ -649,26 +648,9 @@ struct AssistantThumb: View {
         }
     }
 
-    private var scope: some View {
-        // Bez wewnętrznego marginesu `chipRow` — ta miniatura stoi luzem, nie
-        // w kafelku, więc jej brzeg ma trzymać się brzegu tekstu nad nią.
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
-                ForEach(Array([("Ten tydzień", true, false), ("Tylko ja", true, true), ("Cel 2 100 kcal", false, false)].enumerated()), id: \.offset) { _, c in
-                    HStack(spacing: 5) {
-                        if c.2 { avatar("M", SCPalette.terracotta, size: 16) }
-                        Text(c.0).font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize().foregroundStyle(Color.scLabel(scheme))
-                        if c.1 { Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.scFaint(scheme)) }
-                    }
-                    .padding(.horizontal, 12).frame(height: 32)
-                    .background(Capsule().fill(Color.scChipBg(scheme)))
-                    .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-                }
-            }
-        }
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize)
-    }
+    // Miniatura `scope` rysowała chipy „Ten tydzień · Tylko ja · Cel 2 100
+    // kcal" — obrazek kontrolki, której nie ma. Zakres mówi się teraz zdaniem,
+    // więc karta „Dla kogo liczyć" została bez miniatury.
 
     private var clarify: some View {
         mini {

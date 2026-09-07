@@ -1,21 +1,26 @@
 import SwiftUI
 
-// Plan tygodnia — v2 "Cozy Kitchen".
-// Source of truth: claude.ai design canvas → `PlanA2FullWidth`
-// (components/plan-a2-fix.jsx), sections "Plan tygodnia · Etap 1" and
-// "Etap 2 — sekcja „Każdy je inaczej”".
+// Plan tygodnia — v2 „Cozy Kitchen”, kierunek D.
+// Źródło: canvas claude.ai → „Weekly Meals - Plan v2.html”
+// (`components/plan-v2-d.jsx`, `plan-v2-edit.jsx`, `plan-v2-empty.jsx`).
 //
-// Layout: title + overflow menu + profile chip, a day strip, then a full-width
-// paging carousel where one page = one day with all its meal slots followed by
-// that day's „Każdy je inaczej" section.
+// Układ: tytuł z akcjami i pasek dni — wszystko przypięte do góry — a pod nimi
+// jedyna przewijana część ekranu: strona jednego dnia jako OŚ CZASU
+// (`PlanDayTimeline`). Ruch palcem w bok przestawia dzień (`DayPager`), tak
+// samo jak w Kalendarzu.
 //
-// Household splits: every meal carries the members it is for (empty = shared).
-// The profile chip switches the whole screen between the household lens and a
-// single person's.
+// Co zmienił kierunek D względem v2.0:
+// • Karta dnia i osobna sekcja „Każdy je inaczej” zniknęły. Porę dnia niesie
+//   szyna czasu po lewej, a danie domownika stoi wprost pod daniem domu.
+// • Przełącznik gospodarstwa zszedł z nagłówka do menu „…”. Oś pokazuje dania
+//   wszystkich obok siebie, więc soczewka jednej osoby przestała być czymś,
+//   co trzeba mieć pod kciukiem przez cały czas.
+// • Nagłówek dnia ma zawsze ten sam przycisk asystenta (44 pt), nigdy „+”.
+//   Dodawanie ręczne żyje w wierszach osi: „Wybierz przepis” i „Dodaj posiłek”.
 //
 // Sloty posiłków: dzień rysuje tyle wierszy, ile gospodarstwo ma włączonych
-// w Ustawieniach → „Posiłki w planie", plus te, w których mimo wyłączenia coś
-// stoi (`visibleSlots(on:)`). Kolejność zawsze porą dnia.
+// w Ustawieniach → „Posiłki w planie”, plus te, w których mimo wyłączenia coś
+// stoi (`visibleSlots(on:)`). Reszta czeka pod „Dodaj posiłek”.
 struct WeeklyPlanView: View {
     @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
@@ -24,24 +29,33 @@ struct WeeklyPlanView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
 
-    /// Day currently centred in the carousel, keyed by "yyyy-MM-dd".
-    @State private var scrolledDayKey: String?
-
     /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
     /// wspólny zostaje tylko tydzień.
     @State private var selectedDate: Date = Date()
     @State private var profile: PlanProfile = .household
-    @State private var showProfileSheet = false
     @State private var pickerTarget: PickerTarget?
     @State private var detailTarget: DetailTarget?
     @State private var showClearDayAlert = false
     @State private var showClearWeekAlert = false
-    @State private var showProducts = false
+    /// Arkusze bez własnego celu: lista zakupów i plansza asystenta.
+    ///
+    /// Jeden `@State` na oba, a nie dwa niezależne `Bool`-e z osobnymi
+    /// `.sheet(isPresented:)`. SwiftUI potrafi zgubić wcześniejsze
+    /// `.sheet(isPresented:)` w łańcuchu modyfikatorów tego samego widoku,
+    /// a ten ekran ma ich cztery — z celami przepisu i wyboru posiłku.
+    /// Jeden `item` to jedna prezentacja, więc nie ma czego gubić.
+    @State private var simpleSheet: SimpleSheet?
+
+    private enum SimpleSheet: String, Identifiable {
+        case products
+        case assistantIntro
+        var id: String { rawValue }
+    }
 
     /// Posiłek otwarty w szczegółach, razem z miejscem, z którego przyszedł.
     ///
-    /// Sam `Recipe` tu nie wystarczy: ekran szczegółu pozwala teraz zmienić
-    /// liczbę porcji, a zapis musi trafić w ten konkretny wpis planu — czyli
+    /// Sam `Recipe` tu nie wystarczy: ekran szczegółu pozwala zmienić liczbę
+    /// porcji, a zapis musi trafić w ten konkretny wpis planu — czyli
     /// potrzebuje dnia, slotu i dotychczasowego audytorium.
     private struct DetailTarget: Identifiable {
         let date: Date
@@ -59,18 +73,13 @@ struct WeeklyPlanView: View {
     private struct PickerTarget: Identifiable {
         let date: Date
         let slot: MealSlot
-        /// Set when the sheet edits an existing variant rather than adding one.
+        /// Ustawione, gdy arkusz edytuje istniejący wariant, a nie dokłada nowy.
         let editing: PlanMeal?
 
         var id: String {
             let base = "\(MealCalendarStore.dateKey(for: date)).\(slot.rawValue)"
             return editing.map { "\(base).\($0.id)" } ?? base
         }
-    }
-
-    private struct PlanDay: Identifiable, Hashable {
-        let id: String      // "yyyy-MM-dd"
-        let date: Date
     }
 
     // MARK: - Derived
@@ -88,23 +97,8 @@ struct WeeklyPlanView: View {
         return max(1, members.count)
     }
 
-    private var planDays: [PlanDay] {
-        datesViewModel.dates.map { PlanDay(id: MealCalendarStore.dateKey(for: $0), date: $0) }
-    }
-
-    private var selectedDayKey: String {
-        MealCalendarStore.dateKey(for: selectedDate)
-    }
-
-    /// Index of the day in view. Falls back to the selected day while the
-    /// carousel has not reported a position yet.
-    private var activeIndex: Int {
-        let key = scrolledDayKey ?? selectedDayKey
-        return planDays.firstIndex { $0.id == key } ?? 0
-    }
-
-    /// "yyyy-MM-dd" keys for days that already hold a meal — drives the sage
-    /// dot under the day strip.
+    /// Klucze „yyyy-MM-dd” dni, w których coś już stoi — z nich bierze się
+    /// zielona kropka pod paskiem dni i odpowiedź na „czy tydzień jest pusty”.
     private var plannedDates: Set<String> {
         var set = Set<String>()
         for date in datesViewModel.dates {
@@ -114,20 +108,17 @@ struct WeeklyPlanView: View {
         return set
     }
 
-    /// Day the carousel is currently showing.
-    private var activeDay: Date? {
-        planDays.indices.contains(activeIndex) ? planDays[activeIndex].date : nil
-    }
+    /// Cały widoczny tydzień bez jednego posiłku. Nie decyduje już o TYM, czy
+    /// plansza asystenta się pokaże (pokazuje się zawsze, gdy stukniesz
+    /// w przycisk) — tylko o tym, co na niej pisze: „ułożę” brzmi jak groźba
+    /// nadpisania komuś, kto ma już pół tygodnia rozpisane ręcznie.
+    private var isWeekEmpty: Bool { plannedDates.isEmpty }
 
-    private func hasMeals(on date: Date) -> Bool {
-        !mealStore.plan(for: date).allMeals.isEmpty
-    }
-
-    /// Meals for a slot, narrowed to the active profile.
+    /// Posiłki slotu, zawężone do bieżącego profilu.
     ///
-    /// A personal dish beats the slot's shared one: if Ania has her own lunch,
-    /// her lens shows that, not the shared lunch as well. Without this rule a
-    /// person's day double-counted every slot they had a variant in.
+    /// Danie osobiste bije danie wspólne: jeśli Ania ma swój obiad, jej
+    /// soczewka pokazuje właśnie ten obiad, a nie dodatkowo wspólny. Bez tej
+    /// reguły dzień jednej osoby liczył każdy slot podwójnie.
     private func visibleMeals(date: Date, slot: MealSlot) -> [PlanMeal] {
         let all = mealStore.meals(for: date, slot: slot)
         guard let memberId = profile.memberId else { return all }
@@ -146,6 +137,14 @@ struct WeeklyPlanView: View {
         )
     }
 
+    /// Pory, których dzień jeszcze nie pokazuje — pod „Dodaj posiłek”.
+    /// Pusto znaczy, że dom planuje już wszystkie sześć: wiersza nie ma wtedy
+    /// czym wypełnić, więc go nie ma.
+    private func extraSlots(on date: Date) -> [MealSlot] {
+        let visible = Set(visibleSlots(on: date))
+        return MealSlot.allCases.filter { !visible.contains($0) }
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -154,22 +153,25 @@ struct WeeklyPlanView: View {
                 SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+                // Nagłówek i pasek dni stoją, przewija się wyłącznie strona
+                // dnia. Wcześniej cała strona była jednym `ScrollView` i przy
+                // dłuższym dniu tytuł i pasek dni wyjeżdżały za górną krawędź —
+                // czyli to, po czym się nawiguje, znikało dokładnie wtedy, gdy
+                // było potrzebne.
+                VStack(alignment: .leading, spacing: 0) {
+                    Group {
                         // Marginesy wspólne z pozostałymi zakładkami —
-                        // tytuł siada w tym samym miejscu co „Przepisy".
+                        // tytuł siada w tym samym miejscu co „Przepisy”.
                         headerRow
                             .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.top, SCPageMetrics.top)
-                            // 16, nie 22: pasek dni zaczyna się teraz własnym
-                            // wierszem podpisu („TEN TYDZIEŃ · 8–14 WRZ"),
-                            // który sam robi odstęp od tytułu. Przy 22 pt
-                            // nagłówek i pasek rozjeżdżały się na dwie
-                            // niepowiązane wyspy.
+                            // 16, nie 22: pasek dni zaczyna się własnym
+                            // wierszem podpisu („TEN TYDZIEŃ · 8–14 WRZ”),
+                            // który sam robi odstęp od tytułu.
                             .padding(.bottom, 16)
 
-                        // Day strip instead of a week switcher: it is the
-                        // navigation actually used day to day. Wygląd wspólny
+                        // Pasek dni zamiast przełącznika tygodni: to nawigacja
+                        // faktycznie używana na co dzień. Wygląd wspólny
                         // z Kalendarzem, ale wybrany dzień jest osobny —
                         // planowanie i podgląd dnia to dwie różne czynności.
                         EditorialWeekBar(
@@ -179,30 +181,36 @@ struct WeeklyPlanView: View {
                         )
                         .padding(.horizontal, SCPageMetrics.horizontal)
 
+                        // 14 pt nad kreską i nic pod nią: odstęp od kreski do
+                        // nazwy dnia należy do osi (`PlanDayTimeline` zaczyna
+                        // się własnym paddingiem 18 pt), żeby liczyć go w
+                        // jednym miejscu, a nie po obu stronach granicy.
                         Rectangle()
                             .fill(Color.scRule(scheme))
                             .frame(height: 1)
                             .padding(.horizontal, SCPageMetrics.horizontal)
-                            .padding(.top, 6)
-                            .padding(.bottom, 16)
+                            .padding(.top, 14)
 
                         if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
                             Text(errorMessage)
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                                 .padding(.horizontal, SCPageMetrics.horizontal)
-                                .padding(.bottom, 10)
+                                .padding(.top, 12)
                         }
-
-                        carousel
                     }
-                    .padding(.bottom, 32)
+
+                    DayPager(
+                        datesViewModel: datesViewModel,
+                        selectedDate: $selectedDate,
+                        bottomPadding: 32
+                    ) { date in
+                        dayPage(for: date)
+                    }
                 }
-                .scrollIndicators(.hidden)
-                // Same trick as Kalendarz v2: let the layout start at the
-                // design's 58pt-from-screen-top instead of below the nav bar,
-                // while SwiftUI keeps rendering the bar so its blur-on-scroll
-                // material still fades in.
+                // Ten sam trik co w Kalendarzu v2: układ startuje od
+                // projektowych 78 pt od GÓRNEJ KRAWĘDZI EKRANU, a nie spod
+                // paska nawigacji.
                 .ignoresSafeArea(.container, edges: .top)
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -211,8 +219,8 @@ struct WeeklyPlanView: View {
                     Color.clear.frame(width: 1, height: 1)
                 }
             }
-            // The empty nav-bar layer would otherwise swallow taps on the
-            // profile chip and overflow menu sitting underneath it.
+            // Pusta warstwa paska nawigacji zjadałaby stuknięcia w akcje
+            // nagłówka, które siedzą pod nią.
             .background(NavBarHitTestPassthrough())
             .task(id: datesViewModel.weekStartISO) {
                 await mealStore.loadWeekPlanFromBackend(
@@ -222,13 +230,12 @@ struct WeeklyPlanView: View {
                 prefetchWeekImages()
             }
             .task {
-                // The profile filter and the "who eats this" badges are built
-                // from the household roster, so make sure it is loaded.
+                // Imiona, kolory i odznaki „dla kogo” biorą się ze składu
+                // gospodarstwa, więc musi być wczytany.
                 await sessionStore.refreshHouseholdMembers(force: false)
             }
             .onAppear {
                 selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
-                if scrolledDayKey == nil { scrolledDayKey = selectedDayKey }
             }
             .onChange(of: datesViewModel.weekStartISO) { _, _ in
                 selectedDate = datesViewModel.selectedDate
@@ -236,26 +243,8 @@ struct WeeklyPlanView: View {
             .onChange(of: selectedDate) { _, newValue in
                 datesViewModel.selectDate(newValue)
             }
-            // Two-way with the day strip: tapping a day scrolls the carousel,
-            // swiping the carousel moves the strip's underline.
-            .onChange(of: scrolledDayKey) { oldKey, newKey in
-                // The scroll view reports its initial page before `onAppear`
-                // has aligned it; ignore that first nil → key transition or it
-                // would drag the selection back to Monday.
-                guard oldKey != nil,
-                      let newKey,
-                      let day = planDays.first(where: { $0.id == newKey }),
-                      !Calendar.current.isDate(day.date, inSameDayAs: selectedDate) else { return }
-                selectedDate = day.date
-            }
-            .onChange(of: selectedDayKey) { _, newKey in
-                guard scrolledDayKey != newKey else { return }
-                withAnimation(.smooth(duration: 0.25)) {
-                    scrolledDayKey = newKey
-                }
-            }
-            // A member who is filtered out can't be planned for, so drop back
-            // to the household lens if the roster loses them.
+            // Domownika, którego nie ma na liście, nie da się zaplanować —
+            // przy zniknięciu ze składu wracamy do soczewki całego domu.
             .onChange(of: members.map(\.id)) { _, ids in
                 if let id = profile.memberId, !ids.contains(id) {
                     profile = .household
@@ -267,23 +256,33 @@ struct WeeklyPlanView: View {
             } message: {
                 Text("Wszystkie posiłki tego dnia zostaną usunięte z planu.")
             }
-            .alert("Usuń plan tygodnia", isPresented: $showClearWeekAlert) {
-                Button("Usuń", role: .destructive) { clearWeek() }
+            .alert("Wyczyść cały tydzień", isPresented: $showClearWeekAlert) {
+                Button("Wyczyść", role: .destructive) { clearWeek() }
                 Button("Anuluj", role: .cancel) { }
             } message: {
                 Text("Plan całego tygodnia zostanie usunięty razem z posiłkami przypisanymi do dni.")
             }
-            .sheet(isPresented: $showProfileSheet) {
-                PlanProfileSheet(profile: $profile, members: members)
-            }
-            .sheet(isPresented: $showProducts) {
-                ProductsView(topPadding: 24)
+            .sheet(item: $simpleSheet) { which in
+                switch which {
+                case .products:
+                    ProductsView(topPadding: 24)
+                case .assistantIntro:
+                    PlanAssistantIntroSheet(
+                        members: members,
+                        days: datesViewModel.dates,
+                        slotsPerDay: visibleSlots(on: selectedDate).count,
+                        weekIsEmpty: isWeekEmpty,
+                        onOpenAssistant: { openAssistantTabAfterSheet() }
+                    )
+                    .presentationDetents([.large])
+                    .dashboardLiquidSheet()
+                }
             }
             // Skrót z karty asystenta: przełączenie zakładki to za mało,
             // bo lista zakupów jest arkuszem wewnątrz tego ekranu.
             .onChange(of: sessionStore.opensShoppingList, initial: true) { _, wants in
                 guard wants else { return }
-                showProducts = true
+                simpleSheet = .products
                 sessionStore.opensShoppingList = false
             }
             .sheet(item: $pickerTarget) { target in
@@ -293,14 +292,16 @@ struct WeeklyPlanView: View {
                     weekStartISO: datesViewModel.weekStartISO,
                     members: members,
                     editing: target.editing,
-                    // Planning through a person's lens means the meal is for
-                    // them unless you say otherwise.
+                    // Planowanie przez soczewkę jednej osoby znaczy, że posiłek
+                    // jest dla niej, dopóki nie powiesz inaczej.
                     defaultParticipantIds: profile.memberId.map { [$0] } ?? [],
                     // Po acku serwera, nie po dismissie — arkusz zamyka się
                     // przed końcem zapisu, a lista zakupów liczona ze starego
                     // planu byłaby do wyrzucenia.
                     onSaveCompleted: { refreshShoppingList() }
                 )
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
             }
             .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
@@ -321,7 +322,7 @@ struct WeeklyPlanView: View {
                     onClose: { detailTarget = nil },
                     // Stepper startuje od liczby, którą pokazuje wiersz planu.
                     // Posiłek bez zapisanej wartości podstawia tu regułę auto,
-                    // bo „nie ustawiono" to nie to samo co jedna porcja.
+                    // bo „nie ustawiono” to nie to samo co jedna porcja.
                     initialServings: target.meal.effectiveServings(
                         knownHouseholdMemberCount: knownHouseholdMemberCount
                     ) ?? target.recipe.servings,
@@ -338,13 +339,9 @@ struct WeeklyPlanView: View {
 
     // MARK: - Pieces
 
-    /// Średnica pigułek akcji w nagłówku Planu.
-    ///
-    /// 34 pt, a nie domyślne 38: to jedyny nagłówek z TRZEMA akcjami naraz
-    /// (zakupy, ⋯, profil) i przy 38 pt wiersz wychodził poza szerokość
-    /// ekranu — tytuł urywał się jako „Plan tygodn…". Cztery punkty z każdej
-    /// pigułki plus ciaśniejszy odstęp oddają tytułowi ~14 pt; resztę
-    /// dokłada `EditorialPageHeader`, dobierając stopień pisma.
+    /// Średnica pigułek akcji w nagłówku Planu — 34 pt, jak `P2Circle`
+    /// w makiecie. Akcje są teraz dwie (zakupy i „…”), więc tytuł mieści się
+    /// w pełnym stopniu pisma, tak jak na pozostałych zakładkach.
     private static let headerActionSize: CGFloat = 34
 
     private var headerRow: some View {
@@ -352,41 +349,73 @@ struct WeeklyPlanView: View {
             HStack(spacing: 6) {
                 // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
-                // Zwolnione miejsce w menu zajął asystent.
                 EditorialIconButton(
                     icon: MenuConstans.Products.icon,
                     size: Self.headerActionSize
                 ) {
-                    showProducts = true
+                    simpleSheet = .products
                 }
                 .accessibilityLabel(MenuConstans.Products.name)
 
                 overflowMenu
-
-                PlanProfileChip(profile: profile, members: members) {
-                    showProfileSheet = true
-                }
             }
         }
     }
 
-    /// To, czego nie robi się codziennie: czyszczenie dnia i tygodnia.
+    /// Wszystko, co dotyczy CAŁEGO tygodnia, plus wybór soczewki.
     ///
-    /// Skoki po tygodniach wyprowadziły się STĄD na pasek dni — tam da się
-    /// przesunąć planszę palcem, są strzałki i „DZIŚ", a przede wszystkim
-    /// widać, na którym tygodniu się stoi. Trzy pozycje menu robiące to samo
-    /// co kontrolka o dwa wiersze niżej były już tylko dłuższym menu.
+    /// Skoki po tygodniach wyprowadziły się stąd na pasek dni. Zamiast nich
+    /// wszedł asystent (ta sama akcja co przycisk w nagłówku dnia, tylko dla
+    /// osoby, która szuka jej w menu) i przełącznik profilu, który zszedł
+    /// z nagłówka razem z pigułką.
     private var overflowMenu: some View {
         Menu {
+            // Prosto do asystenta, bez planszy „co on właściwie robi”.
+            // Kto szuka go w menu, ten już wie — planszę pokazuje przycisk
+            // w nagłówku dnia, na który trafia się przypadkiem.
+            Button {
+                sessionStore.dashboardTab = .assistant
+            } label: {
+                Label("Zaplanuj tydzień z asystentem", systemImage: MenuConstans.Assistant.icon)
+            }
+
+            if members.count > 1 {
+                Menu {
+                    Button {
+                        profile = .household
+                    } label: {
+                        Label(
+                            "Cały dom",
+                            systemImage: profile == .household ? "checkmark" : "house"
+                        )
+                    }
+
+                    ForEach(members, id: \.id) { member in
+                        Button {
+                            profile = .member(member.id)
+                        } label: {
+                            Label(
+                                HouseholdMemberStyle.shortName(member.displayName),
+                                systemImage: profile.memberId == member.id ? "checkmark" : "person"
+                            )
+                        }
+                    }
+                } label: {
+                    Label(profileMenuTitle, systemImage: "person.crop.circle")
+                }
+            }
+
+            Divider()
+
             Button(role: .destructive) {
                 showClearDayAlert = true
             } label: {
-                Label("Wyczyść ten dzień", systemImage: "eraser")
+                Label(clearDayTitle, systemImage: "eraser")
             }
             Button(role: .destructive) {
                 showClearWeekAlert = true
             } label: {
-                Label("Usuń plan tygodnia", systemImage: "trash")
+                Label("Wyczyść cały tydzień", systemImage: "trash")
             }
         } label: {
             // Ten sam rozmiar co `EditorialIconButton` obok, żeby akcje
@@ -401,67 +430,77 @@ struct WeeklyPlanView: View {
         .accessibilityLabel("Więcej opcji planu")
     }
 
-    private var carousel: some View {
-        ScrollView(.horizontal) {
-            // Top-aligned: days differ in height, and centring made a
-            // three-slot day float away from the week header while a
-            // four-slot day sat flush against it.
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(planDays) { day in
-                    // Card and its splits travel together, so the section is
-                    // always flush under the day it describes. Pinning the
-                    // section outside the carousel meant matching the scroll
-                    // view's height to the page in view — which centred taller
-                    // pages and let them bleed over the day strip.
-                    VStack(alignment: .leading, spacing: 0) {
-                        PlanDayCard(
-                        date: day.date,
-                        isToday: datesViewModel.isToday(day.date),
-                        isPast: !datesViewModel.isEditable(day.date),
-                        isEditable: datesViewModel.isEditable(day.date),
-                        profile: profile,
-                        members: members,
-                        slots: visibleSlots(on: day.date),
-                        meals: { slot in visibleMeals(date: day.date, slot: slot) },
-                        onTapMeal: { slot, meal in openDetail(date: day.date, slot: slot, meal: meal) },
-                        onAddMeal: { slot in
-                            pickerTarget = PickerTarget(date: day.date, slot: slot, editing: nil)
-                        },
-                        onEditMeal: { slot, meal in
-                            pickerTarget = PickerTarget(date: day.date, slot: slot, editing: meal)
-                        },
-                            onRemoveMeal: { slot, meal in
-                                removeMeal(date: day.date, slot: slot, meal: meal)
-                            }
-                        )
-
-                        // Only worth showing once the day holds something and
-                        // there is someone to split with — otherwise it just
-                        // repeats „Brak planu" from the card above.
-                        if profile == .household, members.count > 1, hasMeals(on: day.date) {
-                            PlanDaySplitsSection(
-                                date: day.date,
-                                slots: visibleSlots(on: day.date),
-                                meals: { slot in mealStore.meals(for: day.date, slot: slot) },
-                                members: members,
-                                onTapMeal: { slot, meal in openDetail(date: day.date, slot: slot, meal: meal) }
-                            )
-                            .padding(.top, 30)
-                        }
-                    }
-                    // Strona karuzeli trzyma wspólny margines strony.
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .containerRelativeFrame(.horizontal)
-                }
-            }
-            .scrollTargetLayout()
+    /// „Pokaż plan: cały dom” / „Pokaż plan: Ania”.
+    private var profileMenuTitle: String {
+        guard let id = profile.memberId,
+              let member = members.first(where: { $0.id == id }) else {
+            return "Pokaż plan: cały dom"
         }
-        .scrollTargetBehavior(.viewAligned)
-        .scrollPosition(id: $scrolledDayKey)
-        .scrollIndicators(.hidden)
+        return "Pokaż plan: \(HouseholdMemberStyle.shortName(member.displayName))"
+    }
+
+    /// „Wyczyść poniedziałek”, „Wyczyść środę” — nazwa dnia w bierniku.
+    ///
+    /// Formy z `DateFormatter` są w mianowniku („środa”), a po „wyczyść” stoi
+    /// biernik. Różnica dotyczy tylko trzech dni tygodnia, ale to akurat te,
+    /// które najczęściej się czyści.
+    private var clearDayTitle: String {
+        let weekday = PlanWeek.calendar.component(.weekday, from: selectedDate)
+        let names = [
+            "niedzielę", "poniedziałek", "wtorek", "środę",
+            "czwartek", "piątek", "sobotę"
+        ]
+        let index = max(0, min(names.count - 1, weekday - 1))
+        return "Wyczyść \(names[index])"
+    }
+
+    /// Strona jednego dnia — oś czasu ze wszystkim, co w nim stoi.
+    private func dayPage(for date: Date) -> some View {
+        PlanDayTimeline(
+            date: date,
+            isToday: datesViewModel.isToday(date),
+            isEditable: datesViewModel.isEditable(date),
+            profile: profile,
+            members: members,
+            slots: visibleSlots(on: date),
+            meals: { slot in visibleMeals(date: date, slot: slot) },
+            extraSlots: extraSlots(on: date),
+            onTapMeal: { slot, meal in openDetail(date: date, slot: slot, meal: meal) },
+            onAddMeal: { slot in
+                pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
+            },
+            onEditMeal: { slot, meal in
+                pickerTarget = PickerTarget(date: date, slot: slot, editing: meal)
+            },
+            onRemoveMeal: { slot, meal in
+                removeMeal(date: date, slot: slot, meal: meal)
+            },
+            onAssistant: { simpleSheet = .assistantIntro },
+            onPickExtraSlot: { slot in
+                pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
+            }
+        )
+        // Strona trzyma wspólny margines strony.
+        .padding(.horizontal, SCPageMetrics.horizontal)
+        // Przeszłość jest tylko do czytania — i ma to być widać, zanim
+        // użytkownik dotknie wiersza i nic się nie stanie.
+        .opacity(datesViewModel.isEditable(date) ? 1 : 0.72)
     }
 
     // MARK: - Actions
+
+    /// Zakładka przełącza się DOPIERO po zjeździe arkusza.
+    ///
+    /// Arkusz wisi na ekranie Planu, a `TabView` trzyma ekrany zakładek przy
+    /// życiu — przełączenie w tej samej klatce, w której arkusz zjeżdża, urywa
+    /// jego animację w połowie i asystent wchodzi zza wpół zamkniętej planszy.
+    /// 280 ms to tyle, ile trwa systemowe zamknięcie arkusza.
+    private func openAssistantTabAfterSheet() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(280))
+            sessionStore.dashboardTab = .assistant
+        }
+    }
 
     private func openDetail(date: Date, slot: MealSlot, meal: PlanMeal) {
         Task { @MainActor in
@@ -504,7 +543,7 @@ struct WeeklyPlanView: View {
     }
 
     private func clearActiveDay() {
-        guard let activeDay else { return }
+        let activeDay = selectedDate
         Task { @MainActor in
             for slot in MealSlot.allCases where !mealStore.meals(for: activeDay, slot: slot).isEmpty {
                 _ = await mealStore.removeWeekSlot(
@@ -547,11 +586,11 @@ struct WeeklyPlanView: View {
 
 // MARK: - Nav bar hit-test pass-through
 //
-// Same helper every editorial v2 screen carries privately (Kalendarz, Przepisy,
-// Produkty, Ustawienia): the toolbar layer stays alive so SwiftUI's
-// blur-on-scroll material still fades in, but stops capturing touches across
-// its ~44pt height — otherwise it would eat taps on the profile chip and the
-// week chevrons that sit underneath it.
+// Ten sam prywatny pomocnik, co na każdym ekranie v2 (Kalendarz, Przepisy,
+// Produkty, Ustawienia): warstwa paska narzędzi zostaje żywa, więc systemowe
+// rozmycie przy przewijaniu dalej działa, ale przestaje łapać dotknięcia na
+// swojej ~44-punktowej wysokości — inaczej zjadałaby stuknięcia w akcje
+// nagłówka i strzałki tygodnia, które siedzą pod nią.
 private struct NavBarHitTestPassthrough: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         BarUnlocker()
