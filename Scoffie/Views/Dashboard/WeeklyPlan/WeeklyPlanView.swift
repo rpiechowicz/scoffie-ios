@@ -64,12 +64,12 @@ struct WeeklyPlanView: View {
     /// która mówi, co jest nawigacją, a co podglądem: dwa paski tej samej
     /// szerokości jeden nad drugim czytały się jak dwa poziomy tego samego menu.
     ///
-    /// Ile dokładnie — decyduje najdłuższy podpis w pigułce. Cztery kolumny
-    /// dzielą szerokość po równo, a w jednej czwartej musi się zmieścić
-    /// „K 1135/2100" (~65 pt). Stąd 0,82, a nie okrągłe dwie trzecie: przy
-    /// nich kolumna miała 60 pt i albo podpis się kurczył, albo tor musiał
-    /// zejść obok niego do kreski. Podłoga 310 pt trzyma to samo na wąskich
-    /// telefonach; sufit zostawia pigułkę w marginesach strony.
+    /// Ile dokładnie — decydują podpisy w pigułce. Kolumna kalorii bierze
+    /// tyle, ile potrzebuje „kcal 2298/2300" (~90 pt), a trzy makra dzielą resztę
+    /// po równo i każde musi zmieścić „B 112/110" (~60 pt). Stąd 0,82, a nie
+    /// okrągłe dwie trzecie: przy nich makra miały po ~50 pt i podpis się
+    /// kurczył. Podłoga 310 pt trzyma to samo na wąskich telefonach
+    /// (375 pt: makra po ~62 pt); sufit zostawia pigułkę w marginesach strony.
     private var goalBarWidth: CGFloat {
         guard pageWidth > 0 else { return 0 }
         let limit = pageWidth - SCPageMetrics.horizontal * 2
@@ -280,7 +280,11 @@ struct WeeklyPlanView: View {
                         // własny bezpieczny obszar (`safeAreaInset` niżej),
                         // więc to jest już tylko prześwit MIĘDZY ostatnim
                         // wierszem osi a szkłem pigułki.
-                        bottomPadding: 16
+                        bottomPadding: 16,
+                        // Stuknięcie w dzień i strzałki tygodnia jadą tak samo
+                        // jak gest — strona rysuje dzień z argumentu, więc
+                        // pager może pokazać stary dzień na czas zjazdu.
+                        animatesSelectionChanges: true
                     ) { date in
                         dayPage(for: date)
                     }
@@ -392,7 +396,11 @@ struct WeeklyPlanView: View {
                     PlanAssistantIntroSheet(
                         members: members,
                         days: datesViewModel.dates,
-                        slotsPerDay: visibleSlots(on: selectedDate).count,
+                        // Sloty z ustawień, nie `visibleSlots(on:)`: tamte
+                        // doliczają pory widoczne tylko dlatego, że akurat
+                        // w wybranym dniu coś w nich stoi, i obietnica
+                        // „21 posiłków" rosła do 28 po przełączeniu dnia.
+                        slotsPerDay: sessionStore.mealSlots.enabled.count,
                         weekIsEmpty: isWeekEmpty,
                         onOpenAssistant: { openAssistantTabAfterSheet() }
                     )
@@ -473,7 +481,8 @@ struct WeeklyPlanView: View {
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
                 EditorialIconButton(
                     icon: MenuConstans.Products.icon,
-                    size: Self.headerActionSize
+                    size: Self.headerActionSize,
+                    tapTarget: 44
                 ) {
                     simpleSheet = .products
                 }
@@ -548,6 +557,8 @@ struct WeeklyPlanView: View {
                 .frame(width: Self.headerActionSize, height: Self.headerActionSize)
                 .background(Circle().fill(Color.scTileBg(scheme)))
                 .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                // 34 pt to rysunek; cel dotyku 44, jak w przycisku obok.
+                .scTapTarget(drawn: Self.headerActionSize)
         }
         .accessibilityLabel("Więcej opcji planu")
     }
@@ -587,6 +598,9 @@ struct WeeklyPlanView: View {
             slots: visibleSlots(on: date),
             meals: { slot in visibleMeals(date: date, slot: slot) },
             extraSlots: extraSlots(on: date),
+            // Wołanie o pusty tydzień tylko tam, gdzie da się coś dodać —
+            // pusty tydzień z przeszłości jest po prostu pusty.
+            weekIsEmpty: isWeekEmpty && datesViewModel.isEditable(date),
             onTapMeal: { slot, meal in openDetail(date: date, slot: slot, meal: meal) },
             onAddMeal: { slot in
                 pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
@@ -605,8 +619,13 @@ struct WeeklyPlanView: View {
         // Strona trzyma wspólny margines strony.
         .padding(.horizontal, SCPageMetrics.horizontal)
         // Przeszłość jest tylko do czytania — i ma to być widać, zanim
-        // użytkownik dotknie wiersza i nic się nie stanie.
-        .opacity(datesViewModel.isEditable(date) ? 1 : 0.72)
+        // użytkownik dotknie wiersza i nic się nie stanie. 0,82, nie 0,72:
+        // przygaszenie nakłada się na już przygaszone `scMuted` w metadanych
+        // wiersza („60 min · 604 kcal") i przy 0,72 schodziły one poniżej
+        // progu czytelności. Przełączenie tej wartości nie jest animowane
+        // celowo — dzieje się między zjazdem a wjazdem strony w `DayPager`,
+        // czyli poza ekranem.
+        .opacity(datesViewModel.isEditable(date) ? 1 : 0.82)
     }
 
     // MARK: - Actions

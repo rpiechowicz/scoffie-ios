@@ -29,6 +29,11 @@ struct PlanDayTimeline: View {
     /// Sloty, których ten dzień jeszcze nie pokazuje — z nich wybiera się przy
     /// „Dodaj posiłek”. Pusto = wiersza nie ma czym wypełnić, więc go nie ma.
     let extraSlots: [MealSlot]
+    /// Cały widoczny tydzień bez jednego posiłku — i dzień, w który da się
+    /// coś dodać. Wtedy nad osią stoi wołanie do asystenta: sześć wierszy
+    /// „Nic nie zaplanowano" mówi o dniu, a nikt z nich nie wyczyta, że pusty
+    /// jest cały tydzień i że jest na to jeden przycisk.
+    var weekIsEmpty: Bool = false
     let onTapMeal: (MealSlot, PlanMeal) -> Void
     let onAddMeal: (MealSlot) -> Void
     let onEditMeal: (MealSlot, PlanMeal) -> Void
@@ -88,12 +93,73 @@ struct PlanDayTimeline: View {
                 .padding(.top, 18)
                 .padding(.bottom, 14)
 
+            if weekIsEmpty {
+                emptyWeekCallout
+                    .padding(.bottom, 8)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             timeline
         }
+        // Wołanie znika tą samą sprężyną, którą pierwszy posiłek wjeżdża na
+        // oś niżej — jeden ruch, nie dwa.
+        .animation(.spring(response: 0.36, dampingFraction: 0.9), value: weekIsEmpty)
         // Świeża tożsamość na każdy dzień: bez niej sprężyna niżej próbowałaby
         // przeprowadzić wiersze poniedziałku w wiersze wtorku dokładnie wtedy,
         // gdy `DayPager` przesuwa całą stronę — dwie animacje na jednym ruchu.
         .id(dayKey)
+    }
+
+    // MARK: - Pusty tydzień
+
+    /// Karta nad osią: „ten tydzień jest jeszcze pusty" i droga do asystenta.
+    ///
+    /// Ta sama akcja, co przycisk z różdżką w nagłówku dnia — ale ten przycisk
+    /// jest ikoną bez podpisu i przy pustym tygodniu nikt nie wie, że to
+    /// właśnie on. Karta mówi to słowami, raz, i znika z pierwszym posiłkiem.
+    private var emptyWeekCallout: some View {
+        Button(action: onAssistant) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: MenuConstans.Assistant.icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .frame(width: 36, height: 36)
+                    .scSoftSurface(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ten tydzień jest jeszcze pusty")
+                        .scFont(14.5, weight: .semibold, relativeTo: .footnote)
+                        .tracking(-0.3)
+                        .foregroundStyle(Color.scLabel(scheme))
+
+                    Text("Asystent ułoży go w kilka sekund. Możesz też dodać posiłki ręcznie niżej.")
+                        .scFont(12.5, relativeTo: .caption)
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .multilineTextAlignment(.leading)
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.scFaint(scheme))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.scTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .accessibilityLabel("Ten tydzień jest jeszcze pusty. Zaplanuj z asystentem")
     }
 
     // MARK: - Nagłówek dnia
@@ -103,7 +169,7 @@ struct PlanDayTimeline: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Text(Self.longDayFormatter.string(from: date).capitalized)
-                        .font(.system(size: 22, weight: .bold))
+                        .scFont(22, weight: .bold, relativeTo: .title2)
                         .tracking(-0.5)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
@@ -113,7 +179,7 @@ struct PlanDayTimeline: View {
                 }
 
                 Text(summaryText)
-                    .font(.system(size: 14, weight: .regular))
+                    .scFont(14, weight: .regular, relativeTo: .footnote)
                     .tracking(-0.15)
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
@@ -136,7 +202,7 @@ struct PlanDayTimeline: View {
 
     private var todayBadge: some View {
         Text("DZIŚ")
-            .font(.system(size: 10.5, weight: .bold))
+            .scFont(10.5, weight: .bold, relativeTo: .caption2)
             .tracking(0.6)
             .foregroundStyle(SCPalette.terracotta)
             .padding(.horizontal, 8)
@@ -238,12 +304,13 @@ struct PlanDayTimeline: View {
 
     // MARK: - Podsumowanie dnia
 
-    /// „2 z 3 posiłków · 780 kcal”, a przy dniu z osobnymi daniami domowników
+    /// „2 z 3 posiłków”, a przy dniu z osobnymi daniami domowników
     /// „3 z 3 posiłków · 5 dań”.
     ///
-    /// Liczba dań wypiera kalorie, a nie dokłada się do nich: gdy w slotach
-    /// stoi więcej dań niż slotów, suma kalorii przestaje opisywać czyjkolwiek
-    /// dzień — jest sumą dwóch różnych obiadów, których nikt nie zje razem.
+    /// Kalorii tu już nie ma — tę samą liczbę pokazuje pigułka „Cel dnia" nad
+    /// menu, i to obok celu, więc podtytuł powtarzał ją bez kontekstu.
+    /// Liczba dań zostaje: mówi coś, czego pigułka nie mówi — że w slotach
+    /// stoi więcej niż jedno danie na porę.
     private var summaryText: String {
         let list = rows
         let filled = list.filter { !$0.dishes.isEmpty }.count
@@ -256,25 +323,8 @@ struct PlanDayTimeline: View {
 
         if dishes > filled {
             text += " · \(dishes) \(PolishPlural.form(dishes, one: "danie", few: "dania", many: "dań"))"
-        } else if dishes > 0 {
-            text += " · \(kcalToday) kcal"
         }
         return text
-    }
-
-    /// Kalorie są udziałem jednej osoby, nie sumą tego, co stoi na stole —
-    /// nagłówek dnia stoi obok osobistego celu i musi się z nim dać porównać.
-    /// Suma leci w `Double`, bo obcinanie każdego posiłku z osobna kumulowało
-    /// błąd przez cały dzień.
-    private var kcalToday: Int {
-        let sum = rows
-            .flatMap(\.dishes)
-            .reduce(0.0) { partial, meal in
-                partial + meal.nutritionPerPerson(
-                    knownHouseholdMemberCount: knownHouseholdMemberCount
-                ).kcal
-            }
-        return Int(sum.rounded())
     }
 
     /// Ilu domowników dzieli się porcjami, albo `nil`, dopóki `SessionStore`
@@ -342,7 +392,7 @@ struct PlanRailMark: View {
 
             if let time {
                 Text(time)
-                    .font(.system(size: 12.5, weight: .bold))
+                    .scFont(12.5, weight: .bold, relativeTo: .caption)
                     .tracking(-0.1)
                     .monospacedDigit()
                     .foregroundStyle(muted ? Color.scFaint(scheme) : Color.scLabel(scheme))
@@ -446,13 +496,14 @@ struct PlanTimelineRow: View {
                     .font(.system(size: 12, weight: .bold))
 
                 Text("Osobne danie dla kogoś")
-                    .font(.system(size: 13, weight: .semibold))
+                    .scFont(13, weight: .semibold, relativeTo: .footnote)
                     .tracking(-0.2)
             }
             .foregroundStyle(SCPalette.terracotta)
-            .frame(height: 30)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            // Wiersz rysuje się na 30 pt, żeby nie rozpychać pory dnia, ale
+            // palec dostaje 44.
+            .scTapHeight(drawn: 30)
         }
         .buttonStyle(PlanPressStyle())
         .accessibilityLabel("Dodaj osobne danie dla domownika, \(slot.title)")
@@ -544,7 +595,7 @@ struct PlanTimelineDish: View {
                     .padding(.top, 2)
 
                 Text(meal.recipe.name)
-                    .font(.system(size: isAlternative ? 15.5 : 17, weight: .semibold))
+                    .scFont(isAlternative ? 15.5 : 17, weight: .semibold, relativeTo: .body)
                     .tracking(-0.35)
                     .foregroundStyle(Color.scLabel(scheme))
                     .multilineTextAlignment(.leading)
@@ -552,7 +603,7 @@ struct PlanTimelineDish: View {
                     .padding(.top, 4)
 
                 Text(metaText)
-                    .font(.system(size: 12.5, weight: .regular))
+                    .scFont(12.5, weight: .regular, relativeTo: .caption)
                     .tracking(-0.1)
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
@@ -587,7 +638,7 @@ struct PlanTimelineDish: View {
 
     private func eyebrowText(_ text: String, color: Color) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .bold))
+            .scFont(11, weight: .bold, relativeTo: .caption2)
             .tracking(1)
             .foregroundStyle(color)
             .lineLimit(1)
@@ -765,14 +816,14 @@ struct PlanTimelineEmptyRow: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(slot.title.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .scFont(11, weight: .bold, relativeTo: .caption2)
                     .tracking(1)
                     .foregroundStyle(Color.scFaint(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
                 Text("Nic nie zaplanowano")
-                    .font(.system(size: 15, weight: .medium))
+                    .scFont(15, weight: .medium, relativeTo: .subheadline)
                     .tracking(-0.3)
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
@@ -785,7 +836,7 @@ struct PlanTimelineEmptyRow: View {
             if isEditable {
                 HStack(spacing: 3) {
                     Text("Wybierz przepis")
-                        .font(.system(size: 14, weight: .bold))
+                        .scFont(14, weight: .bold, relativeTo: .footnote)
                         .tracking(-0.1)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
@@ -858,12 +909,12 @@ struct PlanTimelineAddRow: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Dodaj posiłek")
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .scFont(14.5, weight: .semibold, relativeTo: .footnote)
                     .tracking(-0.3)
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .regular))
+                    .scFont(12, weight: .regular, relativeTo: .caption)
                     .foregroundStyle(Color.scFaint(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -871,6 +922,9 @@ struct PlanTimelineAddRow: View {
 
             Spacer(minLength: 0)
         }
+        // Kółko z plusem ma 30 pt; z 12 pt odstępu nad wierszem wychodziło
+        // 42 — dwa punkty poniżej celu dotyku.
+        .frame(minHeight: 44)
     }
 
     /// „II śniadanie, podwieczorek lub przekąska” — dokładnie te pory, które da

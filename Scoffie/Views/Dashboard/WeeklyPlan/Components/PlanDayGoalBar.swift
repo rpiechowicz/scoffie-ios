@@ -21,7 +21,7 @@ import SwiftUI
 /// „Dodaj posiłek" siedziało pod pigułką i nie dało się w nie stuknąć.
 ///
 /// **Cztery kolumny w jednym wierszu.** Kalorie i trzy makra stoją obok siebie,
-/// każde z podpisem „K 1135/2100" i torem pod spodem na pełną szerokość swojej
+/// każde z podpisem „kcal 1135/2100" i torem pod spodem na pełną szerokość swojej
 /// kolumny. Cztery tory tej samej długości, wszystkie zaczynające się w tym
 /// samym miejscu — czyta się je jako jedną siatkę, a nie cztery osobne kreski.
 ///
@@ -33,10 +33,15 @@ import SwiftUI
 /// oba naraz: pigułka jest niższa niż przy dwóch wierszach jednolinijkowych,
 /// a tor jest dwa razy dłuższy.
 ///
-/// Wszystkie cztery kolumny są równe i tego samego rozmiaru. Kalorie wyróżnia
-/// pierwsze miejsce i kolor akcentu marki, a nie większy stopień pisma —
-/// większy rozjeżdżałby wysokość podpisu i zsuwał jeden tor niżej od
-/// pozostałych, czyli psuł dokładnie tę siatkę, dla której ten układ powstał.
+/// Cztery kolumny mają ten sam stopień pisma. Kalorie wyróżnia pierwsze
+/// miejsce i kolor akcentu marki, a nie większe cyfry — większe rozjeżdżałyby
+/// wysokość podpisu i zsuwały jeden tor niżej od pozostałych, czyli psuły
+/// dokładnie tę siatkę, dla której ten układ powstał. Kolumna kalorii jest za
+/// to SZERSZA: bierze tyle, ile potrzebuje jej podpis („kcal 2298/2300" to
+/// słowo i dziewięć cyfr wobec litery i sześciu w makrach), a trzy makra
+/// dzielą resztę po równo.
+/// Przy czterech równych kolumnach kalorie musiały się kurczyć albo ucinać,
+/// a makra stały z zapasem, którego nie miały na co wydać.
 /// `MacroSegmentBar`, który stał tu na początku, zostaje w Kalendarzu: tam
 /// pytanie brzmi „z czego składa się to, co zjadłem", a nie „ile mi zostało".
 ///
@@ -46,11 +51,13 @@ import SwiftUI
 ///
 /// Szerokość pigułki ustawia `WeeklyPlanView` — to ona zna wymiar zakładki.
 /// Cztery kolumny potrzebują jej więcej niż dwa wiersze po trzy, bo najdłuższy
-/// podpis („K 1135/2100") musi się zmieścić w jednej czwartej.
+/// podpis („kcal 1135/2100") musi się zmieścić obok trzech makr.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
     let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
 
     /// Promień rogu szkła i obszaru dotyku — jedna liczba, żeby te dwa
     /// kształty nie mogły się rozjechać.
@@ -60,34 +67,60 @@ struct PlanDayGoalBar: View {
     /// liczby nie ma — idzie wyłącznie do opisu dla VoiceOver.
     private var remaining: Int { targets.kcal - nutrition.kcal }
 
-    /// Wszystko, co ma przejść płynnie przy zmianie dnia i przy dołożeniu
-    /// posiłku — jedna wartość, jedna sprężyna.
+    /// Wszystko, co ma przejść płynnie przy zmianie dnia, przy dołożeniu
+    /// posiłku i po przestawieniu celu w Ustawieniach — jedna wartość, jedna
+    /// sprężyna. Cele są w odcisku celowo: bez nich powrót z suwaka kalorii
+    /// podmieniał mianownik i przeskakiwał cztery tory bez ruchu.
     private var fingerprint: String {
-        "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
+        let macros = targets.macros
+        return "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
+            + "|\(targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
     }
+
+    /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
+    /// własną domyślną (0,4 s) i przy 0,36 s na cyfrach kreska lądowała
+    /// chwilę po liczbie — dwie sprężyny w jednej kolumnie widać jako dwie.
+    static let animation: Animation = .spring(response: 0.36, dampingFraction: 0.9)
 
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
                 MacroMeter(
-                    letter: "K",
+                    letter: "kcal",
                     title: "Kalorie",
                     value: nutrition.kcal,
                     target: targets.kcal,
                     color: SCMacroPalette.calories,
                     unit: "kilokalorii",
-                    accessibilityDetail: remainingDetail
+                    accessibilityDetail: remainingDetail,
+                    animation: Self.animation
                 )
+                // Szerokość z podpisu, nie z podziału na cztery — patrz
+                // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
+                .fixedSize(horizontal: true, vertical: false)
 
                 macroMeters
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
             // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
             // pigułka odpowiada dokładnie jak wiersz osi nad nią.
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Self.cornerRadius))
+            // Samo `.regular` przepuszczało tekst osi przewijany pod pigułką
+            // na tyle wyraźnie, że przy górnej krawędzi wyglądał jak artefakt
+            // renderowania. Sam `tint` tego nie gasił — barwi szkło, ale nie
+            // zasłania. Stąd warstwa tła strony POD szkłem: to ona przygasza
+            // przelatującą treść do rozmytej plamy, a odblaski i reakcja na
+            // dotyk zostają na szkle nad nią.
+            .glassEffect(
+                .regular.tint(Color.scPageBase(scheme).opacity(0.35)).interactive(),
+                in: .rect(cornerRadius: Self.cornerRadius)
+            )
+            .background(
+                Color.scPageBase(scheme).opacity(0.72),
+                in: .rect(cornerRadius: Self.cornerRadius)
+            )
             // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
             // na cyfrach, na literach i na kilku punktach pasków. Padding,
             // przerwy między kolumnami i całe tło szkła były martwe — pigułka
@@ -99,12 +132,14 @@ struct PlanDayGoalBar: View {
             )
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
-        .animation(.spring(response: 0.36, dampingFraction: 0.9), value: fingerprint)
-        // `.contain`, nie `.ignore`: każdy miernik ma własne zdanie z celem
-        // („Białko: 100 ze 150 gramów, cel przekroczony") i scalenie wszystkiego
-        // w jedno zjadałoby dokładnie tę część, dla której VoiceOver przychodzi
-        // na ten pasek.
-        .accessibilityElement(children: .contain)
+        .animation(Self.animation, value: fingerprint)
+        // `.combine`, nie `.contain`: każdy miernik ma własne zdanie z celem
+        // („Białko: 100 ze 150 gramów, cel przekroczony") i scalenie skleja te
+        // cztery zdania w jeden element, który NADAL jest przyciskiem.
+        // `.contain` robił z pigułki kontener z czterema mierników w środku
+        // i podpowiedzią „Otwiera cel dnia" na czymś, w co nie dało się
+        // stuknąć — VoiceOver czytał liczby i nie miał czego aktywować.
+        .accessibilityElement(children: .combine)
         .accessibilityHint("Otwiera cel dnia")
     }
 
@@ -134,21 +169,24 @@ struct PlanDayGoalBar: View {
                 title: "Białko",
                 value: nutrition.protein,
                 target: targets.macros?.proteinG,
-                color: SCMacroPalette.protein
+                color: SCMacroPalette.protein,
+                animation: Self.animation
             )
             MacroMeter(
                 letter: "T",
                 title: "Tłuszcze",
                 value: nutrition.fat,
                 target: targets.macros?.fatG,
-                color: SCMacroPalette.fat
+                color: SCMacroPalette.fat,
+                animation: Self.animation
             )
             MacroMeter(
                 letter: "W",
-                title: "Węglowodany",
+                title: "Węgle",
                 value: nutrition.carbs,
                 target: targets.macros?.carbsG,
-                color: SCMacroPalette.carbs
+                color: SCMacroPalette.carbs,
+                animation: Self.animation
             )
         }
     }

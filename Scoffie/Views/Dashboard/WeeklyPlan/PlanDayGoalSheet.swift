@@ -137,13 +137,13 @@ struct PlanDayGoalSheet: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Cel dnia")
-                    .font(.system(size: 24, weight: .heavy))
+                    .scFont(24, weight: .heavy, relativeTo: .title2)
                     .tracking(-0.4)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 Text(subtitle)
-                    .font(.system(size: 13, weight: .regular))
+                    .scFont(13, weight: .regular, relativeTo: .footnote)
                     .tracking(-0.1)
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
@@ -252,7 +252,7 @@ struct PlanDayGoalSheet: View {
     /// zostawiać trzy wiersze bez prawej strony i pierścienie bez postępu.
     private var macroHint: some View {
         Text("Cele makro policzymy, gdy uzupełnisz sylwetkę w Ustawieniach → Twoje dane.")
-            .font(.system(size: 12, weight: .regular))
+            .scFont(12, weight: .regular, relativeTo: .caption)
             .foregroundStyle(Color.scMuted(scheme))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -267,7 +267,7 @@ struct PlanDayGoalSheet: View {
                 .frame(height: 1)
 
             Text("W POSIŁKACH")
-                .font(.system(size: 10.5, weight: .bold))
+                .scFont(10.5, weight: .bold, relativeTo: .caption2)
                 .tracking(1.4)
                 .foregroundStyle(Color.scFaint(scheme))
         }
@@ -400,7 +400,7 @@ struct PlanGoalLegendRow: View {
                     .frame(width: 7, height: 7)
 
                 Text(row.title)
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .scFont(12.5, weight: .semibold, relativeTo: .caption)
                     .tracking(-0.1)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
@@ -414,12 +414,12 @@ struct PlanGoalLegendRow: View {
                     // wiedzieć; kolor makra mówi „to ta pozycja wyszła poza",
                     // a nie „zrobiłeś coś źle".
                     Text(verbatim: String(row.value))
-                        .font(.system(size: 12.5, weight: .bold))
+                        .scFont(12.5, weight: .bold, relativeTo: .caption)
                         .monospacedDigit()
                         .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
 
                     Text(trailingText)
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .scFont(10.5, weight: .semibold, relativeTo: .caption2)
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                 }
@@ -428,8 +428,8 @@ struct PlanGoalLegendRow: View {
             }
 
             // Ten sam tor, co w pigułce nad menu (`MacroProgressTrack`): szare
-            // tło na to, czego brakuje, kolor na to, co jest, i osobna pełnej
-            // mocy warstwa na nadmiar, gdy baza przygasa. Rysowany tylko tam,
+            // tło na to, czego brakuje, kolor na to, co jest, i jasny odcinek
+            // od prawej na nadmiar ponad cel. Rysowany tylko tam,
             // gdzie jest do czego mierzyć — pusty tor pod wierszem bez celu
             // obiecywałby liczbę, której nie ma.
             //
@@ -489,7 +489,7 @@ struct PlanGoalMealRow: View {
                         .frame(width: 5, height: 5)
 
                     Text(title)
-                        .font(.system(size: 13.5, weight: entry.isPlanned ? .semibold : .regular))
+                        .scFont(13.5, weight: entry.isPlanned ? .semibold : .regular, relativeTo: .footnote)
                         .tracking(-0.2)
                         .foregroundStyle(
                             entry.isPlanned ? Color.scLabel(scheme) : Color.scMuted(scheme)
@@ -499,7 +499,7 @@ struct PlanGoalMealRow: View {
 
                 if entry.isPlanned {
                     Text(macroText)
-                        .font(.system(size: 11, weight: .regular))
+                        .scFont(11, weight: .regular, relativeTo: .caption2)
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -583,18 +583,18 @@ struct PlanGoalMealRow: View {
         if entry.isPlanned {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(verbatim: String(Int(entry.nutrition.kcal.rounded())))
-                    .font(.system(size: 13.5, weight: .bold))
+                    .scFont(13.5, weight: .bold, relativeTo: .footnote)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text("kcal")
-                    .font(.system(size: 10, weight: .semibold))
+                    .scFont(10, weight: .semibold, relativeTo: .caption2)
                     .foregroundStyle(Color.scMuted(scheme))
             }
             .fixedSize()
         } else {
             Text("— kcal")
-                .font(.system(size: 11, weight: .semibold))
+                .scFont(11, weight: .semibold, relativeTo: .caption2)
                 .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize()
         }

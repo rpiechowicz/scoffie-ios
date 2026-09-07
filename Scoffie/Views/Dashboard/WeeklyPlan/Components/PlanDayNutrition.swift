@@ -9,7 +9,7 @@ import Foundation
 /// z tej samej pigułki z inną liczbą w środku to najgorszy możliwy wynik.
 ///
 /// Liczby są udziałem JEDNEJ osoby, nie sumą tego, co stoi na stole — tak samo
-/// jak w nagłówku dnia na osi (`PlanDayTimeline.kcalToday`). Dzienny cel jest
+/// jak w wierszach osi dnia (`PlanDayTimeline`). Dzienny cel jest
 /// osobisty, więc porównywać się z nim może wyłącznie osobisty talerz.
 struct PlanDayNutrition {
     /// Jeden wiersz listy „W posiłkach": danie albo pusta pora.

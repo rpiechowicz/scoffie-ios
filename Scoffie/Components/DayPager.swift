@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// Ruch nawigacji po dniach — JEDNA sprężyna na wszystko, co przestawia
+/// dzień albo tydzień: wjazd strony w `DayPager`, przeskok podkreślenia po
+/// stuknięciu w pasek dni, podmiana liczb przy zmianie tygodnia.
+///
+/// Osobny typ, bo `DayPager` jest generyczny i nie może mieć `static let`,
+/// a `EditorialWeekBar` miał dotąd własną kopię z innym tłumieniem (0,82) —
+/// to samo podkreślenie odbijało się inaczej zależnie od tego, czy zmiana
+/// przyszła z gestu, czy ze stuknięcia. Tłumienie 0,86: przeskok bąbla
+/// o kilkanaście punktów może się lekko odbić, ale cała strona nie —
+/// przestrzeliłaby poza krawędź i mignęła tłem.
+enum DayNavigationMotion {
+    static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
+}
+
 /// Jeden dzień na ekranie, przewijany palcem w bok.
 ///
 /// Plan i Kalendarz pokazują ten sam tydzień, ale każdy swój dzień — i na obu
@@ -15,13 +29,44 @@ import SwiftUI
 /// Pionowe przewijanie treści dnia należy do tego widoku: nagłówki obu
 /// ekranów są przypięte do góry, więc scrolluje się dokładnie tyle, ile
 /// obejmuje `content`, i nic ponadto.
+///
+/// **Stuknięcie w dzień jedzie tak samo jak gest.** Z `animatesSelectionChanges`
+/// każda zmiana `selectedDate` z zewnątrz — stuknięcie w pasek dni, strzałka
+/// tygodnia, „DZIŚ" — dostaje ten sam dwufazowy zjazd i wjazd, co
+/// przesunięcie palcem; kierunek bierze się z porównania dat. Bez tego
+/// strona podmieniała się twardym cięciem, a podkreślenie na pasku
+/// sprężynowało — dwa języki dla jednej czynności. To wymaga, żeby `content`
+/// rysował dzień Z ARGUMENTU, a nie ze stanu ekranu: na czas zjazdu pager
+/// pokazuje jeszcze stary dzień (`displayedDate`), choć `selectedDate` już
+/// wskazuje nowy. Kalendarz rysuje z własnego stanu, więc zostaje przy
+/// domyślnym `false` i twardym przeskoku.
 struct DayPager<Content: View>: View {
     let datesViewModel: DatesViewModel
     @Binding var selectedDate: Date
     /// Dolny odstęp treści — ostatni kafel nie może kończyć się na krawędzi.
-    var bottomPadding: CGFloat = SCPageMetrics.bottom
-    @ViewBuilder var content: (Date) -> Content
+    let bottomPadding: CGFloat
+    /// Czy zmiany `selectedDate` spoza gestu też mają zjazd i wjazd strony.
+    let animatesSelectionChanges: Bool
+    let content: (Date) -> Content
 
+    init(
+        datesViewModel: DatesViewModel,
+        selectedDate: Binding<Date>,
+        bottomPadding: CGFloat = SCPageMetrics.bottom,
+        animatesSelectionChanges: Bool = false,
+        @ViewBuilder content: @escaping (Date) -> Content
+    ) {
+        self.datesViewModel = datesViewModel
+        self._selectedDate = selectedDate
+        self.bottomPadding = bottomPadding
+        self.animatesSelectionChanges = animatesSelectionChanges
+        self.content = content
+        self._displayedDate = State(initialValue: selectedDate.wrappedValue)
+    }
+
+    /// Dzień, który strona faktycznie rysuje. Przy zmianie z zewnątrz zostaje
+    /// w tyle za `selectedDate` na czas zjazdu starej strony.
+    @State private var displayedDate: Date
     /// Wychylenie strony w trakcie przeciągania, a po zatwierdzeniu — faza
     /// wyjścia i wejścia dnia.
     @State private var dragOffset: CGFloat = 0
@@ -49,17 +94,18 @@ struct DayPager<Content: View>: View {
 
     var body: some View {
         ScrollView {
-            content(selectedDate)
+            content(animatesSelectionChanges ? displayedDate : selectedDate)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, bottomPadding)
                 // Zmiana dnia jest animowana ZE WZGLĘDU NA PASEK DNI (patrz
-                // `step(by:)`), a ta sama animacja obejmowałaby też przebudowę
-                // kafli — wjeżdżałyby na ekran, dopasowując po drodze wysokości
-                // i teksty. Strona podmienia się poza ekranem, więc nie ma tu
-                // czego animować. Zakres jest wąski: dotyczy wyłącznie zmian
-                // `selectedDate`, więc animacje wewnątrz kafli (serduszko,
-                // odhaczenie posiłku) zostają nietknięte.
+                // `transition(to:)`), a ta sama animacja obejmowałaby też
+                // przebudowę kafli — wjeżdżałyby na ekran, dopasowując po
+                // drodze wysokości i teksty. Strona podmienia się poza
+                // ekranem, więc nie ma tu czego animować. Zakres jest wąski:
+                // dotyczy wyłącznie zmian dnia, więc animacje wewnątrz kafli
+                // (serduszko, odhaczenie posiłku) zostają nietknięte.
                 .animation(nil, value: selectedDate)
+                .animation(nil, value: displayedDate)
         }
         .scrollIndicators(.hidden)
         // Gest łapie się na całej stronie, także w przerwach między kaflami.
@@ -80,6 +126,17 @@ struct DayPager<Content: View>: View {
         // a przewaga w poziomie rozstrzyga, który z nich cokolwiek robi.
         .simultaneousGesture(daySwipe)
         .sensoryFeedback(.selection, trigger: daySteps)
+        .onChange(of: selectedDate) { _, target in
+            guard animatesSelectionChanges, !isPaging else { return }
+            guard !Calendar.current.isDate(target, inSameDayAs: displayedDate) else { return }
+            // Przed pierwszym pomiarem (wejście na zakładkę) nie ma dokąd
+            // zjeżdżać — twardy przeskok, tak jak przed tą zmianą.
+            guard pageWidth > 0 else {
+                displayedDate = target
+                return
+            }
+            transition(to: target, forward: target > displayedDate, movesSelection: false)
+        }
     }
 
     private var daySwipe: some Gesture {
@@ -110,14 +167,10 @@ struct DayPager<Content: View>: View {
     ///
     /// JEDNA animacja na dwie rzeczy, nie dwie podobne: strona i pasek ruszają
     /// w tej samej chwili tą samą sprężyną, więc lądują razem bez dobierania
-    /// czasów na oko. `response` jest ten sam, co przy stuknięciu w dzień na
-    /// pasku (`EditorialWeekBar`), żeby gest i stuknięcie przestawiały
-    /// podkreślenie identycznie; tłumienie 0.86 zamiast 0.82, bo przeskok
-    /// bąbla o kilkanaście punktów może się odbić, a cała strona nie —
-    /// przestrzeliłaby poza krawędź i mignęła tłem.
-    private static var enterAnimation: Animation {
-        .spring(response: 0.34, dampingFraction: 0.86)
-    }
+    /// czasów na oko. Stała jest wspólna z `EditorialWeekBar`
+    /// (`DayNavigationMotion.spring`), więc gest i stuknięcie przestawiają
+    /// podkreślenie identycznie.
+    private static var enterAnimation: Animation { DayNavigationMotion.spring }
 
     /// Zjazd starego dnia: przyspiesza, bo strona ucieka za krawędź.
     ///
@@ -142,32 +195,55 @@ struct DayPager<Content: View>: View {
     /// zawsze jedna strona, więc nic nie podskakuje, a kierunek zjazdu bierze
     /// się wprost z gestu — nie trzeba go zgadywać z porównania dat.
     private func step(by days: Int) {
+        daySteps += 1
+        transition(
+            to: datesViewModel.stepDay(from: selectedDate, by: days),
+            forward: days > 0,
+            movesSelection: true
+        )
+    }
+
+    /// Zjazd i wjazd — wspólne dla gestu i dla zmiany z zewnątrz.
+    ///
+    /// `movesSelection` mówi, czy to pager przestawia `selectedDate` (gest),
+    /// czy tylko dogania datę, którą ktoś już przestawił (stuknięcie w pasek,
+    /// strzałka tygodnia). W drugim przypadku podkreślenie na pasku już
+    /// jedzie — ruszyło w chwili stuknięcia, czyli tam, gdzie palec; strona
+    /// dojeżdża za nim.
+    private func transition(to target: Date, forward: Bool, movesSelection: Bool) {
         // Szerokość bywa jeszcze nieznana w pierwszej klatce po wejściu na
         // zakładkę; wtedy lepszy jest twardy przeskok niż zjazd donikąd.
         let travel = pageWidth > 0 ? pageWidth : Self.dragLimit
         isPaging = true
-        daySteps += 1
 
         withAnimation(Self.exitAnimation) {
-            dragOffset = days > 0 ? -travel : travel
+            dragOffset = forward ? -travel : travel
         }
 
         Task { @MainActor in
             try? await Task.sleep(for: Self.exitDuration)
             // Nowy dzień startuje z przeciwnej krawędzi, bez animacji —
             // dopiero powrót do zera jest animowany.
-            dragOffset = days > 0 ? travel : -travel
+            dragOffset = forward ? travel : -travel
 
             // Data i strona ruszają TYM SAMYM wywołaniem: podkreślenie na
             // pasku dni jedzie dokładnie tak długo, jak wjeżdża strona, więc
             // nie wyprzedza jej ani nie zostaje w tyle. Wcześniej ta linijka
             // stała poza `withAnimation` i dzień po prostu przeskakiwał.
             withAnimation(Self.enterAnimation) {
-                selectedDate = datesViewModel.stepDay(from: selectedDate, by: days)
+                if movesSelection { selectedDate = target }
+                displayedDate = target
                 dragOffset = 0
             }
             try? await Task.sleep(for: Self.enterDuration)
             isPaging = false
+
+            // Zmiana, która przyszła w trakcie animacji (szybkie dwa
+            // stuknięcia), została zignorowana przez `onChange` — strona
+            // dogania datę bez drugiego zjazdu, żeby nie ustawiać kolejki.
+            if !Calendar.current.isDate(displayedDate, inSameDayAs: selectedDate) {
+                displayedDate = selectedDate
+            }
         }
     }
 

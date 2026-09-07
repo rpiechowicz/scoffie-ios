@@ -239,3 +239,61 @@ struct SCPageBackground: View {
         }
     }
 }
+
+// MARK: - Pismo skalowane z Dynamic Type
+
+/// `.font(.system(size:))`, tylko że rośnie z Dynamic Type — względem stylu,
+/// do którego projektowy rozmiar jest najbliższy.
+///
+/// Samo `size:` stoi w miejscu przy największym tekście w systemie, a
+/// `Font.system(_ style:)` nie daje projektowych 15,5 pt ani 12,5 pt.
+/// `@ScaledMetric` łączy jedno z drugim: baza z makiety, skala z ustawień
+/// telefonu. Ten sam wzór stoi w `MacroMeter`, tylko tam wprost w widoku,
+/// bo sklejony `Text` potrzebuje `Font`, a nie modyfikatora.
+private struct SCScaledFont: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+    private let weight: Font.Weight
+
+    init(size: CGFloat, weight: Font.Weight, relativeTo style: Font.TextStyle) {
+        _size = ScaledMetric(wrappedValue: size, relativeTo: style)
+        self.weight = weight
+    }
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size, weight: weight))
+    }
+}
+
+extension View {
+    /// Projektowy rozmiar pisma, który skaluje się z Dynamic Type.
+    func scFont(
+        _ size: CGFloat,
+        weight: Font.Weight = .regular,
+        relativeTo style: Font.TextStyle
+    ) -> some View {
+        modifier(SCScaledFont(size: size, weight: weight, relativeTo: style))
+    }
+
+    /// Cel dotyku 44 pt wokół czegoś narysowanego mniej — bez ruszania układu.
+    ///
+    /// Ramka rośnie do `size`, a ujemny padding oddaje układowi dokładnie
+    /// tyle, ile wzięła, więc sąsiedzi stoją tam, gdzie stali. Obszar dotyku
+    /// zostaje przy ramce: SwiftUI trafia w widok po jego własnych granicach,
+    /// nie po tym, ile miejsca zgłosił rodzicowi. Sąsiednie cele mogą na
+    /// siebie zachodzić — wygrywa ten rysowany później, czyli po prawej.
+    func scTapTarget(_ size: CGFloat = 44, drawn: CGFloat) -> some View {
+        let side = max(size, drawn)
+        return frame(width: side, height: side)
+            .contentShape(Rectangle())
+            .padding(-(side - drawn) / 2)
+    }
+
+    /// To samo, ale wyłącznie w pionie — dla wierszy i pigułek na całą
+    /// szerokość, którym brakuje tylko wysokości.
+    func scTapHeight(_ height: CGFloat = 44, drawn: CGFloat) -> some View {
+        let tall = max(height, drawn)
+        return frame(height: tall)
+            .contentShape(Rectangle())
+            .padding(.vertical, -(tall - drawn) / 2)
+    }
+}
