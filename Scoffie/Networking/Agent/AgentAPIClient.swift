@@ -48,16 +48,6 @@ final class AgentAPIClient {
         try await perform(path: "agent/conversations/\(id)", method: "GET", bodyData: nil)
     }
 
-    /// Kontekst chipów i arkusza „Dla kogo liczyć": domownicy z etykietą celu
-    /// i zgodą, cel pytającego, zużycie. Jedno źródło zamiast trzech cache'ów.
-    func context(householdId: String, weekStart: String?) async throws -> AgentContextDTO {
-        var query = [URLQueryItem(name: "householdId", value: householdId)]
-        if let weekStart {
-            query.append(URLQueryItem(name: "weekStart", value: weekStart))
-        }
-        return try await perform(path: "agent/context", method: "GET", bodyData: nil, query: query)
-    }
-
     /// „Ile mi zostało" — do ekranu limitów; działa też przy wyłączonym asystencie.
     func usage(householdId: String) async throws -> AgentUsageDTO {
         try await perform(

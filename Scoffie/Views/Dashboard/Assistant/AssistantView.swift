@@ -30,9 +30,6 @@ struct AssistantView: View {
     /// Wiadomość poprawiana w tej chwili — razem z jej pierwotną treścią,
     /// żeby dało się wrócić bez pytania serwera.
     @State private var editing: EditingMessage?
-    /// Kogo dotyczy pytanie; puste = całe gospodarstwo.
-    @State private var scopeUserIds: Set<String> = []
-    @State private var showsScopeSheet = false
     @State private var showsRecipePicker = false
     @State private var showDeleteAlert = false
     @State private var showConversations = false
@@ -137,11 +134,6 @@ struct AssistantView: View {
             // Cicho i tylko raz na kwadrans — to karta poboczna.
             await sessionStore.refreshMemberContext()
         }
-        .task(id: datesViewModel.weekStartISO) {
-            // Chipy i arkusz „Dla kogo liczyć” biorą to samo, co serwer
-            // wkłada do promptu — jedno źródło zamiast trzech cache'ów.
-            await store.refreshContext(weekStart: datesViewModel.weekStartISO)
-        }
         .task {
             // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
             // użytkownik widział rozmowę, dopóki serwer nie odpowiedział.
@@ -156,13 +148,6 @@ struct AssistantView: View {
                 welcomeSeen = true
                 onboardingSeen = true
             }
-        }
-        .sheet(isPresented: $showsScopeSheet) {
-            AssistantScopeSheet(
-                members: sessionStore.householdMembers,
-                context: store.context?.members ?? [],
-                selection: $scopeUserIds
-            )
         }
         .sheet(isPresented: $showUsage) {
             // „Limity asystenta" to ten sam arkusz, co „Asystent i plan"
@@ -745,27 +730,6 @@ struct AssistantView: View {
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
-    /// Etykieta zakresu: „Cały dom · 4”, „Ania i Zosia”, „3 osoby”.
-    ///
-    /// Do dwóch osób wypisujemy imiona — to jest cała informacja. Powyżej
-    /// imiona nie mieszczą się w chipie, a sama liczba wystarczy, bo listę
-    /// widać po dotknięciu.
-    private static func scopeLabel(
-        selected: [HouseholdMemberSnapshot],
-        all: [HouseholdMemberSnapshot]
-    ) -> String {
-        if selected.isEmpty {
-            return all.count > 1 ? "Cały dom · \(all.count)" : "Tylko Ty"
-        }
-        let names = selected.map(\.displayName)
-        switch names.count {
-        case 1: return names[0]
-        case 2: return "\(names[0]) i \(names[1])"
-        default:
-            return "\(names.count) \(AssistantScopeSheet.peopleWord(names.count))"
-        }
-    }
-
     /// „1–7 września” — zakres widocznego tygodnia jednym napisem.
     private static func weekLabel(for dates: [Date]) -> String {
         guard let first = dates.first, let last = dates.last else {
@@ -782,7 +746,7 @@ struct AssistantView: View {
         return "\(day.string(from: first))–\(full.string(from: last))"
     }
 
-    /// Podpowiedzi nad chipami zakresu, dosunięte do prawej jak dymki
+    /// Podpowiedzi tuż nad polem, dosunięte do prawej jak dymki
     /// użytkownika. TYLKO na pustej rozmowie — pomagają zacząć. W trwającej
     /// rozmowie ich nie ma: „Podmień jedno danie" pod każdą odpowiedzią było
     /// szumem, a po błędzie czasu wystarczy komunikat z ponowieniem.
@@ -804,19 +768,6 @@ struct AssistantView: View {
             }
 
             Divider().overlay(Color.scRule(scheme))
-
-            // Zakres widoczny PRZED odpowiedzią: bez tego użytkownik dowiaduje
-            // się, o który tydzień i o kogo chodziło, dopiero z wyniku.
-            AssistantContextChips(
-                items: contextChips,
-                isMuted: store.isSending,
-                onTap: { chip in
-                    guard chip.id == "household" else { return }
-                    showsScopeSheet = true
-                }
-            )
-                .padding(.top, 10)
-                .padding(.bottom, 2)
 
             if editing != nil {
                 editingBar
@@ -913,7 +864,9 @@ struct AssistantView: View {
                 .accessibilityLabel(store.isSending ? "Zatrzymaj turę" : "Wyślij")
             }
             .padding(.horizontal, 8)
-            .padding(.top, 8)
+            // 12, nie 8: pole stoi teraz bezpośrednio pod kreską — chipy
+            // zakresu, które wcześniej robiły tu odstęp, zostały usunięte.
+            .padding(.top, 12)
             .padding(.bottom, 12)
         }
     }
@@ -959,41 +912,6 @@ struct AssistantView: View {
         }
     }
 
-    /// Chipy mówią, z czym asystent policzy odpowiedź. Zakres domowników
-    /// da się zmienić dotknięciem; pozostałe są etykietami i dlatego nie
-    /// udają klikalnych chevronem.
-    private var contextChips: [AssistantContextChip] {
-        var chips: [AssistantContextChip] = [
-            AssistantContextChip(
-                id: "week",
-                icon: "calendar",
-                label: datesViewModel.isCurrentWeek
-                    ? "Ten tydzień"
-                    : Self.weekLabel(for: datesViewModel.dates)
-            )
-        ]
-
-        let household = sessionStore.householdMembers
-        let selected = household.filter { scopeUserIds.contains($0.id) }
-        chips.append(
-            AssistantContextChip(
-                id: "household",
-                icon: selected.isEmpty && household.count > 1 ? "person.2" : "person",
-                label: Self.scopeLabel(selected: selected, all: household),
-                adjustable: household.count > 1,
-                isActive: !selected.isEmpty
-            )
-        )
-
-        // Cel z serwera, gdy go dał — to nim liczą się paski celu na kartach;
-        // cel z telefonu jest tylko zapasem na starszy serwer.
-        let goal = store.context?.targetKcalPerDay ?? calorieGoal
-        chips.append(
-            AssistantContextChip(id: "goal", icon: "target", label: "Cel \(goal) kcal")
-        )
-        return chips
-    }
-
     private var canSend: Bool {
         store.canSend && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -1027,7 +945,6 @@ struct AssistantView: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, store.canSend else { return }
 
-        let scope = scopeUserIds
         let edited = editing
         draft = ""
         editing = nil
@@ -1042,8 +959,7 @@ struct AssistantView: View {
             } else {
                 await store.send(
                     text: text,
-                    weekStart: datesViewModel.weekStartISO,
-                    scopeUserIds: Array(scope)
+                    weekStart: datesViewModel.weekStartISO
                 )
             }
         }
