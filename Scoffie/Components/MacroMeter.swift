@@ -61,20 +61,29 @@ struct MacroProgressTrack: View {
     }
 }
 
-/// Podpis „B 100/150" i tor makra W JEDNEJ LINII — jedna kolumna pigułki.
+/// Jedna kolumna pigułki: podpis „B 100/150" i pod nim tor na PEŁNĄ szerokość
+/// kolumny.
 ///
-/// Poziomo, a nie podpis nad paskiem. Pionowy wariant robił z każdej kolumny
-/// dwa wiersze, a że nad nimi stoi jeszcze wiersz z kaloriami, pigułka miała
-/// trzy poziomy tekstu i wychodziła na klocek nad dolnym menu zamiast na pasek.
-/// Tu wysokość kolumny to wysokość jednej linijki, więc cała pigułka schodzi
-/// do dwóch wierszy i kilkudziesięciu punktów.
+/// Trzeci układ tego komponentu i pierwszy, w którym pasek jest paskiem.
+/// Pierwszy stawiał podpis nad torem, ale kolumny szły trzy w wierszu pod
+/// wierszem kalorii — trzy poziomy tekstu, pigułka jak klocek. Drugi położył
+/// podpis i tor w jednej linii, co zbiło wysokość, ale zabrało torowi całą
+/// szerokość poza podpisem: przy trzech kolumnach zostawało na niego ~32 pt,
+/// czyli kreska, a nie miernik. Do tego podpisy różnej długości („B 100/150"
+/// kontra „T 40/70") dawały tory różnej długości i o różnych początkach, więc
+/// nie dało się ich porównać ani wzrokiem prześlizgnąć po jednej linii.
 ///
-/// Litera niesie kolor, liczba niesie stan. Po przekroczeniu celu liczba
-/// przechodzi w kolor swojego makra, żeby sygnał był i w pasku, i w tekście:
-/// pasek widać kątem oka, liczbę widać, gdy się na nią patrzy, i żaden z tych
-/// dwóch sposobów patrzenia nie powinien przegapić przekroczenia.
+/// Tutaj kolumna ma dwie linijki, ale W PIGUŁCE JEST JEDEN WIERSZ takich
+/// kolumn — cztery równe, kalorie i trzy makra obok siebie. Wysokość wychodzi
+/// niższa niż przy dwóch wierszach jednolinijkowych, a tor dostaje całą
+/// szerokość kolumny: wszystkie cztery tej samej długości, wszystkie zaczynają
+/// się w tym samym miejscu, więc widać je jako jedną siatkę.
+///
+/// Wartość i cel mają różną wagę i różny kolor. „100" jest tym, po co się
+/// patrzy, „/150" jest odniesieniem — jednolity ciąg „100/150" kazał czytać
+/// obie liczby, żeby wyłuskać pierwszą.
 struct MacroMeter: View {
-    /// Podpis na ekranie — jedna litera przy makrach, „kcal" przy kaloriach.
+    /// Podpis na ekranie — jedna litera: K, B, T, W.
     let letter: String
     /// Pełna nazwa — wyłącznie dla VoiceOver, na ekranie nie ma na nią miejsca.
     let title: String
@@ -90,12 +99,13 @@ struct MacroMeter: View {
     /// Dopowiedzenie na koniec zdania dla VoiceOver — to, co widać z układu,
     /// ale czego nie da się usłyszeć z samych liczb.
     var accessibilityDetail: String?
-    /// Wiersz kalorii: o pół stopnia większy podpis i grubszy tor. Ta różnica
-    /// jest jedyną hierarchią w pigułce — cztery identyczne wiersze czytałyby
-    /// się jak lista, a kalorie są tu pierwszą liczbą, nie czwartą.
-    var isProminent: Bool = false
 
     @Environment(\.colorScheme) private var scheme
+
+    /// Wysokość toru. Osobna stała, bo kolumna bez celu musi zarezerwować
+    /// dokładnie tyle samo miejsca — inaczej brak sylwetki w profilu
+    /// rozjeżdżałby wysokości kolumn i pigułka robiła się schodkowa.
+    private static let trackHeight: CGFloat = 4
 
     private var progress: Double? {
         guard let target, target > 0 else { return nil }
@@ -105,48 +115,39 @@ struct MacroMeter: View {
     private var isOverTarget: Bool { (progress ?? 0) > 1 }
 
     var body: some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(letter)
-                    .font(.system(size: isProminent ? 10.5 : 9.5, weight: .bold))
+                    .font(.system(size: 9.5, weight: .bold))
                     .foregroundStyle(color)
 
-                Text(valueText)
-                    .font(.system(size: isProminent ? 12 : 10, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(isOverTarget ? color : Color.scLabel(scheme))
-                    .contentTransition(.numericText())
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(verbatim: String(value))
+                        .font(.system(size: 11.5, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(isOverTarget ? color : Color.scLabel(scheme))
+                        .contentTransition(.numericText())
+
+                    if let target {
+                        Text(verbatim: "/\(target)")
+                            .font(.system(size: 9, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.scMuted(scheme))
+                    }
+                }
             }
             .lineLimit(1)
-            // Podpis bierze swoje najpierw, tor dostaje resztę kolumny.
-            // Kolumny są równe, więc tory wychodzą różnej długości — i tak ma
-            // być: każdy ma pod spodem własny szary tor na pełną swoją
-            // długość, więc proporcję czyta się w obrębie jednego makra,
-            // a nie przez porównanie z sąsiadem.
-            .layoutPriority(1)
             .minimumScaleFactor(0.8)
 
             if let progress {
-                // `minWidth`, bo bez niego przy długim podpisie („W 250/250")
-                // na wąskim telefonie na tor zostawało kilka punktów i wyglądał
-                // jak artefakt. Tu prędzej ściśnie się o dwie dziesiąte stopnia
-                // podpis, niż zniknie pasek.
-                MacroProgressTrack(
-                    progress: progress,
-                    color: color,
-                    height: isProminent ? 4 : 3
-                )
-                .frame(minWidth: 22, maxWidth: .infinity)
+                MacroProgressTrack(progress: progress, color: color, height: Self.trackHeight)
+            } else {
+                Color.clear.frame(height: Self.trackHeight)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var valueText: String {
-        guard let target else { return String(value) }
-        return "\(value)/\(target)"
     }
 
     private var accessibilityLabel: String {

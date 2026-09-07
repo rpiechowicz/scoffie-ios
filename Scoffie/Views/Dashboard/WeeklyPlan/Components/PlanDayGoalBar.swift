@@ -20,28 +20,33 @@ import SwiftUI
 /// przez nie widać. Zwykły `overlay` dawał pierwsze i tracił drugie —
 /// „Dodaj posiłek" siedziało pod pigułką i nie dało się w nie stuknąć.
 ///
-/// **Cztery mierniki jednego kształtu.** Kalorie zajmują pierwszy wiersz, trzy
-/// makra dzielą drugi; każdy z podpisem „x/y" i własnym torem z szarą resztą.
-/// Kalorie miały tu wcześniej osobny nagłówek — wielką liczbę „ile zostało",
-/// podpis przy niej i licznik „1135 / 2100" na drugim końcu wiersza. Były to
-/// trzy sposoby powiedzenia jednej rzeczy, każdy innym krojem, i to one robiły
-/// z pigułki nagłówek z tabelką pod spodem zamiast czterech równorzędnych
-/// pasków. `MacroSegmentBar`, który stał tu jeszcze wcześniej, nie znika
-/// z aplikacji: zostaje w Kalendarzu, gdzie pytanie brzmi „z czego składa się
-/// to, co zjadłem", a nie „ile mi zostało".
+/// **Cztery kolumny w jednym wierszu.** Kalorie i trzy makra stoją obok siebie,
+/// każde z podpisem „K 1135/2100" i torem pod spodem na pełną szerokość swojej
+/// kolumny. Cztery tory tej samej długości, wszystkie zaczynające się w tym
+/// samym miejscu — czyta się je jako jedną siatkę, a nie cztery osobne kreski.
 ///
-/// Miernik kalorii jest o pół stopnia większy i ma grubszy tor. To jedyna
-/// hierarchia w pigułce — cztery identyczne wiersze czytałyby się jak lista,
-/// a kalorie są tu pierwszą liczbą, nie czwartą.
+/// Dwa poprzednie układy tego nie dawały. Trzy makra w jednym wierszu obok
+/// swoich podpisów zostawiały na tor ~32 pt, a podpisy różnej długości
+/// przesuwały każdy tor w inne miejsce; wcześniejszy wariant z podpisem nad
+/// torem miał tory sensownej długości, ale kosztem trzeciego poziomu tekstu
+/// i pigułki wysokiej jak klocek. Kolumna dwulinijkowa w JEDNYM wierszu daje
+/// oba naraz: pigułka jest niższa niż przy dwóch wierszach jednolinijkowych,
+/// a tor jest dwa razy dłuższy.
+///
+/// Wszystkie cztery kolumny są równe i tego samego rozmiaru. Kalorie wyróżnia
+/// pierwsze miejsce i kolor akcentu marki, a nie większy stopień pisma —
+/// większy rozjeżdżałby wysokość podpisu i zsuwał jeden tor niżej od
+/// pozostałych, czyli psuł dokładnie tę siatkę, dla której ten układ powstał.
+/// `MacroSegmentBar`, który stał tu na początku, zostaje w Kalendarzu: tam
+/// pytanie brzmi „z czego składa się to, co zjadłem", a nie „ile mi zostało".
 ///
 /// **Ile zostało do celu nie stoi już nigdzie na ekranie.** Jest do policzenia
-/// z „1135/2100", a pasek obok mówi to samo bez czytania — trzy warianty tej
-/// jednej liczby w jednej pigułce były po prostu za dużo. VoiceOver dostaje ją
-/// nadal, bo dla niego pasek nie istnieje.
+/// z „1135/2100", a tor obok mówi to samo bez czytania. VoiceOver dostaje tę
+/// liczbę nadal, bo dla niego tor nie istnieje.
 ///
-/// Szerokość pigułki ustawia `WeeklyPlanView` — to ona zna wymiar zakładki,
-/// a pigułka ma tylko wypełnić to, co dostanie. Poziomy miernik potrzebuje
-/// miejsca na podpis I na tor, więc ta szerokość nie może schodzić zbyt nisko.
+/// Szerokość pigułki ustawia `WeeklyPlanView` — to ona zna wymiar zakładki.
+/// Cztery kolumny potrzebują jej więcej niż dwa wiersze po trzy, bo najdłuższy
+/// podpis („K 1135/2100") musi się zmieścić w jednej czwartej.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -63,22 +68,21 @@ struct PlanDayGoalBar: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 10) {
                 MacroMeter(
-                    letter: "kcal",
+                    letter: "K",
                     title: "Kalorie",
                     value: nutrition.kcal,
                     target: targets.kcal,
                     color: SCMacroPalette.calories,
                     unit: "kilokalorii",
-                    accessibilityDetail: remainingDetail,
-                    isProminent: true
+                    accessibilityDetail: remainingDetail
                 )
 
                 macroMeters
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
             // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
@@ -112,13 +116,19 @@ struct PlanDayGoalBar: View {
             : "\(abs(remaining)) kilokalorii ponad cel"
     }
 
-    /// Trzy równe kolumny: podpis „B 100/150" i tor makra w jednej linii.
+    /// Trzy kolumny makr — dopełnienie kolumny kalorii do czterech.
+    ///
+    /// Osobna właściwość, a nie trzy wywołania wprost w `body`: rozbija to
+    /// jeden wielki `HStack` na dwa czytelne kawałki, a `Group` zachowuje
+    /// płaską strukturę wiersza, więc kolumny nadal dzielą szerokość
+    /// po równo — nie trzy czwarte na makra i jedna na kalorie.
     ///
     /// Bez policzonych celów makr (brak sylwetki w profilu) `MacroMeter`
-    /// zostawia samą wartość i nie rysuje toru — pusty pasek obiecywałby cel,
-    /// którego nikt nie wyznaczył.
+    /// zostawia samą wartość i rezerwuje puste miejsce po torze — pusty pasek
+    /// obiecywałby cel, którego nikt nie wyznaczył, a zwinięcie go rozjechałoby
+    /// wysokość kolumn.
     private var macroMeters: some View {
-        HStack(alignment: .center, spacing: 12) {
+        Group {
             MacroMeter(
                 letter: "B",
                 title: "Białko",

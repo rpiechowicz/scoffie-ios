@@ -64,16 +64,16 @@ struct WeeklyPlanView: View {
     /// która mówi, co jest nawigacją, a co podglądem: dwa paski tej samej
     /// szerokości jeden nad drugim czytały się jak dwa poziomy tego samego menu.
     ///
-    /// Trzy czwarte, a nie dwie trzecie. Przy dwóch trzecich na trzy kolumny
-    /// makr zostawało po 70 pt i podpis musiał iść NAD torem — a to znaczyło
-    /// trzeci wiersz tekstu i pigułkę wysoką na klocek. Te kilkadziesiąt
-    /// punktów szerokości więcej kupuje podpis i tor w jednej linii, czyli
-    /// realnie NIŻSZY pasek. Podłoga 300 pt trzyma to samo na wąskich
+    /// Ile dokładnie — decyduje najdłuższy podpis w pigułce. Cztery kolumny
+    /// dzielą szerokość po równo, a w jednej czwartej musi się zmieścić
+    /// „K 1135/2100" (~65 pt). Stąd 0,82, a nie okrągłe dwie trzecie: przy
+    /// nich kolumna miała 60 pt i albo podpis się kurczył, albo tor musiał
+    /// zejść obok niego do kreski. Podłoga 310 pt trzyma to samo na wąskich
     /// telefonach; sufit zostawia pigułkę w marginesach strony.
     private var goalBarWidth: CGFloat {
         guard pageWidth > 0 else { return 0 }
         let limit = pageWidth - SCPageMetrics.horizontal * 2
-        return min(max(pageWidth * 3 / 4, 300), limit)
+        return min(max(pageWidth * 0.82, 310), limit)
     }
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
