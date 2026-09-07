@@ -47,6 +47,14 @@ struct DayPager<Content: View>: View {
             content(selectedDate)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, bottomPadding)
+                // Zmiana dnia jest animowana ZE WZGLĘDU NA PASEK DNI (patrz
+                // `step(by:)`), a ta sama animacja obejmowałaby też przebudowę
+                // kafli — wjeżdżałyby na ekran, dopasowując po drodze wysokości
+                // i teksty. Strona podmienia się poza ekranem, więc nie ma tu
+                // czego animować. Zakres jest wąski: dotyczy wyłącznie zmian
+                // `selectedDate`, więc animacje wewnątrz kafli (serduszko,
+                // odhaczenie posiłku) zostają nietknięte.
+                .animation(nil, value: selectedDate)
         }
         .scrollIndicators(.hidden)
         // Gest łapie się na całej stronie, także w przerwach między kaflami.
@@ -93,12 +101,32 @@ struct DayPager<Content: View>: View {
             }
     }
 
-    /// Czas zjazdu starego dnia i wjazdu nowego. Fazy odmierza zegar, a nie
-    /// domknięcie animacji: `withAnimation(_:completion:)` woła swoje
-    /// domknięcie poza izolacją głównego aktora, a cały ten widok jest na nim.
-    /// Wartości muszą odpowiadać animacjom w `step(by:)`.
-    private static var exitDuration: Duration { .milliseconds(160) }
-    private static var enterDuration: Duration { .milliseconds(320) }
+    /// Wjazd nowego dnia — i to samo, czym jedzie podkreślenie na pasku dni.
+    ///
+    /// JEDNA animacja na dwie rzeczy, nie dwie podobne: strona i pasek ruszają
+    /// w tej samej chwili tą samą sprężyną, więc lądują razem bez dobierania
+    /// czasów na oko. `response` jest ten sam, co przy stuknięciu w dzień na
+    /// pasku (`EditorialWeekBar`), żeby gest i stuknięcie przestawiały
+    /// podkreślenie identycznie; tłumienie 0.86 zamiast 0.82, bo przeskok
+    /// bąbla o kilkanaście punktów może się odbić, a cała strona nie —
+    /// przestrzeliłaby poza krawędź i mignęła tłem.
+    private static var enterAnimation: Animation {
+        .spring(response: 0.34, dampingFraction: 0.86)
+    }
+
+    /// Zjazd starego dnia: przyspiesza, bo strona ucieka za krawędź.
+    ///
+    /// Krzywa i odmierzany czas liczą się z JEDNEJ liczby. Fazy odmierza
+    /// zegar, a nie domknięcie animacji (`withAnimation(_:completion:)` woła
+    /// swoje domknięcie poza izolacją głównego aktora, a cały ten widok jest
+    /// na nim), więc rozjechanie się tych dwóch wartości podmieniałoby dzień
+    /// w połowie zjazdu — na oczach użytkownika.
+    private static let exitSeconds: TimeInterval = 0.16
+    private static var exitAnimation: Animation { .easeIn(duration: exitSeconds) }
+    private static var exitDuration: Duration { .milliseconds(Int(exitSeconds * 1000)) }
+
+    /// Ile trzymać blokadę po starcie wjazdu — tyle, ile sprężyna osiada.
+    private static var enterDuration: Duration { .milliseconds(340) }
 
     /// Zmiana dnia w dwóch fazach: stary dzień zjeżdża w bok, nowy wjeżdża
     /// z przeciwnej strony.
@@ -115,17 +143,22 @@ struct DayPager<Content: View>: View {
         isPaging = true
         daySteps += 1
 
-        withAnimation(.easeIn(duration: 0.16)) {
+        withAnimation(Self.exitAnimation) {
             dragOffset = days > 0 ? -travel : travel
         }
 
         Task { @MainActor in
             try? await Task.sleep(for: Self.exitDuration)
-            selectedDate = datesViewModel.stepDay(from: selectedDate, by: days)
             // Nowy dzień startuje z przeciwnej krawędzi, bez animacji —
             // dopiero powrót do zera jest animowany.
             dragOffset = days > 0 ? travel : -travel
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+
+            // Data i strona ruszają TYM SAMYM wywołaniem: podkreślenie na
+            // pasku dni jedzie dokładnie tak długo, jak wjeżdża strona, więc
+            // nie wyprzedza jej ani nie zostaje w tyle. Wcześniej ta linijka
+            // stała poza `withAnimation` i dzień po prostu przeskakiwał.
+            withAnimation(Self.enterAnimation) {
+                selectedDate = datesViewModel.stepDay(from: selectedDate, by: days)
                 dragOffset = 0
             }
             try? await Task.sleep(for: Self.enterDuration)
