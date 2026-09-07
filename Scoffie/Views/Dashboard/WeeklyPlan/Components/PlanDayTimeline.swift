@@ -154,16 +154,13 @@ struct PlanDayTimeline: View {
     /// stany dnia — pełny, częściowy i pusty.
     private var assistantButton: some View {
         Button(action: onAssistant) {
-            ZStack {
-                Circle()
-                    .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12))
-                Circle()
-                    .stroke(SCPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.28), lineWidth: 1)
-                Image(systemName: MenuConstans.Assistant.icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(SCPalette.terracotta)
-            }
-            .frame(width: 44, height: 44)
+            // `scSoftSurface` zamiast własnego tintu i obwódki: te same liczby,
+            // co pod każdym innym akcentowym przyciskiem w aplikacji.
+            Image(systemName: MenuConstans.Assistant.icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(SCPalette.terracotta)
+                .frame(width: 44, height: 44)
+                .scSoftSurface(Circle())
         }
         .buttonStyle(PlanPressStyle())
         .accessibilityLabel("Zaplanuj z asystentem")
@@ -853,13 +850,11 @@ struct PlanTimelineAddRow: View {
 
     private var content: some View {
         HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12))
-                Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(SCPalette.terracotta)
-            }
-            .frame(width: 30, height: 30)
+            Image(systemName: "plus")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(SCPalette.terracotta)
+                .frame(width: 30, height: 30)
+                .scSoftSurface(Circle())
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Dodaj posiłek")

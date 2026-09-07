@@ -315,32 +315,15 @@ struct PlanAssistantIntroSheet: View {
 
     private var footer: some View {
         VStack(spacing: 2) {
-            Button {
+            // Ten sam przycisk, co w stopkach pozostałych arkuszy — terakota
+            // w wariancie „soft”, bez gradientu i cienia.
+            EditorialPrimaryActionButton(
+                title: "Przejdź do Asystenta",
+                icon: MenuConstans.Assistant.icon
+            ) {
                 dismiss()
                 onOpenAssistant()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: MenuConstans.Assistant.icon)
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Przejdź do Asystenta")
-                        .font(.system(size: 15.5, weight: .bold))
-                        .tracking(-0.3)
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(
-                    Capsule().fill(
-                        LinearGradient(
-                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.12)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                )
-                .shadow(color: SCPalette.terracotta.opacity(0.30), radius: 18, x: 0, y: 8)
             }
-            .buttonStyle(PlanPressStyle(scale: 0.985))
 
             Button {
                 dismiss()

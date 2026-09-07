@@ -557,10 +557,7 @@ struct PlanSlotPickerSheet: View {
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10))
-                        )
+                        .scSoftCapsule()
                 }
                 .buttonStyle(PlanPressStyle(scale: 0.96))
                 .padding(.top, 2)
@@ -596,30 +593,21 @@ struct PlanSlotPickerSheet: View {
                 audienceSummary
             }
 
-            Button {
-                confirm()
-            } label: {
-                Text(ctaTitle)
-                    .font(.system(size: 15.5, weight: .bold))
-                    .tracking(-0.3)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.12)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                    )
-                    .shadow(color: SCPalette.terracotta.opacity(canConfirm ? 0.30 : 0), radius: 18, y: 8)
-            }
-            .buttonStyle(PlanPressStyle(scale: 0.985))
-            .disabled(!canConfirm)
-            .opacity(canConfirm ? 1 : 0.4)
-            .animation(.easeOut(duration: 0.2), value: canConfirm)
+            // Ten sam przycisk, co w każdym innym arkuszu aplikacji: terakota
+            // w wariancie „soft” (tint + obwódka, bez gradientu i cienia).
+            // Wcześniej to CTA malowało się po swojemu i było jedyną pełną
+            // plamą koloru w całej apce.
+            EditorialPrimaryActionButton(
+                title: ctaTitle,
+                icon: ctaIcon,
+                isEnabled: selectedRecipeId != nil,
+                isLoading: isSaving,
+                // Domknięcie, nie goła referencja do metody — projekt ma
+                // włączone `InferSendableFromCaptures` (SE-0418) i referencje
+                // metod w takich miejscach potrafią rozjechać wnioskowanie
+                // typu z błędem wskazującym zupełnie inną linię.
+                action: { confirm() }
+            )
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -658,6 +646,11 @@ struct PlanSlotPickerSheet: View {
     private var ctaTitle: String {
         guard let editing else { return "Dodaj do planu" }
         return selectedRecipeId == editing.recipe.id ? "Zapisz zmiany" : "Zamień przepis"
+    }
+
+    private var ctaIcon: String {
+        guard let editing else { return "plus" }
+        return selectedRecipeId == editing.recipe.id ? "checkmark" : "arrow.2.squarepath"
     }
 
     private var canConfirm: Bool {
