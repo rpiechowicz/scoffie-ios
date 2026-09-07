@@ -1,0 +1,125 @@
+import SwiftUI
+
+/// Pigułka „ile jeszcze zostało" tuż nad dolnym menu — wejście do arkusza
+/// „Cel dnia" (`PlanDayGoalSheet`).
+///
+/// Źródło: canvas claude.ai → „Weekly Meals - Plan v2.html”, pasek pod osią
+/// dnia. W aplikacji nie stoi jednak na końcu przewijanej treści, tylko wisi
+/// nad menu jako `safeAreaInset`: liczba, po którą sięga się w trakcie
+/// układania dnia, nie może wymagać przewinięcia na sam dół.
+///
+/// **Szkło, nie karta.** Dolne menu na iOS 26 jest z Liquid Glass i pigułka
+/// stoi tuż nad nim, więc musi być z tego samego materiału — kafel z tokenów
+/// `scTileBg` wyglądałby obok niego jak wklejka z innego ekranu. Stąd
+/// `glassEffect` zamiast `dashboardLiquidCard()`, którego używa reszta
+/// aplikacji tam, gdzie karta leży W treści, a nie NAD nią.
+///
+/// **Treść przewija się pod spodem, ale kończy nad pigułką.** To jest cała
+/// robota `safeAreaInset` po stronie `WeeklyPlanView`: pasek nie zjada
+/// ostatniego wiersza osi, a mimo to jedzenie przelatuje pod szkłem i jest
+/// przez nie widać. Zwykły `overlay` dawał pierwsze i tracił drugie —
+/// „Dodaj posiłek" siedziało pod pigułką i nie dało się w nie stuknąć.
+struct PlanDayGoalBar: View {
+    let nutrition: PlanDayNutrition
+    let targets: DailyNutritionTargets
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    /// Ile kalorii zostaje do celu; ujemne znaczy „ponad cel".
+    private var remaining: Int { targets.kcal - nutrition.kcal }
+
+    private var fillFraction: CGFloat {
+        CGFloat(nutrition.kcal) / CGFloat(max(targets.kcal, 1))
+    }
+
+    /// Podpis przy liczbie. Po przekroczeniu celu pokazujemy nadwyżkę, a nie
+    /// zero — „0 kcal zostało" i „230 kcal ponad cel" to dwie różne wiadomości,
+    /// a użytkownikowi potrzebna jest ta druga.
+    private var caption: String {
+        remaining >= 0 ? "kcal zostało" : "kcal ponad cel"
+    }
+
+    /// Wszystko, co ma przejść płynnie przy zmianie dnia i przy dołożeniu
+    /// posiłku — jedna wartość, jedna sprężyna.
+    private var fingerprint: String {
+        "\(remaining).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(verbatim: String(abs(remaining)))
+                        .font(.system(size: 17, weight: .heavy))
+                        .tracking(-0.4)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .contentTransition(.numericText())
+
+                    Text(caption)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .tracking(-0.1)
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 10)
+
+                    macroTriple
+                }
+
+                MacroSegmentBar(
+                    protein: nutrition.protein,
+                    fat: nutrition.fat,
+                    carbs: nutrition.carbs,
+                    fillFraction: fillFraction
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
+            // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
+            // pigułka odpowiada dokładnie jak wiersz osi nad nią.
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .animation(.spring(response: 0.36, dampingFraction: 0.9), value: fingerprint)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Otwiera cel dnia")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// „B 71 · T 56 · W 95" — te same trzy litery, co w liczniku pod osią
+    /// i w podsumowaniu Kalendarza, w tych samych trzech kolorach.
+    private var macroTriple: some View {
+        HStack(spacing: 10) {
+            macroChip("B", value: nutrition.protein, color: SCPalette.indigo)
+            macroChip("T", value: nutrition.fat, color: SCPalette.terracottaDeep)
+            macroChip("W", value: nutrition.carbs, color: SCPalette.sage)
+        }
+        .fixedSize()
+    }
+
+    private func macroChip(_ letter: String, value: Int, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Text(letter)
+                .font(.system(size: 10.5, weight: .bold))
+                .foregroundStyle(color)
+
+            Text(verbatim: String(value))
+                .font(.system(size: 12.5, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(Color.scLabel(scheme))
+                .contentTransition(.numericText())
+        }
+    }
+
+    private var accessibilityLabel: String {
+        let head = remaining >= 0
+            ? "Zostało \(remaining) kilokalorii z \(targets.kcal)"
+            : "\(abs(remaining)) kilokalorii ponad cel \(targets.kcal)"
+        return "\(head). Białko \(nutrition.protein) gramów, tłuszcze \(nutrition.fat) gramów, węglowodany \(nutrition.carbs) gramów."
+    }
+}

@@ -49,8 +49,34 @@ struct WeeklyPlanView: View {
     private enum SimpleSheet: String, Identifiable {
         case products
         case assistantIntro
+        case dayGoal
         var id: String { rawValue }
     }
+
+    /// Wysokość obszaru zakładki — z niej liczy się sufit arkusza „Cel dnia".
+    /// Arkusz sam jej nie zna: `GeometryReader` w jego wnętrzu podaje wysokość
+    /// AKTUALNEGO detentu, a nie tego, do ilu wolno mu urosnąć.
+    @State private var pageHeight: CGFloat = 0
+
+    // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
+    // czytamy go tymi samymi kluczami, co Kalendarz, bo tylko `@AppStorage`
+    // odświeży pigułkę, gdy ktoś przestawi suwak i wróci na Plan.
+    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
+    @AppStorage(RecipePersonalization.Keys.goal)
+    private var goalRaw: String = UserGoal.healthy.rawValue
+    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @AppStorage(BodyMetrics.Keys.activityLevel)
+    private var profileActivityRaw: Int = ActivityLevel.light.rawValue
+    @AppStorage(DailyNutritionTargets.Keys.proteinG)
+    private var proteinOverride: Int = DailyNutritionTargets.Keys.noOverride
+    @AppStorage(DailyNutritionTargets.Keys.fatG)
+    private var fatOverride: Int = DailyNutritionTargets.Keys.noOverride
+    @AppStorage(DailyNutritionTargets.Keys.carbsG)
+    private var carbsOverride: Int = DailyNutritionTargets.Keys.noOverride
 
     /// Posiłek otwarty w szczegółach, razem z miejscem, z którego przyszedł.
     ///
@@ -113,6 +139,35 @@ struct WeeklyPlanView: View {
     /// w przycisk) — tylko o tym, co na niej pisze: „ułożę” brzmi jak groźba
     /// nadpisania komuś, kto ma już pół tygodnia rozpisane ręcznie.
     private var isWeekEmpty: Bool { plannedDates.isEmpty }
+
+    /// Dzienny cel — ta sama reguła, co w Ustawieniach.
+    private var dailyTargets: DailyNutritionTargets {
+        DailyNutritionTargets.resolve(
+            calorieGoal: calorieGoal,
+            goal: UserGoal(rawValue: goalRaw) ?? .healthy,
+            metrics: BodyMetrics(
+                heightCm: profileHeightCm,
+                weightKg: profileWeightKg,
+                yearOfBirth: profileYearOfBirth,
+                activityRaw: profileActivityRaw,
+                sexRaw: profileSexRaw
+            ),
+            proteinOverride: proteinOverride,
+            fatOverride: fatOverride,
+            carbsOverride: carbsOverride
+        )
+    }
+
+    /// Wybrany dzień policzony raz — pigułka nad menu i arkusz „Cel dnia"
+    /// biorą liczby stąd, przez tę samą listę slotów i tę samą soczewkę
+    /// profilu, co oś dnia pod spodem.
+    private var selectedDayNutrition: PlanDayNutrition {
+        PlanDayNutrition.make(
+            slots: visibleSlots(on: selectedDate),
+            meals: { visibleMeals(date: selectedDate, slot: $0) },
+            knownHouseholdMemberCount: knownHouseholdMemberCount
+        )
+    }
 
     /// Posiłki slotu, zawężone do bieżącego profilu.
     ///
@@ -203,7 +258,11 @@ struct WeeklyPlanView: View {
                     DayPager(
                         datesViewModel: datesViewModel,
                         selectedDate: $selectedDate,
-                        bottomPadding: 32
+                        // 16, nie 32: pigułka „Cel dnia" wstawia pod treść
+                        // własny bezpieczny obszar (`safeAreaInset` niżej),
+                        // więc to jest już tylko prześwit MIĘDZY ostatnim
+                        // wierszem osi a szkłem pigułki.
+                        bottomPadding: 16
                     ) { date in
                         dayPage(for: date)
                     }
@@ -212,6 +271,33 @@ struct WeeklyPlanView: View {
                 // projektowych 78 pt od GÓRNEJ KRAWĘDZI EKRANU, a nie spod
                 // paska nawigacji.
                 .ignoresSafeArea(.container, edges: .top)
+            }
+            // Pigułka wchodzi bezpiecznym obszarem, a nie `overlay`.
+            // Różnica jest w tym, co się dzieje z osią dnia pod spodem:
+            // `overlay` zostawiał ostatni wiersz („Dodaj posiłek") POD szkłem,
+            // gdzie było go widać, ale nie dało się w niego stuknąć.
+            // `safeAreaInset` doksięgowuje wysokość pigułki do wnętrza
+            // `ScrollView`, więc treść nadal przelatuje pod szkłem przy
+            // przewijaniu, ale kończy się nad nim.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PlanDayGoalBar(
+                    nutrition: selectedDayNutrition,
+                    targets: dailyTargets,
+                    action: { simpleSheet = .dayGoal }
+                )
+                .padding(.horizontal, SCPageMetrics.horizontal)
+                .padding(.bottom, 8)
+            }
+            // Wysokość obszaru zakładki — sufit dla arkusza „Cel dnia".
+            // Mierzona spod spodu, żeby pomiar nie ruszał układu.
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { pageHeight = geo.size.height }
+                        .onChange(of: geo.size.height) { _, height in
+                            pageHeight = height
+                        }
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -266,6 +352,20 @@ struct WeeklyPlanView: View {
                 switch which {
                 case .products:
                     ProductsView(topPadding: 24)
+                case .dayGoal:
+                    PlanDayGoalSheet(
+                        date: selectedDate,
+                        nutrition: selectedDayNutrition,
+                        targets: dailyTargets,
+                        // 0,9 wysokości zakładki: arkusz „do treści" nie ma
+                        // prawa dojechać pod sam pasek stanu, bo wtedy
+                        // przestaje być podglądem, a zaczyna być ekranem.
+                        maxHeight: pageHeight * 0.9
+                    )
+                    // Bez `presentationDetents` — arkusz podaje własny,
+                    // policzony z treści (patrz `PlanDayGoalSheet`).
+                    .dashboardLiquidSheet()
+
                 case .assistantIntro:
                     PlanAssistantIntroSheet(
                         members: members,
