@@ -71,7 +71,10 @@ struct EditorialWeekBar: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // 14, nie 6: strzałki zmiany tygodnia siedziały praktycznie na
+        // liczbach dni i wiersz podpisu czytał się jak część planszy dni,
+        // a nie jak osobna kontrolka nad nią.
+        VStack(alignment: .leading, spacing: 14) {
             if showsWeekCaption {
                 weekCaption
             }

@@ -5,9 +5,10 @@ import SwiftUI
 // (components/plan-a2-fix.jsx), sections "Plan tygodnia · Etap 1" and
 // "Etap 2 — sekcja „Każdy je inaczej”".
 //
-// Layout: title + overflow menu + profile chip, a day strip, then a full-width
-// paging carousel where one page = one day with all its meal slots followed by
-// that day's „Każdy je inaczej" section.
+// Layout: title + overflow menu + profile chip and a day strip — wszystko
+// przypięte do góry — a pod nimi jedyna przewijana część ekranu: strona
+// jednego dnia ze wszystkimi slotami i sekcją „Każdy je inaczej". Ruch palcem
+// w bok przestawia dzień (`DayPager`), tak samo jak w Kalendarzu.
 //
 // Household splits: every meal carries the members it is for (empty = shared).
 // The profile chip switches the whole screen between the household lens and a
@@ -23,9 +24,6 @@ struct WeeklyPlanView: View {
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
-
-    /// Day currently centred in the carousel, keyed by "yyyy-MM-dd".
-    @State private var scrolledDayKey: String?
 
     /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
     /// wspólny zostaje tylko tydzień.
@@ -68,11 +66,6 @@ struct WeeklyPlanView: View {
         }
     }
 
-    private struct PlanDay: Identifiable, Hashable {
-        let id: String      // "yyyy-MM-dd"
-        let date: Date
-    }
-
     // MARK: - Derived
 
     private var members: [HouseholdMemberSnapshot] {
@@ -88,21 +81,6 @@ struct WeeklyPlanView: View {
         return max(1, members.count)
     }
 
-    private var planDays: [PlanDay] {
-        datesViewModel.dates.map { PlanDay(id: MealCalendarStore.dateKey(for: $0), date: $0) }
-    }
-
-    private var selectedDayKey: String {
-        MealCalendarStore.dateKey(for: selectedDate)
-    }
-
-    /// Index of the day in view. Falls back to the selected day while the
-    /// carousel has not reported a position yet.
-    private var activeIndex: Int {
-        let key = scrolledDayKey ?? selectedDayKey
-        return planDays.firstIndex { $0.id == key } ?? 0
-    }
-
     /// "yyyy-MM-dd" keys for days that already hold a meal — drives the sage
     /// dot under the day strip.
     private var plannedDates: Set<String> {
@@ -112,11 +90,6 @@ struct WeeklyPlanView: View {
             if !plan.allMeals.isEmpty { set.insert(plan.dateKey) }
         }
         return set
-    }
-
-    /// Day the carousel is currently showing.
-    private var activeDay: Date? {
-        planDays.indices.contains(activeIndex) ? planDays[activeIndex].date : nil
     }
 
     private func hasMeals(on date: Date) -> Bool {
@@ -154,8 +127,13 @@ struct WeeklyPlanView: View {
                 SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+                // Nagłówek i pasek dni stoją, przewija się wyłącznie strona
+                // dnia. Wcześniej cała strona była jednym `ScrollView` i przy
+                // dłuższym dniu tytuł, profil i pasek dni wyjeżdżały za górną
+                // krawędź — czyli to, po czym się nawiguje, znikało dokładnie
+                // wtedy, gdy było potrzebne.
+                VStack(alignment: .leading, spacing: 0) {
+                    Group {
                         // Marginesy wspólne z pozostałymi zakładkami —
                         // tytuł siada w tym samym miejscu co „Przepisy".
                         headerRow
@@ -193,16 +171,18 @@ struct WeeklyPlanView: View {
                                 .padding(.horizontal, SCPageMetrics.horizontal)
                                 .padding(.bottom, 10)
                         }
-
-                        carousel
                     }
-                    .padding(.bottom, 32)
+
+                    DayPager(
+                        datesViewModel: datesViewModel,
+                        selectedDate: $selectedDate,
+                        bottomPadding: 32
+                    ) { date in
+                        dayPage(for: date)
+                    }
                 }
-                .scrollIndicators(.hidden)
                 // Same trick as Kalendarz v2: let the layout start at the
-                // design's 58pt-from-screen-top instead of below the nav bar,
-                // while SwiftUI keeps rendering the bar so its blur-on-scroll
-                // material still fades in.
+                // design's 58pt-from-screen-top instead of below the nav bar.
                 .ignoresSafeArea(.container, edges: .top)
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -228,31 +208,12 @@ struct WeeklyPlanView: View {
             }
             .onAppear {
                 selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
-                if scrolledDayKey == nil { scrolledDayKey = selectedDayKey }
             }
             .onChange(of: datesViewModel.weekStartISO) { _, _ in
                 selectedDate = datesViewModel.selectedDate
             }
             .onChange(of: selectedDate) { _, newValue in
                 datesViewModel.selectDate(newValue)
-            }
-            // Two-way with the day strip: tapping a day scrolls the carousel,
-            // swiping the carousel moves the strip's underline.
-            .onChange(of: scrolledDayKey) { oldKey, newKey in
-                // The scroll view reports its initial page before `onAppear`
-                // has aligned it; ignore that first nil → key transition or it
-                // would drag the selection back to Monday.
-                guard oldKey != nil,
-                      let newKey,
-                      let day = planDays.first(where: { $0.id == newKey }),
-                      !Calendar.current.isDate(day.date, inSameDayAs: selectedDate) else { return }
-                selectedDate = day.date
-            }
-            .onChange(of: selectedDayKey) { _, newKey in
-                guard scrolledDayKey != newKey else { return }
-                withAnimation(.smooth(duration: 0.25)) {
-                    scrolledDayKey = newKey
-                }
             }
             // A member who is filtered out can't be planned for, so drop back
             // to the household lens if the roster loses them.
@@ -401,64 +362,49 @@ struct WeeklyPlanView: View {
         .accessibilityLabel("Więcej opcji planu")
     }
 
-    private var carousel: some View {
-        ScrollView(.horizontal) {
-            // Top-aligned: days differ in height, and centring made a
-            // three-slot day float away from the week header while a
-            // four-slot day sat flush against it.
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(planDays) { day in
-                    // Card and its splits travel together, so the section is
-                    // always flush under the day it describes. Pinning the
-                    // section outside the carousel meant matching the scroll
-                    // view's height to the page in view — which centred taller
-                    // pages and let them bleed over the day strip.
-                    VStack(alignment: .leading, spacing: 0) {
-                        PlanDayCard(
-                        date: day.date,
-                        isToday: datesViewModel.isToday(day.date),
-                        isPast: !datesViewModel.isEditable(day.date),
-                        isEditable: datesViewModel.isEditable(day.date),
-                        profile: profile,
-                        members: members,
-                        slots: visibleSlots(on: day.date),
-                        meals: { slot in visibleMeals(date: day.date, slot: slot) },
-                        onTapMeal: { slot, meal in openDetail(date: day.date, slot: slot, meal: meal) },
-                        onAddMeal: { slot in
-                            pickerTarget = PickerTarget(date: day.date, slot: slot, editing: nil)
-                        },
-                        onEditMeal: { slot, meal in
-                            pickerTarget = PickerTarget(date: day.date, slot: slot, editing: meal)
-                        },
-                            onRemoveMeal: { slot, meal in
-                                removeMeal(date: day.date, slot: slot, meal: meal)
-                            }
-                        )
-
-                        // Only worth showing once the day holds something and
-                        // there is someone to split with — otherwise it just
-                        // repeats „Brak planu" from the card above.
-                        if profile == .household, members.count > 1, hasMeals(on: day.date) {
-                            PlanDaySplitsSection(
-                                date: day.date,
-                                slots: visibleSlots(on: day.date),
-                                meals: { slot in mealStore.meals(for: day.date, slot: slot) },
-                                members: members,
-                                onTapMeal: { slot, meal in openDetail(date: day.date, slot: slot, meal: meal) }
-                            )
-                            .padding(.top, 30)
-                        }
-                    }
-                    // Strona karuzeli trzyma wspólny margines strony.
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .containerRelativeFrame(.horizontal)
+    /// Strona jednego dnia: karta ze slotami i sekcja podziałów pod nią.
+    ///
+    /// Karta i podziały jadą razem, więc sekcja jest zawsze tuż pod dniem,
+    /// który opisuje.
+    private func dayPage(for date: Date) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PlanDayCard(
+                date: date,
+                isToday: datesViewModel.isToday(date),
+                isPast: !datesViewModel.isEditable(date),
+                isEditable: datesViewModel.isEditable(date),
+                profile: profile,
+                members: members,
+                slots: visibleSlots(on: date),
+                meals: { slot in visibleMeals(date: date, slot: slot) },
+                onTapMeal: { slot, meal in openDetail(date: date, slot: slot, meal: meal) },
+                onAddMeal: { slot in
+                    pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
+                },
+                onEditMeal: { slot, meal in
+                    pickerTarget = PickerTarget(date: date, slot: slot, editing: meal)
+                },
+                onRemoveMeal: { slot, meal in
+                    removeMeal(date: date, slot: slot, meal: meal)
                 }
+            )
+
+            // Only worth showing once the day holds something and there is
+            // someone to split with — otherwise it just repeats „Brak planu"
+            // from the card above.
+            if profile == .household, members.count > 1, hasMeals(on: date) {
+                PlanDaySplitsSection(
+                    date: date,
+                    slots: visibleSlots(on: date),
+                    meals: { slot in mealStore.meals(for: date, slot: slot) },
+                    members: members,
+                    onTapMeal: { slot, meal in openDetail(date: date, slot: slot, meal: meal) }
+                )
+                .padding(.top, 30)
             }
-            .scrollTargetLayout()
         }
-        .scrollTargetBehavior(.viewAligned)
-        .scrollPosition(id: $scrolledDayKey)
-        .scrollIndicators(.hidden)
+        // Strona trzyma wspólny margines strony.
+        .padding(.horizontal, SCPageMetrics.horizontal)
     }
 
     // MARK: - Actions
@@ -504,7 +450,7 @@ struct WeeklyPlanView: View {
     }
 
     private func clearActiveDay() {
-        guard let activeDay else { return }
+        let activeDay = selectedDate
         Task { @MainActor in
             for slot in MealSlot.allCases where !mealStore.meals(for: activeDay, slot: slot).isEmpty {
                 _ = await mealStore.removeWeekSlot(
