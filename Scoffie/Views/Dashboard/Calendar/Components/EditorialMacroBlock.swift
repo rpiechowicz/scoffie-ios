@@ -176,9 +176,9 @@ private struct MacroStatGrid: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            MacroStat(label: "BIAŁKO",   value: protein, dot: SCPalette.indigo,         isEmpty: isEmpty)
-            MacroStat(label: "TŁUSZCZE", value: fat,     dot: SCPalette.terracottaDeep, isEmpty: isEmpty)
-            MacroStat(label: "WĘGLE",    value: carbs,   dot: SCPalette.sage,           isEmpty: isEmpty)
+            MacroStat(label: "BIAŁKO",   value: protein, dot: SCMacroPalette.protein, isEmpty: isEmpty)
+            MacroStat(label: "TŁUSZCZE", value: fat,     dot: SCMacroPalette.fat,     isEmpty: isEmpty)
+            MacroStat(label: "WĘGLE",    value: carbs,   dot: SCMacroPalette.carbs,   isEmpty: isEmpty)
         }
     }
 }

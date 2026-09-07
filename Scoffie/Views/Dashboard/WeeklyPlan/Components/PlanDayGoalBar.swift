@@ -47,7 +47,7 @@ struct PlanDayGoalBar: View {
     /// Wszystko, co ma przejść płynnie przy zmianie dnia i przy dołożeniu
     /// posiłku — jedna wartość, jedna sprężyna.
     private var fingerprint: String {
-        "\(remaining).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
+        "\(remaining).\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
     }
 
     var body: some View {
@@ -72,12 +72,25 @@ struct PlanDayGoalBar: View {
                     macroTriple
                 }
 
-                MacroSegmentBar(
-                    protein: nutrition.protein,
-                    fat: nutrition.fat,
-                    carbs: nutrition.carbs,
-                    fillFraction: fillFraction
-                )
+                // Pasek NIE idzie przez całą szerokość pigułki, tylko dzieli
+                // wiersz z licznikiem „zjedzone / cel". Dwa powody: pasek na
+                // całość ciągnął oko na sam dół i wyglądał jak kreska pod
+                // treścią, a nie jak jej część; a sama proporcja („965 zostało"
+                // to ile właściwie z ilu?) nie miała gdzie paść. Podziału nie
+                // wymuszam ułamkiem — licznik bierze tyle, ile potrzebuje na
+                // swoje cyfry, pasek resztę, i przy typowych wartościach
+                // wychodzi z tego mniej więcej dwie trzecie na pasek.
+                HStack(alignment: .center, spacing: 10) {
+                    MacroSegmentBar(
+                        protein: nutrition.protein,
+                        fat: nutrition.fat,
+                        carbs: nutrition.carbs,
+                        fillFraction: fillFraction
+                    )
+                    .frame(maxWidth: .infinity)
+
+                    progressCount
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -105,13 +118,36 @@ struct PlanDayGoalBar: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// „1135 / 2100 kcal" na prawym końcu paska.
+    ///
+    /// Wielka liczba u góry mówi, ile ZOSTAŁO — a to jest odpowiedź bez
+    /// pytania, dopóki nie widać, z ilu. Po przekroczeniu celu zjedzone idzie
+    /// w kolor kalorii, żeby przejście przez cel było widać także tutaj,
+    /// a nie tylko w podpisie nad paskiem.
+    private var progressCount: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Text(verbatim: String(nutrition.kcal))
+                .font(.system(size: 11.5, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(remaining < 0 ? SCMacroPalette.calories : Color.scLabel(scheme))
+                .contentTransition(.numericText())
+
+            Text(verbatim: "/ \(targets.kcal) kcal")
+                .font(.system(size: 10, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(Color.scMuted(scheme))
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+
     /// „B 71 · T 56 · W 95" — te same trzy litery, co w liczniku pod osią
     /// i w podsumowaniu Kalendarza, w tych samych trzech kolorach.
     private var macroTriple: some View {
         HStack(spacing: 10) {
-            macroChip("B", value: nutrition.protein, color: SCPalette.indigo)
-            macroChip("T", value: nutrition.fat, color: SCPalette.terracottaDeep)
-            macroChip("W", value: nutrition.carbs, color: SCPalette.sage)
+            macroChip("B", value: nutrition.protein, color: SCMacroPalette.protein)
+            macroChip("T", value: nutrition.fat, color: SCMacroPalette.fat)
+            macroChip("W", value: nutrition.carbs, color: SCMacroPalette.carbs)
         }
         .fixedSize()
     }

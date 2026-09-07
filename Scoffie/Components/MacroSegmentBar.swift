@@ -9,10 +9,8 @@ import SwiftUI
 /// czytelne to było jak szew, a nie jak podział.
 ///
 /// Wyjęty z `EditorialMacroBlock` (Kalendarz), bo Plan tygodnia rysuje ten sam
-/// pasek w pigułce nad dolnym menu. Dwie kopie znaczyłyby dwa miejsca, w
-/// których trzeba pamiętać, że białko jest indygo, tłuszcz terakotowy,
-/// a węgle szałwiowe — a to jest właśnie ta trójka, której użytkownik uczy się
-/// raz i rozpoznaje potem wszędzie.
+/// pasek w pigułce nad dolnym menu. Kolory idą z `SCMacroPalette` — trójka,
+/// której użytkownik uczy się raz i rozpoznaje potem wszędzie.
 ///
 /// Proporcje segmentów liczą się z KALORII makroskładników (4/9/4 kcal na
 /// gram), nie z gramów. Pasek pokazuje, z czego składa się energia dnia,
@@ -53,9 +51,9 @@ struct MacroSegmentBar: View {
     /// w pasku dziurę tam, gdzie tłuszcz by stał.
     private var segments: [(color: Color, share: CGFloat)] {
         [
-            (SCPalette.indigo, proteinShare),
-            (SCPalette.terracottaDeep, fatShare),
-            (SCPalette.sage, carbsShare)
+            (SCMacroPalette.protein, proteinShare),
+            (SCMacroPalette.fat, fatShare),
+            (SCMacroPalette.carbs, carbsShare)
         ]
         .filter { $0.1 > 0 }
     }

@@ -60,7 +60,7 @@ struct PlanDayGoalSheet: View {
     /// na posiłek. Nie musi być dokładny — ma tylko trafić w okolicę, zanim
     /// pomiar poda liczbę prawdziwą.
     private static func estimatedHeight(rows: Int, hasMacroTargets: Bool) -> CGFloat {
-        let chrome: CGFloat = 330
+        let chrome: CGFloat = 320
         let list = CGFloat(max(rows, 1)) * 40 + CGFloat(max(rows - 1, 0)) * 12
         return chrome + list + (hasMacroTargets ? 0 : 40)
     }
@@ -190,52 +190,13 @@ struct PlanDayGoalSheet: View {
                 PlanGoalRings.Ring(progress: $0.progress ?? 0, color: $0.color)
             }
         )
-        .overlay { ringsCenter }
         .accessibilityHidden(true)
     }
 
-    private var ringsCenter: some View {
-        VStack(spacing: 1) {
-            CountingNumber(target: abs(remainingKcal))
-                .font(.system(size: centerFontSize, weight: .heavy))
-                .tracking(-0.8)
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            Text(remainingKcal >= 0 ? "ZOSTAŁO" : "PONAD CEL")
-                .font(.system(size: 8.5, weight: .bold))
-                .tracking(1.2)
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(width: PlanGoalRings.innerDiameter)
-    }
-
-    /// Stopień pisma licznika dobrany do liczby cyfr.
-    ///
-    /// `minimumScaleFactor` tego nie załatwiał: skala wchodzi dopiero, gdy
-    /// tekst NIE MIEŚCI SIĘ w ramce, a „1707" mieściło się w niej co do
-    /// punktu — dosuwało się do pierścienia i światła w środku nie zostawało
-    /// wcale. Skok stopnia robi to, co powinien robić układ: cztery cyfry są
-    /// mniejsze niż trzy, zamiast być tak samo duże i ciasne.
-    ///
-    /// Liczy się z CELU, nie z wartości rysowanej w danej klatce — `CountingNumber`
-    /// jedzie od zera, więc rozmiar liczony z bieżącej liczby zmieniałby się
-    /// przez całe odliczanie.
-    private var centerFontSize: CGFloat {
-        switch String(abs(remainingKcal)).count {
-        case ...3:  return 26
-        case 4:     return 22
-        default:    return 18
-        }
-    }
-
-    private var remainingKcal: Int { targets.kcal - nutrition.kcal }
-
     private var legend: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        // 14, nie 11: cztery wiersze mają wypełnić wysokość wykresu obok,
+        // a nie stać zbite w jego środku.
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(legendRows) { row in
                 PlanGoalLegendRow(row: row)
             }
@@ -246,20 +207,8 @@ struct PlanDayGoalSheet: View {
     /// Kolejność wierszy jest kolejnością pierścieni: kalorie na zewnątrz,
     /// makra do środka.
     ///
-    /// Kolory makr są te same, co w liczniku Kalendarza i w pasku pigułki
-    /// (białko indygo, tłuszcz terakota, węgle szałwia) — makieta miała tu
-    /// własną trójkę, ale użytkownik uczy się tych kolorów raz i ma je
-    /// rozpoznawać na każdym ekranie.
-    ///
-    /// Kalorie NIE biorą czwartego akcentu, tylko kolor tekstu. Terakota,
-    /// którą tu wcześniej stały, jest o pół tonu od `terracottaDeep`
-    /// tłuszczu — dwa sąsiednie pierścienie w tym samym pomarańczu i legenda,
-    /// w której trzeba było czytać podpisy, żeby wiedzieć, który jest który.
-    /// Zamiany po stronie tłuszczu zrobić się nie da, bo ten kolor obowiązuje
-    /// na trzech ekranach. A kalorie i tak nie są czwartym makrem, tylko ich
-    /// sumą: neutralny pierścień na zewnątrz trzech kolorowych mówi to
-    /// wprost i domyka się z licznikiem w środku, który ma dokładnie ten sam
-    /// kolor.
+    /// Kolory idą z `SCMacroPalette`, wspólnej z licznikiem Kalendarza
+    /// i z paskiem pigułki.
     private var legendRows: [PlanGoalLegendRow.Row] {
         let macros = targets.macros
 
@@ -267,7 +216,7 @@ struct PlanDayGoalSheet: View {
             PlanGoalLegendRow.Row(
                 id: "kcal",
                 title: "Kalorie",
-                color: Color.scLabel(scheme),
+                color: SCMacroPalette.calories,
                 value: nutrition.kcal,
                 target: targets.kcal,
                 unit: "kcal"
@@ -275,7 +224,7 @@ struct PlanDayGoalSheet: View {
             PlanGoalLegendRow.Row(
                 id: "protein",
                 title: "Białko",
-                color: SCPalette.indigo,
+                color: SCMacroPalette.protein,
                 value: nutrition.protein,
                 target: macros?.proteinG,
                 unit: "g"
@@ -283,7 +232,7 @@ struct PlanDayGoalSheet: View {
             PlanGoalLegendRow.Row(
                 id: "fat",
                 title: "Tłuszcze",
-                color: SCPalette.terracottaDeep,
+                color: SCMacroPalette.fat,
                 value: nutrition.fat,
                 target: macros?.fatG,
                 unit: "g"
@@ -291,7 +240,7 @@ struct PlanDayGoalSheet: View {
             PlanGoalLegendRow.Row(
                 id: "carbs",
                 title: "Węgle",
-                color: SCPalette.sage,
+                color: SCMacroPalette.carbs,
                 value: nutrition.carbs,
                 target: macros?.carbsG,
                 unit: "g"
@@ -357,19 +306,17 @@ struct PlanGoalRings: View {
 
     let rings: [Ring]
 
-    static let size: CGFloat = 148
-    static let lineWidth: CGFloat = 8
-    static let spacing: CGFloat = 3
-    /// Ile pierścieni rysuje ten wykres — kalorie plus trzy makra.
-    static let ringCount: Int = 4
-
-    /// Światło w środku najgłębszego pierścienia — pod licznik i podpis.
-    /// Liczone z tych samych stałych, żeby zmiana grubości nie wymagała
-    /// dobierania szerokości tekstu na oko.
-    static let innerDiameter: CGFloat =
-        PlanGoalRings.size
-        - 2 * CGFloat(PlanGoalRings.ringCount) * (PlanGoalRings.lineWidth + PlanGoalRings.spacing)
-        + PlanGoalRings.lineWidth
+    /// 136, nie 148: bez licznika w środku wykres nie musi już być tak duży,
+    /// a te dwanaście punktów przechodzi na legendę, gdzie „1135 / 2100 kcal"
+    /// stało dotąd na granicy zawijania. Przy okazji wysokość wykresu schodzi
+    /// bliżej wysokości czterech wierszy legendy obok — wcześniej legenda
+    /// pływała w środku wyższej kolumny.
+    static let size: CGFloat = 136
+    /// Grubsze niż wtedy, gdy w środku stał licznik: światło w środku nie musi
+    /// już mieścić czterocyfrowej liczby, więc te punkty wracają do pierścieni,
+    /// gdzie robią z wykresu obwarzanek zamiast czterech kresek.
+    static let lineWidth: CGFloat = 10
+    static let spacing: CGFloat = 4
 
     @State private var isRevealed = false
 
@@ -420,6 +367,10 @@ struct PlanGoalLegendRow: View {
             guard let target, target > 0 else { return nil }
             return Double(value) / Double(target)
         }
+
+        /// Cel przekroczony. Bez celu nie ma czego przekroczyć, więc `nil`
+        /// jest tu równie dobre jak zero.
+        var isOverTarget: Bool { (progress ?? 0) > 1 }
     }
 
     let row: Row
@@ -443,10 +394,15 @@ struct PlanGoalLegendRow: View {
                 Spacer(minLength: 6)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    // Po przekroczeniu celu liczba idzie w kolor swojego
+                    // makra. Czerwień byłaby tu kłamstwem — 145 g białka przy
+                    // celu 130 g to nie jest błąd, tylko fakt, o którym warto
+                    // wiedzieć; kolor makra mówi „to ta pozycja wyszła poza",
+                    // a nie „zrobiłeś coś źle".
                     Text(verbatim: String(row.value))
                         .font(.system(size: 12.5, weight: .bold))
                         .monospacedDigit()
-                        .foregroundStyle(Color.scLabel(scheme))
+                        .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
 
                     Text(trailingText)
                         .font(.system(size: 10.5, weight: .semibold))
@@ -462,16 +418,27 @@ struct PlanGoalLegendRow: View {
             if let progress = row.progress {
                 GeometryReader { geo in
                     let width = geo.size.width
+                    // Odsłonięcie i wartość w jednej liczbie, żeby kreska
+                    // i pierścień obok jechały tą samą drogą.
+                    let shown = isRevealed ? CGFloat(max(progress, 0)) : 0
+
                     ZStack(alignment: .leading) {
                         Capsule()
                             .fill(Color.scBarTrack(scheme))
 
                         Capsule()
                             .fill(row.color)
-                            .frame(
-                                width: width * (isRevealed ? CGFloat(min(max(progress, 0), 1)) : 0),
-                                height: 3
-                            )
+                            .frame(width: width * min(shown, 1), height: 3)
+
+                        // Nadmiar — druga kreska po tej samej ścieżce, z cieniem
+                        // pod spodem. Ten sam język, co w pierścieniu: pełne
+                        // koło plus warstwa na nim. Przy zerze kapsuła o
+                        // szerokości zero nie rysuje niczego, więc nie ma tu
+                        // czego chować pod `if`.
+                        Capsule()
+                            .fill(row.color)
+                            .frame(width: width * min(max(shown - 1, 0), 1), height: 3)
+                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                     }
                     .frame(height: 3)
                 }
@@ -498,7 +465,10 @@ struct PlanGoalLegendRow: View {
         guard let target = row.target else {
             return "\(row.title): \(row.value) \(row.unit)"
         }
-        return "\(row.title): \(row.value) z \(target) \(row.unit)"
+        let base = "\(row.title): \(row.value) z \(target) \(row.unit)"
+        // Kolor liczby jest jedynym znakiem przekroczenia — VoiceOver musi
+        // dostać to samo słowami.
+        return row.isOverTarget ? base + ", cel przekroczony" : base
     }
 }
 

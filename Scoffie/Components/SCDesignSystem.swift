@@ -62,6 +62,27 @@ enum SCPalette {
     }
 }
 
+/// Kolory makroskładników i kalorii — jedna czwórka na całą aplikację.
+///
+/// Żyły dotąd wpisane w miejscu użycia w trzech kopiach (licznik Kalendarza,
+/// pasek makr, arkusz „Cel dnia") i przy pierwszej zmianie odcienia trzeba
+/// było trafić we wszystkie trzy. Teraz jest jedno miejsce, bo użytkownik
+/// uczy się tych kolorów raz i ma je rozpoznawać na każdym ekranie.
+///
+/// Tłuszcz stoi na maśle, a nie na głębokiej terakocie, bo terakota jest
+/// kolorem KALORII — dwa sąsiednie pierścienie w arkuszu wychodziły w tym
+/// samym pomarańczu i trzeba było czytać podpisy, żeby wiedzieć, który jest
+/// który. Cała czwórka (pomarańcz, indygo, żółty, zieleń) to zarazem paleta
+/// z makiety.
+enum SCMacroPalette {
+    /// Kalorie nie są czwartym makrem, tylko ich sumą — ale mają swój kolor,
+    /// bo w arkuszu dostają własny pierścień.
+    static let calories = SCPalette.terracotta
+    static let protein = SCPalette.indigo
+    static let fat = SCPalette.butter
+    static let carbs = SCPalette.sage
+}
+
 extension Color {
     static func scCanvas(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? SCPalette.canvasDark : SCPalette.canvasLight
