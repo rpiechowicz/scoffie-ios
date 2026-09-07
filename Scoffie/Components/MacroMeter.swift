@@ -74,6 +74,7 @@ struct MacroProgressTrack: View {
 /// pasek widać kątem oka, liczbę widać, gdy się na nią patrzy, i żaden z tych
 /// dwóch sposobów patrzenia nie powinien przegapić przekroczenia.
 struct MacroMeter: View {
+    /// Podpis na ekranie — jedna litera przy makrach, „kcal" przy kaloriach.
     let letter: String
     /// Pełna nazwa — wyłącznie dla VoiceOver, na ekranie nie ma na nią miejsca.
     let title: String
@@ -83,6 +84,16 @@ struct MacroMeter: View {
     /// nie ma.
     let target: Int?
     let color: Color
+    /// Jednostka w dopełniaczu, wyłącznie do zdania dla VoiceOver
+    /// („…z 2100 kilokalorii").
+    var unit: String = "gramów"
+    /// Dopowiedzenie na koniec zdania dla VoiceOver — to, co widać z układu,
+    /// ale czego nie da się usłyszeć z samych liczb.
+    var accessibilityDetail: String?
+    /// Wiersz kalorii: o pół stopnia większy podpis i grubszy tor. Ta różnica
+    /// jest jedyną hierarchią w pigułce — cztery identyczne wiersze czytałyby
+    /// się jak lista, a kalorie są tu pierwszą liczbą, nie czwartą.
+    var isProminent: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
@@ -97,11 +108,11 @@ struct MacroMeter: View {
         HStack(spacing: 6) {
             HStack(spacing: 3) {
                 Text(letter)
-                    .font(.system(size: 9.5, weight: .bold))
+                    .font(.system(size: isProminent ? 10.5 : 9.5, weight: .bold))
                     .foregroundStyle(color)
 
                 Text(valueText)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: isProminent ? 12 : 10, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(isOverTarget ? color : Color.scLabel(scheme))
                     .contentTransition(.numericText())
@@ -120,8 +131,12 @@ struct MacroMeter: View {
                 // na wąskim telefonie na tor zostawało kilka punktów i wyglądał
                 // jak artefakt. Tu prędzej ściśnie się o dwie dziesiąte stopnia
                 // podpis, niż zniknie pasek.
-                MacroProgressTrack(progress: progress, color: color, height: 3)
-                    .frame(minWidth: 22, maxWidth: .infinity)
+                MacroProgressTrack(
+                    progress: progress,
+                    color: color,
+                    height: isProminent ? 4 : 3
+                )
+                .frame(minWidth: 22, maxWidth: .infinity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -130,13 +145,19 @@ struct MacroMeter: View {
     }
 
     private var valueText: String {
-        guard let target else { return "\(value) g" }
+        guard let target else { return String(value) }
         return "\(value)/\(target)"
     }
 
     private var accessibilityLabel: String {
-        guard let target else { return "\(title): \(value) gramów" }
-        let base = "\(title): \(value) z \(target) gramów"
-        return isOverTarget ? base + ", cel przekroczony" : base
+        var text: String
+        if let target {
+            text = "\(title): \(value) z \(target) \(unit)"
+            if isOverTarget { text += ", cel przekroczony" }
+        } else {
+            text = "\(title): \(value) \(unit)"
+        }
+        if let accessibilityDetail { text += ", \(accessibilityDetail)" }
+        return text
     }
 }
