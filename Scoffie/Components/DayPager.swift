@@ -34,6 +34,11 @@ struct DayPager<Content: View>: View {
     /// trakcie przestawiało dzień, ale zostawiało stronę odjechaną w bok.
     @State private var isPaging = false
 
+    // Wszystkie stałe niżej są LICZONE (`static var { … }`), a nie
+    // przechowywane: `DayPager` jest typem generycznym, a tam `static let`
+    // nie przechodzi kompilacji — „static stored properties not supported
+    // in generic types”.
+
     /// Ile trzeba przeciągnąć (z rozpędem), żeby dzień przeskoczył. Ta sama
     /// wartość co przy tygodniach na pasku dni — jeden ekran, jeden próg.
     private static var commitThreshold: CGFloat { 56 }
@@ -121,7 +126,7 @@ struct DayPager<Content: View>: View {
     /// swoje domknięcie poza izolacją głównego aktora, a cały ten widok jest
     /// na nim), więc rozjechanie się tych dwóch wartości podmieniałoby dzień
     /// w połowie zjazdu — na oczach użytkownika.
-    private static let exitSeconds: TimeInterval = 0.16
+    private static var exitSeconds: TimeInterval { 0.16 }
     private static var exitAnimation: Animation { .easeIn(duration: exitSeconds) }
     private static var exitDuration: Duration { .milliseconds(Int(exitSeconds * 1000)) }
 
