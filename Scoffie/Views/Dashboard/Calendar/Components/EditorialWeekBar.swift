@@ -92,7 +92,9 @@ struct EditorialWeekBar: View {
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                        // Ta sama sprężyna, którą `DayPager` wjeżdża stroną —
+                        // stuknięcie i gest przestawiają podkreślenie identycznie.
+                        withAnimation(DayNavigationMotion.spring) {
                             selectedDate = date
                         }
                     }
@@ -118,7 +120,7 @@ struct EditorialWeekBar: View {
     private var weekCaption: some View {
         HStack(spacing: 6) {
             Text(captionText)
-                .font(.system(size: 9.5, weight: .bold))
+                .scFont(9.5, weight: .bold, relativeTo: .caption2)
                 .tracking(1.1)
                 .foregroundStyle(Color.scMuted(scheme))
                 .lineLimit(1)
@@ -131,7 +133,7 @@ struct EditorialWeekBar: View {
                     changeWeek { datesViewModel.goToCurrentWeek() }
                 } label: {
                     Text("DZIŚ")
-                        .font(.system(size: 9.5, weight: .bold))
+                        .scFont(9.5, weight: .bold, relativeTo: .caption2)
                         .tracking(1)
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 9)
@@ -142,6 +144,10 @@ struct EditorialWeekBar: View {
                         .overlay(
                             Capsule().stroke(SCPalette.terracotta.opacity(0.34), lineWidth: 1)
                         )
+                        // Pigułka ma ~22 pt wysokości; cel dotyku dostaje 44
+                        // bez podnoszenia wiersza podpisu.
+                        .frame(minWidth: 44)
+                        .scTapHeight(drawn: 22)
                 }
                 .buttonStyle(.plain)
                 .transition(.opacity.combined(with: .scale(scale: 0.85)))
@@ -175,6 +181,11 @@ struct EditorialWeekBar: View {
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(Color.scTileBg(scheme)))
                 .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                // Kółko zostaje 26 pt (wiersz podpisu ma być niski), cel
+                // dotyku rośnie do 44. Dwa cele obok siebie zachodzą na
+                // siebie o kilkanaście punktów — środek między strzałkami
+                // i tak jest niczyj.
+                .scTapTarget(drawn: 26)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -240,7 +251,7 @@ struct EditorialWeekBar: View {
     /// Liczby dni mają `.contentTransition(.interpolate)`, więc przechodzą
     /// płynnie zamiast przeskakiwać.
     private func changeWeek(_ step: () -> Void) {
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+        withAnimation(DayNavigationMotion.spring) {
             step()
             dragOffset = 0
         }
@@ -272,7 +283,7 @@ struct EditorialWeekBar: View {
 
             VStack(spacing: 4) {
                 Text(EditorialWeekBar.shortDayFormatter.string(from: date).uppercased())
-                    .font(.system(size: 9, weight: .bold))
+                    .scFont(9, weight: .bold, relativeTo: .caption2)
                     .tracking(1)
                     .foregroundStyle(isSelected ? label : muted)
                     // Jak niżej przy numerze dnia — bez tego kolor skrótu
@@ -280,7 +291,7 @@ struct EditorialWeekBar: View {
                     .contentTransition(.interpolate)
 
                 Text(dayNumber)
-                    .font(.system(size: 18, weight: isSelected ? .heavy : .semibold))
+                    .scFont(18, weight: isSelected ? .heavy : .semibold, relativeTo: .body)
                     .tracking(-0.3)
                     .foregroundStyle(isPast ? muted : label)
                     .strikethrough(isPast, color: strike)
@@ -319,7 +330,10 @@ struct EditorialWeekBar: View {
             .padding(.bottom, 8)
             .accessibilityElement()
             .accessibilityLabel(accessibilityLabel)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            // `.isButton` jest tu jawnie: komórka reaguje na `onTapGesture`,
+            // a nie jest `Button`, więc VoiceOver czytał datę bez słowa, że
+            // da się w nią stuknąć.
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         }
 
         private var dayNumber: String {

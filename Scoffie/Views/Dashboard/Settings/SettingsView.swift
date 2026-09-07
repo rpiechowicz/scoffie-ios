@@ -348,20 +348,21 @@ struct SettingsView: View {
         currentGoal.suggestedCalories(for: bodyMetrics)
     }
 
-    /// Makra policzone z celu kalorycznego, sylwetki i liczby treningów.
-    /// `nil`, gdy w profilu brakuje danych.
-    private var computedMacros: MacroTargets? {
-        bodyMetrics?.macroTargets(for: currentGoal, calories: calorieGoal)
-    }
-
-    /// To, co realnie obowiązuje: ręczne nadpisanie, a w jego braku wyliczenie.
+    /// To, co realnie obowiązuje: ręczne nadpisanie, a w jego braku wyliczenie
+    /// z celu kalorycznego, sylwetki i liczby treningów. `nil`, gdy w profilu
+    /// brakuje danych.
+    ///
+    /// Sama reguła siedzi w `DailyNutritionTargets`, bo pokazuje ją teraz
+    /// także Plan tygodnia (pigułka nad menu i arkusz „Cel dnia").
     private var effectiveMacros: MacroTargets? {
-        guard let computed = computedMacros else { return nil }
-        return MacroTargets(
-            proteinG: proteinOverride >= 0 ? proteinOverride : computed.proteinG,
-            fatG: fatOverride >= 0 ? fatOverride : computed.fatG,
-            carbsG: carbsOverride >= 0 ? carbsOverride : computed.carbsG
-        )
+        DailyNutritionTargets.resolve(
+            calorieGoal: calorieGoal,
+            goal: currentGoal,
+            metrics: bodyMetrics,
+            proteinOverride: proteinOverride,
+            fatOverride: fatOverride,
+            carbsOverride: carbsOverride
+        ).macros
     }
 
     private var hasMacroOverride: Bool {

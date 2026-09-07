@@ -14,6 +14,10 @@ struct EditorialIconButton: View {
     /// Co czyta VoiceOver. Bez tego czytał nazwę symbolu
     /// („square dot and dot pencil”) — dla osoby niewidzącej to szum.
     var accessibilityTitle: String? = nil
+    /// Cel dotyku większy niż rysowana pigułka (`scTapTarget`). `nil` zostawia
+    /// cel równy pigułce — dla 38 pt i więcej różnica jest kosmetyczna, dla
+    /// 34 pt w nagłówku Planu już nie.
+    var tapTarget: CGFloat? = nil
     var action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -41,6 +45,7 @@ struct EditorialIconButton: View {
                     .foregroundStyle(highlighted ? accent : Color.scLabel(scheme))
             }
             .frame(width: size, height: size)
+            .scTapTarget(tapTarget ?? size, drawn: size)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(accessibilityTitle ?? icon))

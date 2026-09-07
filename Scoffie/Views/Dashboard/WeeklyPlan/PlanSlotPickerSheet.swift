@@ -244,7 +244,7 @@ struct PlanSlotPickerSheet: View {
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 Text("DLA KOGO")
-                    .font(.system(size: 9, weight: .bold))
+                    .scFont(9, weight: .bold, relativeTo: .caption2)
                     .tracking(2)
                     .foregroundStyle(Color.scMuted(scheme))
 
@@ -254,7 +254,7 @@ struct PlanSlotPickerSheet: View {
                         .foregroundStyle(Color.scFaint(scheme))
 
                     Text("Na razie planujesz dla siebie. Dodaj domownika w Ustawieniach, żeby przypisywać dania konkretnym osobom.")
-                        .font(.system(size: 12, weight: .medium))
+                        .scFont(12, weight: .medium, relativeTo: .caption)
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -278,14 +278,14 @@ struct PlanSlotPickerSheet: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(contextLine)
-                    .font(.system(size: 10, weight: .bold))
+                    .scFont(10, weight: .bold, relativeTo: .caption2)
                     .tracking(2)
                     .foregroundStyle(slot.cozyAccent)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
                 Text(editing == nil ? "Wybierz przepis" : "Zmień przepis")
-                    .font(.system(size: 24, weight: .bold))
+                    .scFont(24, weight: .bold, relativeTo: .title2)
                     .tracking(-0.5)
                     .foregroundStyle(Color.scLabel(scheme))
             }
@@ -326,7 +326,7 @@ struct PlanSlotPickerSheet: View {
 
             TextField("Szukaj w przepisach", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .regular))
+                .scFont(15, weight: .regular, relativeTo: .subheadline)
                 .foregroundStyle(Color.scLabel(scheme))
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -363,7 +363,7 @@ struct PlanSlotPickerSheet: View {
                     }
                 } label: {
                     Text(option.title)
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .scFont(13.5, weight: .semibold, relativeTo: .footnote)
                         .tracking(-0.2)
                         .foregroundStyle(isOn ? Color.scLabel(scheme) : Color.scMuted(scheme))
                         .frame(maxWidth: .infinity)
@@ -458,14 +458,14 @@ struct PlanSlotPickerSheet: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(recipe.name)
-                            .font(.system(size: 15.5, weight: .semibold))
+                            .scFont(15.5, weight: .semibold, relativeTo: .subheadline)
                             .tracking(-0.3)
                             .foregroundStyle(Color.scLabel(scheme))
                             .multilineTextAlignment(.leading)
                             .lineLimit(2)
 
                         Text("\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal.rounded())) kcal")
-                            .font(.system(size: 12.5, weight: .regular))
+                            .scFont(12.5, weight: .regular, relativeTo: .caption)
                             .monospacedDigit()
                             .foregroundStyle(Color.scMuted(scheme))
                             .lineLimit(1)
@@ -557,7 +557,7 @@ struct PlanSlotPickerSheet: View {
                 .font(.system(size: 11, weight: .bold))
 
             Text("Ukryto \(hiddenByPersonalizationCount) \(RecipeCountNoun.label(for: hiddenByPersonalizationCount)) spoza Twojej diety i alergenów.")
-                .font(.system(size: 12, weight: .semibold))
+                .scFont(12, weight: .semibold, relativeTo: .caption)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
@@ -584,11 +584,11 @@ struct PlanSlotPickerSheet: View {
                 .foregroundStyle(Color.scMuted(scheme))
 
             Text("Brak wyników")
-                .font(.system(size: 17, weight: .bold))
+                .scFont(17, weight: .bold, relativeTo: .body)
                 .foregroundStyle(Color.scLabel(scheme))
 
             Text(emptyStateHint)
-                .font(.system(size: 13, weight: .medium))
+                .scFont(13, weight: .medium, relativeTo: .footnote)
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
 
@@ -599,7 +599,7 @@ struct PlanSlotPickerSheet: View {
                     }
                 } label: {
                     Text("Pokaż wszystkie przepisy")
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .scFont(13.5, weight: .semibold, relativeTo: .footnote)
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
@@ -670,7 +670,7 @@ struct PlanSlotPickerSheet: View {
             PlanWhoBadge(participantIds: participantsToSave, members: roster, size: 22)
 
             Text(audienceText)
-                .font(.system(size: 13, weight: .semibold))
+                .scFont(13, weight: .semibold, relativeTo: .footnote)
                 .tracking(-0.2)
                 .foregroundStyle(Color.scMuted(scheme))
                 .lineLimit(1)

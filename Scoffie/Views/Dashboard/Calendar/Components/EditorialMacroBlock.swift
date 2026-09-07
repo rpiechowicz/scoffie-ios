@@ -24,13 +24,6 @@ struct EditorialMacroBlock: View {
     var target: Int = 2100
     @Environment(\.colorScheme) private var scheme
 
-    private var pKcal: Int { protein * 4 }
-    private var fKcal: Int { fat * 9 }
-    private var cKcal: Int { carbs * 4 }
-    private var totalMacroKcal: Int { max(1, pKcal + fKcal + cKcal) }
-    private var pPct: CGFloat { CGFloat(pKcal) / CGFloat(totalMacroKcal) }
-    private var fPct: CGFloat { CGFloat(fKcal) / CGFloat(totalMacroKcal) }
-    private var cPct: CGFloat { CGFloat(cKcal) / CGFloat(totalMacroKcal) }
     private var fillPct: CGFloat {
         min(1, CGFloat(kcal) / CGFloat(max(target, 1)))
     }
@@ -106,36 +99,18 @@ struct EditorialMacroBlock: View {
                 .padding(.bottom, 3)
             }
 
-            // Segmented progress bar
-            GeometryReader { geo in
-                let w = geo.size.width
-                let filled = w * fillPct
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.scBarTrack(scheme))
-
-                    // Widmo planu — dokąd dojedzie dzień, jeśli użytkownik
-                    // zje resztę. Neutralny, przygaszony kolor: to jeszcze
-                    // nie są policzone kalorie.
-                    if plannedPct > fillPct {
-                        Capsule()
-                            .fill(Color.scMuted(scheme).opacity(0.32))
-                            .frame(width: w * plannedPct, height: 4)
-                    }
-
-                    if !isEmpty {
-                        HStack(spacing: 0) {
-                            Rectangle().fill(SCPalette.indigo).frame(width: filled * pPct)
-                            Rectangle().fill(SCPalette.terracottaDeep).frame(width: filled * fPct)
-                            Rectangle().fill(SCPalette.sage).frame(width: filled * cPct)
-                        }
-                        .frame(width: filled, height: 4, alignment: .leading)
-                        .clipShape(Capsule())
-                    }
-                }
-                .frame(height: 4)
-            }
-            .frame(height: 4)
+            // Pasek makro — wspólny z pigułką „Cel dnia" w Planie tygodnia
+            // (`MacroSegmentBar`). Widmo planu, czyli dokąd dojedzie dzień,
+            // jeśli użytkownik zje resztę, jest tutejszym dodatkiem: Kalendarz
+            // liczy zjedzone, a Plan wszystko zaplanowane, więc tam nie ma
+            // czego zapowiadać.
+            MacroSegmentBar(
+                protein: protein,
+                fat: fat,
+                carbs: carbs,
+                fillFraction: fillPct,
+                ghostFraction: plannedPct
+            )
             .padding(.top, 2)
 
             HStack {
@@ -201,9 +176,9 @@ private struct MacroStatGrid: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            MacroStat(label: "BIAŁKO",   value: protein, dot: SCPalette.indigo,         isEmpty: isEmpty)
-            MacroStat(label: "TŁUSZCZE", value: fat,     dot: SCPalette.terracottaDeep, isEmpty: isEmpty)
-            MacroStat(label: "WĘGLE",    value: carbs,   dot: SCPalette.sage,           isEmpty: isEmpty)
+            MacroStat(label: "BIAŁKO",   value: protein, dot: SCMacroPalette.protein, isEmpty: isEmpty)
+            MacroStat(label: "TŁUSZCZE", value: fat,     dot: SCMacroPalette.fat,     isEmpty: isEmpty)
+            MacroStat(label: "WĘGLE",    value: carbs,   dot: SCMacroPalette.carbs,   isEmpty: isEmpty)
         }
     }
 }
