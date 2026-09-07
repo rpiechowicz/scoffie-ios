@@ -74,10 +74,12 @@ struct PlanProfileChip: View {
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Color.scMuted(scheme))
         }
-        .padding(.leading, 7)
-        .padding(.trailing, 9)
-        // 6pt → wysokość 38pt, tyle co `EditorialIconButton` obok.
-        .padding(.vertical, 6)
+        .padding(.leading, 4)
+        .padding(.trailing, 7)
+        // 4pt → wysokość 34pt, tyle co pigułki akcji obok
+        // (`WeeklyPlanView.headerActionSize`). Nagłówek zszedł z 38 pt,
+        // żeby „Plan tygodnia" mieściło się w wierszu bez urwania.
+        .padding(.vertical, 4)
         .background(Capsule().fill(Color.scTileBg(scheme)))
         .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
     }

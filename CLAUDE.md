@@ -66,8 +66,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   schowa obie pod „Więcej".
 - Asystent AI (Faza 1) jedzie po REST, NIE po sockecie: `POST /agent/conversations/:id/messages`
   oddaje `202` z `turnId`, a odpowiedź zbiera się odpytywaniem `GET /agent/turns/:id` co sekundę
-  (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–60 s i musi przeżyć
-  telefon w tle, a ack Socket.IO wygasa po kilku sekundach. `clientMessageId` (UUID z telefonu) jest
+  (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–240 s (sufit `AI_TURN_TIMEOUT_MS`,
+  od 6.09.2026 podniesiony z 90 s) i musi przeżyć telefon w tle, a ack
+  Socket.IO wygasa po kilku sekundach. Sufit odpytywania na telefonie
+  (`AgentStore.pollTimeout`) MUSI zostawać nad sufitem serwera. `clientMessageId` (UUID z telefonu) jest
   kluczem idempotencji — ponowienie oddaje TĘ SAMĄ turę, zamiast płacić drugi raz za ten sam prompt.
   Daty (`weekStart` = poniedziałek, `clientToday`, `timeZone`) liczy TELEFON; serwer stoi w UTC.
   `AgentStore` wisi na `SessionStore`, a nie na arkuszu — rozmowa przeżywa zamknięcie asystenta.

@@ -191,6 +191,14 @@ private struct SexChip: View {
 
 // Nie `private` — korzysta z niego również arkusz „Twoje dane” w Ustawieniach,
 // żeby rok urodzenia wybierało się tam dokładnie tak samo jak w kreatorze.
+//
+// Pod spodem jest poziomy `ScrollView` po CAŁYM zakresie lat, a nie pięć
+// przycisków przerysowywanych przy każdej zmianie. Poprzednia wersja liczyła
+// widoczne lata jako `year-2…year+2`, więc każdy krok podmieniał wszystkie
+// pięć etykiet naraz: gest zatrzymywał się po jednym roku, a zamiast
+// przewijania było mruganie. Tu przewija system — z rozpędem, z odbiciem na
+// końcach zakresu i ze snapowaniem do komórki (`viewAligned`), a rok bierze
+// się z tego, co stoi na środku.
 struct YearWheelPicker: View {
     @Binding var year: Int
     let range: ClosedRange<Int>
@@ -202,87 +210,118 @@ struct YearWheelPicker: View {
     var surface: Color? = nil
 
     @Environment(\.colorScheme) private var colorScheme
-    @State private var dragAnchorYear: Int? = nil
 
-    private static let snapAnimation = Animation.spring(response: 0.22, dampingFraction: 0.78)
-    private static let dragAnimation = Animation.interactiveSpring(response: 0.18, dampingFraction: 0.86)
+    /// Rok pod środkiem kontrolki. Osobny od `year`, bo w trakcie
+    /// przewijania jest `nil` przez chwilę między komórkami — i dlatego
+    /// nie może BYĆ źródłem prawdy, tylko ją aktualizować.
+    @State private var centeredYear: Int?
+
+    /// Ile lat mieści się w kontrolce. Pięć, jak dotąd: środkowa komórka
+    /// plus po dwie z każdej strony jako zapowiedź kierunku.
+    private static let visibleCells: CGFloat = 5
+    private static let contentPadding: CGFloat = 6
+    private static let rowHeight: CGFloat = 44
+
+    private var years: [Int] { Array(range) }
 
     var body: some View {
-        let years = visibleYears()
-        return HStack(spacing: 4) {
-            ForEach(years, id: \.self) { y in
-                Button {
-                    guard range.contains(y), y != year else { return }
-                    withAnimation(Self.snapAnimation) {
-                        year = y
-                    }
-                } label: {
-                    Text(String(y))
-                        .font(yearFont(for: y))
-                        .foregroundStyle(yearColor(for: y))
-                        .monospacedDigit()
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!range.contains(y))
-            }
-        }
-        .padding(6)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
-                    .fill(surface ?? Color.scTileBg(colorScheme))
-                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
-                    .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
+        GeometryReader { proxy in
+            let cellWidth = max(
+                44,
+                (proxy.size.width - Self.contentPadding * 2) / Self.visibleCells
+            )
+            // Marginesy treści równe dwóm komórkom z każdej strony —
+            // pierwszy i ostatni rok zakresu też muszą dać się ustawić
+            // na środku, a nie tylko przy krawędzi.
+            let sideInset = max(0, (proxy.size.width - cellWidth) / 2)
 
-                GeometryReader { proxy in
-                    let w = (proxy.size.width - 12) / 5
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(SCPalette.terracotta.opacity(colorScheme == .dark ? 0.16 : 0.12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(SCPalette.terracotta.opacity(0.32), lineWidth: 1)
-                        )
-                        .frame(width: w, height: proxy.size.height - 12)
-                        .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                        .allowsHitTesting(false)
-                }
-            }
-        )
-        .gesture(
-            DragGesture(minimumDistance: 4)
-                .onChanged { value in
-                    let anchor = dragAnchorYear ?? year
-                    if dragAnchorYear == nil { dragAnchorYear = anchor }
-                    // ~52pt per logical cell on a 360pt-wide picker — feels
-                    // like a wheel without overshooting on small flicks.
-                    let cellWidth: CGFloat = 52
-                    let steps = Int((-value.translation.width / cellWidth).rounded())
-                    let target = clamp(anchor + steps)
-                    if target != year {
-                        withAnimation(Self.dragAnimation) {
-                            year = target
-                        }
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(years, id: \.self) { y in
+                        Text(String(y))
+                            .font(font(for: y))
+                            .foregroundStyle(color(for: y))
+                            .monospacedDigit()
+                            .frame(width: cellWidth, height: Self.rowHeight)
+                            .contentShape(Rectangle())
+                            // Skala i przezroczystość prowadzone przez sam
+                            // scroll — dzięki temu sąsiedzi gasną PŁYNNIE
+                            // w trakcie ruchu, a nie skokiem po dojechaniu.
+                            .scrollTransition(
+                                .interactive,
+                                axis: .horizontal
+                            ) { content, phase in
+                                content
+                                    .scaleEffect(phase.isIdentity ? 1 : 0.86)
+                                    .opacity(phase.isIdentity ? 1 : 0.55)
+                            }
+                            // Stuknięcie w sąsiada zostaje jako druga droga —
+                            // ustawienie `centeredYear` przewija tam scroll,
+                            // więc wynik jest ten sam co przy geście.
+                            .onTapGesture {
+                                guard y != year else { return }
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                    centeredYear = y
+                                }
+                                year = y
+                            }
+                            .id(y)
                     }
                 }
-                .onEnded { _ in
-                    dragAnchorYear = nil
-                }
-        )
+                .scrollTargetLayout()
+            }
+            .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $centeredYear, anchor: .center)
+            .contentMargins(.horizontal, sideInset, for: .scrollContent)
+            .frame(height: Self.rowHeight)
+            .padding(.vertical, Self.contentPadding)
+            .background(background(cellWidth: cellWidth))
+            // Snap ustawił nowy rok na środku — to jedyne miejsce, w którym
+            // gest zmienia wartość.
+            .onChange(of: centeredYear) { _, newValue in
+                guard let newValue, newValue != year else { return }
+                year = newValue
+            }
+            // Wartość zmieniona z zewnątrz (wczytanie profilu, korekta
+            // zakresu w `clampToRange`) dojeżdża do środka sama.
+            .onChange(of: year) { _, newValue in
+                guard centeredYear != newValue else { return }
+                centeredYear = newValue
+            }
+            .onAppear { centeredYear = clamp(year) }
+        }
+        .frame(height: Self.rowHeight + Self.contentPadding * 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Rok urodzenia: \(year)")
         .accessibilityAdjustableAction { direction in
-            withAnimation(Self.snapAnimation) {
-                switch direction {
-                case .increment:
-                    year = clamp(year + 1)
-                case .decrement:
-                    year = clamp(year - 1)
-                @unknown default:
-                    break
-                }
+            switch direction {
+            case .increment:
+                year = clamp(year + 1)
+            case .decrement:
+                year = clamp(year - 1)
+            @unknown default:
+                break
             }
+        }
+    }
+
+    private func background(cellWidth: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
+                .fill(surface ?? Color.scTileBg(colorScheme))
+            RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
+                .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
+
+            // Ramka wyboru stoi NIERUCHOMO na środku — to lata jadą pod nią.
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(SCPalette.terracotta.opacity(colorScheme == .dark ? 0.16 : 0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(SCPalette.terracotta.opacity(0.32), lineWidth: 1)
+                )
+                .frame(width: cellWidth, height: Self.rowHeight)
+                .allowsHitTesting(false)
         }
     }
 
@@ -290,27 +329,14 @@ struct YearWheelPicker: View {
         min(max(value, range.lowerBound), range.upperBound)
     }
 
-    private func visibleYears() -> [Int] {
-        (-2...2).map { year + $0 }
+    private func font(for y: Int) -> Font {
+        y == year
+            ? .system(size: 20, weight: .bold)
+            : .system(size: 16, weight: .medium)
     }
 
-    private func yearFont(for y: Int) -> Font {
-        if y == year { return .system(size: 20, weight: .bold) }
-        if abs(y - year) == 1 { return .system(size: 16, weight: .medium) }
-        return .system(size: 15, weight: .medium)
-    }
-
-    private func yearColor(for y: Int) -> Color {
-        if !range.contains(y) {
-            return Color.scFaint(colorScheme).opacity(0.4)
-        }
-        if y == year {
-            return Color.scLabel(colorScheme)
-        }
-        if abs(y - year) == 1 {
-            return Color.scMuted(colorScheme)
-        }
-        return Color.scFaint(colorScheme)
+    private func color(for y: Int) -> Color {
+        y == year ? Color.scLabel(colorScheme) : Color.scMuted(colorScheme)
     }
 }
 

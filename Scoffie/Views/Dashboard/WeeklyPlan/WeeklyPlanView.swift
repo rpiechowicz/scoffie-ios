@@ -161,10 +161,12 @@ struct WeeklyPlanView: View {
                         headerRow
                             .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.top, SCPageMetrics.top)
-                            // 22 zamiast 14 — pasek dni to osobna kontrolka,
-                            // a nie podtytuł nagłówka; przy 14 pt skrót „PON.
-                            // WT. ŚR." wyglądał na przyklejony do tytułu.
-                            .padding(.bottom, 22)
+                            // 16, nie 22: pasek dni zaczyna się teraz własnym
+                            // wierszem podpisu („TEN TYDZIEŃ · 8–14 WRZ"),
+                            // który sam robi odstęp od tytułu. Przy 22 pt
+                            // nagłówek i pasek rozjeżdżały się na dwie
+                            // niepowiązane wyspy.
+                            .padding(.bottom, 16)
 
                         // Day strip instead of a week switcher: it is the
                         // navigation actually used day to day. Wygląd wspólny
@@ -336,13 +338,25 @@ struct WeeklyPlanView: View {
 
     // MARK: - Pieces
 
+    /// Średnica pigułek akcji w nagłówku Planu.
+    ///
+    /// 34 pt, a nie domyślne 38: to jedyny nagłówek z TRZEMA akcjami naraz
+    /// (zakupy, ⋯, profil) i przy 38 pt wiersz wychodził poza szerokość
+    /// ekranu — tytuł urywał się jako „Plan tygodn…". Cztery punkty z każdej
+    /// pigułki plus ciaśniejszy odstęp oddają tytułowi ~14 pt; resztę
+    /// dokłada `EditorialPageHeader`, dobierając stopień pisma.
+    private static let headerActionSize: CGFloat = 34
+
     private var headerRow: some View {
         EditorialPageHeader(title: "Plan tygodnia") {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
                 // Zwolnione miejsce w menu zajął asystent.
-                EditorialIconButton(icon: MenuConstans.Products.icon) {
+                EditorialIconButton(
+                    icon: MenuConstans.Products.icon,
+                    size: Self.headerActionSize
+                ) {
                     showProducts = true
                 }
                 .accessibilityLabel(MenuConstans.Products.name)
@@ -356,49 +370,31 @@ struct WeeklyPlanView: View {
         }
     }
 
-    /// Everything that isn't day-to-day planning: week jumps and clearing.
-    /// Parked in a menu so the top of the screen stays about *this* week.
+    /// To, czego nie robi się codziennie: czyszczenie dnia i tygodnia.
+    ///
+    /// Skoki po tygodniach wyprowadziły się STĄD na pasek dni — tam da się
+    /// przesunąć planszę palcem, są strzałki i „DZIŚ", a przede wszystkim
+    /// widać, na którym tygodniu się stoi. Trzy pozycje menu robiące to samo
+    /// co kontrolka o dwa wiersze niżej były już tylko dłuższym menu.
     private var overflowMenu: some View {
         Menu {
-            Section {
-                Button {
-                    datesViewModel.goToPreviousWeek()
-                } label: {
-                    Label("Poprzedni tydzień", systemImage: "arrow.left")
-                }
-                Button {
-                    datesViewModel.goToNextWeek()
-                } label: {
-                    Label("Następny tydzień", systemImage: "arrow.right")
-                }
-                if !datesViewModel.isCurrentWeek {
-                    Button {
-                        datesViewModel.goToCurrentWeek()
-                    } label: {
-                        Label("Wróć do bieżącego tygodnia", systemImage: "calendar.badge.clock")
-                    }
-                }
+            Button(role: .destructive) {
+                showClearDayAlert = true
+            } label: {
+                Label("Wyczyść ten dzień", systemImage: "eraser")
             }
-
-            Section {
-                Button(role: .destructive) {
-                    showClearDayAlert = true
-                } label: {
-                    Label("Wyczyść ten dzień", systemImage: "eraser")
-                }
-                Button(role: .destructive) {
-                    showClearWeekAlert = true
-                } label: {
-                    Label("Usuń plan tygodnia", systemImage: "trash")
-                }
+            Button(role: .destructive) {
+                showClearWeekAlert = true
+            } label: {
+                Label("Usuń plan tygodnia", systemImage: "trash")
             }
         } label: {
-            // Ten sam rozmiar co `EditorialIconButton` (38pt), żeby akcje
-            // nagłówka wyglądały tak samo na każdej zakładce.
+            // Ten sam rozmiar co `EditorialIconButton` obok, żeby akcje
+            // nagłówka stały w jednym rytmie.
             Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
-                .frame(width: 38, height: 38)
+                .frame(width: Self.headerActionSize, height: Self.headerActionSize)
                 .background(Circle().fill(Color.scTileBg(scheme)))
                 .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
         }
