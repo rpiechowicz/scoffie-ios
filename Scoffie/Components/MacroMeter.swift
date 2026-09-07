@@ -61,7 +61,13 @@ struct MacroProgressTrack: View {
     }
 }
 
-/// Podpis „B 100/150" nad własnym torem makra — jedna kolumna pigułki.
+/// Podpis „B 100/150" i tor makra W JEDNEJ LINII — jedna kolumna pigułki.
+///
+/// Poziomo, a nie podpis nad paskiem. Pionowy wariant robił z każdej kolumny
+/// dwa wiersze, a że nad nimi stoi jeszcze wiersz z kaloriami, pigułka miała
+/// trzy poziomy tekstu i wychodziła na klocek nad dolnym menu zamiast na pasek.
+/// Tu wysokość kolumny to wysokość jednej linijki, więc cała pigułka schodzi
+/// do dwóch wierszy i kilkudziesięciu punktów.
 ///
 /// Litera niesie kolor, liczba niesie stan. Po przekroczeniu celu liczba
 /// przechodzi w kolor swojego makra, żeby sygnał był i w pasku, i w tekście:
@@ -88,7 +94,7 @@ struct MacroMeter: View {
     private var isOverTarget: Bool { (progress ?? 0) > 1 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 6) {
             HStack(spacing: 3) {
                 Text(letter)
                     .font(.system(size: 9.5, weight: .bold))
@@ -101,10 +107,21 @@ struct MacroMeter: View {
                     .contentTransition(.numericText())
             }
             .lineLimit(1)
-            .minimumScaleFactor(0.75)
+            // Podpis bierze swoje najpierw, tor dostaje resztę kolumny.
+            // Kolumny są równe, więc tory wychodzą różnej długości — i tak ma
+            // być: każdy ma pod spodem własny szary tor na pełną swoją
+            // długość, więc proporcję czyta się w obrębie jednego makra,
+            // a nie przez porównanie z sąsiadem.
+            .layoutPriority(1)
+            .minimumScaleFactor(0.8)
 
             if let progress {
-                MacroProgressTrack(progress: progress, color: color)
+                // `minWidth`, bo bez niego przy długim podpisie („W 250/250")
+                // na wąskim telefonie na tor zostawało kilka punktów i wyglądał
+                // jak artefakt. Tu prędzej ściśnie się o dwie dziesiąte stopnia
+                // podpis, niż zniknie pasek.
+                MacroProgressTrack(progress: progress, color: color, height: 3)
+                    .frame(minWidth: 22, maxWidth: .infinity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

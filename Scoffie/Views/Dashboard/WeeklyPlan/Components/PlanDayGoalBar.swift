@@ -29,8 +29,16 @@ import SwiftUI
 /// nie znika z aplikacji — zostaje w Kalendarzu, gdzie pytanie brzmi właśnie
 /// „z czego składa się to, co zjadłem".
 ///
-/// Szerokość pigułki (dwie trzecie ekranu) ustawia `WeeklyPlanView` — to ona
-/// zna wymiar zakładki, a pigułka ma tylko wypełnić to, co dostanie.
+/// **Dwa wiersze, nie trzy.** Mierniki są poziome (`MacroMeter`: podpis i tor
+/// w jednej linii), bo podpis NAD paskiem robił z każdej kolumny drugi wiersz
+/// i pigułka rosła do trzech poziomów tekstu — czytała się wtedy jak klocek
+/// nad menu, a nie jak pasek. Cała reszta odchudzania (stopnie pisma, odstępy)
+/// dawała po kilka punktów; ten jeden ruch daje kilkanaście.
+///
+/// Szerokość pigułki ustawia `WeeklyPlanView` — to ona zna wymiar zakładki,
+/// a pigułka ma tylko wypełnić to, co dostanie. Poziomy miernik potrzebuje
+/// miejsca na podpis I na tor, więc ta szerokość nie może już schodzić tak
+/// nisko, jak przy wariancie z podpisem nad paskiem.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -60,7 +68,7 @@ struct PlanDayGoalBar: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: String(abs(remaining)))
                         .font(.system(size: 15.5, weight: .heavy))
@@ -86,7 +94,7 @@ struct PlanDayGoalBar: View {
                 macroMeters
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
             // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
@@ -144,7 +152,7 @@ struct PlanDayGoalBar: View {
     /// zostawia sam skład dnia i nie rysuje toru — pusty pasek obiecywałby
     /// cel, którego nikt nie wyznaczył.
     private var macroMeters: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             MacroMeter(
                 letter: "B",
                 title: "Białko",
