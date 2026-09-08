@@ -15,8 +15,10 @@ import SwiftUI
 // • Przełącznik gospodarstwa zszedł z nagłówka do menu „…”. Oś pokazuje dania
 //   wszystkich obok siebie, więc soczewka jednej osoby przestała być czymś,
 //   co trzeba mieć pod kciukiem przez cały czas.
-// • Nagłówek dnia ma zawsze ten sam przycisk asystenta (44 pt), nigdy „+”.
-//   Dodawanie ręczne żyje w wierszach osi: „Wybierz przepis” i „Dodaj posiłek”.
+// • Asystent siedzi w nagłówku EKRANU, w rzędzie z zakupami i „…”. Nagłówek
+//   dnia jest już tylko podpisem: nazwa dnia po lewej, „2 z 3 posiłków” po
+//   prawej. Dodawanie ręczne żyje w wierszach osi: „Wybierz przepis”
+//   i „Dodaj posiłek”.
 //
 // Sloty posiłków: dzień rysuje tyle wierszy, ile gospodarstwo ma włączonych
 // w Ustawieniach → „Posiłki w planie”, plus te, w których mimo wyłączenia coś
@@ -150,6 +152,22 @@ struct WeeklyPlanView: View {
             if !plan.allMeals.isEmpty { set.insert(plan.dateKey) }
         }
         return set
+    }
+
+    /// Ile produktów zostało do kupienia w widocznym tygodniu — liczba na
+    /// plakietce przy koszyku. Regułę („co się liczy po zamknięciu listy")
+    /// trzyma magazyn, żeby nagłówek Planu i ekran Zakupów nie mogły podać
+    /// dwóch różnych liczb.
+    private var shoppingRemainingCount: Int {
+        shoppingListStore.remainingCount(for: datesViewModel.weekStartISO)
+    }
+
+    /// VoiceOver czyta stan razem z akcją — sama plakietka jest dla niego
+    /// niewidoczna, bo „19" wypowiedziane osobno nic nie znaczy.
+    private var shoppingAccessibilityLabel: String {
+        let remaining = shoppingRemainingCount
+        guard remaining > 0 else { return "Lista zakupów" }
+        return "Lista zakupów, \(PolishPlural.products(remaining)) do kupienia"
     }
 
     /// Cały widoczny tydzień bez jednego posiłku. Nie decyduje już o TYM, czy
@@ -341,6 +359,13 @@ struct WeeklyPlanView: View {
                 )
                 prefetchWeekImages()
             }
+            // Plakietka przy koszyku musi znać stan listy, ZANIM ktokolwiek
+            // otworzy arkusz — inaczej pokazywałaby zero do pierwszego
+            // wejścia w zakupy. `load` idzie po cache, więc arkusz otwarty
+            // chwilę później nie płaci za to drugim zapytaniem.
+            .task(id: datesViewModel.weekStartISO) {
+                await shoppingListStore.load(weekStart: datesViewModel.weekStartISO)
+            }
             .task {
                 // Imiona, kolory i odznaki „dla kogo” biorą się ze składu
                 // gospodarstwa, więc musi być wczytany.
@@ -470,15 +495,38 @@ struct WeeklyPlanView: View {
     // MARK: - Pieces
 
     /// Średnica pigułek akcji w nagłówku Planu — 34 pt, jak `P2Circle`
-    /// w makiecie. Akcje są teraz dwie (zakupy i „…”), więc tytuł mieści się
-    /// w pełnym stopniu pisma, tak jak na pozostałych zakładkach.
+    /// w makiecie. Akcje są trzy (asystent, zakupy i „…”); tytuł schodzi
+    /// wtedy o stopień pisma sam, przez `ViewThatFits` w `EditorialPageHeader`.
     private static let headerActionSize: CGFloat = 34
 
     private var headerRow: some View {
         EditorialPageHeader(title: "Plan tygodnia") {
             HStack(spacing: 6) {
+                // Asystent stoi w nagłówku EKRANU, a nie w nagłówku dnia.
+                //
+                // Wcześniej był 44-punktową pigułką obok nazwy dnia — czyli
+                // jedyną akcją, która wyglądała, jakby dotyczyła poniedziałku,
+                // a otwierała planszę na cały tydzień. Tutaj mówi to samo, co
+                // sąsiednie akcje: rzecz dotyczy tego planu, nie tej strony.
+                // Podświetlona, bo to jedyna akcja nagłówka, która coś tworzy.
+                EditorialIconButton(
+                    icon: MenuConstans.Assistant.icon,
+                    highlighted: true,
+                    size: Self.headerActionSize,
+                    tapTarget: 44
+                ) {
+                    simpleSheet = .assistantIntro
+                }
+                .accessibilityLabel("Zaplanuj z asystentem")
+
                 // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
+                //
+                // Plakietka z liczbą jest ceną za to przeniesienie. Zakupy
+                // przestały być zakładką, więc nic na ekranie nie mówiło, że
+                // coś w nich zostało — żeby się dowiedzieć, trzeba było
+                // otworzyć arkusz. Teraz koszyk niesie tę jedną liczbę, która
+                // ma znaczenie: ile produktów czeka na kupienie.
                 EditorialIconButton(
                     icon: MenuConstans.Products.icon,
                     size: Self.headerActionSize,
@@ -486,7 +534,8 @@ struct WeeklyPlanView: View {
                 ) {
                     simpleSheet = .products
                 }
-                .accessibilityLabel(MenuConstans.Products.name)
+                .scCountBadge(shoppingRemainingCount)
+                .accessibilityLabel(shoppingAccessibilityLabel)
 
                 overflowMenu
             }
@@ -496,14 +545,13 @@ struct WeeklyPlanView: View {
     /// Wszystko, co dotyczy CAŁEGO tygodnia, plus wybór soczewki.
     ///
     /// Skoki po tygodniach wyprowadziły się stąd na pasek dni. Zamiast nich
-    /// wszedł asystent (ta sama akcja co przycisk w nagłówku dnia, tylko dla
-    /// osoby, która szuka jej w menu) i przełącznik profilu, który zszedł
-    /// z nagłówka razem z pigułką.
+    /// wszedł asystent (skrót prosto do zakładki, dla osoby, która szuka go
+    /// w menu) i przełącznik profilu, który zszedł z nagłówka razem z pigułką.
     private var overflowMenu: some View {
         Menu {
             // Prosto do asystenta, bez planszy „co on właściwie robi”.
-            // Kto szuka go w menu, ten już wie — planszę pokazuje przycisk
-            // w nagłówku dnia, na który trafia się przypadkiem.
+            // Kto szuka go w menu, ten już wie — planszę pokazuje pigułka
+            // z iskierkami w nagłówku, na którą trafia się przypadkiem.
             Button {
                 sessionStore.dashboardTab = .assistant
             } label: {
@@ -549,15 +597,9 @@ struct WeeklyPlanView: View {
                 Label("Wyczyść cały tydzień", systemImage: "trash")
             }
         } label: {
-            // Ten sam rozmiar co `EditorialIconButton` obok, żeby akcje
-            // nagłówka stały w jednym rytmie.
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.scLabel(scheme))
-                .frame(width: Self.headerActionSize, height: Self.headerActionSize)
-                .background(Circle().fill(Color.scTileBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-                // 34 pt to rysunek; cel dotyku 44, jak w przycisku obok.
+            // Ten sam krążek co `EditorialIconButton` obok, żeby akcje
+            // nagłówka stały w jednym rytmie. 34 pt to rysunek; cel dotyku 44.
+            SCCircleIconLabel(icon: "ellipsis", size: Self.headerActionSize, iconSize: 14)
                 .scTapTarget(drawn: Self.headerActionSize)
         }
         .accessibilityLabel("Więcej opcji planu")

@@ -838,12 +838,11 @@ struct PlanMemberBar: View {
 
 /// Plakietka puli w nagłówku rozmowy — kropki i liczba, bez wykrzyknika.
 ///
-/// Kropki, a nie sam licznik, bo „2 z 5" każe liczyć, a dwie pełne kropki
-/// z pięciu widać bez czytania. Rysujemy CAŁĄ pulę: pełne = zostało,
-/// wygaszone = zużyte — same pozostałe (dwie kropki bez odniesienia) nie
-/// mówiły, ile było na starcie. Barwa zmienia się dopiero przy zerze
-/// i nawet wtedy nie jest alarmem: pole tekstowe zostaje aktywne, a plany
-/// są jedno stuknięcie dalej.
+/// Sam rysunek mieszka w `SCPipsBadge` (Kalendarz liczy nim zjedzone posiłki);
+/// tutaj zostaje to, co puli asystenta właściwe: ile kropek jest pełnych,
+/// jak brzmi podpis i kiedy barwa się zmienia. Barwa zmienia się dopiero
+/// przy zerze i nawet wtedy nie jest alarmem: pole tekstowe zostaje aktywne,
+/// a plany są jedno stuknięcie dalej.
 struct AssistantQuotaPips: View {
     let remaining: Int
     /// Cała pula próbna; z niej liczy się liczba kropek.
@@ -852,8 +851,6 @@ struct AssistantQuotaPips: View {
     /// przyciski — same kropki wystarczą, etykieta wraca dopiero przy zerze,
     /// bo wtedy kropek nie ma i bez słowa plakietka byłaby pusta.
     var showsLabel: Bool = true
-
-    @Environment(\.colorScheme) private var scheme
 
     private var isEmpty: Bool { remaining <= 0 }
     private var color: Color { isEmpty ? SCPalette.terracotta : SCPalette.butter }
@@ -864,27 +861,16 @@ struct AssistantQuotaPips: View {
     }
 
     var body: some View {
-        HStack(spacing: 7) {
-            if !isEmpty {
-                HStack(spacing: 3.5) {
-                    ForEach(0..<max(1, min(8, limit)), id: \.self) { index in
-                        Circle()
-                            .fill(index < remaining ? color : color.opacity(0.28))
-                            .frame(width: 6, height: 6)
-                    }
-                }
-            }
-            if showsLabel || isEmpty {
-                Text(label)
-                    .font(.system(size: 11.5, weight: .bold))
-                    .foregroundStyle(color)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.leading, isEmpty ? 11 : 10)
-        .padding(.trailing, showsLabel || isEmpty ? 11 : 10)
-        .frame(height: 28)
-        .background(Capsule().fill(color.opacity(scheme == .dark ? 0.15 : 0.10)))
+        SCPipsBadge(
+            filled: max(0, remaining),
+            total: limit,
+            color: color,
+            // Kompaktowy pasek zjada podpis, ale przy pustej puli nie ma
+            // czego zjadać — kropek już nie ma i plakietka bez słowa byłaby
+            // pustą pigułką.
+            label: (showsLabel || isEmpty) ? label : nil,
+            showsPips: !isEmpty
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isEmpty
             ? "Pula wiadomości na próbę wyczerpana"

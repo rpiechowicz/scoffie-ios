@@ -30,6 +30,40 @@ enum SCPalette {
         light: (160, 120, 40)    // oklch(0.55 0.12 80) — mustard, readable on cream
     )
 
+    // Trzy akcenty dołożone dla pór „pomiędzy" (II śniadanie, podwieczorek,
+    // przekąska). Wcześniej dziedziczyły barwę po sąsiednim posiłku głównym
+    // i przez to obiad wychodził w kalendarzu tym samym kolorem, co
+    // podwieczorek — a to są dwa różne wiersze w tym samym dniu.
+    //
+    // Dobrane po odstępie na kole barw, nie „na oko": każda para ma co
+    // najmniej ~35° różnicy, a pary stojące najbliżej (róż–terakota,
+    // lawenda–indygo) rozjeżdżają się dodatkowo jasnością i nasyceniem.
+    // Dzień czyta się przez to jako przejście od ciepłego rana do chłodnego
+    // wieczoru: masło → róż → szałwia → morska → indygo, a bezczasowa
+    // przekąska stoi z boku w lawendzie.
+
+    /// II śniadanie. Przygaszony róż — cieplejszy niż wszystko po lewej
+    /// stronie palety, ale wyraźnie różowy, nie pomarańczowy jak terakota.
+    static let rose = dynamicColor(
+        dark:  (224, 154, 164),  // oklch(0.76 0.08 5)
+        light: (176, 78, 104)    // oklch(0.52 0.13 0) — ciemniejszy na kremie
+    )
+
+    /// Podwieczorek. Morska — jedyny wolny kawałek koła między szałwią
+    /// a indygo, i jedyny kolor w palecie, którego nie da się pomylić
+    /// z zielenią obiadu.
+    static let teal = dynamicColor(
+        dark:  (111, 185, 204),  // oklch(0.73 0.07 215)
+        light: (40, 120, 145)    // oklch(0.51 0.08 220) — ciemniejsza na kremie
+    )
+
+    /// Przekąska. Lawenda wprost z makiety kalendarza (`#B79BE0`) — pora
+    /// bez godziny dostaje kolor, który też nie pasuje do rytmu dnia.
+    static let lavender = dynamicColor(
+        dark:  (183, 155, 224),  // #B79BE0 z canvasu
+        light: (126, 79, 160)    // ciemniejsza i bardziej fioletowa niż indygo
+    )
+
     // Warm canvas. Dark is near-black with a warm brown cast.
     static let canvasDark = Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255)     // #1A1411
     static let canvasLight = Color(red: 250 / 255, green: 246 / 255, blue: 240 / 255) // #FAF6F0
@@ -157,7 +191,7 @@ extension Color {
     ///
     /// Te trzy tinty istniały dotąd wyłącznie jako liczby wpisywane w miejscu
     /// użycia i zdążyły się rozjechać na cztery różne wartości
-    /// (`EditorialMealCard` 0.14/0.09, `HealthIntegrationSheet` 0.10/0.07,
+    /// (kafel posiłku 0.14/0.09, `HealthIntegrationSheet` 0.10/0.07,
     /// `PlanDaySplitsSection` 0.22/0.16, `PlanSlotPickerSheet` 0.16/0.10).
     /// Asystent potrzebuje ich w kartach na tyle często, że dalsze mnożenie
     /// wariantów zrobiłoby z tego loterię — stąd jedna prawda tutaj.
@@ -212,10 +246,78 @@ extension Color {
             : SCPalette.labelLight.opacity(0.07)
     }
 
+    /// Znak odhaczenia — „zjedzone".
+    ///
+    /// Neutralny, nie zielony, i to jest decyzja, a nie oszczędność. Sześć pór
+    /// dnia zajmuje sześć barw, a szałwia była jedną z nich — kolorem obiadu.
+    /// Odhaczony obiad miał przez to dwa szałwiowe kółka w jednym wierszu
+    /// i nie dawało się powiedzieć, które mówi „obiad", a które „zjedzone".
+    ///
+    /// Przesunięcie obiadu nic by nie dało: żeby status miał własną barwę,
+    /// musiałaby stać co najmniej ~90° od każdej z sześciu pór, a tyle
+    /// wolnego miejsca na kole już nie ma. Status wychodzi więc z koła
+    /// w ogóle: to ATRAMENT, nie plama. Kółko z ledwie zaznaczonym
+    /// wypełnieniem, obwódką w połowie mocy i wyraźnym ptaszkiem w środku —
+    /// ta sama warstwa, co pismo wiersza. Pełny krążek w tym kolorze świecił
+    /// w ciemnym motywie jak lampka i przekrzykiwał zarówno zdjęcie, jak
+    /// i tytuł dania, choć zjedzony posiłek ma PRZYGASAĆ, a nie wołać.
+    ///
+    /// Szałwia zostaje przy podsumowaniach dnia (kropki „2 z 4", kropka
+    /// „z planem" na pasku dni) — tam nie sąsiaduje z kolorem pory, więc nie
+    /// ma czego mylić, i nadal znaczy „zrobione".
+    static func scChecked(_ scheme: ColorScheme) -> Color {
+        scLabel(scheme)
+    }
+
     static func scChipBg(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? SCPalette.labelDark.opacity(0.08)
             : SCPalette.labelLight.opacity(0.05)
+    }
+}
+
+// Mieszanie barw — odpowiednik `color-mix(in oklch, …)` z tokenów makiety.
+//
+// Mieszka w systemie projektowym, a nie przy ekranie, który akurat pierwszy
+// tego potrzebował: `mix(black:)` woła dziś kilkanaście miejsc (awatary
+// domowników, kafle ustawień, mierniki makro, kółko odhaczenia na Zakupach),
+// więc schowane w pliku jednego komponentu znikało razem z nim.
+//
+// Nazwy są własne (`mix(black:)` / `mix(white:)`), bo `Color.mix(with:by:in:)`
+// z systemowego SwiftUI ma inną listę argumentów — pomyłka w wywołaniu wychodzi
+// wtedy jako „extra argument 'black' in call”, a nie jako cicha podmiana.
+extension Color {
+    /// Interpoluje z inną barwą w liniowym sRGB.
+    func mix(with other: Color, by fraction: CGFloat) -> Color {
+        let f = max(0, min(1, fraction))
+
+        let a = UIColor(self).cgColor.components ?? [0, 0, 0, 1]
+        let b = UIColor(other).cgColor.components ?? [0, 0, 0, 1]
+
+        // Barwa w skali szarości ma dwie składowe (biel + alfa), nie cztery —
+        // wtedy jasność siedzi w `[0]` i wszystkie trzy kanały biorą się stamtąd.
+        let aR = a.count >= 3 ? a[0] : a[0]
+        let aG = a.count >= 3 ? a[1] : a[0]
+        let aB = a.count >= 3 ? a[2] : a[0]
+        let bR = b.count >= 3 ? b[0] : b[0]
+        let bG = b.count >= 3 ? b[1] : b[0]
+        let bB = b.count >= 3 ? b[2] : b[0]
+
+        return Color(
+            red:   Double(aR + (bR - aR) * f),
+            green: Double(aG + (bG - aG) * f),
+            blue:  Double(aB + (bB - aB) * f)
+        )
+    }
+
+    /// Przyciemnienie o `fraction` — cień gradientu pod akcentem.
+    func mix(black fraction: CGFloat) -> Color {
+        self.mix(with: .black, by: fraction)
+    }
+
+    /// Rozjaśnienie o `fraction` — światło u góry gradientu.
+    func mix(white fraction: CGFloat) -> Color {
+        self.mix(with: .white, by: fraction)
     }
 }
 

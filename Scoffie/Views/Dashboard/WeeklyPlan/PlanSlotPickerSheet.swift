@@ -292,16 +292,7 @@ struct PlanSlotPickerSheet: View {
 
             Spacer(minLength: 8)
 
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.scTileBg(scheme)))
-                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            }
-            .buttonStyle(PlanPressStyle(scale: 0.9))
-            .accessibilityLabel("Zamknij")
+            SCSheetCloseButton { dismiss() }
         }
     }
 

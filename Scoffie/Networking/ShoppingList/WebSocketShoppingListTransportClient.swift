@@ -146,27 +146,6 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:archiveShoppingList.")
     }
 
-    func selectArchivedList(archiveId: String) async throws {
-        let householdId = try await resolveHouseholdId()
-        let payload = try makePayload(
-            ArchiveSelectionPayload(
-                userId: userId,
-                householdId: householdId,
-                archiveId: archiveId
-            )
-        )
-        let envelope: WsEnvelope<BackendMutationResultDTO> = try await socket.emitWithAck(
-            event: "weeklyPlans:selectShoppingListArchive",
-            payload: payload,
-            as: WsEnvelope<BackendMutationResultDTO>.self
-        )
-
-        if envelope.ok {
-            return
-        }
-        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:selectShoppingListArchive.")
-    }
-
     func deleteArchivedList(archiveId: String) async throws {
         let householdId = try await resolveHouseholdId()
         let payload = try makePayload(

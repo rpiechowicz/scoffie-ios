@@ -152,27 +152,20 @@ struct PlanDayGoalSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Ten sam krążek z krzyżykiem, co w każdym arkuszu Ustawień
-            // (`EditorialSheetHeader`) — inny rozmiar albo inne tło robiłyby
-            // z zamykania zagadkę zależną od tego, skąd się przyszło.
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.scChipBg(scheme)))
-                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Zamknij")
+            SCSheetCloseButton { dismiss() }
         }
     }
 
     /// „Poniedziałek · 3 z 3 posiłków" — ta sama para liczb, co w nagłówku
     /// dnia na osi, żeby arkusz nie opisywał innego dnia niż ekran pod nim.
+    ///
+    /// W Kalendarzu ta sama para liczy co innego: nie ile pór jest
+    /// zaplanowanych, tylko ile już zjedzonych — bo to jest liczba, z której
+    /// wzięła się suma nad listą.
     private var subtitle: String {
         let day = Self.longDayFormatter.string(from: date).capitalized
-        return "\(day) · \(nutrition.filledSlots) z \(nutrition.slotCount) posiłków"
+        let what = nutrition.countsOnlyEaten ? "zjedzone" : "posiłków"
+        return "\(day) · \(nutrition.filledSlots) z \(nutrition.slotCount) \(what)"
     }
 
     // MARK: - Pierścienie i legenda
@@ -276,7 +269,7 @@ struct PlanDayGoalSheet: View {
     private var mealsList: some View {
         VStack(spacing: 12) {
             ForEach(nutrition.entries) { entry in
-                PlanGoalMealRow(entry: entry)
+                PlanGoalMealRow(entry: entry, showsEatenState: nutrition.countsOnlyEaten)
             }
         }
     }
@@ -473,10 +466,20 @@ struct PlanGoalLegendRow: View {
 /// i kalorie po prawej.
 struct PlanGoalMealRow: View {
     let entry: PlanDayNutrition.Entry
+    /// Czy wiersz ma mówić o odhaczeniu. Włącza to Kalendarz, w którym suma
+    /// nad listą liczy wyłącznie zjedzone — bez tego dwa dania po 500 kcal
+    /// stałyby obok siebie identycznie, a tylko jedno z nich byłoby w sumie.
+    var showsEatenState: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
     private static let thumbSize: CGFloat = 38
+
+    /// Zaplanowane, ale jeszcze niezjedzone — tylko tam, gdzie odhaczenie
+    /// w ogóle coś znaczy.
+    private var isPending: Bool {
+        showsEatenState && entry.isPlanned && !entry.isEaten
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -484,15 +487,37 @@ struct PlanGoalMealRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(entry.slot.cozyAccent.opacity(entry.isPlanned ? 1 : 0.35))
-                        .frame(width: 5, height: 5)
+                    if showsEatenState && entry.isPlanned {
+                        // Ptaszek zamiast kropki pory: w Kalendarzu pierwsze
+                        // pytanie do wiersza brzmi „liczy się czy nie", a nie
+                        // „która to pora" — porę niesie nazwa dania obok.
+                        Image(systemName: entry.isEaten
+                            ? "checkmark.circle.fill"
+                            : "circle.dashed")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(
+                                entry.isEaten
+                                    ? Color.scChecked(scheme)
+                                    : Color.scFaint(scheme)
+                            )
+                            // Wiersz scala dzieci (`.combine`), więc ta
+                            // etykieta wchodzi do zdania czytanego przez
+                            // VoiceOver — bez niej stan odhaczenia byłby
+                            // wyłącznie kolorem.
+                            .accessibilityLabel(entry.isEaten ? "zjedzone" : "niezjedzone")
+                    } else {
+                        Circle()
+                            .fill(entry.slot.cozyAccent.opacity(entry.isPlanned ? 1 : 0.35))
+                            .frame(width: 5, height: 5)
+                    }
 
                     Text(title)
                         .scFont(13.5, weight: entry.isPlanned ? .semibold : .regular, relativeTo: .footnote)
                         .tracking(-0.2)
                         .foregroundStyle(
-                            entry.isPlanned ? Color.scLabel(scheme) : Color.scMuted(scheme)
+                            entry.isPlanned && !isPending
+                                ? Color.scLabel(scheme)
+                                : Color.scMuted(scheme)
                         )
                         .lineLimit(1)
                 }
@@ -501,7 +526,7 @@ struct PlanGoalMealRow: View {
                     Text(macroText)
                         .scFont(11, weight: .regular, relativeTo: .caption2)
                         .monospacedDigit()
-                        .foregroundStyle(Color.scMuted(scheme))
+                        .foregroundStyle(isPending ? Color.scFaint(scheme) : Color.scMuted(scheme))
                         .lineLimit(1)
                 }
             }
@@ -545,6 +570,10 @@ struct PlanGoalMealRow: View {
         }
         .frame(width: Self.thumbSize, height: Self.thumbSize)
         .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        // Danie jeszcze niezjedzone przygasa — jest w dniu, ale nie ma go
+        // w liczbie nad listą, i wiersz musi to powiedzieć bez czytania.
+        .saturation(isPending ? 0.35 : 1)
+        .opacity(isPending ? 0.6 : 1)
     }
 
     /// Ten sam kafel zastępczy, co na osi dnia: gradient akcentu pory, ukośna
@@ -585,11 +614,11 @@ struct PlanGoalMealRow: View {
                 Text(verbatim: String(Int(entry.nutrition.kcal.rounded())))
                     .scFont(13.5, weight: .bold, relativeTo: .footnote)
                     .monospacedDigit()
-                    .foregroundStyle(Color.scLabel(scheme))
+                    .foregroundStyle(isPending ? Color.scFaint(scheme) : Color.scLabel(scheme))
 
                 Text("kcal")
                     .scFont(10, weight: .semibold, relativeTo: .caption2)
-                    .foregroundStyle(Color.scMuted(scheme))
+                    .foregroundStyle(isPending ? Color.scFaint(scheme) : Color.scMuted(scheme))
             }
             .fixedSize()
         } else {

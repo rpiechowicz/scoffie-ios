@@ -263,19 +263,6 @@ final class ShoppingListStore {
         }
     }
 
-    func selectArchivedList(archiveId: String) {
-        guard let currentWeekStart = weekStart else { return }
-        Task {
-            do {
-                try await repository.selectArchivedList(archiveId: archiveId)
-                openRevisionsByWeek.removeValue(forKey: currentWeekStart)
-                await load(weekStart: currentWeekStart, force: true)
-            } catch {
-                errorMessage = UserFacingErrorMapper.message(from: error)
-            }
-        }
-    }
-
     func deleteArchivedList(archiveId: String) {
         guard let currentWeekStart = weekStart else { return }
         Task {
@@ -350,14 +337,31 @@ final class ShoppingListStore {
         return makePendingItems(currentItems: items, archivedItems: archive.items)
     }
 
-    func readonlyItems(for weekStart: String) -> [ShoppingItem] {
-        guard hasOpenRevision(for: weekStart),
-              let archive = currentClosedArchive(for: weekStart)
-        else {
-            return []
+    /// Produkty widoczne na aktywnej liście tygodnia — to, co użytkownik
+    /// jeszcze może kupić.
+    ///
+    /// Po zamknięciu listy i zmianie planu zostają wyłącznie pozycje dołożone
+    /// przez tę zmianę: dokupione wcześniej rzeczy są już w domu i nie mają
+    /// prawa wracać na listę.
+    func activeItems(for weekStart: String) -> [ShoppingItem] {
+        hasOpenRevision(for: weekStart) ? pendingItems(for: weekStart) : items
+    }
+
+    /// Ile produktów zostało do kupienia w tym tygodniu.
+    ///
+    /// Z tej liczby żyje plakietka przy koszyku w nagłówku Planu tygodnia.
+    /// Lista zakupów jest arkuszem, a nie zakładką, więc bez niej stan
+    /// zakupów widać dopiero po otwarciu arkusza. Tydzień zamknięty bez
+    /// otwartej rewizji nie ma już czego kupować — plakietka gaśnie.
+    func remainingCount(for weekStart: String) -> Int {
+        guard self.weekStart == weekStart else { return 0 }
+
+        let openRevision = hasOpenRevision(for: weekStart)
+        if currentClosedArchive(for: weekStart) != nil, !openRevision {
+            return 0
         }
 
-        return archive.items
+        return activeItems(for: weekStart).filter { !$0.isChecked }.count
     }
 
     private func scheduleReload(weekStart: String) {

@@ -755,7 +755,7 @@ struct RecipeDetailView: View {
     // MARK: - Helpers
 
     private var categoryAccent: Color {
-        RecipeDetailPalette.accent(for: recipe.category)
+        RecipeAccent.accent(for: recipe.category)
     }
 
     /// „Pasuje też na: II śniadanie · Przekąska".
@@ -852,7 +852,7 @@ private struct EditorialEyebrowRow: View {
         pill(
             icon: RecipesConstants.icon(for: category),
             text: RecipesConstants.shortDisplayName(for: category).uppercased(),
-            accent: RecipeDetailPalette.accent(for: category)
+            accent: RecipeAccent.accent(for: category)
         )
     }
 
@@ -1303,22 +1303,6 @@ private struct EditorialShimmerBlock: View {
 }
 
 // MARK: - Palette + formatters
-
-private enum RecipeDetailPalette {
-    /// Cozy Kitchen accent per recipe category. Mirrors the meal-slot
-    /// mapping used by `EditorialMealCard` so a breakfast recipe surfaces
-    /// in butter, lunch in sage, dinner in indigo across both screens.
-    static func accent(for category: RecipesCategory) -> Color {
-        switch category {
-        case .breakfast: return SCPalette.butter
-        case .lunch:     return SCPalette.sage
-        case .dinner:    return SCPalette.indigo
-        case .snacks:    return SCPalette.terracotta
-        case .favourite: return SCPalette.terracotta
-        case .all:       return SCPalette.terracotta
-        }
-    }
-}
 
 private enum RecipeDetailFormat {
     static func integer(_ value: Double) -> String {

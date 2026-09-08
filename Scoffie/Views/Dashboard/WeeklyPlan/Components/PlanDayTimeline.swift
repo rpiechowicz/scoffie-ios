@@ -44,6 +44,10 @@ struct PlanDayTimeline: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
+    /// Strona dnia jeździ palcem w bok (`DayPager`), a jej przyciski zajmują
+    /// całą szerokość — bez tej furtki machnięcie kończące się na przycisku
+    /// otwierało go zamiast przestawić dzień.
+    @Environment(\.dayPagerGate) private var pagerGate
 
     // MARK: - Wiersze
 
@@ -114,11 +118,11 @@ struct PlanDayTimeline: View {
 
     /// Karta nad osią: „ten tydzień jest jeszcze pusty" i droga do asystenta.
     ///
-    /// Ta sama akcja, co przycisk z różdżką w nagłówku dnia — ale ten przycisk
+    /// Ta sama akcja, co pigułka z iskierkami w nagłówku ekranu — ale tamta
     /// jest ikoną bez podpisu i przy pustym tygodniu nikt nie wie, że to
-    /// właśnie on. Karta mówi to słowami, raz, i znika z pierwszym posiłkiem.
+    /// właśnie ona. Karta mówi to słowami, raz, i znika z pierwszym posiłkiem.
     private var emptyWeekCallout: some View {
-        Button(action: onAssistant) {
+        Button { pagerGate.ifNotSwiping(onAssistant) } label: {
             HStack(alignment: .center, spacing: 12) {
                 Image(systemName: MenuConstans.Assistant.icon)
                     .font(.system(size: 15, weight: .semibold))
@@ -164,40 +168,59 @@ struct PlanDayTimeline: View {
 
     // MARK: - Nagłówek dnia
 
+    /// Nazwa dnia po lewej, podsumowanie po prawej — jeden wiersz, jak
+    /// w makiecie.
+    ///
+    /// Asystent wyprowadził się stąd do nagłówka ekranu (`WeeklyPlanView`).
+    /// Stał tu jako 44-punktowa pigułka obok tytułu dnia i był jedyną akcją
+    /// w tym wierszu, więc wiersz musiał być na tyle wysoki, żeby ją zmieścić,
+    /// a podsumowanie schodziło pod tytuł do drugiej linii. W nagłówku ekranu
+    /// stoi w rzędzie z pozostałymi akcjami planu (zakupy, „…”) i dotyczy —
+    /// tak jak one — całego tygodnia, a nie akurat oglądanego dnia.
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(Self.longDayFormatter.string(from: date).capitalized)
-                        .scFont(22, weight: .bold, relativeTo: .title2)
-                        .tracking(-0.5)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+        // Raz, nie trzy razy: każde sięgnięcie po `summary` przelicza wiersze
+        // dnia od nowa.
+        let summary = self.summary
 
-                    if isToday { todayBadge }
-                }
+        // `center`, nie `firstTextBaseline` — patrz `CalendarDayHeader`:
+        // pigułka „DZIŚ" i plakietka kropek to kształty, a nie zdania.
+        return HStack(alignment: .center, spacing: 8) {
+            Text(Self.longDayFormatter.string(from: date).capitalized)
+                .scFont(22, weight: .bold, relativeTo: .title2)
+                .tracking(-0.5)
+                .foregroundStyle(Color.scLabel(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                // Tytuł dnia ma pierwszeństwo przy dzieleniu wiersza:
+                // „Poniedziałek” nie skraca się po to, żeby zmieściło się
+                // podsumowanie, tylko odwrotnie.
+                .layoutPriority(1)
 
-                Text(summaryText)
-                    .scFont(14, weight: .regular, relativeTo: .footnote)
-                    .tracking(-0.15)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    // Liczby w podsumowaniu przechodzą, zamiast przeskakiwać:
-                    // dołożenie obiadu przesuwa „1 z 3” na „2 z 3” i kalorie
-                    // w tej samej klatce, w której wiersz wjeżdża na oś.
-                    // Sama `.contentTransition` nie wystarczy — musi mieć czym
-                    // jechać, stąd ta sama sprężyna, co pod osią niżej.
-                    .contentTransition(.numericText())
-                    .animation(.spring(response: 0.36, dampingFraction: 0.9), value: summaryText)
+            if isToday { todayBadge }
+
+            Spacer(minLength: 10)
+
+            if summary.total > 0 {
+                // Ta sama plakietka, co licznik zjedzonych w Kalendarzu:
+                // „2 z 3” każe przeczytać i porównać dwie liczby, a dwie
+                // pełne kropki z trzech widać kątem oka. Kropki są też
+                // jedyną rzeczą, która nie rośnie z długością zdania — a to
+                // zdanie potrafi urosnąć o „· 5 dań”.
+                SCPipsBadge(
+                    filled: summary.filled,
+                    total: summary.total,
+                    color: SCPalette.sage,
+                    label: summaryLabel(summary),
+                    size: .small
+                )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilitySummary(summary))
             }
-
-            Spacer(minLength: 8)
-
-            assistantButton
         }
+        // Dołożenie obiadu dorysowuje kropkę i przesuwa „1 z 3” na „2 z 3”
+        // w tej samej klatce, w której wiersz wjeżdża na oś — jedna sprężyna
+        // na jeden ruch, ta sama co pod osią niżej.
+        .animation(.spring(response: 0.36, dampingFraction: 0.9), value: summaryLabel(summary))
     }
 
     private var todayBadge: some View {
@@ -211,25 +234,6 @@ struct PlanDayTimeline: View {
                 Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.14))
             )
             .fixedSize()
-    }
-
-    /// Zawsze asystent, nigdy „+”.
-    ///
-    /// Dodawanie ręczne żyje w wierszach osi („Wybierz przepis”, „Dodaj
-    /// posiłek”), więc przycisk nagłówka może być jedną rzeczą przez wszystkie
-    /// stany dnia — pełny, częściowy i pusty.
-    private var assistantButton: some View {
-        Button(action: onAssistant) {
-            // `scSoftSurface` zamiast własnego tintu i obwódki: te same liczby,
-            // co pod każdym innym akcentowym przyciskiem w aplikacji.
-            Image(systemName: MenuConstans.Assistant.icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(SCPalette.terracotta)
-                .frame(width: 44, height: 44)
-                .scSoftSurface(Circle())
-        }
-        .buttonStyle(PlanPressStyle())
-        .accessibilityLabel("Zaplanuj z asystentem")
     }
 
     // MARK: - Oś
@@ -304,25 +308,42 @@ struct PlanDayTimeline: View {
 
     // MARK: - Podsumowanie dnia
 
-    /// „2 z 3 posiłków”, a przy dniu z osobnymi daniami domowników
-    /// „3 z 3 posiłków · 5 dań”.
-    ///
-    /// Kalorii tu już nie ma — tę samą liczbę pokazuje pigułka „Cel dnia" nad
-    /// menu, i to obok celu, więc podtytuł powtarzał ją bez kontekstu.
-    /// Liczba dań zostaje: mówi coś, czego pigułka nie mówi — że w slotach
-    /// stoi więcej niż jedno danie na porę.
-    private var summaryText: String {
+    /// Ile pór ma już posiłek, ile ich w ogóle jest i ile stoi w nich dań.
+    private var summary: (filled: Int, total: Int, dishes: Int) {
         let list = rows
-        let filled = list.filter { !$0.dishes.isEmpty }.count
-        let total = list.count
-        let dishes = list.reduce(0) { $0 + $1.dishes.count }
+        return (
+            filled: list.filter { !$0.dishes.isEmpty }.count,
+            total: list.count,
+            dishes: list.reduce(0) { $0 + $1.dishes.count }
+        )
+    }
 
+    /// „2 z 3”, a przy dniu z osobnymi daniami domowników „2 z 3 · 5 dań”.
+    ///
+    /// Słowa „posiłków” nie ma: stoi pod nim rząd kropek, po jednej na porę,
+    /// więc zdanie i tak mówi o czym. Kalorii też nie — tę samą liczbę
+    /// pokazuje pigułka „Cel dnia" nad menu, i to obok celu, więc podtytuł
+    /// powtarzał ją bez kontekstu. Liczba dań zostaje: mówi coś, czego
+    /// kropki nie powiedzą — że w porze stoi więcej niż jedno danie.
+    private func summaryLabel(_ summary: (filled: Int, total: Int, dishes: Int)) -> String {
+        var text = "\(summary.filled) z \(summary.total)"
+
+        if summary.dishes > summary.filled {
+            let word = PolishPlural.form(summary.dishes, one: "danie", few: "dania", many: "dań")
+            text += " · \(summary.dishes) \(word)"
+        }
+        return text
+    }
+
+    /// Po polsku i w całości — kropek VoiceOver nie policzy.
+    private func accessibilitySummary(_ summary: (filled: Int, total: Int, dishes: Int)) -> String {
         // Po „z <liczba>” polski rzeczownik stoi w dopełniaczu bez względu na
         // liczbę — „1 z 3 posiłków”, „2 z 4 posiłków”.
-        var text = "\(filled) z \(total) posiłków"
+        var text = "Zaplanowane \(summary.filled) z \(summary.total) posiłków"
 
-        if dishes > filled {
-            text += " · \(dishes) \(PolishPlural.form(dishes, one: "danie", few: "dania", many: "dań"))"
+        if summary.dishes > summary.filled {
+            let word = PolishPlural.form(summary.dishes, one: "danie", few: "dania", many: "dań")
+            text += ", \(summary.dishes) \(word)"
         }
         return text
     }
@@ -446,6 +467,9 @@ struct PlanTimelineRow: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
+    /// Wiersz zajmuje całą szerokość strony, którą `DayPager` przesuwa palcem
+    /// w bok — patrz `DayPagerGate`.
+    @Environment(\.dayPagerGate) private var pagerGate
 
     var body: some View {
         HStack(alignment: .top, spacing: PlanTimelineMetrics.gutter) {
@@ -490,7 +514,7 @@ struct PlanTimelineRow: View {
     }
 
     private var variantButton: some View {
-        Button(action: onAddVariant) {
+        Button { pagerGate.ifNotSwiping(onAddVariant) } label: {
             HStack(spacing: 6) {
                 Image(systemName: "person.badge.plus")
                     .font(.system(size: 12, weight: .bold))
@@ -526,7 +550,7 @@ struct PlanTimelineRow: View {
 
     private func dishTapTarget(_ meal: PlanMeal, isAlternative: Bool) -> some View {
         Button {
-            onTapMeal(meal)
+            pagerGate.ifNotSwiping { onTapMeal(meal) }
         } label: {
             PlanTimelineDish(
                 slot: slot,
@@ -760,7 +784,7 @@ struct PlanTimelineDish: View {
 // MARK: - Pusta pora
 
 /// Ten sam rytm co wiersz z posiłkiem, jedna cicha akcja ręczna po prawej.
-/// Asystent w tym wierszu nie siedzi — jest raz, w nagłówku dnia.
+/// Asystent w tym wierszu nie siedzi — jest raz, w nagłówku ekranu.
 struct PlanTimelineEmptyRow: View {
     let slot: MealSlot
     let isLast: Bool
@@ -769,6 +793,9 @@ struct PlanTimelineEmptyRow: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
+    /// Jak w wierszu z posiłkiem: cel dotyku jest szeroki na całą stronę,
+    /// więc machnięcie w bok nie może go „stuknąć” po drodze.
+    @Environment(\.dayPagerGate) private var pagerGate
 
     var body: some View {
         HStack(alignment: .top, spacing: PlanTimelineMetrics.gutter) {
@@ -802,7 +829,7 @@ struct PlanTimelineEmptyRow: View {
     @ViewBuilder
     private var tappableContent: some View {
         if isEditable {
-            Button(action: onAdd) { content }
+            Button { pagerGate.ifNotSwiping(onAdd) } label: { content }
                 .buttonStyle(PlanPressStyle())
                 .accessibilityLabel("\(slot.title): nic nie zaplanowano. Stuknij, aby wybrać przepis.")
         } else {
@@ -941,22 +968,6 @@ struct PlanTimelineAddRow: View {
     /// bo to skrót liczebnika, a nie początek zdania.
     private static func inSentence(_ slot: MealSlot) -> String {
         slot.title.hasPrefix("II ") ? slot.title : slot.title.lowercased()
-    }
-}
-
-// MARK: - Reakcja na dotyk
-
-/// Lekkie ściśnięcie pod palcem — jedyny sygnał, że wiersz bez karty i bez
-/// obwódki jest klikalny. Sprężyna jest krótka, bo reakcja na dotyk ma
-/// wyprzedzać ruch palca, a nie iść za nim.
-struct PlanPressStyle: ButtonStyle {
-    var scale: CGFloat = 0.975
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .opacity(configuration.isPressed ? 0.72 : 1)
-            .animation(.spring(response: 0.24, dampingFraction: 0.85), value: configuration.isPressed)
     }
 }
 

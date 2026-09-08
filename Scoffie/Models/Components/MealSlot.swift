@@ -32,10 +32,11 @@ enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
     /// wspólnej sekcji `.snacks`: z punktu widzenia katalogu to ten sam rodzaj
     /// dania — coś małego, na słodko albo pod rękę — a nie trzy osobne kuchnie.
     ///
-    /// Kolor idzie tu inną drogą niż `accentColor`: akcent grupuje sloty porą
-    /// dnia, bo w planie podwieczorek stoi obok obiadu, a katalogu pora dnia
-    /// nie obchodzi. Dlatego podwieczorek jest tu przy przekąsce, a tam przy
-    /// obiedzie — i to jest zamierzone, nie przeoczenie.
+    /// Kategoria idzie inną drogą niż kolor (`MealSlot.cozyAccent`): akcent
+    /// jest osobny dla każdej z sześciu pór, bo w planie i w kalendarzu stoją
+    /// one w jednej kolumnie i muszą się od siebie różnić. Katalogu pora dnia
+    /// nie obchodzi, więc tutaj podwieczorek ląduje przy przekąsce — i to
+    /// jest zamierzone, nie przeoczenie.
     ///
     /// Bez tego przepis, którego `mealType` z backendu to `SNACK`,
     /// `SECOND_BREAKFAST` albo `AFTERNOON_SNACK`, nie miał kategorii — a brak
@@ -121,28 +122,6 @@ enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
         case .afternoonSnack:  return "Popołudniowa przerwa — owoc, jogurt, kanapka"
         case .dinner:          return "Ostatni pełny posiłek"
         case .snack:           return "Slot bez stałej pory — na przekąski w ciągu dnia"
-        }
-    }
-
-    // MARK: - Kolory
-    //
-    // Posiłek dodatkowy dostaje akcent posiłku, obok którego stoi (II śniadanie
-    // = rodzina śniadania), a odróżnia się ikoną i lżejszym wierszem. Sześć
-    // niezależnych kolorów rozbiłoby paletę „Cozy Kitchen" na jarmark.
-
-    var accentColor: Color {
-        switch self {
-        case .breakfast, .secondBreakfast: return .orange
-        case .lunch, .afternoonSnack:      return .blue
-        case .dinner, .snack:              return .purple
-        }
-    }
-
-    var secondaryAccentColor: Color {
-        switch self {
-        case .breakfast, .secondBreakfast: return .yellow
-        case .lunch, .afternoonSnack:      return .cyan
-        case .dinner, .snack:              return .indigo
         }
     }
 

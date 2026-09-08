@@ -186,15 +186,22 @@ struct StartupLoaderView: View {
         .frame(height: 42)
     }
 
+    /// Siedem dni, siedem kolorów — cała paleta „Cozy Kitchen" naraz.
+    ///
+    /// Wcześniej trzy akcenty szły w kółko (terakota, masło, szałwia ×2)
+    /// i fala wypełniająca tydzień powtarzała się w połowie drogi. Odkąd
+    /// każda pora dnia ma własny kolor, jest ich dokładnie tyle, ile dni:
+    /// zaczyna barwa marki, dalej idzie przejście od ciepłego do chłodnego,
+    /// tak samo jak doba na osi dnia w Kalendarzu.
     private var tileColors: [Color] {
         [
             SCPalette.terracotta,
             SCPalette.butter,
+            SCPalette.rose,
             SCPalette.sage,
-            SCPalette.terracotta,
-            SCPalette.butter,
-            SCPalette.sage,
-            SCPalette.terracottaDeep
+            SCPalette.teal,
+            SCPalette.indigo,
+            SCPalette.lavender
         ]
     }
 

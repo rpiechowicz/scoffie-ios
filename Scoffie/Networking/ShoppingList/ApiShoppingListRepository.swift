@@ -27,10 +27,6 @@ final class ApiShoppingListRepository: ShoppingListRepository {
         try await client.archiveShoppingList(weekStart: weekStart, weekLabel: weekLabel)
     }
 
-    func selectArchivedList(archiveId: String) async throws {
-        try await client.selectArchivedList(archiveId: archiveId)
-    }
-
     func deleteArchivedList(archiveId: String) async throws {
         try await client.deleteArchivedList(archiveId: archiveId)
     }

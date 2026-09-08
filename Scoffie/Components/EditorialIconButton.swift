@@ -1,8 +1,8 @@
 import SwiftUI
 
-// 38pt okrągła pigułka z obwódką i delikatnym wypełnieniem — akcja w wierszu
-// nagłówka (`EditorialPageHeader`). Gdy `highlighted` jest ustawione, tło i
-// obwódka biorą kolor akcentu.
+// Okrągła akcja w wierszu nagłówka (`EditorialPageHeader`) — `SCCircleIconLabel`
+// opakowany w przycisk z celem dotyku. Sam rysunek mieszka w komponencie, bo
+// biorą go stąd także etykiety menu „…", które przyciskiem nie są.
 struct EditorialIconButton: View {
     let icon: String
     var accent: Color = SCPalette.terracotta
@@ -20,34 +20,12 @@ struct EditorialIconButton: View {
     var tapTarget: CGFloat? = nil
     var action: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(
-                        highlighted
-                        ? accent.opacity(0.20)
-                        : Color.scTileBg(scheme)
-                    )
-
-                Circle()
-                    .stroke(
-                        highlighted
-                        ? accent.opacity(0.40)
-                        : Color.scTileStroke(scheme),
-                        lineWidth: 1
-                    )
-
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(highlighted ? accent : Color.scLabel(scheme))
-            }
-            .frame(width: size, height: size)
-            .scTapTarget(tapTarget ?? size, drawn: size)
+            SCCircleIconLabel(icon: icon, size: size, accent: accent, highlighted: highlighted)
+                .scTapTarget(tapTarget ?? size, drawn: size)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.9))
         .accessibilityLabel(Text(accessibilityTitle ?? icon))
     }
 }

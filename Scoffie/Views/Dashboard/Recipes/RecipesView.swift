@@ -871,18 +871,7 @@ private struct RecipeCategorySheetView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(Color.scFeatureRowBg(scheme)))
-                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Zamknij")
+            SCSheetCloseButton { dismiss() }
         }
     }
 
