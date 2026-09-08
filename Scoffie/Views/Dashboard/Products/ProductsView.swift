@@ -455,8 +455,15 @@ struct ProductsView: View {
                     completedAislesSnapshot = current
                     return
                 }
-                collapsedAisles.formUnion(current.subtracting(completedAislesSnapshot))
-                collapsedAisles.subtract(completedAislesSnapshot.subtracting(current))
+                // Zwłoka 0,45 s to nie ozdoba: alejka domyka się w tej samej
+                // chwili, w której zapala się ostatni ptaszek. Bez niej wiersz
+                // znikał razem ze stuknięciem i nie dawało się zobaczyć, że
+                // odhaczenie w ogóle weszło. Kolejność jest teraz czytelna:
+                // ptaszek → przekreślenie → alejka się składa.
+                withAnimation(Self.foldAnimation.delay(0.45)) {
+                    collapsedAisles.formUnion(current.subtracting(completedAislesSnapshot))
+                    collapsedAisles.subtract(completedAislesSnapshot.subtracting(current))
+                }
                 completedAislesSnapshot = current
             }
             .sheet(item: previewArchiveSheetBinding) { archive in
@@ -640,7 +647,6 @@ struct ProductsView: View {
             }
         }
         .animation(.easeInOut(duration: 0.24), value: canCloseCurrentList)
-        .animation(.easeInOut(duration: 0.24), value: todayOnly)
     }
 
     @ViewBuilder
@@ -730,23 +736,40 @@ struct ProductsView: View {
 
     // MARK: - Akcje
 
+    /// Zwinięcie alejki jedzie JEDNĄ transakcją na cały ekran, a nie
+    /// animacją przypiętą do sekcji.
+    ///
+    /// Sekcja zna tylko własną wysokość; to, co pod nią stoi — kolejne alejki
+    /// i pigułka „Zamknij listę” — należy do ekranu. `withAnimation` obejmuje
+    /// jedno i drugie, więc sąsiedzi jadą w górę tą samą sprężyną, zamiast
+    /// doskakiwać po zakończeniu animacji sekcji.
     private func toggleAisle(_ department: String) {
-        if collapsedAisles.contains(department) {
-            collapsedAisles.remove(department)
-        } else {
-            collapsedAisles.insert(department)
+        withAnimation(Self.foldAnimation) {
+            if collapsedAisles.contains(department) {
+                collapsedAisles.remove(department)
+            } else {
+                collapsedAisles.insert(department)
+            }
         }
     }
+
+    /// Sprężyna bez odbicia — akordeon ma się złożyć, a nie sprężynować.
+    private static let foldAnimation = Animation.spring(response: 0.34, dampingFraction: 0.92)
 
     /// Stuknięcie w wiersz „Na dziś”: z pełnej listy otwiera arkusz z daniami,
     /// z trybu filtra wraca do całej listy.
     private func handleTodayTap() {
-        if todayOnly {
-            todayOnly = false
-        } else {
+        guard todayOnly else {
             infoSheet = .today
+            return
         }
+        withAnimation(Self.filterAnimation) { todayOnly = false }
     }
+
+    /// Przełączenie filtra podmienia CAŁĄ listę alejek, więc jedzie łagodniej
+    /// od zwijania jednej sekcji — szybka sprężyna na takiej zmianie czyta się
+    /// jak mrugnięcie ekranu.
+    private static let filterAnimation = Animation.easeInOut(duration: 0.28)
 
     private func handleToggle(_ item: ShoppingItem) {
         guard let target = activeItems.first(where: { $0.productKey == item.productKey }) else { return }
@@ -770,7 +793,7 @@ struct ProductsView: View {
                 onToggleItem: { handleToggle($0) },
                 onShowInList: {
                     infoSheet = nil
-                    todayOnly = true
+                    withAnimation(Self.filterAnimation) { todayOnly = true }
                 },
                 onClose: { infoSheet = nil }
             )

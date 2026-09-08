@@ -59,7 +59,10 @@ struct ShoppingProgressBar: View {
             .frame(width: geo.size.width, alignment: .leading)
         }
         .frame(height: height)
-        .animation(.easeInOut(duration: 0.32), value: segments)
+        // Sprężyna bez odbicia, nie krzywa: wypełnienie segmentu dojeżdża
+        // do końca miękko, więc odhaczenie widać na pasku nawet wtedy, gdy
+        // przyrost to jedna dwudziesta jego szerokości.
+        .animation(.spring(response: 0.42, dampingFraction: 0.95), value: segments)
     }
 }
 
@@ -101,7 +104,17 @@ struct ShoppingProgressHeader: View {
                     // Prawa etykieta nie skaluje się ani nie zwija — jest
                     // krótsza od lewej i to lewa oddaje jej miejsce.
                     .fixedSize()
-                    .contentTransition(.opacity)
+                    // Licznik schodzi w dół, więc i cyfra ma się przewijać
+                    // w dół; „Wszystko kupione” wchodzi zwykłym przenikaniem,
+                    // bo to już nie jest liczba.
+                    .contentTransition(.numericText(countsDown: true))
+                    .id(isComplete)
+                    .transition(.opacity)
+                    // Animacja siedzi na TEJ etykiecie, nie na całym wierszu:
+                    // duży licznik obok to `CountingNumber`, który prowadzi
+                    // własne odliczanie — objęty animacją z zewnątrz dostawał
+                    // dwie na raz i drgał w trakcie.
+                    .animation(.easeInOut(duration: 0.28), value: remaining)
             }
 
             ShoppingProgressBar(segments: segments)

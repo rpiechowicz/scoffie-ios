@@ -157,13 +157,19 @@ struct ShoppingTodaySheet: View {
                     amount: item.displayAmount,
                     dishes: item.department,
                     bought: item.isChecked,
+                    // Ilość trzyma kolor DZIAŁU także tutaj, choć arkusz jest
+                    // pogrupowany po daniach: ta sama barwa co na liście mówi,
+                    // z której półki produkt się bierze.
+                    accent: ProductConstants.departmentColor(for: item.department),
                     isLast: idx == dishItems.count - 1,
                     isDisabled: disablesTaps,
                     onToggle: { onToggleItem(item) }
                 )
             }
+            // Ta sama zwłoka co na liście — kupiony składnik schodzi na dół
+            // grupy dopiero wtedy, gdy widać już, że ptaszek wszedł.
             .animation(
-                .snappy(duration: 0.34),
+                .spring(response: 0.38, dampingFraction: 0.88).delay(0.2),
                 value: dishItems.map(\.productKey).joined(separator: "|")
             )
         }

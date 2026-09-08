@@ -45,6 +45,9 @@ struct ShoppingTodayRow: View {
                     // na dwie linijki rozpychało wiersz i odklejało go od
                     // paska postępu nad nim.
                     .minimumScaleFactor(0.8)
+                    // „brakuje 8 produktów” → „brakuje 7 produktów”: przewija
+                    // się sama cyfra, reszta zdania stoi.
+                    .contentTransition(.numericText(countsDown: true))
 
                 Spacer(minLength: 8)
 
@@ -54,6 +57,7 @@ struct ShoppingTodayRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.26), value: missing)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(isFiltered ? "Stuknij, aby wrócić do całej listy" : "Stuknij, aby zobaczyć dzisiejsze dania")
     }

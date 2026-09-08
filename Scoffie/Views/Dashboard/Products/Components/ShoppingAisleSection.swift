@@ -74,13 +74,7 @@ struct ShoppingAisleSection: View {
             header
 
             if showsRows {
-                rows
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: -8)),
-                            removal: .opacity
-                        )
-                    )
+                rows.transition(Self.rowsTransition)
             } else {
                 // Zwinięta sekcja zostawia po sobie kreskę, nie pustkę —
                 // inaczej dwa nagłówki pod rząd czytały się jak jeden blok.
@@ -88,10 +82,26 @@ struct ShoppingAisleSection: View {
                     .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.top, 8)
+                    .transition(.opacity.animation(.easeIn(duration: 0.18).delay(0.1)))
             }
         }
-        .animation(.smooth(duration: 0.28), value: isCollapsed)
     }
+
+    /// Zwijanie w dwóch tempach, nie w jednym.
+    ///
+    /// Zawartość gaśnie SZYBKO (0,14 s), a wysokość sekcji jedzie sprężyną
+    /// z ekranu — dzięki temu wiersze znikają, zanim zaczną się nakładać na
+    /// nagłówek następnej alejki. Przy rozwijaniu jest odwrotnie: najpierw
+    /// robi się miejsce, a treść wchodzi z opóźnieniem 0,1 s, więc nie widać
+    /// jej „przez” zwijającą się jeszcze przestrzeń.
+    ///
+    /// Bez tych dwóch temp akordeon czytał się jak przeskok: cała treść
+    /// przenikała dokładnie tak długo, jak zmieniała się wysokość, i przez
+    /// pół animacji sekcja była zlepkiem dwóch półprzezroczystych stanów.
+    private static let rowsTransition = AnyTransition.asymmetric(
+        insertion: .opacity.animation(.easeOut(duration: 0.22).delay(0.1)),
+        removal: .opacity.animation(.easeIn(duration: 0.14))
+    )
 
     // MARK: - Nagłówek
 
@@ -115,6 +125,10 @@ struct ShoppingAisleSection: View {
                 Spacer(minLength: 8)
 
                 counter
+                    // Licznik zmienia się przy KAŻDYM odhaczeniu, czyli poza
+                    // transakcją zwijania — własna animacja jest tu po to,
+                    // żeby cyfra przewinęła się zamiast mrugnąć.
+                    .animation(.easeInOut(duration: 0.22), value: boughtCount)
 
                 if isCollapsible {
                     Image(systemName: "chevron.down")
@@ -156,7 +170,7 @@ struct ShoppingAisleSection: View {
                 .foregroundStyle(SCPalette.sage)
                 .lineLimit(1)
                 .fixedSize()
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
             } else {
                 Text("\(boughtCount) z \(items.count)")
                     .font(.system(size: 12.5, weight: .regular))
@@ -164,6 +178,10 @@ struct ShoppingAisleSection: View {
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .fixedSize()
+                    // Cyfra przewija się w miejscu, zamiast podmieniać się
+                    // skokiem — przy szybkim odhaczaniu widać, że licznik
+                    // faktycznie liczy, a nie miga.
+                    .contentTransition(.numericText())
                     .transition(.opacity)
             }
         }
@@ -190,6 +208,7 @@ struct ShoppingAisleSection: View {
                     amount: item.displayAmount,
                     dishes: dishSummary(item),
                     bought: item.isChecked,
+                    accent: accent,
                     showsTodayTag: mode == .list && isTodayItem(item),
                     isLast: index == ordered.count - 1,
                     isDisabled: disablesTaps,
@@ -198,6 +217,9 @@ struct ShoppingAisleSection: View {
                 )
             }
         }
-        .animation(.snappy(duration: 0.34), value: orderSignature)
+        // Przeniesienie kupionego na dół alejki czeka 0,2 s. Bez tej zwłoki
+        // wiersz uciekał spod palca w tej samej klatce, w której zapalał się
+        // ptaszek, i nie dawało się zobaczyć, CO się właściwie odhaczyło.
+        .animation(.spring(response: 0.38, dampingFraction: 0.88).delay(0.2), value: orderSignature)
     }
 }

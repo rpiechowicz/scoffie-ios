@@ -15,7 +15,7 @@ import SwiftUI
 ///
 /// Szałwia, a nie kolor działu: „kupione” to jeden stan na całej liście
 /// i musi wyglądać tak samo w warzywach, co w nabiale. Kolor działu niesie
-/// nagłówek sekcji i pasek postępu.
+/// nagłówek sekcji, pasek postępu i pigułka z ilością.
 struct ShoppingCheckCircle: View {
     let on: Bool
     var size: CGFloat = 22
@@ -82,6 +82,8 @@ struct ShoppingProductRow: View {
     /// z pomidorów”. `nil` chowa całą drugą linijkę, nie zostawia pustej.
     var dishes: String?
     let bought: Bool
+    /// Kolor działu — niesie go pigułka z ilością.
+    var accent: Color = SCPalette.terracotta
     /// Znacznik „Dziś”. W trybie „Na dziś” gaśnie — tam wszystko jest na dziś,
     /// więc znacznik przy każdym wierszu przestawałby cokolwiek znaczyć.
     var showsTodayTag: Bool = false
@@ -142,18 +144,9 @@ struct ShoppingProductRow: View {
                     .transition(.scale.combined(with: .opacity))
             }
 
-            Text(amount)
-                .font(.system(size: 13, weight: .medium))
-                .tracking(-0.1)
-                .monospacedDigit()
-                .foregroundStyle(bought ? Color.scFaint(scheme) : Color.scMuted(scheme))
-                .lineLimit(1)
-                // Ilość nigdy się nie zwija ani nie skaluje — to jedyna liczba
-                // w wierszu i musi dać się przeczytać z ręki w sklepie.
-                // Miejsce oddaje jej nazwa produktu, nie odwrotnie.
-                .fixedSize()
+            amountPill
         }
-        .frame(minHeight: dishes == nil ? 46 : 52)
+        .frame(minHeight: dishes == nil ? 48 : 54)
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
@@ -161,6 +154,44 @@ struct ShoppingProductRow: View {
                     .frame(height: 1)
             }
         }
+        .animation(.easeInOut(duration: 0.22), value: bought)
+    }
+
+    /// Ilość w pigułce w kolorze działu.
+    ///
+    /// Wersja płaska („150 g” szarym tekstem obok nazwy) była nie do
+    /// odczytania z ręki w sklepie: to jedyna LICZBA w wierszu, a wyglądała
+    /// jak przypis. Pigułka daje jej własne pole i kontrast, a kolor działu
+    /// wiąże ją z nagłówkiem alejki i z segmentem na pasku postępu — ta sama
+    /// barwa mówi „to z tej półki”. Kupione schodzi do neutralnej szarości:
+    /// ilość już nie jest potrzebna, więc przestaje wołać.
+    private var amountPill: some View {
+        Text(amount)
+            .font(.system(size: 13, weight: .bold))
+            .tracking(0.1)
+            .monospacedDigit()
+            .foregroundStyle(bought ? Color.scMuted(scheme) : accent)
+            .lineLimit(1)
+            // Ilość nigdy się nie zwija ani nie skaluje — miejsce oddaje jej
+            // nazwa produktu, nie odwrotnie.
+            .fixedSize()
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(
+                    bought
+                    ? Color.scChipBg(scheme)
+                    : accent.opacity(scheme == .dark ? 0.20 : 0.12)
+                )
+            )
+            .overlay(
+                Capsule().stroke(
+                    bought
+                    ? Color.scTileStroke(scheme)
+                    : accent.opacity(scheme == .dark ? 0.42 : 0.32),
+                    lineWidth: 1
+                )
+            )
     }
 
     private var accessibilityLabel: Text {
@@ -182,19 +213,22 @@ struct ShoppingProductRow: View {
                 amount: "800 g",
                 dishes: "Kurczak pieczony",
                 bought: false,
+                accent: SCPalette.terracottaDeep,
                 showsTodayTag: true
             )
             ShoppingProductRow(
                 name: "Pomidory krojone z puszki bez skórki",
                 amount: "750 g",
                 dishes: "Krem z pomidorów · Ryż z warzywami",
-                bought: false
+                bought: false,
+                accent: SCPalette.sage
             )
             ShoppingProductRow(
                 name: "Masło",
                 amount: "250 g",
                 dishes: "Omlet ze szpinakiem",
                 bought: true,
+                accent: SCPalette.lavender,
                 isLast: true
             )
         }
