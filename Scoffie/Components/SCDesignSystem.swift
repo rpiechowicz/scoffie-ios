@@ -246,6 +246,28 @@ extension Color {
             : SCPalette.labelLight.opacity(0.07)
     }
 
+    /// Znak odhaczenia — „zjedzone".
+    ///
+    /// Neutralny, nie zielony, i to jest decyzja, a nie oszczędność. Sześć pór
+    /// dnia zajmuje sześć barw, a szałwia była jedną z nich — kolorem obiadu.
+    /// Odhaczony obiad miał przez to dwa szałwiowe kółka w jednym wierszu
+    /// i nie dawało się powiedzieć, które mówi „obiad", a które „zjedzone".
+    ///
+    /// Przesunięcie obiadu nic by nie dało: żeby status miał własną barwę,
+    /// musiałaby stać co najmniej ~90° od każdej z sześciu pór, a tyle
+    /// wolnego miejsca na kole już nie ma. Status wychodzi więc z koła
+    /// w ogóle — pełne kółko w kolorze pisma z ptaszkiem w kolorze tła.
+    /// Czyta się jak zaznaczony checkbox, nie da się go pomylić z żadną porą,
+    /// a wiersz i tak przygasa zdjęciem i tytułem, więc jeden wyraźny znak
+    /// jest kontrastem, a nie hałasem.
+    ///
+    /// Szałwia zostaje przy podsumowaniach dnia (kropki „2 z 4", kropka
+    /// „z planem" na pasku dni) — tam nie sąsiaduje z kolorem pory, więc nie
+    /// ma czego mylić, i nadal znaczy „zrobione".
+    static func scChecked(_ scheme: ColorScheme) -> Color {
+        scLabel(scheme)
+    }
+
     static func scChipBg(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? SCPalette.labelDark.opacity(0.08)

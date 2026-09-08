@@ -45,6 +45,12 @@ struct CalendarDayHeader: View {
             Spacer(minLength: 10)
 
             if total > 0 {
+                // Szałwia, choć pojedynczy ptaszek w wierszu jest neutralny
+                // (`Color.scChecked`). To nie jest niekonsekwencja: tamten
+                // znak stoi tuż obok koloru pory i musiał się od niego
+                // odciąć, a ta plakietka podsumowuje CAŁY dzień i nie
+                // sąsiaduje z żadną porą. Szałwia znaczy tu to samo, co
+                // kropka „z planem" na pasku dni nad nią.
                 SCPipsBadge(
                     filled: eaten,
                     total: total,

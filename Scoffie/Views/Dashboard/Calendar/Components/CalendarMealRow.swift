@@ -57,7 +57,7 @@ enum CalendarRelativeTime {
 // MARK: - Checkbox
 
 /// Kółko stanu: puste (później / inny dzień) · kreskowane (bez pory) ·
-/// w kolorze pory z kropką (następne) · sage'owe z ptaszkiem (zjedzone).
+/// w kolorze pory z kropką (następne) · pełne z ptaszkiem (zjedzone).
 ///
 /// Ten sam rysunek co węzeł osi, tylko bez zdjęcia — dlatego mieszka obok
 /// wiersza, a nie w nim: oś sięga po `CalendarMealStatus` do tego samego
@@ -72,7 +72,9 @@ struct CalendarMealCheck: View {
     var body: some View {
         ZStack {
             if status.isEaten {
-                Circle().fill(SCPalette.sage)
+                // Neutralne, nie w kolorze pory i nie zielone — patrz
+                // `Color.scChecked`. Zieleń była zarazem kolorem obiadu.
+                Circle().fill(Color.scChecked(scheme))
 
                 Image(systemName: "checkmark")
                     .font(.system(size: size * 0.5, weight: .heavy))
@@ -201,7 +203,7 @@ struct CalendarMealRow: View {
             Text("· \(statusText)")
                 .font(.system(size: 11.5, weight: .semibold))
                 .monospacedDigit()
-                .foregroundStyle(eaten ? SCPalette.sage : Color.scFaint(scheme))
+                .foregroundStyle(eaten ? Color.scMuted(scheme) : Color.scFaint(scheme))
                 // Odliczanie tyka co minutę i bez tego liczby po prostu
                 // podmieniałyby się między klatkami, w wierszu, na który
                 // akurat nikt nie patrzy — albo patrzy.

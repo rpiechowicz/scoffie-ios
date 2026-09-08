@@ -508,7 +508,9 @@ struct PlanGoalMealRow: View {
                             : "circle.dashed")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(
-                                entry.isEaten ? SCPalette.sage : Color.scFaint(scheme)
+                                entry.isEaten
+                                    ? Color.scChecked(scheme)
+                                    : Color.scFaint(scheme)
                             )
                             // Wiersz scala dzieci (`.combine`), więc ta
                             // etykieta wchodzi do zdania czytanego przez
