@@ -56,25 +56,6 @@ struct ShoppingCheckCircle: View {
     }
 }
 
-/// Znacznik „Dziś” przy produkcie potrzebnym do dzisiejszego dania.
-struct ShoppingTodayTag: View {
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Text("DZIŚ")
-            .font(.system(size: 9.5, weight: .bold))
-            .tracking(0.6)
-            .foregroundStyle(SCPalette.terracotta)
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2.5)
-            .background(
-                Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12))
-            )
-    }
-}
-
 struct ShoppingProductRow: View {
     let name: String
     let amount: String
@@ -140,7 +121,7 @@ struct ShoppingProductRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsTodayTag && !bought {
-                ShoppingTodayTag()
+                ShoppingTag(text: "Dziś")
                     .transition(.scale.combined(with: .opacity))
             }
 

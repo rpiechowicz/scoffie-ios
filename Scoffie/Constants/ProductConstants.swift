@@ -34,6 +34,57 @@ struct ProductConstants {
         static let other = "Inne"
     }
 
+    // MARK: - Grupowanie w alejki
+
+    /// Kolejność obchodzenia sklepu. „Inne” zawsze na końcu — to worek na to,
+    /// czego nie dało się przypisać, a nie dział z własną półką.
+    private static let departmentRank: [String: Int] = [
+        Department.vegetables: 1,
+        Department.fruits: 2,
+        Department.meat: 3,
+        Department.fish: 4,
+        Department.dairy: 5,
+        Department.bakery: 6,
+        Department.grains: 7,
+        Department.canned: 8,
+        Department.spices: 9,
+        Department.oils: 10,
+        Department.alcohols: 11,
+        Department.beverages: 12,
+        Department.snacks: 13,
+        Department.frozen: 14,
+        Department.bakerySweets: 15,
+        Department.household: 16,
+        Department.other: 99
+    ]
+
+    /// Produkty pogrupowane w alejki, w kolejności obchodzenia sklepu.
+    ///
+    /// Mieszka tutaj, a nie na ekranie: tą samą kolejność rysuje aktywna lista
+    /// i podgląd listy z historii, a dwie kopie tego słownika rozjechałyby się
+    /// przy pierwszym dołożonym dziale.
+    static func grouped(_ items: [ShoppingItem]) -> [(department: String, items: [ShoppingItem])] {
+        let normalizedOther = Department.other
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        return Dictionary(grouping: items, by: \.department)
+            .sorted {
+                let leftKey = $0.key.trimmingCharacters(in: .whitespacesAndNewlines)
+                let rightKey = $1.key.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                let leftIsOther = leftKey.lowercased() == normalizedOther
+                let rightIsOther = rightKey.lowercased() == normalizedOther
+                if leftIsOther != rightIsOther { return !leftIsOther }
+
+                let leftRank = departmentRank[leftKey] ?? 999
+                let rightRank = departmentRank[rightKey] ?? 999
+                if leftRank != rightRank { return leftRank < rightRank }
+                return leftKey < rightKey
+            }
+            .map { (department: $0.key, items: $0.value) }
+    }
+
     // MARK: - Department Icon & Color
 
     static func departmentIcon(for department: String) -> String {

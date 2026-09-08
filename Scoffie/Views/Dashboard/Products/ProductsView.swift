@@ -32,23 +32,30 @@ struct ProductsView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
 
-    @State private var archivePendingDeletion: ArchivedShoppingList?
     @State private var showDeleteAllHistoryAlert = false
-    @State private var previewArchiveId: String?
 
-    /// Arkusze bez własnego celu — historia list i „Na dziś”.
+    /// Arkusze bez własnego celu — historia, jeden miesiąc historii i „Na dziś”.
     ///
-    /// Jeden `@State` na oba, a nie dwa niezależne `Bool`-e z osobnymi
+    /// Jeden `@State` na wszystkie, a nie osobne `Bool`-e z własnymi
     /// `.sheet(isPresented:)`: SwiftUI potrafi zgubić wcześniejszy
-    /// `.sheet(isPresented:)` w łańcuchu modyfikatorów tego samego widoku,
-    /// a ten ekran ma jeszcze arkusz podglądu archiwum. Ta sama zasada, co
-    /// w `WeeklyPlanView`.
+    /// `.sheet(isPresented:)` w łańcuchu modyfikatorów tego samego widoku.
+    /// Ta sama zasada, co w `WeeklyPlanView`.
     @State private var infoSheet: InfoSheet?
 
-    private enum InfoSheet: String, Identifiable {
-        case history
+    private enum InfoSheet: Identifiable, Hashable {
         case today
-        var id: String { rawValue }
+        case history
+        /// Miesiąc otwarty WPROST z ekranu z zamkniętą listą, z pominięciem
+        /// arkusza historii — tam miesiące stoją już na ekranie.
+        case month(String)
+
+        var id: String {
+            switch self {
+            case .today:            return "today"
+            case .history:          return "history"
+            case .month(let key):   return "month.\(key)"
+            }
+        }
     }
 
     /// Dania tygodnia stojące za produktami. Liczone z planu, nie z serwera —
@@ -89,25 +96,6 @@ struct ProductsView: View {
         shoppingListStore.items
     }
 
-    private var previewedArchive: ArchivedShoppingList? {
-        guard let previewArchiveId else { return nil }
-        return shoppingListStore.archivedLists.first { $0.archiveId == previewArchiveId }
-    }
-
-    private var previewedArchiveItems: [ShoppingItem] {
-        guard let previewArchiveId else { return [] }
-        return shoppingListStore.archiveDisplayItems(archiveId: previewArchiveId)
-    }
-
-    private var previewArchiveSheetBinding: Binding<ArchivedShoppingList?> {
-        Binding(
-            get: { previewedArchive },
-            set: { updatedValue in
-                previewArchiveId = updatedValue?.archiveId
-            }
-        )
-    }
-
     private var archivedCurrentWeek: ArchivedShoppingList? {
         shoppingListStore.currentClosedArchive(for: datesViewModel.weekStartISO)
     }
@@ -128,7 +116,7 @@ struct ProductsView: View {
     }
 
     private var groupedByDepartment: [(department: String, items: [ShoppingItem])] {
-        groupItemsByDepartment(activeItems)
+        ProductConstants.grouped(activeItems)
     }
 
     /// Alejki widoczne na ekranie. W trybie „Na dziś” zostają wyłącznie
@@ -136,54 +124,7 @@ struct ProductsView: View {
     /// znikał spod palca w chwili odhaczenia.
     private var visibleGroups: [(department: String, items: [ShoppingItem])] {
         guard todayOnly else { return groupedByDepartment }
-        return groupItemsByDepartment(activeItems.filter { dishIndex.isForToday($0) })
-    }
-
-    private var groupedPreviewItemsByDepartment: [(department: String, items: [ShoppingItem])] {
-        groupItemsByDepartment(previewedArchiveItems)
-    }
-
-    private func groupItemsByDepartment(_ items: [ShoppingItem]) -> [(department: String, items: [ShoppingItem])] {
-        let departmentOrder: [String: Int] = [
-            ProductConstants.Department.vegetables: 1,
-            ProductConstants.Department.fruits: 2,
-            ProductConstants.Department.meat: 3,
-            ProductConstants.Department.fish: 4,
-            ProductConstants.Department.dairy: 5,
-            ProductConstants.Department.bakery: 6,
-            ProductConstants.Department.grains: 7,
-            ProductConstants.Department.canned: 8,
-            ProductConstants.Department.spices: 9,
-            ProductConstants.Department.oils: 10,
-            ProductConstants.Department.alcohols: 11,
-            ProductConstants.Department.beverages: 12,
-            ProductConstants.Department.snacks: 13,
-            ProductConstants.Department.frozen: 14,
-            ProductConstants.Department.bakerySweets: 15,
-            ProductConstants.Department.household: 16,
-            ProductConstants.Department.other: 99
-        ]
-        let normalizedOther = ProductConstants.Department.other
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-
-        return Dictionary(grouping: items, by: \.department)
-            .sorted {
-                let leftKey = $0.key.trimmingCharacters(in: .whitespacesAndNewlines)
-                let rightKey = $1.key.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                let leftIsOther = leftKey.lowercased() == normalizedOther
-                let rightIsOther = rightKey.lowercased() == normalizedOther
-                if leftIsOther != rightIsOther {
-                    return !leftIsOther
-                }
-
-                let leftRank = departmentOrder[leftKey] ?? 999
-                let rightRank = departmentOrder[rightKey] ?? 999
-                if leftRank != rightRank { return leftRank < rightRank }
-                return leftKey < rightKey
-            }
-            .map { (department: $0.key, items: $0.value) }
+        return ProductConstants.grouped(activeItems.filter { dishIndex.isForToday($0) })
     }
 
     private var boughtCount: Int {
@@ -402,33 +343,19 @@ struct ProductsView: View {
             .sensoryFeedback(trigger: canCloseCurrentList) { _, isReady in
                 isReady ? .success : nil
             }
-            .alert("Usunąć listę z historii?", isPresented: archiveDeleteAlertBinding) {
-                Button("Anuluj", role: .cancel) {
-                    archivePendingDeletion = nil
-                }
-                Button("Usuń", role: .destructive) {
-                    if let archivePendingDeletion {
-                        if previewArchiveId == archivePendingDeletion.archiveId {
-                            previewArchiveId = nil
-                        }
-                        shoppingListStore.deleteArchivedList(archiveId: archivePendingDeletion.id)
-                    }
-                    archivePendingDeletion = nil
-                }
-            } message: {
-                Text("Ta operacja usunie zapisany wpis historyczny dla wybranego tygodnia.")
-            }
+            // Kasowanie POJEDYNCZEJ listy potwierdza się w arkuszu, w którym
+            // się jej dotyka: alert przypięty tutaj wisiałby pod dwoma
+            // arkuszami historii i nigdy by się nie pokazał.
             .alert("Usunąć całą historię list?", isPresented: $showDeleteAllHistoryAlert) {
                 Button("Anuluj", role: .cancel) { }
                 Button("Usuń wszystko", role: .destructive) {
-                    previewArchiveId = nil
+                    infoSheet = nil
                     shoppingListStore.deleteAllArchivedLists()
                 }
             } message: {
                 Text("Ta operacja usunie wszystkie zapisane listy produktów z historii.")
             }
             .task(id: datesViewModel.weekStartISO) {
-                previewArchiveId = nil
                 todayOnly = false
                 didSeedCollapsedAisles = false
                 collapsedAisles = []
@@ -474,22 +401,29 @@ struct ProductsView: View {
                 }
                 completedAislesSnapshot = current
             }
-            .sheet(item: previewArchiveSheetBinding) { archive in
-                archivePreview(archive)
-                    .presentationDetents([.large])
-                    .dashboardLiquidSheet()
-            }
+            // Arkusze WOLNO stawiać jeden na drugim: historia → miesiąc →
+            // lista. Każdy poziom zdejmuje się własną strzałką w lewym górnym
+            // rogu, a to, co pod spodem, zostaje tam, gdzie było.
             .sheet(item: $infoSheet) { which in
-                switch which {
-                case .history:
-                    historySheet
-                        .presentationDetents([.medium, .large])
-                        .dashboardLiquidSheet()
-                case .today:
-                    todaySheet
-                        .presentationDetents([.large])
-                        .dashboardLiquidSheet()
+                Group {
+                    switch which {
+                    case .today:
+                        todaySheet
+                    case .history:
+                        ShoppingHistorySheet(
+                            months: historyMonths,
+                            itemsForArchive: { shoppingListStore.archiveDisplayItems(archiveId: $0) },
+                            dishSummary: { item in dishSummary(for: item) },
+                            onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
+                            onDeleteAll: { shoppingListStore.deleteAllArchivedLists() },
+                            onBack: { infoSheet = nil }
+                        )
+                    case .month(let key):
+                        monthSheet(key: key)
+                    }
                 }
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
             }
         }
     }
@@ -555,33 +489,20 @@ struct ProductsView: View {
         .accessibilityLabel("Więcej opcji listy zakupów")
     }
 
-    /// Eyebrow tygodnia i meta „10 dań · 29 produktów”.
+    /// Eyebrow tygodnia i meta — „10 dań · 29 produktów” na aktywnej liście,
+    /// „Lista zamknięta” po jej domknięciu.
     private var weekRow: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text(weekEyebrow)
-                .font(.system(size: 11, weight: .bold))
-                .tracking(1.4)
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+        ShoppingEyebrowRow(eyebrow: weekEyebrow, meta: weekRowMeta)
+            .padding(.horizontal, pageHorizontalPadding)
+            .padding(.top, 20)
+    }
 
-            Spacer(minLength: 8)
-
-            if listState == .content {
-                Text(weekMeta)
-                    .font(.system(size: 12.5, weight: .regular))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .lineLimit(1)
-                    // Meta ustępuje miejsca eyebrow, a nie odwrotnie —
-                    // data tygodnia jest tu ważniejsza od liczby dań.
-                    .layoutPriority(-1)
-                    .transition(.opacity)
-            }
+    private var weekRowMeta: String? {
+        switch listState {
+        case .content:          return weekMeta
+        case .archived:         return "Lista zamknięta"
+        case .loading, .empty:  return nil
         }
-        .frame(minHeight: 22)
-        .padding(.horizontal, pageHorizontalPadding)
-        .padding(.top, 20)
     }
 
     // MARK: - Active shopping list
@@ -915,360 +836,120 @@ struct ProductsView: View {
         .background(Capsule().fill(Color.scChipBg(scheme)))
     }
 
-    // MARK: - Archived state
+    // MARK: - Historia
     //
-    // Bez karty statusu i bez powtórzonej daty: eyebrow nad listą mówi już,
-    // o którym tygodniu mowa, a status domyka jedna wyśrodkowana kreska
-    // (ten sam wzorzec, co pusta oś w Kalendarzu). Każdy wiersz historii
-    // pokazuje folio, etykietę rewizji i licznik.
+    // Zamknięty tydzień to nie jest „stan pusty z komunikatem”. Lista jest
+    // domknięta, nic na niej nie zostało do zrobienia i nowa ułoży się sama —
+    // więc ekran oddaje miejsce jedynej rzeczy, która tu jeszcze coś znaczy:
+    // historii. Stąd zdjęcia dań, jedno zdanie i wprost pod nim miesiące.
+    //
+    // Źródło: canvas → „Zakupy v2 · Historia · Final”, plansza 1.
+
     private var archivedState: some View {
         VStack(alignment: .leading, spacing: 0) {
-            weekClosedRule
+            ShoppingClosedHero(
+                imageURLs: closedHeroImageURLs,
+                bought: archivedCurrentWeekCounts.bought,
+                total: archivedCurrentWeekCounts.total
+            )
+            .padding(.horizontal, pageHorizontalPadding)
+            .padding(.top, 36)
+
+            Rectangle()
+                .fill(Color.scRule(scheme))
+                .frame(height: 1)
                 .padding(.horizontal, pageHorizontalPadding)
-                .padding(.top, 16)
-                .padding(.bottom, 18)
+                .padding(.top, 32)
 
-            if !currentWeekArchives.isEmpty {
-                archiveRowsContainer(currentWeekArchives)
-                    .padding(.horizontal, pageHorizontalPadding)
-
-                deleteAllHistoryButton
-                    .padding(.horizontal, pageHorizontalPadding)
-                    .padding(.top, 14)
-            }
-        }
-    }
-
-    /// Archives that belong to the currently-viewed week — sorted by
-    /// revision ascending so the displayed folios run 01 → 02 → 03 in
-    /// the same direction as `Lista 1 → Lista 2 → Lista 3`.
-    private var currentWeekArchives: [ArchivedShoppingList] {
-        let weekStart = datesViewModel.weekStartISO
-        return shoppingListStore.archivedLists
-            .filter { $0.weekStart == weekStart }
-            .sorted { $0.revision < $1.revision }
-    }
-
-    /// Cross-week history feed — newest week first, then oldest revision
-    /// first within each week (so revision folios still read ascending).
-    private var sortedAllArchives: [ArchivedShoppingList] {
-        shoppingListStore.archivedLists.sorted { lhs, rhs in
-            if lhs.weekStart != rhs.weekStart {
-                return lhs.weekStart > rhs.weekStart
-            }
-            return lhs.revision < rhs.revision
-        }
-    }
-
-    /// Calendar-style centered rule: hairline — „8–14 WRZ · ZAMKNIĘTE” —
-    /// hairline.
-    private var weekClosedRule: some View {
-        HStack(spacing: 10) {
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
-                .frame(maxWidth: .infinity)
-
-            Text("\(weekRangeShort.uppercased()) · ZAMKNIĘTE")
-                .font(.system(size: 9, weight: .bold))
-                .tracking(2)
-                .foregroundStyle(SCPalette.indigo)
-                .lineLimit(1)
-                .fixedSize()
-
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    // MARK: - Archive history (sheet + inline rows)
-
-    /// Rounded container with hairline separators between archive rows.
-    private func archiveRowsContainer(_ archives: [ArchivedShoppingList]) -> some View {
-        VStack(spacing: 0) {
-            ForEach(Array(archives.enumerated()), id: \.element.id) { idx, archive in
-                archiveRow(archive)
-
-                if idx < archives.count - 1 {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                        .padding(.leading, 60)
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    /// Subtle, full-width red pill — same look as on the history sheet so
-    /// the destructive affordance reads consistently across surfaces.
-    private var deleteAllHistoryButton: some View {
-        Button {
-            showDeleteAllHistoryAlert = true
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "trash")
-                    .font(.system(size: 12, weight: .semibold))
-                Text("Usuń całą historię")
-                    .font(.system(size: 13, weight: .medium))
-                    .tracking(-0.1)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Capsule().fill(Color.red.opacity(0.10)))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Usuń całą historię")
-    }
-
-    private var historySheet: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("HISTORIA LIST")
-                                .font(.system(size: 10.5, weight: .bold))
-                                .tracking(1.4)
-                                .foregroundStyle(SCPalette.terracotta)
-                                .lineLimit(1)
-                            Text("Zamknięte listy")
-                                .font(.system(size: 22, weight: .heavy))
-                                .foregroundStyle(Color.scLabel(scheme))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        Spacer(minLength: 8)
-                        Button {
-                            infoSheet = nil
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Color.scMuted(scheme))
-                                .frame(width: 36, height: 36)
-                                .background(Circle().fill(Color.scChipBg(scheme)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Zamknij")
-                    }
-
-                    if shoppingListStore.archivedLists.isEmpty {
-                        Text("Brak zapisanych list.")
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
-                    } else {
-                        archiveRowsContainer(sortedAllArchives)
-
-                        deleteAllHistoryButton
-                            .padding(.top, 8)
-                    }
-                }
-                .padding(SCPageMetrics.horizontal)
-                .padding(.top, 12)
-            }
-            .scrollIndicators(.hidden)
-        }
-    }
-
-    /// One archive row — single line, no date repetition. Folio italic uses
-    /// the actual revision number so it always matches the „Lista N” label.
-    private func archiveRow(_ archive: ArchivedShoppingList) -> some View {
-        let counts = shoppingListStore.archiveDisplayCounts(archiveId: archive.archiveId)
-        let folio = archive.revision < 10
-            ? String(format: "0%d", archive.revision)
-            : "\(archive.revision)"
-        let isCurrentWeek = archive.weekStart == datesViewModel.weekStartISO
-
-        return HStack(alignment: .center, spacing: 14) {
-            Button {
-                previewArchiveId = archive.archiveId
-                infoSheet = nil
-            } label: {
-                HStack(alignment: .center, spacing: 14) {
-                    Text(folio)
-                        .font(.system(size: 24, weight: .heavy))
-                        .italic()
-                        .tracking(-0.8)
-                        .foregroundStyle(SCPalette.indigo.opacity(scheme == .dark ? 0.65 : 0.55))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .fixedSize()
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 0) {
-                            Text("Lista \(archive.revision)")
-                                .font(.system(size: 15, weight: .heavy))
-                                .tracking(-0.3)
-                                .foregroundStyle(Color.scLabel(scheme))
-
-                            Text(verbatim: " · ")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.scMuted(scheme))
-
-                            Text("\(counts.bought)/\(counts.total) kupione")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.scMuted(scheme))
-                                .monospacedDigit()
-                        }
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-
-                        if !isCurrentWeek {
-                            Text(archive.weekLabel)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.scMuted(scheme).opacity(0.8))
-                                .lineLimit(1)
-                        }
-                    }
-
-                    Spacer(minLength: 8)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Pokaż listę \(archive.revision), \(archive.weekLabel)")
-
-            HStack(spacing: 6) {
-                archiveIconButton(
-                    icon: "eye",
+            if historyMonths.isEmpty {
+                noteCard(
+                    icon: "clock.arrow.circlepath",
                     tint: Color.scMuted(scheme),
-                    fill: Color.scChipBg(scheme),
-                    label: "Pokaż listę \(archive.revision)"
-                ) {
-                    previewArchiveId = archive.archiveId
-                    infoSheet = nil
-                }
+                    title: "Historia jest pusta",
+                    subtitle: "Zamknięte listy zakupów trafią tutaj same."
+                )
+                .padding(.horizontal, pageHorizontalPadding)
+                .padding(.top, 18)
+            } else {
+                ShoppingSectionTitle(
+                    title: "Historia",
+                    count: PolishPlural.lists(historyListCount)
+                )
+                .padding(.horizontal, pageHorizontalPadding)
+                .padding(.top, 18)
+                .padding(.bottom, 4)
 
-                archiveIconButton(
-                    icon: "trash",
-                    tint: .red.opacity(0.85),
-                    fill: Color.red.opacity(0.10),
-                    label: "Usuń z historii"
-                ) {
-                    archivePendingDeletion = archive
+                ShoppingMonthList(months: historyMonths) { month in
+                    infoSheet = .month(month.key)
                 }
+                .padding(.horizontal, pageHorizontalPadding)
             }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-    }
-
-    private func archiveIconButton(
-        icon: String,
-        tint: Color,
-        fill: Color,
-        label: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(fill))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
-    // MARK: - Archive preview sheet
-
-    private func archivePreview(_ archive: ArchivedShoppingList) -> some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("LISTA \(archive.revision)")
-                                .font(.system(size: 10.5, weight: .bold))
-                                .tracking(1.4)
-                                .foregroundStyle(SCPalette.terracotta)
-                                .lineLimit(1)
-                            Text(archive.weekLabel)
-                                .font(.system(size: 22, weight: .heavy))
-                                .foregroundStyle(Color.scLabel(scheme))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        Spacer(minLength: 8)
-                        Button {
-                            previewArchiveId = nil
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Color.scMuted(scheme))
-                                .frame(width: 36, height: 36)
-                                .background(Circle().fill(Color.scChipBg(scheme)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Zamknij")
-                    }
-
-                    if groupedPreviewItemsByDepartment.isEmpty {
-                        noteCard(
-                            icon: "basket",
-                            tint: Color.scMuted(scheme),
-                            title: "Pusta lista",
-                            subtitle: "Ta zamknięta lista nie ma żadnych produktów."
-                        )
-                        .padding(.top, 18)
-                    } else {
-                        ForEach(Array(groupedPreviewItemsByDepartment.enumerated()), id: \.element.department) { _, group in
-                            ShoppingAisleSection(
-                                department: group.department,
-                                items: group.items,
-                                mode: .readOnly,
-                                // Dania pod produktem tylko dla OGLĄDANEGO
-                                // tygodnia. Indeks jest zbudowany z jego planu,
-                                // więc przy liście sprzed miesiąca dopisałby
-                                // „Pomidorom" dzisiejszą zupę — czyli danie,
-                                // którego w tamtym tygodniu nie było.
-                                dishSummary: { item in
-                                    archive.weekStart == datesViewModel.weekStartISO
-                                    ? dishIndex.dishSummary(for: item)
-                                    : nil
-                                }
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, SCPageMetrics.horizontal)
-                .padding(.top, 24)
-                .padding(.bottom, SCPageMetrics.bottom)
-            }
-            .scrollIndicators(.hidden)
         }
     }
 
-    private var archiveDeleteAlertBinding: Binding<Bool> {
-        Binding(
-            get: { archivePendingDeletion != nil },
-            set: { isPresented in
-                if !isPresented {
-                    archivePendingDeletion = nil
-                }
-            }
+    /// Licznik zamkniętej listy tygodnia. Ta sama reguła, co w wierszach
+    /// historii (`archiveDisplayCounts`), żeby zdanie w nagłówku i liczba przy
+    /// liście niżej nigdy nie mówiły dwóch różnych rzeczy o tej samej liście.
+    private var archivedCurrentWeekCounts: (bought: Int, total: Int) {
+        guard let archive = archivedCurrentWeek else { return (0, 0) }
+        return shoppingListStore.archiveDisplayCounts(archiveId: archive.archiveId)
+    }
+
+    /// Zdjęcia dań tygodnia do pustego stanu — po jednym na przepis, cztery.
+    ///
+    /// Bierzemy je z planu, nie z listy zakupów: lista zna produkty, a na
+    /// krążkach mają być DANIA, dla których się kupowało.
+    private var closedHeroImageURLs: [URL] {
+        var seen = Set<String>()
+        var urls: [URL] = []
+        for dish in dishIndex.dishes {
+            guard let url = dish.imageURL, seen.insert(dish.title).inserted else { continue }
+            urls.append(url)
+            if urls.count == 4 { break }
+        }
+        return urls
+    }
+
+    /// Historia poukładana w miesiące. Liczniki idą przez
+    /// `archiveDisplayCounts`, więc druga rewizja tygodnia nie dolicza po raz
+    /// drugi tego samego jogurtu.
+    private var historyMonths: [ShoppingHistoryMonth] {
+        ShoppingHistory.months(
+            archives: shoppingListStore.archivedLists,
+            counts: { shoppingListStore.archiveDisplayCounts(archiveId: $0) },
+            currentWeekStart: datesViewModel.weekStartISO
         )
+    }
+
+    private var historyListCount: Int {
+        historyMonths.reduce(0) { $0 + $1.listCount }
+    }
+
+    /// Arkusz jednego miesiąca — otwierany wprost z ekranu z zamkniętą listą.
+    /// Miesiąc wyszukiwany po kluczu przy każdym rysowaniu: skasowanie
+    /// ostatniej listy miesiąca zamyka arkusz samo, zamiast zostawiać otwarty
+    /// ekran czegoś, czego już nie ma.
+    @ViewBuilder
+    private func monthSheet(key: String) -> some View {
+        if let month = historyMonths.first(where: { $0.key == key }) {
+            ShoppingHistoryMonthSheet(
+                month: month,
+                itemsForArchive: { shoppingListStore.archiveDisplayItems(archiveId: $0) },
+                dishSummary: { item in dishSummary(for: item) },
+                onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
+                onBack: { infoSheet = nil }
+            )
+        }
+    }
+
+    /// Dania pod nazwą produktu w liście z historii.
+    ///
+    /// Indeks jest zbudowany z planu OGLĄDANEGO tygodnia, więc przy liście
+    /// sprzed miesiąca dopisałby „Pomidorom” dzisiejszą zupę. Historia
+    /// zamkniętej listy z tego samego tygodnia dania ma — i to jest dokładnie
+    /// ten przypadek, w którym ktoś do niej wraca.
+    private func dishSummary(for item: ShoppingItem) -> String? {
+        dishIndex.dishSummary(for: item)
     }
 }
 

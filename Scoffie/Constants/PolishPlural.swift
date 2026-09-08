@@ -62,6 +62,11 @@ enum PolishPlural {
         "\(count) \(form(count, one: "składnik", few: "składniki", many: "składników"))"
     }
 
+    /// Liczba list zakupów, np. „5 list”.
+    static func lists(_ count: Int) -> String {
+        "\(count) \(form(count, one: "lista", few: "listy", many: "list"))"
+    }
+
     /// Ile pozycji jest już kupionych, np. „3 kupione”.
     ///
     /// Rzeczownik zostaje domyślny („produkt”), więc odmienia się przymiotnik:
