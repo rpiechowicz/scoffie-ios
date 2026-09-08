@@ -104,10 +104,6 @@ class MealCalendarStore {
         save()
     }
 
-    func clearRecipe(for date: Date, slot: MealSlot) {
-        setRecipe(nil, for: date, slot: slot)
-    }
-
     func clearWeek(dates: [Date]) {
         for date in dates {
             let key = Self.dateKey(for: date)

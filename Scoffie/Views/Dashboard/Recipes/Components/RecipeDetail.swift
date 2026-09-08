@@ -754,10 +754,6 @@ struct RecipeDetailView: View {
 
     // MARK: - Helpers
 
-    private var categoryAccent: Color {
-        RecipeAccent.accent(for: recipe.category)
-    }
-
     /// „Pasuje też na: II śniadanie · Przekąska".
     ///
     /// Przepis należy do jednej kategorii, ale bywa dobry o kilku porach dnia

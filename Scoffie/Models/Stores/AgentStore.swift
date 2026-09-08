@@ -141,11 +141,6 @@ final class AgentStore {
         errorMessage = nil
     }
 
-    /// Arkusz zamknięty bez zgody — błąd pod rozmową zostaje, arkusz nie wraca sam.
-    func consentDismissed() {
-        needsConsent = false
-    }
-
     /// „Zgłoś odpowiedź" — oddaje komunikat błędu albo `nil`.
     func report(messageId: String, reason: String, comment: String?) async -> String? {
         do {

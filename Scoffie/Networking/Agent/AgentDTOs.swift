@@ -190,9 +190,6 @@ struct AgentUsageDTO: Decodable, Equatable {
     /// domownik, który za nic nie płaci — i lądował w Ustawieniach iOS, gdzie
     /// nie ma żadnej subskrypcji do zarządzania. Teraz decyduje `isPayer`
     /// z serwera, bo tylko on wie, czyj `identityHash` stoi przy umowie.
-    var showsManageSubscription: Bool {
-        !isTrial && source == "SUBSCRIPTION" && isThePayer
-    }
 }
 
 // MARK: - Żądania

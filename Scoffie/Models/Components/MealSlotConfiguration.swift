@@ -28,10 +28,6 @@ struct MealSlotConfiguration: Equatable {
     }
 
     /// Posiłki dodatkowe, które są aktualnie włączone.
-    var enabledOptional: [MealSlot] {
-        enabled.filter { !$0.isCore }
-    }
-
     func enabling(_ slot: MealSlot) -> MealSlotConfiguration {
         MealSlotConfiguration(enabled: enabled + [slot])
     }

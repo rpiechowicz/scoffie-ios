@@ -28,10 +28,6 @@ struct SubscriptionPlan: Identifiable, Equatable {
     /// domu, nie obiecuje niczego ponad limity.
     let audience: String
 
-    var quantityLine: String {
-        "\(messages) wiadomości i \(plans) zapisów planu w miesiącu"
-    }
-
     var fallbackPrice: String {
         let formatter = NumberFormatter()
         formatter.locale = Locale(identifier: "pl_PL")

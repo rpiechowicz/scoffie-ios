@@ -102,12 +102,6 @@ struct RecipeDietProfile: Equatable {
         return allergens.isDisjoint(with: avoided)
     }
 
-    /// Alergeny z przepisu, których użytkownik unika — do plakietek
-    /// ostrzegawczych, gdy personalizacja jest wyłączona.
-    func conflicting(with avoided: Set<Allergen>) -> [Allergen] {
-        Allergen.allCases.filter { allergens.contains($0) && avoided.contains($0) }
-    }
-
     /// Profil z tagów serwera — parytet z `src/common/diet-tags.ts` i
     /// `src/recipes/diet-rules.util.ts` w backendzie. Nieznane id (nowszy
     /// serwer) są pomijane: alergen, którego enum nie zna, i tak nie ma chipa.

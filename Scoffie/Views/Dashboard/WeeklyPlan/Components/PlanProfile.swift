@@ -18,14 +18,4 @@ enum PlanProfile: Hashable {
         return nil
     }
 
-    /// Czy posiłek o takim audytorium należy do bieżącej soczewki?
-    /// Dania wspólne („Wspólne”, puste audytorium) należą zawsze.
-    func includes(participantIds: [String]) -> Bool {
-        switch self {
-        case .household:
-            return true
-        case .member(let id):
-            return participantIds.isEmpty || participantIds.contains(id)
-        }
-    }
 }

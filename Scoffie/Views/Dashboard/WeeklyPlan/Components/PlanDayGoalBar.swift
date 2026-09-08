@@ -11,7 +11,7 @@ import SwiftUI
 /// **Szkło, nie karta.** Dolne menu na iOS 26 jest z Liquid Glass i pigułka
 /// stoi tuż nad nim, więc musi być z tego samego materiału — kafel z tokenów
 /// `scTileBg` wyglądałby obok niego jak wklejka z innego ekranu. Stąd
-/// `glassEffect` zamiast `dashboardLiquidCard()`, którego używa reszta
+/// `glassEffect` zamiast płaskiego tła, którego używa reszta
 /// aplikacji tam, gdzie karta leży W treści, a nie NAD nią.
 ///
 /// **Treść przewija się pod spodem, ale kończy nad pigułką.** To jest cała

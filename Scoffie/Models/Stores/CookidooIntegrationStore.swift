@@ -48,15 +48,6 @@ final class CookidooIntegrationStore {
         return false
     }
 
-    var loginForDisplay: String? {
-        switch status {
-        case .connected(let login), .authFailed(let login):
-            return login
-        case .unknown, .notConnected, .disabled:
-            return nil
-        }
-    }
-
     var isDisabled: Bool {
         if case .disabled = status { return true }
         return false

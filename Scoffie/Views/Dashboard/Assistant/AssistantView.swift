@@ -130,11 +130,6 @@ struct AssistantView: View {
         .onAppear { store.setVisible(true) }
         .onDisappear { store.setVisible(false) }
         .task {
-            // Cele i ograniczenia domowników pod kartę „Co wiem o Was”.
-            // Cicho i tylko raz na kwadrans — to karta poboczna.
-            await sessionStore.refreshMemberContext()
-        }
-        .task {
             // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
             // użytkownik widział rozmowę, dopóki serwer nie odpowiedział.
             await sessionStore.consentStore?.refresh()
@@ -494,11 +489,6 @@ struct AssistantView: View {
 
     /// Ile wiadomości zostało z puli PRÓBNEJ; `nil` w planie miesięcznym
     /// albo gdy jeszcze nie znamy liczb.
-    private var trialMessagesLeft: Int? {
-        guard let usage = store.usage, usage.isTrial else { return nil }
-        return usage.messages.remaining
-    }
-
     private var conversationTitle: String? {
         guard let id = store.conversationId else { return nil }
         return store.conversations.first { $0.id == id }?.title
@@ -663,87 +653,8 @@ struct AssistantView: View {
     }
 
     private var emptyState: some View {
-        AssistantEmptyState(knowledge: knowledge, onAsk: ask)
+        AssistantEmptyState()
             .padding(.bottom, 8)
-    }
-
-    /// Fakty pod pusty stan — liczone tutaj, bo tylko ten widok ma naraz
-    /// dostęp do planu, katalogu i składu gospodarstwa.
-    private var knowledge: AssistantKnowledge {
-        let dates = datesViewModel.dates
-        let planned = dates.reduce(into: 0) { total, date in
-            total += mealStore.plan(for: date).allMeals.count
-        }
-        let slotsPerDay = max(1, sessionStore.mealSlots.enabled.count)
-        let recipes = recipeCatalogStore.recipes
-
-        return AssistantKnowledge(
-            weekLabel: Self.weekLabel(for: dates),
-            plannedMeals: planned,
-            totalMealSlots: slotsPerDay * max(1, dates.count),
-            calorieGoal: calorieGoal,
-            proteinTargetG: ownProteinTarget,
-            recipeCount: recipes.count,
-            favouriteCount: recipes.filter(\.favourite).count,
-            members: otherMembers
-        )
-    }
-
-    private var ownProteinTarget: Int? {
-        let ownId = sessionStore.currentUserId
-        let mine = sessionStore.memberContext.first { $0.userId == ownId }
-        return mine?.targets?.macros?.proteinG
-    }
-
-    /// Domownicy poza mną — w karcie „Co wiem o Was” moje własne cele mają
-    /// osobny wiersz, więc powtarzanie ich tutaj byłoby szumem.
-    private var otherMembers: [AssistantKnowledge.Member] {
-        let ownId = sessionStore.currentUserId
-        return sessionStore.memberContext
-            .filter { $0.userId != ownId }
-            .map { context in
-                AssistantKnowledge.Member(
-                    id: context.userId,
-                    name: HouseholdMemberStyle.shortName(context.displayName),
-                    calorieGoal: context.targets?.calorieGoal,
-                    restrictions: Self.restrictions(for: context)
-                )
-            }
-    }
-
-    /// „bez laktozy”, „wegetariańska” — to samo, czym asystent zawęża katalog.
-    private static func restrictions(for context: BackendMemberContextDTO) -> String? {
-        var parts: [String] = []
-
-        let allergens = (context.allergens ?? [])
-            .compactMap { Allergen(rawValue: $0)?.title.lowercased() }
-        if !allergens.isEmpty {
-            parts.append("bez " + allergens.joined(separator: ", "))
-        }
-
-        if let raw = context.dietPreference,
-           let diet = DietPreference(backendValue: raw),
-           diet != .none {
-            parts.append(diet.title.lowercased())
-        }
-
-        return parts.isEmpty ? nil : parts.joined(separator: ", ")
-    }
-
-    /// „1–7 września” — zakres widocznego tygodnia jednym napisem.
-    private static func weekLabel(for dates: [Date]) -> String {
-        guard let first = dates.first, let last = dates.last else {
-            return "ten tydzień"
-        }
-        let day = DateFormatter()
-        day.locale = Locale(identifier: "pl_PL")
-        day.dateFormat = "d"
-
-        let full = DateFormatter()
-        full.locale = Locale(identifier: "pl_PL")
-        full.dateFormat = "d MMMM"
-
-        return "\(day.string(from: first))–\(full.string(from: last))"
     }
 
     /// Podpowiedzi tuż nad polem, dosunięte do prawej jak dymki
