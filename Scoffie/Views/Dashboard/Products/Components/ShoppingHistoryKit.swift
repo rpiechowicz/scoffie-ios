@@ -67,41 +67,40 @@ struct ShoppingEyebrowRow: View {
     }
 }
 
-/// Nagłówek arkusza historii: cofnij · tytuł · akcje.
+/// Nagłówek arkusza zakupów: tytuł · akcje · krzyżyk.
 ///
-/// Osobny komponent, a nie `EditorialPageHeader`: tamten nie ma miejsca na
-/// akcję po lewej, bo żaden ekran zakładki jej nie potrzebuje. Historia jest
-/// stosem arkuszy i cofnięcie o jeden poziom musi stać tam, gdzie ręka go
-/// szuka — w lewym górnym rogu. Stopnie pisma i ich schodzenie są te same,
-/// co w `EditorialPageHeader`, tylko zaczynają niżej: 34-punktowa pigułka
-/// cofania zabiera tytułowi tyle samo szerokości, co jedna akcja po prawej.
+/// Osobny komponent, a nie `EditorialSheetHeader`: tamten prowadzi eyebrow NAD
+/// tytułem i trzyma go w 24 punktach, a te ekrany są ciągiem dalszym Zakupów
+/// i mają czytać się jak one — duży tytuł, a pod nim własny wiersz z eyebrow
+/// i metą (`ShoppingEyebrowRow`).
+///
+/// Zamyka KRZYŻYK, nie strzałka wstecz, i to nawet wtedy, gdy arkusze stoją
+/// jeden na drugim. Arkusz się zamyka — dokładnie to samo robi przeciągnięcie
+/// w dół — a strzałka obiecywałaby nawigację, której tu nie ma.
 struct ShoppingSheetHeader<Trailing: View>: View {
     let title: String
-    var onBack: () -> Void
+    var onClose: () -> Void
     @ViewBuilder var trailing: () -> Trailing
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            EditorialIconButton(
-                icon: "chevron.left",
-                size: 34,
-                accessibilityTitle: "Wstecz",
-                tapTarget: 44,
-                action: onBack
-            )
-
+            // Ta sama drabinka stopni pisma, co w `EditorialPageHeader`:
+            // tytuł schodzi o stopień, zamiast się urywać.
             ViewThatFits(in: .horizontal) {
-                titleText(size: 30)
-                titleText(size: 26)
-                titleText(size: 22, allowsScaling: true)
+                titleText(size: 32)
+                titleText(size: 28)
+                titleText(size: 24, allowsScaling: true)
             }
 
             Spacer(minLength: 8)
 
-            trailing()
-                .fixedSize(horizontal: true, vertical: false)
+            HStack(spacing: 6) {
+                trailing()
+                SCSheetCloseButton(action: onClose)
+            }
+            .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -117,8 +116,8 @@ struct ShoppingSheetHeader<Trailing: View>: View {
 }
 
 extension ShoppingSheetHeader where Trailing == EmptyView {
-    init(title: String, onBack: @escaping () -> Void) {
-        self.init(title: title, onBack: onBack) { EmptyView() }
+    init(title: String, onClose: @escaping () -> Void) {
+        self.init(title: title, onClose: onClose) { EmptyView() }
     }
 }
 
@@ -230,7 +229,7 @@ struct ShoppingHistoryListRow: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.985))
         .accessibilityLabel("\(entry.name), zamknięta \(ShoppingHistoryFormat.closedAt(entry.closedAt)), \(entry.bought) z \(entry.total) kupione")
         .contextMenu {
             if let onDelete {
@@ -296,7 +295,7 @@ struct ShoppingHistoryMonthRow: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.985))
         .accessibilityLabel("\(month.name) \(month.year), \(meta)")
     }
 }

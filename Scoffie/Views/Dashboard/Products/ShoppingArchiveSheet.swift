@@ -16,7 +16,7 @@ struct ShoppingArchiveSheet: View {
     /// bo indeks jest zbudowany z JEGO planu.
     var dishSummary: (ShoppingItem) -> String? = { _ in nil }
     var onDelete: (() -> Void)?
-    var onBack: () -> Void
+    var onClose: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -50,7 +50,7 @@ struct ShoppingArchiveSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ShoppingSheetHeader(title: entry.name, onBack: onBack) {
+                    ShoppingSheetHeader(title: entry.name, onClose: onClose) {
                         overflowMenu
                     }
 
@@ -100,13 +100,10 @@ struct ShoppingArchiveSheet: View {
                     Label("Usuń listę z historii", systemImage: "trash")
                 }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.scTileBg(scheme)))
-                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-                    .scTapTarget(drawn: 34)
+                // 36 pt, nie 34: w nagłówku arkusza stoi obok krzyżyka
+                // (`SCSheetCloseButton`) i ma mieć jego rozmiar.
+                SCCircleIconLabel(icon: "ellipsis", size: 36, iconSize: 14)
+                    .contentShape(Circle())
             }
             .accessibilityLabel("Więcej opcji listy")
         }

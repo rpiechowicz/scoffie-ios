@@ -971,22 +971,6 @@ struct PlanTimelineAddRow: View {
     }
 }
 
-// MARK: - Reakcja na dotyk
-
-/// Lekkie ściśnięcie pod palcem — jedyny sygnał, że wiersz bez karty i bez
-/// obwódki jest klikalny. Sprężyna jest krótka, bo reakcja na dotyk ma
-/// wyprzedzać ruch palca, a nie iść za nim.
-struct PlanPressStyle: ButtonStyle {
-    var scale: CGFloat = 0.975
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .opacity(configuration.isPressed ? 0.72 : 1)
-            .animation(.spring(response: 0.24, dampingFraction: 0.85), value: configuration.isPressed)
-    }
-}
-
 // MARK: - Ukośna kreska 45°
 
 /// `repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0 2.5px, transparent 2.5px 11px)`

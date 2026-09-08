@@ -56,7 +56,7 @@ struct ShoppingTodayRow: View {
             .frame(height: 48)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.985))
         .animation(.easeInOut(duration: 0.26), value: missing)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(isFiltered ? "Stuknij, aby wrócić do całej listy" : "Stuknij, aby zobaczyć dzisiejsze dania")

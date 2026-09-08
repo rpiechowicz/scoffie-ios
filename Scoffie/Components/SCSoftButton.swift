@@ -152,3 +152,26 @@ extension View {
     }
     .preferredColorScheme(.light)
 }
+
+// MARK: - Ściśnięcie pod palcem
+
+/// Wciśnięcie: lekkie ściśnięcie i przygaszenie treści.
+///
+/// Przyszedł z osi dnia w Planie i tam mieszkał, choć używa go dziś połowa
+/// aplikacji — Kalendarz, pigułka celu, arkusz wyboru posiłku i krzyżyk
+/// zamykający arkusze. Styl przycisku nie jest częścią osi dnia i nie ma
+/// powodu, żeby wspólny komponent w `Components/` sięgał po niego do widoku.
+///
+/// Sprężyna jest krótka, bo reakcja na dotyk ma wyprzedzać ruch palca,
+/// a nie iść za nim. Na osi dnia jest to jedyny sygnał, że wiersz bez karty
+/// i bez obwódki w ogóle da się kliknąć.
+struct PlanPressStyle: ButtonStyle {
+    var scale: CGFloat = 0.975
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .animation(.spring(response: 0.24, dampingFraction: 0.85), value: configuration.isPressed)
+    }
+}

@@ -120,15 +120,8 @@ struct AssistantHeader<MenuContent: View>: View {
         Menu {
             menu()
         } label: {
-            ZStack {
-                Circle().fill(Color.scTileBg(scheme))
-                Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1)
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(scheme))
-            }
-            .frame(width: 38, height: 38)
-            .contentShape(Circle())
+            SCCircleIconLabel(icon: "ellipsis", size: 38)
+                .contentShape(Circle())
         }
         .menuOrder(.fixed)
         .accessibilityLabel("Więcej opcji asystenta")

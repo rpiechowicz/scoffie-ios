@@ -263,19 +263,6 @@ final class ShoppingListStore {
         }
     }
 
-    func selectArchivedList(archiveId: String) {
-        guard let currentWeekStart = weekStart else { return }
-        Task {
-            do {
-                try await repository.selectArchivedList(archiveId: archiveId)
-                openRevisionsByWeek.removeValue(forKey: currentWeekStart)
-                await load(weekStart: currentWeekStart, force: true)
-            } catch {
-                errorMessage = UserFacingErrorMapper.message(from: error)
-            }
-        }
-    }
-
     func deleteArchivedList(archiveId: String) {
         guard let currentWeekStart = weekStart else { return }
         Task {

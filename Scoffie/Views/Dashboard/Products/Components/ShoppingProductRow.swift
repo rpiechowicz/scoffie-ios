@@ -85,7 +85,11 @@ struct ShoppingProductRow: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Wiersz bez karty i bez obwódki — ściśnięcie pod palcem jest
+        // jedynym sygnałem, że w ogóle da się w niego kliknąć. Ta sama
+        // reakcja, co na osi dnia w Planie, tylko delikatniejsza: wierszy
+        // jest tu trzydzieści, a nie trzy.
+        .buttonStyle(PlanPressStyle(scale: 0.985))
         .disabled(isDisabled || isReadOnly)
         .opacity(isDisabled ? 0.72 : 1)
         .accessibilityLabel(accessibilityLabel)

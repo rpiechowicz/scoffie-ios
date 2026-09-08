@@ -597,15 +597,9 @@ struct WeeklyPlanView: View {
                 Label("Wyczyść cały tydzień", systemImage: "trash")
             }
         } label: {
-            // Ten sam rozmiar co `EditorialIconButton` obok, żeby akcje
-            // nagłówka stały w jednym rytmie.
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.scLabel(scheme))
-                .frame(width: Self.headerActionSize, height: Self.headerActionSize)
-                .background(Circle().fill(Color.scTileBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-                // 34 pt to rysunek; cel dotyku 44, jak w przycisku obok.
+            // Ten sam krążek co `EditorialIconButton` obok, żeby akcje
+            // nagłówka stały w jednym rytmie. 34 pt to rysunek; cel dotyku 44.
+            SCCircleIconLabel(icon: "ellipsis", size: Self.headerActionSize, iconSize: 14)
                 .scTapTarget(drawn: Self.headerActionSize)
         }
         .accessibilityLabel("Więcej opcji planu")

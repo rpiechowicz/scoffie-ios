@@ -91,40 +91,14 @@ struct ShoppingTodaySheet: View {
     // MARK: - Nagłówek
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Na dziś")
-                    .font(.system(size: 22, weight: .heavy))
-                    .tracking(-0.5)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            ShoppingSheetHeader(title: "Na dziś", onClose: onClose)
 
-                Spacer(minLength: 8)
-
-                Text(hasEverything ? "Wszystko kupione" : "\(missingCount) do kupienia")
-                    .font(.system(size: 13, weight: .regular))
-                    .monospacedDigit()
-                    .foregroundStyle(hasEverything ? SCPalette.sage : Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .fixedSize()
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color.scChipBg(scheme)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Zamknij")
-            }
-
-            Text("\(dayLabel) · \(PolishPlural.dishes(visibleDishes.count)) · \(boughtCount) z \(todayItems.count) kupione")
-                .font(.system(size: 13, weight: .regular))
-                .monospacedDigit()
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+            ShoppingEyebrowRow(
+                eyebrow: "\(dayLabel) · \(PolishPlural.dishes(visibleDishes.count))",
+                meta: hasEverything ? "Wszystko kupione" : "\(missingCount) do kupienia"
+            )
+            .padding(.top, 14)
         }
         .padding(.horizontal, SCPageMetrics.horizontal)
         .padding(.top, 18)

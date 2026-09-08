@@ -152,19 +152,7 @@ struct PlanDayGoalSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Ten sam krążek z krzyżykiem, co w każdym arkuszu Ustawień
-            // (`EditorialSheetHeader`) — inny rozmiar albo inne tło robiłyby
-            // z zamykania zagadkę zależną od tego, skąd się przyszło.
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.scChipBg(scheme)))
-                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Zamknij")
+            SCSheetCloseButton { dismiss() }
         }
     }
 

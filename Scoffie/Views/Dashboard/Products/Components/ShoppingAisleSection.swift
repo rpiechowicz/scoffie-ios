@@ -187,7 +187,7 @@ struct ShoppingAisleSection: View {
             .padding(.bottom, 6)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.98))
         .disabled(!isCollapsible)
         .accessibilityLabel(headerAccessibilityLabel)
         .accessibilityHint(isCollapsible ? (isCollapsed ? "Stuknij, aby rozwinąć" : "Stuknij, aby zwinąć") : "")

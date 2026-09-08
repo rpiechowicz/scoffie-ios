@@ -13,9 +13,6 @@ struct ArchivedShoppingList: Identifiable, Codable, Hashable {
 
     var id: String { archiveId }
 
-    var totalCount: Int { items.count }
-    var boughtCount: Int { items.filter(\.isChecked).count }
-
     private enum CodingKeys: String, CodingKey {
         case archiveId
         case weekStart

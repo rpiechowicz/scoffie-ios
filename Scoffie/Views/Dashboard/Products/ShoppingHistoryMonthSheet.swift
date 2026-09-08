@@ -18,7 +18,7 @@ struct ShoppingHistoryMonthSheet: View {
     var itemsForArchive: (String) -> [ShoppingItem]
     var dishSummary: (ShoppingItem) -> String? = { _ in nil }
     var onDelete: ((ShoppingHistoryEntry) -> Void)?
-    var onBack: () -> Void
+    var onClose: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -50,7 +50,7 @@ struct ShoppingHistoryMonthSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ShoppingSheetHeader(title: month.name, onBack: onBack)
+                    ShoppingSheetHeader(title: month.name, onClose: onClose)
 
                     ShoppingEyebrowRow(eyebrow: "Historia · \(month.year)", meta: meta)
                         .padding(.top, 20)
@@ -83,7 +83,7 @@ struct ShoppingHistoryMonthSheet: View {
                 // znika z miesiąca, `openedEntryBinding` przestaje go
                 // znajdować i arkusz schodzi sam.
                 onDelete: archiveDeleteAction(for: entry),
-                onBack: { openedArchiveId = nil }
+                onClose: { openedArchiveId = nil }
             )
             .presentationDetents([.large])
             .dashboardLiquidSheet()
@@ -179,12 +179,23 @@ struct ShoppingHistoryMonthSheet: View {
         return week.isCurrent ? "\(range) · TEN TYDZIEŃ" : range
     }
 
-    /// Pionowa linia szyny — pod treścią, od pierwszej kropki do ostatniej.
-    /// Ta sama geometria co na osi dnia w Planie.
+    /// Pionowa linia szyny — pod treścią, od pierwszej kropki w dół.
+    ///
+    /// Na osi dnia w Planie każdy wiersz ma własną kropkę, więc linia kończy
+    /// się tam, gdzie ostatnia. Tutaj kropka jest jedna na TYDZIEŃ, a pod nią
+    /// stoi tyle wierszy, ile zamkniętych list — linia dobiegałaby więc kilka
+    /// wierszy za ostatnią kropkę i urywała się w pustce. Zamiast mierzyć,
+    /// gdzie dokładnie jest ostatnia kropka, linia po prostu gaśnie u dołu.
     private var railLine: some View {
         HStack(spacing: 0) {
             Rectangle()
-                .fill(Color.scRule(scheme))
+                .fill(
+                    LinearGradient(
+                        colors: [Color.scRule(scheme), Color.scRule(scheme), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
                 .frame(width: 1)
 
             Spacer(minLength: 0)

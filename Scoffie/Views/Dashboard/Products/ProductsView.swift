@@ -416,7 +416,7 @@ struct ProductsView: View {
                             dishSummary: { item in dishSummary(for: item) },
                             onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
                             onDeleteAll: { shoppingListStore.deleteAllArchivedLists() },
-                            onBack: { infoSheet = nil }
+                            onClose: { infoSheet = nil }
                         )
                     case .month(let key):
                         monthSheet(key: key)
@@ -478,12 +478,7 @@ struct ProductsView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.scLabel(scheme))
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Color.scTileBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+            SCCircleIconLabel(icon: "ellipsis", size: 34, iconSize: 14)
                 .scTapTarget(drawn: 34)
         }
         .accessibilityLabel("Więcej opcji listy zakupów")
@@ -937,7 +932,7 @@ struct ProductsView: View {
                 itemsForArchive: { shoppingListStore.archiveDisplayItems(archiveId: $0) },
                 dishSummary: { item in dishSummary(for: item) },
                 onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
-                onBack: { infoSheet = nil }
+                onClose: { infoSheet = nil }
             )
         }
     }

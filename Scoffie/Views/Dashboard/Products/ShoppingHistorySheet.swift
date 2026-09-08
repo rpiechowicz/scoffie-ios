@@ -13,7 +13,7 @@ struct ShoppingHistorySheet: View {
     var dishSummary: (ShoppingItem) -> String? = { _ in nil }
     var onDelete: ((ShoppingHistoryEntry) -> Void)?
     var onDeleteAll: (() -> Void)?
-    var onBack: () -> Void
+    var onClose: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -39,7 +39,7 @@ struct ShoppingHistorySheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ShoppingSheetHeader(title: "Historia", onBack: onBack) {
+                    ShoppingSheetHeader(title: "Historia", onClose: onClose) {
                         overflowMenu
                     }
 
@@ -81,7 +81,7 @@ struct ShoppingHistorySheet: View {
                 itemsForArchive: itemsForArchive,
                 dishSummary: dishSummary,
                 onDelete: onDelete,
-                onBack: { openedMonthKey = nil }
+                onClose: { openedMonthKey = nil }
             )
             .presentationDetents([.large])
             .dashboardLiquidSheet()
@@ -96,13 +96,10 @@ struct ShoppingHistorySheet: View {
                     Label("Usuń całą historię", systemImage: "trash")
                 }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.scTileBg(scheme)))
-                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-                    .scTapTarget(drawn: 34)
+                // 36 pt, nie 34: w nagłówku arkusza stoi obok krzyżyka
+                // (`SCSheetCloseButton`) i ma mieć jego rozmiar.
+                SCCircleIconLabel(icon: "ellipsis", size: 36, iconSize: 14)
+                    .contentShape(Circle())
             }
             .accessibilityLabel("Więcej opcji historii")
         }

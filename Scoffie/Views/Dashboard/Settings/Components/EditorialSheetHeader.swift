@@ -1,9 +1,13 @@
 import SwiftUI
 
-// Editorial sheet header used by every Ustawienia sheet (Gospodarstwo,
-// Preferencje, Dieta, Pomoc). Mirrors the pattern from Produkty's history
-// + archive-preview sheets — small uppercase eyebrow in terracotta, heavy
-// title in label color, circular xmark close button on the trailing edge.
+// Nagłówek arkusza: eyebrow wersalikami w terakocie, ciężki tytuł, krzyżyk
+// po prawej. Używa go dwadzieścia arkuszy — Ustawienia, Przepisy, Asystent,
+// cel dnia w Planie — więc to jest DOMYŚLNY nagłówek arkusza w aplikacji.
+//
+// Zakupy prowadzą własny (`ShoppingSheetHeader`): ich arkusze są ciągiem
+// dalszym ekranu Zakupów i mają czytać się jak on — dużym tytułem, z eyebrow
+// w osobnym wierszu pod spodem. Krzyżyk jest ten sam (`SCSheetCloseButton`),
+// bo zamykanie arkusza nie ma prawa zależeć od tego, skąd się przyszło.
 struct EditorialSheetHeader: View {
     let eyebrow: String
     let title: String
@@ -30,16 +34,7 @@ struct EditorialSheetHeader: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.scChipBg(scheme)))
-                    .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Zamknij")
+            SCSheetCloseButton(action: onClose)
         }
     }
 }
