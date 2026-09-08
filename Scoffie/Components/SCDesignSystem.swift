@@ -276,6 +276,51 @@ extension Color {
     }
 }
 
+// Mieszanie barw — odpowiednik `color-mix(in oklch, …)` z tokenów makiety.
+//
+// Mieszka w systemie projektowym, a nie przy ekranie, który akurat pierwszy
+// tego potrzebował: `mix(black:)` woła dziś kilkanaście miejsc (awatary
+// domowników, kafle ustawień, mierniki makro, kółko odhaczenia na Zakupach),
+// więc schowane w pliku jednego komponentu znikało razem z nim.
+//
+// Nazwy są własne (`mix(black:)` / `mix(white:)`), bo `Color.mix(with:by:in:)`
+// z systemowego SwiftUI ma inną listę argumentów — pomyłka w wywołaniu wychodzi
+// wtedy jako „extra argument 'black' in call”, a nie jako cicha podmiana.
+extension Color {
+    /// Interpoluje z inną barwą w liniowym sRGB.
+    func mix(with other: Color, by fraction: CGFloat) -> Color {
+        let f = max(0, min(1, fraction))
+
+        let a = UIColor(self).cgColor.components ?? [0, 0, 0, 1]
+        let b = UIColor(other).cgColor.components ?? [0, 0, 0, 1]
+
+        // Barwa w skali szarości ma dwie składowe (biel + alfa), nie cztery —
+        // wtedy jasność siedzi w `[0]` i wszystkie trzy kanały biorą się stamtąd.
+        let aR = a.count >= 3 ? a[0] : a[0]
+        let aG = a.count >= 3 ? a[1] : a[0]
+        let aB = a.count >= 3 ? a[2] : a[0]
+        let bR = b.count >= 3 ? b[0] : b[0]
+        let bG = b.count >= 3 ? b[1] : b[0]
+        let bB = b.count >= 3 ? b[2] : b[0]
+
+        return Color(
+            red:   Double(aR + (bR - aR) * f),
+            green: Double(aG + (bG - aG) * f),
+            blue:  Double(aB + (bB - aB) * f)
+        )
+    }
+
+    /// Przyciemnienie o `fraction` — cień gradientu pod akcentem.
+    func mix(black fraction: CGFloat) -> Color {
+        self.mix(with: .black, by: fraction)
+    }
+
+    /// Rozjaśnienie o `fraction` — światło u góry gradientu.
+    func mix(white fraction: CGFloat) -> Color {
+        self.mix(with: .white, by: fraction)
+    }
+}
+
 // Page background — warm canvas with a soft terracotta glow at the top.
 // Used as the root of editorial screens (Kalendarz v2).
 struct SCPageBackground: View {
