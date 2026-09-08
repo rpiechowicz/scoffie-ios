@@ -14,6 +14,57 @@ enum DayNavigationMotion {
     static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
 }
 
+/// Furtka między machnięciem palcem a stuknięciem w treść dnia.
+///
+/// `Button` w SwiftUI odpala akcję przy PUSZCZENIU palca w obrębie swojego
+/// kształtu — bez względu na to, ile palec przejechał po drodze. `ScrollView`
+/// potrafi mu to odebrać (dlatego przewijanie w pionie nie otwiera przypadkiem
+/// posiłku), ale gest `DayPagera` jest tylko `simultaneousGesture` i przycisków
+/// nie dotyka. Wiersz posiłku zajmuje całą szerokość strony, więc machnięcie
+/// w bok kończy się w tym samym wierszu, w którym się zaczęło: dzień się
+/// przestawiał i JEDNOCZEŚNIE otwierał się szczegół posiłku.
+///
+/// Stąd ta furtka: `DayPager` odnotowuje każdy poziomy ruch palca, a akcje
+/// wierszy przepuszczają się przez `ifNotSwiping`.
+@MainActor
+final class DayPagerGate {
+    /// Chwila ostatniego poziomego ruchu palca po stronie dnia.
+    private var lastSwipeMove: Date = .distantPast
+
+    /// Okno, w którym stuknięcie jest już tylko ogonem machnięcia.
+    private static let window: TimeInterval = 0.3
+
+    /// Woła `DayPager` przy każdym poziomym ruchu palca.
+    func noteSwipeMovement() {
+        lastSwipeMove = Date()
+    }
+
+    /// Wykonuje akcję, chyba że ten sam dotyk przestawiał właśnie dzień.
+    ///
+    /// Znacznik czasu, a nie flaga kasowana w `onEnded`: kolejność zdarzeń przy
+    /// puszczeniu palca (akcja `Button`-a kontra `onEnded` gestu) nie jest
+    /// w SwiftUI ustalona, a flaga skasowana o klatkę za wcześnie wpuszcza
+    /// dokładnie to stuknięcie, które miała zatrzymać. Znacznik nie ma czego
+    /// gubić i sam się „kasuje”, więc urwany gest nie zostawia po sobie
+    /// martwych przycisków.
+    func ifNotSwiping(_ action: () -> Void) {
+        guard Date().timeIntervalSince(lastSwipeMove) > Self.window else { return }
+        action()
+    }
+}
+
+private struct DayPagerGateKey: EnvironmentKey {
+    @MainActor static let defaultValue = DayPagerGate()
+}
+
+extension EnvironmentValues {
+    /// Furtka bieżącej strony dnia. Poza `DayPagerem` przepuszcza wszystko.
+    var dayPagerGate: DayPagerGate {
+        get { self[DayPagerGateKey.self] }
+        set { self[DayPagerGateKey.self] = newValue }
+    }
+}
+
 /// Jeden dzień na ekranie, przewijany palcem w bok.
 ///
 /// Plan i Kalendarz pokazują ten sam tydzień, ale każdy swój dzień — i na obu
@@ -70,6 +121,8 @@ struct DayPager<Content: View>: View {
     /// Wychylenie strony w trakcie przeciągania, a po zatwierdzeniu — faza
     /// wyjścia i wejścia dnia.
     @State private var dragOffset: CGFloat = 0
+    /// Krycie strony: zjazd i wjazd dnia idą z zanikiem, przeciąganie nie.
+    @State private var pageOpacity: Double = 1
     /// Zmierzona szerokość strony (patrz `background` w `body`).
     @State private var pageWidth: CGFloat = 0
     /// Licznik zmian dnia — `sensoryFeedback` potrzebuje czegoś, co rośnie
@@ -78,6 +131,15 @@ struct DayPager<Content: View>: View {
     /// Blokada na czas animacji przejścia: bez niej drugie machnięcie w jej
     /// trakcie przestawiało dzień, ale zostawiało stronę odjechaną w bok.
     @State private var isPaging = false
+    /// Oś bieżącego gestu, rozstrzygnięta RAZ. Wcześniej warunek przewagi
+    /// liczył się przy każdej klatce, więc gest prowadzony po skosie raz
+    /// ruszał stroną, a raz nie — strona co chwilę przystawała pod palcem.
+    @State private var isHorizontalDrag: Bool?
+    /// Wychylenie palca w chwili rozstrzygnięcia osi. Odejmuje się je od
+    /// translacji, żeby strona ruszała od zera, a nie skakała o próg gestu.
+    @State private var dragBaseline: CGFloat = 0
+    /// Furtka dla stuknięć w treść dnia — patrz `DayPagerGate`.
+    @State private var gate = DayPagerGate()
 
     // Wszystkie stałe niżej są LICZONE (`static var { … }`), a nie
     // przechowywane: `DayPager` jest typem generycznym, a tam `static let`
@@ -87,10 +149,13 @@ struct DayPager<Content: View>: View {
     /// Ile trzeba przeciągnąć (z rozpędem), żeby dzień przeskoczył. Ta sama
     /// wartość co przy tygodniach na pasku dni — jeden ekran, jeden próg.
     private static var commitThreshold: CGFloat { 56 }
-    /// Sufit wychylenia przy przeciąganiu w bok. Strona nie jeździ 1:1
-    /// z palcem, dopóki gest nie jest zatwierdzony — ruch się wypłaszcza,
-    /// żeby było widać, że to jeszcze nie jest zmiana dnia.
-    private static var dragLimit: CGFloat { 70 }
+    /// Do progu strona jedzie 1:1 z palcem — tyle ruchu, ile gestu.
+    private static var freeTravel: CGFloat { commitThreshold }
+    /// Sufit wychylenia przy przeciąganiu w bok. Za progiem ruch się
+    /// wypłaszcza: widać, że strona jest już na granicy zatwierdzenia.
+    private static var dragLimit: CGFloat { 104 }
+    /// Ile palec musi przejechać, żeby oś gestu dała się rozstrzygnąć.
+    private static var axisLockDistance: CGFloat { 14 }
 
     var body: some View {
         ScrollView {
@@ -106,11 +171,13 @@ struct DayPager<Content: View>: View {
                 // (serduszko, odhaczenie posiłku) zostają nietknięte.
                 .animation(nil, value: selectedDate)
                 .animation(nil, value: displayedDate)
+                .environment(\.dayPagerGate, gate)
         }
         .scrollIndicators(.hidden)
         // Gest łapie się na całej stronie, także w przerwach między kaflami.
         .contentShape(Rectangle())
         .offset(x: dragOffset)
+        .opacity(pageOpacity)
         // Szerokość strony — z niej liczy się dystans zjazdu przy zmianie
         // dnia. Mierzona spod spodu, żeby pomiar nie wpływał na układ treści.
         .background {
@@ -140,19 +207,38 @@ struct DayPager<Content: View>: View {
     }
 
     private var daySwipe: some Gesture {
-        DragGesture(minimumDistance: 16)
+        DragGesture(minimumDistance: 12)
             .onChanged { value in
                 guard !isPaging else { return }
+
+                if isHorizontalDrag == nil {
+                    let horizontal = abs(value.translation.width)
+                    let vertical = abs(value.translation.height)
+                    // Dopóki gest nie odjechał na tyle, żeby było wiadomo,
+                    // dokąd zmierza, nie robi nic — ani strona, ani furtka.
+                    guard max(horizontal, vertical) >= Self.axisLockDistance else { return }
+                    isHorizontalDrag = horizontal > vertical
+                    dragBaseline = value.translation.width
+                }
+
                 // Pion należy do przewijania kafli.
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                dragOffset = Self.resisted(value.translation.width)
+                guard isHorizontalDrag == true else { return }
+
+                // Od tej chwili stuknięcia z tego dotyku są ogonem machnięcia,
+                // a nie wyborem posiłku.
+                gate.noteSwipeMovement()
+                dragOffset = Self.resisted(value.translation.width - dragBaseline)
             }
             .onEnded { value in
-                guard !isPaging else { return }
-                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
-                let travel = value.predictedEndTranslation.width
+                let wasHorizontal = isHorizontalDrag == true
+                let baseline = dragBaseline
+                isHorizontalDrag = nil
+                dragBaseline = 0
 
-                guard isHorizontal, abs(travel) >= Self.commitThreshold else {
+                guard !isPaging, wasHorizontal else { return }
+                let travel = value.predictedEndTranslation.width - baseline
+
+                guard abs(travel) >= Self.commitThreshold else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                         dragOffset = 0
                     }
@@ -182,6 +268,14 @@ struct DayPager<Content: View>: View {
     private static var exitSeconds: TimeInterval { 0.16 }
     private static var exitAnimation: Animation { .easeIn(duration: exitSeconds) }
     private static var exitDuration: Duration { .milliseconds(Int(exitSeconds * 1000)) }
+
+    /// Ile strona odjeżdża, zanim zniknie — ułamek szerokości, nie cała.
+    ///
+    /// Przy pełnej szerokości strona pokonywała ~390 pt w 160 ms i to widać:
+    /// treść przelatywała przez ekran jak smuga. Krótszy dystans z zanikiem
+    /// czyta się jako to samo („dzień wyszedł w bok”), a nie ma czasu rozmyć
+    /// się w ruchu.
+    private static var exitTravelRatio: CGFloat { 0.42 }
 
     /// Ile trzymać blokadę po starcie wjazdu — tyle, ile sprężyna osiada.
     private static var enterDuration: Duration { .milliseconds(340) }
@@ -213,11 +307,12 @@ struct DayPager<Content: View>: View {
     private func transition(to target: Date, forward: Bool, movesSelection: Bool) {
         // Szerokość bywa jeszcze nieznana w pierwszej klatce po wejściu na
         // zakładkę; wtedy lepszy jest twardy przeskok niż zjazd donikąd.
-        let travel = pageWidth > 0 ? pageWidth : Self.dragLimit
+        let travel = pageWidth > 0 ? pageWidth * Self.exitTravelRatio : Self.dragLimit
         isPaging = true
 
         withAnimation(Self.exitAnimation) {
             dragOffset = forward ? -travel : travel
+            pageOpacity = 0
         }
 
         Task { @MainActor in
@@ -234,6 +329,7 @@ struct DayPager<Content: View>: View {
                 if movesSelection { selectedDate = target }
                 displayedDate = target
                 dragOffset = 0
+                pageOpacity = 1
             }
             try? await Task.sleep(for: Self.enterDuration)
             isPaging = false
@@ -247,10 +343,18 @@ struct DayPager<Content: View>: View {
         }
     }
 
-    /// Opór przy przeciąganiu: pierwsze punkty idą prawie 1:1, dalej ruch się
-    /// wypłaszcza i nigdy nie przekracza `dragLimit`.
+    /// Opór przy przeciąganiu: do progu zatwierdzenia strona idzie 1:1
+    /// z palcem, dalej ruch się wypłaszcza i nigdy nie przekracza `dragLimit`.
+    ///
+    /// Wcześniej opór działał od pierwszego punktu i przy 70 pt gestu strona
+    /// przesuwała się o 35 — machnięcie wyglądało, jakby ekran je zignorował.
     private static func resisted(_ translation: CGFloat) -> CGFloat {
-        let ratio = translation / dragLimit
-        return dragLimit * ratio / (1 + abs(ratio))
+        let distance = abs(translation)
+        guard distance > freeTravel else { return translation }
+
+        let sign: CGFloat = translation < 0 ? -1 : 1
+        let slack = dragLimit - freeTravel
+        let ratio = (distance - freeTravel) / slack
+        return sign * (freeTravel + slack * ratio / (1 + ratio))
     }
 }

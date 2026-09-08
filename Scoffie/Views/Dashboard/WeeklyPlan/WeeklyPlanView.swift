@@ -15,8 +15,10 @@ import SwiftUI
 // • Przełącznik gospodarstwa zszedł z nagłówka do menu „…”. Oś pokazuje dania
 //   wszystkich obok siebie, więc soczewka jednej osoby przestała być czymś,
 //   co trzeba mieć pod kciukiem przez cały czas.
-// • Nagłówek dnia ma zawsze ten sam przycisk asystenta (44 pt), nigdy „+”.
-//   Dodawanie ręczne żyje w wierszach osi: „Wybierz przepis” i „Dodaj posiłek”.
+// • Asystent siedzi w nagłówku EKRANU, w rzędzie z zakupami i „…”. Nagłówek
+//   dnia jest już tylko podpisem: nazwa dnia po lewej, „2 z 3 posiłków” po
+//   prawej. Dodawanie ręczne żyje w wierszach osi: „Wybierz przepis”
+//   i „Dodaj posiłek”.
 //
 // Sloty posiłków: dzień rysuje tyle wierszy, ile gospodarstwo ma włączonych
 // w Ustawieniach → „Posiłki w planie”, plus te, w których mimo wyłączenia coś
@@ -470,13 +472,30 @@ struct WeeklyPlanView: View {
     // MARK: - Pieces
 
     /// Średnica pigułek akcji w nagłówku Planu — 34 pt, jak `P2Circle`
-    /// w makiecie. Akcje są teraz dwie (zakupy i „…”), więc tytuł mieści się
-    /// w pełnym stopniu pisma, tak jak na pozostałych zakładkach.
+    /// w makiecie. Akcje są trzy (asystent, zakupy i „…”); tytuł schodzi
+    /// wtedy o stopień pisma sam, przez `ViewThatFits` w `EditorialPageHeader`.
     private static let headerActionSize: CGFloat = 34
 
     private var headerRow: some View {
         EditorialPageHeader(title: "Plan tygodnia") {
             HStack(spacing: 6) {
+                // Asystent stoi w nagłówku EKRANU, a nie w nagłówku dnia.
+                //
+                // Wcześniej był 44-punktową pigułką obok nazwy dnia — czyli
+                // jedyną akcją, która wyglądała, jakby dotyczyła poniedziałku,
+                // a otwierała planszę na cały tydzień. Tutaj mówi to samo, co
+                // sąsiednie akcje: rzecz dotyczy tego planu, nie tej strony.
+                // Podświetlona, bo to jedyna akcja nagłówka, która coś tworzy.
+                EditorialIconButton(
+                    icon: MenuConstans.Assistant.icon,
+                    highlighted: true,
+                    size: Self.headerActionSize,
+                    tapTarget: 44
+                ) {
+                    simpleSheet = .assistantIntro
+                }
+                .accessibilityLabel("Zaplanuj z asystentem")
+
                 // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
                 EditorialIconButton(
@@ -496,14 +515,13 @@ struct WeeklyPlanView: View {
     /// Wszystko, co dotyczy CAŁEGO tygodnia, plus wybór soczewki.
     ///
     /// Skoki po tygodniach wyprowadziły się stąd na pasek dni. Zamiast nich
-    /// wszedł asystent (ta sama akcja co przycisk w nagłówku dnia, tylko dla
-    /// osoby, która szuka jej w menu) i przełącznik profilu, który zszedł
-    /// z nagłówka razem z pigułką.
+    /// wszedł asystent (skrót prosto do zakładki, dla osoby, która szuka go
+    /// w menu) i przełącznik profilu, który zszedł z nagłówka razem z pigułką.
     private var overflowMenu: some View {
         Menu {
             // Prosto do asystenta, bez planszy „co on właściwie robi”.
-            // Kto szuka go w menu, ten już wie — planszę pokazuje przycisk
-            // w nagłówku dnia, na który trafia się przypadkiem.
+            // Kto szuka go w menu, ten już wie — planszę pokazuje pigułka
+            // z iskierkami w nagłówku, na którą trafia się przypadkiem.
             Button {
                 sessionStore.dashboardTab = .assistant
             } label: {
