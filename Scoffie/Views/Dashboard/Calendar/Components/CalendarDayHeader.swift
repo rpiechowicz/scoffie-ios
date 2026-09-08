@@ -25,7 +25,11 @@ struct CalendarDayHeader: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        // `center`, nie `firstTextBaseline`: w wierszu stoją tytuł i dwie
+        // pigułki, a pigułka to kształt, nie zdanie. Zrównanie linii pisma
+        // spychało ją poniżej dolnej krawędzi tytułu — o tyle, ile ma
+        // własnego paddingu pod tekstem.
+        HStack(alignment: .center, spacing: 8) {
             Text(Self.longDayFormatter.string(from: date).capitalized)
                 .scFont(22, weight: .bold, relativeTo: .title2)
                 .tracking(-0.5)

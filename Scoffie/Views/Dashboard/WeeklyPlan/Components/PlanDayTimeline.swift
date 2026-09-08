@@ -182,7 +182,9 @@ struct PlanDayTimeline: View {
         // dnia od nowa.
         let summary = self.summary
 
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+        // `center`, nie `firstTextBaseline` — patrz `CalendarDayHeader`:
+        // pigułka „DZIŚ" i plakietka kropek to kształty, a nie zdania.
+        return HStack(alignment: .center, spacing: 8) {
             Text(Self.longDayFormatter.string(from: date).capitalized)
                 .scFont(22, weight: .bold, relativeTo: .title2)
                 .tracking(-0.5)

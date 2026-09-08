@@ -16,14 +16,20 @@ import SwiftUI
 //  1. **Oś jest przypięta**, tak jak pasek dni — nie jedzie z listą posiłków.
 //     Odpowiada na „gdzie w dobie jestem”, a to pytanie nie znika po
 //     przewinięciu listy o dwa kafle w dół.
-//  2. **„Teraz” to kropka na kresce, nie pionowa linia z godziną.** Linia
-//     przecinała pasmo kalorii i przy posiłku stojącym blisko bieżącej
-//     godziny wyglądała na usterkę rysowania — dwie kreski i dwie liczby
-//     w jednym miejscu. Godzina też odpadła: stoi na pasku stanu telefonu
-//     dwa centymetry wyżej, a tu robiła trzecią liczbę w wierszu, który ma
-//     ich już dwie. Zostaje sama kropka, dość duża, żeby ją było widać, na
-//     obwódce w kolorze tła — dzięki niej odcina się i od kreski,
-//     i od zdjęcia, obok którego akurat wypadła.
+//  2. **„Teraz” ma własny pas nad zdjęciami i nie wchodzi im w drogę.**
+//     Najpierw była pionowa linia z godziną — przecinała wszystko po drodze
+//     i czytała się jak usterka rysowania. Potem kropka na kresce — ale
+//     kreska to miejsce, w którym stoją zdjęcia, więc o 13:00 przy obiedzie
+//     o 14:00 kropka wchodziła na talerz. Godziny na osi nie ma w ogóle:
+//     stoi na pasku stanu telefonu dwa centymetry wyżej.
+//
+//     Zostają dwie rzeczy, obie nie do zderzenia z niczym. Przebyta część
+//     doby jest terakotowa (dziś; dzień miniony ma ją wygaszoną, bo terakota
+//     znaczy „teraz”, a nie „kiedyś”) — to ona niesie „ile dnia za mną”
+//     z dokładnością do piksela. Nad nią, w pasie, który zwolniły kalorie,
+//     stoi trójkącik wierzchołkiem w dół i wskazuje dokładne miejsce.
+//     Pas jest pusty na całej szerokości, więc trójkącik nie ma na co
+//     wejść — ani na zdjęcie, ani na podpis godziny.
 //  3. **Posiłek bez godziny nie ma czego szukać na osi.** Makieta stawiała go
 //     kreskowanego w rynnie po prawej — ale rynna to osobna zasada do
 //     nauczenia się, a przekąska „kiedykolwiek” i tak stoi na liście niżej.
@@ -75,16 +81,15 @@ struct CalendarDayAxis: View {
     private enum Metrics {
         /// Średnica zdjęcia na osi.
         static let node: CGFloat = 30
-        /// Prześwit nad zdjęciem. Odkąd znacznik „teraz" zszedł na kreskę,
-        /// a kalorie zeszły z osi, zostało z tego samo oddechnięcie od
-        /// paska dni.
-        static let band: CGFloat = 4
+        /// Pas nad zdjęciami. Mieści wyłącznie trójkącik „teraz", więc jest
+        /// wolny na całej szerokości i znacznik nie ma na co wejść.
+        static let band: CGFloat = 14
         static let timeGap: CGFloat = 5
         static let timeLabel: CGFloat = 14
-        /// Kropka „teraz" na kresce, razem z obwódką w kolorze tła.
-        static let nowDot: CGFloat = 16
-        /// Grubość tej obwódki — to ona robi kropce prześwit wokół.
-        static let nowRing: CGFloat = 3
+        /// Trójkącik „teraz": szerokość, wysokość i prześwit nad zdjęciami.
+        static let caretWidth: CGFloat = 9
+        static let caretHeight: CGFloat = 6
+        static let caretGap: CGFloat = 4
         /// Szerokość kolumny węzła — mierzona podpisem godziny („08:00”),
         /// bo to on, a nie zdjęcie, jest tu najszerszy.
         static let column: CGFloat = 44
@@ -130,13 +135,11 @@ struct CalendarDayAxis: View {
                         .offset(x: item.x - Metrics.column / 2, y: 0)
                 }
 
-                // Znacznik „teraz" na samej górze stosu: kropka na kresce ma
-                // być widoczna także wtedy, gdy wypada tuż obok zdjęcia.
                 if let nowX {
-                    nowMarker
+                    nowCaret
                         .offset(
-                            x: nowX - Metrics.nowDot / 2,
-                            y: Metrics.trackY - Metrics.nowDot / 2
+                            x: nowX - Metrics.caretWidth / 2,
+                            y: Metrics.band - Metrics.caretHeight - Metrics.caretGap
                         )
                 }
             }
@@ -168,7 +171,14 @@ struct CalendarDayAxis: View {
 
             if elapsed > 0 {
                 Capsule()
-                    .fill(Color.scFaint(scheme))
+                    // Terakota tylko dzisiaj. W dniu minionym cała doba jest
+                    // „przebyta" i pomalowanie jej akcentem znaczyłoby tyle
+                    // co nic — akcent ma mówić „jesteś tutaj".
+                    .fill(
+                        nowMinutes == nil
+                            ? Color.scFaint(scheme)
+                            : SCPalette.terracotta.opacity(0.55)
+                    )
                     .frame(width: min(elapsed, width), height: 2)
             }
         }
@@ -202,14 +212,12 @@ struct CalendarDayAxis: View {
         return nowX ?? 0
     }
 
-    /// Kropka „teraz" — wyśrodkowana na kresce, bez podpisu.
-    private var nowMarker: some View {
-        Circle()
+    /// Trójkącik „teraz" — wierzchołkiem w dół, wprost w miejsce na kresce,
+    /// w którym kończy się przebyta część doby.
+    private var nowCaret: some View {
+        AxisCaret()
             .fill(SCPalette.terracotta)
-            .overlay(
-                Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: Metrics.nowRing)
-            )
-            .frame(width: Metrics.nowDot, height: Metrics.nowDot)
+            .frame(width: Metrics.caretWidth, height: Metrics.caretHeight)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -405,6 +413,18 @@ struct CalendarDayAxis: View {
             }
         }
         return xs
+    }
+}
+
+/// Trójkącik znacznika „teraz" — podstawa u góry, wierzchołek na dole.
+private struct AxisCaret: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
