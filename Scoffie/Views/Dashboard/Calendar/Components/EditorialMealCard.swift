@@ -44,6 +44,11 @@ struct EditorialMealCard: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
+    /// Kafel zajmuje całą szerokość strony dnia, a strona jeździ palcem
+    /// w bok (`DayPager`). Bez tej furtki machnięcie kończące się na kaflu
+    /// przestawiało dzień i JEDNOCZEŚNIE otwierało szczegóły posiłku —
+    /// dokładnie ten sam błąd, który naprawiliśmy w Planie tygodnia.
+    @Environment(\.dayPagerGate) private var pagerGate
 
     var body: some View {
         Group {
@@ -93,7 +98,7 @@ struct EditorialMealCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsEatenToggle {
-                EatenToggle(isEaten: isEaten, action: onToggleEaten)
+                EatenToggle(isEaten: isEaten) { pagerGate.ifNotSwiping(onToggleEaten) }
             }
         }
         .padding(13)
@@ -109,7 +114,7 @@ struct EditorialMealCard: View {
                 )
         )
         .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .onTapGesture { onTap() }
+        .onTapGesture { pagerGate.ifNotSwiping(onTap) }
         .contextMenu { contextActions }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel(for: meal))
