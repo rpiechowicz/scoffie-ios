@@ -74,11 +74,19 @@ struct CalendarMealCheck: View {
             if status.isEaten {
                 // Neutralne, nie w kolorze pory i nie zielone — patrz
                 // `Color.scChecked`. Zieleń była zarazem kolorem obiadu.
-                Circle().fill(Color.scChecked(scheme))
+                //
+                // Wypełnienie ledwie zaznaczone, obwódka w połowie mocy,
+                // ptaszek pełną mocą: pełny krążek w kolorze pisma świecił
+                // w ciemnym motywie jak lampka, a zjedzony posiłek ma
+                // przygasać, nie wołać.
+                Circle().fill(Color.scChecked(scheme).opacity(0.12))
+
+                Circle()
+                    .strokeBorder(Color.scChecked(scheme).opacity(0.4), lineWidth: 1.5)
 
                 Image(systemName: "checkmark")
-                    .font(.system(size: size * 0.5, weight: .heavy))
-                    .foregroundStyle(Color.scPageBase(scheme))
+                    .font(.system(size: size * 0.46, weight: .bold))
+                    .foregroundStyle(Color.scChecked(scheme).opacity(0.85))
             } else {
                 Circle()
                     .strokeBorder(

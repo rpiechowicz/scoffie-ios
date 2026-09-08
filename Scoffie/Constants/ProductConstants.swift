@@ -254,29 +254,37 @@ struct ProductConstants {
         }
     }
 
-    // Editorial "Cozy Kitchen" palette — every department maps to one of the
-    // five SCPalette accents (sage / terracotta / terracottaDeep / butter /
-    // indigo). Source of truth: v2-design/Scoffie - Produkty.html
-    // (PROD_CATEGORIES + tokeny akcentów z systemu projektowego).
+    // Paleta „Cozy Kitchen" — dział bierze jeden z OŚMIU akcentów.
+    //
+    // Było pięć i szesnaście działów, więc samo indygo wracało pięć razy:
+    // ryby, kasze, napoje, mrożonki i alkohole miały jedną barwę i kropka
+    // przy nagłówku sekcji przestawała cokolwiek mówić. Odkąd pory dnia
+    // dostały róż, morską i lawendę, jest z czego brać — szesnaście działów
+    // dzieli osiem kolorów dokładnie po dwa.
+    //
+    // Gdzie się dało, kolor coś znaczy (warzywa zielone, mięso ceglaste,
+    // ryby morskie, pieczywo złote, wino różowe, mrożonki zimne). Gdzie nie
+    // — liczy się tylko to, żeby sąsiedzi na liście się różnili.
     static func departmentColor(for department: String) -> Color {
         let d = department.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         switch d {
         case Department.vegetables.lowercased():    return SCPalette.sage
-        case Department.fruits.lowercased():        return SCPalette.terracotta
+        case Department.fruits.lowercased():        return SCPalette.rose
         case Department.meat.lowercased():          return SCPalette.terracottaDeep
-        case Department.fish.lowercased():          return SCPalette.indigo
+        case Department.fish.lowercased():          return SCPalette.teal
         case Department.bakery.lowercased():        return SCPalette.butter
-        case Department.dairy.lowercased():         return SCPalette.butter
-        case Department.grains.lowercased():        return SCPalette.indigo
-        case Department.canned.lowercased():        return SCPalette.terracotta
-        case Department.beverages.lowercased():     return SCPalette.indigo
-        case Department.snacks.lowercased():        return SCPalette.terracotta
+        case Department.dairy.lowercased():         return SCPalette.lavender
+        case Department.grains.lowercased():        return SCPalette.terracotta
+        case Department.canned.lowercased():        return SCPalette.indigo
+        case Department.beverages.lowercased():     return SCPalette.teal
+        // Ta sama lawenda, co pora „przekąska" w Planie i Kalendarzu.
+        case Department.snacks.lowercased():        return SCPalette.lavender
         case Department.household.lowercased():     return SCPalette.sage
         case Department.frozen.lowercased():        return SCPalette.indigo
         case Department.spices.lowercased():        return SCPalette.terracottaDeep
         case Department.oils.lowercased():          return SCPalette.butter
-        case Department.alcohols.lowercased():      return SCPalette.indigo
-        case Department.bakerySweets.lowercased():  return SCPalette.butter
+        case Department.alcohols.lowercased():      return SCPalette.rose
+        case Department.bakerySweets.lowercased():  return SCPalette.terracotta
         default:                                    return SCPalette.sage
         }
     }

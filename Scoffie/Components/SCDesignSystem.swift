@@ -256,10 +256,11 @@ extension Color {
     /// Przesunięcie obiadu nic by nie dało: żeby status miał własną barwę,
     /// musiałaby stać co najmniej ~90° od każdej z sześciu pór, a tyle
     /// wolnego miejsca na kole już nie ma. Status wychodzi więc z koła
-    /// w ogóle — pełne kółko w kolorze pisma z ptaszkiem w kolorze tła.
-    /// Czyta się jak zaznaczony checkbox, nie da się go pomylić z żadną porą,
-    /// a wiersz i tak przygasa zdjęciem i tytułem, więc jeden wyraźny znak
-    /// jest kontrastem, a nie hałasem.
+    /// w ogóle: to ATRAMENT, nie plama. Kółko z ledwie zaznaczonym
+    /// wypełnieniem, obwódką w połowie mocy i wyraźnym ptaszkiem w środku —
+    /// ta sama warstwa, co pismo wiersza. Pełny krążek w tym kolorze świecił
+    /// w ciemnym motywie jak lampka i przekrzykiwał zarówno zdjęcie, jak
+    /// i tytuł dania, choć zjedzony posiłek ma PRZYGASAĆ, a nie wołać.
     ///
     /// Szałwia zostaje przy podsumowaniach dnia (kropki „2 z 4", kropka
     /// „z planem" na pasku dni) — tam nie sąsiaduje z kolorem pory, więc nie

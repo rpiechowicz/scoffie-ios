@@ -348,13 +348,17 @@ struct CalendarDayAxis: View {
     }
 
     /// Pieczątka zjedzenia — ten sam znak co w wierszu posiłku, tyle że
-    /// wielkości guzika od koszuli. Ptaszek bierze kolor tła strony, więc
-    /// pieczątka odcina się od zdjęcia bez dodatkowej obwódki.
+    /// wielkości guzika od koszuli.
+    ///
+    /// Krążek bierze kolor TŁA, ptaszek kolor pisma — odwrotnie, niż odruch
+    /// podpowiada. Pieczątka siedzi w rogu zdjęcia, więc musi się z niego
+    /// wyciąć, a jasny krążek na jasnym daniu byłby kolejną plamą światła
+    /// w miejscu, które ma przygasać.
     private var eatenBadge: some View {
         Image(systemName: "checkmark.circle.fill")
             .symbolRenderingMode(.palette)
             .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(Color.scPageBase(scheme), Color.scChecked(scheme))
+            .foregroundStyle(Color.scChecked(scheme).opacity(0.9), Color.scPageBase(scheme))
             .offset(x: 2, y: 2)
     }
 
@@ -362,7 +366,7 @@ struct CalendarDayAxis: View {
 
     private func ringColor(_ node: Node) -> Color {
         switch node.status {
-        case .eaten: return Color.scChecked(scheme).opacity(0.45)
+        case .eaten: return Color.scChecked(scheme).opacity(0.28)
         case .next:  return node.slot.cozyAccent
         default:     return Color.scTileStroke(scheme)
         }
