@@ -180,11 +180,16 @@ struct CalendarDayAxis: View {
 
             Text(emptyMessage)
                 .font(.system(size: 10.5, weight: .bold))
-                .tracking(1.4)
+                .tracking(1.2)
                 .foregroundStyle(Color.scFaint(scheme))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
+                .minimumScaleFactor(0.85)
+                // Podpis bierze swoją szerokość PIERWSZY, kreski dzielą
+                // resztę. Bez tego obie kreski — każda `maxWidth: .infinity`
+                // — zgłaszają się po całą dostępną szerokość, `HStack` dzieli
+                // ją po równo na trzy i podpis dostaje jedną trzecią wiersza,
+                // czyli za mało: ucinał się wielokropkiem.
+                .layoutPriority(1)
 
             emptyRule
         }
@@ -519,7 +524,7 @@ private struct AxisNodePressStyle: ButtonStyle {
                 nodes: nodes,
                 nowMinutes: 9 * 60 + 41,
                 isPast: false,
-                emptyMessage: "NIC NIE ZAPLANOWANO",
+                emptyMessage: "BRAK POSIŁKÓW",
                 onTap: { _ in }
             )
 
@@ -527,7 +532,7 @@ private struct AxisNodePressStyle: ButtonStyle {
                 nodes: [],
                 nowMinutes: 9 * 60 + 41,
                 isPast: false,
-                emptyMessage: "NIC NIE ZAPLANOWANO",
+                emptyMessage: "BRAK POSIŁKÓW",
                 onTap: { _ in }
             )
         }

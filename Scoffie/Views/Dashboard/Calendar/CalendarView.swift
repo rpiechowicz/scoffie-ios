@@ -310,7 +310,7 @@ struct CalendarView: View {
     /// Jedno zdanie na oba przypadki kłamałoby w jednym z nich.
     private var axisEmptyMessage: String {
         let hasMeals = dayCards(on: selectedDate).contains { $0.meal != nil }
-        return hasMeals ? "BEZ STAŁYCH GODZIN" : "NIC NIE ZAPLANOWANO"
+        return hasMeals ? "POSIŁKI BEZ GODZIN" : "BRAK POSIŁKÓW"
     }
 
     /// Dzień z przeszłości — cała trasa na osi jest już przebyta.
