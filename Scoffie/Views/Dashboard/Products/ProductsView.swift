@@ -31,6 +31,7 @@ struct ProductsView: View {
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
 
     @State private var showDeleteAllHistoryAlert = false
 
@@ -435,7 +436,15 @@ struct ProductsView: View {
         // i mówi o jednej czynności — kupowaniu na ten tydzień. „Produkty”
         // brzmiało jak katalog, którym ten ekran nigdy nie był.
         EditorialPageHeader(title: "Zakupy") {
-            overflowMenu
+            HStack(spacing: 6) {
+                overflowMenu
+
+                // Ekran Zakupów sam jest arkuszem (wchodzi koszykiem
+                // z nagłówka Planu), więc zamyka się tym samym krzyżykiem,
+                // co wszystko inne. Wcześniej jedyną drogą wyjścia było
+                // przeciągnięcie w dół — działa, ale trzeba na nie wpaść.
+                SCSheetCloseButton { dismiss() }
+            }
         }
         .padding(.horizontal, pageHorizontalPadding)
         .padding(.top, pageTopPadding)
@@ -478,8 +487,11 @@ struct ProductsView: View {
                 }
             }
         } label: {
-            SCCircleIconLabel(icon: "ellipsis", size: 34, iconSize: 14)
-                .scTapTarget(drawn: 34)
+            // 36, nie 34: stoi obok krzyżyka zamykającego arkusz i ma mieć
+            // jego rozmiar. 34 jest rozmiarem akcji w nagłówku EKRANU
+            // (Plan tygodnia), gdzie krzyżyka nie ma.
+            SCCircleIconLabel(icon: "ellipsis", size: 36, iconSize: 14)
+                .scTapTarget(drawn: 36)
         }
         .accessibilityLabel("Więcej opcji listy zakupów")
     }

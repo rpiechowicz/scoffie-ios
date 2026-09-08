@@ -525,7 +525,11 @@ struct CalendarView: View {
                     onTap: { openAxisNode($0) }
                 )
                 .padding(.horizontal, SCPageMetrics.horizontal)
-                .padding(.top, 14)
+                // 2, nie 14: oś wnosi WŁASNY pusty pas 14 pt nad zdjęciami
+                // (`Metrics.band` — miejsce na trójkącik „teraz"), więc do
+                // paska dni doliczał się on drugi raz i między datą a osią
+                // robiła się dziura na trzydzieści kilka punktów.
+                .padding(.top, 2)
 
                 // Kreska pod paskiem dni — `margin: 14px … 18px` z projektu;
                 // 12 od góry, bo oś kończy się własnym wierszem godzin.
