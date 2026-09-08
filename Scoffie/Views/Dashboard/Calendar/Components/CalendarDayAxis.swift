@@ -7,16 +7,21 @@ import SwiftUI
 // okrągłe zdjęcie dania stojące na swojej godzinie, kalorie nad nim, godzina
 // pod nim, a terakotowy znacznik „teraz” tylko na dzisiaj.
 //
-// Trzy rzeczy różnią tę oś od makiety:
+// Cztery rzeczy różnią tę oś od makiety:
 //
 //  1. **Oś jest przypięta**, tak jak pasek dni — nie jedzie z listą posiłków.
 //     Odpowiada na „gdzie w dobie jestem”, a to pytanie nie znika po
 //     przewinięciu listy o dwa kafle w dół.
-//  2. **Posiłek bez godziny nie ma czego szukać na osi.** Makieta stawiała go
+//  2. **„Teraz” to kropka na kresce, nie pionowa linia.** Linia z makiety
+//     przecinała pasmo kalorii i przy posiłku stojącym blisko bieżącej
+//     godziny wyglądała na usterkę rysowania — dwie kreski i dwie liczby
+//     w jednym miejscu. Kropka siedzi dokładnie NA kresce, godzina stoi
+//     wyśrodkowana nad nią, i to wszystko.
+//  3. **Posiłek bez godziny nie ma czego szukać na osi.** Makieta stawiała go
 //     kreskowanego w rynnie po prawej — ale rynna to osobna zasada do
 //     nauczenia się, a przekąska „kiedykolwiek” i tak stoi na liście niżej.
 //     Filtr robi wywołujący: `Node` nie ma opcjonalnej godziny.
-//  3. **Węzły nigdy się nie stykają.** Śniadanie o 8:00 i drugie śniadanie
+//  4. **Węzły nigdy się nie stykają.** Śniadanie o 8:00 i drugie śniadanie
 //     o 8:30 dzieli na podziałce 06–23 jakieś 12 pt — zlewały się w plamę,
 //     a podpisy godzin nachodziły na siebie. `Self.spread` rozsuwa je do
 //     `Metrics.minSpacing`, zachowując kolejność dnia i trzymając skrajne
@@ -25,24 +30,26 @@ struct CalendarDayAxis: View {
     /// Jeden posiłek na osi.
     ///
     /// `minutes` nie jest opcjonalne celowo — posiłek bez pory nie ma tu
-    /// miejsca, a opcjonalna godzina wpuszczałaby go z powrotem.
+    /// miejsca, a opcjonalna godzina wpuszczałaby go z powrotem. `status`
+    /// przychodzi z ekranu, ten sam, którym rysuje się checkbox w wierszu:
+    /// oś i lista nie mogą się różnić w tym, co jest „następne”.
     struct Node: Identifiable {
         let id: String
         let slot: MealSlot
         /// Minuty od północy — z rozkładu gospodarstwa (`MealSlotSchedule`).
         let minutes: Int
-        /// Kalorie na jedną osobę, policzone tak samo jak licznik dnia.
+        /// Kalorie na jedną osobę, policzone tak samo jak pigułka celu.
         let kcal: Int
-        let isEaten: Bool
+        let status: CalendarMealStatus
         let title: String
         let imageURL: URL?
     }
 
     /// Węzły dnia; kolejność nie ma znaczenia, oś sortuje po godzinie.
     let nodes: [Node]
-    /// Czy oglądany dzień to dzisiaj — od tego zależy znacznik „teraz”
-    /// i to, który posiłek jest „następny”.
-    let isToday: Bool
+    /// Bieżąca godzina w minutach od północy — `nil` dla dnia, który nie jest
+    /// dzisiaj. Ekran podaje ją z jednego zegara, wspólnego z listą posiłków.
+    let nowMinutes: Int?
     /// Dzień miniony ma całą trasę przebytą, przyszły — żadnej.
     let isPast: Bool
     let onTap: (Node) -> Void
@@ -57,13 +64,15 @@ struct CalendarDayAxis: View {
     private enum Metrics {
         /// Średnica zdjęcia na osi.
         static let node: CGFloat = 30
-        /// Pasmo nad zdjęciem. Mieści dwa piętra: znacznik „teraz” pod samą
+        /// Pasmo nad zdjęciem. Mieści dwa piętra: godzinę „teraz” pod samą
         /// górą i kalorie tuż nad zdjęciem, więc nigdy nie piszą po sobie.
         static let band: CGFloat = 32
         static let nowLabel: CGFloat = 13
         static let kcalLabel: CGFloat = 13
         static let timeGap: CGFloat = 5
         static let timeLabel: CGFloat = 14
+        /// Kropka „teraz" na kresce.
+        static let nowDot: CGFloat = 9
         /// Szerokość kolumny węzła — mierzona podpisem godziny („08:00”),
         /// bo to on, a nie zdjęcie, jest tu najszerszy.
         static let column: CGFloat = 44
@@ -80,37 +89,15 @@ struct CalendarDayAxis: View {
         static let dayEnd = 23 * 60
     }
 
-    /// Stan węzła względem „teraz”. Miniony i przyszły dzień nie mają
-    /// „następnego” — tam wszystko, co nieodhaczone, jest po prostu planem.
-    private enum Status {
-        case eaten, next, planned
-    }
-
     private struct Placed: Identifiable {
         let node: Node
         let x: CGFloat
-        let status: Status
         var id: String { node.id }
     }
 
     // MARK: - Body
 
     var body: some View {
-        Group {
-            if isToday {
-                // Minuta wystarczy: oś ma podziałkę godzinową, więc częstsze
-                // odświeżanie i tak nie przesunęłoby znacznika o piksel.
-                TimelineView(.everyMinute) { context in
-                    axis(nowMinutes: Self.minutes(from: context.date))
-                }
-            } else {
-                axis(nowMinutes: nil)
-            }
-        }
-        .frame(height: Metrics.height)
-    }
-
-    private func axis(nowMinutes: Int?) -> some View {
         GeometryReader { geo in
             let width = geo.size.width
             let placed = layout(width: width)
@@ -119,18 +106,21 @@ struct CalendarDayAxis: View {
             ZStack(alignment: .topLeading) {
                 track(width: width, elapsedTo: elapsedWidth(nowX: nowX, width: width))
 
-                if let nowX, let nowMinutes {
-                    nowMarker(minutes: nowMinutes)
-                        .offset(x: nowX - Metrics.column / 2, y: 0)
-                }
-
                 ForEach(placed) { item in
                     nodeView(item)
                         .offset(x: item.x - Metrics.column / 2, y: 0)
                 }
+
+                // Znacznik „teraz" na samej górze stosu: kropka na kresce ma
+                // być widoczna także wtedy, gdy wypada tuż obok zdjęcia.
+                if let nowX, let nowMinutes {
+                    nowMarker(minutes: nowMinutes)
+                        .offset(x: nowX - Metrics.column / 2, y: 0)
+                }
             }
             .frame(width: width, height: Metrics.height, alignment: .topLeading)
         }
+        .frame(height: Metrics.height)
         // Zmiana dnia przeprowadza węzły tą samą sprężyną, którą jedzie
         // strona dnia i podkreślenie na pasku — jeden ruch na jedną czynność.
         .animation(DayNavigationMotion.spring, value: fingerprint)
@@ -142,7 +132,7 @@ struct CalendarDayAxis: View {
     private var fingerprint: String {
         nodes
             .sorted { $0.minutes < $1.minutes }
-            .map { "\($0.id):\($0.minutes):\($0.isEaten ? 1 : 0)" }
+            .map { "\($0.id):\($0.minutes):\($0.status.isEaten ? 1 : 0)" }
             .joined(separator: "|")
     }
 
@@ -171,20 +161,30 @@ struct CalendarDayAxis: View {
         return nowX ?? 0
     }
 
+    /// Godzina wyśrodkowana nad kropką, kropka wyśrodkowana na kresce.
+    ///
+    /// Obie części dzielą tę samą kolumnę i to ona trzyma je w jednej osi
+    /// pionowej — bez niej podpis stał obok kropki, a nie nad nią.
     private func nowMarker(minutes: Int) -> some View {
-        VStack(spacing: 2) {
+        ZStack(alignment: .top) {
             Text(MealSlotSchedule.format(minutes))
                 .font(.system(size: 10.5, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(SCPalette.terracotta)
                 .lineLimit(1)
-                .frame(height: Metrics.nowLabel)
+                .frame(width: Metrics.column, height: Metrics.nowLabel)
 
-            Capsule()
+            Circle()
                 .fill(SCPalette.terracotta)
-                .frame(width: 2, height: Metrics.trackY - Metrics.nowLabel - 2)
+                .frame(width: Metrics.nowDot, height: Metrics.nowDot)
+                // Obwódka w kolorze tła robi kropce prześwit na kresce
+                // i na zdjęciu, obok którego akurat wypadła.
+                .overlay(
+                    Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 2)
+                )
+                .offset(y: Metrics.trackY - Metrics.nowDot / 2)
         }
-        .frame(width: Metrics.column, alignment: .center)
+        .frame(width: Metrics.column, height: Metrics.height, alignment: .top)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -199,19 +199,19 @@ struct CalendarDayAxis: View {
                 Text("\(item.node.kcal)")
                     .font(.system(size: 10.5, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(kcalColor(item.status))
+                    .foregroundStyle(labelColor(item.node.status))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .frame(height: Metrics.kcalLabel)
                     .padding(.bottom, 3)
                     .frame(height: Metrics.band, alignment: .bottom)
 
-                thumbnail(item)
+                thumbnail(item.node)
 
                 Text(MealSlotSchedule.format(item.node.minutes))
                     .font(.system(size: 11, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(timeColor(item.status))
+                    .foregroundStyle(labelColor(item.node.status))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .frame(height: Metrics.timeGap + Metrics.timeLabel, alignment: .bottom)
@@ -221,37 +221,37 @@ struct CalendarDayAxis: View {
         }
         .buttonStyle(.plain)
         .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .center)))
-        .accessibilityLabel(accessibilityLabel(item))
+        .accessibilityLabel(accessibilityLabel(item.node))
         .accessibilityHint("Otwiera szczegóły posiłku")
     }
 
-    private func thumbnail(_ item: Placed) -> some View {
+    private func thumbnail(_ node: Node) -> some View {
         Group {
-            if let url = item.node.imageURL {
+            if let url = node.imageURL {
                 CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()
                     default:
-                        fallback(item.node.slot)
+                        fallback(node.slot)
                     }
                 }
             } else {
-                fallback(item.node.slot)
+                fallback(node.slot)
             }
         }
         .frame(width: Metrics.node, height: Metrics.node)
         .clipShape(Circle())
         // Zjedzone przygasa — zostaje czytelne, ale przestaje konkurować
-        // z tym, co dopiero przed użytkownikiem. Ta sama reguła co na kaflu.
-        .saturation(item.status == .eaten ? 0.45 : 1)
-        .opacity(item.status == .eaten ? 0.8 : 1)
+        // z tym, co dopiero przed użytkownikiem. Ta sama reguła co w wierszu.
+        .saturation(node.status.isEaten ? 0.45 : 1)
+        .opacity(node.status.isEaten ? 0.8 : 1)
         .overlay(
             Circle()
-                .strokeBorder(ringColor(item), lineWidth: item.status == .next ? 2 : 1)
+                .strokeBorder(ringColor(node), lineWidth: node.status == .next ? 2 : 1)
         )
         .overlay(alignment: .bottomTrailing) {
-            if item.status == .eaten { eatenBadge }
+            if node.status.isEaten { eatenBadge }
         }
     }
 
@@ -269,7 +269,7 @@ struct CalendarDayAxis: View {
         }
     }
 
-    /// Pieczątka zjedzenia — ten sam znak co na kaflu posiłku, tyle że
+    /// Pieczątka zjedzenia — ten sam znak co w wierszu posiłku, tyle że
     /// wielkości guzika od koszuli. Wypełnienie kółka bierze kolor tła
     /// strony, więc pieczątka odcina się od zdjęcia bez dodatkowej obwódki.
     private var eatenBadge: some View {
@@ -282,38 +282,30 @@ struct CalendarDayAxis: View {
 
     // MARK: - Barwy stanu
 
-    private func ringColor(_ item: Placed) -> Color {
-        switch item.status {
-        case .eaten:   return SCPalette.sage.opacity(0.55)
-        case .next:    return item.node.slot.cozyAccent
-        case .planned: return Color.scTileStroke(scheme)
+    private func ringColor(_ node: Node) -> Color {
+        switch node.status {
+        case .eaten: return SCPalette.sage.opacity(0.55)
+        case .next:  return node.slot.cozyAccent
+        default:     return Color.scTileStroke(scheme)
         }
     }
 
-    private func kcalColor(_ status: Status) -> Color {
+    private func labelColor(_ status: CalendarMealStatus) -> Color {
         switch status {
-        case .eaten:   return SCPalette.sage
-        case .next:    return Color.scLabel(scheme)
-        case .planned: return Color.scFaint(scheme)
+        case .eaten: return SCPalette.sage
+        case .next:  return Color.scLabel(scheme)
+        default:     return Color.scFaint(scheme)
         }
     }
 
-    private func timeColor(_ status: Status) -> Color {
-        switch status {
-        case .eaten:   return SCPalette.sage
-        case .next:    return Color.scLabel(scheme)
-        case .planned: return Color.scFaint(scheme)
-        }
-    }
-
-    private func accessibilityLabel(_ item: Placed) -> String {
+    private func accessibilityLabel(_ node: Node) -> String {
         var parts = [
-            item.node.slot.title,
-            MealSlotSchedule.format(item.node.minutes),
-            item.node.title,
-            "\(item.node.kcal) kcal"
+            node.slot.title,
+            MealSlotSchedule.format(node.minutes),
+            node.title,
+            "\(node.kcal) kcal"
         ]
-        if item.status == .eaten { parts.append("zjedzone") }
+        if node.status.isEaten { parts.append("zjedzone") }
         return parts.joined(separator: ", ")
     }
 
@@ -355,22 +347,7 @@ struct CalendarDayAxis: View {
             upper: max(half, width - half)
         )
 
-        // „Następny” istnieje tylko dzisiaj: w minionym dniu nic już nie
-        // nadchodzi, a w przyszłym wszystko jest równie odległe.
-        var nextTaken = !isToday
-        return sorted.indices.map { index in
-            let node = sorted[index]
-            let status: Status
-            if node.isEaten {
-                status = .eaten
-            } else if !nextTaken {
-                nextTaken = true
-                status = .next
-            } else {
-                status = .planned
-            }
-            return Placed(node: node, x: xs[index], status: status)
-        }
+        return sorted.indices.map { Placed(node: sorted[$0], x: xs[$0]) }
     }
 
     /// Rozsuwa węzły tak, żeby żadne dwa nie stały bliżej niż `minSpacing`,
@@ -413,37 +390,37 @@ struct CalendarDayAxis: View {
         }
         return xs
     }
-
-    private static func minutes(from date: Date) -> Int {
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-    }
 }
 
 #Preview("Oś dnia — dzisiaj") {
     let nodes = [
         CalendarDayAxis.Node(
             id: "sn", slot: .breakfast, minutes: 8 * 60, kcal: 510,
-            isEaten: true, title: "Owsianka kakaowa", imageURL: nil
+            status: .eaten, title: "Owsianka kakaowa", imageURL: nil
         ),
         CalendarDayAxis.Node(
             id: "ii", slot: .secondBreakfast, minutes: 8 * 60 + 30, kcal: 190,
-            isEaten: false, title: "Jogurt z granolą", imageURL: nil
+            status: .next, title: "Jogurt z granolą", imageURL: nil
         ),
         CalendarDayAxis.Node(
             id: "ob", slot: .lunch, minutes: 14 * 60, kcal: 1208,
-            isEaten: false, title: "Indyk z ziemniakami", imageURL: nil
+            status: .later, title: "Indyk z ziemniakami", imageURL: nil
         ),
         CalendarDayAxis.Node(
             id: "ko", slot: .dinner, minutes: 20 * 60, kcal: 900,
-            isEaten: false, title: "Pierogi z truskawkami", imageURL: nil
+            status: .later, title: "Pierogi z truskawkami", imageURL: nil
         )
     ]
 
     ZStack {
         SCPageBackground(scheme: .dark).ignoresSafeArea()
-        CalendarDayAxis(nodes: nodes, isToday: true, isPast: false, onTap: { _ in })
-            .padding(.horizontal, SCPageMetrics.horizontal)
+        CalendarDayAxis(
+            nodes: nodes,
+            nowMinutes: 9 * 60 + 41,
+            isPast: false,
+            onTap: { _ in }
+        )
+        .padding(.horizontal, SCPageMetrics.horizontal)
     }
     .preferredColorScheme(.dark)
 }
