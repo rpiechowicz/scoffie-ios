@@ -4,11 +4,15 @@ import SwiftUI
 //
 // Źródło: canvas claude.ai → „Weekly Meals - Kalendarz v2 D6.html”,
 // `components/cal-v2-d.jsx` (`CalDAxis`). Doba jako jedna kreska: węzeł to
-// okrągłe zdjęcie dania stojące na swojej godzinie, kalorie nad nim, godzina
-// pod nim, a terakotowy znacznik „teraz” tylko na dzisiaj.
+// okrągłe zdjęcie dania stojące na swojej godzinie, godzina pod nim,
+// a terakotowa kropka „teraz” tylko na dzisiaj.
 //
-// Cztery rzeczy różnią tę oś od makiety:
+// Pięć rzeczy różni tę oś od makiety:
 //
+//  0. **Oś stoi zawsze, także w dniu bez posiłków.** Sama kreska z kropką
+//     „teraz” to nadal odpowiedź — „nic tu nie ma, a dzień leci” — a oś
+//     znikająca i wracająca przy przewijaniu dni przesuwałaby wszystko pod
+//     nią o siedemdziesiąt punktów w górę i w dół.
 //  1. **Oś jest przypięta**, tak jak pasek dni — nie jedzie z listą posiłków.
 //     Odpowiada na „gdzie w dobie jestem”, a to pytanie nie znika po
 //     przewinięciu listy o dwa kafle w dół.
@@ -24,7 +28,11 @@ import SwiftUI
 //     kreskowanego w rynnie po prawej — ale rynna to osobna zasada do
 //     nauczenia się, a przekąska „kiedykolwiek” i tak stoi na liście niżej.
 //     Filtr robi wywołujący: `Node` nie ma opcjonalnej godziny.
-//  4. **Węzły nigdy się nie stykają.** Śniadanie o 8:00 i drugie śniadanie
+//  4a. **Kreska ma dziurę pod każdym zdjęciem.** Nie kosmetyka: zdjęcie
+//     przygasa przy zjedzeniu i jeszcze raz pod palcem, a wtedy kreska
+//     przechodząca pod spodem prześwitywała przez nie jak rysa na ekranie.
+//     Maska wycina ją tam, gdzie i tak nie miała czego pokazywać.
+//  5. **Węzły nigdy się nie stykają.** Śniadanie o 8:00 i drugie śniadanie
 //     o 8:30 dzieli na podziałce 06–23 jakieś 12 pt — zlewały się w plamę,
 //     a podpisy godzin nachodziły na siebie. `Self.spread` rozsuwa je do
 //     `Metrics.minSpacing`, zachowując kolejność dnia i trzymając skrajne
@@ -67,10 +75,10 @@ struct CalendarDayAxis: View {
     private enum Metrics {
         /// Średnica zdjęcia na osi.
         static let node: CGFloat = 30
-        /// Pasmo nad zdjęciem — mieści już tylko kalorie, odkąd znacznik
-        /// „teraz" zszedł na samą kreskę.
-        static let band: CGFloat = 20
-        static let kcalLabel: CGFloat = 13
+        /// Prześwit nad zdjęciem. Odkąd znacznik „teraz" zszedł na kreskę,
+        /// a kalorie zeszły z osi, zostało z tego samo oddechnięcie od
+        /// paska dni.
+        static let band: CGFloat = 4
         static let timeGap: CGFloat = 5
         static let timeLabel: CGFloat = 14
         /// Kropka „teraz" na kresce, razem z obwódką w kolorze tła.
@@ -83,6 +91,9 @@ struct CalendarDayAxis: View {
         /// Najmniejszy rozstaw środków. O 2 pt większy od kolumny, żeby
         /// sąsiednie podpisy dzielił prześwit, a nie sama styczność.
         static let minSpacing: CGFloat = 46
+        /// Średnica dziury wycinanej w kresce pod zdjęciem — o 6 pt większa
+        /// od zdjęcia, więc zostaje wokół niego 3-punktowy prześwit.
+        static var hole: CGFloat { node + 6 }
 
         static var trackY: CGFloat { band + node / 2 }
         static var height: CGFloat { band + node + timeGap + timeLabel }
@@ -108,7 +119,11 @@ struct CalendarDayAxis: View {
             let nowX = nowMinutes.map { x(forMinutes: $0, width: width) }
 
             ZStack(alignment: .topLeading) {
-                track(width: width, elapsedTo: elapsedWidth(nowX: nowX, width: width))
+                track(
+                    width: width,
+                    elapsedTo: elapsedWidth(nowX: nowX, width: width),
+                    holes: placed.map(\.x)
+                )
 
                 ForEach(placed) { item in
                     nodeView(item)
@@ -145,7 +160,7 @@ struct CalendarDayAxis: View {
 
     // MARK: - Kreska
 
-    private func track(width: CGFloat, elapsedTo elapsed: CGFloat) -> some View {
+    private func track(width: CGFloat, elapsedTo elapsed: CGFloat, holes: [CGFloat]) -> some View {
         ZStack(alignment: .leading) {
             Capsule()
                 .fill(Color.scRule(scheme))
@@ -158,6 +173,25 @@ struct CalendarDayAxis: View {
             }
         }
         .frame(width: width, height: 2, alignment: .leading)
+        // Kreska kończy się przed każdym zdjęciem i zaczyna za nim. Zdjęcie
+        // bywa półprzezroczyste — zjedzone przygasa, a pod palcem przygasa
+        // jeszcze raz — i wtedy kreska prześwitywała przez nie na wylot.
+        // Maska usuwa problem u źródła, zamiast dobierać krycia tak, żeby
+        // akurat nie było jej widać.
+        .mask {
+            Rectangle()
+                .overlay(alignment: .leading) {
+                    ZStack(alignment: .leading) {
+                        ForEach(Array(holes.enumerated()), id: \.offset) { _, x in
+                            Circle()
+                                .frame(width: Metrics.hole, height: Metrics.hole)
+                                .offset(x: x - Metrics.hole / 2)
+                                .blendMode(.destinationOut)
+                        }
+                    }
+                }
+                .compositingGroup()
+        }
         .offset(y: Metrics.trackY - 1)
     }
 
@@ -187,17 +221,8 @@ struct CalendarDayAxis: View {
             pagerGate.ifNotSwiping { onTap(item.node) }
         } label: {
             VStack(spacing: 0) {
-                Text("\(item.node.kcal)")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(labelColor(item.node.status))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(height: Metrics.kcalLabel)
-                    .padding(.bottom, 3)
-                    .frame(height: Metrics.band, alignment: .bottom)
-
                 thumbnail(item.node)
+                    .frame(height: Metrics.band + Metrics.node, alignment: .bottom)
 
                 Text(MealSlotSchedule.format(item.node.minutes))
                     .font(.system(size: 11, weight: .bold))
@@ -210,7 +235,7 @@ struct CalendarDayAxis: View {
             .frame(width: Metrics.column, height: Metrics.height, alignment: .top)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AxisNodePressStyle())
         .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .center)))
         .accessibilityLabel(accessibilityLabel(item.node))
         .accessibilityHint("Otwiera szczegóły posiłku")
@@ -380,6 +405,21 @@ struct CalendarDayAxis: View {
             }
         }
         return xs
+    }
+}
+
+/// Dotknięcie węzła osi: samo ściśnięcie, bez zmiany krycia.
+///
+/// `PlainButtonStyle` (i wspólny `PlanPressStyle`) przygaszają etykietę do
+/// ~0,72 — na wierszu z tłem to czytelna reakcja, ale tutaj etykietą jest
+/// okrągłe zdjęcie leżące NA kresce dnia, więc przygaszenie odsłaniało pod
+/// nim to, co akurat było głębiej. Kreska ma już dziurę pod zdjęciem, a ten
+/// styl zdejmuje drugą połowę problemu: nie ma czego prześwietlać.
+private struct AxisNodePressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
+            .animation(.spring(response: 0.24, dampingFraction: 0.85), value: configuration.isPressed)
     }
 }
 

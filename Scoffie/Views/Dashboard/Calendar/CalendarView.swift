@@ -504,25 +504,26 @@ struct CalendarView: View {
                 // w makiecie D6 — i jest przypięta razem z nimi. „Gdzie
                 // w dobie jestem" to pytanie zadawane przez cały czas
                 // oglądania listy, nie tylko na jej górze.
-                if !nodes.isEmpty {
-                    CalendarDayAxis(
-                        nodes: nodes,
-                        nowMinutes: isToday ? Self.minutes(from: now) : nil,
-                        isPast: isPastDay(now: now),
-                        onTap: { openAxisNode($0) }
-                    )
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.top, 14)
-                }
+                //
+                // Stoi też w dniu bez posiłków: sama kreska z kropką „teraz"
+                // to nadal odpowiedź, a oś znikająca i wracająca przy
+                // przewijaniu dni szarpałaby całą stroną pod nią.
+                CalendarDayAxis(
+                    nodes: nodes,
+                    nowMinutes: isToday ? Self.minutes(from: now) : nil,
+                    isPast: isPastDay(now: now),
+                    onTap: { openAxisNode($0) }
+                )
+                .padding(.horizontal, SCPageMetrics.horizontal)
+                .padding(.top, 14)
 
-                // Kreska pod paskiem dni — `margin: 14px … 18px` z projektu.
-                // Z osią nad sobą odstęp schodzi do 12, bo oś kończy się
-                // własnym wierszem godzin.
+                // Kreska pod paskiem dni — `margin: 14px … 18px` z projektu;
+                // 12 od góry, bo oś kończy się własnym wierszem godzin.
                 Rectangle()
                     .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.top, nodes.isEmpty ? 14 : 12)
+                    .padding(.top, 12)
                     .padding(.bottom, 18)
 
                 // Kroki z HealthKit — tylko gdy integracja „Zdrowie"
@@ -561,10 +562,6 @@ struct CalendarView: View {
                         .padding(.bottom, 12)
                 }
             }
-            // Dzień, w którym żaden posiłek nie ma godziny, nie ma osi —
-            // a bez tego lista podskakiwałaby o jej wysokość dokładnie
-            // w chwili, gdy wjeżdża nowy dzień.
-            .animation(DayNavigationMotion.spring, value: nodes.isEmpty)
 
             DayPager(
                 datesViewModel: datesViewModel,

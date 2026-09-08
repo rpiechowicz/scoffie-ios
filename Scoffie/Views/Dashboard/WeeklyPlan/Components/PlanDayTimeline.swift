@@ -178,7 +178,11 @@ struct PlanDayTimeline: View {
     /// stoi w rzędzie z pozostałymi akcjami planu (zakupy, „…”) i dotyczy —
     /// tak jak one — całego tygodnia, a nie akurat oglądanego dnia.
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        // Raz, nie trzy razy: każde sięgnięcie po `summary` przelicza wiersze
+        // dnia od nowa.
+        let summary = self.summary
+
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(Self.longDayFormatter.string(from: date).capitalized)
                 .scFont(22, weight: .bold, relativeTo: .title2)
                 .tracking(-0.5)
@@ -194,21 +198,27 @@ struct PlanDayTimeline: View {
 
             Spacer(minLength: 10)
 
-            Text(summaryText)
-                .scFont(14, weight: .regular, relativeTo: .footnote)
-                .tracking(-0.15)
-                .monospacedDigit()
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                // Liczby w podsumowaniu przechodzą, zamiast przeskakiwać:
-                // dołożenie obiadu przesuwa „1 z 3” na „2 z 3” i kalorie
-                // w tej samej klatce, w której wiersz wjeżdża na oś.
-                // Sama `.contentTransition` nie wystarczy — musi mieć czym
-                // jechać, stąd ta sama sprężyna, co pod osią niżej.
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.36, dampingFraction: 0.9), value: summaryText)
+            if summary.total > 0 {
+                // Ta sama plakietka, co licznik zjedzonych w Kalendarzu:
+                // „2 z 3” każe przeczytać i porównać dwie liczby, a dwie
+                // pełne kropki z trzech widać kątem oka. Kropki są też
+                // jedyną rzeczą, która nie rośnie z długością zdania — a to
+                // zdanie potrafi urosnąć o „· 5 dań”.
+                SCPipsBadge(
+                    filled: summary.filled,
+                    total: summary.total,
+                    color: SCPalette.sage,
+                    label: summaryLabel(summary),
+                    size: .small
+                )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilitySummary(summary))
+            }
         }
+        // Dołożenie obiadu dorysowuje kropkę i przesuwa „1 z 3” na „2 z 3”
+        // w tej samej klatce, w której wiersz wjeżdża na oś — jedna sprężyna
+        // na jeden ruch, ta sama co pod osią niżej.
+        .animation(.spring(response: 0.36, dampingFraction: 0.9), value: summaryLabel(summary))
     }
 
     private var todayBadge: some View {
@@ -296,25 +306,42 @@ struct PlanDayTimeline: View {
 
     // MARK: - Podsumowanie dnia
 
-    /// „2 z 3 posiłków”, a przy dniu z osobnymi daniami domowników
-    /// „3 z 3 posiłków · 5 dań”.
-    ///
-    /// Kalorii tu już nie ma — tę samą liczbę pokazuje pigułka „Cel dnia" nad
-    /// menu, i to obok celu, więc podtytuł powtarzał ją bez kontekstu.
-    /// Liczba dań zostaje: mówi coś, czego pigułka nie mówi — że w slotach
-    /// stoi więcej niż jedno danie na porę.
-    private var summaryText: String {
+    /// Ile pór ma już posiłek, ile ich w ogóle jest i ile stoi w nich dań.
+    private var summary: (filled: Int, total: Int, dishes: Int) {
         let list = rows
-        let filled = list.filter { !$0.dishes.isEmpty }.count
-        let total = list.count
-        let dishes = list.reduce(0) { $0 + $1.dishes.count }
+        return (
+            filled: list.filter { !$0.dishes.isEmpty }.count,
+            total: list.count,
+            dishes: list.reduce(0) { $0 + $1.dishes.count }
+        )
+    }
 
+    /// „2 z 3”, a przy dniu z osobnymi daniami domowników „2 z 3 · 5 dań”.
+    ///
+    /// Słowa „posiłków” nie ma: stoi pod nim rząd kropek, po jednej na porę,
+    /// więc zdanie i tak mówi o czym. Kalorii też nie — tę samą liczbę
+    /// pokazuje pigułka „Cel dnia" nad menu, i to obok celu, więc podtytuł
+    /// powtarzał ją bez kontekstu. Liczba dań zostaje: mówi coś, czego
+    /// kropki nie powiedzą — że w porze stoi więcej niż jedno danie.
+    private func summaryLabel(_ summary: (filled: Int, total: Int, dishes: Int)) -> String {
+        var text = "\(summary.filled) z \(summary.total)"
+
+        if summary.dishes > summary.filled {
+            let word = PolishPlural.form(summary.dishes, one: "danie", few: "dania", many: "dań")
+            text += " · \(summary.dishes) \(word)"
+        }
+        return text
+    }
+
+    /// Po polsku i w całości — kropek VoiceOver nie policzy.
+    private func accessibilitySummary(_ summary: (filled: Int, total: Int, dishes: Int)) -> String {
         // Po „z <liczba>” polski rzeczownik stoi w dopełniaczu bez względu na
         // liczbę — „1 z 3 posiłków”, „2 z 4 posiłków”.
-        var text = "\(filled) z \(total) posiłków"
+        var text = "Zaplanowane \(summary.filled) z \(summary.total) posiłków"
 
-        if dishes > filled {
-            text += " · \(dishes) \(PolishPlural.form(dishes, one: "danie", few: "dania", many: "dań"))"
+        if summary.dishes > summary.filled {
+            let word = PolishPlural.form(summary.dishes, one: "danie", few: "dania", many: "dań")
+            text += ", \(summary.dishes) \(word)"
         }
         return text
     }
