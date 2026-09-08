@@ -430,7 +430,18 @@ struct ProductsView: View {
             .task(id: datesViewModel.weekStartISO) {
                 previewArchiveId = nil
                 todayOnly = false
+                didSeedCollapsedAisles = false
+                collapsedAisles = []
+
                 await shoppingListStore.load(weekStart: datesViewModel.weekStartISO)
+
+                // Stan wyjściowy zwinięć ustawia się PO wczytaniu, bez animacji:
+                // alejka kupiona wcześniej (choćby na drugim telefonie) ma być
+                // od razu złożona, a nie rozłożyć się i zwinąć pół sekundy
+                // później, jakby ktoś właśnie coś odhaczył.
+                completedAislesSnapshot = completedAisles
+                collapsedAisles = completedAisles
+                didSeedCollapsedAisles = true
             }
             // Powiązanie produktów z daniami przelicza się wraz z planem —
             // `initial: true`, bo przy pierwszym wejściu plan jest już
@@ -445,16 +456,13 @@ struct ProductsView: View {
             // Alejka kupiona w całości zwija się sama — ale tylko w chwili,
             // w której się domknęła. Rozwiniętą potem ręcznie zostawiamy
             // rozwiniętą, bo to była decyzja użytkownika, a nie stan listy.
-            .onChange(of: completedAisles, initial: true) { _, current in
-                if !didSeedCollapsedAisles {
-                    didSeedCollapsedAisles = true
-                    // Wejście na listę, w której coś już jest kupione: alejki
-                    // domknięte wcześniej (także na innym telefonie) startują
-                    // zwinięte, zamiast rozwijać się na sekundę i zwijać same.
-                    collapsedAisles = current
-                    completedAislesSnapshot = current
-                    return
-                }
+            //
+            // Do czasu ustawienia stanu wyjściowego (patrz `.task` wyżej) nie
+            // reagujemy w ogóle: zmiany z wczytywania listy to nie są niczyje
+            // odhaczenia i nie mają prawa niczego składać na oczach użytkownika.
+            .onChange(of: completedAisles) { _, current in
+                guard didSeedCollapsedAisles else { return }
+
                 // Zwłoka 0,45 s to nie ozdoba: alejka domyka się w tej samej
                 // chwili, w której zapala się ostatni ptaszek. Bez niej wiersz
                 // znikał razem ze stuknięciem i nie dawało się zobaczyć, że

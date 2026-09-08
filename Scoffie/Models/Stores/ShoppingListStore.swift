@@ -377,16 +377,6 @@ final class ShoppingListStore {
         return activeItems(for: weekStart).filter { !$0.isChecked }.count
     }
 
-    func readonlyItems(for weekStart: String) -> [ShoppingItem] {
-        guard hasOpenRevision(for: weekStart),
-              let archive = currentClosedArchive(for: weekStart)
-        else {
-            return []
-        }
-
-        return archive.items
-    }
-
     private func scheduleReload(weekStart: String) {
         pendingReloadTask?.cancel()
         pendingReloadTask = Task { @MainActor [weak self] in

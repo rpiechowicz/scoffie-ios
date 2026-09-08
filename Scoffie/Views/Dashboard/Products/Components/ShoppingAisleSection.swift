@@ -38,13 +38,15 @@ struct ShoppingAisleSection: View {
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Zmierzona wysokość rozwiniętych wierszy — z niej jedzie roleta.
+    @State private var rowsHeight: CGFloat = 0
+
     private var accent: Color { ProductConstants.departmentColor(for: department) }
     private var icon: String { ProductConstants.departmentIcon(for: department) }
 
     private var boughtCount: Int { items.filter(\.isChecked).count }
     private var isComplete: Bool { !items.isEmpty && boughtCount == items.count }
     private var isCollapsible: Bool { mode == .list }
-    private var showsRows: Bool { !isCollapsible || !isCollapsed }
 
     /// Kupione spadają na dół alejki — to, co zostało do wzięcia, stoi zawsze
     /// pod nagłówkiem. `enumerated` na wejściu trzyma kolejność stabilną:
@@ -73,35 +75,78 @@ struct ShoppingAisleSection: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            if showsRows {
-                rows.transition(Self.rowsTransition)
+            if isCollapsible {
+                blind
+                collapsedRule
             } else {
-                // Zwinięta sekcja zostawia po sobie kreskę, nie pustkę —
-                // inaczej dwa nagłówki pod rząd czytały się jak jeden blok.
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.top, 8)
-                    .transition(.opacity.animation(.easeIn(duration: 0.18).delay(0.1)))
+                rows
             }
         }
     }
 
-    /// Zwijanie w dwóch tempach, nie w jednym.
+    /// Kreska domykająca zwiniętą alejkę.
     ///
-    /// Zawartość gaśnie SZYBKO (0,14 s), a wysokość sekcji jedzie sprężyną
-    /// z ekranu — dzięki temu wiersze znikają, zanim zaczną się nakładać na
-    /// nagłówek następnej alejki. Przy rozwijaniu jest odwrotnie: najpierw
-    /// robi się miejsce, a treść wchodzi z opóźnieniem 0,1 s, więc nie widać
-    /// jej „przez” zwijającą się jeszcze przestrzeń.
+    /// Nie pojawia się i nie znika — rośnie z zera razem z roletą i w tej samej
+    /// transakcji. Element wchodzący tranzycją musiałby najpierw dostać miejsce,
+    /// a to jest dokładnie ten skok, którego roleta się pozbyła.
     ///
-    /// Bez tych dwóch temp akordeon czytał się jak przeskok: cała treść
-    /// przenikała dokładnie tak długo, jak zmieniała się wysokość, i przez
-    /// pół animacji sekcja była zlepkiem dwóch półprzezroczystych stanów.
-    private static let rowsTransition = AnyTransition.asymmetric(
-        insertion: .opacity.animation(.easeOut(duration: 0.22).delay(0.1)),
-        removal: .opacity.animation(.easeIn(duration: 0.14))
-    )
+    /// Stoi POZA pomiarem rolety: wliczona w niego doliczałaby się do wysokości
+    /// rozwiniętej sekcji i zostawiała pod ostatnim wierszem dziewięć pustych
+    /// punktów, a przy zwiniętej (wysokość 0) i tak nie byłoby jej widać.
+    private var collapsedRule: some View {
+        Rectangle()
+            .fill(Color.scRule(scheme))
+            .frame(height: isCollapsed ? 1 : 0)
+            .padding(.top, isCollapsed ? 8 : 0)
+            .opacity(isCollapsed ? 1 : 0)
+    }
+
+    // MARK: - Roleta
+    //
+    // Zwijanie NIE jest wstawianiem i usuwaniem wierszy z układu.
+    //
+    // Tak było wcześniej — `if isCollapsed` z tranzycją — i widać było, gdzie
+    // ten pomysł się łamie: wiersz usunięty tranzycją zostaje w układzie na
+    // czas SWOJEGO zniknięcia, więc najpierw robiła się pusta przestrzeń
+    // wielkości całej sekcji, a dopiero potem reszta listy jechała w górę.
+    // Dwie animacje pod rząd zamiast jednej.
+    //
+    // Roleta trzyma jedną liczbę: wysokość. Wiersze stoją nieruchomo, przypięte
+    // do góry, a przycięta ramka zjeżdża po nich jak żaluzja — to, co zostaje
+    // pod spodem, przesuwa się dokładnie w tym samym tempie i w tej samej
+    // chwili, bo to jest ta sama zmiana układu, nie druga z kolei.
+    //
+    // `fixedSize` w pionie jest tu warunkiem działania: bez niego ramka o zerowej
+    // wysokości ściskałaby wiersze do zera, pomiar w tle oddawałby zero i roleta
+    // nie miałaby dokąd wracać.
+    private var blind: some View {
+        rows
+            .fixedSize(horizontal: false, vertical: true)
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .onChange(of: geo.size.height, initial: true) { _, height in
+                            // Próg 0,5 pt ucina drgania z zaokrągleń pikseli —
+                            // bez niego pomiar potrafi krążyć między dwiema
+                            // wartościami przy każdym przerysowaniu.
+                            if abs(height - rowsHeight) > 0.5 { rowsHeight = height }
+                        }
+                }
+            }
+            .frame(height: blindHeight, alignment: .top)
+            .clipped()
+            // Przycięcie nie obcina dotknięć — bez tego zwinięta alejka
+            // dalej łapała stuknięcia w niewidoczne wiersze.
+            .allowsHitTesting(!isCollapsed)
+            .accessibilityHidden(isCollapsed)
+    }
+
+    /// `nil` = wysokość naturalna. Zwrócone przy pierwszym rysowaniu, zanim
+    /// pomiar wróci — inaczej sekcja mignęłaby pusta.
+    private var blindHeight: CGFloat? {
+        if isCollapsed { return 0 }
+        return rowsHeight > 0 ? rowsHeight : nil
+    }
 
     // MARK: - Nagłówek
 

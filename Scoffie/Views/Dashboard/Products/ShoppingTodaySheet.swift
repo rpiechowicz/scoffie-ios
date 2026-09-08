@@ -47,6 +47,16 @@ struct ShoppingTodaySheet: View {
         items.filter { index.isForToday($0) }
     }
 
+    /// Dania, pod którymi jest co pokazać.
+    ///
+    /// Po zamknięciu listy i zmianie planu aktywna lista niesie tylko produkty
+    /// DOŁOŻONE tą zmianą, więc danie sprzed zamknięcia zostaje bez ani jednego
+    /// wiersza. Nagłówek „0 składników · 0 kupionych” nad pustką nie mówi nic
+    /// poza tym, że coś się popsuło.
+    private var visibleDishes: [ShoppingDish] {
+        dishes.filter { !index.items(items, for: $0).isEmpty }
+    }
+
     private var boughtCount: Int { todayItems.filter(\.isChecked).count }
     private var missingCount: Int { todayItems.count - boughtCount }
     private var hasEverything: Bool { missingCount == 0 }
@@ -109,7 +119,7 @@ struct ShoppingTodaySheet: View {
                 .accessibilityLabel("Zamknij")
             }
 
-            Text("\(dayLabel) · \(PolishPlural.dishes(dishes.count)) · \(boughtCount) z \(todayItems.count) kupione")
+            Text("\(dayLabel) · \(PolishPlural.dishes(visibleDishes.count)) · \(boughtCount) z \(todayItems.count) kupione")
                 .font(.system(size: 13, weight: .regular))
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
@@ -126,7 +136,7 @@ struct ShoppingTodaySheet: View {
     private var content: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(dishes) { dish in
+                ForEach(visibleDishes) { dish in
                     dishSection(dish)
                 }
             }
