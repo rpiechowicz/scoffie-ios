@@ -31,9 +31,20 @@ enum CalendarMealStatus {
 
 /// „za 4 h 19 min” — ile zostało do posiłku.
 enum CalendarRelativeTime {
+    /// Ile minut po godzinie posiłku wciąż mówimy „teraz".
+    ///
+    /// Obiad o 14:00 zjedzony o 14:10 nie jest spóźniony, tylko zjedzony —
+    /// ale ten sam obiad oglądany o 18:00 już nie jest „teraz" i wiersz nie
+    /// ma prawa tak twierdzić. Bez tej granicy pierwszy nieodhaczony posiłek
+    /// dnia stał w „teraz" aż do północy.
+    private static let graceMinutes = 20
+
     static func text(to minutes: Int, from nowMinutes: Int) -> String {
         let delta = minutes - nowMinutes
-        guard delta > 0 else { return "teraz" }
+
+        if delta <= 0 {
+            return delta >= -graceMinutes ? "teraz" : "pora minęła"
+        }
 
         let hours = delta / 60
         let rest = delta % 60
@@ -191,6 +202,11 @@ struct CalendarMealRow: View {
                 .font(.system(size: 11.5, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(eaten ? SCPalette.sage : Color.scFaint(scheme))
+                // Odliczanie tyka co minutę i bez tego liczby po prostu
+                // podmieniałyby się między klatkami, w wierszu, na który
+                // akurat nikt nie patrzy — albo patrzy.
+                .contentTransition(.numericText())
+                .animation(.smooth(duration: 0.25), value: statusText)
         }
         .lineLimit(1)
     }
@@ -269,7 +285,6 @@ struct CalendarEmptySlotRow: View {
                     style: StrokeStyle(lineWidth: 1.5, dash: [3, 2.5])
                 )
                 .frame(width: 26, height: 26)
-                .scTapTarget(44, drawn: 26)
 
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.scChipBg(scheme))

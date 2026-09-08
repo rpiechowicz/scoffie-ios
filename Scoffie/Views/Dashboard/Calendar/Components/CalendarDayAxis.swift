@@ -12,11 +12,14 @@ import SwiftUI
 //  1. **Oś jest przypięta**, tak jak pasek dni — nie jedzie z listą posiłków.
 //     Odpowiada na „gdzie w dobie jestem”, a to pytanie nie znika po
 //     przewinięciu listy o dwa kafle w dół.
-//  2. **„Teraz” to kropka na kresce, nie pionowa linia.** Linia z makiety
+//  2. **„Teraz” to kropka na kresce, nie pionowa linia z godziną.** Linia
 //     przecinała pasmo kalorii i przy posiłku stojącym blisko bieżącej
 //     godziny wyglądała na usterkę rysowania — dwie kreski i dwie liczby
-//     w jednym miejscu. Kropka siedzi dokładnie NA kresce, godzina stoi
-//     wyśrodkowana nad nią, i to wszystko.
+//     w jednym miejscu. Godzina też odpadła: stoi na pasku stanu telefonu
+//     dwa centymetry wyżej, a tu robiła trzecią liczbę w wierszu, który ma
+//     ich już dwie. Zostaje sama kropka, dość duża, żeby ją było widać, na
+//     obwódce w kolorze tła — dzięki niej odcina się i od kreski,
+//     i od zdjęcia, obok którego akurat wypadła.
 //  3. **Posiłek bez godziny nie ma czego szukać na osi.** Makieta stawiała go
 //     kreskowanego w rynnie po prawej — ale rynna to osobna zasada do
 //     nauczenia się, a przekąska „kiedykolwiek” i tak stoi na liście niżej.
@@ -64,15 +67,16 @@ struct CalendarDayAxis: View {
     private enum Metrics {
         /// Średnica zdjęcia na osi.
         static let node: CGFloat = 30
-        /// Pasmo nad zdjęciem. Mieści dwa piętra: godzinę „teraz” pod samą
-        /// górą i kalorie tuż nad zdjęciem, więc nigdy nie piszą po sobie.
-        static let band: CGFloat = 32
-        static let nowLabel: CGFloat = 13
+        /// Pasmo nad zdjęciem — mieści już tylko kalorie, odkąd znacznik
+        /// „teraz" zszedł na samą kreskę.
+        static let band: CGFloat = 20
         static let kcalLabel: CGFloat = 13
         static let timeGap: CGFloat = 5
         static let timeLabel: CGFloat = 14
-        /// Kropka „teraz" na kresce.
-        static let nowDot: CGFloat = 9
+        /// Kropka „teraz" na kresce, razem z obwódką w kolorze tła.
+        static let nowDot: CGFloat = 16
+        /// Grubość tej obwódki — to ona robi kropce prześwit wokół.
+        static let nowRing: CGFloat = 3
         /// Szerokość kolumny węzła — mierzona podpisem godziny („08:00”),
         /// bo to on, a nie zdjęcie, jest tu najszerszy.
         static let column: CGFloat = 44
@@ -113,9 +117,12 @@ struct CalendarDayAxis: View {
 
                 // Znacznik „teraz" na samej górze stosu: kropka na kresce ma
                 // być widoczna także wtedy, gdy wypada tuż obok zdjęcia.
-                if let nowX, let nowMinutes {
-                    nowMarker(minutes: nowMinutes)
-                        .offset(x: nowX - Metrics.column / 2, y: 0)
+                if let nowX {
+                    nowMarker
+                        .offset(
+                            x: nowX - Metrics.nowDot / 2,
+                            y: Metrics.trackY - Metrics.nowDot / 2
+                        )
                 }
             }
             .frame(width: width, height: Metrics.height, alignment: .topLeading)
@@ -132,7 +139,7 @@ struct CalendarDayAxis: View {
     private var fingerprint: String {
         nodes
             .sorted { $0.minutes < $1.minutes }
-            .map { "\($0.id):\($0.minutes):\($0.status.isEaten ? 1 : 0)" }
+            .map { "\($0.id):\($0.minutes):\($0.status)" }
             .joined(separator: "|")
     }
 
@@ -161,32 +168,16 @@ struct CalendarDayAxis: View {
         return nowX ?? 0
     }
 
-    /// Godzina wyśrodkowana nad kropką, kropka wyśrodkowana na kresce.
-    ///
-    /// Obie części dzielą tę samą kolumnę i to ona trzyma je w jednej osi
-    /// pionowej — bez niej podpis stał obok kropki, a nie nad nią.
-    private func nowMarker(minutes: Int) -> some View {
-        ZStack(alignment: .top) {
-            Text(MealSlotSchedule.format(minutes))
-                .font(.system(size: 10.5, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(SCPalette.terracotta)
-                .lineLimit(1)
-                .frame(width: Metrics.column, height: Metrics.nowLabel)
-
-            Circle()
-                .fill(SCPalette.terracotta)
-                .frame(width: Metrics.nowDot, height: Metrics.nowDot)
-                // Obwódka w kolorze tła robi kropce prześwit na kresce
-                // i na zdjęciu, obok którego akurat wypadła.
-                .overlay(
-                    Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 2)
-                )
-                .offset(y: Metrics.trackY - Metrics.nowDot / 2)
-        }
-        .frame(width: Metrics.column, height: Metrics.height, alignment: .top)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+    /// Kropka „teraz" — wyśrodkowana na kresce, bez podpisu.
+    private var nowMarker: some View {
+        Circle()
+            .fill(SCPalette.terracotta)
+            .overlay(
+                Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: Metrics.nowRing)
+            )
+            .frame(width: Metrics.nowDot, height: Metrics.nowDot)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Węzeł

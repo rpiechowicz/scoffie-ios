@@ -45,17 +45,20 @@ struct CalendarDayHeader: View {
                     filled: eaten,
                     total: total,
                     color: SCPalette.sage,
-                    label: "\(eaten) z \(total)"
+                    label: "\(eaten) z \(total)",
+                    // Mała, bo to komentarz do tytułu dnia, a nie drugi
+                    // tytuł: przy 28 pt plakietka ważyła w wierszu tyle,
+                    // co „Poniedziałek" obok niej.
+                    size: .small
                 )
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Zjedzone \(eaten) z \(total) posiłków")
-                // Odhaczenie posiłku zapala kropkę tym samym ruchem, którym
-                // zmienia się kafel niżej — bez tego kropka po prostu
-                // podmieniałaby kolor między klatkami.
-                .animation(.smooth(duration: 0.22), value: eaten)
-                .animation(.smooth(duration: 0.22), value: total)
             }
         }
+        // Odhaczenie posiłku zapala kropkę tym samym ruchem, którym zmienia
+        // się wiersz niżej. Odcisk obejmuje też pulę, więc dołożenie posiłku
+        // dorysowuje kropkę zamiast podmienić plakietkę między klatkami.
+        .animation(.smooth(duration: 0.22), value: "\(eaten)/\(total)")
     }
 
     private var todayBadge: some View {

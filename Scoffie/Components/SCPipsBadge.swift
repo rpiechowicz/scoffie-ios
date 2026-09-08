@@ -26,6 +26,26 @@ struct SCPipsBadge: View {
     var showsPips: Bool = true
     /// Sufit rysowanych kropek — dłuższa pula nie ma prawa rozepchnąć wiersza.
     var maxPips: Int = 8
+    /// Skala pigułki. Patrz `Size`.
+    var size: Size = .regular
+
+    /// Dwa rozmiary, bo plakietka stoi w dwóch różnych wierszach.
+    ///
+    /// `regular` stoi samotnie w nagłówku rozmowy asystenta i może być
+    /// wyraźna. `small` stoi w Kalendarzu obok 22-punktowego tytułu dnia,
+    /// gdzie 28 pt wysokości przeciągało wiersz na swoją stronę — plakietka
+    /// jest komentarzem do tytułu, a wyglądała na drugi tytuł.
+    enum Size {
+        case regular
+        case small
+
+        var height: CGFloat { self == .regular ? 28 : 22 }
+        var pip: CGFloat { self == .regular ? 6 : 5 }
+        var pipSpacing: CGFloat { self == .regular ? 3.5 : 3 }
+        var fontSize: CGFloat { self == .regular ? 11.5 : 10.5 }
+        var gap: CGFloat { self == .regular ? 7 : 5.5 }
+        var padding: CGFloat { self == .regular ? 10 : 8 }
+    }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -33,20 +53,20 @@ struct SCPipsBadge: View {
     private var drawsPips: Bool { showsPips && total > 0 }
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: size.gap) {
             if drawsPips {
-                HStack(spacing: 3.5) {
+                HStack(spacing: size.pipSpacing) {
                     ForEach(0..<pipCount, id: \.self) { index in
                         Circle()
                             .fill(index < filled ? color : color.opacity(0.28))
-                            .frame(width: 6, height: 6)
+                            .frame(width: size.pip, height: size.pip)
                     }
                 }
             }
 
             if let label {
                 Text(label)
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.system(size: size.fontSize, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(color)
                     .lineLimit(1)
@@ -54,9 +74,9 @@ struct SCPipsBadge: View {
         }
         // Kropka jest okrągła i sama sobie robi światło przy krawędzi,
         // podpis nie — stąd punkt różnicy po każdej stronie.
-        .padding(.leading, drawsPips ? 10 : 11)
-        .padding(.trailing, label == nil ? 10 : 11)
-        .frame(height: 28)
+        .padding(.leading, drawsPips ? size.padding : size.padding + 1)
+        .padding(.trailing, label == nil ? size.padding : size.padding + 1)
+        .frame(height: size.height)
         .background(Capsule().fill(color.opacity(scheme == .dark ? 0.15 : 0.10)))
     }
 }

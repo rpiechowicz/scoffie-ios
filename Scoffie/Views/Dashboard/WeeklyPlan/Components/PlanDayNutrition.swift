@@ -19,6 +19,9 @@ struct PlanDayNutrition {
         let meal: PlanMeal?
         /// Makra na jedną osobę; `.zero` dla pustej pory.
         let nutrition: Nutrition
+        /// Czy posiłek jest odhaczony jako zjedzony. Zawsze `false` tam, gdzie
+        /// odhaczanie nie ma sensu (Plan tygodnia planuje, a nie liczy zjedzone).
+        let isEaten: Bool
         let id: String
 
         var isPlanned: Bool { meal != nil }
@@ -28,8 +31,17 @@ struct PlanDayNutrition {
     /// Suma dnia na jedną osobę.
     let total: Nutrition
     /// Ile pór ma już posiłek i ile ich w ogóle jest — „3 z 3 posiłków".
+    /// W Kalendarzu licznik po lewej mówi o porach ZJEDZONYCH.
     let filledSlots: Int
     let slotCount: Int
+    /// Czy `total` liczy wyłącznie odhaczone posiłki (Kalendarz), czy
+    /// wszystko, co stoi w planie (Plan tygodnia).
+    ///
+    /// Widok czyta stąd, jak opisać dzień: przy `true` niezjedzone dania
+    /// nadal są na liście — bo dzień je ma — ale nie wchodzą do sumy i muszą
+    /// to po sobie pokazać. Lista bez nich odpowiadałaby na pytanie „co
+    /// zjadłem" pustką, zamiast powiedzieć „to jeszcze przed tobą".
+    let countsOnlyEaten: Bool
 
     var kcal: Int { Int(total.kcal.rounded()) }
     var protein: Int { Int(total.protein.rounded()) }
@@ -51,11 +63,23 @@ struct PlanDayNutrition {
     ///     składu gospodarstwa — wtedy udziałem jednej osoby jest pełna porcja
     ///     przepisu, czyli ta sama liczba, którą reguła auto pokaże po
     ///     wczytaniu listy. Ekran nie miga.
+    ///   - isEaten: `nil` w Planie tygodnia — liczy się wszystko, co stoi
+    ///     w dniu. Kalendarz podaje tu regułę odhaczenia i wtedy do sumy
+    ///     wchodzą WYŁĄCZNIE posiłki zjedzone, a reszta zostaje na liście
+    ///     wygaszona. Zaplanowany obiad nie jest dowodem, że ktoś go zjadł,
+    ///     ale nie jest też powodem, żeby zniknął z dnia.
     static func make(
         slots: [MealSlot],
         meals: (MealSlot) -> [PlanMeal],
-        knownHouseholdMemberCount: Int?
+        knownHouseholdMemberCount: Int?,
+        isEaten: ((PlanMeal) -> Bool)? = nil
     ) -> PlanDayNutrition {
+        // Dopasowanie wzorca zamiast `isEaten != nil`: domknięcie nie jest
+        // `Equatable` i porównywanie go z `nil` czyta się jak pomyłka, nawet
+        // gdy kompilator je przepuszcza.
+        var countsOnlyEaten = false
+        if case .some = isEaten { countsOnlyEaten = true }
+
         var entries: [Entry] = []
         var sum = Nutrition.zero
         var filled = 0
@@ -65,29 +89,44 @@ struct PlanDayNutrition {
 
             guard !dishes.isEmpty else {
                 entries.append(
-                    Entry(slot: slot, meal: nil, nutrition: .zero, id: "empty.\(slot.rawValue)")
+                    Entry(
+                        slot: slot,
+                        meal: nil,
+                        nutrition: .zero,
+                        isEaten: false,
+                        id: "empty.\(slot.rawValue)"
+                    )
                 )
                 continue
             }
 
-            filled += 1
+            // Pora liczy się jako „wypełniona", gdy niesie to, o co pyta
+            // licznik: w Planie — cokolwiek, w Kalendarzu — coś zjedzonego.
+            if !countsOnlyEaten || dishes.contains(where: { isEaten?($0) == true }) {
+                filled += 1
+            }
 
             for dish in dishes {
                 let nutrition = dish.nutritionPerPerson(
                     knownHouseholdMemberCount: knownHouseholdMemberCount
                 )
-                sum.kcal += nutrition.kcal
-                sum.protein += nutrition.protein
-                sum.fat += nutrition.fat
-                sum.carbs += nutrition.carbs
-                sum.fiber += nutrition.fiber
-                sum.salt += nutrition.salt
+                let eaten = isEaten?(dish) ?? false
+
+                if !countsOnlyEaten || eaten {
+                    sum.kcal += nutrition.kcal
+                    sum.protein += nutrition.protein
+                    sum.fat += nutrition.fat
+                    sum.carbs += nutrition.carbs
+                    sum.fiber += nutrition.fiber
+                    sum.salt += nutrition.salt
+                }
 
                 entries.append(
                     Entry(
                         slot: slot,
                         meal: dish,
                         nutrition: nutrition,
+                        isEaten: eaten,
                         id: "\(slot.rawValue).\(dish.id)"
                     )
                 )
@@ -98,7 +137,8 @@ struct PlanDayNutrition {
             entries: entries,
             total: sum,
             filledSlots: filled,
-            slotCount: slots.count
+            slotCount: slots.count,
+            countsOnlyEaten: countsOnlyEaten
         )
     }
 }

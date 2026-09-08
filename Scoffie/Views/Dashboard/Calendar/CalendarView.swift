@@ -97,7 +97,7 @@ struct CalendarView: View {
         visibleSlots(on: date).flatMap { myMeals(for: $0, on: date) }
     }
 
-    /// Posiłki dnia, który pokazuje PRZYPIĘTY nagłówek (oś, makra, licznik).
+    /// Posiłki dnia, który pokazuje PRZYPIĘTY nagłówek (oś i licznik).
     /// Strona dnia rysuje z własnego argumentu — przez chwilę po machnięciu
     /// pokazuje jeszcze poprzedni dzień, a nagłówek już nowy.
     private var selectedDayMeals: [PlanMeal] {
@@ -148,15 +148,19 @@ struct CalendarView: View {
     /// sumuje to, co zaplanowane, a Kalendarz wyłącznie to, co odhaczone.
     /// Zaplanowany obiad nie jest dowodem, że ktokolwiek go zjadł, więc
     /// wpuszczenie go do licznika kalorii byłoby po prostu nieprawdą.
+    ///
+    /// Do sumy — ale nie do listy. Arkusz dostaje WSZYSTKIE dania dnia
+    /// (`isEaten` decyduje tylko o tym, co wchodzi do sumy), bo lista, która
+    /// pokazuje wyłącznie zjedzone, na dzień przed pierwszym odhaczeniem jest
+    /// pusta i wygląda jak dzień bez planu. Niezjedzone stoją tam wygaszone,
+    /// z kreskowanym kółkiem — widać, że są, i widać, że jeszcze nie liczą.
     private var eatenNutrition: PlanDayNutrition {
         let userId = sessionStore.currentUserId
         return PlanDayNutrition.make(
             slots: visibleSlots(on: selectedDate),
-            meals: { slot in
-                myMeals(for: slot, on: selectedDate)
-                    .filter { $0.isEaten(by: userId) }
-            },
-            knownHouseholdMemberCount: knownHouseholdMemberCount
+            meals: { myMeals(for: $0, on: selectedDate) },
+            knownHouseholdMemberCount: knownHouseholdMemberCount,
+            isEaten: { $0.isEaten(by: userId) }
         )
     }
 
@@ -306,8 +310,8 @@ struct CalendarView: View {
             < Calendar.current.startOfDay(for: now)
     }
 
-    /// Udział jednej osoby w kaloriach posiłku — ta sama liczba, którą kafel
-    /// pokazuje w wierszu meta i którą sumuje blok makro.
+    /// Udział jednej osoby w kaloriach posiłku — ta sama liczba, którą wiersz
+    /// pokazuje w podpisie i którą sumuje pigułka celu nad dolnym menu.
     private func perPersonKcal(_ meal: PlanMeal) -> Int {
         Int(
             meal.nutritionPerPerson(knownHouseholdMemberCount: knownHouseholdMemberCount)
