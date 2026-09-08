@@ -46,6 +46,29 @@ enum PolishPlural {
     static func meals(_ count: Int) -> String {
         "\(count) \(form(count, one: "posiłek", few: "posiłki", many: "posiłków"))"
     }
+
+    /// Liczba produktów na liście zakupów, np. „8 produktów”.
+    static func products(_ count: Int) -> String {
+        "\(count) \(form(count, one: "produkt", few: "produkty", many: "produktów"))"
+    }
+
+    /// Liczba dań, np. „4 dania”.
+    static func dishes(_ count: Int) -> String {
+        "\(count) \(form(count, one: "danie", few: "dania", many: "dań"))"
+    }
+
+    /// Liczba składników, np. „5 składników”.
+    static func ingredients(_ count: Int) -> String {
+        "\(count) \(form(count, one: "składnik", few: "składniki", many: "składników"))"
+    }
+
+    /// Ile pozycji jest już kupionych, np. „3 kupione”.
+    ///
+    /// Rzeczownik zostaje domyślny („produkt”), więc odmienia się przymiotnik:
+    /// „1 kupiony”, „2 kupione”, „5 kupionych”.
+    static func bought(_ count: Int) -> String {
+        "\(count) \(form(count, one: "kupiony", few: "kupione", many: "kupionych"))"
+    }
 }
 
 /// Podgląd jest tu zamiast testu jednostkowego: pokazuje wszystkie klasy

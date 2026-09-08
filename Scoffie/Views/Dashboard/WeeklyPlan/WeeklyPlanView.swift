@@ -154,6 +154,22 @@ struct WeeklyPlanView: View {
         return set
     }
 
+    /// Ile produktów zostało do kupienia w widocznym tygodniu — liczba na
+    /// plakietce przy koszyku. Regułę („co się liczy po zamknięciu listy")
+    /// trzyma magazyn, żeby nagłówek Planu i ekran Zakupów nie mogły podać
+    /// dwóch różnych liczb.
+    private var shoppingRemainingCount: Int {
+        shoppingListStore.remainingCount(for: datesViewModel.weekStartISO)
+    }
+
+    /// VoiceOver czyta stan razem z akcją — sama plakietka jest dla niego
+    /// niewidoczna, bo „19" wypowiedziane osobno nic nie znaczy.
+    private var shoppingAccessibilityLabel: String {
+        let remaining = shoppingRemainingCount
+        guard remaining > 0 else { return "Lista zakupów" }
+        return "Lista zakupów, \(PolishPlural.products(remaining)) do kupienia"
+    }
+
     /// Cały widoczny tydzień bez jednego posiłku. Nie decyduje już o TYM, czy
     /// plansza asystenta się pokaże (pokazuje się zawsze, gdy stukniesz
     /// w przycisk) — tylko o tym, co na niej pisze: „ułożę” brzmi jak groźba
@@ -343,6 +359,13 @@ struct WeeklyPlanView: View {
                 )
                 prefetchWeekImages()
             }
+            // Plakietka przy koszyku musi znać stan listy, ZANIM ktokolwiek
+            // otworzy arkusz — inaczej pokazywałaby zero do pierwszego
+            // wejścia w zakupy. `load` idzie po cache, więc arkusz otwarty
+            // chwilę później nie płaci za to drugim zapytaniem.
+            .task(id: datesViewModel.weekStartISO) {
+                await shoppingListStore.load(weekStart: datesViewModel.weekStartISO)
+            }
             .task {
                 // Imiona, kolory i odznaki „dla kogo” biorą się ze składu
                 // gospodarstwa, więc musi być wczytany.
@@ -498,6 +521,12 @@ struct WeeklyPlanView: View {
 
                 // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
+                //
+                // Plakietka z liczbą jest ceną za to przeniesienie. Zakupy
+                // przestały być zakładką, więc nic na ekranie nie mówiło, że
+                // coś w nich zostało — żeby się dowiedzieć, trzeba było
+                // otworzyć arkusz. Teraz koszyk niesie tę jedną liczbę, która
+                // ma znaczenie: ile produktów czeka na kupienie.
                 EditorialIconButton(
                     icon: MenuConstans.Products.icon,
                     size: Self.headerActionSize,
@@ -505,7 +534,8 @@ struct WeeklyPlanView: View {
                 ) {
                     simpleSheet = .products
                 }
-                .accessibilityLabel(MenuConstans.Products.name)
+                .scCountBadge(shoppingRemainingCount)
+                .accessibilityLabel(shoppingAccessibilityLabel)
 
                 overflowMenu
             }
