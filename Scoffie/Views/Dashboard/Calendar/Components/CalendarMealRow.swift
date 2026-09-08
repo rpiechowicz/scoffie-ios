@@ -390,18 +390,25 @@ struct CalendarMealThumbnail: View {
 // MARK: - Paleta pór dnia
 
 extension MealSlot {
-    /// Akcent „Cozy Kitchen" — zastępuje domyślne kolory systemowe.
+    /// Akcent „Cozy Kitchen" — jeden kolor na porę dnia.
     ///
-    /// Posiłek dodatkowy dziedziczy akcent po sąsiednim posiłku głównym
-    /// (II śniadanie ← śniadanie, podwieczorek ← obiad, przekąska ← kolacja).
-    /// Paleta ma cztery akcenty i dokładanie do niej dwóch nowych dla slotów,
-    /// które są z definicji mniej ważne od głównych, rozbiłoby hierarchię
-    /// ekranu zamiast ją doprecyzować.
+    /// Sześć kolorów, nie trzy. Pory „pomiędzy" dziedziczyły wcześniej barwę
+    /// po sąsiednim posiłku głównym — założenie było takie, że mniej ważny
+    /// posiłek nie potrzebuje własnego koloru i odróżni go ikona. W dniu,
+    /// w którym obiad i podwieczorek stoją dwa wiersze od siebie w tej samej
+    /// zieleni, to założenie po prostu nie działa: kolor przestaje cokolwiek
+    /// znaczyć, skoro dwie różne pory noszą ten sam.
+    ///
+    /// Kolejność jest kolejnością doby — ciepłe rano, chłodny wieczór —
+    /// a przekąska stoi z boku, bo jako jedyna nie ma swojej godziny.
     var cozyAccent: Color {
         switch self {
-        case .breakfast, .secondBreakfast: return SCPalette.butter
-        case .lunch, .afternoonSnack:      return SCPalette.sage
-        case .dinner, .snack:              return SCPalette.indigo
+        case .breakfast:       return SCPalette.butter
+        case .secondBreakfast: return SCPalette.rose
+        case .lunch:           return SCPalette.sage
+        case .afternoonSnack:  return SCPalette.teal
+        case .dinner:          return SCPalette.indigo
+        case .snack:           return SCPalette.lavender
         }
     }
 

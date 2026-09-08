@@ -30,6 +30,40 @@ enum SCPalette {
         light: (160, 120, 40)    // oklch(0.55 0.12 80) — mustard, readable on cream
     )
 
+    // Trzy akcenty dołożone dla pór „pomiędzy" (II śniadanie, podwieczorek,
+    // przekąska). Wcześniej dziedziczyły barwę po sąsiednim posiłku głównym
+    // i przez to obiad wychodził w kalendarzu tym samym kolorem, co
+    // podwieczorek — a to są dwa różne wiersze w tym samym dniu.
+    //
+    // Dobrane po odstępie na kole barw, nie „na oko": każda para ma co
+    // najmniej ~35° różnicy, a pary stojące najbliżej (róż–terakota,
+    // lawenda–indygo) rozjeżdżają się dodatkowo jasnością i nasyceniem.
+    // Dzień czyta się przez to jako przejście od ciepłego rana do chłodnego
+    // wieczoru: masło → róż → szałwia → morska → indygo, a bezczasowa
+    // przekąska stoi z boku w lawendzie.
+
+    /// II śniadanie. Przygaszony róż — cieplejszy niż wszystko po lewej
+    /// stronie palety, ale wyraźnie różowy, nie pomarańczowy jak terakota.
+    static let rose = dynamicColor(
+        dark:  (224, 154, 164),  // oklch(0.76 0.08 5)
+        light: (176, 78, 104)    // oklch(0.52 0.13 0) — ciemniejszy na kremie
+    )
+
+    /// Podwieczorek. Morska — jedyny wolny kawałek koła między szałwią
+    /// a indygo, i jedyny kolor w palecie, którego nie da się pomylić
+    /// z zielenią obiadu.
+    static let teal = dynamicColor(
+        dark:  (111, 185, 204),  // oklch(0.73 0.07 215)
+        light: (40, 120, 145)    // oklch(0.51 0.08 220) — ciemniejsza na kremie
+    )
+
+    /// Przekąska. Lawenda wprost z makiety kalendarza (`#B79BE0`) — pora
+    /// bez godziny dostaje kolor, który też nie pasuje do rytmu dnia.
+    static let lavender = dynamicColor(
+        dark:  (183, 155, 224),  // #B79BE0 z canvasu
+        light: (126, 79, 160)    // ciemniejsza i bardziej fioletowa niż indygo
+    )
+
     // Warm canvas. Dark is near-black with a warm brown cast.
     static let canvasDark = Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255)     // #1A1411
     static let canvasLight = Color(red: 250 / 255, green: 246 / 255, blue: 240 / 255) // #FAF6F0
