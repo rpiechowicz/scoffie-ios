@@ -37,6 +37,11 @@ struct EditorialWeekBar: View {
     /// Licznik zmian tygodnia — tylko po to, żeby `sensoryFeedback` miało
     /// czym się wyzwolić (sam `weekStartISO` zmienia się też przy starcie).
     @State private var weekChanges = 0
+    /// Oś bieżącego gestu, rozstrzygnięta RAZ — patrz `weekSwipe`.
+    @State private var isHorizontalDrag: Bool?
+    /// Wychylenie palca w chwili rozstrzygnięcia osi. Odejmuje się je od
+    /// translacji, żeby plansza ruszała od zera, a nie skakała o próg gestu.
+    @State private var dragBaseline: CGFloat = 0
 
     /// Ile trzeba przeciągnąć (razem z rozpędem), żeby tydzień przeskoczył.
     /// Liczone z `predictedEndTranslation`, więc szybkie machnięcie palcem
@@ -46,6 +51,9 @@ struct EditorialWeekBar: View {
     /// dokąd odjechać (za nią nie ma drugiego tygodnia, tylko te same
     /// komórki z innymi liczbami), więc opór rośnie i ruch się wypłaszcza.
     private static let dragLimit: CGFloat = 56
+    /// Ile palec musi przejechać, żeby oś gestu dała się rozstrzygnąć.
+    /// Ta sama liczba, co w `DayPager` — jeden ekran, jeden próg.
+    private static let axisLockDistance: CGFloat = 14
 
     private static let shortDayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -59,6 +67,21 @@ struct EditorialWeekBar: View {
         let f = DateFormatter()
         f.locale = Locale(identifier: "pl_PL")
         f.dateFormat = "d"
+        return f
+    }()
+
+    /// „poniedziałek, 8 września 2026" — pełna data dla VoiceOver.
+    ///
+    /// Z polskim locale, jak reszta formaterów w tym pliku.
+    /// `DateFormatter.localizedString(dateStyle: .full)` szło locale'em
+    /// TELEFONU, więc na urządzeniu ustawionym po angielsku VoiceOver czytał
+    /// „Monday, September 8, 2026, dziś" — angielską datę doklejoną do
+    /// polskiego słowa. Aplikacja jest po polsku w całości, więc data też.
+    private static let fullDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "pl_PL")
+        f.dateStyle = .full
+        f.timeStyle = .none
         return f
     }()
 
@@ -221,16 +244,33 @@ struct EditorialWeekBar: View {
     private var weekSwipe: some Gesture {
         DragGesture(minimumDistance: 14)
             .onChanged { value in
-                // Pionowy ruch należy do scrolla ekranu — pasek siedzi
+                // Oś gestu rozstrzyga się RAZ, przy pierwszym wyraźnym ruchu.
+                // Wcześniej warunek przewagi liczył się przy każdej klatce,
+                // więc gest prowadzony po skosie raz ruszał planszą, a raz
+                // nie — plansza co chwilę przystawała pod palcem. Ta sama
+                // poprawka, którą dostał `DayPager` pod spodem.
+                if isHorizontalDrag == nil {
+                    let horizontal = abs(value.translation.width)
+                    let vertical = abs(value.translation.height)
+                    guard max(horizontal, vertical) >= Self.axisLockDistance else { return }
+                    isHorizontalDrag = horizontal > vertical
+                    dragBaseline = value.translation.width
+                }
+
+                // Pion należy do przewijania ekranu — pasek siedzi
                 // w `ScrollView` i nie wolno mu przejmować przewijania.
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                dragOffset = Self.resisted(value.translation.width)
+                guard isHorizontalDrag == true else { return }
+                dragOffset = Self.resisted(value.translation.width - dragBaseline)
             }
             .onEnded { value in
-                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
-                let travel = value.predictedEndTranslation.width
+                let wasHorizontal = isHorizontalDrag == true
+                let baseline = dragBaseline
+                isHorizontalDrag = nil
+                dragBaseline = 0
 
-                guard isHorizontal, abs(travel) >= Self.commitThreshold else {
+                let travel = value.predictedEndTranslation.width - baseline
+
+                guard wasHorizontal, abs(travel) >= Self.commitThreshold else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                         dragOffset = 0
                     }
@@ -336,14 +376,19 @@ struct EditorialWeekBar: View {
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         }
 
+        /// `EditorialWeekBar.dayOnlyFormatter`, nie własny `DateFormatter()`.
+        ///
+        /// Ten getter szedł przez `DateFormatter()` przy KAŻDYM rysowaniu
+        /// komórki — siedem sztuk na przerysowanie paska, a Kalendarz
+        /// przerysowuje stronę co minutę (zegar osi dnia). `DateFormatter`
+        /// jest jedną z droższych rzeczy w Foundation i nie ma powodu
+        /// tworzyć go częściej niż raz.
         private var dayNumber: String {
-            let f = DateFormatter()
-            f.dateFormat = "d"
-            return f.string(from: date)
+            EditorialWeekBar.dayOnlyFormatter.string(from: date)
         }
 
         private var accessibilityLabel: String {
-            let weekday = DateFormatter.localizedString(from: date, dateStyle: .full, timeStyle: .none)
+            let weekday = EditorialWeekBar.fullDateFormatter.string(from: date)
             if isToday { return "\(weekday), dziś" }
             if isPast { return "\(weekday), przeszłość" }
             if isPlanned { return "\(weekday), zaplanowany" }

@@ -4,11 +4,12 @@ import SwiftUI
 /// i osobna warstwa na nadmiar ponad cel.
 ///
 /// Wspólny dla pigułki „Cel dnia" nad menu i dla legendy w arkuszu — obie
-/// pokazują tę samą rzecz i muszą pokazywać ją tak samo. To NIE jest
-/// `MacroSegmentBar`: tamten dzieli JEDEN pasek między trzy makra i mówi,
-/// z czego składa się energia dnia; ten pokazuje JEDNO makro wobec JEGO
-/// własnego celu. Pierwsze odpowiada na „co jem", drugie na „ile mi zostało" —
-/// i to drugie pytanie zadaje się częściej.
+/// pokazują tę samą rzecz i muszą pokazywać ją tak samo. Jeden tor to JEDNO
+/// makro wobec JEGO własnego celu, czyli odpowiedź na „ile mi zostało".
+/// Stał tu kiedyś obok paska segmentowego — jednej kreski dzielonej na trzy
+/// makra, odpowiadający na „z czego składa się energia dnia". Tamto pytanie
+/// zeszło z obu ekranów razem z blokiem makra w Kalendarzu i pasek poszedł
+/// za nim; zostaje to, które zadaje się częściej.
 ///
 /// **Przekroczony cel zostawia pełny tor i dokłada ciemniejszy odcinek od
 /// prawej.** Pierwszy wariant gasił pełne wypełnienie do jednej trzeciej mocy

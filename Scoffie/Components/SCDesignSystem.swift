@@ -191,7 +191,7 @@ extension Color {
     ///
     /// Te trzy tinty istniały dotąd wyłącznie jako liczby wpisywane w miejscu
     /// użycia i zdążyły się rozjechać na cztery różne wartości
-    /// (`EditorialMealCard` 0.14/0.09, `HealthIntegrationSheet` 0.10/0.07,
+    /// (kafel posiłku 0.14/0.09, `HealthIntegrationSheet` 0.10/0.07,
     /// `PlanDaySplitsSection` 0.22/0.16, `PlanSlotPickerSheet` 0.16/0.10).
     /// Asystent potrzebuje ich w kartach na tyle często, że dalsze mnożenie
     /// wariantów zrobiłoby z tego loterię — stąd jedna prawda tutaj.

@@ -42,8 +42,9 @@ import SwiftUI
 /// dzielą resztę po równo.
 /// Przy czterech równych kolumnach kalorie musiały się kurczyć albo ucinać,
 /// a makra stały z zapasem, którego nie miały na co wydać.
-/// `MacroSegmentBar`, który stał tu na początku, zostaje w Kalendarzu: tam
-/// pytanie brzmi „z czego składa się to, co zjadłem", a nie „ile mi zostało".
+/// Pasek dzielony między trzy makra, który stał tu na początku, zniknął
+/// z aplikacji razem z blokiem makra w Kalendarzu: odpowiadał na „z czego
+/// składa się to, co zjadłem", a pigułka pyta „ile mi zostało".
 ///
 /// **Ile zostało do celu nie stoi już nigdzie na ekranie.** Jest do policzenia
 /// z „1135/2100", a tor obok mówi to samo bez czytania. VoiceOver dostaje tę

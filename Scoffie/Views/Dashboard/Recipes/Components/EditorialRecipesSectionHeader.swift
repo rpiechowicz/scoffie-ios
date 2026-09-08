@@ -63,19 +63,26 @@ struct EditorialRecipesSectionHeader: View {
 
 // Cozy Kitchen accent per recipe category — single source of truth used by
 // the section headers and editorial covers across the Przepisy v2 surface.
-// Mirrors `RecipeDetailPalette.accent(for:)` in RecipeDetail.swift, which
-// stayed private because the detail view didn't need an exported version.
+// Jedno mapowanie kategorii na kolor w całej aplikacji. Szczegół przepisu
+// miał do niedawna własną, prywatną kopię tego samego `switch`-a i po zmianie
+// koloru przekąsek obie wersje przez chwilę mówiły co innego — stąd jedno
+// miejsce zamiast dwóch bliźniaczych.
 enum RecipeAccent {
+    /// Akcent kategorii — ten sam, którym pora dnia świeci w Planie
+    /// i Kalendarzu (`MealSlot.cozyAccent`).
+    ///
+    /// Kategorii realnych są cztery, a pór dnia sześć: trzy sloty „pomiędzy"
+    /// dzielą jedną sekcję `.snacks`. Bierze ona lawendę — akcent przekąski,
+    /// czyli tej pory, od której sekcja wzięła nazwę. Dopóki sloty
+    /// „pomiędzy" nie miały własnych kolorów, spadała tu terakota i sekcja
+    /// czytała się jak brak kategorii, tak samo jak „Wszystkie".
     static func accent(for category: RecipesCategory) -> Color {
         switch category {
         case .breakfast: return SCPalette.butter
         case .lunch:     return SCPalette.sage
         case .dinner:    return SCPalette.indigo
-        // Terakota była dotąd zarezerwowana dla pseudo-kategorii, które nigdy
-        // nie rysują sekcji — paleta „Cozy Kitchen" ma dokładnie cztery
-        // akcenty, więc czwarta realna kategoria domyka komplet zamiast
-        // dokładać piąty kolor spoza tokenów.
-        case .snacks:    return SCPalette.terracotta
+        case .snacks:    return SCPalette.lavender
+        // Terakota zostaje pseudo-kategoriom, które nigdy nie rysują sekcji.
         case .favourite: return SCPalette.terracotta
         case .all:       return SCPalette.terracotta
         }

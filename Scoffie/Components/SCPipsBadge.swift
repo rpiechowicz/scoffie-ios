@@ -52,13 +52,26 @@ struct SCPipsBadge: View {
     private var pipCount: Int { max(1, min(maxPips, total)) }
     private var drawsPips: Bool { showsPips && total > 0 }
 
+    /// Ile kropek zapalić. Przy puli mieszczącej się w suficie to po prostu
+    /// `filled`; przy większej — proporcja przeliczona na tyle kropek, ile
+    /// się rysuje.
+    ///
+    /// Bez tego „9 z 10" zapalało wszystkie osiem kropek i wyglądało na
+    /// komplet, choć jednej pozycji brakowało. Zaokrąglamy W DÓŁ, żeby pełny
+    /// rząd znaczył wyłącznie pełną pulę.
+    private var litPips: Int {
+        guard total > pipCount else { return filled }
+        guard filled < total else { return pipCount }
+        return Int((Double(filled) / Double(total) * Double(pipCount)).rounded(.down))
+    }
+
     var body: some View {
         HStack(spacing: size.gap) {
             if drawsPips {
                 HStack(spacing: size.pipSpacing) {
                     ForEach(0..<pipCount, id: \.self) { index in
                         Circle()
-                            .fill(index < filled ? color : color.opacity(0.28))
+                            .fill(index < litPips ? color : color.opacity(0.28))
                             .frame(width: size.pip, height: size.pip)
                     }
                 }

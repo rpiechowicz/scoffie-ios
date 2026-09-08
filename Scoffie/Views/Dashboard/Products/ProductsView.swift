@@ -512,7 +512,7 @@ struct ProductsView: View {
     // header already says "№ 18 · ZAKUPY TYGODNIA" and the title block stays
     // ("Produkty / na ten tydzień") for tab consistency. Closed-week status
     // and date are folded into a single centered rule (same pattern as the
-    // Kalendarz's "W MENU" divider). Each archive row drops the redundant
+    // Kalendarz's empty-axis label). Each archive row drops the redundant
     // date — they all belong to the viewed week — and shows just the folio,
     // revision label, and count.
     private var archivedState: some View {
