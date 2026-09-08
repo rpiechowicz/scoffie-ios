@@ -9,10 +9,14 @@ import SwiftUI
 //
 // Pięć rzeczy różni tę oś od makiety:
 //
-//  0. **Oś stoi zawsze, także w dniu bez posiłków.** Sama kreska z kropką
-//     „teraz” to nadal odpowiedź — „nic tu nie ma, a dzień leci” — a oś
-//     znikająca i wracająca przy przewijaniu dni przesuwałaby wszystko pod
-//     nią o siedemdziesiąt punktów w górę i w dół.
+//  0. **Oś stoi zawsze, także w dniu bez posiłków** — oś znikająca
+//     i wracająca przy przewijaniu dni przesuwałaby wszystko pod nią
+//     o kilkadziesiąt punktów w górę i w dół. Pusta oś nie jest jednak samą
+//     kreską: goła kreska bez niczego czyta się jak niedorysowany ekran,
+//     więc dzień bez czego postawić dostaje w środku podpis mówiący, czego
+//     nie ma (kreska–podpis–kreska, ten sam rytm co „W MENU" na innych
+//     ekranach). Treść podpisu podaje ekran, bo tylko on wie, czy dzień jest
+//     pusty, czy tylko nikt nie ma stałej pory.
 //  1. **Oś jest przypięta**, tak jak pasek dni — nie jedzie z listą posiłków.
 //     Odpowiada na „gdzie w dobie jestem”, a to pytanie nie znika po
 //     przewinięciu listy o dwa kafle w dół.
@@ -69,6 +73,9 @@ struct CalendarDayAxis: View {
     let nowMinutes: Int?
     /// Dzień miniony ma całą trasę przebytą, przyszły — żadnej.
     let isPast: Bool
+    /// Co napisać, gdy nie ma czego postawić na osi. Wielkimi literami,
+    /// krótko — stoi między dwiema kreskami.
+    let emptyMessage: String
     let onTap: (Node) -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -119,36 +126,78 @@ struct CalendarDayAxis: View {
 
     var body: some View {
         GeometryReader { geo in
-            let width = geo.size.width
-            let placed = layout(width: width)
-            let nowX = nowMinutes.map { x(forMinutes: $0, width: width) }
-
-            ZStack(alignment: .topLeading) {
-                track(
-                    width: width,
-                    elapsedTo: elapsedWidth(nowX: nowX, width: width),
-                    holes: placed.map(\.x)
-                )
-
-                ForEach(placed) { item in
-                    nodeView(item)
-                        .offset(x: item.x - Metrics.column / 2, y: 0)
-                }
-
-                if let nowX {
-                    nowCaret
-                        .offset(
-                            x: nowX - Metrics.caretWidth / 2,
-                            y: Metrics.band - Metrics.caretHeight - Metrics.caretGap
-                        )
-                }
+            if nodes.isEmpty {
+                emptyRow
+                    .frame(width: geo.size.width, height: Metrics.height, alignment: .top)
+            } else {
+                filled(width: geo.size.width)
             }
-            .frame(width: width, height: Metrics.height, alignment: .topLeading)
         }
         .frame(height: Metrics.height)
         // Zmiana dnia przeprowadza węzły tą samą sprężyną, którą jedzie
         // strona dnia i podkreślenie na pasku — jeden ruch na jedną czynność.
         .animation(DayNavigationMotion.spring, value: fingerprint)
+    }
+
+    /// Doba z posiłkami: kreska, węzły, znacznik „teraz".
+    private func filled(width: CGFloat) -> some View {
+        let placed = layout(width: width)
+        let nowX = nowMinutes.map { x(forMinutes: $0, width: width) }
+
+        return ZStack(alignment: .topLeading) {
+            track(
+                width: width,
+                elapsedTo: elapsedWidth(nowX: nowX, width: width),
+                holes: placed.map(\.x)
+            )
+
+            ForEach(placed) { item in
+                nodeView(item)
+                    .offset(x: item.x - Metrics.column / 2, y: 0)
+            }
+
+            if let nowX {
+                nowCaret
+                    .offset(
+                        x: nowX - Metrics.caretWidth / 2,
+                        y: Metrics.band - Metrics.caretHeight - Metrics.caretGap
+                    )
+            }
+        }
+        .frame(width: width, height: Metrics.height, alignment: .topLeading)
+    }
+
+    /// Doba bez czego postawić: podpis między dwiema kreskami, na wysokości,
+    /// na której normalnie biegnie oś.
+    ///
+    /// Kreski nie ma pod podpisem — nie trzeba jej wycinać maską ani dobierać
+    /// tła pod tekst, a przerwa w linii i tak jest tym, co czyta się jako
+    /// „tu nic nie stoi”. Znacznika „teraz” tu nie ma: wskazywałby miejsce
+    /// na osi, na której nie ma czego wskazywać.
+    private var emptyRow: some View {
+        HStack(spacing: 12) {
+            emptyRule
+
+            Text(emptyMessage)
+                .font(.system(size: 10.5, weight: .bold))
+                .tracking(1.4)
+                .foregroundStyle(Color.scFaint(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+
+            emptyRule
+        }
+        // Podwojone `trackY` daje pudełko, którego środek wypada dokładnie
+        // tam, gdzie w pełnym dniu biegnie kreska.
+        .frame(height: Metrics.trackY * 2)
+    }
+
+    private var emptyRule: some View {
+        Rectangle()
+            .fill(Color.scRule(scheme))
+            .frame(height: 1)
+            .frame(maxWidth: .infinity)
     }
 
     /// Odcisk zawartości osi — po nim animuje się podmiana dnia i odhaczenie
@@ -465,12 +514,23 @@ private struct AxisNodePressStyle: ButtonStyle {
 
     ZStack {
         SCPageBackground(scheme: .dark).ignoresSafeArea()
-        CalendarDayAxis(
-            nodes: nodes,
-            nowMinutes: 9 * 60 + 41,
-            isPast: false,
-            onTap: { _ in }
-        )
+        VStack(spacing: 32) {
+            CalendarDayAxis(
+                nodes: nodes,
+                nowMinutes: 9 * 60 + 41,
+                isPast: false,
+                emptyMessage: "NIC NIE ZAPLANOWANO",
+                onTap: { _ in }
+            )
+
+            CalendarDayAxis(
+                nodes: [],
+                nowMinutes: 9 * 60 + 41,
+                isPast: false,
+                emptyMessage: "NIC NIE ZAPLANOWANO",
+                onTap: { _ in }
+            )
+        }
         .padding(.horizontal, SCPageMetrics.horizontal)
     }
     .preferredColorScheme(.dark)

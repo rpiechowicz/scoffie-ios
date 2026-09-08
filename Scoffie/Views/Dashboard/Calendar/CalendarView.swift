@@ -304,6 +304,15 @@ struct CalendarView: View {
         return map
     }
 
+    /// Co napisać na pustej osi. Dwa różne braki, dwa różne zdania:
+    /// dzień bez żadnego posiłku to nie to samo, co dzień, w którym posiłki
+    /// są, tylko żaden nie ma stałej pory (dom z samą przekąską w planie).
+    /// Jedno zdanie na oba przypadki kłamałoby w jednym z nich.
+    private var axisEmptyMessage: String {
+        let hasMeals = dayCards(on: selectedDate).contains { $0.meal != nil }
+        return hasMeals ? "BEZ STAŁYCH GODZIN" : "NIC NIE ZAPLANOWANO"
+    }
+
     /// Dzień z przeszłości — cała trasa na osi jest już przebyta.
     private func isPastDay(now: Date) -> Bool {
         Calendar.current.startOfDay(for: selectedDate)
@@ -512,6 +521,7 @@ struct CalendarView: View {
                     nodes: nodes,
                     nowMinutes: isToday ? Self.minutes(from: now) : nil,
                     isPast: isPastDay(now: now),
+                    emptyMessage: axisEmptyMessage,
                     onTap: { openAxisNode($0) }
                 )
                 .padding(.horizontal, SCPageMetrics.horizontal)
