@@ -2889,7 +2889,7 @@ struct SettingsView: View {
         } catch is CancellationError {
             return
         } catch {
-            sessionStore.authError = UserFacingErrorMapper.message(from: error)
+            sessionStore.authError = UserFacingErrorMapper.inlineMessage(from: error)
             invitationLink = nil
         }
     }

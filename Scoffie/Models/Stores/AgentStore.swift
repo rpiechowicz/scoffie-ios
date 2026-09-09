@@ -147,7 +147,7 @@ final class AgentStore {
             try await client.reportMessage(id: messageId, reason: reason, comment: comment)
             return nil
         } catch {
-            return UserFacingErrorMapper.message(from: error)
+            return UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -811,7 +811,7 @@ final class AgentStore {
                 break
             }
         }
-        errorMessage = UserFacingErrorMapper.message(from: error)
+        errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
     }
 
     /// Kod porażki tury (`AgentTurn.errorCode`) na kopię dla użytkownika.

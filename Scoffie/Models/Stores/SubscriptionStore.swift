@@ -97,8 +97,11 @@ final class SubscriptionStore {
     /// trwała — tak, chwilowa — nie, bo Apple ma o niej przypomnieć).
     enum ReportOutcome {
         case accepted
+        /// Serwer ODPOWIEDZIAŁ odmową — komunikat jest zawsze.
         case rejected(String)
-        case postponed(String)
+        /// Nie udało się dowieźć zgłoszenia. `nil` znaczy „to był brak sieci":
+        /// mówi o nim pasek u góry, a nie komunikat przy przycisku.
+        case postponed(String?)
     }
 
     private(set) var products: [StoreKit.Product] = []
@@ -251,7 +254,11 @@ final class SubscriptionStore {
     /// jedynym miejscem, które ma prawo rozstrzygać o podpisie, jest serwer
     /// z łańcuchem do przypiętego korzenia Apple.
     private func handle(_ result: VerificationResult<Transaction>) async -> ReportOutcome {
-        guard let client else { return .postponed("Brak połączenia z serwerem.") }
+        // Brak klienta to nie brak sieci — sesja jeszcze nie zbudowała
+        // warstwy zakupów. Dawne „Brak połączenia z serwerem." mówiło tu
+        // nieprawdę i myliło się z jedynym miejscem, które od teraz mówi
+        // o łączności.
+        guard let client else { return .postponed("Zakupy nie są jeszcze gotowe. Spróbuj za chwilę.") }
         do {
             _ = try await client.register(signedTransaction: result.jwsRepresentation)
             await refreshState()
@@ -261,7 +268,7 @@ final class SubscriptionStore {
             lastError = nil
             return .accepted
         } catch {
-            let message = UserFacingErrorMapper.message(from: error)
+            let message = UserFacingErrorMapper.inlineMessage(from: error)
             if Self.isPermanentRefusal(error) {
                 // ODMOWA TRWAŁA MUSI DOMKNĄĆ TRANSAKCJĘ. Otwarta transakcja
                 // wraca w `Transaction.updates` przy KAŻDYM starcie aplikacji,
@@ -273,7 +280,10 @@ final class SubscriptionStore {
                     await transaction.finish()
                 }
                 lastError = message
-                return .rejected(message)
+                // Odmowa trwała zawsze przychodzi Z ODPOWIEDZI serwera, więc
+                // `message` jest tu w praktyce zawsze — zapasowe zdanie stoi
+                // tylko po to, żeby typ się domykał bez wykrzyknika.
+                return .rejected(message ?? "Nie udało się potwierdzić zakupu.")
             }
             // Awaria sieci albo serwera: transakcja ZOSTAJE otwarta, żeby
             // Apple przypomniało o niej przy następnym starcie.

@@ -36,6 +36,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Nasłuch interfejsu startuje razem z aplikacją, żeby pierwsze
+        // żądanie miało już z czym porównać swoje niepowodzenie.
+        ConnectivityMonitor.shared.start()
         PlanChangeNotificationService.requestAuthorizationIfNeeded()
         application.registerForRemoteNotifications()
         return true
@@ -324,6 +327,11 @@ struct ScoffieApp: App {
             }
             .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
             .environment(\.sessionStore, sessionStore)
+            // Kolejność ma znaczenie: jedno i drugie musi stać POD
+            // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`
+            // do środowiska.
+            .scToastDebugTrigger()
+            .scConnectivityToast()
             .scToastLayer(toastCenter)
             .preferredColorScheme((AppTheme(rawValue: themeRawValue) ?? .system).colorScheme)
             .task(id: startupTaskID) {

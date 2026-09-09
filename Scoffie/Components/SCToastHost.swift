@@ -275,6 +275,17 @@ struct SCToastHost: View {
     private func drive() async {
         if let incoming = center.current {
             guard shown?.id != incoming.id else { return }
+            if shown != nil {
+                // Podmiana treści na już otwartej kapsule: najpierw wraca ona
+                // do wyspy i dopiero stamtąd wychodzi z nowym zdaniem.
+                // Przenikanie w miejscu wyglądałoby jak błąd rysowania, bo
+                // między komunikatami zmienia się i szerokość, i wysokość.
+                // Tędy przechodzi też powrót paska braku sieci po chwilowym
+                // „Zapisano".
+                isOpen = false
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+            }
             shown = incoming
             dragOffset = 0
             isOpen = false
@@ -319,16 +330,18 @@ private final class SCToastWindow: UIWindow {
 private struct SCToastWindowInstaller: UIViewRepresentable {
     let center: SCToastCenter
 
-    func makeUIView(context: Context) -> UIView { Installer(center: center) }
+    func makeUIView(context: Context) -> UIView { Installer(toasts: center) }
 
     func updateUIView(_ uiView: UIView, context: Context) {}
 
     private final class Installer: UIView {
-        private let center: SCToastCenter
+        // NIE `center` — `UIView` ma już własne `center` typu `CGPoint`
+        // i nazwa po cichu weszłaby z nim w kolizję.
+        private let toasts: SCToastCenter
         private var overlay: SCToastWindow?
 
-        init(center: SCToastCenter) {
-            self.center = center
+        init(toasts: SCToastCenter) {
+            self.toasts = toasts
             super.init(frame: .zero)
             isUserInteractionEnabled = false
         }
@@ -342,7 +355,7 @@ private struct SCToastWindowInstaller: UIViewRepresentable {
 
             let overlay = SCToastWindow(windowScene: scene)
             let host = UIHostingController(
-                rootView: SCToastHost(center: center) { [weak overlay] rect in
+                rootView: SCToastHost(center: toasts) { [weak overlay] rect in
                     overlay?.interactiveRect = rect
                 }
             )
@@ -403,7 +416,22 @@ private struct SCToastPreviewStage: View {
                     center.warning("Cookidoo prosi o ponowne logowanie")
                 }
                 SCSoftButton(title: "Błąd", trailingIcon: nil, accent: SCPalette.rose) {
-                    center.error("Nie udało się zapisać", "Sprawdź internet i spróbuj ponownie.")
+                    center.error("Nie udało się zapisać", "Spróbuj ponownie za chwilę.")
+                }
+                // Pasek stanu: zostaje, dopóki go nie zgasisz, i wraca po
+                // każdym komunikacie chwilowym. Tak wygląda brak sieci.
+                SCSoftButton(title: "Pasek: brak sieci", trailingIcon: nil, accent: SCPalette.butter) {
+                    center.setPersistent(
+                        SCToast(
+                            style: .warning,
+                            title: "Brak połączenia z internetem",
+                            message: "Widzisz ostatnio pobrane dane."
+                        )
+                    )
+                }
+                SCSoftButton(title: "Pasek: zgaś", trailingIcon: nil, accent: SCPalette.sage) {
+                    center.setPersistent(nil)
+                    center.success("Połączenie wróciło")
                 }
                 Spacer()
             }

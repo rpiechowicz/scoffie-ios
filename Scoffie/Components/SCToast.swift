@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 // MARK: - Model
@@ -143,17 +144,30 @@ struct SCToast: Identifiable, Equatable {
 @MainActor
 @Observable
 final class SCToastCenter {
-    /// Toast na ekranie. `nil` znaczy, że nie ma czego pokazywać — ale widok
-    /// może jeszcze przez chwilę domykać poprzedni (patrz `gap`).
-    private(set) var current: SCToast?
+    /// Toast na ekranie. Chwilowy ma pierwszeństwo przed trwałym: „Zapisano"
+    /// jest odpowiedzią na to, co użytkownik właśnie zrobił, a pasek braku
+    /// sieci opisuje tło i po chwili wróci sam.
+    var current: SCToast? {
+        if let transient { return transient }
+        return isPersistentMuted ? nil : persistent
+    }
+
+    /// Toast na czas — znika sam po `duration`.
+    private var transient: SCToast?
+
+    /// Toast na STAN — zostaje, dopóki trwa to, co go wywołało, i nie ma
+    /// własnego licznika. Tak robią aplikacje, w których brak sieci jest
+    /// czytelny: komunikat o stanie trwającym nie może znikać po trzech
+    /// sekundach, bo wtedy kłamie — stan trwa dalej, tylko już go nie widać.
+    private var persistent: SCToast?
+
+    /// Użytkownik odsunął pasek trwały ręką. Wraca dopiero przy następnej
+    /// ZMIANIE stanu — pokazywanie go z powrotem od razu byłoby kłótnią
+    /// z człowiekiem, który właśnie powiedział, że wie.
+    private var isPersistentMuted = false
 
     private var queue: [SCToast] = []
     private var timer: Task<Void, Never>?
-
-    /// Ile czeka kapsuła między zjazdem jednego toastu a wjazdem następnego.
-    /// Bez tej przerwy druga treść wskakuje w połowie zwijania i całość czyta
-    /// się jak mignięcie, a nie jak dwa osobne komunikaty.
-    private static let gap: Duration = .milliseconds(420)
 
     /// Ile toastów czeka w kolejce. Powyżej tego nowe są odrzucane — seria
     /// dwudziestu błędów po zerwanym połączeniu nie ma prawa zająć górnej
@@ -194,12 +208,15 @@ final class SCToastCenter {
         // przedłuża pobyt. Store potrafi ustawić `errorMessage` dwa razy pod
         // rząd (rollback, a zaraz po nim kolejny nieudany load), a użytkownik
         // ma z tego zobaczyć jedno zdanie, nie dwa identyczne.
-        if current == toast {
+        if transient == toast {
             armTimer(for: toast)
             return
         }
+        // To samo, co mówi już pasek trwały, nie ma po co przyjeżdżać drugi
+        // raz jako komunikat na czas.
+        if transient == nil, persistent == toast { return }
         guard queue.last != toast else { return }
-        guard current != nil else {
+        guard transient != nil else {
             present(toast)
             return
         }
@@ -207,15 +224,28 @@ final class SCToastCenter {
         queue.append(toast)
     }
 
+    /// Ustawia albo gasi pasek stanu. `nil` znaczy „stan minął".
+    func setPersistent(_ toast: SCToast?) {
+        guard persistent != toast else { return }
+        persistent = toast
+        // Nowy stan zaczyna od zera — wcześniejsze odsunięcie ręką dotyczyło
+        // poprzedniego zdania, nie tego.
+        isPersistentMuted = false
+    }
+
     /// Zamknięcie ręką — stuknięciem albo machnięciem w górę.
     func dismiss() {
         timer?.cancel()
         timer = nil
-        advance()
+        if transient != nil {
+            advance()
+        } else if persistent != nil {
+            isPersistentMuted = true
+        }
     }
 
     private func present(_ toast: SCToast) {
-        current = toast
+        transient = toast
         armTimer(for: toast)
     }
 
@@ -228,17 +258,19 @@ final class SCToastCenter {
         }
     }
 
-    /// Zdejmuje bieżący toast i — po przerwie na zwinięcie kapsuły — wpuszcza
-    /// następny z kolejki.
+    /// Zdejmuje chwilowy toast i wpuszcza następny z kolejki.
+    ///
+    /// Bez pustej przerwy: przerwę na zwinięcie kapsuły robi już `SCToastHost`
+    /// przy KAŻDEJ podmianie treści, więc drugie odliczanie tutaj tylko by ją
+    /// wydłużało. Gdy kolejka jest pusta, `current` samo wraca do paska
+    /// trwałego — jeśli jakiś wisi.
     private func advance() {
-        current = nil
         timer = nil
-        guard !queue.isEmpty else { return }
-        timer = Task { [weak self] in
-            try? await Task.sleep(for: Self.gap)
-            guard !Task.isCancelled, let self, !self.queue.isEmpty else { return }
-            self.present(self.queue.removeFirst())
+        guard !queue.isEmpty else {
+            transient = nil
+            return
         }
+        present(queue.removeFirst())
     }
 }
 
@@ -296,5 +328,62 @@ extension View {
     /// Wystawia `errorMessage` store jako toast.
     func scErrorToast(_ message: @autoclosure @escaping () -> String?) -> some View {
         modifier(SCErrorToastBridge(message: message))
+    }
+}
+
+// MARK: - Most z monitora łączności
+
+/// Zamienia stan `ConnectivityMonitor` na komunikat u góry ekranu.
+///
+/// Dwie rzeczy są tu celowo niesymetryczne — i tak samo rozwiązują to
+/// aplikacje, w których brak sieci jest czytelny (Slack, Spotify, Gmail):
+///
+/// - **brak sieci to pasek TRWAŁY.** Stan trwa, więc komunikat nie ma prawa
+///   zniknąć sam po trzech sekundach: użytkownik zostałby z przekonaniem, że
+///   już wróciło, choć nic nie wróciło. Zamiast tego wisi, dopóki jest czego
+///   dotyczyć, i da się go odsunąć ręką.
+/// - **powrót to komunikat na CHWILĘ.** To zdarzenie, nie stan. Ma zrobić
+///   jedno: zdjąć niepewność i zejść z drogi.
+///
+/// Sam moment zapalenia jest opóźniony — patrz `ConnectivityMonitor`.
+private struct SCConnectivityToastBridge: ViewModifier {
+    @Environment(\.toasts) private var toasts
+
+    func body(content: Content) -> some View {
+        content.onChange(
+            of: ConnectivityMonitor.shared.isOffline,
+            initial: true
+        ) { wasOffline, isOffline in
+            guard !isOffline else {
+                // Dwa różne stany, dwa różne zdania. „Sprawdź internet" przy
+                // działającym Wi-Fi wysyła człowieka do restartu routera,
+                // który niczego nie naprawi — a to my nie odpowiadamy.
+                let hasNetwork = ConnectivityMonitor.shared.isPathSatisfied
+                toasts.setPersistent(
+                    SCToast(
+                        style: .warning,
+                        title: hasNetwork
+                            ? "Nie mogę połączyć się ze Scoffie"
+                            : "Brak połączenia z internetem",
+                        message: "Widzisz ostatnio pobrane dane."
+                    )
+                )
+                return
+            }
+            toasts.setPersistent(nil)
+            // „Wróciło" tylko po tym, jak naprawdę zniknęło. Przy starcie
+            // aplikacji `initial: true` woła to z obiema wartościami równymi
+            // `false` i wtedy nie ma czego ogłaszać.
+            if wasOffline {
+                toasts.success("Połączenie wróciło")
+            }
+        }
+    }
+}
+
+extension View {
+    /// Wpina pasek braku sieci. Zakładany raz, w korzeniu aplikacji.
+    func scConnectivityToast() -> some View {
+        modifier(SCConnectivityToastBridge())
     }
 }

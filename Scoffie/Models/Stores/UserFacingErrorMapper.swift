@@ -23,12 +23,14 @@ enum UserFacingErrorMapper {
 
     /// Czy to błąd ŁĄCZNOŚCI (martwy socket, brak ACK, offline), a nie
     /// odpowiedź serwera. Te pierwsze bywają chwilowe — zaraz po wybudzeniu
-    /// aplikacji socket jeszcze wstaje — i `ConnectivityErrorGate` pokazuje je
-    /// dopiero, gdy się utrzymają.
+    /// aplikacji socket jeszcze wstaje — więc `inlineMessage` w ogóle ich nie
+    /// pokazuje: oddaje je `ConnectivityMonitor`, a ten mówi o braku sieci
+    /// dopiero, gdy się utrzyma.
     ///
-    /// Odpowiedź serwera z kodem NIGDY nie jest błędem łączności — dawne
-    /// dopasowanie gołego „socket" w treści opóźniałoby o 2 s prawdziwe
-    /// odmowy, gdyby tylko komunikat zawierał to słowo.
+    /// Ten podział jest tu jedyną granicą, na której stoi cała reszta, więc
+    /// warto go trzymać wąsko: odpowiedź serwera z kodem NIGDY nie jest
+    /// błędem łączności — dawne dopasowanie gołego „socket" w treści
+    /// wyciszałoby prawdziwe odmowy, gdyby tylko komunikat zawierał to słowo.
     static func isConnectivityIssue(_ error: Error) -> Bool {
         switch error {
         case RecipeDataError.server:
@@ -54,6 +56,30 @@ enum UserFacingErrorMapper {
     /// użytkownikowi surowy identyfikator.
     static func copy(forCode code: String) -> String? {
         copyByCode[code]
+    }
+
+    /// Kopia do pokazania NA MIEJSCU — albo `nil`, gdy błąd jest łącznościowy.
+    ///
+    /// To jest jedyne wejście, z którego powinny korzystać store i widoki
+    /// ustawiające `errorMessage` / `authError`. Brak sieci nie należy już do
+    /// ekranu, na którym akurat padło żądanie: wcześniej ta sama awaria
+    /// potrafiła wyprodukować czerwony wiersz w Kalendarzu, drugi w Zakupach
+    /// i trzeci pod polem logowania Cookidoo, a każdy z nich mówił to samo
+    /// zdanie innymi słowami i w innym momencie. Teraz mówi to jedno miejsce:
+    /// pasek u góry, i dopiero gdy brak sieci się utrzyma
+    /// (`ConnectivityMonitor`).
+    ///
+    /// Przy okazji każdy błąd melduje się w monitorze, bo tylko warstwa
+    /// wyżej wie, czy padł transport, czy odpowiedział serwer:
+    /// - błąd łączności → dowód kłopotów,
+    /// - każdy inny → dowód, że serwer ODPOWIEDZIAŁ, czyli że sieć działa.
+    static func inlineMessage(from error: Error) -> String? {
+        guard !isConnectivityIssue(error) else {
+            ConnectivityMonitor.noteTransportFailure()
+            return nil
+        }
+        ConnectivityMonitor.noteResponse()
+        return message(from: error)
     }
 
     static func message(from error: Error) -> String {

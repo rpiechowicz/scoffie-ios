@@ -45,10 +45,6 @@ final class ShoppingListStore {
     /// optymistyczny ptaszek stanem z serwera, który o tapnięciu jeszcze
     /// nie wie — checkbox „mrugał".
     private var inFlightToggleKeys: Set<String> = []
-    /// Odracza pokazanie błędów łączności z `load()` — patrz komentarz
-    /// w `ConnectivityErrorGate`. Błędy akcji użytkownika pokazują się
-    /// bez zmian, od razu.
-    private let connectivityErrorGate = ConnectivityErrorGate()
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -125,7 +121,6 @@ final class ShoppingListStore {
 
     func load(weekStart: String, force: Bool = false) async {
         errorMessage = nil
-        connectivityErrorGate.reset()
         self.weekStart = weekStart
 
         // `!isLoading` także w gałęzi cache: gdy trwa fetch sieciowy, zapis
@@ -149,12 +144,7 @@ final class ShoppingListStore {
             await apply(state: state, for: weekStart)
             invalidatedWeeks.remove(weekStart)
         } catch {
-            // Błąd łączności z odświeżenia pokazuje się dopiero, gdy się
-            // utrzyma — reconnect po powrocie z tła gasił go po ~0,3 s
-            // i banner tylko migał.
-            connectivityErrorGate.publish(error) { [weak self] message in
-                self?.errorMessage = message
-            }
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             if let cachedState = cachedStateByWeek[weekStart] {
                 await apply(state: cachedState, for: weekStart)
             }
@@ -238,7 +228,7 @@ final class ShoppingListStore {
                     self.items[rollbackIndex].isChecked = originalState
                     self.cacheCurrentState(for: weekStart)
                 }
-                self.errorMessage = UserFacingErrorMapper.message(from: error)
+                self.errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }
     }
@@ -258,7 +248,7 @@ final class ShoppingListStore {
                 openRevisionsByWeek.removeValue(forKey: weekStart)
                 await load(weekStart: weekStart, force: true)
             } catch {
-                errorMessage = UserFacingErrorMapper.message(from: error)
+                errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }
     }
@@ -278,7 +268,7 @@ final class ShoppingListStore {
                 }
                 await load(weekStart: currentWeekStart, force: true)
             } catch {
-                errorMessage = UserFacingErrorMapper.message(from: error)
+                errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }
     }
@@ -291,7 +281,7 @@ final class ShoppingListStore {
                 openRevisionsByWeek.removeAll()
                 await load(weekStart: currentWeekStart, force: true)
             } catch {
-                errorMessage = UserFacingErrorMapper.message(from: error)
+                errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }
     }
@@ -402,7 +392,7 @@ final class ShoppingListStore {
             isBatchUpdating = false
             items = originalItems
             cacheCurrentState(for: weekStart)
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -523,7 +513,7 @@ final class ShoppingListStore {
                     pendingResetProductKeys.remove(item.productKey)
                 }
             } catch {
-                errorMessage = UserFacingErrorMapper.message(from: error)
+                errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
                 invalidatedWeeks.insert(weekStart)
             }
             pendingResetProductKeys.subtract(keysToReset)

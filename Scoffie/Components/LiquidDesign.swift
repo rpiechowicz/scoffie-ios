@@ -54,15 +54,17 @@ enum DashboardPalette {
 }
 
 extension View {
+    /// Bez `if #available(iOS 16.4, *)`, bo target aplikacji to iOS 26 —
+    /// gałąź zapasowa była nieosiągalna od dawna.
+    ///
+    /// Nie była też niewinna: dwie gałęzie dawały dwa różne typy konkretne
+    /// (trzy modyfikatory kontra jeden), a funkcja obiecywała jedno
+    /// `some View`, więc kompilator kończył na „branches have mismatching
+    /// types". Jeden typ zamiast dwóch usuwa problem u źródła, zamiast
+    /// zaklejać go `@ViewBuilder`, który tylko owinąłby to w `AnyView`.
     func dashboardLiquidSheet(cornerRadius: CGFloat = 30) -> some View {
-        if #available(iOS 16.4, *) {
-            self
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(cornerRadius)
-                .presentationBackground(.clear)
-        } else {
-            self
-                .presentationDragIndicator(.visible)
-        }
+        presentationDragIndicator(.visible)
+            .presentationCornerRadius(cornerRadius)
+            .presentationBackground(.clear)
     }
 }

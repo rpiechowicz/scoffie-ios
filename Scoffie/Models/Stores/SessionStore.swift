@@ -287,7 +287,7 @@ final class SessionStore {
             clearRuntimeStores()
             tearDownSessionSocket()
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
             isAuthenticated = false
             clearRuntimeStores()
             tearDownSessionSocket()
@@ -311,6 +311,9 @@ final class SessionStore {
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
+        // Doszliśmy do serwera — niepowodzenie transportu poleciałoby wyżej
+        // jako `URLError` i zameldowało się w monitorze przez `inlineMessage`.
+        ConnectivityMonitor.noteResponse()
         guard let http = response as? HTTPURLResponse else {
             throw RecipeDataError.serverError(message: "Brak odpowiedzi HTTP z serwera.")
         }
@@ -427,7 +430,7 @@ final class SessionStore {
                 return false
             }
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
 
@@ -1123,7 +1126,7 @@ final class SessionStore {
             await registerPushDeviceIfPossible()
             isAuthenticated = true
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1164,7 +1167,7 @@ final class SessionStore {
             // Ignore task cancellation caused by view lifecycle updates.
             return
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1204,7 +1207,7 @@ final class SessionStore {
         } catch is CancellationError {
             return false
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
     }
@@ -1357,7 +1360,7 @@ final class SessionStore {
         } catch is CancellationError {
             return
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1502,7 +1505,7 @@ final class SessionStore {
         } catch is CancellationError {
             return
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1949,7 +1952,7 @@ final class SessionStore {
             } catch {
                 // Offline / błąd sieci — zostawiamy to, co już mamy (cache / poprzedni pull).
                 if !self.didLoadHouseholdMembers, self.householdMembers.isEmpty {
-                    self.authError = UserFacingErrorMapper.message(from: error)
+                    self.authError = UserFacingErrorMapper.inlineMessage(from: error)
                 }
             }
         }
