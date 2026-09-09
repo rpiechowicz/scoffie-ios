@@ -15,8 +15,9 @@ enum SCToastMetrics {
     /// Poniżej tej wysokości wcięcia telefon wyspy nie ma.
     ///
     /// Wartości z życia: wyspa 59 albo 62 pt, wcięcie 47/48/50, przycisk
-    /// Początek 20, orientacja pozioma 0. Próg 51 rozdziela te grupy
-    /// z zapasem po obu stronach — i przy okazji łapie poziomą orientację,
+    /// Początek 20, orientacja pozioma 0. Próg 51 rozdziela te grupy — od
+    /// strony wyspy z zapasem (50 → 59), od strony wcięcia o włos, bo
+    /// iPhone 13 mini zgłasza 50 pt. Przy okazji łapie orientację poziomą,
     /// w której wyspa leży z boku i nie da się z niej nic wyprowadzić.
     private static let islandInsetFloor: CGFloat = 51
 
@@ -34,8 +35,10 @@ enum SCToastMetrics {
 
     struct Layout {
         /// Przesunięcie kapsuły ZWINIĘTEJ względem górnej krawędzi
-        /// bezpiecznego obszaru. Ujemne, bo wchodzi w pas wyspy — kapsuła
+        /// bezpiecznego obszaru. Z wyspą ujemne, bo w nią wchodzi — kapsuła
         /// startuje dokładnie na niej i dlatego czyta się jak jej część.
+        /// Bez wyspy nie ma z czego wyrastać, więc jest równe temu, co
+        /// rozwinięte: kapsuła rośnie w miejscu.
         var collapsedTopOffset: CGFloat
 
         /// Przesunięcie kapsuły ROZWINIĘTEJ.
@@ -71,7 +74,228 @@ enum SCToastMetrics {
     }
 }
 
+// MARK: - Ruch
+
+/// Wszystkie krzywe w jednym miejscu. Jedna sprężyna na jedno przejście,
+/// bez `.delay`: opóźnienia nie da się odwrócić w połowie drogi, a sprężyna
+/// przejęta w locie zachowuje położenie i prędkość — to cała obsługa
+/// przerwań.
+///
+/// `smooth` to sprężyna krytycznie tłumiona (bounce 0), wybór Apple „gdy nie
+/// wiesz". Dwa poprzednie odrzucenia NIE były sprawą odbicia ramki
+/// (0,77 % przy tłumieniu 0,84 to ~2 pt, niewidoczne): za pierwszym razem
+/// cukierkowy był glif z własną sprężyną 0,62 i kolorowa poświata, za drugim
+/// „bugowała się" mechanika — trzy zegary na jednym kształcie, wyścig pomiaru
+/// wysokości, wstawianie do drzewa odseparowane od otwarcia czekaniem na
+/// klatkę. Pokrętło na potem: `spring(duration:bounce:)` z ±0,1.
+private enum SCToastMotion {
+    /// Wyjście z wyspy.
+    static let open = Animation.smooth(duration: 0.48)
+    /// Powrót do wyspy — krótszy: przychodzi z namysłem, odchodzi zdecydowanie.
+    static let close = Animation.smooth(duration: 0.34)
+    /// Podmiana treści na otwartej kapsule (zmienia się tylko wysokość).
+    static let resize = Animation.smooth(duration: 0.40)
+    /// Powrót po przeciągnięciu, które nie zamknęło.
+    static let settle = Animation.smooth(duration: 0.28)
+    /// Reduce Motion: wyłącznie krycie.
+    static let fadeIn = Animation.easeOut(duration: 0.20)
+    static let fadeOut = Animation.easeIn(duration: 0.16)
+}
+
+/// Gładki próg 0→1 z zerowym nachyleniem na obu końcach.
+private func smoothstep(_ x: CGFloat) -> CGFloat {
+    let t = min(max(x, 0), 1)
+    return t * t * (3 - 2 * t)
+}
+
+// MARK: - Choreografia z jednej liczby
+
+/// Kropla, nie kałuża.
+///
+/// Cała droga z wyspy do pigułki jest funkcją JEDNEJ liczby `progress`
+/// (0 = ramka wyspy, 1 = pigułka). Sprężyna animuje tę liczbę, a wszystko
+/// inne — wysokość, odklejenie górnej krawędzi, szerokość, cień, obwódka,
+/// krycie treści — liczy się z niej co klatkę. Kanały nie mogą się rozjechać,
+/// bo nie ma dwóch krzywych, które mogłyby; a każde przerwanie (zamknięcie
+/// w połowie otwierania, nowy toast w połowie zwijania) to zawrócenie jednej
+/// sprężyny.
+///
+/// Kolejność w `progress` nie jest ozdobą — wynika z tego, czego NIE wolno.
+/// Pas u góry ekranu (wyspa, zegarek, bateria) należy do systemu i jest
+/// rysowany nad aplikacją; szeroka kapsuła w tym pasie chowałaby zegarek.
+/// Dlatego:
+/// 1. najpierw rośnie WYSOKOŚĆ, z górną krawędzią wciąż na wyspie — wyspa
+///    wypuszcza w dół wąską kroplę;
+/// 2. potem kropla ODKLEJA się i zjeżdża pod pas;
+/// 3. i dopiero wtedy ROZLEWA się na szerokość.
+/// Przy zwijaniu to samo wspak: zwęża się, wraca pod wyspę, wsiąka.
+private struct SCToastChoreography {
+    let progress: CGFloat
+
+    /// Udział wysokości — prowadzi, gotowy przy 0,7.
+    var height: CGFloat { smoothstep(progress / 0.70) }
+    /// Odklejenie górnej krawędzi od wyspy: rusza przy 0,15, gotowe przy 0,7.
+    var detach: CGFloat { smoothstep((progress - 0.15) / 0.55) }
+    /// Szerokość — dopiero gdy górna krawędź wychodzi z pasa systemu.
+    ///
+    /// Rząd ikon systemu (zegarek do x≈75, bateria od x≈300) kończy się na
+    /// y≈34, a górna krawędź kapsuły schodzi poniżej tego dopiero przy
+    /// p≈0,42. Do p=0,32 szerokość stoi na 126 pt, czyli DOKŁADNIE w obrysie
+    /// wyspy — kapsuła nie kładzie ani jednego czarnego piksela bliżej
+    /// zegarka, niż leży sama wyspa.
+    var width: CGFloat { smoothstep((progress - 0.32) / 0.38) }
+    /// Krycie treści — startuje DOKŁADNIE tam, gdzie szerokość dobiega końca
+    /// (0,70). Te dwa pasma nie mogą na siebie zachodzić: okno przycięcia
+    /// odsłania kółko z glifem przy p≈0,63, więc treść, która zaczęłaby się
+    /// pojawiać wcześniej, nie przenikałaby, tylko wysuwała się spod krawędzi
+    /// cięcia. Przy okazji szerokie pasmo daje treści realny czas na zejście
+    /// przy zwijaniu — wcześniejsze 0,18 znikało w 42 ms, czyli w dwóch
+    /// i pół klatce przy 60 Hz, i czytało się jak zgaśnięcie, nie zanik.
+    var reveal: CGFloat { smoothstep((progress - 0.70) / 0.30) }
+    /// Cień i obwódka — wyspa ich nie ma, więc pojawiają się po odklejeniu.
+    var settle: CGFloat { smoothstep((progress - 0.55) / 0.45) }
+}
+
+/// Kształt kapsuły — pigułka z SUFITEM promienia.
+///
+/// Zwykły `Capsule` liczy promień jako połowę wysokości i przy normalnych
+/// rozmiarach (54–88 pt) to jest dokładnie to, czego chcemy. Przy rozmiarach
+/// dostępności toast rośnie do ~200 pt, promień razem z nim, i łuk zaczyna
+/// zjadać rogi tekstu: nie ucina go wielokropkiem, tylko fizycznie obcina
+/// litery. Sufit 44 pt zatrzymuje promień, zanim to nastąpi (prawy górny róg
+/// pisma wymaga promienia poniżej ~49 pt), a poniżej 88 pt wysokości kształt
+/// jest CO DO PIKSELA tą samą pigułką, co wcześniej.
+private struct SCToastCapsuleShape: InsettableShape {
+    static let maxCornerRadius: CGFloat = 44
+
+    var insetAmount: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let box = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        let radius = min(box.height / 2, Self.maxCornerRadius)
+        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: box)
+    }
+
+    func inset(by amount: CGFloat) -> Self {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
+    }
+}
+
+/// Rozmiar kapsuły jako funkcja udziałów i NATURALNEGO rozmiaru treści.
+///
+/// Treść jest jedynym dzieckiem. Układ pyta ją o rozmiar idealny (stała
+/// szerokość docelowa, wysokość z tekstu) w tym samym przebiegu, w którym
+/// rysuje kapsułę — więc nie ma ukrytej kopii do mierzenia, stanu
+/// `contentHeight` ani wyścigu, w którym wysokość przychodziła klatkę za
+/// późno i sprężyna zawracała w locie. Przy okazji znika błąd, przez który
+/// dwuwierszowa wiadomość obcinała się do jednej linii: pomiar w tle kapsuły
+/// dostawał propozycję wysokości równą… samej kapsule.
+private struct SCIslandMorphLayout: Layout {
+    var widthT: CGFloat
+    var heightT: CGFloat
+    var island: CGSize
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let natural = subviews.first?.sizeThatFits(.unspecified) ?? island
+        return CGSize(
+            width: island.width + (max(island.width, natural.width) - island.width) * widthT,
+            height: island.height + (max(island.height, natural.height) - island.height) * heightT
+        )
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        // Treść stoi w miejscu — na osi kapsuły, przy górnej krawędzi, w swoim
+        // naturalnym rozmiarze. Kapsuła ją ODSŁANIA, nie przesuwa. Wcześniej
+        // treść była wyśrodkowana w rosnącej ramce i jechała ~130 pt w lewo
+        // i ~60 pt w dół, wjeżdżając w pole widzenia — czytało się to jako
+        // „wsuwanie na miejsce", nie jako pojawienie.
+        for subview in subviews {
+            subview.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top, proposal: .unspecified)
+        }
+    }
+}
+
+/// Cała kapsuła — kształt, cień, obwódka, krycie i pozycja — policzona
+/// z jednej interpolowanej liczby. SwiftUI woła `body` z pośrednimi
+/// wartościami `progress` w każdej klatce; to ten sam mechanizm, na którym
+/// stoi `AnimatedNumber`.
+private struct SCIslandMorph: ViewModifier, Animatable {
+    var progress: CGFloat
+    let layout: SCToastMetrics.Layout
+    let accent: Color
+    /// Ramka kapsuły w układzie okna, mierzona TU — WEWNĄTRZ przesunięcia,
+    /// więc razem z nim. Modyfikator zapięty za `offset` widziałby
+    /// nieprzesunięte gniazdo układu (tak samo, jak `.background` po
+    /// `.offset` nie jedzie za treścią): przy starcie ruchu 48 pt POD kroplą,
+    /// a na telefonach bez wyspy zawsze 8 pt nad kapsułą.
+    let onFrame: (CGRect) -> Void
+
+    /// Animuje się WYŁĄCZNIE `progress`.
+    ///
+    /// Przesunięcie palcem świadomie tu nie wchodzi, choć kusiło: wspólny
+    /// `AnimatablePair` dałby jeden atrybut na całą pionową geometrię, ale
+    /// gest zapisuje przesunięcie BEZ animacji, a zapis bez animacji do
+    /// połowy pary zdejmuje animację z całej pary. Kapsuła chwycona w trakcie
+    /// wyrastania przeskakiwałaby wtedy od razu do pełnej pigułki. Dlatego
+    /// przeciąganie zostaje osobnym `offset` na zewnątrz — zwykłym
+    /// modyfikatorem, który animuje się sam, gdy trzeba.
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let c = SCToastChoreography(progress: min(max(progress, 0), 1))
+        let y = layout.collapsedTopOffset + (layout.expandedTopOffset - layout.collapsedTopOffset) * c.detach
+        // Z wyspą: w spoczynku krycie DOKŁADNIE 0. Czerń pod czernią wystarcza
+        // na ekranie, ale nie w przełączniku aplikacji ani na nagraniu ekranu —
+        // tam wycięcie wyspy nie zakrywa już naszej kapsuły. Bez wyspy nie ma
+        // z czego wyrastać, więc pierwsza trzecia ruchu to zwykłe pojawienie.
+        let alpha: Double = layout.hasIsland
+            ? (c.progress > 0.001 ? 1 : 0)
+            : Double(min(1, c.progress / 0.35))
+
+        SCIslandMorphLayout(widthT: c.width, heightT: c.height, island: SCToastMetrics.islandSize) {
+            content.opacity(Double(c.reveal))
+        }
+        .clipShape(SCToastCapsuleShape())
+        // Cień rzuca sam czarny kształt, nie grupa z tekstem — taniej i bez
+        // `compositingGroup`. Zgaszony, póki kapsuła siedzi na wyspie: wyspa
+        // nie rzuca cienia, a ciemna poświata wokół niej w pierwszych klatkach
+        // była tym samym rodzajem błędu, co odrzucona kolorowa.
+        .background {
+            SCToastCapsuleShape()
+                .fill(.black)
+                .shadow(color: .black.opacity(Double(0.34 * c.settle)), radius: 16, x: 0, y: 8)
+        }
+        .overlay {
+            SCToastCapsuleShape()
+                .strokeBorder(accent.opacity(Double(0.16 * c.settle)), lineWidth: 0.8)
+        }
+        // Kształt dotyku i pomiar ramki TU, przed `offset` — w układzie
+        // współrzędnych samej kapsuły, więc jadą razem z nią. Gesty zapięte
+        // na zewnątrz trafiają w rysowaną kapsułę i tak (dotyk schodzi przez
+        // przesunięcie do treści), ale kształt i ramka zadeklarowane na
+        // zewnątrz stałyby w nieprzesuniętym gnieździe układu.
+        .contentShape(SCToastCapsuleShape())
+        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }, action: onFrame)
+        .opacity(alpha)
+        .offset(y: y)
+    }
+}
+
 // MARK: - Widok
+
+/// Ostatnia zmierzona ramka kapsuły — w klasie, nie w `@State CGRect`, bo
+/// zapis co klatkę animacji do zwykłego `@State` przebudowywałby ciało
+/// całego widoku co klatkę. Tożsamość obiektu wystarcza: nikt nie musi być
+/// odświeżany, gdy ramka się zmienia, tylko okno ma ją dostać.
+private final class SCFrameBox {
+    var rect: CGRect = .zero
+}
 
 /// Kapsuła toastu i cała jej animacja.
 ///
@@ -90,125 +314,136 @@ struct SCToastHost: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Toast rysowany w tej chwili. To NIE jest to samo, co `center.current`:
-    /// kolejka zdejmuje toast od razu, a kapsuła musi się jeszcze zwinąć
-    /// z powrotem do wyspy. Przez te ~0,4 s żyje tutaj.
-    @State private var shown: SCToast?
-    @State private var isOpen = false
-    @State private var contentHeight: CGFloat = SCToastMetrics.islandSize.height
+    /// Treść w kapsule. ZOSTAJE po zamknięciu — kapsuła zwija się z tym, co
+    /// pokazywała, więc nic nie przeskakuje w trakcie zwijania — i jest
+    /// podmieniana w miejscu, gdy przychodzi następny toast.
+    @State private var displayed: SCToast?
+    /// JEDYNA liczba ruchu: 0 = ramka wyspy, 1 = rozwinięta pigułka.
+    @State private var progress: CGFloat = 0
+    /// Logiczna widoczność — dotyk, VoiceOver, ramka dla okna. Zmienia się
+    /// od razu, nie po animacji.
+    @State private var isPresented = false
+    /// Bramka krycia. Rządzi WYŁĄCZNIE przy Reduce Motion (geometria wtedy
+    /// nie animuje się wcale, kapsuła tylko przenika), ale pisana jest
+    /// w każdej gałęzi, żeby zawsze mówiła to samo, co `isPresented`:
+    /// przełączenie Reduce Motion w trakcie toastu nie może odsłonić
+    /// widmowej kapsuły ani schować żywej.
+    @State private var veil = false
     @State private var dragOffset: CGFloat = 0
+    @State private var frameBox = SCFrameBox()
 
     var body: some View {
         // Świadomie BEZ `ignoresSafeArea`: pod nim `GeometryReader` potrafi
         // zgłosić zerowe wcięcia, a to z nich bierze się cała pozycja kapsuły.
-        // Zamiast tego wszystko liczy się od krawędzi bezpiecznego obszaru,
-        // a w pas wyspy wchodzi się ujemnym przesunięciem — rysowanie poza tę
-        // krawędź i tak nie jest przycinane.
+        // Wszystko liczy się od krawędzi bezpiecznego obszaru, a w pas wyspy
+        // wchodzi ujemnym przesunięciem — rysowanie poza tę krawędź i tak nie
+        // jest przycinane.
         GeometryReader { proxy in
             let layout = SCToastMetrics.layout(in: proxy)
-
-            Group {
-                if let shown {
-                    capsule(shown, layout: layout)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            capsule(layout: layout)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .task(id: center.current?.id) { await drive() }
-        .sensoryFeedback(trigger: shown?.id) { _, _ in
-            shown?.style.feedback
+        // Synchronicznie, nie `.task`: `withAnimation` rusza w TEJ SAMEJ
+        // transakcji, w której zmienia się stan. Nie ma klatki zwłoki do
+        // wyczekania ani `Task.sleep` do anulowania — a to właśnie przerwane
+        // odliczanie gubiło pasek braku sieci, gdy ktoś stuknął w kapsułę
+        // podczas podmiany: zadanie zaczynało od nowa, widziało „ten sam
+        // toast" i wychodziło, zostawiając kapsułę zwiniętą na zawsze.
+        .onChange(of: center.current?.id, initial: true) { _, _ in sync() }
+        // Ramka dla okna na OBU zboczach. Sam pomiar geometrii nie wystarczy:
+        // odpala się tylko, gdy ramka się ZMIENI, a przy Reduce Motion między
+        // dwoma toastami o tej samej wysokości nie zmienia się nic — okno
+        // zostawałoby z zerem i widoczny pasek nie dałby się stuknąć.
+        .onChange(of: isPresented) { _, presented in
+            onFrameChange(presented ? frameBox.rect : .zero)
+        }
+        // Dotyk i ogłoszenie idą za ZDARZENIEM, nie za treścią: nowy toast
+        // chwilowy albo nowy pasek stanu. Pasek wracający po „Zapisano" nie
+        // stuka i nie mówi drugi raz.
+        .sensoryFeedback(trigger: center.feedbackCount) { _, _ in
+            center.current?.style.feedback
+        }
+        // `initial: true`, bo warstwa toastów wstaje razem z aplikacją: gdyby
+        // pasek braku sieci zapalił się, zanim okno zdąży się założyć,
+        // VoiceOver nie usłyszałby o nim nigdy.
+        .onChange(of: center.feedbackCount, initial: true) { _, _ in
+            if let toast = center.current {
+                announce(toast)
+            }
         }
     }
 
-    // MARK: Kapsuła
+    // MARK: Kapsuła (zawsze zamontowana)
 
-    @ViewBuilder
-    private func capsule(_ toast: SCToast, layout: SCToastMetrics.Layout) -> some View {
-        let island = SCToastMetrics.islandSize
-        let width = isOpen ? layout.expandedWidth : island.width
-        let height = isOpen ? max(island.height, contentHeight) : island.height
-
-        // Czerń jest dosłowna i nie zmienia się z motywem aplikacji: wyspa
-        // to wygaszony fragment ekranu OLED, czyli #000. Kapsuła w cieplejszym
-        // grafitcie (choćby `scPageBase`) zdradziłaby się w chwili, w której
-        // wyjeżdża spod wyspy — spod czerni wysuwałby się kolor. Stąd też
-        // jasny tekst w obu motywach: na czerni nie ma innego wyjścia.
-        Capsule(style: .continuous)
-            .fill(.black)
-            .frame(width: width, height: height)
-            .overlay(alignment: .leading) {
-                // Treść ma STAŁĄ szerokość docelową i jest przycinana kształtem
-                // kapsuły. Gdyby zwężała się razem z nią, tekst przelewałby
-                // się między liniami w trakcie animacji — a to widać.
-                content(toast)
+    /// Kapsuła NIGDY nie jest wstawiana ani usuwana z drzewa. W spoczynku
+    /// siedzi zwinięta dokładnie na wyspie, z kryciem 0.
+    ///
+    /// Dzięki temu nie ma osobnej transakcji wstawienia, którą trzeba by
+    /// odseparować od otwarcia czekaniem „na jedną klatkę". Tamto czekanie
+    /// działało ze szczęścia: gdy główny wątek był zajęty — a bywa, dokładnie
+    /// na błędzie, który toast ma zgłosić — oba zapisy lądowały w jednej
+    /// klatce i kapsuła pojawiała się od razu rozwinięta, bez wyrastania
+    /// z wyspy. Raz tak, raz nie: to jest to „bugowanie się".
+    private func capsule(layout: SCToastMetrics.Layout) -> some View {
+        // ZStack, NIE Group. `Group` jest przezroczysty: każdy modyfikator za
+        // nim idzie na każde dziecko z osobna, a przed pierwszym toastem
+        // dzieci nie ma — czyli nie ma też morfu w drzewie i pierwsze otwarcie
+        // wskoczyłoby od razu rozwinięte. Pusty ZStack to prawdziwy widok
+        // o rozmiarze zero: układ spada na ramkę wyspy, krycie zostaje 0,
+        // a `progress` ma od czego startować.
+        ZStack(alignment: .top) {
+            if let displayed {
+                content(displayed)
                     .frame(width: layout.expandedWidth, alignment: .leading)
-                    .opacity(isOpen ? 1 : 0)
-                    .animation(contentCurve, value: isOpen)
+                    // Bez własnego przenikania — kryciem treści steruje
+                    // `reveal` w morfie.
+                    .transition(.identity)
             }
-            .clipShape(Capsule(style: .continuous))
-            // Włos obwódki, nie obrys. Akcent ma być rozpoznawalny w kółku
-            // z glifem, a nie obrysowywać cały kształt.
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(toast.style.accent.opacity(isOpen ? 0.16 : 0), lineWidth: 0.8)
+        }
+        .modifier(SCIslandMorph(
+            progress: progress,
+            layout: layout,
+            accent: displayed?.style.accent ?? .clear,
+            onFrame: { rect in
+                frameBox.rect = rect
+                if isPresented {
+                    onFrameChange(rect)
+                }
             }
-            // Cień rzuca SPŁASZCZONA kapsuła — stąd `compositingGroup` przed
-            // nim, żeby SwiftUI policzył go raz z całości, a nie osobno
-            // z każdej warstwy.
-            //
-            // Nie ma tu już kolorowej poświaty pod kapsułą. Rozmyta plama
-            // akcentu wylewająca się na tło była najbardziej „zabawkowym"
-            // elementem całości — wyspa nie świeci. Paleta zostaje tam, gdzie
-            // ma znaczenie: w kółku z glifem.
-            .compositingGroup()
-            .shadow(color: .black.opacity(isOpen ? 0.34 : 0), radius: 16, x: 0, y: 8)
-            // Niewidoczna kopia treści rozłożona na docelowej szerokości —
-            // stąd bierze się wysokość, do której kapsuła ma urosnąć. Bez
-            // pomiaru trzeba by ją zgadywać, a Dynamic Type zmienia ją
-            // o kilkanaście punktów.
-            .background(alignment: .topLeading) {
-                content(toast)
-                    .frame(width: layout.expandedWidth, alignment: .leading)
-                    .hidden()
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                        contentHeight = $0
-                    }
-            }
-            // Ramka i wszystko powyżej — jedna krzywa.
-            .animation(morph, value: isOpen)
-            .animation(morph, value: contentHeight)
-            // Pozycja pionowa — DRUGA krzywa, ruszająca później. Zewnętrzne
-            // `animation` obejmuje wszystko, ale wewnętrzne już zajęło ramkę,
-            // więc to tutaj rządzi wyłącznie przesunięciem. Dzięki temu
-            // kapsuła najpierw rozciąga się w dół przy wyspie, a dopiero
-            // potem odjeżdża — patrz `detachMorph`.
-            .offset(y: dragOffset + (isOpen ? layout.expandedTopOffset : layout.collapsedTopOffset))
-            .animation(detachMorph, value: isOpen)
-            .contentShape(Capsule(style: .continuous))
-            .onTapGesture { center.dismiss() }
-            .gesture(dismissDrag)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                onFrameChange($0)
-            }
-            .onDisappear { onFrameChange(.zero) }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(toast.style.accessibilityPrefix) \(toast.title)")
-            .accessibilityValue(toast.message ?? "")
-            .accessibilityAddTraits(.isStaticText)
+        ))
+        .opacity(reduceMotion ? (veil ? 1 : 0) : 1)
+        // Przeciąganie osobno i NA ZEWNĄTRZ morfu — patrz `animatableData`.
+        // Pomiar ramki siedzi głębiej, więc oba przesunięcia są dla niego
+        // przodkami i wchodzą do przeliczenia na układ okna.
+        .offset(y: dragOffset)
+        .onTapGesture { center.dismiss() }
+        .gesture(dismissDrag)
+        // PO gestach, nie przed nimi: `allowsHitTesting` wyłącza dotyk dla
+        // widoku, który modyfikuje, a gest zapięty później owija już
+        // wyłączony widok od zewnątrz i dalej by słuchał.
+        .allowsHitTesting(isPresented)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(displayed?.style.accessibilityPrefix ?? "") \(displayed?.title ?? "")")
+        .accessibilityValue(displayed?.message ?? "")
+        .accessibilityAddTraits(.isStaticText)
+        .accessibilityHidden(!isPresented)
     }
 
     private func content(_ toast: SCToast) -> some View {
         HStack(spacing: 11) {
-            Image(systemName: toast.style.icon)
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(toast.style.accent)
-                .frame(width: 26, height: 26)
-                .background(Circle().fill(toast.style.accent.opacity(0.18)))
-                .overlay(Circle().strokeBorder(toast.style.accent.opacity(0.45), lineWidth: 1))
-                // Bez własnej sprężyny i bez skoku skali. Glif wyskakujący
-                // z odbiciem, chwilę po tekście, był tu najgłośniejszym
-                // elementem całej animacji — przy trzecim toaście z rzędu
-                // zaczynał się naprzykrzać. Wchodzi razem z tekstem.
+            // Kółko z glifem podmienia się przez przenikanie CAŁEGO kółka
+            // (tożsamość po stylu) — bez interpolacji barwy, bez efektów
+            // symboli, bez własnej sprężyny. Wchodzi razem z tekstem.
+            ZStack {
+                Image(systemName: toast.style.icon)
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(toast.style.accent)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(toast.style.accent.opacity(0.18)))
+                    .overlay(Circle().strokeBorder(toast.style.accent.opacity(0.45), lineWidth: 1))
+                    .id(toast.style)
+                    .transition(.opacity)
+            }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(toast.title)
@@ -216,12 +451,16 @@ struct SCToastHost: View {
                     .tracking(-0.2)
                     .foregroundStyle(.white)
                     .lineLimit(2)
+                    // Podmiana w miejscu: stare zdanie przenika w nowe.
+                    .contentTransition(.opacity)
 
                 if let message = toast.message {
                     Text(message)
                         .scFont(12.5, weight: .regular, relativeTo: .caption)
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(2)
+                        .contentTransition(.opacity)
+                        .transition(.opacity)
                 }
             }
             .multilineTextAlignment(.leading)
@@ -236,101 +475,151 @@ struct SCToastHost: View {
         .frame(minHeight: 54)
     }
 
-    // MARK: Ruch
+    // MARK: Sterowanie
 
-    /// Rozciąganie i zwijanie RAMKI.
+    /// Jedyny właściciel ruchu. Każde przejście ma dokładnie JEDNĄ animowaną
+    /// transakcję, obejmującą treść, `progress` i reset przeciągnięcia — więc
+    /// po machnięciu kapsuła wraca DO wyspy z miejsca, w którym zostawił ją
+    /// palec, a nie zwija się w powietrzu nad nią i nie skacze potem o 48 pt.
+    /// Otwarcie ze spoczynku i Reduce Motion dokładają przed nią jedną
+    /// transakcję BEZ ruchu — po to, żeby podmiana treści nie animowała się
+    /// tam, gdzie i tak nic nie widać.
     ///
-    /// `smooth` zamiast `spring(dampingFraction:)`, bo to sprężyna bez
-    /// odbicia. Wyspa jest ciałem stałym: rozciąga się i wraca, ale nie
-    /// dygocze. Każde przeregulowanie — a przy tłumieniu 0,84 było widoczne —
-    /// zamienia sprzęt w gumową zabawkę.
-    private var morph: Animation {
-        if reduceMotion { return .easeOut(duration: 0.2) }
-        return isOpen ? .smooth(duration: 0.44) : .smooth(duration: 0.28)
+    /// Idempotentne: zawsze celuje w stan wynikający z `center.current`,
+    /// niezależnie od tego, w którym punkcie animacji jest kapsuła. Sprężyna
+    /// przejmuje bieżące położenie i prędkość i zawraca — to zamyka wszystkie
+    /// przypadki przerwania jednym mechanizmem.
+    ///
+    /// Nowy toast na otwartej kapsule NIE zwija jej do wyspy. Poprzednio tak
+    /// było, z uzasadnieniem „zmienia się szerokość i wysokość" — ale
+    /// szerokość zależy wyłącznie od ekranu, nigdy od treści. Zmienia się
+    /// sama wysokość, a to jest zwykły ruch sprężyny plus przenikanie treści.
+    /// Kolejka trzech toastów przestaje wyglądać jak drzwi windy, a pasek
+    /// braku sieci nie znika i nie wraca dwa razy wokół każdego „Zapisano".
+    private func sync() {
+        var still = Transaction()
+        still.disablesAnimations = true
+
+        if let incoming = center.current {
+            let replacing = isPresented
+            isPresented = true
+
+            if reduceMotion {
+                // Geometria i treść skaczą bez ruchu, animuje się tylko zasłona.
+                // Treść też w tej transakcji: gdyby szła pod `fadeIn`, zmiana
+                // naturalnego rozmiaru treści pociągnęłaby za sobą ramkę
+                // i kapsuła rosłaby przez 0,2 s — dokładnie to, czego ten tryb
+                // ma nie robić.
+                withTransaction(still) {
+                    displayed = incoming
+                    progress = 1
+                    dragOffset = 0
+                }
+                withAnimation(SCToastMotion.fadeIn) { veil = true }
+            } else {
+                // Otwarcie ze spoczynku: treść podmienia się BEZ animacji, bo
+                // przy `progress` bliskim zera i tak jej nie widać. Animowana
+                // podmiana krzyżowałaby stare kółko z nowym pod rosnącym
+                // kryciem — duch poprzedniego akcentu przez ~0,1 s.
+                //
+                // Jedyna dziura: toast, który przyjdzie w pierwszych ~40 ms
+                // zwijania, gdy `reveal` jeszcze nie zszedł do zera. Wtedy
+                // treść podmienia się skokiem zamiast przenikać. Wartości
+                // prezentacyjnej `progress` nie da się odczytać ze stanu, więc
+                // ten przypadek zostaje świadomie — kosztuje dwie klatki
+                // i wymaga zdarzenia z zewnątrz dokładnie w chwili odsunięcia
+                // ręką (kolejka idzie ścieżką `replacing`).
+                // Dwie rozłączne ścieżki, bo `displayed` wolno zapisać
+                // DOKŁADNIE RAZ na przejście: drugi zapis tej samej zmiennej
+                // w animowanej transakcji skasowałby transakcję bez ruchu
+                // i podmiana treści jednak by przenikała.
+                if replacing {
+                    // Kapsuła otwarta albo w połowie zwijania? Sprężyna
+                    // przejmuje bieżącą pozycję i prędkość; przenikanie treści
+                    // jedzie tą samą krzywą.
+                    withAnimation(SCToastMotion.resize) {
+                        displayed = incoming
+                        progress = 1
+                        dragOffset = 0
+                        veil = true
+                    }
+                } else {
+                    withTransaction(still) { displayed = incoming }
+                    withAnimation(SCToastMotion.open) {
+                        progress = 1
+                        dragOffset = 0
+                        veil = true
+                    }
+                }
+            }
+        } else {
+            guard isPresented else { return }
+            isPresented = false
+
+            if reduceMotion {
+                // Zasłona gaśnie; geometria wraca do wyspy dopiero PO niej
+                // i bez ruchu. Zostawiona przy 1 byłaby niewidoczna tylko
+                // dopóty, dopóki Reduce Motion jest włączone — wyłączenie go
+                // odsłaniałoby rozwiniętą kapsułę ze starym zdaniem.
+                withAnimation(SCToastMotion.fadeOut, completionCriteria: .removed) {
+                    veil = false
+                } completion: {
+                    guard !isPresented else { return }
+                    var settle = Transaction()
+                    settle.disablesAnimations = true
+                    withTransaction(settle) {
+                        progress = 0
+                        dragOffset = 0
+                    }
+                }
+            } else {
+                withAnimation(SCToastMotion.close) {
+                    progress = 0
+                    dragOffset = 0
+                    veil = false
+                }
+            }
+        }
     }
 
-    /// Zjazd spod wyspy — ta sama krzywa, ale RUSZA PÓŹNIEJ niż ramka.
-    ///
-    /// Tu siedzi całe wrażenie ciągłości. Gdy górna krawędź jedzie razem
-    /// z dolną, spod wyspy zjeżdża gotowy prostokąt i widać dwa osobne
-    /// przedmioty. Te 80 ms zwłoki sprawiają, że kapsuła najpierw ROZCIĄGA
-    /// SIĘ w dół, wciąż trzymając się wyspy, i dopiero potem się odkleja —
-    /// czyli zachowuje się jak jej przedłużenie, a nie jak coś, co spod niej
-    /// wyjechało.
-    ///
-    /// Przy zwijaniu zwłoki nie ma: wracanie ma być krótkie.
-    private var detachMorph: Animation {
-        if reduceMotion { return .easeOut(duration: 0.2) }
-        return isOpen ? .smooth(duration: 0.44).delay(0.08) : .smooth(duration: 0.26)
+    /// VoiceOver nie widzi kapsuły, dopóki ktoś jej nie dotknie — a toast mówi
+    /// o rzeczach, które właśnie się stały. Ogłoszenie dowozi treść bez
+    /// szukania jej palcem.
+    private func announce(_ toast: SCToast) {
+        var text = "\(toast.style.accessibilityPrefix) \(toast.title)"
+        if let message = toast.message {
+            text += ". \(message)"
+        }
+        AccessibilityNotification.Announcement(text).post()
     }
 
-    /// Treść wchodzi PO kapsule i po tym, jak ta wyjdzie spod wyspy —
-    /// wcześniej i tak nie byłoby jej widać. Samo przenikanie, bez
-    /// rozmycia i bez skoku skali: to są ozdoby, które przy trzeciej
-    /// powtórce zaczynają przeszkadzać.
-    private var contentCurve: Animation {
-        if reduceMotion { return .easeOut(duration: 0.18) }
-        return isOpen
-            ? .easeOut(duration: 0.22).delay(0.18)
-            : .easeIn(duration: 0.1)
-    }
+    // MARK: Gest
 
-    /// Machnięcie w górę zamyka. W dół kapsuła prawie nie idzie — opór
-    /// mówi „tędy nie", zamiast pozwolić przeciągnąć ją na pół ekranu.
+    /// Machnięcie w górę zamyka. W dół kapsuła prawie nie idzie — opór mówi
+    /// „tędy nie", zamiast pozwolić przeciągnąć ją na pół ekranu.
     private var dismissDrag: some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { value in
                 let dy = value.translation.height
-                dragOffset = dy < 0 ? dy : dy * 0.16
+                // W górę też jest sufit, nie tylko opór w dół. Cała
+                // choreografia pilnuje, żeby czarna kapsuła nie weszła
+                // w rząd ikon systemu — a nieograniczone przeciągnięcie
+                // wsuwało ją tam jednym ruchem palca, na całej szerokości,
+                // i w jasnym motywie zegarek znikał w czerni. 18 pt jest
+                // wyraźnie za progiem zamknięcia (14 pt), więc gest działa
+                // jak wcześniej.
+                dragOffset = dy < 0 ? max(dy, -18) : dy * 0.16
             }
             .onEnded { value in
                 let flicked = value.predictedEndTranslation.height < -50
                 if value.translation.height < -14 || flicked {
+                    // Reszta dzieje się w `sync()`: przesunięcie wraca w TEJ
+                    // SAMEJ sprężynie, co zwijanie.
                     center.dismiss()
                 } else {
-                    // Też bez odbicia — kapsuła wraca na miejsce, nie
-                    // sprężynuje z powrotem.
-                    withAnimation(.smooth(duration: 0.26)) {
-                        dragOffset = 0
-                    }
+                    withAnimation(SCToastMotion.settle) { dragOffset = 0 }
                 }
             }
-    }
-
-    /// Trzyma `shown` w zgodzie z kolejką i rozkłada zmianę na dwie klatki.
-    private func drive() async {
-        if let incoming = center.current {
-            guard shown?.id != incoming.id else { return }
-            if shown != nil {
-                // Podmiana treści na już otwartej kapsule: najpierw wraca ona
-                // do wyspy i dopiero stamtąd wychodzi z nowym zdaniem.
-                // Przenikanie w miejscu wyglądałoby jak błąd rysowania, bo
-                // między komunikatami zmienia się i szerokość, i wysokość.
-                // Tędy przechodzi też powrót paska braku sieci po chwilowym
-                // „Zapisano".
-                isOpen = false
-                try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled else { return }
-            }
-            shown = incoming
-            dragOffset = 0
-            isOpen = false
-            // Jedna klatka w stanie zwiniętym. Bez niej SwiftUI policzy
-            // wstawienie widoku i otwarcie w jednej transakcji, więc kapsuła
-            // pojawi się od razu rozwinięta — bez wyrastania z wyspy.
-            try? await Task.sleep(for: .milliseconds(16))
-            guard !Task.isCancelled else { return }
-            isOpen = true
-        } else {
-            guard shown != nil else { return }
-            isOpen = false
-            try? await Task.sleep(for: .milliseconds(380))
-            // Kolejka mogła w tym czasie wpuścić następny toast — wtedy
-            // `drive()` ruszyło od nowa i to zadanie nie ma już nic do
-            // sprzątania.
-            guard !Task.isCancelled, center.current == nil else { return }
-            shown = nil
-        }
     }
 }
 
@@ -345,14 +634,23 @@ private final class SCToastWindow: UIWindow {
     var interactiveRect: CGRect = .zero
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        // Kapsuła zwinięta ma ramkę wyspy i zaraz zniknie — przez te dwie
-        // klatki nie ma prawa zabierać stuknięć z okolic wyspy.
+        // Pierwsze klatki otwierania: kapsuła ma jeszcze ramkę wyspy
+        // (`isPresented` już prawdziwe, ramka zgłoszona), a stoi pod wyspą —
+        // przez ten moment nie zabiera stuknięć z okolic wyspy. Zwijanie
+        // zgłasza od razu zero, więc tu nie trafia; w spoczynku ramka ma
+        // co najmniej 54 pt, więc próg zawsze przepuszcza.
         guard interactiveRect.height > SCToastMetrics.islandSize.height + 4 else { return false }
         return interactiveRect.contains(point)
     }
 }
 
 /// Zakłada okno toastów przy pierwszym pojawieniu się w scenie.
+///
+/// Instalacja jest JEDNORAZOWA: kolejka zostaje zamknięta w widoku kontrolera
+/// hostującego, a `updateUIView` nic nie robi. Stoi to na założeniu, że
+/// `SCToastCenter` w aplikacji jest dokładnie jedno (tworzone w `ScoffieApp`).
+/// Gdyby kiedyś `scToastLayer` dostał inną instancję, okno pokazywałoby dalej
+/// toasty ze starej — po cichu.
 private struct SCToastWindowInstaller: UIViewRepresentable {
     let center: SCToastCenter
 

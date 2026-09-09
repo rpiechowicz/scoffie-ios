@@ -62,8 +62,9 @@ private struct SCToastDebugTriggerModifier: ViewModifier {
                             "Serwer odpowiedział błędem. Spróbuj ponownie za chwilę albo odśwież ekran."
                         )
                     }
-                    // Trzy pod rząd — sprawdza kolejkę i przerwę na zwinięcie
-                    // kapsuły między komunikatami.
+                    // Trzy pod rząd — sprawdza kolejkę i podmianę W MIEJSCU:
+                    // treść ma przeniknąć, wysokość dojechać, a kapsuła nie ma
+                    // prawa wrócić do wyspy między komunikatami.
                     Button("Seria trzech (kolejka)") {
                         toasts.success("Zapisano")
                         toasts.info("Lista zamknięta")

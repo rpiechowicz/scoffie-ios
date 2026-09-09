@@ -58,7 +58,10 @@ struct SCToast: Identifiable, Equatable {
     }
 
     /// Waga zdarzenia. Wybiera barwę akcentu, glif i dotyk.
-    enum Style: Equatable {
+    ///
+    /// `Hashable`, bo kółko z glifem w kapsule ma tożsamość po stylu
+    /// (`.id(style)`) — przy podmianie toastu przenika jako całość.
+    enum Style: Hashable {
         /// Udało się — „Zapisano", „Lista zamknięta".
         case success
         /// Neutralna informacja, bez winnego i bez sukcesu.
@@ -166,6 +169,19 @@ final class SCToastCenter {
     /// z człowiekiem, który właśnie powiedział, że wie.
     private var isPersistentMuted = false
 
+    /// Licznik zdarzeń godnych dotyku i ogłoszenia: nowy toast chwilowy albo
+    /// NOWY pasek stanu W CHWILI, GDY TRAFIA NA EKRAN. Pasek wracający po
+    /// chwilowym „Zapisano" go nie podbija — to nie jest nowa wiadomość,
+    /// tylko ta sama, znów widoczna. Widok wiesza na tym `sensoryFeedback`
+    /// i ogłoszenie VoiceOver, zamiast na tożsamości treści.
+    private(set) var feedbackCount = 0
+
+    /// Pasek stanu ustawiony, gdy na ekranie był toast chwilowy — dotyk
+    /// należy mu się dopiero, gdy się pokaże. Podbicie licznika w chwili
+    /// ustawienia zagrałoby wzorem TEGO, co widać (np. sukcesu „Zapisano"),
+    /// a sam pasek wjechałby potem po cichu.
+    private var persistentAwaitsFeedback = false
+
     private var queue: [SCToast] = []
     private var timer: Task<Void, Never>?
 
@@ -231,6 +247,13 @@ final class SCToastCenter {
         // Nowy stan zaczyna od zera — wcześniejsze odsunięcie ręką dotyczyło
         // poprzedniego zdania, nie tego.
         isPersistentMuted = false
+        persistentAwaitsFeedback = false
+        guard toast != nil else { return }
+        if transient == nil {
+            feedbackCount += 1
+        } else {
+            persistentAwaitsFeedback = true
+        }
     }
 
     /// Zamknięcie ręką — stuknięciem albo machnięciem w górę.
@@ -246,6 +269,7 @@ final class SCToastCenter {
 
     private func present(_ toast: SCToast) {
         transient = toast
+        feedbackCount += 1
         armTimer(for: toast)
     }
 
@@ -260,14 +284,20 @@ final class SCToastCenter {
 
     /// Zdejmuje chwilowy toast i wpuszcza następny z kolejki.
     ///
-    /// Bez pustej przerwy: przerwę na zwinięcie kapsuły robi już `SCToastHost`
-    /// przy KAŻDEJ podmianie treści, więc drugie odliczanie tutaj tylko by ją
-    /// wydłużało. Gdy kolejka jest pusta, `current` samo wraca do paska
-    /// trwałego — jeśli jakiś wisi.
+    /// Bez przerwy między nimi: `SCToastHost` podmienia treść W MIEJSCU
+    /// (przenikanie plus dojazd wysokości), więc kapsuła nie wraca do wyspy
+    /// między dwoma komunikatami. Gdy kolejka jest pusta, `current` samo
+    /// wraca do paska trwałego — jeśli jakiś wisi — również w miejscu.
     private func advance() {
         timer = nil
         guard !queue.isEmpty else {
             transient = nil
+            // Pasek ustawiony pod toastem chwilowym dostaje dotyk teraz —
+            // w chwili, w której naprawdę wjeżdża na ekran.
+            if persistentAwaitsFeedback, persistent != nil, !isPersistentMuted {
+                persistentAwaitsFeedback = false
+                feedbackCount += 1
+            }
             return
         }
         present(queue.removeFirst())
@@ -350,34 +380,51 @@ private struct SCConnectivityToastBridge: ViewModifier {
     @Environment(\.toasts) private var toasts
 
     func body(content: Content) -> some View {
-        content.onChange(
-            of: ConnectivityMonitor.shared.isOffline,
-            initial: true
-        ) { wasOffline, isOffline in
-            guard !isOffline else {
-                // Dwa różne stany, dwa różne zdania. „Sprawdź internet" przy
-                // działającym Wi-Fi wysyła człowieka do restartu routera,
-                // który niczego nie naprawi — a to my nie odpowiadamy.
-                let hasNetwork = ConnectivityMonitor.shared.isPathSatisfied
-                toasts.setPersistent(
-                    SCToast(
-                        style: .warning,
-                        title: hasNetwork
-                            ? "Nie mogę połączyć się ze Scoffie"
-                            : "Brak połączenia z internetem",
-                        message: "Widzisz ostatnio pobrane dane."
-                    )
-                )
-                return
+        content
+            .onChange(
+                of: ConnectivityMonitor.shared.isOffline,
+                initial: true
+            ) { wasOffline, isOffline in
+                guard !isOffline else {
+                    toasts.setPersistent(Self.offlineToast())
+                    return
+                }
+                toasts.setPersistent(nil)
+                // „Wróciło" tylko po tym, jak naprawdę zniknęło. Przy starcie
+                // aplikacji `initial: true` woła to z obiema wartościami
+                // równymi `false` i wtedy nie ma czego ogłaszać.
+                if wasOffline {
+                    toasts.success("Połączenie wróciło")
+                }
             }
-            toasts.setPersistent(nil)
-            // „Wróciło" tylko po tym, jak naprawdę zniknęło. Przy starcie
-            // aplikacji `initial: true` woła to z obiema wartościami równymi
-            // `false` i wtedy nie ma czego ogłaszać.
-            if wasOffline {
-                toasts.success("Połączenie wróciło")
+            // Diagnoza może się zmienić BEZ zmiany samego „jest offline":
+            // telefon traci zasięg, gdy pasek mówi już „nie mogę połączyć się
+            // ze Scoffie". Monitor nie zgłasza wtedy nic nowego (`isOffline`
+            // stoi na `true`), więc bez tego wyzwalacza pasek zostawałby
+            // z nieaktualnym zdaniem.
+            //
+            // Tylko w stronę UTRATY interfejsu. Powrót też zmienia tę flagę,
+            // ale wtedy monitor jest w 1,5-sekundowym oknie potwierdzania
+            // i pasek zaraz zgaśnie — podmiana zdania w tej chwili kosztowałaby
+            // ostrzegawczy dotyk, drugie ogłoszenie VoiceOver i przywrócenie
+            // paska, który użytkownik przed sekundą odsunął ręką.
+            .onChange(of: ConnectivityMonitor.shared.isPathSatisfied) { _, satisfied in
+                guard !satisfied, ConnectivityMonitor.shared.isOffline else { return }
+                toasts.setPersistent(Self.offlineToast())
             }
-        }
+    }
+
+    /// Dwa różne stany, dwa różne zdania. „Sprawdź internet" przy działającym
+    /// Wi-Fi wysyła człowieka do restartu routera, który niczego nie naprawi —
+    /// a to nie router nie odpowiada.
+    private static func offlineToast() -> SCToast {
+        SCToast(
+            style: .warning,
+            title: ConnectivityMonitor.shared.isPathSatisfied
+                ? "Nie mogę połączyć się ze Scoffie"
+                : "Brak połączenia z internetem",
+            message: "Widzisz ostatnio pobrane dane."
+        )
     }
 }
 
