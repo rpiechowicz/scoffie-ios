@@ -143,33 +143,25 @@ struct SCToastHost: View {
                 content(toast)
                     .frame(width: layout.expandedWidth, alignment: .leading)
                     .opacity(isOpen ? 1 : 0)
-                    .blur(radius: reduceMotion || isOpen ? 0 : 2.5)
                     .animation(contentCurve, value: isOpen)
             }
             .clipShape(Capsule(style: .continuous))
+            // Włos obwódki, nie obrys. Akcent ma być rozpoznawalny w kółku
+            // z glifem, a nie obrysowywać cały kształt.
             .overlay {
                 Capsule(style: .continuous)
-                    .strokeBorder(toast.style.accent.opacity(isOpen ? 0.28 : 0), lineWidth: 0.8)
+                    .strokeBorder(toast.style.accent.opacity(isOpen ? 0.16 : 0), lineWidth: 0.8)
             }
-            // Cień rzuca SPŁASZCZONA kapsuła i nic więcej — stąd
-            // `compositingGroup` przed nim i poświata dopiero za nim.
-            // Odwrotna kolejność kazałaby SwiftUI policzyć cień także
-            // z rozmytej plamy akcentu i spod kapsuły wychodziła wtedy
-            // brudna obwódka zamiast miękkiego cienia.
+            // Cień rzuca SPŁASZCZONA kapsuła — stąd `compositingGroup` przed
+            // nim, żeby SwiftUI policzył go raz z całości, a nie osobno
+            // z każdej warstwy.
+            //
+            // Nie ma tu już kolorowej poświaty pod kapsułą. Rozmyta plama
+            // akcentu wylewająca się na tło była najbardziej „zabawkowym"
+            // elementem całości — wyspa nie świeci. Paleta zostaje tam, gdzie
+            // ma znaczenie: w kółku z glifem.
             .compositingGroup()
-            .shadow(color: .black.opacity(isOpen ? 0.42 : 0), radius: 18, x: 0, y: 10)
-            // Poświata w barwie akcentu — jedyne, co odróżnia tę kapsułę od
-            // czarnego prostokąta, i jedyny ślad palety na powierzchni, która
-            // musi zostać czarna. Zgaszona do zera w stanie zwiniętym, żeby
-            // nic nie wystawało zza prawdziwej wyspy.
-            .background {
-                Capsule(style: .continuous)
-                    .fill(toast.style.accent)
-                    .frame(width: width * 0.72, height: height)
-                    .blur(radius: 26)
-                    .opacity(isOpen ? 0.28 : 0)
-                    .offset(y: 8)
-            }
+            .shadow(color: .black.opacity(isOpen ? 0.34 : 0), radius: 16, x: 0, y: 8)
             // Niewidoczna kopia treści rozłożona na docelowej szerokości —
             // stąd bierze się wysokość, do której kapsuła ma urosnąć. Bez
             // pomiaru trzeba by ją zgadywać, a Dynamic Type zmienia ją
@@ -182,12 +174,16 @@ struct SCToastHost: View {
                         contentHeight = $0
                     }
             }
-            // Pionowa pozycja jedzie TĄ SAMĄ sprężyną, co ramka — stąd jedno
-            // `offset` zamiast osobnego na zewnątrz. Zjazd spod wyspy i
-            // rozwijanie to ma być jeden ruch, a nie dwa obok siebie.
-            .offset(y: dragOffset + (isOpen ? layout.expandedTopOffset : layout.collapsedTopOffset))
+            // Ramka i wszystko powyżej — jedna krzywa.
             .animation(morph, value: isOpen)
             .animation(morph, value: contentHeight)
+            // Pozycja pionowa — DRUGA krzywa, ruszająca później. Zewnętrzne
+            // `animation` obejmuje wszystko, ale wewnętrzne już zajęło ramkę,
+            // więc to tutaj rządzi wyłącznie przesunięciem. Dzięki temu
+            // kapsuła najpierw rozciąga się w dół przy wyspie, a dopiero
+            // potem odjeżdża — patrz `detachMorph`.
+            .offset(y: dragOffset + (isOpen ? layout.expandedTopOffset : layout.collapsedTopOffset))
+            .animation(detachMorph, value: isOpen)
             .contentShape(Capsule(style: .continuous))
             .onTapGesture { center.dismiss() }
             .gesture(dismissDrag)
@@ -209,10 +205,10 @@ struct SCToastHost: View {
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(toast.style.accent.opacity(0.18)))
                 .overlay(Circle().strokeBorder(toast.style.accent.opacity(0.45), lineWidth: 1))
-                // Glif dociąga sprężyną chwilę po tekście — to jedyny ruch,
-                // który tu wolno przesadzić, bo jest wielkości paznokcia.
-                .scaleEffect(isOpen ? 1 : 0.4)
-                .animation(iconCurve, value: isOpen)
+                // Bez własnej sprężyny i bez skoku skali. Glif wyskakujący
+                // z odbiciem, chwilę po tekście, był tu najgłośniejszym
+                // elementem całej animacji — przy trzecim toaście z rzędu
+                // zaczynał się naprzykrzać. Wchodzi razem z tekstem.
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(toast.title)
@@ -242,32 +238,41 @@ struct SCToastHost: View {
 
     // MARK: Ruch
 
-    /// Wyrastanie i zwijanie. Sprężyna prawie bez odbicia — kapsuła ma
-    /// wypłynąć z wyspy, a nie odskoczyć od niej. Zjazd jest krótszy
-    /// i sztywniejszy: wracanie tam, skąd się przyszło, nie potrzebuje
-    /// tyle uwagi, co pojawienie się.
+    /// Rozciąganie i zwijanie RAMKI.
+    ///
+    /// `smooth` zamiast `spring(dampingFraction:)`, bo to sprężyna bez
+    /// odbicia. Wyspa jest ciałem stałym: rozciąga się i wraca, ale nie
+    /// dygocze. Każde przeregulowanie — a przy tłumieniu 0,84 było widoczne —
+    /// zamienia sprzęt w gumową zabawkę.
     private var morph: Animation {
-        if reduceMotion { return .easeOut(duration: 0.22) }
-        return isOpen
-            ? .spring(response: 0.46, dampingFraction: 0.84)
-            : .spring(response: 0.34, dampingFraction: 0.94)
+        if reduceMotion { return .easeOut(duration: 0.2) }
+        return isOpen ? .smooth(duration: 0.44) : .smooth(duration: 0.28)
     }
 
-    /// Treść wchodzi PO kapsule, nie razem z nią — najpierw otwiera się
-    /// czerń, dopiero potem pojawiają się słowa. To ta zwłoka sprawia, że
-    /// całość czyta się jak jeden ruch, a nie jak wjeżdżający baner.
+    /// Zjazd spod wyspy — ta sama krzywa, ale RUSZA PÓŹNIEJ niż ramka.
+    ///
+    /// Tu siedzi całe wrażenie ciągłości. Gdy górna krawędź jedzie razem
+    /// z dolną, spod wyspy zjeżdża gotowy prostokąt i widać dwa osobne
+    /// przedmioty. Te 80 ms zwłoki sprawiają, że kapsuła najpierw ROZCIĄGA
+    /// SIĘ w dół, wciąż trzymając się wyspy, i dopiero potem się odkleja —
+    /// czyli zachowuje się jak jej przedłużenie, a nie jak coś, co spod niej
+    /// wyjechało.
+    ///
+    /// Przy zwijaniu zwłoki nie ma: wracanie ma być krótkie.
+    private var detachMorph: Animation {
+        if reduceMotion { return .easeOut(duration: 0.2) }
+        return isOpen ? .smooth(duration: 0.44).delay(0.08) : .smooth(duration: 0.26)
+    }
+
+    /// Treść wchodzi PO kapsule i po tym, jak ta wyjdzie spod wyspy —
+    /// wcześniej i tak nie byłoby jej widać. Samo przenikanie, bez
+    /// rozmycia i bez skoku skali: to są ozdoby, które przy trzeciej
+    /// powtórce zaczynają przeszkadzać.
     private var contentCurve: Animation {
-        if reduceMotion { return .easeOut(duration: 0.2) }
+        if reduceMotion { return .easeOut(duration: 0.18) }
         return isOpen
-            ? .easeOut(duration: 0.24).delay(0.07)
-            : .easeIn(duration: 0.11)
-    }
-
-    private var iconCurve: Animation {
-        if reduceMotion { return .easeOut(duration: 0.2) }
-        return isOpen
-            ? .spring(response: 0.40, dampingFraction: 0.62).delay(0.1)
-            : .easeIn(duration: 0.11)
+            ? .easeOut(duration: 0.22).delay(0.18)
+            : .easeIn(duration: 0.1)
     }
 
     /// Machnięcie w górę zamyka. W dół kapsuła prawie nie idzie — opór
@@ -283,7 +288,9 @@ struct SCToastHost: View {
                 if value.translation.height < -14 || flicked {
                     center.dismiss()
                 } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                    // Też bez odbicia — kapsuła wraca na miejsce, nie
+                    // sprężynuje z powrotem.
+                    withAnimation(.smooth(duration: 0.26)) {
                         dragOffset = 0
                     }
                 }
