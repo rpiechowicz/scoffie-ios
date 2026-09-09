@@ -273,16 +273,22 @@ final class ShoppingListStore {
         }
     }
 
-    func deleteAllArchivedLists() {
-        guard let currentWeekStart = weekStart else { return }
-        Task {
-            do {
-                try await repository.deleteAllArchivedLists(weekStart: currentWeekStart)
-                openRevisionsByWeek.removeAll()
-                await load(weekStart: currentWeekStart, force: true)
-            } catch {
-                errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
-            }
+    /// Oddaje, czy historia naprawdę zniknęła.
+    ///
+    /// Wcześniej metoda otwierała własne zadanie i nie mówiła nic — sukcesu
+    /// nie dało się odróżnić od awarii, a to operacja nieodwracalna i wspólna
+    /// dla całego domu.
+    @discardableResult
+    func deleteAllArchivedLists() async -> Bool {
+        guard let currentWeekStart = weekStart else { return false }
+        do {
+            try await repository.deleteAllArchivedLists(weekStart: currentWeekStart)
+            openRevisionsByWeek.removeAll()
+            await load(weekStart: currentWeekStart, force: true)
+            return true
+        } catch {
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            return false
         }
     }
 

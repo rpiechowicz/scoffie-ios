@@ -24,6 +24,7 @@ import SwiftUI
 // w Ustawieniach → „Posiłki w planie”, plus te, w których mimo wyłączenia coś
 // stoi (`visibleSlots(on:)`). Reszta czeka pod „Dodaj posiłek”.
 struct WeeklyPlanView: View {
+    @Environment(\.toasts) private var toasts
     @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
@@ -282,13 +283,12 @@ struct WeeklyPlanView: View {
                             .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.top, 14)
 
-                        if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
-                            Text(errorMessage)
-                                .font(.footnote)
-                                .foregroundStyle(.red)
-                                .padding(.horizontal, SCPageMetrics.horizontal)
-                                .padding(.top, 12)
-                        }
+                        // Bez czerwonego wiersza błędu: od kiedy most z korzenia
+                        // aplikacji wystawia `errorMessage` jako toast, ten sam
+                        // komunikat renderował się DWA razy — raz jako kapsuła,
+                        // raz jako przypis, który dokładał wysokości przypiętemu
+                        // nagłówkowi i spychał oś dnia w chwili, gdy treść pod
+                        // spodem i tak się przekładała.
                     }
 
                     DayPager(
@@ -740,11 +740,36 @@ struct WeeklyPlanView: View {
     }
 
     private func clearWeek() {
+        // Policzone PRZED kasowaniem — po nim nie ma już czego liczyć, a to
+        // jedyna liczba, która mówi, czy zniknęło to, co miało zniknąć.
+        // Alert zapytać o to nie mógł: nikt tych posiłków wcześniej nie liczył.
+        // Liczymy SLOTY, nie warianty: `allMeals` rozbija posiłek na osobne
+        // wpisy dla każdego podziału audytorium, więc tydzień z codzienną
+        // kolacją dla dwojga meldowałby czternaście posiłków tam, gdzie plan
+        // pokazuje siedem. Reszta aplikacji też liczy slotami.
+        let removed = datesViewModel.dates
+            .map { mealStore.plan(for: $0).plannedSlots.count }
+            .reduce(0, +)
         Task { @MainActor in
-            await mealStore.clearWeekFromBackend(
+            let cleared = await mealStore.clearWeekFromBackend(
                 weekStart: datesViewModel.weekStartISO,
                 dates: datesViewModel.dates
             )
+            // Sześć z siedmiu skasowanych dni jest poza ekranem: użytkownik
+            // widzi, jak pustoszeje jeden, i gasnące kropki na pasku dni.
+            if cleared {
+                if removed > 0 {
+                    toasts.success("Tydzień wyczyszczony", "Zniknęło \(PolishPlural.meals(removed)).")
+                } else {
+                    // „Zniknęło 0 posiłków" to zdanie, którego nikt by nie napisał.
+                    toasts.success("Tydzień był już pusty")
+                }
+            } else {
+                // Bez potwierdzenia przy nieudanym kasowaniu użytkownik zostaje
+                // po alercie z niczym: przy braku sieci `errorMessage` jest
+                // puste, więc most z korzenia też milczy.
+                toasts.error("Nie udało się wyczyścić tygodnia", "Plan został bez zmian.")
+            }
             refreshShoppingList()
         }
     }

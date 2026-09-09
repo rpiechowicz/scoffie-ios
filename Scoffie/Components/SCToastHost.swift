@@ -271,9 +271,13 @@ private struct SCIslandMorph: ViewModifier, Animatable {
                 .fill(.black)
                 .shadow(color: .black.opacity(Double(0.34 * c.settle)), radius: 16, x: 0, y: 8)
         }
+        // Włos obwódki, nie obrys. 0,28, nie 0,16: przy 0,16 wychodziło
+        // 1,18–1,26 : 1, czyli dokładnie tyle, co ciemne płótno pod spodem
+        // (1,15 : 1) — w ciemnym motywie kapsuła nie miała krawędzi w ogóle,
+        // tylko cień. W jasnym motywie kremowe płótno i tak ją odcina.
         .overlay {
             SCToastCapsuleShape()
-                .strokeBorder(accent.opacity(Double(0.16 * c.settle)), lineWidth: 0.8)
+                .strokeBorder(accent.opacity(Double(0.28 * c.settle)), lineWidth: 0.8)
         }
         // Kształt dotyku i pomiar ramki TU, przed `offset` — w układzie
         // współrzędnych samej kapsuły, więc jadą razem z nią. Gesty zapięte
@@ -434,13 +438,27 @@ struct SCToastHost: View {
             // Kółko z glifem podmienia się przez przenikanie CAŁEGO kółka
             // (tożsamość po stylu) — bez interpolacji barwy, bez efektów
             // symboli, bez własnej sprężyny. Wchodzi razem z tekstem.
+            // Krążek PEŁNY, z glifem wyciętym w czerni kapsuły.
+            //
+            // Wcześniej stały tu trzy warstwy przepisane z `scSoftSurface`
+            // (wypełnienie 0,18, obwódka 0,45, glif w akcencie) — a te liczby
+            // są strojone pod tło PRZYCISKU na ciemnym płótnie, nie pod
+            // czerń. Na #000 wypełnienie wychodziło 1,16–1,38 : 1, czyli
+            // nic, trzy z czterech obwódek nie dobijały do 3 : 1, i cały
+            // sygnał barwy niósł jeden glif szerokości włosa, który na OLED
+            // dodatkowo się rozlewał.
+            //
+            // Pełny krążek robi trzy rzeczy naraz: kontrast glifu równa się
+            // kontrastowi akcentu (więc zestrojenie czwórki barw zestraja
+            // i glify), znika rozlewanie, a sam glif staje się DZIURĄ —
+            // dokładnie tym, czym jest wyspa, którą kapsuła udaje.
+            // `.heavy` zostaje: pismo wycięte czyta się cieńsze, niż jest.
             ZStack {
                 Image(systemName: toast.style.icon)
                     .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(toast.style.accent)
+                    .foregroundStyle(.black)
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(toast.style.accent.opacity(0.18)))
-                    .overlay(Circle().strokeBorder(toast.style.accent.opacity(0.45), lineWidth: 1))
+                    .background(Circle().fill(toast.style.accent))
                     .id(toast.style)
                     .transition(.opacity)
             }
@@ -739,7 +757,7 @@ private struct SCToastPreviewStage: View {
                 SCSoftButton(title: "Uwaga", trailingIcon: nil, accent: SCPalette.butter) {
                     center.warning("Cookidoo prosi o ponowne logowanie")
                 }
-                SCSoftButton(title: "Błąd", trailingIcon: nil, accent: SCPalette.rose) {
+                SCSoftButton(title: "Błąd", trailingIcon: nil, accent: SCPalette.terracottaDeep) {
                     center.error("Nie udało się zapisać", "Spróbuj ponownie za chwilę.")
                 }
                 // Pasek stanu: zostaje, dopóki go nie zgasisz, i wraca po

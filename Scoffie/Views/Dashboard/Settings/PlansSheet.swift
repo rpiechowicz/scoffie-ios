@@ -18,6 +18,7 @@ struct PlansSheet: View {
     var onPurchased: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.toasts) private var toasts
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
 
@@ -29,8 +30,6 @@ struct PlansSheet: View {
     @State private var showTerms = false
     @State private var showPrivacy = false
     @State private var isRestoring = false
-    /// Wyzwalacz wibracji „udało się" — rośnie przy każdym przyjętym zakupie.
-    @State private var purchaseCount = 0
 
     private var subscriptions: SubscriptionStore {
         sessionStore.subscriptionStore ?? fallbackSubscriptions
@@ -99,7 +98,6 @@ struct PlansSheet: View {
         }
         .presentationDragIndicator(.visible)
         .sensoryFeedback(.selection, trigger: selected.id)
-        .sensoryFeedback(.success, trigger: purchaseCount)
         .sheet(isPresented: $showTerms) {
             LegalDocumentSheet(title: "Regulamin") { TermsOfServiceContent() }
         }
@@ -231,16 +229,26 @@ struct PlansSheet: View {
 
     private func buy() {
         guard let product = subscriptions.product(for: selected) else { return }
+        // Kolejka do stałej PRZED zadaniem: arkusz da się zsunąć palcem, gdy
+        // zgłoszenie do serwera jeszcze trwa, a wtedy odczyt ze środowiska
+        // trafiłby w domyślną kolejkę podglądu i potwierdzenie przepadłoby.
+        let toasts = toasts
         Task {
             switch await subscriptions.purchase(product) {
             case .purchased:
                 // Serwer JUŻ potwierdził — inaczej nie byłoby `.purchased`.
-                notice = "Dziękujemy! Plan jest włączony."
-                purchaseCount += 1
+                //
+                // Potwierdzenie idzie do toastu, bo `notice` znikało razem
+                // z arkuszem, który sam je zamykał: użytkownik wracał właśnie
+                // z systemowego okna Apple, wodząc wzrokiem za tamtym oknem
+                // w dół, a jedyne „udało się" mieszkało w stopce, której
+                // zostało 1,2 s życia. Kapsuła przeżywa `dismiss()` i ląduje
+                // nad „Asystent i plan" już w nowym stanie. Własnej haptyki
+                // nie ma tu po co trzymać — `SCToastHost` bije swoją.
+                // „Plan" bez dopowiedzenia myliłoby się z zakładką Plan
+                // (tygodnia). Mówimy o tym, co się realnie odblokowało.
+                toasts.success("Asystent odblokowany", "Pytania są już dostępne dla całego domu.")
                 onPurchased?()
-                // Chwila na przeczytanie potwierdzenia, potem arkusz schodzi
-                // i odsłania „Asystent i plan" już z nowym stanem.
-                try? await Task.sleep(for: .seconds(1.2))
                 dismiss()
             case .pending:
                 // „Poproś o zakup" (Chmura Rodzinna) albo zgłoszenie, którego

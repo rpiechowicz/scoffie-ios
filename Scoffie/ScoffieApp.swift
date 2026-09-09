@@ -82,9 +82,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case .shoppingList:
             completionHandler([.list])
         case .assistantTurn:
-            // Odpowiedź asystenta przyszła, gdy aplikacja jest na wierzchu —
-            // baner bez dźwięku: kropka na zakładce i tak już się świeci.
-            completionHandler([.banner])
+            // Przy aplikacji na wierzchu mówi o tym KAPSUŁA, nie systemowy
+            // baner: `AgentStore` wystawia toast z własnego odpytywania, więc
+            // sygnał dociera niezależnie od zgody na powiadomienia, a baner
+            // i kapsuła biją się o ten sam pas ekranu. Push zostaje przy swojej
+            // prawdziwej robocie — dosięgnąć człowieka przy zamkniętej apce.
+            completionHandler([.list])
         case .unknown:
             completionHandler([.banner])
         }
@@ -331,6 +334,22 @@ struct ScoffieApp: App {
             // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`
             // do środowiska.
             .scToastDebugTrigger()
+            // Zdarzenia BEZ EKRANU: tura asystenta, która skończyła się, gdy
+            // użytkownik patrzył na plan, i zakup dogadany z Apple w tle.
+            //
+            // Wiszą TUTAJ, a nie w gałęzi pulpitu, i to jest istotne: gałąź
+            // pulpitu ma `.id(currentRootScreen)`, więc przy każdym przejściu
+            // korzenia (loader, powitanie, zmiana gospodarstwa) budowałaby się
+            // od nowa i brała bieżącą wartość za punkt odniesienia. A zakup
+            // odtworzony przez StoreKit dociera właśnie w oknie loadera.
+            .scBackgroundToast(
+                sessionStore.agentStore?.backgroundNotice,
+                onShown: { sessionStore.agentStore?.clearBackgroundNotice() }
+            )
+            .scBackgroundToast(
+                sessionStore.subscriptionStore?.backgroundNotice,
+                onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
+            )
             .scConnectivityToast()
             .scToastLayer(toastCenter)
             .preferredColorScheme((AppTheme(rawValue: themeRawValue) ?? .system).colorScheme)

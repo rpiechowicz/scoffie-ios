@@ -6,10 +6,12 @@ import SwiftUI
 // nie zależy: to jeden modyfikator wpięty raz w `ScoffieApp` i jedna biedronka
 // przy prawej krawędzi ekranu.
 //
-// Istnieje, bo toasty odpalają się dziś wyłącznie z braku sieci i z błędów
-// serwera — czyli z rzeczy, których nie da się wywołać na życzenie, patrząc
-// akurat na ten ekran, który chce się obejrzeć. Bez tego jedynym sposobem na
-// zobaczenie kapsuły byłoby wyłączanie Wi-Fi i odliczanie do sześciu.
+// Większość miejsc w aplikacji odpala dziś toast zwykłym stuknięciem, więc
+// menu służy głównie do oglądania samego wyglądu i przypadków brzegowych.
+// Dwie sekcje są jednak jedyną drogą: „Bez ekranu" powtarza zdarzenia, których
+// nie da się wywołać na życzenie (zakup dogadany z Apple w tle, tura asystenta,
+// która padła poza ekranem), a „Pasek stanu" oszczędza wyłączania Wi-Fi
+// i odliczania do sześciu.
 
 extension View {
     /// Biedronka odpalająca każdy wariant toastu — TYLKO w kompilacji Debug.
@@ -74,6 +76,21 @@ private struct SCToastDebugTriggerModifier: ViewModifier {
                     Button("Dwa razy to samo (tłumienie)") {
                         toasts.error("Nie udało się zapisać")
                         toasts.error("Nie udało się zapisać")
+                    }
+                }
+
+                Section("Bez ekranu") {
+                    // Kopie 1:1 z `SubscriptionStore` i `AgentStore` — te dwa
+                    // idą przez `scBackgroundToast`, czyli jedyną ścieżkę,
+                    // której nie da się zainscenizować z poziomu interfejsu.
+                    Button("Zakup zatwierdzony w tle") {
+                        toasts.success("Asystent odblokowany", "Zakup został zatwierdzony.")
+                    }
+                    Button("Asystent nie dokończył") {
+                        toasts.error("Asystent nie dokończył", "Pytanie zostało w rozmowie.")
+                    }
+                    Button("Limit asystenta wyczerpany") {
+                        toasts.warning("Limit asystenta wyczerpany", "Pula odnowi się w nowym miesiącu.")
                     }
                 }
 

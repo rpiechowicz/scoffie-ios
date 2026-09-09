@@ -3,6 +3,12 @@ import SwiftUI
 // Scoffie v2 "Cozy Kitchen" design tokens.
 // Źródło: v2-design/Scoffie - Onboarding.html (tokeny kolorów).
 // Dark-first; light mirrors. Colors converted from OKLCH → sRGB.
+//
+// UWAGA na adnotacje OKLCH przy poszczególnych barwach: te opisane jako
+// „zmierzone" odpowiadają wiezionym liczbom co do trzeciego miejsca, reszta
+// to tokeny z makiety, dostrojone potem ręcznie — i potrafią się od wiezionej
+// wartości różnić zauważalnie (terakota o ΔE ≈ 6,5). Nie przeliczaj barwy
+// z komentarza, jeśli nie pisze przy nim „zmierzone".
 
 enum SCPalette {
     // Warm terracotta family — primary brand accent. Reads as food + warmth
@@ -18,15 +24,15 @@ enum SCPalette {
     )
     static let terracottaDeep = Color(red: 182 / 255, green: 100 / 255, blue: 60 / 255)  // oklch(0.60 0.15 40)
     static let sage = dynamicColor(
-        dark:  (135, 194, 165),  // oklch(0.74 0.10 155)
+        dark:  (135, 194, 165),  // zmierzone oklch(0.765 0.074 163)
         light: (76, 135, 102)    // oklch(0.55 0.10 155) — darkened for legibility on cream
     )
     static let indigo = dynamicColor(
-        dark:  (101, 115, 202),  // oklch(0.62 0.14 265)
+        dark:  (101, 115, 202),  // zmierzone oklch(0.585 0.134 274)
         light: (75, 88, 175)     // slightly darker for cream-bg contrast
     )
     static let butter = dynamicColor(
-        dark:  (232, 207, 133),  // oklch(0.88 0.10 88)
+        dark:  (232, 207, 133),  // zmierzone oklch(0.859 0.097 92)
         light: (160, 120, 40)    // oklch(0.55 0.12 80) — mustard, readable on cream
     )
 
@@ -93,6 +99,62 @@ enum SCPalette {
         return Color(uiColor: UIColor { trait in
             trait.userInterfaceStyle == .dark ? darkUIColor : lightUIColor
         })
+    }
+
+    /// Akcenty na CZYSTĄ CZERŃ (#000) — dziś wyłącznie kapsuła toastu.
+    ///
+    /// Drugi komplet liczb dla barw, które paleta już ma, i to jest celowe.
+    /// Warianty ciemne powyżej są strojone pod `canvasDark` (#1A1411), które
+    /// samo ma wobec czerni ledwie 1,15 : 1 — na prawdziwej czerni ta sama
+    /// czwórka rozjeżdża się prawie trzykrotnie: szałwia 10,3 : 1, masło
+    /// 13,7 : 1, a indygo tylko 4,86 : 1. Glif 12 pt w indygo czytał się na
+    /// kapsule jak przybrudzony piksel, a masło przekrzykiwało biały tytuł
+    /// obok. Tutaj cała czwórka stoi w jednym paśmie jasności.
+    ///
+    /// RUSZASZ `SCPalette.indigo` ALBO `SCPalette.butter`? Zajrzyj i tutaj —
+    /// te wartości nie wynikają z tamtych automatycznie.
+    enum OnBlack {
+        /// Sukces. Jedyna, która już była w paśmie — reszta jest strojona
+        /// do niej. Szałwia znaczy w tej aplikacji „zrobione" (`scChecked`).
+        static let sage = Color(red: 135 / 255, green: 194 / 255, blue: 165 / 255)   // 10,29 : 1
+
+        /// Informacja. Ruszona jest przede wszystkim jasność
+        /// (oklch 0,585 → 0,719), nasycenie schodzi śladowo (0,134 → 0,121),
+        /// barwa stoi w miejscu (274°) — więc nadal jest to rozpoznawalnie
+        /// indygo, które znaczy „informacyjnie" (`scIndigoTint`) i „białko".
+        static let indigo = Color(red: 141 / 255, green: 158 / 255, blue: 240 / 255) // 8,28 : 1
+
+        /// Uwaga. Ściszone, ale ŚWIADOMIE nie do końca — masło zostaje
+        /// wyraźnie jaśniejsze od reszty, bo to ono siedzi na trwałym pasku
+        /// braku sieci, czyli na jedynym toaście, w który ktokolwiek naprawdę
+        /// się wpatruje.
+        ///
+        /// Parą do pilnowania przy deuteranopii NIE jest szałwia–masło (te
+        /// rozjeżdżają się swobodnie, ΔE ≈ 38), tylko szałwia–ember: ΔE ≈ 25,
+        /// czyli najbliższa para w komplecie — i akurat ta, w której pomyłka
+        /// kosztuje najwięcej, bo to „zrobione" kontra „nie udało się".
+        /// Rozdziela je dopiero glif, dlatego ma zostać ciężki.
+        static let butter = Color(red: 220 / 255, green: 194 / 255, blue: 118 / 255) // 12,02 : 1
+
+        /// Błąd. NOWA barwa, nie ma jej w palecie na płótnie — i tak ma
+        /// zostać.
+        ///
+        /// Wcześniej błąd brał róż, ale róż ma już trzy etaty (II śniadanie,
+        /// owoce i alkohole na liście zakupów, pierścień ekranu startowego)
+        /// i jest przy nasyceniu 0,085 NAJMNIEJ natarczywą barwą, jaką ta
+        /// aplikacja ma — w robocie, która natarczywa być musi. Wychodziło
+        /// z tego, że awaria czytała się łagodniej niż akcja główna.
+        /// Systemowa czerwień była odrzucona słusznie (jest brutalna i obca
+        /// tej palecie); odpowiedzią jest ciepły alarm zestrojony z resztą,
+        /// a nie sięgnięcie po najbliższy róż.
+        ///
+        /// Zostaje w `OnBlack` i tylko tam: na płótnie biłaby się z terakotą,
+        /// z którą dzieli jasność, a dzieli je raptem 31° barwy.
+        /// Nasycenie podniesione ponad to, co dawał sam alarm: przy tej samej
+        /// jasności i barwie odsuwa embera od szałwii w oczach osoby
+        /// z deuteranopią (ΔE 21,7 → 25,2). Rozjaśnianie działa tu ODWROTNIE —
+        /// jaśniejszy ember zbliża się do szałwii, nie oddala.
+        static let ember = Color(red: 254 / 255, green: 97 / 255, blue: 113 / 255)   // 7,16 : 1
     }
 }
 

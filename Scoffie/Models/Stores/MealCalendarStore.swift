@@ -339,19 +339,28 @@ class MealCalendarStore {
         }
     }
 
+    /// Oddaje, czy tydzień naprawdę zniknął.
+    ///
+    /// Wołający nie może tego wywnioskować z `errorMessage`: przy braku sieci
+    /// mapper oddaje `nil`, więc puste pole znaczyłoby raz „udało się", a raz
+    /// „nie mamy o czym mówić" — i potwierdzenie kłamałoby dokładnie wtedy,
+    /// gdy sieci nie ma.
     @MainActor
-    func clearWeekFromBackend(weekStart: String, dates: [Date]) async {
+    @discardableResult
+    func clearWeekFromBackend(weekStart: String, dates: [Date]) async -> Bool {
         guard let weeklyPlanRepository else {
             clearWeek(dates: dates)
-            return
+            return true
         }
 
         do {
             try await weeklyPlanRepository.clearWeekPlan(weekStart: weekStart)
             clearWeek(dates: dates)
             errorMessage = nil
+            return true
         } catch {
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            return false
         }
     }
 

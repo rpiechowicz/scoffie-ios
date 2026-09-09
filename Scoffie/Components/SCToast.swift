@@ -71,30 +71,34 @@ struct SCToast: Identifiable, Equatable {
         /// Nie udało się. Domyślne wyjście dla `errorMessage` ze store.
         case error
 
-        /// Barwa akcentu — ZAWSZE w wariancie na ciemne tło.
+        /// Barwa akcentu — z osobnego kompletu strojonego na czerń.
         ///
         /// Kapsuła jest czarna niezależnie od motywu aplikacji (dlaczego —
-        /// patrz `SCToastHost`), więc nie może brać koloru rozwiązanego przez
-        /// trait telefonu. `SCPalette.sage` w jasnym motywie to zieleń
-        /// przyciemniona pod krem; położona na czerni gaśnie w błoto.
+        /// patrz `SCToastHost`), a warianty ciemne w `SCPalette` są strojone
+        /// pod `canvasDark`, nie pod #000. Na prawdziwej czerni rozjeżdżały
+        /// się prawie trzykrotnie w jasności — stąd `SCPalette.OnBlack`
+        /// i tam siedzi całe uzasadnienie liczb.
         ///
-        /// Sama czwórka barw idzie za tym, co paleta już znaczy gdzie indziej:
-        /// szałwia to „zrobione" (`scChecked`), indygo „informacyjnie"
-        /// (`scIndigoTint`), masło „uwaga / nowe" (`scButterTint`). Róż jest
-        /// jedynym czerwonym w palecie — surowy `Color.red`, który stał
-        /// dotąd w czerwonych wierszach błędu, nie należy do tej aplikacji.
+        /// Znaczenia idą za tym, co paleta już mówi gdzie indziej: szałwia to
+        /// „zrobione" (`scChecked`), indygo „informacyjnie" (`scIndigoTint`),
+        /// masło „uwaga / nowe" (`scButterTint`). Błąd ma własną barwę, bo
+        /// róż był tu czwartym lokatorem i najmniej natarczywym kolorem
+        /// aplikacji w najbardziej natarczywej robocie.
+        ///
+        /// RUSZASZ TE BARWY? Wartości są w `SCPalette.OnBlack`.
         var accent: Color {
             switch self {
-            case .success: Self.onBlack(SCPalette.sage)
-            case .info:    Self.onBlack(SCPalette.indigo)
-            case .warning: Self.onBlack(SCPalette.butter)
-            case .error:   Self.onBlack(SCPalette.rose)
+            case .success: SCPalette.OnBlack.sage
+            case .info:    SCPalette.OnBlack.indigo
+            case .warning: SCPalette.OnBlack.butter
+            case .error:   SCPalette.OnBlack.ember
             }
         }
 
-        /// Glif w kółku po lewej. Nagi, bez własnej obwódki — kółko wokół
-        /// niego rysuje `SCToastHost`, tym samym zestawem liczb, co
-        /// `scSoftSurface`.
+        /// Glif WYCIĘTY w krążku. `SCToastHost` wypełnia krążek akcentem
+        /// i rysuje glif w czerni kapsuły, więc kontrast glifu równa się
+        /// kontrastowi akcentu z `SCPalette.OnBlack` — zestrojenie barw
+        /// zestraja tym samym glify.
         var icon: String {
             switch self {
             case .success: "checkmark"
@@ -125,14 +129,6 @@ struct SCToast: Identifiable, Equatable {
             }
         }
 
-        /// Rozwiązuje barwę z palety w wariancie ciemnym, cokolwiek ustawił
-        /// użytkownik. Paleta zostaje jedynym źródłem prawdy — nie ma tu
-        /// drugiego kompletu liczb, który mógłby się z nią rozjechać.
-        private static func onBlack(_ color: Color) -> Color {
-            Color(uiColor: UIColor(color).resolvedColor(
-                with: UITraitCollection(userInterfaceStyle: .dark)
-            ))
-        }
     }
 }
 
@@ -358,6 +354,58 @@ extension View {
     /// Wystawia `errorMessage` store jako toast.
     func scErrorToast(_ message: @autoclosure @escaping () -> String?) -> some View {
         modifier(SCErrorToastBridge(message: message))
+    }
+}
+
+// MARK: - Most dla zdarzeń bez ekranu
+
+/// Wystawia toast ustawiony przez store, który NIE MA gdzie go pokazać.
+///
+/// Są w tej aplikacji zdarzenia bez widoku: transakcja App Store zatwierdzona
+/// przez rodzica dwie godziny po prośbie dziecka, tura asystenta, która
+/// skończyła się, gdy użytkownik patrzył na plan. Nie da się ich powiesić
+/// na ekranie, bo w chwili, gdy się dzieją, żadnego właściwego ekranu nie ma.
+///
+/// `@autoclosure` z tego samego powodu, co przy `scErrorToast`: gdyby korzeń
+/// odczytywał `store.backgroundNotice` u siebie, każda transakcja w tle
+/// przebudowywałaby całe drzewo aplikacji.
+private struct SCBackgroundToastBridge: ViewModifier {
+    let toast: () -> SCToast?
+    let onShown: () -> Void
+
+    @Environment(\.toasts) private var toasts
+
+    func body(content: Content) -> some View {
+        // `initial: true`, w odróżnieniu od `scErrorToast`. Tam stan zastany
+        // ma się NIE odtwarzać, bo błąd jest zdarzeniem. Tu jest odwrotnie:
+        // pole kasuje się w chwili pokazania, więc niepusta wartość zastana
+        // z definicji znaczy „tego jeszcze nikt nie widział".
+        //
+        // Bez tego przepadał dokładnie ten przypadek, dla którego ten most
+        // powstał: zakup dogadany z Apple przy zamkniętej aplikacji dociera
+        // w chwili budowania sesji, gdy na ekranie stoi jeszcze loader.
+        // Wartość ustawiona przed zamontowaniem mostu nie była dla `onChange`
+        // zmianą — nie pokazywała się, nie kasowała, a pole zostawało zajęte
+        // do końca sesji i połykało wszystko następne.
+        content.onChange(of: toast(), initial: true) { _, new in
+            guard let new else { return }
+            toasts.show(new)
+            // Skasowanie jest NIEZBĘDNE, nie sprzątaniem: `SCToast` porównuje
+            // się po treści i ignoruje identyfikator, więc bez powrotu do
+            // `nil` drugie takie samo powiadomienie nie zmieniłoby wartości
+            // i przepadłoby po cichu.
+            onShown()
+        }
+    }
+}
+
+extension View {
+    /// Wpina powiadomienia, które store wystawia spoza jakiegokolwiek ekranu.
+    func scBackgroundToast(
+        _ toast: @autoclosure @escaping () -> SCToast?,
+        onShown: @escaping () -> Void
+    ) -> some View {
+        modifier(SCBackgroundToastBridge(toast: toast, onShown: onShown))
     }
 }
 

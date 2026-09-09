@@ -111,6 +111,53 @@ final class SubscriptionStore {
     /// Stan z serwera: czy zakupy są włączone i co ta osoba już ma.
     private(set) var state: BillingStateDTO?
 
+    /// Powiadomienie o zdarzeniu, które zaszło BEZ EKRANU — zakup dogadany
+    /// z Apple w tle. Zdejmuje je most w korzeniu aplikacji
+    /// (`scBackgroundToast`) i od razu kasuje przez `clearBackgroundNotice()`.
+    private(set) var backgroundNotice: SCToast?
+
+    /// Kasowanie jest niezbędne, nie sprząta: `SCToast` porównuje się po
+    /// treści, więc bez powrotu do `nil` drugie identyczne powiadomienie
+    /// nie zmieniłoby wartości i przepadłoby po cichu.
+    func clearBackgroundNotice() {
+        backgroundNotice = nil
+    }
+
+    /// Transakcje, o których powiedział już ekran zakupu. Bez tego ta sama
+    /// płatność potrafiłaby dać dwie kapsuły: jedną z `PlansSheet`, drugą
+    /// z pętli `Transaction.updates`, gdyby StoreKit podał ją tam ponownie.
+    private var announcedTransactionIDs: Set<UInt64> = []
+
+    /// Mówi o zakupie, który doszedł do skutku POZA ekranem.
+    ///
+    /// Bramkujemy po `Transaction.reason`, a nie po tym, czy stan przed
+    /// zgłoszeniem wyglądał na „bez dostępu". Tamten warunek był nie do
+    /// obronienia: `state` jest `nil` aż do pierwszego `refreshState()`,
+    /// czyli do otwarcia ekranu planu, a StoreKit odtwarza niedomknięte
+    /// transakcje zaraz po starcie — więc comiesięczne odnowienie wyglądało
+    /// jak wejście z braku dostępu w dostęp i mówiło „kupione" bez powodu.
+    /// `reason` to fakt, który podaje sam StoreKit.
+    private func announceIfApprovedInBackground(
+        _ result: VerificationResult<Transaction>,
+        outcome: ReportOutcome
+    ) {
+        guard case .accepted = outcome else { return }
+        let transaction = result.unsafePayloadValue
+        guard transaction.reason == .purchase else { return }
+        guard !announcedTransactionIDs.contains(transaction.id) else { return }
+        announcedTransactionIDs.insert(transaction.id)
+        backgroundNotice = SCToast(
+            style: .success,
+            title: "Asystent odblokowany",
+            message: "Zakup został zatwierdzony."
+        )
+    }
+
+    /// Odnotowuje, że o tej płatności powiedział już ekran zakupu.
+    private func noteAnnouncedOnScreen(_ result: VerificationResult<Transaction>) {
+        announcedTransactionIDs.insert(result.unsafePayloadValue.id)
+    }
+
     /// Czy wolno pobrać pieniądze. Decyduje SERWER, bo tylko on wie, czy umie
     /// potwierdzić transakcję w App Store. Brak odpowiedzi = nie wolno.
     var purchasesEnabled: Bool { state?.purchasesEnabled == true }
@@ -129,9 +176,13 @@ final class SubscriptionStore {
         updatesTask = Task { [weak self] in
             for await result in Transaction.updates {
                 guard let self else { return }
-                // Wynik ląduje w `lastError`; tu nie ma komu go pokazać, a
-                // odmowa trwała i tak domknie transakcję w `handle`.
-                _ = await self.handle(result)
+                // Tędy wchodzi zakup zatwierdzony PÓŹNIEJ — dziecko poprosiło,
+                // rodzic kliknął dwie godziny potem — i zgłoszenie, które Apple
+                // ponowiło przy starcie. W obu przypadkach nie ma ekranu, na
+                // którym dałoby się cokolwiek pokazać, więc powiadomienie idzie
+                // do kolejki toastów przez most z korzenia aplikacji.
+                let outcome = await self.handle(result)
+                self.announceIfApprovedInBackground(result, outcome: outcome)
             }
         }
     }
@@ -186,6 +237,10 @@ final class SubscriptionStore {
                 // co dalej.
                 switch await handle(verification) {
                 case .accepted:
+                    // O tej płatności powie ekran zakupu; pętla
+                    // `Transaction.updates` ma o niej milczeć, gdyby StoreKit
+                    // podał ją tam jeszcze raz.
+                    noteAnnouncedOnScreen(verification)
                     return .purchased
                 case let .rejected(message):
                     return .failed(message)

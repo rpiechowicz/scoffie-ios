@@ -16,6 +16,7 @@ struct ProfileDetailsSheet: View {
     var onClose: () -> Void
 
     @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.toasts) private var toasts
     @Environment(\.colorScheme) private var scheme
 
     @AppStorage("settings.user.displayName") private var displayName: String = ""
@@ -702,15 +703,34 @@ struct ProfileDetailsSheet: View {
         let activity = activityLevelRaw
         let sexValue = sexRaw
 
+        // Kolejka do stałej PRZED zadaniem: `onClose()` leci kilka linijek
+        // niżej i środowisko tego arkusza już nie istnieje, gdy `await`
+        // wracają.
+        let toasts = toasts
         Task { @MainActor in
-            await store.saveProfile(
+            let profileSaved = await store.saveProfile(
                 displayName: name.isEmpty ? nil : name,
                 yearOfBirth: year,
                 heightCm: height,
                 weightKg: weight,
                 sex: sexValue.isEmpty ? nil : sexValue
             )
-            await store.saveUserPreferences(activityLevel: activity)
+            let preferencesSaved = await store.saveUserPreferences(activityLevel: activity)
+
+            // Najcichsza awaria w Ustawieniach. `saveProfile` zapisuje do
+            // `UserDefaults` optymistycznie, zanim cokolwiek pójdzie w sieć,
+            // więc karta profilu pokazuje nowe imię niezależnie od tego, czy
+            // zapis doszedł — a następne `users:me` przywraca stare i wygląda
+            // to, jakby aplikacja skasowała zmianę. Warstwa socketu nie melduje
+            // się w `ConnectivityMonitor`, więc nie zapala się nawet pasek
+            // braku sieci. Arkusza już nie ma, więc nie ma gdzie tego napisać
+            // poza kapsułą.
+            if !profileSaved || !preferencesSaved {
+                toasts.error(
+                    "Nie udało się zapisać profilu",
+                    "Zmiany zostały tylko na tym telefonie."
+                )
+            }
         }
 
         onClose()
