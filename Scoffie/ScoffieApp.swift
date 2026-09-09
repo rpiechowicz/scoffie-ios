@@ -226,6 +226,8 @@ struct ScoffieApp: App {
     /// Dynamic Island, a wyspa jest jedna.
     @State private var toastCenter = SCToastCenter()
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
+
+    private var appTheme: AppTheme { AppTheme(rawValue: themeRawValue) ?? .system }
     @Environment(\.scenePhase) private var scenePhase
 
     /// Klucz dla `.task(id:)` uruchamiającego smart startup loader.
@@ -351,8 +353,10 @@ struct ScoffieApp: App {
                 onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
             )
             .scConnectivityToast()
-            .scToastLayer(toastCenter)
-            .preferredColorScheme((AppTheme(rawValue: themeRawValue) ?? .system).colorScheme)
+            // Motyw podany JAWNIE: warstwa toastów mieszka w osobnym oknie,
+            // do którego `preferredColorScheme` nie dociera.
+            .scToastLayer(toastCenter, colorScheme: appTheme.colorScheme)
+            .preferredColorScheme(appTheme.colorScheme)
             .task(id: startupTaskID) {
                 await sessionStore.runStartupIfNeeded()
             }

@@ -90,16 +90,24 @@ enum SCToastMetrics {
 /// klatkę. Pokrętło na potem: `spring(duration:bounce:)` z ±0,1.
 private enum SCToastMotion {
     /// Wyjście z wyspy.
-    static let open = Animation.smooth(duration: 0.48)
+    ///
+    /// Odrobina odbicia (0,08), nie zero. Sprężyna krytycznie tłumiona
+    /// dochodzi do celu bez życia — nic w świecie fizycznym nie zatrzymuje się
+    /// dokładnie tak — i to właśnie czytało się jako „nienaturalne". Osiem
+    /// setnych daje przeregulowanie rzędu 0,06 %, czyli ułamek punktu: nie
+    /// widać odskoku, widać lądowanie.
+    static let open = Animation.spring(duration: 0.62, bounce: 0.08)
     /// Powrót do wyspy — krótszy: przychodzi z namysłem, odchodzi zdecydowanie.
-    static let close = Animation.smooth(duration: 0.34)
+    /// Tu odbicia NIE MA: przeregulowanie przy wyspie wystawiłoby czerń ponad
+    /// jej krawędź.
+    static let close = Animation.smooth(duration: 0.54)
     /// Podmiana treści na otwartej kapsule (zmienia się tylko wysokość).
-    static let resize = Animation.smooth(duration: 0.40)
+    static let resize = Animation.spring(duration: 0.50, bounce: 0.06)
     /// Powrót po przeciągnięciu, które nie zamknęło.
-    static let settle = Animation.smooth(duration: 0.28)
+    static let settle = Animation.smooth(duration: 0.34)
     /// Reduce Motion: wyłącznie krycie.
-    static let fadeIn = Animation.easeOut(duration: 0.20)
-    static let fadeOut = Animation.easeIn(duration: 0.16)
+    static let fadeIn = Animation.easeOut(duration: 0.24)
+    static let fadeOut = Animation.easeIn(duration: 0.18)
 }
 
 /// Gładki próg 0→1 z zerowym nachyleniem na obu końcach.
@@ -132,28 +140,50 @@ private func smoothstep(_ x: CGFloat) -> CGFloat {
 private struct SCToastChoreography {
     let progress: CGFloat
 
-    /// Udział wysokości — prowadzi, gotowy przy 0,7.
-    var height: CGFloat { smoothstep(progress / 0.70) }
-    /// Odklejenie górnej krawędzi od wyspy: rusza przy 0,15, gotowe przy 0,7.
-    var detach: CGFloat { smoothstep((progress - 0.15) / 0.55) }
+    // Cała GEOMETRIA kończy się przy 0,82, nie przy 0,70 — i to jest
+    // odpowiedź na „za szybko przeskakuje".
+    //
+    // Samo wydłużenie sprężyny tego nie załatwiło: przy pasmach kończących się
+    // na 0,70 wydłużenie z 0,48 s do 0,62 s przesunęło koniec ruchu ze 186 ms
+    // na 226 ms, czyli o 40 ms, a całe pozostałe 140 ms wpadło w przenikanie
+    // tekstu i narastanie cienia — czyli w rzeczy, o których nikt nie mówił,
+    // że są za szybkie. Dopiero przesunięcie pasm w górę oddaje ten czas
+    // RUCHOWI: teraz kropla wychodzi z wyspy, zjeżdża i rozlewa się przez
+    // 284 ms zamiast 186.
+    /// Udział wysokości — prowadzi.
+    var height: CGFloat { smoothstep(progress / 0.82) }
+    /// Odklejenie górnej krawędzi od wyspy.
+    var detach: CGFloat { smoothstep((progress - 0.15) / 0.67) }
     /// Szerokość — dopiero gdy górna krawędź wychodzi z pasa systemu.
     ///
     /// Rząd ikon systemu (zegarek do x≈75, bateria od x≈300) kończy się na
-    /// y≈34, a górna krawędź kapsuły schodzi poniżej tego dopiero przy
-    /// p≈0,42. Do p=0,32 szerokość stoi na 126 pt, czyli DOKŁADNIE w obrysie
-    /// wyspy — kapsuła nie kładzie ani jednego czarnego piksela bliżej
-    /// zegarka, niż leży sama wyspa.
-    var width: CGFloat { smoothstep((progress - 0.32) / 0.38) }
-    /// Krycie treści — startuje DOKŁADNIE tam, gdzie szerokość dobiega końca
-    /// (0,70). Te dwa pasma nie mogą na siebie zachodzić: okno przycięcia
-    /// odsłania kółko z glifem przy p≈0,63, więc treść, która zaczęłaby się
-    /// pojawiać wcześniej, nie przenikałaby, tylko wysuwała się spod krawędzi
-    /// cięcia. Przy okazji szerokie pasmo daje treści realny czas na zejście
-    /// przy zwijaniu — wcześniejsze 0,18 znikało w 42 ms, czyli w dwóch
-    /// i pół klatce przy 60 Hz, i czytało się jak zgaśnięcie, nie zanik.
-    var reveal: CGFloat { smoothstep((progress - 0.70) / 0.30) }
-    /// Cień i obwódka — wyspa ich nie ma, więc pojawiają się po odklejeniu.
-    var settle: CGFloat { smoothstep((progress - 0.55) / 0.45) }
+    /// y≈34, a górna krawędź kapsuły schodzi poniżej tego przy p≈0,48 —
+    /// i ma tam ledwie 165 pt szerokości, czyli od x=114 do x=279. Do p=0,36
+    /// szerokość stoi na 126 pt, czyli DOKŁADNIE w obrysie wyspy: kapsuła nie
+    /// kładzie ani jednego piksela bliżej zegarka, niż leży sama wyspa.
+    var width: CGFloat { smoothstep((progress - 0.36) / 0.46) }
+    /// Krycie treści — dopiero gdy okno przycięcia odsłoni kółko z glifem
+    /// (p≈0,72, wraz z łukiem końca kapsuły). Treść, która pojawiłaby się
+    /// wcześniej, nie przenikałaby, tylko wysuwała spod krawędzi cięcia.
+    var reveal: CGFloat { smoothstep((progress - 0.82) / 0.18) }
+    /// Cień i obwódka — wyspa ich nie ma, więc zaczynają się dopiero, gdy
+    /// górna krawędź naprawdę wyjdzie spod niej (p≈0,62 → y≈48,7 wobec dolnej
+    /// krawędzi wyspy na 48,33).
+    ///
+    /// I muszą być prawie gotowe RAZEM ze stygnięciem, nie po nim: kapsuła
+    /// w jasnym motywie ma wobec kremowego płótna 1,05 : 1, więc przez chwilę,
+    /// w której jest już biała, a cienia jeszcze nie ma, tekst wygląda jak
+    /// wypisany wprost na tle, bez żadnego pojemnika.
+    var settle: CGFloat { smoothstep((progress - 0.62) / 0.26) }
+    /// Stygnięcie: przejście z czerni wyspy na własną powierzchnię kapsuły.
+    ///
+    /// Ma znaczenie tylko w jasnym motywie i tylko na telefonach z wyspą
+    /// (patrz `needsCooling` w morfie). Kończy się przy 0,82, czyli DOKŁADNIE
+    /// tam, gdzie zaczyna się `reveal` — pismo i glif nigdy nie zmieniają
+    /// więc barwy na oczach. Pasmo jest szerokie z rozmysłem: przy węższym
+    /// przejście trwało 92 ms, czyli pięć klatek, i czytało się jak mrugnięcie,
+    /// a nie jak stygnięcie.
+    var warmth: CGFloat { smoothstep((progress - 0.34) / 0.48) }
 }
 
 /// Kształt kapsuły — pigułka z SUFITEM promienia.
@@ -225,6 +255,24 @@ private struct SCIslandMorph: ViewModifier, Animatable {
     var progress: CGFloat
     let layout: SCToastMetrics.Layout
     let accent: Color
+    /// Barwa, w którą kapsuła stygnie po wyjściu z wyspy. W ciemnym motywie
+    /// to dalej czerń, więc przejście jest tam żadne.
+    let surface: Color
+    /// Czy w ogóle stygnąć.
+    ///
+    /// Czerń na starcie ma sens WYŁĄCZNIE wtedy, gdy jest z czego wychodzić.
+    /// Na telefonie bez wyspy (SE, 13 mini, każdy w orientacji poziomej)
+    /// nie ma czego udawać, a kapsuła i tak wjeżdża kryciem — czarna pigułka
+    /// pojawiająca się na kremie i bielejąca przez ćwierć sekundy byłaby tam
+    /// najbardziej rzucającą się w oczy rzeczą, jaką ten toast robi.
+    ///
+    /// Przy okazji oszczędza dwa mostkowania `UIColor` na klatkę w ciemnym
+    /// motywie, gdzie mieszanie i tak zawsze daje czerń.
+    let needsCooling: Bool
+    /// Docelowe krycie włosa obwódki. W jasnym motywie wyżej, bo tam obwódka
+    /// jest JEDYNĄ rzeczą odcinającą górną krawędź kapsuły: cień jest
+    /// przesunięty o 8 pt w dół i nad kapsułą nie robi nic.
+    let hairline: Double
     /// Ramka kapsuły w układzie okna, mierzona TU — WEWNĄTRZ przesunięcia,
     /// więc razem z nim. Modyfikator zapięty za `offset` widziałby
     /// nieprzesunięte gniazdo układu (tak samo, jak `.background` po
@@ -262,22 +310,28 @@ private struct SCIslandMorph: ViewModifier, Animatable {
             content.opacity(Double(c.reveal))
         }
         .clipShape(SCToastCapsuleShape())
-        // Cień rzuca sam czarny kształt, nie grupa z tekstem — taniej i bez
+        // Cień rzuca sam kształt, nie grupa z tekstem — taniej i bez
         // `compositingGroup`. Zgaszony, póki kapsuła siedzi na wyspie: wyspa
         // nie rzuca cienia, a ciemna poświata wokół niej w pierwszych klatkach
         // była tym samym rodzajem błędu, co odrzucona kolorowa.
         .background {
             SCToastCapsuleShape()
-                .fill(.black)
+                .fill(needsCooling ? Color.black.mix(with: surface, by: c.warmth) : surface)
                 .shadow(color: .black.opacity(Double(0.34 * c.settle)), radius: 16, x: 0, y: 8)
         }
-        // Włos obwódki, nie obrys. 0,28, nie 0,16: przy 0,16 wychodziło
+        // Włos obwódki, nie obrys.
+        //
+        // W ciemnym motywie 0,28, a nie dawne 0,16: przy 0,16 wychodziło
         // 1,18–1,26 : 1, czyli dokładnie tyle, co ciemne płótno pod spodem
-        // (1,15 : 1) — w ciemnym motywie kapsuła nie miała krawędzi w ogóle,
-        // tylko cień. W jasnym motywie kremowe płótno i tak ją odcina.
+        // (1,15 : 1) — kapsuła nie miała krawędzi w ogóle, tylko cień.
+        //
+        // W jasnym MOCNIEJ, bo tam ten włos pracuje najciężej: ciepła biel
+        // kapsuły ma wobec kremowego płótna 1,05 : 1, cień jest przesunięty
+        // w dół i nad górną krawędzią nie robi nic, a nad kartą (te też są
+        // #FFFCF6) obwódka zostaje jedyną granicą, jaka istnieje.
         .overlay {
             SCToastCapsuleShape()
-                .strokeBorder(accent.opacity(Double(0.28 * c.settle)), lineWidth: 0.8)
+                .strokeBorder(accent.opacity(hairline * Double(c.settle)), lineWidth: 1)
         }
         // Kształt dotyku i pomiar ramki TU, przed `offset` — w układzie
         // współrzędnych samej kapsuły, więc jadą razem z nią. Gesty zapięte
@@ -317,6 +371,19 @@ struct SCToastHost: View {
     var onFrameChange: (CGRect) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Motyw dociera tu przez `overrideUserInterfaceStyle` nałożone na OKNO
+    /// toastu — samo `preferredColorScheme` aplikacji nie sięga innego okna,
+    /// więc bez tego wymuszony jasny motyw przy ciemnym systemie dawałby
+    /// czarną kapsułę na kremowym ekranie.
+    @Environment(\.colorScheme) private var scheme
+
+    /// Barwa, w którą kapsuła stygnie po wyjściu z wyspy, i pismo na niej.
+    private var surface: Color { scheme == .dark ? .black : SCPalette.Toast.surfaceLight }
+    private var ink: Color { scheme == .dark ? .white : SCPalette.Toast.inkLight }
+    /// W ciemnym motywie kapsuła jest czarna od początku do końca, więc nie ma
+    /// z czego stygnąć.
+    private var needsCooling: Bool { scheme != .dark }
+    private var hairlineOpacity: Double { scheme == .dark ? 0.28 : 0.40 }
 
     /// Treść w kapsule. ZOSTAJE po zamknięciu — kapsuła zwija się z tym, co
     /// pokazywała, więc nic nie przeskakuje w trakcie zwijania — i jest
@@ -408,6 +475,11 @@ struct SCToastHost: View {
             progress: progress,
             layout: layout,
             accent: displayed?.style.accent ?? .clear,
+            surface: surface,
+            // Stygnięcie tylko tam, gdzie jest z czego stygnąć — na telefonie
+            // bez wyspy czarna pigułka na kremie nie ma żadnego uzasadnienia.
+            needsCooling: needsCooling && layout.hasIsland,
+            hairline: hairlineOpacity,
             onFrame: { rect in
                 frameBox.rect = rect
                 if isPresented {
@@ -438,7 +510,7 @@ struct SCToastHost: View {
             // Kółko z glifem podmienia się przez przenikanie CAŁEGO kółka
             // (tożsamość po stylu) — bez interpolacji barwy, bez efektów
             // symboli, bez własnej sprężyny. Wchodzi razem z tekstem.
-            // Krążek PEŁNY, z glifem wyciętym w czerni kapsuły.
+            // Krążek PEŁNY, z glifem wyciętym w POWIERZCHNI kapsuły.
             //
             // Wcześniej stały tu trzy warstwy przepisane z `scSoftSurface`
             // (wypełnienie 0,18, obwódka 0,45, glif w akcencie) — a te liczby
@@ -453,10 +525,15 @@ struct SCToastHost: View {
             // i glify), znika rozlewanie, a sam glif staje się DZIURĄ —
             // dokładnie tym, czym jest wyspa, którą kapsuła udaje.
             // `.heavy` zostaje: pismo wycięte czyta się cieńsze, niż jest.
+            //
+            // Glif bierze barwę POWIERZCHNI, nie stałą czerń — w jasnym
+            // motywie kapsuła jest ciepłą bielą i dziura ma być tą bielą.
+            // Treść pojawia się dopiero po `warmth`, więc barwa nigdy nie
+            // zmienia się na oczach.
             ZStack {
                 Image(systemName: toast.style.icon)
                     .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(surface)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(toast.style.accent))
                     .id(toast.style)
@@ -467,7 +544,7 @@ struct SCToastHost: View {
                 Text(toast.title)
                     .scFont(14.5, weight: .semibold, relativeTo: .subheadline)
                     .tracking(-0.2)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(ink)
                     .lineLimit(2)
                     // Podmiana w miejscu: stare zdanie przenika w nowe.
                     .contentTransition(.opacity)
@@ -475,7 +552,7 @@ struct SCToastHost: View {
                 if let message = toast.message {
                     Text(message)
                         .scFont(12.5, weight: .regular, relativeTo: .caption)
-                        .foregroundStyle(.white.opacity(0.62))
+                        .foregroundStyle(ink.opacity(0.62))
                         .lineLimit(2)
                         .contentTransition(.opacity)
                         .transition(.opacity)
@@ -620,12 +697,12 @@ struct SCToastHost: View {
             .onChanged { value in
                 let dy = value.translation.height
                 // W górę też jest sufit, nie tylko opór w dół. Cała
-                // choreografia pilnuje, żeby czarna kapsuła nie weszła
-                // w rząd ikon systemu — a nieograniczone przeciągnięcie
-                // wsuwało ją tam jednym ruchem palca, na całej szerokości,
-                // i w jasnym motywie zegarek znikał w czerni. 18 pt jest
-                // wyraźnie za progiem zamknięcia (14 pt), więc gest działa
-                // jak wcześniej.
+                // choreografia pilnuje, żeby kapsuła nie weszła w rząd ikon
+                // systemu — a nieograniczone przeciągnięcie wsuwało ją tam
+                // jednym ruchem palca, na całej szerokości. Ani czarna
+                // pigułka w ciemnym motywie, ani biała w jasnym nie ma czego
+                // szukać za zegarkiem. 18 pt jest wyraźnie za progiem
+                // zamknięcia (14 pt), więc gest działa jak wcześniej.
                 dragOffset = dy < 0 ? max(dy, -18) : dy * 0.16
             }
             .onEnded { value in
@@ -664,28 +741,55 @@ private final class SCToastWindow: UIWindow {
 
 /// Zakłada okno toastów przy pierwszym pojawieniu się w scenie.
 ///
-/// Instalacja jest JEDNORAZOWA: kolejka zostaje zamknięta w widoku kontrolera
-/// hostującego, a `updateUIView` nic nie robi. Stoi to na założeniu, że
+/// Okno zakłada się RAZ, a `updateUIView` dowozi mu już tylko motyw. Stoi to
+/// na założeniu, że
 /// `SCToastCenter` w aplikacji jest dokładnie jedno (tworzone w `ScoffieApp`).
 /// Gdyby kiedyś `scToastLayer` dostał inną instancję, okno pokazywałoby dalej
 /// toasty ze starej — po cichu.
 private struct SCToastWindowInstaller: UIViewRepresentable {
     let center: SCToastCenter
+    /// Motyw wybrany w Ustawieniach. `nil` znaczy „jak w systemie".
+    let colorScheme: ColorScheme?
 
-    func makeUIView(context: Context) -> UIView { Installer(toasts: center) }
+    func makeUIView(context: Context) -> UIView {
+        Installer(toasts: center, style: Self.style(for: colorScheme))
+    }
 
-    func updateUIView(_ uiView: UIView, context: Context) {}
+    /// Tu, a nie tylko przy zakładaniu okna: motyw da się przełączyć
+    /// w Ustawieniach w trakcie działania aplikacji.
+    func updateUIView(_ uiView: UIView, context: Context) {
+        (uiView as? Installer)?.apply(style: Self.style(for: colorScheme))
+    }
+
+    private static func style(for scheme: ColorScheme?) -> UIUserInterfaceStyle {
+        switch scheme {
+        case .light: .light
+        case .dark:  .dark
+        default:     .unspecified
+        }
+    }
 
     private final class Installer: UIView {
         // NIE `center` — `UIView` ma już własne `center` typu `CGPoint`
         // i nazwa po cichu weszłaby z nim w kolizję.
         private let toasts: SCToastCenter
         private var overlay: SCToastWindow?
+        private var style: UIUserInterfaceStyle
 
-        init(toasts: SCToastCenter) {
+        init(toasts: SCToastCenter, style: UIUserInterfaceStyle) {
             self.toasts = toasts
+            self.style = style
             super.init(frame: .zero)
             isUserInteractionEnabled = false
+        }
+
+        /// Okno toastu jest OSOBNYM oknem, więc `preferredColorScheme`
+        /// aplikacji do niego nie dociera — bez tego wymuszony w Ustawieniach
+        /// jasny motyw przy ciemnym systemie zostawiałby czarną kapsułę na
+        /// kremowym ekranie.
+        func apply(style: UIUserInterfaceStyle) {
+            self.style = style
+            overlay?.overrideUserInterfaceStyle = style
         }
 
         @available(*, unavailable)
@@ -715,6 +819,7 @@ private struct SCToastWindowInstaller: UIViewRepresentable {
             // jaki motyw wybrał użytkownik. Przy okazji klawiatura i pole
             // tekstowe zostają tam, gdzie były.
             overlay.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue + 1)
+            overlay.overrideUserInterfaceStyle = style
             overlay.isHidden = false
             self.overlay = overlay
         }
@@ -724,10 +829,10 @@ private struct SCToastWindowInstaller: UIViewRepresentable {
 extension View {
     /// Zakłada warstwę toastów nad całą aplikacją i wpina kolejkę do
     /// środowiska, żeby dowolny widok mógł sięgnąć po `@Environment(\.toasts)`.
-    func scToastLayer(_ center: SCToastCenter) -> some View {
+    func scToastLayer(_ center: SCToastCenter, colorScheme: ColorScheme?) -> some View {
         environment(\.toasts, center)
             .background {
-                SCToastWindowInstaller(center: center)
+                SCToastWindowInstaller(center: center, colorScheme: colorScheme)
                     .frame(width: 0, height: 0)
                     .allowsHitTesting(false)
             }

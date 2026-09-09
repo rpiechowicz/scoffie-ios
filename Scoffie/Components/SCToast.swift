@@ -71,13 +71,13 @@ struct SCToast: Identifiable, Equatable {
         /// Nie udało się. Domyślne wyjście dla `errorMessage` ze store.
         case error
 
-        /// Barwa akcentu — z osobnego kompletu strojonego na czerń.
+        /// Barwa akcentu — z osobnego kompletu strojonego pod kapsułę.
         ///
-        /// Kapsuła jest czarna niezależnie od motywu aplikacji (dlaczego —
-        /// patrz `SCToastHost`), a warianty ciemne w `SCPalette` są strojone
-        /// pod `canvasDark`, nie pod #000. Na prawdziwej czerni rozjeżdżały
-        /// się prawie trzykrotnie w jasności — stąd `SCPalette.OnBlack`
-        /// i tam siedzi całe uzasadnienie liczb.
+        /// Kapsuła nie stoi na płótnie: w ciemnym motywie jest czarna, w jasnym
+        /// biała jak karta — a warianty w `SCPalette` są strojone pod płótno.
+        /// Na czerni ta sama czwórka rozjeżdżała się prawie trzykrotnie
+        /// w jasności; stąd `SCPalette.Toast` i tam siedzi całe uzasadnienie
+        /// liczb.
         ///
         /// Znaczenia idą za tym, co paleta już mówi gdzie indziej: szałwia to
         /// „zrobione" (`scChecked`), indygo „informacyjnie" (`scIndigoTint`),
@@ -85,19 +85,20 @@ struct SCToast: Identifiable, Equatable {
         /// róż był tu czwartym lokatorem i najmniej natarczywym kolorem
         /// aplikacji w najbardziej natarczywej robocie.
         ///
-        /// RUSZASZ TE BARWY? Wartości są w `SCPalette.OnBlack`.
+        /// RUSZASZ TE BARWY? Wartości są w `SCPalette.Toast`.
         var accent: Color {
             switch self {
-            case .success: SCPalette.OnBlack.sage
-            case .info:    SCPalette.OnBlack.indigo
-            case .warning: SCPalette.OnBlack.butter
-            case .error:   SCPalette.OnBlack.ember
+            case .success: SCPalette.Toast.sage
+            case .info:    SCPalette.Toast.indigo
+            case .warning: SCPalette.Toast.butter
+            case .error:   SCPalette.Toast.ember
             }
         }
 
         /// Glif WYCIĘTY w krążku. `SCToastHost` wypełnia krążek akcentem
-        /// i rysuje glif w czerni kapsuły, więc kontrast glifu równa się
-        /// kontrastowi akcentu z `SCPalette.OnBlack` — zestrojenie barw
+        /// i rysuje glif w POWIERZCHNI kapsuły (czerń w ciemnym motywie,
+        /// `SCPalette.Toast.surfaceLight` w jasnym), więc kontrast glifu równa
+        /// się kontrastowi akcentu wobec tej powierzchni — zestrojenie barw
         /// zestraja tym samym glify.
         var icon: String {
             switch self {

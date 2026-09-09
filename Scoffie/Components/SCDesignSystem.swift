@@ -101,28 +101,50 @@ enum SCPalette {
         })
     }
 
-    /// Akcenty na CZYSTĄ CZERŃ (#000) — dziś wyłącznie kapsuła toastu.
+    /// Akcenty kapsuły toastu — jedyna powierzchnia w aplikacji, która nie
+    /// stoi na płótnie.
     ///
     /// Drugi komplet liczb dla barw, które paleta już ma, i to jest celowe.
-    /// Warianty ciemne powyżej są strojone pod `canvasDark` (#1A1411), które
-    /// samo ma wobec czerni ledwie 1,15 : 1 — na prawdziwej czerni ta sama
-    /// czwórka rozjeżdża się prawie trzykrotnie: szałwia 10,3 : 1, masło
-    /// 13,7 : 1, a indygo tylko 4,86 : 1. Glif 12 pt w indygo czytał się na
-    /// kapsule jak przybrudzony piksel, a masło przekrzykiwało biały tytuł
-    /// obok. Tutaj cała czwórka stoi w jednym paśmie jasności.
+    /// Warianty w ciemnym motywie są strojone pod `canvasDark` (#1A1411),
+    /// a kapsuła wychodzi z CZERNI — a czerń jest wobec `canvasDark` inną
+    /// planetą (płótno ma wobec niej ledwie 1,15 : 1). Ta sama czwórka
+    /// rozjeżdżała się tam prawie trzykrotnie: szałwia 10,3 : 1, masło
+    /// 13,7 : 1, a indygo tylko 4,86 : 1. Glif 12 pt w indygo czytał się jak
+    /// przybrudzony piksel, a masło przekrzykiwało biały tytuł obok.
     ///
-    /// RUSZASZ `SCPalette.indigo` ALBO `SCPalette.butter`? Zajrzyj i tutaj —
+    /// Warianty jasne są z kolei strojone pod CIEPŁĄ BIEL kapsuły
+    /// (`#FFFCF6`), nie pod krem płótna, i mają nieść glif WYCIĘTY w tej
+    /// bieli — stąd wszystkie są ciemniejsze od swoich odpowiedników
+    /// z palety i wszystkie trzymają wobec niej co najmniej 4,9 : 1.
+    ///
+    /// RUSZASZ `SCPalette.sage`, `.indigo` ALBO `.butter`? Zajrzyj i tutaj —
     /// te wartości nie wynikają z tamtych automatycznie.
-    enum OnBlack {
+    enum Toast {
+        /// Powierzchnia kapsuły w jasnym motywie — ciepła biel karty, nie krem
+        /// płótna, żeby toast czytał się jako coś unoszącego się NAD ekranem.
+        /// W ciemnym motywie kapsuła zostaje czarna: tam czerń jest zgodna
+        /// z wyspą i nic nie zyskałaby na zmianie.
+        static let surfaceLight = Color(red: 255 / 255, green: 252 / 255, blue: 246 / 255) // #FFFCF6
+
+        /// Pismo i glif wycięty w kapsule — po prostu druga strona powierzchni.
+        static let inkLight = Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255)        // #1A1411
+
         /// Sukces. Jedyna, która już była w paśmie — reszta jest strojona
         /// do niej. Szałwia znaczy w tej aplikacji „zrobione" (`scChecked`).
-        static let sage = Color(red: 135 / 255, green: 194 / 255, blue: 165 / 255)   // 10,29 : 1
+        static let sage = SCPalette.dynamicColor(
+            dark:  (135, 194, 165),  // 10,29 : 1 na czerni
+            light: (61, 122, 88)     //  4,97 : 1 na ciepłej bieli kapsuły
+        )
 
         /// Informacja. Ruszona jest przede wszystkim jasność
         /// (oklch 0,585 → 0,719), nasycenie schodzi śladowo (0,134 → 0,121),
         /// barwa stoi w miejscu (274°) — więc nadal jest to rozpoznawalnie
         /// indygo, które znaczy „informacyjnie" (`scIndigoTint`) i „białko".
-        static let indigo = Color(red: 141 / 255, green: 158 / 255, blue: 240 / 255) // 8,28 : 1
+        static let indigo = SCPalette.dynamicColor(
+            dark:  (141, 158, 240),  // 8,28 : 1 na czerni
+            light: (75, 88, 175)     // 6,19 : 1 na ciepłej bieli — tu wariant
+                                     // z palety trafia idealnie
+        )
 
         /// Uwaga. Ściszone, ale ŚWIADOMIE nie do końca — masło zostaje
         /// wyraźnie jaśniejsze od reszty, bo to ono siedzi na trwałym pasku
@@ -134,7 +156,13 @@ enum SCPalette {
         /// czyli najbliższa para w komplecie — i akurat ta, w której pomyłka
         /// kosztuje najwięcej, bo to „zrobione" kontra „nie udało się".
         /// Rozdziela je dopiero glif, dlatego ma zostać ciężki.
-        static let butter = Color(red: 220 / 255, green: 194 / 255, blue: 118 / 255) // 12,02 : 1
+        static let butter = SCPalette.dynamicColor(
+            dark:  (220, 194, 118),  // 12,02 : 1 na czerni
+            light: (142, 102, 24)    //  5,05 : 1 — musztarda ciemniejsza niż
+                                     // `SCPalette.butter` na kremie (3,96 : 1
+                                     // nie uniosłoby wyciętego glifu).
+                                     // Najsłabsze ogniwo kompletu, stąd zapas
+        )
 
         /// Błąd. NOWA barwa, nie ma jej w palecie na płótnie — i tak ma
         /// zostać.
@@ -148,13 +176,19 @@ enum SCPalette {
         /// tej palecie); odpowiedzią jest ciepły alarm zestrojony z resztą,
         /// a nie sięgnięcie po najbliższy róż.
         ///
-        /// Zostaje w `OnBlack` i tylko tam: na płótnie biłaby się z terakotą,
+        /// Zostaje w `Toast` i tylko tam: na płótnie biłaby się z terakotą,
         /// z którą dzieli jasność, a dzieli je raptem 31° barwy.
-        /// Nasycenie podniesione ponad to, co dawał sam alarm: przy tej samej
-        /// jasności i barwie odsuwa embera od szałwii w oczach osoby
-        /// z deuteranopią (ΔE 21,7 → 25,2). Rozjaśnianie działa tu ODWROTNIE —
-        /// jaśniejszy ember zbliża się do szałwii, nie oddala.
-        static let ember = Color(red: 254 / 255, green: 97 / 255, blue: 113 / 255)   // 7,16 : 1
+        ///
+        /// W ciemnym motywie nasycenie podniesione ponad to, co dawał sam
+        /// alarm: przy tej samej jasności i barwie odsuwa embera od szałwii
+        /// w oczach osoby z deuteranopią (ΔE 21,7 → 25,2). Rozjaśnianie
+        /// działa tu ODWROTNIE — jaśniejszy ember zbliża się do szałwii,
+        /// nie oddala.
+        static let ember = SCPalette.dynamicColor(
+            dark:  (254, 97, 113),   // 7,16 : 1 na czerni
+            light: (191, 45, 62)     // 5,60 : 1 na ciepłej bieli — wyraźnie
+                                     // czerwony, nie pomarańczowy jak terakota
+        )
     }
 }
 
@@ -349,7 +383,9 @@ extension Color {
 // z systemowego SwiftUI ma inną listę argumentów — pomyłka w wywołaniu wychodzi
 // wtedy jako „extra argument 'black' in call”, a nie jako cicha podmiana.
 extension Color {
-    /// Interpoluje z inną barwą w liniowym sRGB.
+    /// Interpoluje składowe w zapisie GAMMA sRGB (jak `color-mix in srgb`),
+    /// nie w przestrzeni liniowej — więc połowa drogi to połowa składowych,
+    /// a nie połowa jasności.
     func mix(with other: Color, by fraction: CGFloat) -> Color {
         let f = max(0, min(1, fraction))
 
