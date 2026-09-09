@@ -28,26 +28,43 @@ enum SCToastMetrics {
     /// jest niepotrzebna.
     private static let islandTopFromInset: CGFloat = 48
 
+    /// Prześwit pod pasem systemu na telefonach BEZ wyspy — tam granicą jest
+    /// wcięcie albo sam pasek stanu.
+    private static let belowSystemBand: CGFloat = 8
+
     struct Layout {
-        /// Przesunięcie kapsuły względem GÓRNEJ KRAWĘDZI BEZPIECZNEGO OBSZARU
-        /// — bo w niej, a nie w krawędzi ekranu, ma początek `GeometryReader`
-        /// warstwy toastów. Ujemne wchodzi w pas wyspy, dodatnie schodzi pod
-        /// wcięcie.
-        var topOffset: CGFloat
+        /// Przesunięcie kapsuły ZWINIĘTEJ względem górnej krawędzi
+        /// bezpiecznego obszaru. Ujemne, bo wchodzi w pas wyspy — kapsuła
+        /// startuje dokładnie na niej i dlatego czyta się jak jej część.
+        var collapsedTopOffset: CGFloat
+
+        /// Przesunięcie kapsuły ROZWINIĘTEJ.
+        ///
+        /// I to jest sedno: górny pas ekranu NIE NALEŻY DO APLIKACJI. Wyspę,
+        /// zegarek i baterię system rysuje NAD wszystkim, co rysuje aplikacja,
+        /// więc treść kapsuły, która tam wjechała, po prostu znikała pod nimi.
+        /// Rozwinięta kapsuła schodzi więc pod ten pas w całości; z wyspy
+        /// tylko WYJEŻDŻA, a nie zostaje pod nią.
+        var expandedTopOffset: CGFloat
+
         /// Szerokość kapsuły po rozwinięciu.
         var expandedWidth: CGFloat
-        /// Czy kapsuła naprawdę wyrasta z wyspy, czy tylko zjeżdża z góry.
+
+        /// Czy kapsuła naprawdę wyjeżdża z wyspy, czy tylko zjeżdża z góry.
         var hasIsland: Bool
     }
 
     static func layout(in proxy: GeometryProxy) -> Layout {
         let hasIsland = proxy.safeAreaInsets.top >= islandInsetFloor
-        // Bez wyspy nie ma czego udawać — kapsuła siada tuż POD bezpiecznym
-        // obszarem, żeby nie wejść w zegarek ani we wcięcie.
-        let topOffset = hasIsland ? -islandTopFromInset : 8
         let width = min(proxy.size.width - 28, 384)
         return Layout(
-            topOffset: topOffset,
+            // Zwinięta: dokładnie ramka wyspy. Bez wyspy nie ma czego udawać,
+            // więc kapsuła po prostu rośnie w miejscu tuż pod paskiem stanu.
+            collapsedTopOffset: hasIsland ? -islandTopFromInset : belowSystemBand,
+            // Rozwinięta: przy samej krawędzi bezpiecznego obszaru, czyli
+            // ~11 pt pod dolną krawędzią wyspy. Tyle wystarczy, żeby ani
+            // wyspa, ani zegarek nie miały czego przykryć.
+            expandedTopOffset: hasIsland ? 0 : belowSystemBand,
             expandedWidth: max(width, islandSize.width),
             hasIsland: hasIsland
         )
@@ -84,9 +101,9 @@ struct SCToastHost: View {
     var body: some View {
         // Świadomie BEZ `ignoresSafeArea`: pod nim `GeometryReader` potrafi
         // zgłosić zerowe wcięcia, a to z nich bierze się cała pozycja kapsuły.
-        // Zamiast tego licząc od krawędzi bezpiecznego obszaru wchodzimy
-        // w pas wyspy ujemnym przesunięciem — rysowanie poza tę krawędź
-        // i tak nie jest przycinane.
+        // Zamiast tego wszystko liczy się od krawędzi bezpiecznego obszaru,
+        // a w pas wyspy wchodzi się ujemnym przesunięciem — rysowanie poza tę
+        // krawędź i tak nie jest przycinane.
         GeometryReader { proxy in
             let layout = SCToastMetrics.layout(in: proxy)
 
@@ -96,7 +113,6 @@ struct SCToastHost: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .offset(y: layout.topOffset)
         }
         .task(id: center.current?.id) { await drive() }
         .sensoryFeedback(trigger: shown?.id) { _, _ in
@@ -114,9 +130,9 @@ struct SCToastHost: View {
 
         // Czerń jest dosłowna i nie zmienia się z motywem aplikacji: wyspa
         // to wygaszony fragment ekranu OLED, czyli #000. Kapsuła w cieplejszym
-        // grafitcie (choćby `scPageBase`) pokazałaby przy krawędziach wyspy
-        // szew i cała sztuczka by się rozsypała. Stąd też jasny tekst
-        // w obu motywach — na czerni nie ma innego wyjścia.
+        // grafitcie (choćby `scPageBase`) zdradziłaby się w chwili, w której
+        // wyjeżdża spod wyspy — spod czerni wysuwałby się kolor. Stąd też
+        // jasny tekst w obu motywach: na czerni nie ma innego wyjścia.
         Capsule(style: .continuous)
             .fill(.black)
             .frame(width: width, height: height)
@@ -166,7 +182,10 @@ struct SCToastHost: View {
                         contentHeight = $0
                     }
             }
-            .offset(y: dragOffset)
+            // Pionowa pozycja jedzie TĄ SAMĄ sprężyną, co ramka — stąd jedno
+            // `offset` zamiast osobnego na zewnątrz. Zjazd spod wyspy i
+            // rozwijanie to ma być jeden ruch, a nie dwa obok siebie.
+            .offset(y: dragOffset + (isOpen ? layout.expandedTopOffset : layout.collapsedTopOffset))
             .animation(morph, value: isOpen)
             .animation(morph, value: contentHeight)
             .contentShape(Capsule(style: .continuous))
