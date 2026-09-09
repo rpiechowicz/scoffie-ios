@@ -216,6 +216,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 struct ScoffieApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var sessionStore = SessionStore()
+    /// Kolejka wewnętrznych powiadomień. Jedna na aplikację — kapsuła udaje
+    /// Dynamic Island, a wyspa jest jedna.
+    @State private var toastCenter = SCToastCenter()
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
     @Environment(\.scenePhase) private var scenePhase
 
@@ -291,6 +294,14 @@ struct ScoffieApp: App {
                     .environment(\.datesViewModel, sessionStore.datesViewModel)
                     .environment(\.recipeCatalogStore, recipeCatalogStore)
                     .environment(\.shoppingListStore, shoppingListStore)
+                    // Błędy trzech głównych store zamieniają się w toast tutaj,
+                    // a nie na ekranach, które je wywołały. Wcześniej każdy
+                    // z nich rysował własny czerwony wiersz — widoczny tylko
+                    // na swojej zakładce i rozpychający układ w chwili, gdy
+                    // treść pod spodem i tak się przestawiała.
+                    .scErrorToast(mealStore.errorMessage)
+                    .scErrorToast(recipeCatalogStore.errorMessage)
+                    .scErrorToast(shoppingListStore.errorMessage)
             } else {
                 // Stores nie powinny być nil gdy startupPhase == .ready,
                 // ale na wszelki wypadek pokażemy loader niż pusty ekran.
@@ -313,6 +324,7 @@ struct ScoffieApp: App {
             }
             .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
             .environment(\.sessionStore, sessionStore)
+            .scToastLayer(toastCenter)
             .preferredColorScheme((AppTheme(rawValue: themeRawValue) ?? .system).colorScheme)
             .task(id: startupTaskID) {
                 await sessionStore.runStartupIfNeeded()

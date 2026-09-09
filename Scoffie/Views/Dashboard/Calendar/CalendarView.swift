@@ -566,15 +566,6 @@ struct CalendarView: View {
                 )
                 .padding(.horizontal, SCPageMetrics.horizontal)
                 .padding(.bottom, 6)
-
-                if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, SCPageMetrics.horizontal)
-                        .padding(.bottom, 12)
-                }
             }
 
             DayPager(

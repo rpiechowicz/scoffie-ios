@@ -516,15 +516,6 @@ struct ProductsView: View {
 
     private var shoppingListContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let errorMessage = shoppingListStore.errorMessage, !errorMessage.isEmpty {
-                Text(verbatim: errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, pageHorizontalPadding)
-                    .padding(.top, 12)
-            }
-
             ShoppingProgressHeader(
                 bought: boughtCount,
                 total: activeItems.count,
