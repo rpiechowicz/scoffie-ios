@@ -247,7 +247,7 @@ struct SettingsView: View {
             FAQItem(
                 id: "notif-when",
                 question: "Kiedy wysyłane są przypomnienia?",
-                answer: "Plan tygodniowy: w niedzielę wieczorem, jeśli nie masz jeszcze ułożonego planu na nadchodzący tydzień. Lista zakupów: w piątek rano, jeśli zostały niekupione produkty."
+                answer: "Pory posiłków: tyle przed posiłkiem, ile zajmuje przygotowanie dania — a przy daniach, których się nie gotuje, o samej porze. Podsumowanie dnia: wieczorem, gdy zostały posiłki bez odhaczenia albo jutro nie ma planu. Plan tygodniowy i lista zakupów: gdy domownik skończy wprowadzać zmiany."
             )
         ]),
 
