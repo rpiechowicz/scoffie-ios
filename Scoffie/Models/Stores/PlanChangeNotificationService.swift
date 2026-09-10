@@ -40,6 +40,16 @@ enum NotificationIdentifierPrefix {
     static let shopping = "shopping-change-"
     static let invitation = "invitation-"
     static let household = "household-"
+
+    // Przypomnienia o własnym dniu (`MealReminderService`). Planowane
+    // z wyprzedzeniem, więc identyfikator musi dać się POLICZYĆ z daty
+    // i slotu — inaczej nie dałoby się posprzątać rozkładu bez pytania
+    // systemu, co w nim jeszcze stoi.
+    static let cook = "meal-cook-"
+    static let mealTime = "meal-time-"
+    static let dayWrapUp = "day-wrap-"
+    /// Wątek zwijający wszystkie przypomnienia z jednego dnia w jeden stos.
+    static let dayThread = "meals-"
 }
 
 /// Powiadomienia o tym, co w gospodarstwie zrobił KTOŚ INNY.

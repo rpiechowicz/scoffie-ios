@@ -264,6 +264,75 @@ final class SessionStore {
                 await healthStepsStore.refreshAndSync()
             }
         }
+        // Rozkład przypomnień z tego, co JUŻ jest w pamięci. Świeży plan
+        // dojedzie chwilę później i przeliczy go drugi raz — a gdyby nie
+        // dojechał (offline), przypomnienia i tak stoją na wczorajszej
+        // prawdzie zamiast na niczym.
+        rescheduleMealReminders()
+    }
+
+    // MARK: - Przypomnienia o własnym dniu
+
+    /// Układa systemowe przypomnienia o gotowaniu i porach posiłków
+    /// (`MealReminderService`) z tego, co store planu ma teraz w pamięci.
+    ///
+    /// Mieszka tutaj, bo to jedyne miejsce, w którym spotykają się trzy
+    /// rzeczy potrzebne do ułożenia rozkładu: plan tygodnia
+    /// (`mealCalendarStore`), godziny gospodarstwa (`mealSlotSchedule`)
+    /// i tożsamość użytkownika — bez niej nie da się odróżnić własnego obiadu
+    /// od obiadu domownika.
+    ///
+    /// Wołać można ile razy się chce: serwis układa rozkład od zera.
+    func rescheduleMealReminders() {
+        guard let mealCalendarStore, isAuthenticated else {
+            MealReminderService.cancelAll()
+            return
+        }
+
+        let now = Date()
+        let calendar = PlanWeek.calendar
+        let today = calendar.startOfDay(for: now)
+        // Tydzień, o którym wiemy na pewno, że jest wczytany. Dzień spoza
+        // niego wchodzi do rozkładu tylko wtedy, gdy store ma go w pamięci
+        // z wcześniejszego przeglądania — inaczej „brak posiłków" znaczyłoby
+        // „nie wiem", a wieczorne podsumowanie ogłaszałoby pusty dzień
+        // każdemu, kto po prostu nie zajrzał w przyszły tydzień.
+        let loadedWeek = Set(
+            PlanWeek.dates(from: PlanWeek.monday(of: now)).map(PlanWeek.dateKey)
+        )
+        let userId = currentUserId
+        let schedule = mealSlotSchedule
+
+        var days: [MealReminderService.Day] = []
+        for offset in 0..<MealReminderService.horizonDays {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            let plan = mealCalendarStore.plan(for: date)
+            guard loadedWeek.contains(PlanWeek.dateKey(date)) || !plan.plannedSlots.isEmpty else {
+                continue
+            }
+
+            var meals: [MealReminderService.Meal] = []
+            for slot in mealSlots.visibleSlots(planned: plan.plannedSlots) {
+                var mine = plan.meals(for: slot)
+                if let userId {
+                    mine = mine.visibleTo(memberId: userId)
+                }
+                for meal in mine {
+                    meals.append(
+                        MealReminderService.Meal(
+                            slot: slot,
+                            minutes: schedule.minutes(for: slot),
+                            title: meal.recipe.name,
+                            prepMinutes: max(0, meal.recipe.prepTimeMinutes),
+                            isEaten: meal.isEaten(by: userId)
+                        )
+                    )
+                }
+            }
+            days.append(MealReminderService.Day(date: date, meals: meals))
+        }
+
+        MealReminderService.reschedule(days: days, now: now)
     }
 
     // MARK: - Sign in with Apple
@@ -740,6 +809,10 @@ final class SessionStore {
     }
 
     private func clearRuntimeStores() {
+        // Zaplanowane przypomnienia przeżyłyby wylogowanie: `UNCalendar-
+        // NotificationTrigger` nie wie nic o sesji i odpaliłby cudzy obiad
+        // na telefonie, z którego ktoś już wyszedł.
+        MealReminderService.cancelAll()
         realtimeSocket?.off(event: "households:membersChanged")
         realtimeSocket?.off(event: "households:mealTypesChanged")
         realtimeSocket?.off(event: "households:mealTimesChanged")

@@ -10,6 +10,10 @@ struct SettingsView: View {
     @AppStorage("settings.notifications.enabled") private var notificationsEnabled: Bool = true
     @AppStorage("settings.notifications.planReminders") private var planRemindersEnabled: Bool = true
     @AppStorage("settings.notifications.shoppingReminders") private var shoppingRemindersEnabled: Bool = true
+    // Dwa kanały czysto LOKALNE — planuje je telefon (`MealReminderService`),
+    // więc nie jadą na backend razem z pozostałymi preferencjami.
+    @AppStorage(MealReminderService.Keys.mealReminders) private var mealRemindersEnabled: Bool = true
+    @AppStorage(MealReminderService.Keys.dayWrapUp) private var dayWrapUpEnabled: Bool = true
     @AppStorage("settings.user.displayName") private var userDisplayName: String = "user1"
     @AppStorage("settings.user.email") private var userEmail: String = "user1@example.com"
     @AppStorage("settings.user.avatarUrl") private var userAvatarUrl: String = ""
@@ -243,7 +247,7 @@ struct SettingsView: View {
             FAQItem(
                 id: "notif-when",
                 question: "Kiedy wysyłane są przypomnienia?",
-                answer: "Plan tygodniowy: w niedzielę wieczorem, jeśli nie masz jeszcze ułożonego planu na nadchodzący tydzień. Lista zakupów: w piątek rano, jeśli zostały niekupione produkty."
+                answer: "Pory posiłków: tyle przed posiłkiem, ile zajmuje przygotowanie dania — a przy daniach, których się nie gotuje, o samej porze. Podsumowanie dnia: wieczorem, gdy zostały posiłki bez odhaczenia albo jutro nie ma planu. Plan tygodniowy i lista zakupów: gdy domownik skończy wprowadzać zmiany."
             )
         ]),
 
@@ -541,6 +545,13 @@ struct SettingsView: View {
                             return
                         }
                         await sessionStore.syncNotificationPreferences()
+                    }
+                    // Kanały lokalne nie mają czego wysyłać na serwer, ale
+                    // mają co przeliczyć na telefonie: wyłączony przełącznik
+                    // musi zdjąć rozkład od razu, a nie przy najbliższym
+                    // wyjściu z aplikacji.
+                    .onChange(of: localReminderToken) { _, _ in
+                        sessionStore.rescheduleMealReminders()
                     }
             }
             .task {
@@ -1030,11 +1041,42 @@ struct SettingsView: View {
         .joined()
     }
 
+    /// Przełączniki, które zmieniają WYŁĄCZNIE rozkład na telefonie.
+    /// Główny wyłącznik jest w obu tokenach: gasi i pushe z serwera,
+    /// i przypomnienia planowane lokalnie.
+    private var localReminderToken: String {
+        [
+            notificationsEnabled,
+            mealRemindersEnabled,
+            dayWrapUpEnabled
+        ]
+        .map { $0 ? "1" : "0" }
+        .joined()
+    }
+
     private var notificationChannelsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Kanały")
 
             VStack(spacing: 0) {
+                channelToggleRow(
+                    icon: "flame.fill",
+                    accent: SCPalette.terracotta,
+                    title: "Pory posiłków",
+                    subtitle: "Przypomnienie o gotowaniu tyle przed posiłkiem, ile zajmuje danie. Przy daniach bez gotowania — sama pora.",
+                    isOn: $mealRemindersEnabled,
+                    isLast: false
+                )
+
+                channelToggleRow(
+                    icon: "moon.stars.fill",
+                    accent: SCPalette.lavender,
+                    title: "Podsumowanie dnia",
+                    subtitle: "Wieczorem, gdy zostały posiłki bez odhaczenia albo jutro jest bez planu.",
+                    isOn: $dayWrapUpEnabled,
+                    isLast: false
+                )
+
                 channelToggleRow(
                     icon: "calendar.badge.clock",
                     accent: SCPalette.indigo,
