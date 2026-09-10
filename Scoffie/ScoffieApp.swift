@@ -332,10 +332,10 @@ struct ScoffieApp: App {
             }
             .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
             .environment(\.sessionStore, sessionStore)
-            // Kolejność ma znaczenie: jedno i drugie musi stać POD
+            // Kolejność ma znaczenie: każdy z mostów poniżej musi stać POD
             // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`
             // do środowiska.
-            .scToastDebugTrigger()
+            //
             // Zdarzenia BEZ EKRANU: tura asystenta, która skończyła się, gdy
             // użytkownik patrzył na plan, i zakup dogadany z Apple w tle.
             //
