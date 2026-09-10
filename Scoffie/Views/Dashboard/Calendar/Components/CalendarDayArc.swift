@@ -5,14 +5,14 @@ import SwiftUI
 //
 // Źródło: canvas claude.ai → „Weekly Meals - Kalendarz v4.html”,
 // `components/cal-v4.jsx` (`C4Arc`). Doba 06–23 rozpięta na 270° otwartych
-// u dołu: dania stoją okrągłymi zdjęciami na swoich godzinach, przebyta
-// część doby jest wypełniona, a kropka „teraz” pokazuje, gdzie jesteśmy.
-// W dziurze po środku stoi jedno zdanie o tym, co teraz (`CalendarArcCenter`).
+// u dołu: dania stoją okrągłymi zdjęciami wzdłuż toru, przebyta część doby
+// jest wypełniona, a kropka „teraz” pokazuje, gdzie jesteśmy. W dziurze po
+// środku stoi jedno zdanie o tym, co teraz (`CalendarArcCenter`).
 //
 // Łuk zastąpił poziomą oś (`CalendarDayAxis`) z v2 z jednego powodu: kreska
 // przez całą szerokość ekranu zużywała 350 pt na informację, która mieści
-// się w kole 230 pt — a to, co zostawało pod nią, i tak było puste. Koło
-// oddaje ten sam czas i jeszcze zarabia miejsce na zdanie w środku.
+// się w kole — a to, co zostawało pod nią, i tak było puste. Koło oddaje ten
+// sam dzień i jeszcze zarabia miejsce na zdanie w środku.
 //
 // Sześć rzeczy różni ten łuk od makiety:
 //
@@ -26,17 +26,17 @@ import SwiftUI
 //     wypada jego pora, kropka przejmuje KOLOR TEJ PORY i zaczyna oddychać —
 //     ta sama barwa stoi wtedy w obwódce węzła, w środku łuku i w kółku
 //     wiersza na liście. Reguła siedzi w `CalendarDayFocus.nowTint`.
-//  3. **Węzły nigdy się nie stykają.** Śniadanie o 8:00 i drugie śniadanie
-//     o 8:30 dzieli na podziałce 06–23 jakieś 8° — zlewałyby się w plamę.
-//     `Self.spread` rozsuwa je do `minNodeSpacing`, zachowując kolejność dnia
-//     i trzymając skrajne w granicach łuku. To ta sama procedura, co na
-//     poziomej osi v2, tylko liczona w stopniach zamiast w punktach.
+//  3. **Posiłki stoją w RÓWNYCH odstępach, nie na swoich godzinach.**
+//     Największa różnica wobec makiety i jedyna, która zmienia znaczenie
+//     rysunku — cała reguła i jej uzasadnienie siedzą w `anchors`. Skrót:
+//     zegar dnia nie jest równomierny, więc linijka czasu robiła z łuku
+//     kształt przekrzywiony, choć policzony co do stopnia.
 //  4. **Podpis godziny chowa się pod węzłem, nie tylko pod kropką.** Makieta
-//     ukrywała „12”, gdy nachodziła na nie kropka „teraz” — ale obiad o 12:00
-//     zderzał się z tą samą etykietą dokładnie tak samo.
-//  5. **Podziałka idzie co sześć godzin od początku doby**, a nie na sztywno
-//     06/12/18/23. Dom, który je śniadanie o 5:00, rozciąga zakres łuku —
-//     i wtedy zapisane na sztywno godziny wskazywałyby nie swoje miejsca.
+//     ukrywała podpis, gdy nachodziła na niego kropka „teraz” — ale zdjęcie
+//     dania zderza się z nim dokładnie tak samo.
+//  5. **Podpisane są tylko dwa końce doby**, a nie 06/12/18/23 z makiety.
+//     Powód jest ten sam, co w punkcie 3: skala między posiłkami nie jest
+//     równomierna, więc podpis w środku obiecywałby coś, czego nie ma.
 //  6. **Zdjęcie ma wokół siebie prześwit tła.** Zjedzone danie przygasa,
 //     a wtedy tor doby prześwitywał przez nie na wylot jak rysa. Krążek tła
 //     pod zdjęciem wycina tor tam, gdzie i tak nie miał czego pokazywać.
@@ -90,10 +90,17 @@ struct CalendarDayArc: View {
 
     // MARK: - Wymiary
 
-    /// Projektowa średnica planszy — z makiety.
-    static let defaultSize: CGFloat = 232
+    /// Plansza z makiety — od niej liczą się WSZYSTKIE proporcje (zdjęcie,
+    /// grubość toru, kropka, pismo w środku). Nie mylić z `defaultSize`:
+    /// tamto mówi, jak duży łuk rysujemy, to — w jakich proporcjach.
+    private static let designSize: CGFloat = 232
+
+    /// Średnica, do której łuk dochodzi tam, gdzie jest na nią miejsce.
+    /// Większa od makiety, bo na telefonie zostawało po niej kilkadziesiąt
+    /// punktów pustki z obu stron.
+    static let defaultSize: CGFloat = 280
     /// Najmniejsza, przy której środek jeszcze mieści zdanie.
-    static let minSize: CGFloat = 180
+    static let minSize: CGFloat = 210
 
     /// Doba rysowana domyślnie. Posiłek spoza tych godzin rozciąga zakres,
     /// zamiast wypaść poza łuk.
@@ -106,25 +113,39 @@ struct CalendarDayArc: View {
     private static let startAngle: Double = 135
     private static let sweep: Double = 270
 
+    /// Ile łuku zostaje wolne przed pierwszym posiłkiem i za ostatnim.
+    ///
+    /// Bez tego marginesu śniadanie siedziałoby dokładnie na końcu toru
+    /// i kropka „teraz" o 6:30 nie miałaby gdzie stanąć przed nim — a poranek
+    /// przed pierwszym posiłkiem to normalny stan dnia, nie wyjątek.
+    private static let endMargin: Double = 0.12
+
     /// Prześwit między dwoma zdjęciami stojącymi obok siebie na torze.
-    /// Osiem, nie sześć — patrz `minNodeSpacing`.
     private static let nodeGap: CGFloat = 8
     /// Jak blisko musi stanąć węzeł albo kropka, żeby zgasić podpis godziny.
     private static let tickHideDegrees: Double = 16
+
+    /// Proporcje względem `designSize`: zdjęcie 36 pt, tor 8, kropka 11.
+    private static let nodeRatio: CGFloat = 36 / designSize
+    private static let trackRatio: CGFloat = 8 / designSize
+    private static let dotRatio: CGFloat = 11 / designSize
 
     private var c: CGFloat { size / 2 }
     /// Promień, na którym stoją podpisy godzin — tuż przy krawędzi planszy.
     private var hourRadius: CGFloat { c - 9 }
     /// Promień toru. Liczony OD KRAWĘDZI do środka, a nie odwrotnie: podpis
     /// godziny musi się zmieścić na planszy także wtedy, gdy łuk zjeżdża do
-    /// 180 pt, a to on jest najdalej od środka.
+    /// `minSize`, a to on jest najdalej od środka.
     private var radius: CGFloat { hourRadius - nodeSize * 0.52 }
-    private var nodeSize: CGFloat { (size * 34 / CalendarDayArc.defaultSize).rounded() }
-    private var trackWidth: CGFloat { max(5, size * 8 / CalendarDayArc.defaultSize) }
-    private var dotSize: CGFloat { max(9, (size * 11 / CalendarDayArc.defaultSize).rounded()) }
-    /// Pismo w środku zjeżdża razem z planszą, ale nie poniżej 0,82 —
-    /// mniejsze przestaje być czytelne, a i tak ma własny `minimumScaleFactor`.
-    private var textScale: CGFloat { min(1, max(0.82, size / CalendarDayArc.defaultSize)) }
+    private var nodeSize: CGFloat { (size * Self.nodeRatio).rounded() }
+    private var trackWidth: CGFloat { max(5, size * Self.trackRatio) }
+    private var dotSize: CGFloat { max(9, (size * Self.dotRatio).rounded()) }
+    /// Pismo w środku NIE rośnie razem z planszą — zostaje przy rozmiarach
+    /// z makiety, bo to one były strojone pod czytanie, a nie pod średnicę.
+    /// Zjeżdża tylko wtedy, gdy łuk schodzi poniżej makiety, i nie niżej niż
+    /// do 0,82: mniejsze przestaje być czytelne, a i tak ma własny
+    /// `minimumScaleFactor`.
+    private var textScale: CGFloat { min(1, max(0.82, size / Self.designSize)) }
 
     /// Sinus kąta startowego — o tyle poniżej środka wypadają oba końce łuku.
     private static let endsSin: CGFloat = 0.7071
@@ -243,29 +264,20 @@ struct CalendarDayArc: View {
 
     // MARK: - Podziałka godzin
 
-    /// Godziny podpisane na łuku: co sześć od początku doby plus jej koniec.
+    /// Dwa podpisy: godzina, o której doba się na łuku zaczyna, i ta, o której
+    /// się kończy. Domyślnie 06 i 23.
     ///
-    /// Domyślny zakres 06–23 daje dokładnie 06/12/18/23 z makiety. Dom, który
-    /// je poza tymi godzinami, rozciąga zakres — i wtedy podziałka jedzie za
-    /// nim, zamiast wskazywać nie swoje miejsca. Przedostatni podpis znika,
-    /// jeśli stanąłby zbyt blisko końcowego.
+    /// Makieta miała jeszcze 12 i 18 w środku i miały sens, dopóki łuk był
+    /// linijką czasu. Odkąd posiłki dostały równe odstępy (patrz `anchors`),
+    /// czas między nimi rozciąga się i ściska — podpis „12" wypadałby wtedy
+    /// raz bliżej, raz dalej od „06", obiecując równomierność, której już
+    /// nie ma. Zostają końce, bo one się nie ruszają i mówią dokładnie to,
+    /// co trzeba: tu dzień się zaczyna, tam kończy.
     private var hourTicks: [Int] {
         let bounds = domain
         let lower = bounds.lower / 60
         let upper = bounds.upper / 60
-        guard upper > lower else { return [lower] }
-
-        var ticks: [Int] = []
-        var hour = lower
-        while hour < upper {
-            ticks.append(hour)
-            hour += 6
-        }
-        if let last = ticks.last, upper - last < 3 {
-            ticks.removeLast()
-        }
-        ticks.append(upper)
-        return ticks
+        return upper > lower ? [lower, upper] : [lower]
     }
 
     /// Podpis godziny. Gaśnie kryciem, a nie zniknięciem: kropka „teraz”
@@ -435,23 +447,100 @@ struct CalendarDayArc: View {
     // MARK: - Geometria
 
     /// Zakres doby, który łuk ma pokryć. Domyślnie 06–23 jak w makiecie,
-    /// rozciągany, gdy dom je poza tymi godzinami.
+    /// rozciągany o pełną godzinę, gdy dom je poza tymi porami.
+    ///
+    /// Rozciągany o godzinę, a nie „do pierwszego posiłku": oba końce muszą
+    /// zostać ŚCIŚLE przed pierwszym i za ostatnim daniem, bo to na nich
+    /// opiera się skala (`anchors`). Śniadanie o 06:00 przy zakresie
+    /// zaczynającym się też o 06:00 dawałoby odcinek o zerowej szerokości.
     ///
     /// „Teraz” zakresu NIE rozciąga: o 02:00 kropka siada na początku łuku
-    /// i to jest prawda („doba jeszcze się nie zaczęła”), a rozciągnięcie
-    /// przestawiłoby całą podziałkę w środku nocy.
+    /// i to jest prawda („doba jeszcze się nie zaczęła”).
     private var domain: (lower: Int, upper: Int) {
         let minutes = nodes.map(\.minutes)
-        let lower = min(Self.dayStart, minutes.min() ?? Self.dayStart)
-        let upper = max(Self.dayEnd, minutes.max() ?? Self.dayEnd)
+        var lower = Self.dayStart
+        var upper = Self.dayEnd
+
+        if let first = minutes.min(), first <= lower {
+            lower = max(0, (first / 60 - 1) * 60)
+        }
+        if let last = minutes.max(), last >= upper {
+            upper = min(24 * 60 - 1, (last / 60 + 1) * 60)
+        }
         return (lower, max(upper, lower + 1))
     }
 
-    private func progress(forMinutes minutes: Int) -> Double {
+    /// Kotwica skali: która minuta doby wypada w którym miejscu łuku (0…1).
+    private struct Anchor {
+        let minutes: Int
+        let position: Double
+    }
+
+    /// Skala łuku — i to jest miejsce, w którym łuk PRZESTAJE być linijką
+    /// czasu.
+    ///
+    /// Posiłki stoją na nim w RÓWNYCH odstępach, bo zegar dnia i tak nie jest
+    /// równomierny: śniadanie o 08:00 dzielą od początku doby dwie godziny,
+    /// a kolację o 20:00 od jej końca trzy. Na linijce czasu wychodziło z tego
+    /// śniadanie zauważalnie niżej niż kolacja i cały łuk czytał się jak
+    /// przekrzywiony, choć był policzony co do stopnia. Rytm dnia niesie
+    /// KOLEJNOŚĆ posiłków, nie odległość w minutach — więc to kolejność
+    /// dostaje równe odstępy.
+    ///
+    /// Czas nie znika: rozciąga się i ściska MIĘDZY posiłkami. Kropka „teraz"
+    /// dalej mówi prawdę — o 09:41 stoi między śniadaniem a obiadem dokładnie
+    /// tam, gdzie wypada proporcją. Zmienia się tylko to, że godzina drogi
+    /// przed obiadem może być na łuku dłuższa niż godzina drogi po nim.
+    private var anchors: [Anchor] {
         let bounds = domain
-        let span = Double(bounds.upper - bounds.lower)
-        let ratio = Double(minutes - bounds.lower) / span
-        return min(1, max(0, ratio))
+        let mealMinutes = nodes.map(\.minutes).sorted()
+        guard !mealMinutes.isEmpty else {
+            return [Anchor(minutes: bounds.lower, position: 0),
+                    Anchor(minutes: bounds.upper, position: 1)]
+        }
+
+        var result = [Anchor(minutes: bounds.lower, position: 0)]
+        for (index, minutes) in mealMinutes.enumerated() {
+            result.append(Anchor(minutes: minutes, position: mealPosition(index, of: mealMinutes.count)))
+        }
+        result.append(Anchor(minutes: bounds.upper, position: 1))
+        return result
+    }
+
+    /// Miejsce `index`-tego posiłku dnia na łuku. Jedyny posiłek staje
+    /// w szczycie; reszta rozkłada się równo między marginesami.
+    private func mealPosition(_ index: Int, of count: Int) -> Double {
+        guard count > 1 else { return 0.5 }
+
+        // Dzień gęstszy, niż łuk umie pomieścić z marginesami (kilka
+        // wariantów w tej samej porze), oddaje marginesy na rzecz prześwitu
+        // między zdjęciami. Poniżej tego i tak nie ma czego ratować.
+        var margin = Self.endMargin
+        if Self.sweep * (1 - 2 * margin) / Double(count - 1) < minNodeSpacing {
+            margin = 0
+        }
+        return margin + (1 - 2 * margin) * Double(index) / Double(count - 1)
+    }
+
+    /// Minuta doby → miejsce na łuku, po odcinkach między kotwicami.
+    private func progress(forMinutes minutes: Int) -> Double {
+        let points = anchors
+        guard let first = points.first, let last = points.last else { return 0 }
+        if minutes <= first.minutes { return first.position }
+        if minutes >= last.minutes { return last.position }
+
+        for index in 1..<points.count where minutes <= points[index].minutes {
+            let start = points[index - 1]
+            let end = points[index]
+            let width = end.minutes - start.minutes
+            // Odcinek o zerowej szerokości zdarza się, gdy posiłek stoi
+            // dokładnie na granicy zakresu — wtedy po prostu bierzemy jego
+            // miejsce, zamiast dzielić przez zero.
+            guard width > 0 else { return end.position }
+            let ratio = Double(minutes - start.minutes) / Double(width)
+            return start.position + (end.position - start.position) * ratio
+        }
+        return last.position
     }
 
     private func angle(forMinutes minutes: Int) -> Double {
@@ -475,25 +564,31 @@ struct CalendarDayArc: View {
     /// Najmniejszy kąt między środkami dwóch zdjęć, przy którym zostaje
     /// między nimi `nodeGap` prześwitu.
     ///
+    /// Odkąd posiłki rozkładają się równo, nic tu nikogo nie rozsuwa —
+    /// ta liczba jest już tylko progiem, po którym `mealPosition` oddaje
+    /// marginesy przy końcach łuku, żeby dzień z sześcioma wariantami nie
+    /// zlepił zdjęć w jedną plamę.
+    ///
     /// Liczone po ŁUKU, nie po cięciwie — a łuk jest zawsze dłuższy niż
-    /// cięciwa, więc wychodzi z tego odstęp odrobinę ciaśniejszy, niż
-    /// wyglądałoby to na oko. Stąd `nodeGap` z zapasem: przy 232 pt planszy
-    /// różnica między jednym a drugim rachunkiem to pół punktu.
+    /// cięciwa, więc wychodzi z tego próg odrobinę ciaśniejszy, niż
+    /// wyglądałoby to na oko. Stąd `nodeGap` z zapasem: przy planszy
+    /// z makiety różnica między jednym a drugim rachunkiem to pół punktu.
     private var minNodeSpacing: Double {
         Double(nodeSize + Self.nodeGap) / Double(radius) * 180 / Double.pi
     }
 
+    /// Węzły biorą swoje miejsce WPROST z kolejności dnia, a nie z godziny —
+    /// to jest cała różnica między tym łukiem a linijką czasu (patrz
+    /// `anchors`). Równe odstępy wychodzą z rachunku, a nie z rozsuwania po
+    /// fakcie, więc nie ma tu czego poprawiać kolizjami.
     private func layout() -> [Placed] {
         let sorted = nodes.sorted { $0.minutes < $1.minutes }
         guard !sorted.isEmpty else { return [] }
 
-        let degrees = Self.spread(
-            ideal: sorted.map { angle(forMinutes: $0.minutes) },
-            minSpacing: minNodeSpacing,
-            lower: Self.startAngle,
-            upper: Self.startAngle + Self.sweep
-        )
-        return sorted.indices.map { Placed(node: sorted[$0], degrees: degrees[$0]) }
+        return sorted.indices.map { index in
+            let position = mealPosition(index, of: sorted.count)
+            return Placed(node: sorted[index], degrees: Self.startAngle + Self.sweep * position)
+        }
     }
 
     /// Odcisk zawartości łuku — po nim animuje się podmiana dnia i odhaczenie
@@ -505,47 +600,6 @@ struct CalendarDayArc: View {
             .joined(separator: "|")
     }
 
-    /// Rozsuwa węzły tak, żeby żadne dwa nie stały bliżej niż `minSpacing`,
-    /// nie ruszając ich kolejności i nie wypuszczając poza `lower…upper`.
-    ///
-    /// Przejście w przód dopycha każdy węzeł za poprzednika; jeśli ostatni
-    /// wyjdzie za koniec łuku, przejście w tył ściąga cały ogon z powrotem.
-    /// Gdy węzłów jest tyle, że nie mieszczą się nawet ciasno upakowane,
-    /// proporcje przestają cokolwiek znaczyć i rozkładamy je równo — lepiej
-    /// stracić informację o godzinie niż zlepić zdjęcia w jedną plamę.
-    ///
-    /// `static` i bez `self`, żeby dało się to przeczytać (i policzyć
-    /// w głowie) w oderwaniu od widoku. Ta sama procedura jechała na
-    /// poziomej osi v2, tylko w punktach zamiast w stopniach.
-    static func spread(
-        ideal: [Double],
-        minSpacing: Double,
-        lower: Double,
-        upper: Double
-    ) -> [Double] {
-        guard !ideal.isEmpty else { return [] }
-        guard ideal.count > 1 else { return [min(max(ideal[0], lower), upper)] }
-
-        let span = upper - lower
-        let needed = Double(ideal.count - 1) * minSpacing
-        guard needed <= span else {
-            let step = span / Double(ideal.count - 1)
-            return ideal.indices.map { lower + Double($0) * step }
-        }
-
-        var values = ideal.map { min(max($0, lower), upper) }
-        for index in 1..<values.count {
-            values[index] = max(values[index], values[index - 1] + minSpacing)
-        }
-
-        if let last = values.last, last > upper {
-            values[values.count - 1] = upper
-            for index in stride(from: values.count - 2, through: 0, by: -1) {
-                values[index] = min(values[index], values[index + 1] - minSpacing)
-            }
-        }
-        return values
-    }
 }
 
 // MARK: - Kropka „teraz”

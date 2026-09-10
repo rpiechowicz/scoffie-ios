@@ -282,18 +282,30 @@ struct CalendarView: View {
         }
     }
 
-    /// Średnica łuku. Projektowe 232 pt tam, gdzie jest na nie miejsce;
-    /// na krótszym telefonie łuk zjeżdża, żeby zostało co najmniej kilka
-    /// wierszy listy pod nim.
+    /// Średnica łuku — tak duża, jak pozwala na to WYSOKOŚĆ zakładki,
+    /// przycięta jeszcze jej szerokością.
     ///
-    /// Liczone z wysokości zakładki, a nie z modelu telefonu: ta sama
-    /// aplikacja stoi na iPhonie SE i na Pro Max, a między nimi jest 190 pt
-    /// różnicy — dokładnie tyle, ile waży cały łuk.
+    /// Liczone z wymiarów zakładki, a nie z modelu telefonu: ta sama
+    /// aplikacja stoi na iPhonie SE i na Pro Max, a między nimi jest prawie
+    /// 200 pt różnicy w pionie — mniej więcej tyle, ile waży cały łuk.
+    /// Na krótkim ekranie schodzi do `minSize`, żeby pod nim zostało miejsce
+    /// na wiersze listy.
+    ///
+    /// Szerokość jest tylko bezpiecznikiem: łuk ma stałą ramkę, więc gdyby
+    /// wyszedł szerszy niż strona, nie skurczyłby się — wystawałby poza
+    /// margines.
     private var arcSize: CGFloat {
-        guard pageHeight > 0 else { return CalendarDayArc.defaultSize }
-        let span = CalendarDayArc.defaultSize - CalendarDayArc.minSize
-        let ratio = min(1, max(0, (pageHeight - 560) / 180))
-        return (CalendarDayArc.minSize + span * ratio).rounded()
+        var size = CalendarDayArc.defaultSize
+
+        if pageHeight > 0 {
+            let span = CalendarDayArc.defaultSize - CalendarDayArc.minSize
+            let ratio = min(1, max(0, (pageHeight - 560) / 180))
+            size = CalendarDayArc.minSize + span * ratio
+        }
+        if pageWidth > 0 {
+            size = min(size, pageWidth - SCPageMetrics.horizontal * 2)
+        }
+        return size.rounded()
     }
 
     /// Co powiedzieć w dziurze po środku łuku — i jaką barwę ma mieć kropka
