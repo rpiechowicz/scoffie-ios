@@ -47,6 +47,9 @@ enum NotificationIdentifierPrefix {
     // systemu, co w nim jeszcze stoi.
     static let cook = "meal-cook-"
     static let mealTime = "meal-time-"
+    /// Trzy sloty doby — po jednym powiadomieniu na każdy.
+    static let dayMorning = "day-morning-"
+    static let daySnack = "day-snack-"
     static let dayWrapUp = "day-wrap-"
     /// Wątek zwijający wszystkie przypomnienia z jednego dnia w jeden stos.
     static let dayThread = "meals-"

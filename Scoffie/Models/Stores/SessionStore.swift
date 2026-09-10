@@ -300,39 +300,101 @@ final class SessionStore {
         let loadedWeek = Set(
             PlanWeek.dates(from: PlanWeek.monday(of: now)).map(PlanWeek.dateKey)
         )
-        let userId = currentUserId
-        let schedule = mealSlotSchedule
-
         var days: [MealReminderService.Day] = []
         for offset in 0..<MealReminderService.horizonDays {
             guard let date = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
-            let plan = mealCalendarStore.plan(for: date)
-            guard loadedWeek.contains(PlanWeek.dateKey(date)) || !plan.plannedSlots.isEmpty else {
-                continue
-            }
+            guard loadedWeek.contains(PlanWeek.dateKey(date))
+                    || !mealCalendarStore.plan(for: date).plannedSlots.isEmpty
+            else { continue }
+            days.append(reminderDay(for: date, store: mealCalendarStore))
+        }
 
-            var meals: [MealReminderService.Meal] = []
-            for slot in mealSlots.visibleSlots(planned: plan.plannedSlots) {
+        MealReminderService.reschedule(
+            days: days,
+            context: MealReminderService.Context(
+                closedStreak: closedDayStreak(store: mealCalendarStore, calendar: calendar, today: today),
+                pendingShoppingItems: shoppingListStore?.items.filter { !$0.isChecked }.count ?? 0
+            ),
+            now: now
+        )
+    }
+
+    /// Jeden dzień planu przełożony na to, czego potrzebują powiadomienia.
+    private func reminderDay(
+        for date: Date,
+        store: MealCalendarStore
+    ) -> MealReminderService.Day {
+        let userId = currentUserId
+        let schedule = mealSlotSchedule
+        let plan = store.plan(for: date)
+        let memberCount = didLoadHouseholdMembers ? max(1, householdMembers.count) : nil
+
+        var meals: [MealReminderService.Meal] = []
+        for slot in mealSlots.visibleSlots(planned: plan.plannedSlots) {
+            var mine = plan.meals(for: slot)
+            if let userId {
+                mine = mine.visibleTo(memberId: userId)
+            }
+            for meal in mine {
+                meals.append(
+                    MealReminderService.Meal(
+                        slot: slot,
+                        minutes: schedule.minutes(for: slot),
+                        title: meal.recipe.name,
+                        prepMinutes: max(0, meal.recipe.prepTimeMinutes),
+                        kcal: Int(
+                            meal.nutritionPerPerson(knownHouseholdMemberCount: memberCount)
+                                .kcal
+                                .rounded()
+                        ),
+                        isFavourite: meal.recipe.favourite,
+                        isEaten: meal.isEaten(by: userId)
+                    )
+                )
+            }
+        }
+        return MealReminderService.Day(date: date, meals: meals)
+    }
+
+    /// Ile dni z rzędu — licząc od dziś wstecz — zostało domkniętych, czyli
+    /// miało posiłki i wszystkie odhaczone.
+    ///
+    /// Dzień BEZ ani jednego posiłku serii nie przerywa i nie liczy się do
+    /// niej. Inaczej weekend bez planu kasowałby każdą serię, a nie ma czego
+    /// domykać w dniu, w którym nic nie stało.
+    ///
+    /// Liczone z lokalnego cache'u planów, więc seria kończy się razem
+    /// z wylogowaniem albo zmianą gospodarstwa — to nie jest odznaka na
+    /// serwerze, tylko miła liczba dla kogoś, kto właśnie domknął dzień.
+    private func closedDayStreak(
+        store: MealCalendarStore,
+        calendar: Calendar,
+        today: Date
+    ) -> Int {
+        let userId = currentUserId
+        var streak = 0
+
+        for offset in 0..<MealReminderService.streakLookbackDays {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { break }
+            let plan = store.plan(for: date)
+            let slots = mealSlots.visibleSlots(planned: plan.plannedSlots)
+
+            var total = 0
+            var eaten = 0
+            for slot in slots {
                 var mine = plan.meals(for: slot)
                 if let userId {
                     mine = mine.visibleTo(memberId: userId)
                 }
-                for meal in mine {
-                    meals.append(
-                        MealReminderService.Meal(
-                            slot: slot,
-                            minutes: schedule.minutes(for: slot),
-                            title: meal.recipe.name,
-                            prepMinutes: max(0, meal.recipe.prepTimeMinutes),
-                            isEaten: meal.isEaten(by: userId)
-                        )
-                    )
-                }
+                total += mine.count
+                eaten += mine.filter { $0.isEaten(by: userId) }.count
             }
-            days.append(MealReminderService.Day(date: date, meals: meals))
-        }
 
-        MealReminderService.reschedule(days: days, now: now)
+            if total == 0 { continue }
+            guard eaten == total else { break }
+            streak += 1
+        }
+        return streak
     }
 
     // MARK: - Sign in with Apple

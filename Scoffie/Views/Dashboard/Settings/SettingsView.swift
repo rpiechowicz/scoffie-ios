@@ -13,6 +13,7 @@ struct SettingsView: View {
     // Dwa kanały czysto LOKALNE — planuje je telefon (`MealReminderService`),
     // więc nie jadą na backend razem z pozostałymi preferencjami.
     @AppStorage(MealReminderService.Keys.mealReminders) private var mealRemindersEnabled: Bool = true
+    @AppStorage(MealReminderService.Keys.morningBriefing) private var morningBriefingEnabled: Bool = true
     @AppStorage(MealReminderService.Keys.dayWrapUp) private var dayWrapUpEnabled: Bool = true
     @AppStorage("settings.user.displayName") private var userDisplayName: String = "user1"
     @AppStorage("settings.user.email") private var userEmail: String = "user1@example.com"
@@ -247,7 +248,7 @@ struct SettingsView: View {
             FAQItem(
                 id: "notif-when",
                 question: "Kiedy wysyłane są przypomnienia?",
-                answer: "Pory posiłków: tyle przed posiłkiem, ile zajmuje przygotowanie dania — a przy daniach, których się nie gotuje, o samej porze. Podsumowanie dnia: wieczorem, gdy zostały posiłki bez odhaczenia albo jutro nie ma planu. Plan tygodniowy i lista zakupów: gdy domownik skończy wprowadzać zmiany."
+                answer: "Doba ma trzy stałe miejsca i w każdym mieści się najwyżej jedno powiadomienie. Rano — przegląd dnia. Po południu — przekąska, jeśli jest w planie. Wieczorem jedno z czterech: niedokończone odhaczanie, zakupy przed jutrzejszym gotowaniem, jutro bez planu albo seria domkniętych dni. Do tego przypomnienia przy samych posiłkach: o gotowaniu tyle wcześniej, ile zajmuje danie, a przy daniach bez gotowania — o samej porze. Plan tygodniowy i lista zakupów odzywają się wtedy, gdy domownik skończy wprowadzać zmiany."
             )
         ]),
 
@@ -1047,6 +1048,7 @@ struct SettingsView: View {
     private var localReminderToken: String {
         [
             notificationsEnabled,
+            morningBriefingEnabled,
             mealRemindersEnabled,
             dayWrapUpEnabled
         ]
@@ -1060,6 +1062,15 @@ struct SettingsView: View {
 
             VStack(spacing: 0) {
                 channelToggleRow(
+                    icon: "sun.horizon.fill",
+                    accent: SCPalette.butter,
+                    title: "Poranny przegląd",
+                    subtitle: "Jedno spojrzenie na dzień, zanim się zacznie: ile posiłków, ile kalorii, czym zaczynasz.",
+                    isOn: $morningBriefingEnabled,
+                    isLast: false
+                )
+
+                channelToggleRow(
                     icon: "flame.fill",
                     accent: SCPalette.terracotta,
                     title: "Pory posiłków",
@@ -1072,7 +1083,7 @@ struct SettingsView: View {
                     icon: "moon.stars.fill",
                     accent: SCPalette.lavender,
                     title: "Podsumowanie dnia",
-                    subtitle: "Wieczorem, gdy zostały posiłki bez odhaczenia albo jutro jest bez planu.",
+                    subtitle: "Wieczorem: niedokończone odhaczanie, zakupy przed jutrzejszym gotowaniem albo seria domkniętych dni.",
                     isOn: $dayWrapUpEnabled,
                     isLast: false
                 )
