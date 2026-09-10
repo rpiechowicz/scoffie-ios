@@ -16,11 +16,14 @@ import SwiftUI
 //
 // Sześć rzeczy różni ten łuk od makiety:
 //
-//  1. **Kropka „teraz” nie ma przy sobie godziny.** W makiecie miała —
-//     i wtedy trzeba było odsuwać ją od zatłoczonych miejsc, żeby nie
-//     wchodziła na zdjęcia. Godzina stoi na pasku stanu telefonu dwa
-//     centymetry wyżej, więc pisanie jej drugi raz nic nie wnosi, a psuje
-//     rysunek. Zostaje sama kropka.
+//  1. **Kropka „teraz” nie ma przy sobie godziny, a pod daniem chowa się
+//     w całości.** W makiecie miała godzinę — i wtedy trzeba było odsuwać ją
+//     od zatłoczonych miejsc, żeby nie wchodziła na zdjęcia. Godzina stoi na
+//     pasku stanu telefonu dwa centymetry wyżej, więc pisanie jej drugi raz
+//     nic nie wnosi, a psuje rysunek. Sama kropka też nie przepycha się ze
+//     zdjęciem: kiedy pora posiłku nadchodzi, wsuwa się pod nie i wraca,
+//     kiedy pora minie — bo wystający zza dania półksiężyc wygląda jak
+//     usterka, a nie jak znacznik.
 //  2. **Kropka zmienia barwę, gdy pora coś zrobić.** Terakota znaczy „jesteś
 //     tutaj”. Kiedy otwiera się okno gotowania następnego posiłku albo
 //     wypada jego pora, kropka przejmuje KOLOR TEJ PORY — ta sama barwa stoi
@@ -37,11 +40,12 @@ import SwiftUI
 //  5. **Podpisane są tylko dwa końce doby**, a nie 06/12/18/23 z makiety.
 //     Powód jest ten sam, co w punkcie 3: skala nie jest jednostajna, więc
 //     podpis w środku obiecywałby równomierność, której nie ma.
-//  6. **Tor chowa się pod zdjęciami, wycięty maską.** Makieta przeciągała
-//     jedną kreskę pod nimi, a że zjedzone danie przygasa, kreska
-//     prześwitywała przez nie jak rysa. Maska tnie ją OKRĘGIEM współśrodkowym
-//     ze zdjęciem, więc kreska po prostu za nim znika — a jedyne dwie
-//     zaokrąglone końcówki, jakie zostają, to te na końcach doby.
+//  6. **Zdjęcie ma pod sobą krążek tła.** Makieta przeciągała kreskę pod
+//     daniami, a że zjedzone danie przygasa, kreska prześwitywała przez nie
+//     jak rysa. Krążek wycina ją tam, gdzie i tak nie miała czego pokazywać.
+//     Tor zostaje przy tym JEDNĄ kreską od początku doby do jej końca —
+//     przerywanie go pod daniami próbowaliśmy dwa razy i za każdym razem
+//     wychodziło gorzej niż nieprzerywanie (patrz `trackLayer`).
 struct CalendarDayArc: View {
     /// Jeden posiłek na łuku.
     ///
@@ -124,8 +128,6 @@ struct CalendarDayArc: View {
 
     /// Prześwit między dwoma zdjęciami stojącymi obok siebie na torze.
     private static let nodeGap: CGFloat = 8
-    /// Prześwit między zdjęciem a kreską toru dokoła niego.
-    private static let trackGap: CGFloat = 5
     /// Jak blisko musi stanąć węzeł albo kropka, żeby zgasić podpis godziny.
     private static let tickHideDegrees: Double = 16
 
@@ -173,18 +175,17 @@ struct CalendarDayArc: View {
         let placed = layout()
 
         ZStack {
-            trackLayer(placed)
+            trackLayer()
 
             ForEach(hourTicks, id: \.self) { hour in
                 hourLabel(hour, hidden: isTickHidden(hour, placed: placed))
             }
 
-            // Kropka „teraz" POD zdjęciami, nie nad nimi. Kiedy pora posiłku
-            // nadchodzi, jedno wchodzi na drugie — i wtedy to danie ma być
-            // widać w całości, a kropka ma tylko wystawać zza niego. Że
-            // „teraz" jest właśnie tutaj, mówi i tak obwódka, która się wtedy
-            // zapala.
-            nowDot
+            // Kropka „teraz" POD zdjęciami, nie nad nimi — i wsuwająca się
+            // pod nie w całości, kiedy pora posiłku nadchodzi. Wtedy to danie
+            // ma być widać w całości, a że „teraz" jest właśnie na nim, mówi
+            // pierścień wybijający spod zdjęcia.
+            nowDot(placed)
 
             ForEach(placed) { item in
                 nodeButton(item)
@@ -219,20 +220,19 @@ struct CalendarDayArc: View {
 
     // MARK: - Tor doby
 
-    /// Tor doby: pusty pod spodem, przebyty na wierzchu, a pod zdjęciami
-    /// wycięty maską.
+    /// Tor doby: pusty pod spodem, przebyty na wierzchu. JEDNA kreska od
+    /// początku doby do jej końca — zdjęcia leżą na niej, a nie w niej.
     ///
-    /// Trzecie podejście do tego samego problemu i pierwsze, które wygląda.
-    /// Ciągła kreska zasłaniana krążkiem tła prześwitywała przez przygaszone
-    /// zdjęcie zjedzonego dania. Tor pocięty na odcinki z zaokrąglonymi
-    /// końcówkami tego nie miał, ale przy grubości 10 pt każda taka końcówka
-    /// robiła się widocznym półkolem — cztery kopułki dokoła łuku wyglądały
-    /// jak usterka, a nie jak wykończenie.
+    /// Były dwa podejścia do przerywania jej pod daniami i oba okazały się
+    /// gorsze od nieprzerywania. Odcinki z zaokrąglonymi końcówkami robiły
+    /// przy grubości 10 pt osiem widocznych półkoli dokoła łuku. Maska tnąca
+    /// okręgiem nie miała tej wady, ale przerwy rozstawione według godzin
+    /// posiłków zmieniały się z dnia na dzień — i tor przestawał czytać się
+    /// jako jedna doba, a zaczynał jako kilka kresek między daniami.
     ///
-    /// Maska tnie kreskę OKRĘGIEM współśrodkowym ze zdjęciem, więc kreska po
-    /// prostu chowa się za daniem — a jedyne dwie zaokrąglone końcówki, jakie
-    /// zostają, to te na obu końcach doby, gdzie mają sens.
-    private func trackLayer(_ placed: [Placed]) -> some View {
+    /// Kreska prześwitująca przez przygaszone zdjęcie zjedzonego dania
+    /// załatwia się prościej: krążkiem tła pod zdjęciem (patrz `thumbnail`).
+    private func trackLayer() -> some View {
         let drawn = didDraw ? elapsed : 0
         let motion: Animation? = reduceMotion ? nil : .easeOut(duration: 0.85)
 
@@ -248,8 +248,6 @@ struct CalendarDayArc: View {
             .opacity(drawn > 0.001 ? 1 : 0)
             .animation(motion, value: drawn)
         }
-        .frame(width: size, height: size)
-        .mask { holeMask(placed) }
     }
 
     /// Łuk od początku doby do `progress` (ułamek jego długości).
@@ -270,25 +268,6 @@ struct CalendarDayArc: View {
             .frame(width: radius * 2, height: radius * 2)
     }
 
-    /// Maska toru: pełna plansza z wyciętym okrągłym otworem pod każdym
-    /// zdjęciem. Otwór jest o `trackGap` szerszy z każdej strony, więc między
-    /// kreską a daniem zostaje prześwit.
-    private func holeMask(_ placed: [Placed]) -> some View {
-        let hole = nodeSize + Self.trackGap * 2
-
-        return ZStack {
-            Rectangle().fill(Color.black)
-
-            ForEach(placed) { item in
-                Circle()
-                    .frame(width: hole, height: hole)
-                    .position(point(degrees(at: item.position), radius: radius))
-                    .blendMode(.destinationOut)
-            }
-        }
-        .frame(width: size, height: size)
-        .compositingGroup()
-    }
 
     /// Ile doby jest już za nami: cała (dzień miniony), do kropki (dzisiaj)
     /// albo nic (dzień przyszły).
@@ -400,24 +379,39 @@ struct CalendarDayArc: View {
             Circle()
                 .strokeBorder(ringColor(node), lineWidth: ringWidth(node))
         )
-        // Danie, na które właśnie przyszła pora, wybija pierścieniem —
-        // jak echosonda. Kropka „teraz" leży wtedy pod zdjęciem, więc to ten
-        // ruch niesie „to jest ten posiłek, teraz", i niesie go barwą, którą
-        // kropka przejmuje w tej samej chwili.
+        // Dwie warstwy pod zdjęciem, w tej kolejności.
+        //
+        // Krążek tła szerszy od zdjęcia wycina pod nim tor doby: zjedzone
+        // danie przygasa, a wtedy kreska przechodząca pod spodem
+        // prześwitywała przez nie jak rysa na ekranie.
+        //
+        // Na nim — a więc NAD krążkiem, ale wciąż pod zdjęciem — danie,
+        // na które właśnie przyszła pora, wybija pierścieniem jak echosonda.
+        // Gdyby leżał głębiej, pierwsza ćwiartka jego drogi chowałaby się za
+        // krążkiem i pierścień pojawiałby się w locie zamiast wychodzić spod
+        // zdjęcia. Kropka „teraz" jest wtedy schowana (patrz `nowDot`), więc
+        // to ten ruch niesie „to jest ten posiłek, teraz" — i niesie go
+        // barwą, którą kropka przejmuje w tej samej chwili.
         //
         // Ruch, a nie kolejna nieruchoma obwódka: zdjęcie ma już jedną
         // (`ringColor`) i druga wokół niej robiła z dania tarczę strzelniczą.
         .background {
-            if isActive(node) {
-                if reduceMotion {
-                    // Bez ruchu zostaje sam pierścień — w miejscu, w którym
-                    // echosonda spędza połowę cyklu.
-                    Circle()
-                        .strokeBorder(node.slot.cozyAccent.opacity(0.45), lineWidth: 2.5)
-                        .frame(width: nodeSize, height: nodeSize)
-                        .scaleEffect(1.22)
-                } else {
-                    ArcActivePing(tint: node.slot.cozyAccent, diameter: nodeSize)
+            ZStack {
+                Circle()
+                    .fill(Color.scPageBase(scheme))
+                    .padding(-2.5)
+
+                if isActive(node) {
+                    if reduceMotion {
+                        // Bez ruchu zostaje sam pierścień — w miejscu,
+                        // w którym echosonda spędza połowę cyklu.
+                        Circle()
+                            .strokeBorder(node.slot.cozyAccent.opacity(0.45), lineWidth: 2.5)
+                            .frame(width: nodeSize, height: nodeSize)
+                            .scaleEffect(1.22)
+                    } else {
+                        ArcActivePing(tint: node.slot.cozyAccent, diameter: nodeSize)
+                    }
                 }
             }
         }
@@ -526,8 +520,9 @@ struct CalendarDayArc: View {
     // MARK: - Kropka „teraz”
 
     @ViewBuilder
-    private var nowDot: some View {
+    private func nowDot(_ placed: [Placed]) -> some View {
         let motion: Animation? = reduceMotion ? nil : .easeInOut(duration: 0.6)
+        let tucked = isNowUnderNode(placed)
 
         if let nowMinutes {
             CalendarNowDot(
@@ -535,6 +530,16 @@ struct CalendarDayArc: View {
                 ring: Color.scPageBase(scheme),
                 diameter: dotSize
             )
+            // Kropka nie wystaje zza dania półksiężycem — wsuwa się pod nie
+            // w całości i wraca, kiedy pora minie.
+            //
+            // Zjazd skalą, nie samym kryciem: kropka ma SCHOWAĆ SIĘ pod
+            // zdjęciem, a nie zniknąć w powietrzu tuż obok niego. Że „teraz"
+            // jest właśnie na tym daniu, mówi wtedy pierścień wybijający spod
+            // zdjęcia — a barwę ma tę samą, którą kropka miała przed chwilą.
+            .scaleEffect(tucked ? 0.35 : 1)
+            .opacity(tucked ? 0 : 1)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.4), value: tucked)
             .position(point(angle(forMinutes: nowMinutes), radius: radius))
             // Kropka pełznie po torze co minutę — bez tego przeskakiwałaby
             // skokiem o pół punktu, co przy oglądaniu ekranu na żywo widać
@@ -543,6 +548,20 @@ struct CalendarDayArc: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
+    }
+
+    /// Czy kropka „teraz" wchodzi właśnie pod któreś zdjęcie.
+    ///
+    /// Liczone geometrią, a nie stanem posiłku, bo to problem czysto
+    /// rysunkowy: przy krótkim gotowaniu (jogurt, 5 min) kropka wjeżdża pod
+    /// danie na długo przed tym, zanim cokolwiek zaczyna się dziać, a przy
+    /// pieczeni zaczyna się dziać, gdy kropka jest jeszcze daleko. Wystarczy,
+    /// że brzeg kropki dotknie brzegu zdjęcia.
+    private func isNowUnderNode(_ placed: [Placed]) -> Bool {
+        guard let nowMinutes else { return false }
+        let now = angle(forMinutes: nowMinutes)
+        let reach = Double(nodeSize / 2 + dotSize / 2) / Double(radius) * 180 / Double.pi
+        return placed.contains { abs(degrees(at: $0.position) - now) < reach }
     }
 
     // MARK: - Geometria
