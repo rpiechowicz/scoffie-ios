@@ -502,9 +502,9 @@ struct CalendarView: View {
                     targets: dailyTargets,
                     // Pigułka liczy ZJEDZONE, więc dzień przed pierwszym
                     // odhaczeniem ma w niej same zera — i nie da się z niej
-                    // odróżnić dnia z planem od dnia pustego. Poświata mówi
-                    // to jednym spojrzeniem, bez dokładania liczby.
-                    hasPlan: !selectedDayMeals.isEmpty,
+                    // odróżnić dnia z planem od dnia pustego. Blada warstwa
+                    // pod każdym torem mówi, dokąd ten dzień ma dojść.
+                    planned: planNutrition(on: selectedDate),
                     action: { simpleSheet = .dayGoal }
                 )
                 .frame(width: goalBarWidth)

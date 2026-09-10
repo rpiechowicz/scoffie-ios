@@ -56,16 +56,17 @@ import SwiftUI
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
-    /// Czy w tym dniu cokolwiek stoi w planie.
+    /// Do ilu dojdzie dzień, jeśli zjeść wszystko, co w nim stoi.
     ///
     /// Pigułka pokazuje ZJEDZONE, więc dzień, którego nikt jeszcze nie
     /// odhaczył, ma w niej same zera — i wygląda identycznie jak dzień,
-    /// w którym nie ma czego jeść. Poświata rozdziela te dwa stany, nie
-    /// dokładając ani jednej liczby: świeci się, kiedy jest po co tu wrócić.
+    /// w którym nie ma czego jeść. Blada warstwa pod każdym torem rozdziela
+    /// te dwa stany, nie dokładając ani jednej liczby: pokazuje, dokąd tor
+    /// dojdzie, tym samym kolorem, tylko ściszonym.
     ///
-    /// Domyślnie wyłączona — Plan tygodnia liczy sam plan, więc jego pigułka
-    /// nie ma czego zapowiadać.
-    var hasPlan: Bool = false
+    /// `nil` w Planie tygodnia — tam pigułka liczy SAM plan, więc zapowiadać
+    /// go drugi raz nie ma czym.
+    var planned: PlanDayNutrition?
     let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -86,15 +87,8 @@ struct PlanDayGoalBar: View {
         let macros = targets.macros
         return "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
             + "|\(targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
-            + "|\(hasPlan)"
-    }
-
-    /// Poświata pod pigułką — barwa kalorii, bo to ona jest tu pierwsza.
-    /// Przezroczysta, gdy dzień nie ma planu: `Color.clear` w cieniu nie
-    /// rysuje niczego, a zostawia co animować przy zmianie dnia.
-    private var planGlow: Color {
-        guard hasPlan else { return .clear }
-        return SCPalette.terracotta.opacity(scheme == .dark ? 0.26 : 0.16)
+            + "|\(planned?.kcal ?? -1).\(planned?.protein ?? -1)"
+            + ".\(planned?.fat ?? -1).\(planned?.carbs ?? -1)"
     }
 
     /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
@@ -110,6 +104,7 @@ struct PlanDayGoalBar: View {
                     title: "Kalorie",
                     value: nutrition.kcal,
                     target: targets.kcal,
+                    plannedValue: planned?.kcal,
                     color: SCMacroPalette.calories,
                     unit: "kilokalorii",
                     accessibilityDetail: remainingDetail,
@@ -141,10 +136,6 @@ struct PlanDayGoalBar: View {
                 Color.scPageBase(scheme).opacity(0.72),
                 in: .rect(cornerRadius: Self.cornerRadius)
             )
-            // Poświata idzie POD szkłem, na warstwie tła — cień rzucony na
-            // sam `glassEffect` obrysowywałby jego krawędź jak obwódka,
-            // a to ma być łuna spod pigułki, nie ramka wokół niej.
-            .shadow(color: planGlow, radius: 18, x: 0, y: 2)
             // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
             // na cyfrach, na literach i na kilku punktach pasków. Padding,
             // przerwy między kolumnami i całe tło szkła były martwe — pigułka
@@ -193,6 +184,7 @@ struct PlanDayGoalBar: View {
                 title: "Białko",
                 value: nutrition.protein,
                 target: targets.macros?.proteinG,
+                plannedValue: planned?.protein,
                 color: SCMacroPalette.protein,
                 animation: Self.animation
             )
@@ -201,6 +193,7 @@ struct PlanDayGoalBar: View {
                 title: "Tłuszcze",
                 value: nutrition.fat,
                 target: targets.macros?.fatG,
+                plannedValue: planned?.fat,
                 color: SCMacroPalette.fat,
                 animation: Self.animation
             )
@@ -209,6 +202,7 @@ struct PlanDayGoalBar: View {
                 title: "Węgle",
                 value: nutrition.carbs,
                 target: targets.macros?.carbsG,
+                plannedValue: planned?.carbs,
                 color: SCMacroPalette.carbs,
                 animation: Self.animation
             )

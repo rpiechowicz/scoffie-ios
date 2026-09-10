@@ -23,8 +23,8 @@ import SwiftUI
 //     rysunek. Zostaje sama kropka.
 //  2. **Kropka zmienia barwę, gdy pora coś zrobić.** Terakota znaczy „jesteś
 //     tutaj”. Kiedy otwiera się okno gotowania następnego posiłku albo
-//     wypada jego pora, kropka przejmuje KOLOR TEJ PORY i zaczyna oddychać —
-//     ta sama barwa stoi wtedy w obwódce węzła, w środku łuku i w kółku
+//     wypada jego pora, kropka przejmuje KOLOR TEJ PORY — ta sama barwa stoi
+//     wtedy w pierścieniu wybijającym spod dania, w środku łuku i w kółku
 //     wiersza na liście. Reguła siedzi w `CalendarDayFocus.nowTint`.
 //  3. **Skrajne posiłki dnia są wyrównane, reszta zostaje na swoich
 //     godzinach.** Największa różnica wobec makiety i jedyna, która zmienia
@@ -37,10 +37,11 @@ import SwiftUI
 //  5. **Podpisane są tylko dwa końce doby**, a nie 06/12/18/23 z makiety.
 //     Powód jest ten sam, co w punkcie 3: skala nie jest jednostajna, więc
 //     podpis w środku obiecywałby równomierność, której nie ma.
-//  6. **Tor jest pocięty na odcinki, po jednym między daniami.** Makieta
-//     przeciągała jedną kreskę pod zdjęciami. Odcinki mają własne zaokrąglone
-//     końcówki, więc kreska domyka się przy każdym daniu tak samo, jak domyka
-//     się na obu końcach doby — i nie trzeba jej zasłaniać krążkiem tła.
+//  6. **Tor chowa się pod zdjęciami, wycięty maską.** Makieta przeciągała
+//     jedną kreskę pod nimi, a że zjedzone danie przygasa, kreska
+//     prześwitywała przez nie jak rysa. Maska tnie ją OKRĘGIEM współśrodkowym
+//     ze zdjęciem, więc kreska po prostu za nim znika — a jedyne dwie
+//     zaokrąglone końcówki, jakie zostają, to te na końcach doby.
 struct CalendarDayArc: View {
     /// Jeden posiłek na łuku.
     ///
@@ -123,11 +124,8 @@ struct CalendarDayArc: View {
 
     /// Prześwit między dwoma zdjęciami stojącymi obok siebie na torze.
     private static let nodeGap: CGFloat = 8
-    /// Odstęp między zdjęciem a końcówką toru po obu jego stronach.
+    /// Prześwit między zdjęciem a kreską toru dokoła niego.
     private static let trackGap: CGFloat = 5
-    /// Krótszego odcinka toru nie ma sensu rysować — sama zaokrąglona
-    /// końcówka wyglądałaby jak zgubiona kropka.
-    private static let minSegment: Double = 0.012
     /// Jak blisko musi stanąć węzeł albo kropka, żeby zgasić podpis godziny.
     private static let tickHideDegrees: Double = 16
 
@@ -175,8 +173,7 @@ struct CalendarDayArc: View {
         let placed = layout()
 
         ZStack {
-            track(placed)
-            elapsedTrack(placed)
+            trackLayer(placed)
 
             ForEach(hourTicks, id: \.self) { hour in
                 hourLabel(hour, hidden: isTickHidden(hour, placed: placed))
@@ -222,50 +219,40 @@ struct CalendarDayArc: View {
 
     // MARK: - Tor doby
 
-    /// Kawałek toru między dwoma zdjęciami.
-    private struct Segment: Identifiable {
-        let id: Int
-        let from: Double
-        let to: Double
-    }
-
-    /// Tor pocięty na odcinki — po jednym między sąsiednimi zdjęciami, plus
-    /// ogonki przed pierwszym i za ostatnim.
+    /// Tor doby: pusty pod spodem, przebyty na wierzchu, a pod zdjęciami
+    /// wycięty maską.
     ///
-    /// Wcześniej tor był jedną nieprzerwaną kreską, a zdjęcia leżały NA niej
-    /// i zasłaniały ją krążkiem tła. Działało, dopóki nie przyjrzeć się
-    /// z bliska: kreska urywała się pod zdjęciem na płasko, bo krążek ją po
-    /// prostu przykrywał. Pocięty tor kończy każdy odcinek WŁASNĄ zaokrągloną
-    /// końcówką, więc po obu stronach każdego dania kreska domyka się tak
-    /// samo, jak domyka się na obu końcach doby.
+    /// Trzecie podejście do tego samego problemu i pierwsze, które wygląda.
+    /// Ciągła kreska zasłaniana krążkiem tła prześwitywała przez przygaszone
+    /// zdjęcie zjedzonego dania. Tor pocięty na odcinki z zaokrąglonymi
+    /// końcówkami tego nie miał, ale przy grubości 10 pt każda taka końcówka
+    /// robiła się widocznym półkolem — cztery kopułki dokoła łuku wyglądały
+    /// jak usterka, a nie jak wykończenie.
     ///
-    /// Przy okazji znika krążek tła spod zdjęcia — a razem z nim jedyne
-    /// miejsce na łuku, które musiało zgadywać kolor tła strony.
-    private func segments(_ placed: [Placed]) -> [Segment] {
-        let hole = nodeHoleHalf
-        var result: [Segment] = []
-        var cursor: Double = 0
+    /// Maska tnie kreskę OKRĘGIEM współśrodkowym ze zdjęciem, więc kreska po
+    /// prostu chowa się za daniem — a jedyne dwie zaokrąglone końcówki, jakie
+    /// zostają, to te na obu końcach doby, gdzie mają sens.
+    private func trackLayer(_ placed: [Placed]) -> some View {
+        let drawn = didDraw ? elapsed : 0
+        let motion: Animation? = reduceMotion ? nil : .easeOut(duration: 0.85)
 
-        for item in placed.sorted(by: { $0.position < $1.position }) {
-            let gapStart = item.position - hole
-            if gapStart - cursor > Self.minSegment {
-                result.append(Segment(id: result.count, from: cursor, to: gapStart))
-            }
-            cursor = max(cursor, item.position + hole)
+        return ZStack {
+            arcStroke(to: 1, color: Color.scLabel(scheme).opacity(0.10))
+
+            arcStroke(
+                to: drawn,
+                color: Color.scLabel(scheme).opacity(scheme == .dark ? 0.26 : 0.28)
+            )
+            // Zerowe wypełnienie i tak nic nie rysuje, ale zaokrąglona
+            // końcówka potrafi przy nim zostawić kropkę na starcie łuku.
+            .opacity(drawn > 0.001 ? 1 : 0)
+            .animation(motion, value: drawn)
         }
-        if 1 - cursor > Self.minSegment {
-            result.append(Segment(id: result.count, from: cursor, to: 1))
-        }
-        return result
+        .frame(width: size, height: size)
+        .mask { holeMask(placed) }
     }
 
-    /// Połowa luki wycinanej w torze pod zdjęciem, w ułamku długości łuku.
-    private var nodeHoleHalf: Double {
-        let span = Double(nodeSize / 2 + Self.trackGap) / Double(radius) * 180 / Double.pi
-        return span / Self.sweep
-    }
-
-    /// Pusty tor całej doby.
+    /// Łuk od początku doby do `progress` (ułamek jego długości).
     ///
     /// `Circle().trim(from: 0, …)` ZACZYNA SIĘ NA GODZINIE TRZECIEJ, nie na
     /// dwunastej — `CGPath(ellipseIn:)` startuje w punkcie `(maxX, midY)`
@@ -275,46 +262,32 @@ struct CalendarDayArc: View {
     /// więc tor i węzły muszą wychodzić z tej samej liczby. Dołożone 90°
     /// przekręcało sam tor o ćwierć obrotu i otwarcie łuku wypadało z lewej
     /// zamiast u dołu — zdjęcia stały wtedy w powietrzu, obok kreski.
-    private func track(_ placed: [Placed]) -> some View {
-        ForEach(segments(placed)) { segment in
-            arc(from: segment.from, to: segment.to)
-                .stroke(
-                    Color.scLabel(scheme).opacity(0.10),
-                    style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
-                )
-                .frame(width: radius * 2, height: radius * 2)
-        }
-    }
-
-    /// Przebyta część doby — te same odcinki, przycięte do „teraz".
-    ///
-    /// Odcinków jest ZAWSZE tyle samo, co w pustym torze, także tych o zerowej
-    /// długości — gdyby pojawiały się i znikały, pierwsze wejście na ekran
-    /// wstawiałoby je od razu gotowe i nie byłoby czego animować. Puste gasi
-    /// krycie, bo zaokrąglona końcówka potrafi przy zerowej długości zostawić
-    /// po sobie kropkę.
-    private func elapsedTrack(_ placed: [Placed]) -> some View {
-        let drawn = didDraw ? elapsed : 0
-        let motion: Animation? = reduceMotion ? nil : .easeOut(duration: 0.85)
-
-        return ForEach(segments(placed)) { segment in
-            let end = max(segment.from, min(segment.to, drawn))
-            arc(from: segment.from, to: end)
-                .stroke(
-                    Color.scLabel(scheme).opacity(scheme == .dark ? 0.26 : 0.28),
-                    style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
-                )
-                .frame(width: radius * 2, height: radius * 2)
-                .opacity(end - segment.from > 0.001 ? 1 : 0)
-                .animation(motion, value: drawn)
-        }
-    }
-
-    /// Kształt odcinka łuku od `from` do `to` (ułamki jego długości).
-    private func arc(from: Double, to: Double) -> some Shape {
+    private func arcStroke(to progress: Double, color: Color) -> some View {
         Circle()
-            .trim(from: from * Self.sweep / 360, to: to * Self.sweep / 360)
-            .rotation(.degrees(Self.startAngle))
+            .trim(from: 0, to: (Self.sweep / 360) * progress)
+            .stroke(color, style: StrokeStyle(lineWidth: trackWidth, lineCap: .round))
+            .rotationEffect(.degrees(Self.startAngle))
+            .frame(width: radius * 2, height: radius * 2)
+    }
+
+    /// Maska toru: pełna plansza z wyciętym okrągłym otworem pod każdym
+    /// zdjęciem. Otwór jest o `trackGap` szerszy z każdej strony, więc między
+    /// kreską a daniem zostaje prześwit.
+    private func holeMask(_ placed: [Placed]) -> some View {
+        let hole = nodeSize + Self.trackGap * 2
+
+        return ZStack {
+            Rectangle().fill(Color.black)
+
+            ForEach(placed) { item in
+                Circle()
+                    .frame(width: hole, height: hole)
+                    .position(point(degrees(at: item.position), radius: radius))
+                    .blendMode(.destinationOut)
+            }
+        }
+        .frame(width: size, height: size)
+        .compositingGroup()
     }
 
     /// Ile doby jest już za nami: cała (dzień miniony), do kropki (dzisiaj)
@@ -427,18 +400,27 @@ struct CalendarDayArc: View {
             Circle()
                 .strokeBorder(ringColor(node), lineWidth: ringWidth(node))
         )
-        // Kołnierz w kolorze pory pod daniem, na które właśnie przyszła
-        // pora. Kropka „teraz" leży wtedy pod zdjęciem, więc to on niesie
-        // „to jest ten posiłek, teraz" — i niesie to samą barwą, którą kropka
-        // przejmuje w tej samej chwili.
-        .background(
-            Circle()
-                .strokeBorder(
-                    node.slot.cozyAccent.opacity(isActive(node) ? 0.28 : 0),
-                    lineWidth: 5
-                )
-                .padding(-4.5)
-        )
+        // Danie, na które właśnie przyszła pora, wybija pierścieniem —
+        // jak echosonda. Kropka „teraz" leży wtedy pod zdjęciem, więc to ten
+        // ruch niesie „to jest ten posiłek, teraz", i niesie go barwą, którą
+        // kropka przejmuje w tej samej chwili.
+        //
+        // Ruch, a nie kolejna nieruchoma obwódka: zdjęcie ma już jedną
+        // (`ringColor`) i druga wokół niej robiła z dania tarczę strzelniczą.
+        .background {
+            if isActive(node) {
+                if reduceMotion {
+                    // Bez ruchu zostaje sam pierścień — w miejscu, w którym
+                    // echosonda spędza połowę cyklu.
+                    Circle()
+                        .strokeBorder(node.slot.cozyAccent.opacity(0.45), lineWidth: 2.5)
+                        .frame(width: nodeSize, height: nodeSize)
+                        .scaleEffect(1.22)
+                } else {
+                    ArcActivePing(tint: node.slot.cozyAccent, diameter: nodeSize)
+                }
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if node.status.isEaten { eatenBadge }
         }
@@ -499,6 +481,37 @@ struct CalendarDayArc: View {
         return node.status == .next ? 2 : 1
     }
 
+    /// Pierścień wybijający spod zdjęcia i gasnący — sygnał „pora na to
+    /// danie".
+    ///
+    /// `autoreverses: false`, więc pierścień nie wraca do środka, tylko
+    /// zaczyna od nowa: powrót widać jako ruch wsteczny, a echosonda ma bić
+    /// zawsze w tę samą stronę. Skok na początek cyklu wypada przy zerowym
+    /// kryciu, czyli poza wzrokiem.
+    ///
+    /// Ramka jest STAŁA, oddycha `scaleEffect` — rosnąca ramka kazałaby
+    /// układowi przeliczać się co klatkę animacji bez końca.
+    private struct ArcActivePing: View {
+        let tint: Color
+        let diameter: CGFloat
+
+        @State private var expanded = false
+
+        var body: some View {
+            Circle()
+                .strokeBorder(tint, lineWidth: 2.5)
+                .frame(width: diameter, height: diameter)
+                .scaleEffect(expanded ? 1.34 : 1)
+                .opacity(expanded ? 0 : 0.65)
+                .animation(
+                    .easeOut(duration: 1.9).repeatForever(autoreverses: false),
+                    value: expanded
+                )
+                .onAppear { expanded = true }
+                .allowsHitTesting(false)
+        }
+    }
+
     private func accessibilityLabel(_ node: Node) -> String {
         var parts = [
             node.slot.title,
@@ -520,8 +533,7 @@ struct CalendarDayArc: View {
             CalendarNowDot(
                 tint: focus.nowTint,
                 ring: Color.scPageBase(scheme),
-                diameter: dotSize,
-                isUrgent: focus.isUrgent && !reduceMotion
+                diameter: dotSize
             )
             .position(point(angle(forMinutes: nowMinutes), radius: radius))
             // Kropka pełznie po torze co minutę — bez tego przeskakiwałaby
@@ -745,62 +757,27 @@ struct CalendarDayArc: View {
 /// od wszystkiego, po czym akurat przejeżdża — od toru i od zdjęcia dania,
 /// jeśli akurat na nie wejdzie.
 ///
-/// Poświata oddycha wyłącznie wtedy, gdy jest co zrobić (pora gotować, pora
-/// jeść). Osobny widok, a nie modyfikator na kropce, bo `repeatForever`
-/// musi się urodzić i umrzeć razem z powodem — animacja bez końca doczepiona
-/// do widoku, który zostaje na ekranie, potrafi przeżyć swój warunek.
+/// Kropka sama nie pulsuje. Miała własną oddychającą poświatę, dopóki leżała
+/// NAD zdjęciami — odkąd chowa się pod nie, w chwili, w której pulsowanie
+/// miałoby sens, i tak nie było jej widać. Ruch przeniósł się tam, gdzie go
+/// widać: na pierścień wybijający spod dania (`ArcActivePing`). Kropce
+/// zostaje sama barwa, ta sama, którą bierze wtedy tamten pierścień.
 private struct CalendarNowDot: View {
     let tint: Color
     let ring: Color
     let diameter: CGFloat
-    let isUrgent: Bool
 
     var body: some View {
-        ZStack {
-            if isUrgent {
-                PulsingHalo(tint: tint, diameter: diameter)
-            }
-
-            Circle()
-                .fill(tint)
-                .frame(width: diameter, height: diameter)
-                .overlay(
-                    Circle().strokeBorder(ring, lineWidth: 2.5)
-                        .padding(-2.5)
-                )
-        }
-        // Barwa przechodzi płynnie: kropka nie „przeskakuje” z terakoty
-        // w kolor pory, tylko dojrzewa do niego przez ćwierć sekundy.
-        .animation(.smooth(duration: 0.45), value: tint)
-        .animation(.smooth(duration: 0.3), value: isUrgent)
-    }
-
-    /// Poświata, która rośnie i gaśnie. Trzyma własny stan, więc każde
-    /// wejście w tryb pilny zaczyna oddech od początku.
-    ///
-    /// Ramka jest STAŁA, a oddycha `scaleEffect` i krycie: rosnąca ramka
-    /// zmieniałaby co klatkę rozmiar kontenera pod `position`, czyli kazałaby
-    /// układowi przeliczać się przez cały czas trwania animacji bez końca.
-    /// Skala i krycie są czystym rysowaniem — układ ich nie widzi.
-    private struct PulsingHalo: View {
-        let tint: Color
-        let diameter: CGFloat
-
-        @State private var expanded = false
-
-        var body: some View {
-            Circle()
-                .fill(tint)
-                .frame(width: diameter * 2.9, height: diameter * 2.9)
-                .scaleEffect(expanded ? 1 : 0.6)
-                .opacity(expanded ? 0.10 : 0.32)
-                .animation(
-                    .easeInOut(duration: 1.7).repeatForever(autoreverses: true),
-                    value: expanded
-                )
-                .onAppear { expanded = true }
-                .transition(.opacity)
-        }
+        Circle()
+            .fill(tint)
+            .frame(width: diameter, height: diameter)
+            .overlay(
+                Circle().strokeBorder(ring, lineWidth: 2.5)
+                    .padding(-2.5)
+            )
+            // Barwa przechodzi płynnie: kropka nie „przeskakuje” z terakoty
+            // w kolor pory, tylko dojrzewa do niego przez ćwierć sekundy.
+            .animation(.smooth(duration: 0.45), value: tint)
     }
 }
 
