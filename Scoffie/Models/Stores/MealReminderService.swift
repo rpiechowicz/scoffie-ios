@@ -146,48 +146,46 @@ enum MealReminderService {
         for meal in day.meals {
             guard !meal.isEaten, let minutes = meal.minutes else { continue }
 
-            let time = MealSlotSchedule.format(minutes)
-            let dish = meal.title
-            let slot = slotPhrase(meal.slot)
-
             if meal.prepMinutes >= minPrepForCookReminder {
                 // Uprzedzenie wychodzi o tyle wcześniej, ile zajmuje danie —
                 // czyli dokładnie wtedy, kiedy trzeba stanąć przy garnkach,
                 // żeby zdążyć na porę.
+                let copy = cookCopy(
+                    dish: meal.title,
+                    slot: meal.slot,
+                    time: MealSlotSchedule.format(minutes),
+                    prep: meal.prepMinutes,
+                    seed: "cook-\(key)-\(meal.slot.rawValue)"
+                )
                 schedule(
                     identifier: "\(NotificationIdentifierPrefix.cook)\(key)-\(meal.slot.rawValue)",
                     at: minutes - meal.prepMinutes,
                     on: day.date,
                     now: now,
                     calendar: calendar,
-                    title: "Pora gotować",
-                    body: "\(dish) — \(slot) o \(time), zajmie \(meal.prepMinutes) min.",
+                    copy: copy,
                     dateKey: key,
                     isQuiet: false
                 )
             } else {
+                let copy = mealTimeCopy(
+                    dish: meal.title,
+                    slot: meal.slot,
+                    time: MealSlotSchedule.format(minutes),
+                    seed: "eat-\(key)-\(meal.slot.rawValue)"
+                )
                 schedule(
                     identifier: "\(NotificationIdentifierPrefix.mealTime)\(key)-\(meal.slot.rawValue)",
                     at: minutes,
                     on: day.date,
                     now: now,
                     calendar: calendar,
-                    title: "Pora jeść",
-                    body: "\(dish) — \(slot) o \(time).",
+                    copy: copy,
                     dateKey: key,
                     isQuiet: false
                 )
             }
         }
-    }
-
-    /// Nazwa pory w środku zdania („… — obiad o 14:00"). Małą literą, ale
-    /// „II śniadanie" zostaje z rzymską dwójką: „ii śniadanie" czyta się jak
-    /// literówka, a nie jak nazwa posiłku.
-    private static func slotPhrase(_ slot: MealSlot) -> String {
-        let title = slot.title
-        guard slot != .secondBreakfast else { return title }
-        return title.prefix(1).lowercased() + String(title.dropFirst())
     }
 
     // MARK: - Wieczorne podsumowanie
@@ -214,8 +212,11 @@ enum MealReminderService {
                 on: day.date,
                 now: now,
                 calendar: calendar,
-                title: "Domknij dzień",
-                body: "Zostały \(PolishPlural.meals(pending)) do odhaczenia.",
+                copy: wrapUpCopy(
+                    pending: pending,
+                    total: day.meals.count,
+                    seed: "wrap-\(key)"
+                ),
                 dateKey: key,
                 isQuiet: true
             )
@@ -236,11 +237,185 @@ enum MealReminderService {
             on: day.date,
             now: now,
             calendar: calendar,
-            title: "Jutro bez planu",
-            body: "Na jutro nie masz nic zaplanowanego. Dzień układa się w Planie tygodnia.",
+            copy: tomorrowCopy(seed: "tomorrow-\(key)"),
             dateKey: key,
             isQuiet: true
         )
+    }
+
+    // MARK: - Treści
+    //
+    // Powiadomienie czyta się przez sekundę i widuje się je codziennie, więc
+    // rządzą tu dwie zasady, których nie ma nigdzie indziej w aplikacji.
+    //
+    // **Mniej niż wiadomo.** Ekran może pokazać porę, kalorie, czas pracy
+    // i godzinę startu naraz; banner ma na to jedną linijkę. Zostaje danie
+    // i powód, dla którego telefon się odezwał — reszta czeka w Kalendarzu,
+    // jedno stuknięcie dalej.
+    //
+    // **Nie to samo co wczoraj.** Ta sama formułka trzy razy dziennie przez
+    // tydzień przestaje być przypomnieniem, a zaczyna być tapetą. Stąd kilka
+    // wariantów na każdy powód i stabilne losowanie między nimi.
+    //
+    // Jedna pułapka warta zapisania: NIGDY nie stawiamy przy nazwie dania
+    // czasownika ani przymiotnika. „Pierogi z truskawkami będzie gotowe"
+    // i „Owsianka gotowy" to ta sama usterka — nazwy dań mają własny rodzaj
+    // i liczbę, a aplikacja ich nie zna. Nazwa dania zostaje osobnym
+    // kawałkiem zdania; odmienia się to, co pochodzi ze slotu, bo slotów
+    // jest sześć i wszystkie są policzone (`slotPhrase`, `slotAccusative`).
+
+    private struct Copy {
+        let title: String
+        let body: String
+    }
+
+    private static func cookCopy(
+        dish: String,
+        slot: MealSlot,
+        time: String,
+        prep: Int,
+        seed: String
+    ) -> Copy {
+        let name = slotPhrase(slot)
+        let accusative = slotAccusative(slot)
+
+        switch variant(seed, of: 4) {
+        case 0:
+            return Copy(
+                title: "Pora do garnków",
+                body: "\(dish) na \(name) o \(time). Gotowanie zajmie \(prep) min."
+            )
+        case 1:
+            return Copy(
+                title: "Czas zacząć",
+                body: "\(dish) — \(prep) min pracy, żeby zdążyć na \(time)."
+            )
+        case 2:
+            return Copy(
+                title: "Kuchnia czeka",
+                body: "\(dish). Zaczynając teraz, zdążysz na \(accusative) o \(time)."
+            )
+        default:
+            return Copy(
+                title: "Pora gotować",
+                body: "\(slot.title) o \(time), \(prep) min przy garnkach. W menu: \(dish)."
+            )
+        }
+    }
+
+    private static func mealTimeCopy(
+        dish: String,
+        slot: MealSlot,
+        time: String,
+        seed: String
+    ) -> Copy {
+        let name = slotPhrase(slot)
+        let accusative = slotAccusative(slot)
+
+        switch variant(seed, of: 4) {
+        case 0:
+            return Copy(title: "Pora jeść", body: "\(dish) — \(name) o \(time). Smacznego.")
+        case 1:
+            return Copy(title: "Czas na \(accusative)", body: "W menu: \(dish).")
+        case 2:
+            return Copy(title: "\(slot.title) o \(time)", body: "\(dish). Smacznego.")
+        default:
+            return Copy(title: "Pora do stołu", body: "\(dish) — \(name) o \(time).")
+        }
+    }
+
+    /// Dzień, w którym nie odhaczono NICZEGO, to inna sytuacja niż dzień
+    /// z jednym niedokończonym posiłkiem — pierwsza znaczy zwykle „nie
+    /// otwierałem apki", druga „zapomniałem o kolacji". Stąd dwie pule.
+    ///
+    /// Czasownik przy liczbie idzie przez `PolishPlural.form`, bo polska
+    /// liczba odmienia nie tylko rzeczownik: „został 1 posiłek", „zostały
+    /// 3 posiłki", ale już „zostało 5 posiłków". Wpisany na sztywno wygląda
+    /// poprawnie dokładnie do czwartego posiłku w dniu.
+    private static func wrapUpCopy(pending: Int, total: Int, seed: String) -> Copy {
+        let meals = PolishPlural.meals(pending)
+
+        if pending == total, total > 1 {
+            switch variant(seed, of: 2) {
+            case 0:
+                return Copy(
+                    title: "Jak minął dzień?",
+                    body: "Ani jeden posiłek nie odhaczony. Odhacz, co zjedzone."
+                )
+            default:
+                return Copy(
+                    title: "Domknij dzień",
+                    body: "Cały dzień czeka na odhaczenie. To chwila."
+                )
+            }
+        }
+
+        let left = PolishPlural.form(pending, one: "Został", few: "Zostały", many: "Zostało")
+        let waits = PolishPlural.form(pending, one: "czeka", few: "czekają", many: "czeka")
+
+        switch variant(seed, of: 3) {
+        case 0:
+            return Copy(title: "Domknij dzień", body: "\(left) \(meals) do odhaczenia.")
+        case 1:
+            return Copy(
+                title: "Zostało niewiele",
+                body: "\(meals) bez odhaczenia — kilka stuknięć i gotowe."
+            )
+        default:
+            return Copy(title: "Koniec dnia", body: "\(meals) \(waits) na odhaczenie.")
+        }
+    }
+
+    private static func tomorrowCopy(seed: String) -> Copy {
+        switch variant(seed, of: 3) {
+        case 0:
+            return Copy(title: "Jutro bez planu", body: "Wieczór to dobry moment, żeby ułożyć jutrzejszy dzień.")
+        case 1:
+            return Copy(title: "Co jutro jemy?", body: "Jutrzejszy dzień jest jeszcze pusty. Ułożysz go w Planie.")
+        default:
+            return Copy(title: "Jutro pusto", body: "Kilka minut teraz i jutro nie trzeba będzie myśleć, co jeść.")
+        }
+    }
+
+    /// Nazwa pory w środku zdania („… — obiad o 14:00"). Małą literą, ale
+    /// „II śniadanie" zostaje z rzymską dwójką: „ii śniadanie" czyta się jak
+    /// literówka, a nie jak nazwa posiłku.
+    private static func slotPhrase(_ slot: MealSlot) -> String {
+        let title = slot.title
+        guard slot != .secondBreakfast else { return title }
+        return title.prefix(1).lowercased() + String(title.dropFirst())
+    }
+
+    /// Pora w bierniku — „zdążysz na kolację", nie „na kolacja".
+    private static func slotAccusative(_ slot: MealSlot) -> String {
+        switch slot {
+        case .breakfast:       return "śniadanie"
+        case .secondBreakfast: return "II śniadanie"
+        case .lunch:           return "obiad"
+        case .afternoonSnack:  return "podwieczorek"
+        case .dinner:          return "kolację"
+        case .snack:           return "przekąskę"
+        }
+    }
+
+    /// Stabilny wybór wariantu treści.
+    ///
+    /// Losowanie odpada z prostego powodu: rozkład przelicza się przy każdym
+    /// wejściu i wyjściu z aplikacji, więc losowy wariant zmieniałby się
+    /// kilka razy dziennie pod tym samym powiadomieniem. Ziarno liczy się
+    /// z dnia i pory — TA SAMA kolacja zawsze mówi to samo, a dwa posiłki
+    /// tego samego dnia prawie zawsze mówią inaczej.
+    ///
+    /// Własny FNV-1a, a nie `hashValue`: standardowy hash Swifta jest solony
+    /// na start procesu, więc po restarcie aplikacji wypadałby inny wariant.
+    private static func variant(_ seed: String, of count: Int) -> Int {
+        guard count > 1 else { return 0 }
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in seed.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return Int(hash % UInt64(count))
     }
 
     // MARK: - Wysyłka
@@ -251,8 +426,7 @@ enum MealReminderService {
         on date: Date,
         now: Date,
         calendar: Calendar,
-        title: String,
-        body: String,
+        copy: Copy,
         dateKey: String,
         isQuiet: Bool
     ) {
@@ -271,8 +445,8 @@ enum MealReminderService {
         guard let fireDate = calendar.date(from: components), fireDate > now else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
+        content.title = copy.title
+        content.body = copy.body
         content.sound = isQuiet ? nil : .default
         // Przypomnienie o porze jest wezwaniem — ma się pokazać na ekranie
         // blokady. Podsumowanie wieczorne jest informacją i może poczekać
