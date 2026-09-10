@@ -556,6 +556,11 @@ struct CalendarView: View {
                     weekStart: datesViewModel.weekStartISO,
                     dates: datesViewModel.dates
                 )
+                // Świeży plan = świeży rozkład przypomnień o gotowaniu.
+                // Hook cyklu życia (`.background`) też go przelicza, ale
+                // dopiero przy wyjściu z aplikacji — a tydzień potrafi
+                // przyjść z serwera zmieniony ręką domownika.
+                sessionStore.rescheduleMealReminders()
             }
             // Kroki dnia spoza kroczącego okna (przeglądanie przeszłości) —
             // leniwy, czysto lokalny odczyt z HealthKit, bez wysyłki.
@@ -890,6 +895,10 @@ struct CalendarView: View {
                 slot: slot,
                 weekStart: datesViewModel.weekStartISO
             )
+            // Odhaczony posiłek nie ma o czym przypominać. Bez tego kolacja
+            // odhaczona po południu i tak zawołałaby wieczorem „pora gotować"
+            // — u kogoś, kto siedzi w aplikacji i właśnie powiedział, że zjadł.
+            sessionStore.rescheduleMealReminders()
         }
     }
 

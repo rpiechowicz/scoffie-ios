@@ -88,6 +88,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             // i kapsuła biją się o ten sam pas ekranu. Push zostaje przy swojej
             // prawdziwej robocie — dosięgnąć człowieka przy zamkniętej apce.
             completionHandler([.list])
+        case .mealReminder:
+            // Baner bez dźwięku. Przypomnienie o gotowaniu jest wezwaniem
+            // i przy zamkniętej apce ma zadzwonić, ale człowiek z telefonem
+            // w ręku nie potrzebuje, żeby mu w tej ręce zawibrował — a łuk
+            // w Kalendarzu mówi mu to samo bez bannera.
+            completionHandler([.banner])
         case .unknown:
             completionHandler([.banner])
         }
@@ -114,7 +120,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             PlanChangeNotificationService.cancelPendingFallback(
                 prefix: NotificationIdentifierPrefix.shopping
             )
-        case .householdMembers, .householdInvitation, .assistantTurn, .unknown:
+        case .householdMembers, .householdInvitation, .assistantTurn, .mealReminder, .unknown:
             break
         }
     }
@@ -175,6 +181,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             Task { @MainActor in
                 sessionStore.refreshRealtimeStoresOnForeground()
             }
+        case .mealReminder:
+            // „Pora gotować" prowadzi do Kalendarza — tam stoi łuk doby
+            // z tym samym posiłkiem, jego godziną i przyciskiem odhaczenia.
+            // Tylko po stuknięciu: powiadomienie, które samo przestawia
+            // zakładkę komuś pod ręką, byłoby napadem, nie przypomnieniem.
+            if tapped {
+                Task { @MainActor in
+                    sessionStore.dashboardTab = .calendar
+                }
+            }
         case .unknown:
             break
         }
@@ -190,6 +206,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case householdInvitation
         /// Odpowiedź asystenta gotowa (`ASSISTANT_TURN_FINISHED`).
         case assistantTurn
+        /// Własny dzień: pora gotować, pora jeść, wieczorne podsumowanie
+        /// (`MealReminderService`). Wyłącznie lokalne — backend takich
+        /// powiadomień nie wysyła, bo to telefon zna rozkład godzin
+        /// gospodarstwa i swoją strefę czasową.
+        case mealReminder
         case unknown
     }
 
@@ -201,6 +222,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if identifier.hasPrefix(NotificationIdentifierPrefix.plan) { return .weeklyPlan }
         if identifier.hasPrefix(NotificationIdentifierPrefix.shopping) { return .shoppingList }
         if identifier.hasPrefix(NotificationIdentifierPrefix.invitation) { return .householdInvitation }
+        // Przypomnienia mają trzy różne prefiksy, więc pyta o nie sam serwis.
+        if MealReminderService.isOurs(identifier) { return .mealReminder }
         if identifier.hasPrefix(NotificationIdentifierPrefix.household) { return .householdMembers }
         return .unknown
     }
@@ -367,6 +390,11 @@ struct ScoffieApp: App {
                 if newValue == .active {
                     sessionStore.refreshRealtimeStoresOnForeground()
                 } else if newValue == .background {
+                    // Chwila, w której powiadomienia lokalne zaczynają być
+                    // jedynym kanałem: aplikacja właśnie przestała być na
+                    // wierzchu, a plan jest świeży po całej sesji. Rozkład
+                    // układa się od zera, więc powtórzenie nic nie kosztuje.
+                    sessionStore.rescheduleMealReminders()
                     // Ostatnia szansa na wysyłkę kroków — w tle obserwator HK
                     // nie działa i dławienie PUT mogło zjeść ostatnią zmianę.
                     // Asercja background taska, bo iOS potrafi zawiesić proces
