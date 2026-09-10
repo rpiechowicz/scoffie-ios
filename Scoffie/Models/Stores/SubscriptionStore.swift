@@ -28,10 +28,6 @@ struct SubscriptionPlan: Identifiable, Equatable {
     /// domu, nie obiecuje niczego ponad limity.
     let audience: String
 
-    var quantityLine: String {
-        "\(messages) wiadomości i \(plans) zapisów planu w miesiącu"
-    }
-
     var fallbackPrice: String {
         let formatter = NumberFormatter()
         formatter.locale = Locale(identifier: "pl_PL")
@@ -101,8 +97,11 @@ final class SubscriptionStore {
     /// trwała — tak, chwilowa — nie, bo Apple ma o niej przypomnieć).
     enum ReportOutcome {
         case accepted
+        /// Serwer ODPOWIEDZIAŁ odmową — komunikat jest zawsze.
         case rejected(String)
-        case postponed(String)
+        /// Nie udało się dowieźć zgłoszenia. `nil` znaczy „to był brak sieci":
+        /// mówi o nim pasek u góry, a nie komunikat przy przycisku.
+        case postponed(String?)
     }
 
     private(set) var products: [StoreKit.Product] = []
@@ -111,6 +110,53 @@ final class SubscriptionStore {
     private(set) var lastError: String?
     /// Stan z serwera: czy zakupy są włączone i co ta osoba już ma.
     private(set) var state: BillingStateDTO?
+
+    /// Powiadomienie o zdarzeniu, które zaszło BEZ EKRANU — zakup dogadany
+    /// z Apple w tle. Zdejmuje je most w korzeniu aplikacji
+    /// (`scBackgroundToast`) i od razu kasuje przez `clearBackgroundNotice()`.
+    private(set) var backgroundNotice: SCToast?
+
+    /// Kasowanie jest niezbędne, nie sprząta: `SCToast` porównuje się po
+    /// treści, więc bez powrotu do `nil` drugie identyczne powiadomienie
+    /// nie zmieniłoby wartości i przepadłoby po cichu.
+    func clearBackgroundNotice() {
+        backgroundNotice = nil
+    }
+
+    /// Transakcje, o których powiedział już ekran zakupu. Bez tego ta sama
+    /// płatność potrafiłaby dać dwie kapsuły: jedną z `PlansSheet`, drugą
+    /// z pętli `Transaction.updates`, gdyby StoreKit podał ją tam ponownie.
+    private var announcedTransactionIDs: Set<UInt64> = []
+
+    /// Mówi o zakupie, który doszedł do skutku POZA ekranem.
+    ///
+    /// Bramkujemy po `Transaction.reason`, a nie po tym, czy stan przed
+    /// zgłoszeniem wyglądał na „bez dostępu". Tamten warunek był nie do
+    /// obronienia: `state` jest `nil` aż do pierwszego `refreshState()`,
+    /// czyli do otwarcia ekranu planu, a StoreKit odtwarza niedomknięte
+    /// transakcje zaraz po starcie — więc comiesięczne odnowienie wyglądało
+    /// jak wejście z braku dostępu w dostęp i mówiło „kupione" bez powodu.
+    /// `reason` to fakt, który podaje sam StoreKit.
+    private func announceIfApprovedInBackground(
+        _ result: VerificationResult<Transaction>,
+        outcome: ReportOutcome
+    ) {
+        guard case .accepted = outcome else { return }
+        let transaction = result.unsafePayloadValue
+        guard transaction.reason == .purchase else { return }
+        guard !announcedTransactionIDs.contains(transaction.id) else { return }
+        announcedTransactionIDs.insert(transaction.id)
+        backgroundNotice = SCToast(
+            style: .success,
+            title: "Asystent odblokowany",
+            message: "Zakup został zatwierdzony."
+        )
+    }
+
+    /// Odnotowuje, że o tej płatności powiedział już ekran zakupu.
+    private func noteAnnouncedOnScreen(_ result: VerificationResult<Transaction>) {
+        announcedTransactionIDs.insert(result.unsafePayloadValue.id)
+    }
 
     /// Czy wolno pobrać pieniądze. Decyduje SERWER, bo tylko on wie, czy umie
     /// potwierdzić transakcję w App Store. Brak odpowiedzi = nie wolno.
@@ -130,9 +176,13 @@ final class SubscriptionStore {
         updatesTask = Task { [weak self] in
             for await result in Transaction.updates {
                 guard let self else { return }
-                // Wynik ląduje w `lastError`; tu nie ma komu go pokazać, a
-                // odmowa trwała i tak domknie transakcję w `handle`.
-                _ = await self.handle(result)
+                // Tędy wchodzi zakup zatwierdzony PÓŹNIEJ — dziecko poprosiło,
+                // rodzic kliknął dwie godziny potem — i zgłoszenie, które Apple
+                // ponowiło przy starcie. W obu przypadkach nie ma ekranu, na
+                // którym dałoby się cokolwiek pokazać, więc powiadomienie idzie
+                // do kolejki toastów przez most z korzenia aplikacji.
+                let outcome = await self.handle(result)
+                self.announceIfApprovedInBackground(result, outcome: outcome)
             }
         }
     }
@@ -187,6 +237,10 @@ final class SubscriptionStore {
                 // co dalej.
                 switch await handle(verification) {
                 case .accepted:
+                    // O tej płatności powie ekran zakupu; pętla
+                    // `Transaction.updates` ma o niej milczeć, gdyby StoreKit
+                    // podał ją tam jeszcze raz.
+                    noteAnnouncedOnScreen(verification)
                     return .purchased
                 case let .rejected(message):
                     return .failed(message)
@@ -255,7 +309,11 @@ final class SubscriptionStore {
     /// jedynym miejscem, które ma prawo rozstrzygać o podpisie, jest serwer
     /// z łańcuchem do przypiętego korzenia Apple.
     private func handle(_ result: VerificationResult<Transaction>) async -> ReportOutcome {
-        guard let client else { return .postponed("Brak połączenia z serwerem.") }
+        // Brak klienta to nie brak sieci — sesja jeszcze nie zbudowała
+        // warstwy zakupów. Dawne „Brak połączenia z serwerem." mówiło tu
+        // nieprawdę i myliło się z jedynym miejscem, które od teraz mówi
+        // o łączności.
+        guard let client else { return .postponed("Zakupy nie są jeszcze gotowe. Spróbuj za chwilę.") }
         do {
             _ = try await client.register(signedTransaction: result.jwsRepresentation)
             await refreshState()
@@ -265,7 +323,7 @@ final class SubscriptionStore {
             lastError = nil
             return .accepted
         } catch {
-            let message = UserFacingErrorMapper.message(from: error)
+            let message = UserFacingErrorMapper.inlineMessage(from: error)
             if Self.isPermanentRefusal(error) {
                 // ODMOWA TRWAŁA MUSI DOMKNĄĆ TRANSAKCJĘ. Otwarta transakcja
                 // wraca w `Transaction.updates` przy KAŻDYM starcie aplikacji,
@@ -277,7 +335,10 @@ final class SubscriptionStore {
                     await transaction.finish()
                 }
                 lastError = message
-                return .rejected(message)
+                // Odmowa trwała zawsze przychodzi Z ODPOWIEDZI serwera, więc
+                // `message` jest tu w praktyce zawsze — zapasowe zdanie stoi
+                // tylko po to, żeby typ się domykał bez wykrzyknika.
+                return .rejected(message ?? "Nie udało się potwierdzić zakupu.")
             }
             // Awaria sieci albo serwera: transakcja ZOSTAJE otwarta, żeby
             // Apple przypomniało o niej przy następnym starcie.

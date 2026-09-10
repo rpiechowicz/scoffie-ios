@@ -2,7 +2,6 @@ import SwiftUI
 
 struct RecipeItemView: View {
     let recipe: Recipe
-    var isInPlanningMode: Bool = false
     var isSelected: Bool = false
     var badgeCount: Int = 0
     var availabilityBadgeText: String? = nil

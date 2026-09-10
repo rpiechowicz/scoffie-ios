@@ -11,7 +11,7 @@ import SwiftUI
 /// **Szkło, nie karta.** Dolne menu na iOS 26 jest z Liquid Glass i pigułka
 /// stoi tuż nad nim, więc musi być z tego samego materiału — kafel z tokenów
 /// `scTileBg` wyglądałby obok niego jak wklejka z innego ekranu. Stąd
-/// `glassEffect` zamiast `dashboardLiquidCard()`, którego używa reszta
+/// `glassEffect` zamiast płaskiego tła, którego używa reszta
 /// aplikacji tam, gdzie karta leży W treści, a nie NAD nią.
 ///
 /// **Treść przewija się pod spodem, ale kończy nad pigułką.** To jest cała
@@ -56,6 +56,17 @@ import SwiftUI
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
+    /// Do ilu dojdzie dzień, jeśli zjeść wszystko, co w nim stoi.
+    ///
+    /// Pigułka pokazuje ZJEDZONE, więc dzień, którego nikt jeszcze nie
+    /// odhaczył, ma w niej same zera — i wygląda identycznie jak dzień,
+    /// w którym nie ma czego jeść. Blada warstwa pod każdym torem rozdziela
+    /// te dwa stany, nie dokładając ani jednej liczby: pokazuje, dokąd tor
+    /// dojdzie, tym samym kolorem, tylko ściszonym.
+    ///
+    /// `nil` w Planie tygodnia — tam pigułka liczy SAM plan, więc zapowiadać
+    /// go drugi raz nie ma czym.
+    var planned: PlanDayNutrition?
     let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -76,6 +87,8 @@ struct PlanDayGoalBar: View {
         let macros = targets.macros
         return "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
             + "|\(targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
+            + "|\(planned?.kcal ?? -1).\(planned?.protein ?? -1)"
+            + ".\(planned?.fat ?? -1).\(planned?.carbs ?? -1)"
     }
 
     /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
@@ -91,6 +104,7 @@ struct PlanDayGoalBar: View {
                     title: "Kalorie",
                     value: nutrition.kcal,
                     target: targets.kcal,
+                    plannedValue: planned?.kcal,
                     color: SCMacroPalette.calories,
                     unit: "kilokalorii",
                     accessibilityDetail: remainingDetail,
@@ -170,6 +184,7 @@ struct PlanDayGoalBar: View {
                 title: "Białko",
                 value: nutrition.protein,
                 target: targets.macros?.proteinG,
+                plannedValue: planned?.protein,
                 color: SCMacroPalette.protein,
                 animation: Self.animation
             )
@@ -178,6 +193,7 @@ struct PlanDayGoalBar: View {
                 title: "Tłuszcze",
                 value: nutrition.fat,
                 target: targets.macros?.fatG,
+                plannedValue: planned?.fat,
                 color: SCMacroPalette.fat,
                 animation: Self.animation
             )
@@ -186,6 +202,7 @@ struct PlanDayGoalBar: View {
                 title: "Węgle",
                 value: nutrition.carbs,
                 target: targets.macros?.carbsG,
+                plannedValue: planned?.carbs,
                 color: SCMacroPalette.carbs,
                 animation: Self.animation
             )

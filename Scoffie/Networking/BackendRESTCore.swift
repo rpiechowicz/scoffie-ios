@@ -65,7 +65,13 @@ final class BackendRESTCore {
         let response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
+            // Odpowiedź przyszła — nieważne z jakim kodem. To jest najmocniejszy
+            // dowód łączności, jaki aplikacja ma, i gasi pasek „Brak połączenia"
+            // natychmiast. Odczyt interfejsu tego nie zastąpi: Wi-Fi z portalem
+            // logowania też jest `satisfied`.
+            ConnectivityMonitor.noteResponse()
         } catch {
+            ConnectivityMonitor.noteTransportFailure()
             throw BackendAPIError.network
         }
         guard let http = response as? HTTPURLResponse else {

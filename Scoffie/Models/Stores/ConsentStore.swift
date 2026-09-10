@@ -105,7 +105,7 @@ final class ConsentStore {
             if case let BackendAPIError.backend(code, status, message) = error {
                 return "\(message ?? UserFacingErrorMapper.message(from: error)) [\(code) \(status)]"
             }
-            return UserFacingErrorMapper.message(from: error)
+            return UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 }

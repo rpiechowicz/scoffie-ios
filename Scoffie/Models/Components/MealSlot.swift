@@ -59,8 +59,6 @@ enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
     /// Posiłki dodatkowe — to je użytkownik dokłada i zdejmuje.
     static let optionalSlots: [MealSlot] = [.secondBreakfast, .afternoonSnack, .snack]
 
-    var isCore: Bool { Self.core.contains(self) }
-
     /// Pozycja w dniu. `allCases` jest już posortowane, ale jawny indeks
     /// przydaje się przy scalaniu list z backendu, gdzie kolejność bywa inna.
     var dayOrder: Int {

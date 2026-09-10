@@ -131,7 +131,7 @@ struct DataExportSheet: View {
                 let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
                 fileSize = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
             } catch {
-                errorMessage = UserFacingErrorMapper.message(from: error)
+                errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }
     }

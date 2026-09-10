@@ -28,11 +28,6 @@ final class RecipeCatalogStore {
     private var pendingRealtimeReloadTask: Task<Void, Never>?
     private var pendingFavoriteTasks: [UUID: Task<Void, Never>] = [:]
     private var pendingFavoriteOriginalState: [UUID: Bool] = [:]
-    /// Odracza pokazanie błędów łączności z `reload()` — patrz komentarz
-    /// w `ConnectivityErrorGate`. Błędy akcji użytkownika (ulubione,
-    /// paginacja) pokazują się bez zmian, od razu.
-    private let connectivityErrorGate = ConnectivityErrorGate()
-
     private var cacheURL: URL { Self.cacheFileURL }
 
     /// Kasuje plik cache — wołane przy wylogowaniu (`SessionStore`), bo plik
@@ -133,7 +128,6 @@ final class RecipeCatalogStore {
         isLoading = true
         isLoadingMore = false
         errorMessage = nil
-        await connectivityErrorGate.reset()
         do {
             // Ekran Przepisów buduje sekcje po kategoriach po stronie klienta,
             // a API sortuje od najnowszych — po rozroście bazy sama pierwsza
@@ -156,12 +150,7 @@ final class RecipeCatalogStore {
             didLoad = true
             saveCache()
         } catch {
-            // Błąd łączności z odświeżenia pokazuje się dopiero, gdy się
-            // utrzyma — reconnect po powrocie z tła gasił go po ~0,3 s
-            // i banner tylko migał.
-            await connectivityErrorGate.publish(error) { [weak self] message in
-                self?.errorMessage = message
-            }
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
         isLoading = false
     }
@@ -186,7 +175,7 @@ final class RecipeCatalogStore {
             hasMore = fetched.receivedCount >= pageSize
             saveCache()
         } catch {
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -209,7 +198,7 @@ final class RecipeCatalogStore {
             saveCache()
             return detailed
         } catch {
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return recipes.first(where: { $0.id == recipeId })
         }
     }
@@ -246,7 +235,7 @@ final class RecipeCatalogStore {
                 if let rollbackIndex = self.recipes.firstIndex(where: { $0.id == recipeId }) {
                     self.recipes[rollbackIndex].favourite = originalState
                 }
-                self.errorMessage = UserFacingErrorMapper.message(from: error)
+                self.errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }
     }

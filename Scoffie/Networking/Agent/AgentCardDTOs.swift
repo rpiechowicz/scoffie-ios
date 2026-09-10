@@ -63,15 +63,11 @@ struct AgentCardStateDTO: Decodable, Equatable {
     let canUndo: Bool
     let until: String?
 
+    /// Jedyny stan, o który ekran kart faktycznie pyta. Reszta wartości
+    /// (`APPLIED`, `UNDONE`, `STALE`, `EXPIRED`, `FAILED`) przyjeżdża
+    /// w `status` i tam zostaje — pomocniki na każdą z nich stały tu bez
+    /// jednego wywołania.
     var isPending: Bool { status == "PENDING" }
-    var isApplied: Bool { status == "APPLIED" }
-    var isUndone: Bool { status == "UNDONE" }
-    var isStale: Bool { status == "STALE" }
-    var isExpired: Bool { status == "EXPIRED" }
-    var isFailed: Bool { status == "FAILED" }
-    /// STALE zapisuje się tylko z `force` — serwer pomija wtedy porównanie
-    /// z odciskiem tygodnia, walidację robi jak zawsze.
-    var requiresForce: Bool { isStale }
 }
 
 struct PlanWeekCardSlotDTO: Decodable, Equatable, Identifiable {

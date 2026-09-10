@@ -26,6 +26,14 @@ struct MacroProgressTrack: View {
     /// Udział celu. Powyżej 1 znaczy „ponad cel" i rysuje drugą warstwę.
     let progress: Double
     let color: Color
+    /// Dokąd tor dojdzie, jeśli zjeść cały dzień z planu — rysowane BLADO,
+    /// pod właściwym wypełnieniem. `nil` = nie ma czego zapowiadać.
+    ///
+    /// Kalendarz liczy zjedzone, więc dzień przed pierwszym odhaczeniem ma
+    /// same zera i wygląda dokładnie jak dzień, w którym nie ma czego jeść.
+    /// Ta warstwa rozdziela te dwa stany, nie dokładając ani jednej liczby:
+    /// pokazuje, dokąd dzień ma dojść, tym samym kolorem, tylko ściszonym.
+    var plannedProgress: Double?
     var height: CGFloat = 3.5
     /// `nil` gasi animację — do miejsc, które sterują ruchem z zewnątrz.
     var animation: Animation? = .spring(response: 0.4, dampingFraction: 0.9)
@@ -41,10 +49,19 @@ struct MacroProgressTrack: View {
             // Sufit na drugiej warstwie: przy 300 % nadmiar i tak domknąłby
             // pasek, a trzecia warstwa niczego już nie dodaje.
             let over = CGFloat(min(max(progress - 1, 0), 1))
+            let planned = CGFloat(min(max(plannedProgress ?? 0, 0), 1))
 
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(Color.scBarTrack(scheme))
+
+                // Plan pod spodem, zjedzone na wierzchu — plan jest tłem dla
+                // wyniku, nie drugim wynikiem. Krycie 0,3: na tyle, żeby
+                // barwę dało się rozpoznać, i na tyle mało, żeby ani przez
+                // chwilę nie dało się jej pomylić z pełnym wypełnieniem.
+                Capsule()
+                    .fill(color.opacity(scheme == .dark ? 0.30 : 0.26))
+                    .frame(width: width * planned, height: height)
 
                 Capsule()
                     .fill(color)
@@ -61,6 +78,7 @@ struct MacroProgressTrack: View {
         }
         .frame(height: height)
         .animation(animation, value: progress)
+        .animation(animation, value: plannedProgress)
         .accessibilityHidden(true)
     }
 }
@@ -99,6 +117,10 @@ struct MacroMeter: View {
     /// zostaje sama wartość, bez toru — pusty pasek obiecywałby cel, którego
     /// nie ma.
     let target: Int?
+    /// Ile wyjdzie po zjedzeniu całego dnia z planu — bladą warstwą pod
+    /// wypełnieniem. `nil` w Planie tygodnia: tam `value` JEST planem, więc
+    /// zapowiadanie go drugi raz niczego nie dodaje.
+    var plannedValue: Int?
     let color: Color
     /// Jednostka w dopełniaczu, wyłącznie do zdania dla VoiceOver
     /// („…z 2100 kilokalorii").
@@ -129,6 +151,14 @@ struct MacroMeter: View {
         return Double(value) / Double(target)
     }
 
+    /// Zapowiedź planu. Znika, gdy plan nie sięga dalej niż to, co już
+    /// zjedzone — blada warstwa schowana pod pełną i tak nic nie pokazuje,
+    /// a przy równych wartościach potrafiłaby wystawać o pół piksela.
+    private var plannedProgress: Double? {
+        guard let target, target > 0, let plannedValue, plannedValue > value else { return nil }
+        return Double(plannedValue) / Double(target)
+    }
+
     private var isOverTarget: Bool { (progress ?? 0) > 1 }
 
     var body: some View {
@@ -148,6 +178,7 @@ struct MacroMeter: View {
                 MacroProgressTrack(
                     progress: progress,
                     color: color,
+                    plannedProgress: plannedProgress,
                     height: Self.trackHeight,
                     animation: animation
                 )

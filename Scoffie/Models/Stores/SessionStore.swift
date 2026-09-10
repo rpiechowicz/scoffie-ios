@@ -104,11 +104,6 @@ final class SessionStore {
     /// żeby Settings / Household sheet otwierało się z gotowymi danymi.
     var householdMembers: [HouseholdMemberSnapshot] = []
     var isLoadingHouseholdMembers: Bool = false
-    /// Cele i ograniczenia domowników — patrz `refreshMemberContext()`.
-    /// Puste, dopóki ktoś o nie nie poprosi; dziś pyta tylko asystent.
-    var memberContext: [BackendMemberContextDTO] = []
-    private var isLoadingMemberContext: Bool = false
-    private var memberContextLoadedAt: Date?
     private(set) var didLoadHouseholdMembers: Bool = false
     /// Kiedy skład gospodarstwa przyszedł z SERWERA (nie z pliku cache).
     ///
@@ -292,7 +287,7 @@ final class SessionStore {
             clearRuntimeStores()
             tearDownSessionSocket()
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
             isAuthenticated = false
             clearRuntimeStores()
             tearDownSessionSocket()
@@ -316,6 +311,9 @@ final class SessionStore {
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
+        // Doszliśmy do serwera — niepowodzenie transportu poleciałoby wyżej
+        // jako `URLError` i zameldowało się w monitorze przez `inlineMessage`.
+        ConnectivityMonitor.noteResponse()
         guard let http = response as? HTTPURLResponse else {
             throw RecipeDataError.serverError(message: "Brak odpowiedzi HTTP z serwera.")
         }
@@ -432,7 +430,7 @@ final class SessionStore {
                 return false
             }
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
 
@@ -1128,7 +1126,7 @@ final class SessionStore {
             await registerPushDeviceIfPossible()
             isAuthenticated = true
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1169,7 +1167,7 @@ final class SessionStore {
             // Ignore task cancellation caused by view lifecycle updates.
             return
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1209,7 +1207,7 @@ final class SessionStore {
         } catch is CancellationError {
             return false
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
     }
@@ -1362,7 +1360,7 @@ final class SessionStore {
         } catch is CancellationError {
             return
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1507,7 +1505,7 @@ final class SessionStore {
         } catch is CancellationError {
             return
         } catch {
-            authError = UserFacingErrorMapper.message(from: error)
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -1712,13 +1710,11 @@ final class SessionStore {
         // Odłożone zaproszenie należy do osoby, która je otworzyła — następna
         // zalogowana dostawała alert z cudzym domem i mogła do niego dołączyć.
         storedInvitationToken = nil
-        // Usuń tokeny z Keychain
-        KeychainService.delete(forKey: Keys.accessToken)
-        KeychainService.delete(forKey: Keys.refreshToken)
-        KeychainService.delete(forKey: Keys.appleUserIdentifier)
-        KeychainService.delete(forKey: Keys.userId)
-        KeychainService.delete(forKey: Keys.householdId)
-        KeychainService.delete(forKey: Keys.householdName)
+        // Cały Keychain aplikacji, nie sześć kluczy z nazwiska. Lista wpisów
+        // do skasowania musiała być pilnowana ręcznie i pierwszy nowy klucz
+        // zapisany przy logowaniu zostawał na telefonie po wylogowaniu —
+        // czyli dokładnie to, czego art. 17 zabrania.
+        KeychainService.deleteAll()
 
         // Usuń dane sesji z UserDefaults
         let defaults = UserDefaults.standard
@@ -1956,55 +1952,12 @@ final class SessionStore {
             } catch {
                 // Offline / błąd sieci — zostawiamy to, co już mamy (cache / poprzedni pull).
                 if !self.didLoadHouseholdMembers, self.householdMembers.isEmpty {
-                    self.authError = UserFacingErrorMapper.message(from: error)
+                    self.authError = UserFacingErrorMapper.inlineMessage(from: error)
                 }
             }
         }
         householdMembersTask = task
         await task.value
-    }
-
-    /// Cele i ograniczenia WSZYSTKICH domowników — pod kartę „Co wiem o Was”
-    /// na zakładce asystenta.
-    ///
-    /// `householdMembers` mówi, KTO jest w domu; to mówi, CZEGO każdy z nich
-    /// potrzebuje. Serwer ma te dane od zawsze (`households:memberPreferences`,
-    /// ten sam kształt, którym karmiony jest model), tylko klient nigdy o nie
-    /// nie zapytał — a bez nich asystent obiecuje wiedzę, której nie widać.
-    /// Odczyt jest tani i cichy: błąd zostawia poprzednią zawartość i nie
-    /// zapala `authError`, bo to karta poboczna, nie ścieżka krytyczna.
-    func refreshMemberContext(force: Bool = false) async {
-        guard let userId = currentUserId, !userId.isEmpty,
-              let householdId = currentHouseholdId, !householdId.isEmpty else {
-            memberContext = []
-            return
-        }
-        if isLoadingMemberContext { return }
-        if !force, !memberContext.isEmpty,
-           let loadedAt = memberContextLoadedAt,
-           Date().timeIntervalSince(loadedAt) < householdMembersFreshness {
-            return
-        }
-
-        isLoadingMemberContext = true
-        defer { isLoadingMemberContext = false }
-
-        do {
-            let socketClient = sessionSocket()
-            let envelope: WsEnvelope<[BackendMemberContextDTO]> = try await socketClient.emitWithAck(
-                event: "households:memberPreferences",
-                payload: [
-                    "userId": userId,
-                    "householdId": householdId
-                ],
-                as: WsEnvelope<[BackendMemberContextDTO]>.self
-            )
-            guard envelope.ok, let data = envelope.data else { return }
-            memberContext = data
-            memberContextLoadedAt = Date()
-        } catch {
-            // Cicho: karta pokaże to, co już ma, albo nic.
-        }
     }
 
     /// Wyszukiwarka składników — ta sama, z której korzysta asystent.

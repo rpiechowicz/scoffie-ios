@@ -53,6 +53,7 @@ struct AddToPlanSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.toasts) private var toasts
     @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.datesViewModel) private var datesViewModel
@@ -520,16 +521,13 @@ struct AddToPlanSheet: View {
 
     // MARK: - Stopka
 
+    // Bez czerwonego wiersza z `mealStore.errorMessage`. Nie był duplikatem
+    // toastu — był gorszy: `save()` woła `dismiss()` synchronicznie, więc ten
+    // wiersz nigdy nie mógł pokazać błędu WŁASNEGO zapisu. Jedyne, co potrafił
+    // wyrenderować, to nieświeży komunikat zostawiony w store przez coś
+    // wcześniejszego. Błędy store jadą mostem z korzenia aplikacji.
     private var footer: some View {
         VStack(spacing: 10) {
-            if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
             Button {
                 save()
             } label: {
@@ -663,13 +661,31 @@ struct AddToPlanSheet: View {
         // wpis, którego plan i tak nie pokazywał — z perspektywy użytkownika
         // przycisk po prostu nic nie robił.
         let replacing = conflictingMeal?.recipe.id
+        // Nazwę wypieranego dania trzeba wziąć TERAZ. Po zapisie
+        // optymistycznym `conflictingMeal` zwraca już nowe danie i nie ma
+        // z czego powiedzieć, co zniknęło.
+        let replacedName = conflictingMeal?.recipe.name
 
         // Dismiss od razu, jak w PlanSlotPickerSheet: wpis optymistyczny
         // w store ląduje przed siecią, więc nie trzymamy arkusza przez cały
         // round-trip. Błąd wraca rollbackiem i `errorMessage` w store.
+        //
+        // Kolejkę toastów i gotowe zdanie bierzemy do stałych PRZED zadaniem:
+        // arkusz jest zamykany synchronicznie kilka linijek niżej, a wtedy
+        // jego środowisko już nie istnieje. Sama kolejka żyje w korzeniu
+        // aplikacji i przeżywa zamknięcie bez szwanku.
         let store = mealStore
+        let toasts = toasts
+        // Nazwy pory NIE zniżamy: „II śniadanie" wyszłoby jako „ii śniadanie".
+        // Po kropce wielka litera i tak czyta się naturalnie.
+        let placement = "\(Self.dayName(for: date)) · \(slot.title)"
+        // Zapamiętane, żeby po `await` odróżnić „most już to pokazał" od
+        // „nic się nie zmieniło". Sam warunek `errorMessage == nil` na to nie
+        // wystarcza: dwa identyczne błędy pod rząd nie są dla mostu zmianą,
+        // więc nie pokazałby ich ani on, ani my.
+        let errorBefore = store.errorMessage
         Task { @MainActor in
-            _ = await store.upsertWeekSlot(
+            let saved = await store.upsertWeekSlot(
                 recipe: recipe,
                 participantIds: participantsToSave,
                 // Wysyłamy liczbę tylko wtedy, gdy jest wyborem użytkownika.
@@ -685,10 +701,53 @@ struct AddToPlanSheet: View {
                 slot: slot,
                 weekStart: PlanWeek.dateKey(PlanWeek.monday(of: date))
             )
+
+            guard saved else {
+                // Jedyna naprawdę cicha awaria na tej ścieżce. Błąd łączności
+                // NIE ustawia `errorMessage` (mapper oddaje na niego `nil`),
+                // więc most z korzenia nie ma czego pokazać i użytkownik
+                // odchodzi przekonany, że posiłek jest w planie.
+                //
+                // Podtytuł mówi wyłącznie o skutku po naszej stronie. Diagnozy
+                // łączności tu nie ma i być nie może: brak sieci ma w tej
+                // aplikacji jedno miejsce — trwały pasek u góry — a dopisane
+                // tutaj „sprawdź połączenie" wyprzedzałoby go o sześć sekund
+                // i mówiło to samo dwa razy, w tej samej kapsule.
+                if store.errorMessage == errorBefore {
+                    toasts.error("Nie udało się dodać do planu", "Plan został bez zmian.")
+                }
+                return
+            }
+
+            // Zajęty slot znaczy, że coś stąd zniknęło — i tylko nazwa mówi,
+            // co. W gospodarstwie mógł to postawić ktoś inny. Prefiks ustępuje
+            // wtedy miejsca nazwie: podtytuł ma dwie linie, a nazwa dania jest
+            // jedynym powodem, dla którego ten toast w ogóle istnieje.
+            if let replacedName {
+                toasts.success("Zamieniono w planie", "\(slot.title) — zamiast: \(replacedName)")
+            } else {
+                toasts.success("Dodano do planu", placement)
+            }
         }
         onAdded?(date, slot)
         dismiss()
     }
+
+    /// Dzień z datą, nie sam dzień tygodnia: ten arkusz ma własny pasek dni
+    /// i da się go przewinąć na kolejny tydzień, więc „czwartek" bywa
+    /// dwuznaczny. Polski formatter oddaje nazwę dnia z małej litery, a to
+    /// początek zdania.
+    private static func dayName(for date: Date) -> String {
+        let raw = dayFormatter.string(from: date)
+        return raw.prefix(1).uppercased() + raw.dropFirst()
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "EEEE, d MMMM"
+        return formatter
+    }()
 
     private static let monthFormatter: DateFormatter = {
         let formatter = DateFormatter()

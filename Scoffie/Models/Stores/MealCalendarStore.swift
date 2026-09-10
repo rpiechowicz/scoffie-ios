@@ -25,10 +25,9 @@ class MealCalendarStore {
     private var observedWeekDates: [Date] = []
     private var lastWeekChangeVersionByWeek: [String: Int64] = [:]
     private var pendingWeekReloadTask: Task<Void, Never>?
-    /// Odracza pokazanie błędów łączności z odczytu tygodnia — patrz
-    /// komentarz w `ConnectivityErrorGate`. Błędy mutacji planu pokazują
-    /// się bez zmian, od razu.
-    private let connectivityErrorGate = ConnectivityErrorGate()
+    /// Błędy łączności NIE trafiają tu wcale — `inlineMessage` oddaje na nie
+    /// `nil` i melduje je w `ConnectivityMonitor`, który mówi o braku sieci
+    /// raz, u góry ekranu, i dopiero gdy brak się utrzyma.
     var errorMessage: String?
 
     // MARK: - Date formatting
@@ -104,10 +103,6 @@ class MealCalendarStore {
         save()
     }
 
-    func clearRecipe(for date: Date, slot: MealSlot) {
-        setRecipe(nil, for: date, slot: slot)
-    }
-
     func clearWeek(dates: [Date]) {
         for date in dates {
             let key = Self.dateKey(for: date)
@@ -121,7 +116,6 @@ class MealCalendarStore {
         guard let weeklyPlanRepository else { return }
         observedWeekStart = weekStart
         observedWeekDates = dates
-        connectivityErrorGate.reset()
         do {
             let slots = try await weeklyPlanRepository.fetchWeekPlan(weekStart: weekStart)
             // Porcje znane sprzed odświeżenia, po `PlanItem.id`. Odczyt tygodnia
@@ -158,12 +152,7 @@ class MealCalendarStore {
             save()
             errorMessage = nil
         } catch {
-            // Błąd łączności z odświeżenia pokazuje się dopiero, gdy się
-            // utrzyma — reconnect po powrocie z tła gasił go po ~0,3 s
-            // i banner tylko migał.
-            connectivityErrorGate.publish(error) { [weak self] message in
-                self?.errorMessage = message
-            }
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -262,7 +251,7 @@ class MealCalendarStore {
             return true
         } catch {
             setMeals(previous, for: date, slot: slot)
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
     }
@@ -294,7 +283,7 @@ class MealCalendarStore {
             return true
         } catch {
             setMeals(previous, for: date, slot: slot)
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
     }
@@ -345,24 +334,33 @@ class MealCalendarStore {
             return true
         } catch {
             setMeals(previous, for: date, slot: slot)
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
     }
 
+    /// Oddaje, czy tydzień naprawdę zniknął.
+    ///
+    /// Wołający nie może tego wywnioskować z `errorMessage`: przy braku sieci
+    /// mapper oddaje `nil`, więc puste pole znaczyłoby raz „udało się", a raz
+    /// „nie mamy o czym mówić" — i potwierdzenie kłamałoby dokładnie wtedy,
+    /// gdy sieci nie ma.
     @MainActor
-    func clearWeekFromBackend(weekStart: String, dates: [Date]) async {
+    @discardableResult
+    func clearWeekFromBackend(weekStart: String, dates: [Date]) async -> Bool {
         guard let weeklyPlanRepository else {
             clearWeek(dates: dates)
-            return
+            return true
         }
 
         do {
             try await weeklyPlanRepository.clearWeekPlan(weekStart: weekStart)
             clearWeek(dates: dates)
             errorMessage = nil
+            return true
         } catch {
-            errorMessage = UserFacingErrorMapper.message(from: error)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            return false
         }
     }
 

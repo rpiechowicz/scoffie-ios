@@ -6,11 +6,20 @@ import SwiftUI
 /// `progress` powyżej 1 „przepełnia się w nakładkę": pierścień domyka pełne
 /// koło, a nadwyżka idzie DRUGĄ pętlą po tym samym torze.
 ///
-/// Przy tym pełne koło GAŚNIE do jednej trzeciej mocy, a pełną moc ma dopiero
-/// nadwyżka. Sam cień na styku dwóch warstw tego nie załatwiał — przy pełnym
-/// kole w pełnym kolorze druga pętla w tym samym kolorze była widoczna dopiero
-/// z bliska. Tak zmienia się CAŁY pierścień, więc przejście przez cel widać,
-/// zanim się doczyta legendę.
+/// **Nadwyżka jest TYM SAMYM kolorem przyciemnionym o jedną trzecią — dokładnie
+/// jak w `MacroProgressTrack`.** Te dwa rysunki stoją w arkuszu „Cel dnia" obok
+/// siebie, pierścienie po lewej i paski po prawej, i mówią o tych samych
+/// czterech liczbach; przekroczony cel nie może w nich wyglądać na dwa różne
+/// zdarzenia.
+///
+/// Wcześniej pierścień gasił pełne koło do jednej trzeciej mocy i puszczał
+/// nadwyżkę w pełnym kolorze z poświatą — świecąca druga pętla przekrzykiwała
+/// wtedy trzy pozostałe pierścienie i wyglądała bardziej na alarm niż na
+/// „cel zrobiony z okładem". Pasek obok od początku mówił to spokojniej.
+///
+/// Zostaje sam cień rzucany przez drugą pętlę na pierwszą — nie po to, żeby
+/// świecić, tylko żeby dało się zobaczyć, że jedna leży na drugiej. Pasek nie
+/// ma tego problemu, bo jego warstwy leżą obok siebie, a nie na sobie.
 struct ActivityRing: View {
     let progress: CGFloat            // 0...1 (może być > 1 – wtedy "przepełnia" się w nakładkę)
     let lineWidth: CGFloat
@@ -46,7 +55,9 @@ struct ActivityRing: View {
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .opacity(isOver ? 0.3 : 1)
+                // Pełne koło zostaje w pełnej mocy także po przekroczeniu
+                // celu: „cel zrobiony" nie przestaje być prawdą dlatego, że
+                // doszło do niego jeszcze trochę.
                 .shadow(color: endColor.opacity(clamped > 0 && !isOver ? 0.35 : 0), radius: 6, x: 0, y: 0)
 
             // Nadmiar. Rysowany ZAWSZE, nie pod `if` — przy `if` przejście
@@ -56,12 +67,11 @@ struct ActivityRing: View {
             Circle()
                 .trim(from: 0, to: overflow)
                 .stroke(
-                    endColor,
+                    endColor.mix(black: 0.34),
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .shadow(color: endColor.opacity(isOver ? 0.5 : 0), radius: 6, x: 0, y: 0)
-                .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
+                .shadow(color: .black.opacity(isOver ? 0.35 : 0), radius: 3, x: 0, y: 1)
         }
     }
 }

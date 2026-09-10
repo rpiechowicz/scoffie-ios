@@ -52,7 +52,9 @@ final class AuthAPIClient: Sendable {
         let response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
+            ConnectivityMonitor.noteResponse()
         } catch {
+            ConnectivityMonitor.noteTransportFailure()
             throw AuthAPIError.network
         }
 

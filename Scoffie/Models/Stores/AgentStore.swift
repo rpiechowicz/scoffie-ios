@@ -117,6 +117,16 @@ final class AgentStore {
     /// kropka na ikonie asystenta zamyka pętlę „zapytaj, odejdź, wróć".
     private(set) var unseenAnswers = 0
 
+    /// Powiadomienie o turze, która skończyła się poza ekranem. Zdejmuje je
+    /// most w korzeniu aplikacji (`scBackgroundToast`) i od razu kasuje.
+    private(set) var backgroundNotice: SCToast?
+
+    /// Bez tego drugie identyczne powiadomienie nie zmieniłoby wartości
+    /// (`SCToast` porównuje się po treści) i przepadłoby po cichu.
+    func clearBackgroundNotice() {
+        backgroundNotice = nil
+    }
+
     private let client: AgentAPIClient
     private let householdId: String
     private(set) var conversationId: String?
@@ -141,18 +151,13 @@ final class AgentStore {
         errorMessage = nil
     }
 
-    /// Arkusz zamknięty bez zgody — błąd pod rozmową zostaje, arkusz nie wraca sam.
-    func consentDismissed() {
-        needsConsent = false
-    }
-
     /// „Zgłoś odpowiedź" — oddaje komunikat błędu albo `nil`.
     func report(messageId: String, reason: String, comment: String?) async -> String? {
         do {
             try await client.reportMessage(id: messageId, reason: reason, comment: comment)
             return nil
         } catch {
-            return UserFacingErrorMapper.message(from: error)
+            return UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 
@@ -594,6 +599,11 @@ final class AgentStore {
                 failures += 1
                 if failures >= Self.maxPollFailures {
                     handle(error)
+                    // Odpytywanie się poddało, ale tura biegnie dalej na
+                    // serwerze — a od kiedy push przy aplikacji na wierzchu
+                    // schodzi do Centrum powiadomień, to jedyny sygnał, jaki
+                    // ta osoba dostanie.
+                    noteUnfinishedTurnInBackground()
                     return
                 }
                 try? await Task.sleep(for: Self.pollInterval)
@@ -610,6 +620,27 @@ final class AgentStore {
         // Identyfikatora nie kasujemy — po powrocie na zakładkę spróbujemy
         // jeszcze raz.
         errorMessage = "Asystent nie odpowiedział na czas. Wróć tu za chwilę — odpowiedź może już czekać."
+        noteUnfinishedTurnInBackground()
+    }
+
+    /// Tura, która się nie udała, gdy nikt na nią nie patrzył.
+    ///
+    /// Mocniejszy przypadek niż udana odpowiedź, bo tu nie ma ŻADNEGO innego
+    /// kanału: `unseenAnswers` rośnie wyłącznie przy sukcesie, więc plakietka
+    /// na zakładce się nie zapala, a push `ASSISTANT_TURN_FINISHED` nie obejmuje
+    /// tury, z której klient zrezygnował. `ErrorNote` z powodem i przyciskiem
+    /// „Ponów" rysuje się w rozmowie, na którą nikt nie patrzy — człowiek czeka
+    /// na coś, co nigdy nie przyjdzie, często zapłaciwszy za to z limitu.
+    ///
+    /// Podtytuł jest celowo krótki i ogólny: pełne zdanie z mappera bywa długie
+    /// i stoi już w rozmowie, obok ponowienia.
+    private func noteUnfinishedTurnInBackground(
+        style: SCToast.Style = .error,
+        title: String = "Asystent nie dokończył",
+        message: String = "Pytanie zostało w rozmowie."
+    ) {
+        guard !isVisible else { return }
+        backgroundNotice = SCToast(style: style, title: title, message: message)
     }
 
     private func apply(finished turn: AgentTurnDTO) {
@@ -628,9 +659,24 @@ final class AgentStore {
             }
             if answers.isEmpty {
                 errorMessage = "Asystent nie miał nic do powiedzenia. Spróbuj zapytać inaczej."
+                // Tura się domknęła, ale bez odpowiedzi: `unseenAnswers` nie
+                // rośnie, więc plakietka na zakładce się nie zapali i nikt
+                // poza ekranem by się o tym nie dowiedział.
+                noteUnfinishedTurnInBackground()
             } else {
                 messages.append(contentsOf: answers)
-                if !isVisible { unseenAnswers += answers.count }
+                if !isVisible {
+                    unseenAnswers += answers.count
+                    // Pytanie zadane i porzucone: tura biegnie 25-60 s, więc
+                    // użytkownik zdążył przejść na plan. Jedynym sygnałem była
+                    // dotąd liczba na pasku zakładek — kropka na DOLE ekranu,
+                    // gdy patrzy się na górę.
+                    backgroundNotice = SCToast(
+                        style: .success,
+                        title: "Asystent odpowiedział",
+                        message: "Odpowiedź czeka w rozmowie."
+                    )
+                }
                 // Tytuł rozmowy nadaje serwer z PIERWSZEJ wiadomości, a lista
                 // historii ma go pokazać bez ręcznego odświeżania.
                 Task { [weak self] in await self?.refreshConversationsQuietly() }
@@ -638,12 +684,21 @@ final class AgentStore {
         case "LIMITED":
             errorMessage = copy(forCode: turn.errorCode)
                 ?? "Limit asystenta został wyczerpany."
+            // Wyczerpana pula to STAN konta, nie awaria — więc masło („uwaga"),
+            // nie alarm. Ta sama kapsuła co przy padniętym serwerze mówiłaby,
+            // że coś się zepsuło, a nic się nie zepsuło.
+            noteUnfinishedTurnInBackground(
+                style: .warning,
+                title: "Limit asystenta wyczerpany",
+                message: "Pula odnowi się w nowym miesiącu."
+            )
         default:
             errorMessage = copy(forCode: turn.errorCode)
                 ?? "Asystent nie dokończył zadania. Spróbuj ponownie."
             // Podpowiedzi z serwera („tylko obiady", „3 dni") — tylko tam,
             // gdzie serwer je dał, czyli po czasie i po „Stop".
             suggestions = turn.suggestions ?? []
+            noteUnfinishedTurnInBackground()
         }
     }
 
@@ -816,7 +871,7 @@ final class AgentStore {
                 break
             }
         }
-        errorMessage = UserFacingErrorMapper.message(from: error)
+        errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
     }
 
     /// Kod porażki tury (`AgentTurn.errorCode`) na kopię dla użytkownika.

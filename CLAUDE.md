@@ -51,7 +51,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Błędy: `WsEnvelope` (`ok, data, error, message, code, status, details?, requestId`) i REST
   `{code, message, details?, requestId}`; `envelope.failure(fallback:)` → `RecipeDataError.server`;
   kopie po kodzie w `UserFacingErrorMapper.copyByCode` (parytet z `src/common/app-error-code.ts`).
-  Odpowiedź z kodem nigdy nie jest „błędem łączności” (`ConnectivityErrorGate`).
+  Odpowiedź z kodem nigdy nie jest „błędem łączności”.
+- **Błędy do pokazania biorą się WYŁĄCZNIE z `UserFacingErrorMapper.inlineMessage(from:)`**, nie
+  z `message(from:)`. `inlineMessage` oddaje `nil` dla błędów łączności i melduje je
+  w `ConnectivityMonitor`; brak sieci ma w aplikacji dokładnie jedno miejsce — trwały pasek
+  toastu u góry, zapalany dopiero po 6 s nieprzerwanych kłopotów. Nie dopisywać zdań w rodzaju
+  „Sprawdź internet” przy ekranach ani przyciskach. `message(from:)` zostaje surowym mapowaniem
+  dla samego toastu.
 - Alergeny: `enum Allergen` rawValue = id z `src/common/allergens.ts`; nowa wartość NAJPIERW na
   serwerze. Przepis niesie `allergens`/`dietTags` z serwera (`RecipeDietProfile.fromServerTags`);
   heurystyka `RecipeDietClassifier` tylko gdy pola są `nil`. Pusta lista = fakt, nie brak danych.

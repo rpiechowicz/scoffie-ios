@@ -36,14 +36,6 @@ class DatesViewModel {
         Calendar.current.isDate(date, inSameDayAs: selectedDate)
     }
     
-    /// Formatuje datę na nazwę dnia (np. "PN", "WT")
-    func dayName(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        formatter.locale = Locale(identifier: "pl_PL")
-        return formatter.string(from: date).uppercased()
-    }
-    
     /// Formatuje datę na numer dnia (np. "3", "14")
     func dayNumber(for date: Date) -> String {
         let formatter = DateFormatter()
@@ -51,13 +43,6 @@ class DatesViewModel {
         return formatter.string(from: date)
     }
     
-    func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, d MMMM"
-        formatter.locale = Locale(identifier: "pl_PL")
-        return formatter.string(from: date).capitalized
-    }
-        
     /// Kotwica dnia dla tygodnia: ekrany trzymają własny wybrany dzień i
     /// zapisują go tutaj, żeby po zmianie tygodnia obie zakładki miały od
     /// czego zacząć.

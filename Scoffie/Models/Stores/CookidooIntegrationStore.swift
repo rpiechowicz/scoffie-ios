@@ -27,7 +27,7 @@ final class CookidooIntegrationStore {
         case sent
         /// Backendowe okno idempotencji (60 s) — dla użytkownika to sukces.
         case alreadySent
-        case failed(message: String)
+        case failed(message: String?)
     }
 
     private(set) var status: Status = .unknown
@@ -46,15 +46,6 @@ final class CookidooIntegrationStore {
     var isConnected: Bool {
         if case .connected = status { return true }
         return false
-    }
-
-    var loginForDisplay: String? {
-        switch status {
-        case .connected(let login), .authFailed(let login):
-            return login
-        case .unknown, .notConnected, .disabled:
-            return nil
-        }
     }
 
     var isDisabled: Bool {
@@ -142,12 +133,19 @@ final class CookidooIntegrationStore {
         case send
     }
 
-    private static func message(for error: Error, context: ErrorContext) -> String {
+    /// `nil` znaczy „nie ma czego pokazywać w tym arkuszu" — dziś wyłącznie
+    /// przy braku sieci, o którym mówi już pasek u góry.
+    private static func message(for error: Error, context: ErrorContext) -> String? {
         switch error {
         case BackendAPIError.notAuthenticated:
             return "Sesja wygasła. Zaloguj się ponownie do aplikacji."
         case BackendAPIError.network:
-            return "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie."
+            // Brak sieci przestał być sprawą tego arkusza. Zdanie „Sprawdź
+            // internet" stało tu obok trzech innych, które mówiły to samo
+            // w innych miejscach aplikacji; teraz melduje się w monitorze
+            // i — jeśli brak się utrzyma — mówi o nim jeden pasek u góry.
+            ConnectivityMonitor.noteTransportFailure()
+            return nil
         case BackendAPIError.backend(let code, _, _):
             switch code {
             case "COOKIDOO_AUTH_FAILED":
@@ -167,10 +165,10 @@ final class CookidooIntegrationStore {
             default:
                 // Wspólna tabela kodów — inne kody (np. TOO_MANY_REQUESTS)
                 // dostają tę samą kopię co reszta aplikacji.
-                return UserFacingErrorMapper.message(from: error)
+                return UserFacingErrorMapper.inlineMessage(from: error)
             }
         default:
-            return UserFacingErrorMapper.message(from: error)
+            return UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
 

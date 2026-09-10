@@ -35,6 +35,7 @@ enum RecipeDetailContext {
 
 struct RecipeDetailView: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.toasts) private var toasts
     @Environment(\.sessionStore) private var sessionStore
 
     let recipe: Recipe
@@ -575,21 +576,20 @@ struct RecipeDetailView: View {
         recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
     }
 
-    /// Sukces / błąd wysyłki — jedna linijka nad przyciskami, znika sama.
+    /// Błąd wysyłki — jedna linijka nad przyciskami.
+    ///
+    /// Sukces poszedł stąd do toastu i to nie jest przeprowadzka dla zasady:
+    /// stał tu drugi `SCToast`, napisany ręcznie i gorzej — z własnym
+    /// odliczaniem trzech sekund, bez dotyku, bez ogłoszenia dla VoiceOver
+    /// i bez czasu wyliczonego z długości zdania — a przy okazji podnosił
+    /// pasek akcji o wiersz.
+    ///
+    /// Błąd ZOSTAJE tutaj. Toast nie ma przycisku, a to jest konkretna
+    /// diagnoza (wygasłe hasło Cookidoo, przepis bez wersji na Thermomix)
+    /// stojąca dokładnie przy przycisku, który trzeba nacisnąć jeszcze raz.
     @ViewBuilder
     private var thermomixFeedback: some View {
-        if showThermomixSuccess {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12, weight: .bold))
-                Text("Wysłano — przepis czeka w \u{201E}Mój tydzień\u{201D} na Thermomixie")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .lineLimit(2)
-            }
-            .foregroundStyle(SCPalette.sage)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-        } else if let thermomixError {
+        if let thermomixError {
             Text(thermomixError)
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(Color.red.opacity(0.9))
@@ -693,6 +693,10 @@ struct RecipeDetailView: View {
         guard let store = sessionStore.cookidooIntegrationStore, !isSendingToThermomix else { return }
         isSendingToThermomix = true
         thermomixError = nil
+        // Ptaszek gaśnie na czas ponowienia. Bez tego nieudana druga próba
+        // zostawiała zielony ptaszek na przycisku i czerwony błąd tuż obok —
+        // dwa sprzeczne komunikaty o tej samej wysyłce.
+        showThermomixSuccess = false
         Task { @MainActor in
             let outcome = await store.sendToWeek(
                 recipeId: recipe.id.uuidString.lowercased(),
@@ -703,9 +707,21 @@ struct RecipeDetailView: View {
             case .sent, .alreadySent:
                 // `alreadySent` to backendowe okno idempotencji — dla
                 // użytkownika oba przypadki znaczą „jest w Mój tydzień".
+                //
+                // Wynik jest na INNYM URZĄDZENIU, więc ten ekran nie ma jak go
+                // pokazać. Ptaszek na samym przycisku zostaje: kapsuła wyjeżdża
+                // u góry, a palec jest tutaj.
+                //
+                // Ptaszek zostaje do końca oglądania przepisu, a nie na trzy
+                // sekundy jak wcześniej: kapsuła znika, a on jest jedynym
+                // śladem, że ten przepis już poszedł. To ślad na czas WIZYTY —
+                // stan widoku, nie pamięć aplikacji — więc po ponownym
+                // otwarciu przepisu go nie będzie.
                 withAnimation(.smooth(duration: 0.2)) { showThermomixSuccess = true }
-                try? await Task.sleep(for: .seconds(3))
-                withAnimation(.smooth(duration: 0.3)) { showThermomixSuccess = false }
+                toasts.success(
+                    "Wysłano do Thermomixa",
+                    "Czeka w kalendarzu \u{201E}Mój tydzień\u{201D} na dziś."
+                )
             case .failed(let message):
                 thermomixError = message
             }
@@ -753,10 +769,6 @@ struct RecipeDetailView: View {
     }
 
     // MARK: - Helpers
-
-    private var categoryAccent: Color {
-        RecipeAccent.accent(for: recipe.category)
-    }
 
     /// „Pasuje też na: II śniadanie · Przekąska".
     ///

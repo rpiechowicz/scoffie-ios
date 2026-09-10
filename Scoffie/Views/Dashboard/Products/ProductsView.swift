@@ -26,6 +26,7 @@ struct ProductsView: View {
     /// zostawiałby pod uchwytem pustą, niczym nieuzasadnioną przestrzeń.
     var topPadding: CGFloat = SCPageMetrics.top
 
+    @Environment(\.toasts) private var toasts
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
@@ -351,7 +352,7 @@ struct ProductsView: View {
                 Button("Anuluj", role: .cancel) { }
                 Button("Usuń wszystko", role: .destructive) {
                     infoSheet = nil
-                    shoppingListStore.deleteAllArchivedLists()
+                    deleteAllHistory()
                 }
             } message: {
                 Text("Ta operacja usunie wszystkie zapisane listy produktów z historii.")
@@ -416,7 +417,7 @@ struct ProductsView: View {
                             itemsForArchive: { shoppingListStore.archiveDisplayItems(archiveId: $0) },
                             dishSummary: { item in dishSummary(for: item) },
                             onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
-                            onDeleteAll: { shoppingListStore.deleteAllArchivedLists() },
+                            onDeleteAll: { deleteAllHistory() },
                             onClose: { infoSheet = nil }
                         )
                     case .month(let key):
@@ -516,15 +517,6 @@ struct ProductsView: View {
 
     private var shoppingListContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let errorMessage = shoppingListStore.errorMessage, !errorMessage.isEmpty {
-                Text(verbatim: errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, pageHorizontalPadding)
-                    .padding(.top, 12)
-            }
-
             ShoppingProgressHeader(
                 bought: boughtCount,
                 total: activeItems.count,
@@ -946,6 +938,27 @@ struct ProductsView: View {
                 onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
                 onClose: { infoSheet = nil }
             )
+        }
+    }
+
+    /// Kasowanie historii jest nieodwracalne i wspólne dla całego domu, a po
+    /// nim nie ma na czym zobaczyć skutku: alert się zamyka, arkusz znika,
+    /// a użytkownik zostaje na ekranie, na którym historii w ogóle nie widać.
+    /// Podtytuł niesie jedyny fakt, którego alert nie mówił — że listy znikają
+    /// wszystkim, nie tylko tu.
+    private func deleteAllHistory() {
+        // Kolejka i store do stałych PRZED zadaniem — arkusz historii bywa
+        // zamykany w tej samej chwili, a wtedy jego środowisko już nie żyje.
+        let toasts = toasts
+        let store = shoppingListStore
+        Task { @MainActor in
+            if await store.deleteAllArchivedLists() {
+                toasts.success("Historia usunięta", "Zamknięte listy zniknęły też u domowników.")
+            } else {
+                // Przy braku sieci `errorMessage` zostaje puste, a arkusz już
+                // się zamknął — bez tego użytkownik nie dostaje po alercie nic.
+                toasts.error("Nie udało się usunąć historii", "Listy zostały bez zmian.")
+            }
         }
     }
 

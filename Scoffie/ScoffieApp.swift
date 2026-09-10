@@ -36,6 +36,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Nasłuch interfejsu startuje razem z aplikacją, żeby pierwsze
+        // żądanie miało już z czym porównać swoje niepowodzenie.
+        ConnectivityMonitor.shared.start()
         PlanChangeNotificationService.requestAuthorizationIfNeeded()
         application.registerForRemoteNotifications()
         return true
@@ -79,9 +82,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case .shoppingList:
             completionHandler([.list])
         case .assistantTurn:
-            // Odpowiedź asystenta przyszła, gdy aplikacja jest na wierzchu —
-            // baner bez dźwięku: kropka na zakładce i tak już się świeci.
-            completionHandler([.banner])
+            // Przy aplikacji na wierzchu mówi o tym KAPSUŁA, nie systemowy
+            // baner: `AgentStore` wystawia toast z własnego odpytywania, więc
+            // sygnał dociera niezależnie od zgody na powiadomienia, a baner
+            // i kapsuła biją się o ten sam pas ekranu. Push zostaje przy swojej
+            // prawdziwej robocie — dosięgnąć człowieka przy zamkniętej apce.
+            completionHandler([.list])
         case .unknown:
             completionHandler([.banner])
         }
@@ -216,7 +222,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 struct ScoffieApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var sessionStore = SessionStore()
+    /// Kolejka wewnętrznych powiadomień. Jedna na aplikację — kapsuła udaje
+    /// Dynamic Island, a wyspa jest jedna.
+    @State private var toastCenter = SCToastCenter()
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
+
+    private var appTheme: AppTheme { AppTheme(rawValue: themeRawValue) ?? .system }
     @Environment(\.scenePhase) private var scenePhase
 
     /// Klucz dla `.task(id:)` uruchamiającego smart startup loader.
@@ -291,6 +302,14 @@ struct ScoffieApp: App {
                     .environment(\.datesViewModel, sessionStore.datesViewModel)
                     .environment(\.recipeCatalogStore, recipeCatalogStore)
                     .environment(\.shoppingListStore, shoppingListStore)
+                    // Błędy trzech głównych store zamieniają się w toast tutaj,
+                    // a nie na ekranach, które je wywołały. Wcześniej każdy
+                    // z nich rysował własny czerwony wiersz — widoczny tylko
+                    // na swojej zakładce i rozpychający układ w chwili, gdy
+                    // treść pod spodem i tak się przestawiała.
+                    .scErrorToast(mealStore.errorMessage)
+                    .scErrorToast(recipeCatalogStore.errorMessage)
+                    .scErrorToast(shoppingListStore.errorMessage)
             } else {
                 // Stores nie powinny być nil gdy startupPhase == .ready,
                 // ale na wszelki wypadek pokażemy loader niż pusty ekran.
@@ -313,7 +332,31 @@ struct ScoffieApp: App {
             }
             .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
             .environment(\.sessionStore, sessionStore)
-            .preferredColorScheme((AppTheme(rawValue: themeRawValue) ?? .system).colorScheme)
+            // Kolejność ma znaczenie: każdy z mostów poniżej musi stać POD
+            // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`
+            // do środowiska.
+            //
+            // Zdarzenia BEZ EKRANU: tura asystenta, która skończyła się, gdy
+            // użytkownik patrzył na plan, i zakup dogadany z Apple w tle.
+            //
+            // Wiszą TUTAJ, a nie w gałęzi pulpitu, i to jest istotne: gałąź
+            // pulpitu ma `.id(currentRootScreen)`, więc przy każdym przejściu
+            // korzenia (loader, powitanie, zmiana gospodarstwa) budowałaby się
+            // od nowa i brała bieżącą wartość za punkt odniesienia. A zakup
+            // odtworzony przez StoreKit dociera właśnie w oknie loadera.
+            .scBackgroundToast(
+                sessionStore.agentStore?.backgroundNotice,
+                onShown: { sessionStore.agentStore?.clearBackgroundNotice() }
+            )
+            .scBackgroundToast(
+                sessionStore.subscriptionStore?.backgroundNotice,
+                onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
+            )
+            .scConnectivityToast()
+            // Motyw podany JAWNIE: warstwa toastów mieszka w osobnym oknie,
+            // do którego `preferredColorScheme` nie dociera.
+            .scToastLayer(toastCenter, colorScheme: appTheme.colorScheme)
+            .preferredColorScheme(appTheme.colorScheme)
             .task(id: startupTaskID) {
                 await sessionStore.runStartupIfNeeded()
             }

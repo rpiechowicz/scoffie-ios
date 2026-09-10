@@ -332,12 +332,6 @@ struct RecipesView: View {
                 .padding(.top, pageTopPadding)
                 .padding(.bottom, 18)
 
-                if let errorMessage = recipeCatalogStore.errorMessage, !errorMessage.isEmpty {
-                    errorBanner(errorMessage)
-                        .padding(.horizontal, pageHorizontalPadding)
-                        .padding(.bottom, 12)
-                }
-
                 if shouldShowSkeleton {
                     skeletonState
                 } else if !hasVisibleRecipes {
@@ -580,23 +574,6 @@ struct RecipesView: View {
             return "Żaden przepis w katalogu nie mieści się w Twojej diecie i alergenach. Stuknij ikonę dopasowania obok tytułu, żeby je wyłączyć."
         }
         return "Ta baza jest jeszcze pusta — wróć za chwilę."
-    }
-
-    private func errorBanner(_ message: String) -> some View {
-        Text(message)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.red.opacity(scheme == .dark ? 0.14 : 0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.red.opacity(0.32), lineWidth: 1)
-            )
     }
 
     private var skeletonState: some View {
