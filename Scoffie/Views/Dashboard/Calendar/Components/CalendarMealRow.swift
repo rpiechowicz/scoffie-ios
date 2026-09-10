@@ -37,11 +37,19 @@ enum CalendarRelativeTime {
     /// ale ten sam obiad oglądany o 18:00 już nie jest „teraz" i wiersz nie
     /// ma prawa tak twierdzić. Bez tej granicy pierwszy nieodhaczony posiłek
     /// dnia stał w „teraz" aż do północy.
-    private static let graceMinutes = 20
+    ///
+    /// Nie `private`: tę samą granicę czyta środek łuku
+    /// (`CalendarDayFocus.NextMeal.isDue`), a dwie kopie tej liczby
+    /// rozjechałyby się przy pierwszej poprawce.
+    static let graceMinutes = 20
 
     static func text(to minutes: Int, from nowMinutes: Int) -> String {
-        let delta = minutes - nowMinutes
+        text(inMinutes: minutes - nowMinutes)
+    }
 
+    /// To samo, ale z gotową różnicą. Środek łuku liczy ją raz dla całego
+    /// dnia i nie ma po co rozkładać jej z powrotem na dwie godziny.
+    static func text(inMinutes delta: Int) -> String {
         if delta <= 0 {
             return delta >= -graceMinutes ? "teraz" : "pora minęła"
         }
