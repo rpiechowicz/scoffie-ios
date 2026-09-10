@@ -190,6 +190,16 @@ struct CalendarDayArc: View {
 
     // MARK: - Tor doby
 
+    /// Pusty tor całej doby.
+    ///
+    /// `Circle().trim(from: 0, …)` ZACZYNA SIĘ NA GODZINIE TRZECIEJ, nie na
+    /// dwunastej — `CGPath(ellipseIn:)` startuje w punkcie `(maxX, midY)`
+    /// i idzie zgodnie z ruchem wskazówek zegara. Dlatego obrót to dokładnie
+    /// `startAngle`, a nie `startAngle + 90`: kąty w tym pliku liczą się
+    /// w tej samej konwencji, co punkty na łuku (0° w prawo, rosnące w dół),
+    /// więc tor i węzły muszą wychodzić z tej samej liczby. Dołożone 90°
+    /// przekręcało sam tor o ćwierć obrotu i otwarcie łuku wypadało z lewej
+    /// zamiast u dołu — zdjęcia stały wtedy w powietrzu, obok kreski.
     private var track: some View {
         Circle()
             .trim(from: 0, to: Self.sweep / 360)
@@ -197,7 +207,7 @@ struct CalendarDayArc: View {
                 Color.scLabel(scheme).opacity(0.10),
                 style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
             )
-            .rotationEffect(.degrees(Self.startAngle + 90))
+            .rotationEffect(.degrees(Self.startAngle))
             .frame(width: radius * 2, height: radius * 2)
     }
 
@@ -217,7 +227,7 @@ struct CalendarDayArc: View {
                 Color.scLabel(scheme).opacity(scheme == .dark ? 0.26 : 0.28),
                 style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
             )
-            .rotationEffect(.degrees(Self.startAngle + 90))
+            .rotationEffect(.degrees(Self.startAngle))
             .frame(width: radius * 2, height: radius * 2)
             .opacity(drawn > 0.001 ? 1 : 0)
             .animation(motion, value: drawn)

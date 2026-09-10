@@ -1,11 +1,16 @@
 import SwiftUI
 
-// Kalendarz v4 — dwa dopiski pod listą posiłków.
+// Kalendarz v4 — dopisek pod listą posiłków.
 //
 // Źródło: canvas claude.ai → „Weekly Meals - Kalendarz v4.html”,
-// `components/cal-v4.jsx` (bloki `empty` i `past` w `C4Day`). Oba mówią to,
-// czego lista sama z siebie nie powie, i oba pojawiają się wyłącznie wtedy,
-// gdy jest o czym mówić.
+// `components/cal-v4.jsx` (blok `empty` w `C4Day`). Mówi to, czego lista
+// sama z siebie nie powie, i pojawia się wyłącznie wtedy, gdy jest o czym
+// mówić.
+//
+// Makieta stawiała tu jeszcze „Odhacz cały dzień” z podsumowaniem kalorii
+// pod dniem minionym. Zeszło z ekranu: dzień, w którym nikt nic nie
+// odhaczył, ma to napisane w środku łuku, a jedno stuknięcie zapisujące
+// pięć posiłków naraz jest deklaracją, nie zapisem.
 
 // MARK: - Pusty dzień
 
@@ -86,88 +91,13 @@ struct CalendarEmptyDayNote: View {
     }
 }
 
-// MARK: - Nadrobienie minionego dnia
-
-/// „Odhacz cały dzień” — jedno stuknięcie dla dnia, w którym nikt nie
-/// odhaczał na bieżąco.
-///
-/// Stoi wyłącznie pod dniem MINIONYM i wyłącznie wtedy, gdy zostało co
-/// odhaczać. W dzisiejszym dniu byłby to guzik „zjadłem wszystko, także
-/// kolację o 20:00”, czyli zapis nieprawdy — a w przyszłym nie ma nawet
-/// czego zapisywać.
-///
-/// Obok stoi liczba, którą ten ruch dopisze do dnia, bo „odhacz wszystko”
-/// bez niej jest skokiem w ciemno: 1135 kcal to zupełnie inna decyzja niż
-/// 2900.
-struct CalendarCatchUpRow: View {
-    /// Ile kalorii dołoży odhaczenie reszty dnia.
-    let missingKcal: Int
-    /// Ile posiłków zostało — do podpisu dla VoiceOver.
-    let missingMeals: Int
-    let isBusy: Bool
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Button(action: action) {
-                HStack(spacing: 7) {
-                    if isBusy {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(SCPalette.terracotta)
-                    } else {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .heavy))
-                    }
-
-                    Text("Odhacz cały dzień")
-                        .font(.system(size: 14, weight: .bold))
-                        .tracking(-0.1)
-                        .lineLimit(1)
-                        .fixedSize()
-                }
-                .foregroundStyle(SCPalette.terracotta)
-                .padding(.horizontal, 16)
-                .frame(height: 42)
-                .scSoftCapsule()
-            }
-            .buttonStyle(.plain)
-            .disabled(isBusy)
-            .opacity(isBusy ? 0.7 : 1)
-            .accessibilityLabel("Odhacz cały dzień")
-            .accessibilityValue(
-                "\(PolishPlural.meals(missingMeals)) do odhaczenia, \(missingKcal) kcal"
-            )
-
-            Text("\(missingKcal) kcal wg planu")
-                .font(.system(size: 12.5))
-                .monospacedDigit()
-                .foregroundStyle(Color.scFaint(scheme))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
-                // Liczba stoi już w podpisie przycisku obok — VoiceOver
-                // czytałby ją dwa razy pod rząd.
-                .accessibilityHidden(true)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.top, 14)
-        .animation(.smooth(duration: 0.2), value: isBusy)
-    }
-}
-
-#Preview("Dopiski dnia") {
+#Preview("Pusty dzień") {
     ZStack {
         SCPageBackground(scheme: .dark).ignoresSafeArea()
 
         VStack(alignment: .leading, spacing: 32) {
             CalendarEmptyDayNote(canPlan: true, onAskAssistant: {}, onOpenPlan: {})
             CalendarEmptyDayNote(canPlan: false, onAskAssistant: {}, onOpenPlan: {})
-            CalendarCatchUpRow(missingKcal: 1135, missingMeals: 3, isBusy: false, action: {})
-            CalendarCatchUpRow(missingKcal: 1135, missingMeals: 3, isBusy: true, action: {})
         }
         .padding(.horizontal, SCPageMetrics.horizontal)
     }

@@ -57,12 +57,6 @@ struct CalendarView: View {
     /// wspólny zostaje tylko tydzień.
     @State private var selectedDate: Date = Date()
 
-    /// Klucz dnia, który właśnie odhacza się w całości („Odhacz cały
-    /// dzień"). Klucz, a nie `Bool`: `DayPager` trzyma na ekranie dwie
-    /// strony naraz w czasie zjazdu, a kręciołek ma się kręcić tylko na tej,
-    /// która faktycznie zapisuje.
-    @State private var catchUpDayKey: String?
-
     /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
     ///
     /// Szczegół pozwala teraz przestawić liczbę porcji, a zapis musi trafić
@@ -669,23 +663,26 @@ struct CalendarView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, SCPageMetrics.horizontal)
                 // Łuk oddaje układowi swoje puste marginesy sam (jest
-                // okrągły w kwadratowym pudełku), więc tu wystarczy prześwit.
-                .padding(.top, 2)
+                // okrągły w kwadratowym pudełku, a dolna ćwiartka pudełka
+                // nie ma czego rysować), więc oddech nad nim i pod nim trzeba
+                // dołożyć tutaj — inaczej sąsiedzi siadają wprost na
+                // podpisach godzin.
+                .padding(.top, 16)
 
                 // Kreska pod łukiem — koniec części przypiętej, początek
                 // listy, po której się przewija. Bez niej wiersze wjeżdżałyby
                 // przy przewijaniu pod sam łuk i nie byłoby widać, gdzie
                 // kończy się to, co stoi, a zaczyna to, co jedzie.
                 //
-                // Ciaśniej niż pod dawną osią (8/12 zamiast 12/18): łuk
-                // oddaje układowi swój pusty dół, więc kreska i tak siada
-                // niżej, niż na to wygląda.
+                // 26 od góry, bo tyle realnie zostaje między „06"/„23"
+                // a kreską: łuk przycina swój pusty dół co do punktu, więc
+                // ośmiopunktowy odstęp wyglądał jak przyklejenie.
                 Rectangle()
                     .fill(Color.scRule(scheme))
                     .frame(height: 1)
                     .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
+                    .padding(.top, 26)
+                    .padding(.bottom, 14)
 
                 // Kroki z HealthKit — tylko gdy integracja „Zdrowie"
                 // włączona i dzień nie jest z przyszłości (przyszłość nie ma
@@ -770,8 +767,6 @@ struct CalendarView: View {
                         CalendarEmptySlotRow(slot: card.slot, time: time, isLast: isLast)
                     }
                 }
-
-                catchUpRow(for: date, now: now, cards: cards)
             } else {
                 // Dzień bez ani jednego posiłku dostaje JEDEN dopisek zamiast
                 // stosu identycznych pustych pór. Trzy wiersze mówiące „Nic
@@ -791,31 +786,6 @@ struct CalendarView: View {
         // wtedy, gdy `DayPager` przesuwa całą stronę — dwie animacje na
         // jednym ruchu. Ta sama reguła co na osi Planu tygodnia.
         .id(MealCalendarStore.dateKey(for: date))
-    }
-
-    /// „Odhacz cały dzień" — wyłącznie pod dniem minionym, w którym coś
-    /// jeszcze zostało.
-    ///
-    /// Nie w dzisiejszym: guzik odhaczający kolację o 20:00 o godzinie 11:00
-    /// zapisuje nieprawdę. Nie w przyszłym: nie ma czego zapisywać.
-    @ViewBuilder
-    private func catchUpRow(for date: Date, now: Date, cards: [DayCard]) -> some View {
-        let calendar = Calendar.current
-        let isPast = calendar.startOfDay(for: date) < calendar.startOfDay(for: now)
-        let userId = sessionStore.currentUserId
-        let missing = cards.filter { card in
-            guard let meal = card.meal else { return false }
-            return !meal.isEaten(by: userId)
-        }
-
-        if isPast, canLogEatenMeals(on: date), !missing.isEmpty {
-            CalendarCatchUpRow(
-                missingKcal: max(0, planNutrition(on: date).kcal - eatenDayNutrition(on: date).kcal),
-                missingMeals: missing.count,
-                isBusy: catchUpDayKey == MealCalendarStore.dateKey(for: date),
-                action: { catchUpWholeDay(on: date) }
-            )
-        }
     }
 
     /// „za 4 h 19 min" — tylko przy posiłku, który jest teraz następny.
@@ -861,43 +831,6 @@ struct CalendarView: View {
         }) else { return }
 
         handleAssignedTap(entry.meal, slot: entry.slot, on: selectedDate)
-    }
-
-    /// Odhacza wszystko, co zostało w minionym dniu.
-    ///
-    /// Po kolei, a nie równolegle: `setMealEaten` czyta stan pory, dokłada
-    /// do niego znacznik i odkłada z powrotem — dwa takie zapisy puszczone
-    /// naraz na tę samą porę zgubiłyby jeden z nich. Posiłków dnia jest
-    /// najwyżej sześć, więc szereg nic nie kosztuje.
-    ///
-    /// Zapis potrafi się nie udać (offline, odmowa serwera). Każde wywołanie
-    /// samo cofa swoją zmianę i melduje się w `errorMessage` store'u, więc
-    /// dzień zostaje odhaczony w tylu porach, w ilu się udało — a nie
-    /// wygląda na odhaczony i nie jest.
-    private func catchUpWholeDay(on date: Date) {
-        let key = MealCalendarStore.dateKey(for: date)
-        guard catchUpDayKey == nil else { return }
-
-        let userId = sessionStore.currentUserId
-        let pending = dayCards(on: date).compactMap { card -> (slot: MealSlot, meal: PlanMeal)? in
-            guard let meal = card.meal, !meal.isEaten(by: userId) else { return nil }
-            return (card.slot, meal)
-        }
-        guard !pending.isEmpty else { return }
-
-        catchUpDayKey = key
-        Task { @MainActor in
-            for item in pending {
-                await mealStore.setMealEaten(
-                    true,
-                    recipeId: item.meal.recipe.id,
-                    for: date,
-                    slot: item.slot,
-                    weekStart: datesViewModel.weekStartISO
-                )
-            }
-            catchUpDayKey = nil
-        }
     }
 
     private func handleAssignedTap(_ meal: PlanMeal, slot: MealSlot, on date: Date) {
