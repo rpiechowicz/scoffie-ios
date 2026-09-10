@@ -490,6 +490,8 @@ final class SessionStore {
         // `clearPersistedSession()` nie jest, więc nowa para nie wskrzesi sesji.
         refreshTask?.cancel()
         refreshTask = nil
+        proactiveRefreshTimerTask?.cancel()
+        proactiveRefreshTimerTask = nil
         socketAuthRetryTask?.cancel()
         socketAuthRetryTask = nil
         socketAuthRetryCount = 0
@@ -1779,6 +1781,10 @@ final class SessionStore {
         let userIdSaved = KeychainService.save(response.user.id, forKey: Keys.userId)
         debugLog("[SessionStore] keychain saved accessToken=\(accessSaved) refreshToken=\(refreshSaved)")
         debugLog("[SessionStore] keychain saved userId=\(userIdSaved)")
+        // Świeżo zalogowany telefon nie ma za sobą foregroundu, który
+        // uzbroiłby termin odświeżenia — pierwsza godzina pracy bez
+        // przechodzenia w tło skończyłaby się 401.
+        armProactiveRefresh()
 
         // Legacy cleanup: wcześniejsze wersje trzymały tokeny w UserDefaults.
         // Usuwamy je, żeby nie mylić diagnostyki i nie wyciekały przy backupie.
@@ -2689,9 +2695,35 @@ final class SessionStore {
     }
 
     private var refreshTask: Task<SessionRefreshOutcome, Never>?
-    /// Odświeżamy proaktywnie, gdy do wygaśnięcia zostało mniej niż tydzień
-    /// (access token żyje 30 dni, refresh 60).
-    private static let proactiveRefreshWindow: TimeInterval = 7 * 24 * 3600
+    /// Wejście na pierwszy plan odświeża parę tokenów TYLKO wtedy, gdy do
+    /// wygaśnięcia zostało mniej niż tyle.
+    ///
+    /// PIĘĆ MINUT, nie tydzień. Tydzień pochodził z czasów, gdy access token
+    /// żył 30 dni; od audytu 5.09.2026 żyje GODZINĘ, więc warunek „mniej niż
+    /// tydzień do wygaśnięcia" był zawsze prawdziwy i KAŻDE wejście na
+    /// pierwszy plan — także obudzenie cichym pushem w tle — rotowało refresh
+    /// token. A rotacja w tle bywa przerwana uśpieniem procesu: serwer token
+    /// obraca, odpowiedź nie dojeżdża, w Keychain zostaje stary i następny
+    /// start wygląda jak kradzież. Stąd „Sesja wygasła" po dłuższej przerwie
+    /// od aplikacji. Serwer ratuje taką turę oknem łaski
+    /// (`REFRESH_REUSE_GRACE_SECONDS`), ale pierwszym lekarstwem jest nie
+    /// rotować bez potrzeby.
+    ///
+    /// Sama ta liczba nie wystarcza: sesja, która ani razu nie schodzi na
+    /// drugi plan, nie ma czego wyzwolić i po godzinie dostaje 401. Od tego
+    /// jest `armProactiveRefresh` — para dla tego okna, nie jego zamiennik.
+    private static let proactiveRefreshWindow: TimeInterval = 5 * 60
+    /// Odświeżenie NIE czeka na wygaśnięcie. Access token żyje godzinę, a
+    /// sesja spędzona w całości na pierwszym planie (gotowanie z listą
+    /// zakupów, rozmowa z asystentem) nie ma foregroundu, który by ją
+    /// odnowił — bez tego timera po godzinie przychodziło 401 i `auth:expired`
+    /// z socketu w środku pracy. Sesja wracała sama, ale z mignięciem błędu.
+    private var proactiveRefreshTimerTask: Task<Void, Never>?
+    /// O ile przed `exp` uderzamy po nową parę.
+    private static let proactiveRefreshLead: TimeInterval = 5 * 60
+    /// Podłoga odstępu: token krótszy niż wyprzedzenie (albo już wygasły) nie
+    /// może zamienić timera w pętlę odświeżeń.
+    private static let minProactiveRefreshDelay: TimeInterval = 60
     /// Sesja czeka na dostępny Keychain (patrz `restoreSession`).
     private var restoreDeferredUntilKeychainAvailable = false
     /// Seria odmów socketu po udanych refreshach — hamulec na wypadek, gdy
@@ -2758,10 +2790,15 @@ final class SessionStore {
             if authError == Self.sessionExpiredMessage {
                 authError = nil
             }
+            armProactiveRefresh()
         case .rejected:
             handleSessionExpired()
         case .unavailable:
-            break
+            // Offline / 5xx: sesja żyje dalej, więc termin musi zostać
+            // uzbrojony — inaczej jedna chybiona próba zostawiałaby sesję bez
+            // timera aż do następnego foregroundu. Wygasły token daje podłogę
+            // (minuta), czyli ponowienie zamiast ciszy.
+            armProactiveRefresh()
         }
         return outcome
     }
@@ -2769,8 +2806,35 @@ final class SessionStore {
     private func refreshSessionTokensIfExpiringSoon() async {
         guard isAuthenticated || currentUserId != nil else { return }
         guard let expiry = accessTokenExpiry() else { return }
-        guard expiry.timeIntervalSinceNow < Self.proactiveRefreshWindow else { return }
+        guard expiry.timeIntervalSinceNow < Self.proactiveRefreshWindow else {
+            armProactiveRefresh()
+            return
+        }
         await refreshSessionTokens()
+    }
+
+    /// Uzbraja jednorazowy termin na `exp - proactiveRefreshLead`. Każde
+    /// wywołanie zastępuje poprzedni: świeża para = nowy termin. Wołane po
+    /// zapisie tokenów (logowanie) i po każdym odświeżeniu, więc timer istnieje
+    /// przez całe życie sesji, także bez ani jednego przejścia w tło.
+    private func armProactiveRefresh() {
+        proactiveRefreshTimerTask?.cancel()
+        proactiveRefreshTimerTask = nil
+        // Brak `exp` = brak tokenu w Keychain (albo token bez daty) — nie ma
+        // czego pilnować.
+        guard let expiry = accessTokenExpiry() else { return }
+        let delay = max(
+            expiry.timeIntervalSinceNow - Self.proactiveRefreshLead,
+            Self.minProactiveRefreshDelay
+        )
+        proactiveRefreshTimerTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            // `.refreshed` i `.unavailable` uzbrajają termin na nowo w
+            // `refreshSessionTokens`; `.rejected` kończy sesję i timer ginie
+            // razem z nią w `logout()`.
+            await self.refreshSessionTokens()
+        }
     }
 
     /// Serwer odrzucił socket (`connect_error UNAUTHORIZED` / `auth:expired`):
