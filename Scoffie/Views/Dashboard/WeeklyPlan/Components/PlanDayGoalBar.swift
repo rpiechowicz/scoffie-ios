@@ -56,6 +56,16 @@ import SwiftUI
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
+    /// Czy w tym dniu cokolwiek stoi w planie.
+    ///
+    /// Pigułka pokazuje ZJEDZONE, więc dzień, którego nikt jeszcze nie
+    /// odhaczył, ma w niej same zera — i wygląda identycznie jak dzień,
+    /// w którym nie ma czego jeść. Poświata rozdziela te dwa stany, nie
+    /// dokładając ani jednej liczby: świeci się, kiedy jest po co tu wrócić.
+    ///
+    /// Domyślnie wyłączona — Plan tygodnia liczy sam plan, więc jego pigułka
+    /// nie ma czego zapowiadać.
+    var hasPlan: Bool = false
     let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -76,6 +86,15 @@ struct PlanDayGoalBar: View {
         let macros = targets.macros
         return "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
             + "|\(targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
+            + "|\(hasPlan)"
+    }
+
+    /// Poświata pod pigułką — barwa kalorii, bo to ona jest tu pierwsza.
+    /// Przezroczysta, gdy dzień nie ma planu: `Color.clear` w cieniu nie
+    /// rysuje niczego, a zostawia co animować przy zmianie dnia.
+    private var planGlow: Color {
+        guard hasPlan else { return .clear }
+        return SCPalette.terracotta.opacity(scheme == .dark ? 0.26 : 0.16)
     }
 
     /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
@@ -122,6 +141,10 @@ struct PlanDayGoalBar: View {
                 Color.scPageBase(scheme).opacity(0.72),
                 in: .rect(cornerRadius: Self.cornerRadius)
             )
+            // Poświata idzie POD szkłem, na warstwie tła — cień rzucony na
+            // sam `glassEffect` obrysowywałby jego krawędź jak obwódka,
+            // a to ma być łuna spod pigułki, nie ramka wokół niej.
+            .shadow(color: planGlow, radius: 18, x: 0, y: 2)
             // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
             // na cyfrach, na literach i na kilku punktach pasków. Padding,
             // przerwy między kolumnami i całe tło szkła były martwe — pigułka

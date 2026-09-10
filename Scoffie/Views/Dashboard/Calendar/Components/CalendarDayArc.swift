@@ -26,20 +26,21 @@ import SwiftUI
 //     wypada jego pora, kropka przejmuje KOLOR TEJ PORY i zaczyna oddychać —
 //     ta sama barwa stoi wtedy w obwódce węzła, w środku łuku i w kółku
 //     wiersza na liście. Reguła siedzi w `CalendarDayFocus.nowTint`.
-//  3. **Posiłki stoją w RÓWNYCH odstępach, nie na swoich godzinach.**
-//     Największa różnica wobec makiety i jedyna, która zmienia znaczenie
-//     rysunku — cała reguła i jej uzasadnienie siedzą w `anchors`. Skrót:
-//     zegar dnia nie jest równomierny, więc linijka czasu robiła z łuku
-//     kształt przekrzywiony, choć policzony co do stopnia.
+//  3. **Skrajne posiłki dnia są wyrównane, reszta zostaje na swoich
+//     godzinach.** Największa różnica wobec makiety i jedyna, która zmienia
+//     znaczenie rysunku — cała reguła i jej uzasadnienie siedzą w `anchors`.
+//     Skrót: zegar dnia nie jest symetryczny, więc czysta linijka czasu
+//     robiła z łuku kształt przekrzywiony, choć policzony co do stopnia.
 //  4. **Podpis godziny chowa się pod węzłem, nie tylko pod kropką.** Makieta
 //     ukrywała podpis, gdy nachodziła na niego kropka „teraz” — ale zdjęcie
 //     dania zderza się z nim dokładnie tak samo.
 //  5. **Podpisane są tylko dwa końce doby**, a nie 06/12/18/23 z makiety.
-//     Powód jest ten sam, co w punkcie 3: skala między posiłkami nie jest
-//     równomierna, więc podpis w środku obiecywałby coś, czego nie ma.
-//  6. **Zdjęcie ma wokół siebie prześwit tła.** Zjedzone danie przygasa,
-//     a wtedy tor doby prześwitywał przez nie na wylot jak rysa. Krążek tła
-//     pod zdjęciem wycina tor tam, gdzie i tak nie miał czego pokazywać.
+//     Powód jest ten sam, co w punkcie 3: skala nie jest jednostajna, więc
+//     podpis w środku obiecywałby równomierność, której nie ma.
+//  6. **Tor jest pocięty na odcinki, po jednym między daniami.** Makieta
+//     przeciągała jedną kreskę pod zdjęciami. Odcinki mają własne zaokrąglone
+//     końcówki, więc kreska domyka się przy każdym daniu tak samo, jak domyka
+//     się na obu końcach doby — i nie trzeba jej zasłaniać krążkiem tła.
 struct CalendarDayArc: View {
     /// Jeden posiłek na łuku.
     ///
@@ -122,6 +123,11 @@ struct CalendarDayArc: View {
 
     /// Prześwit między dwoma zdjęciami stojącymi obok siebie na torze.
     private static let nodeGap: CGFloat = 8
+    /// Odstęp między zdjęciem a końcówką toru po obu jego stronach.
+    private static let trackGap: CGFloat = 5
+    /// Krótszego odcinka toru nie ma sensu rysować — sama zaokrąglona
+    /// końcówka wyglądałaby jak zgubiona kropka.
+    private static let minSegment: Double = 0.012
     /// Jak blisko musi stanąć węzeł albo kropka, żeby zgasić podpis godziny.
     private static let tickHideDegrees: Double = 16
 
@@ -169,18 +175,23 @@ struct CalendarDayArc: View {
         let placed = layout()
 
         ZStack {
-            track
-            elapsedTrack
+            track(placed)
+            elapsedTrack(placed)
 
             ForEach(hourTicks, id: \.self) { hour in
                 hourLabel(hour, hidden: isTickHidden(hour, placed: placed))
             }
 
+            // Kropka „teraz" POD zdjęciami, nie nad nimi. Kiedy pora posiłku
+            // nadchodzi, jedno wchodzi na drugie — i wtedy to danie ma być
+            // widać w całości, a kropka ma tylko wystawać zza niego. Że
+            // „teraz" jest właśnie tutaj, mówi i tak obwódka, która się wtedy
+            // zapala.
+            nowDot
+
             ForEach(placed) { item in
                 nodeButton(item)
             }
-
-            nowDot
 
             CalendarArcCenter(focus: focus, scale: textScale)
                 .frame(width: (size * 0.62).rounded())
@@ -211,6 +222,49 @@ struct CalendarDayArc: View {
 
     // MARK: - Tor doby
 
+    /// Kawałek toru między dwoma zdjęciami.
+    private struct Segment: Identifiable {
+        let id: Int
+        let from: Double
+        let to: Double
+    }
+
+    /// Tor pocięty na odcinki — po jednym między sąsiednimi zdjęciami, plus
+    /// ogonki przed pierwszym i za ostatnim.
+    ///
+    /// Wcześniej tor był jedną nieprzerwaną kreską, a zdjęcia leżały NA niej
+    /// i zasłaniały ją krążkiem tła. Działało, dopóki nie przyjrzeć się
+    /// z bliska: kreska urywała się pod zdjęciem na płasko, bo krążek ją po
+    /// prostu przykrywał. Pocięty tor kończy każdy odcinek WŁASNĄ zaokrągloną
+    /// końcówką, więc po obu stronach każdego dania kreska domyka się tak
+    /// samo, jak domyka się na obu końcach doby.
+    ///
+    /// Przy okazji znika krążek tła spod zdjęcia — a razem z nim jedyne
+    /// miejsce na łuku, które musiało zgadywać kolor tła strony.
+    private func segments(_ placed: [Placed]) -> [Segment] {
+        let hole = nodeHoleHalf
+        var result: [Segment] = []
+        var cursor: Double = 0
+
+        for item in placed.sorted(by: { $0.position < $1.position }) {
+            let gapStart = item.position - hole
+            if gapStart - cursor > Self.minSegment {
+                result.append(Segment(id: result.count, from: cursor, to: gapStart))
+            }
+            cursor = max(cursor, item.position + hole)
+        }
+        if 1 - cursor > Self.minSegment {
+            result.append(Segment(id: result.count, from: cursor, to: 1))
+        }
+        return result
+    }
+
+    /// Połowa luki wycinanej w torze pod zdjęciem, w ułamku długości łuku.
+    private var nodeHoleHalf: Double {
+        let span = Double(nodeSize / 2 + Self.trackGap) / Double(radius) * 180 / Double.pi
+        return span / Self.sweep
+    }
+
     /// Pusty tor całej doby.
     ///
     /// `Circle().trim(from: 0, …)` ZACZYNA SIĘ NA GODZINIE TRZECIEJ, nie na
@@ -221,37 +275,46 @@ struct CalendarDayArc: View {
     /// więc tor i węzły muszą wychodzić z tej samej liczby. Dołożone 90°
     /// przekręcało sam tor o ćwierć obrotu i otwarcie łuku wypadało z lewej
     /// zamiast u dołu — zdjęcia stały wtedy w powietrzu, obok kreski.
-    private var track: some View {
-        Circle()
-            .trim(from: 0, to: Self.sweep / 360)
-            .stroke(
-                Color.scLabel(scheme).opacity(0.10),
-                style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
-            )
-            .rotationEffect(.degrees(Self.startAngle))
-            .frame(width: radius * 2, height: radius * 2)
+    private func track(_ placed: [Placed]) -> some View {
+        ForEach(segments(placed)) { segment in
+            arc(from: segment.from, to: segment.to)
+                .stroke(
+                    Color.scLabel(scheme).opacity(0.10),
+                    style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
+                )
+                .frame(width: radius * 2, height: radius * 2)
+        }
     }
 
-    /// Przebyta część doby.
+    /// Przebyta część doby — te same odcinki, przycięte do „teraz".
     ///
-    /// Widok stoi ZAWSZE, także przy zerowym wypełnieniu — inaczej pierwsze
-    /// wejście na ekran wstawiałoby go od razu w docelowej długości i nie
-    /// byłoby czego animować. Kryciem, a nie istnieniem, bo zaokrąglona
-    /// końcówka potrafi przy zerowej długości zostawić kropkę na starcie łuku.
-    private var elapsedTrack: some View {
+    /// Odcinków jest ZAWSZE tyle samo, co w pustym torze, także tych o zerowej
+    /// długości — gdyby pojawiały się i znikały, pierwsze wejście na ekran
+    /// wstawiałoby je od razu gotowe i nie byłoby czego animować. Puste gasi
+    /// krycie, bo zaokrąglona końcówka potrafi przy zerowej długości zostawić
+    /// po sobie kropkę.
+    private func elapsedTrack(_ placed: [Placed]) -> some View {
         let drawn = didDraw ? elapsed : 0
         let motion: Animation? = reduceMotion ? nil : .easeOut(duration: 0.85)
 
-        return Circle()
-            .trim(from: 0, to: (Self.sweep / 360) * drawn)
-            .stroke(
-                Color.scLabel(scheme).opacity(scheme == .dark ? 0.26 : 0.28),
-                style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
-            )
-            .rotationEffect(.degrees(Self.startAngle))
-            .frame(width: radius * 2, height: radius * 2)
-            .opacity(drawn > 0.001 ? 1 : 0)
-            .animation(motion, value: drawn)
+        return ForEach(segments(placed)) { segment in
+            let end = max(segment.from, min(segment.to, drawn))
+            arc(from: segment.from, to: end)
+                .stroke(
+                    Color.scLabel(scheme).opacity(scheme == .dark ? 0.26 : 0.28),
+                    style: StrokeStyle(lineWidth: trackWidth, lineCap: .round)
+                )
+                .frame(width: radius * 2, height: radius * 2)
+                .opacity(end - segment.from > 0.001 ? 1 : 0)
+                .animation(motion, value: drawn)
+        }
+    }
+
+    /// Kształt odcinka łuku od `from` do `to` (ułamki jego długości).
+    private func arc(from: Double, to: Double) -> some Shape {
+        Circle()
+            .trim(from: from * Self.sweep / 360, to: to * Self.sweep / 360)
+            .rotation(.degrees(Self.startAngle))
     }
 
     /// Ile doby jest już za nami: cała (dzień miniony), do kropki (dzisiaj)
@@ -307,15 +370,22 @@ struct CalendarDayArc: View {
            abs(angle(forMinutes: nowMinutes) - tick) < Self.tickHideDegrees {
             return true
         }
-        return placed.contains { abs($0.degrees - tick) < Self.tickHideDegrees }
+        return placed.contains { abs(degrees(at: $0.position) - tick) < Self.tickHideDegrees }
     }
 
     // MARK: - Węzły
 
     private struct Placed: Identifiable {
         let node: Node
-        let degrees: Double
+        /// Miejsce na łuku w ułamku jego długości (0 = początek doby,
+        /// 1 = koniec). Stopnie liczy z tego `degrees(at:)` — jedno źródło,
+        /// bo po tej samej skali jedzie też tor pod zdjęciami.
+        let position: Double
         var id: String { node.id }
+    }
+
+    private func degrees(at position: Double) -> Double {
+        Self.startAngle + Self.sweep * position
     }
 
     private func nodeButton(_ item: Placed) -> some View {
@@ -326,7 +396,7 @@ struct CalendarDayArc: View {
                 .scTapTarget(44, drawn: nodeSize)
         }
         .buttonStyle(ArcNodePressStyle())
-        .position(point(item.degrees, radius: radius))
+        .position(point(degrees(at: item.position), radius: radius))
         .transition(.opacity.combined(with: .scale(scale: 0.86, anchor: .center)))
         .accessibilityLabel(accessibilityLabel(item.node))
         .accessibilityHint("Otwiera szczegóły posiłku")
@@ -355,20 +425,28 @@ struct CalendarDayArc: View {
         .opacity(node.status.isEaten ? 0.82 : 1)
         .overlay(
             Circle()
-                .strokeBorder(ringColor(node), lineWidth: node.status == .next ? 2 : 1)
+                .strokeBorder(ringColor(node), lineWidth: ringWidth(node))
         )
-        // Krążek tła szerszy od zdjęcia wycina pod nim tor doby. Zjedzone
-        // danie przygasa, a wtedy kreska przechodząca pod spodem prześwitywała
-        // przez nie jak rysa na ekranie.
+        // Kołnierz w kolorze pory pod daniem, na które właśnie przyszła
+        // pora. Kropka „teraz" leży wtedy pod zdjęciem, więc to on niesie
+        // „to jest ten posiłek, teraz" — i niesie to samą barwą, którą kropka
+        // przejmuje w tej samej chwili.
         .background(
             Circle()
-                .fill(Color.scPageBase(scheme))
-                .padding(-2.5)
+                .strokeBorder(
+                    node.slot.cozyAccent.opacity(isActive(node) ? 0.28 : 0),
+                    lineWidth: 5
+                )
+                .padding(-4.5)
         )
         .overlay(alignment: .bottomTrailing) {
             if node.status.isEaten { eatenBadge }
         }
         .animation(.smooth(duration: 0.24), value: node.status)
+        // Kołnierz zapala się z zegara, nie ze zmiany statusu — bez własnego
+        // odcisku pojawiałby się skokiem w minucie, w której otwiera się okno
+        // gotowania.
+        .animation(.smooth(duration: 0.35), value: isActive(node))
     }
 
     private func fallback(_ slot: MealSlot) -> some View {
@@ -401,12 +479,24 @@ struct CalendarDayArc: View {
             .transition(.scale(scale: 0.4).combined(with: .opacity))
     }
 
+    /// Danie, na które właśnie przyszła pora — gotuje się albo czeka na
+    /// stole. To ono dostaje pełną obwódkę i kołnierz, i to jego barwę
+    /// przejmuje w tej samej chwili kropka „teraz" (`CalendarDayFocus`).
+    private func isActive(_ node: Node) -> Bool {
+        focus.isUrgent && node.status == .next
+    }
+
     private func ringColor(_ node: Node) -> Color {
         switch node.status {
         case .eaten: return Color.scChecked(scheme).opacity(0.28)
         case .next:  return node.slot.cozyAccent
         default:     return Color.scTileStroke(scheme)
         }
+    }
+
+    private func ringWidth(_ node: Node) -> CGFloat {
+        if isActive(node) { return 2.5 }
+        return node.status == .next ? 2 : 1
     }
 
     private func accessibilityLabel(_ node: Node) -> String {
@@ -438,7 +528,6 @@ struct CalendarDayArc: View {
             // skokiem o pół punktu, co przy oglądaniu ekranu na żywo widać
             // jako drgnięcie.
             .animation(motion, value: nowMinutes)
-            .zIndex(3)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
@@ -476,50 +565,48 @@ struct CalendarDayArc: View {
         let position: Double
     }
 
-    /// Skala łuku — i to jest miejsce, w którym łuk PRZESTAJE być linijką
-    /// czasu.
+    /// Skala łuku — i to jest miejsce, w którym łuk przestaje być zwykłą
+    /// linijką czasu.
     ///
-    /// Posiłki stoją na nim w RÓWNYCH odstępach, bo zegar dnia i tak nie jest
-    /// równomierny: śniadanie o 08:00 dzielą od początku doby dwie godziny,
-    /// a kolację o 20:00 od jej końca trzy. Na linijce czasu wychodziło z tego
-    /// śniadanie zauważalnie niżej niż kolacja i cały łuk czytał się jak
-    /// przekrzywiony, choć był policzony co do stopnia. Rytm dnia niesie
-    /// KOLEJNOŚĆ posiłków, nie odległość w minutach — więc to kolejność
-    /// dostaje równe odstępy.
+    /// **Równane są tylko SKRAJNE posiłki.** Pierwsze danie dnia siada na
+    /// `endMargin`, ostatnie na `1 − endMargin`, czyli w miejscach lustrzanych
+    /// wobec szczytu łuku — i to załatwia całą krzywiznę, którą widać było
+    /// gołym okiem: zegar dnia nie jest symetryczny (śniadanie o 08:00 dzielą
+    /// od początku doby dwie godziny, kolację o 20:00 od jej końca trzy), więc
+    /// na czystej linijce czasu śniadanie siedziało niżej niż kolacja.
     ///
-    /// Czas nie znika: rozciąga się i ściska MIĘDZY posiłkami. Kropka „teraz"
-    /// dalej mówi prawdę — o 09:41 stoi między śniadaniem a obiadem dokładnie
-    /// tam, gdzie wypada proporcją. Zmienia się tylko to, że godzina drogi
-    /// przed obiadem może być na łuku dłuższa niż godzina drogi po nim.
+    /// **Wszystko pomiędzy zostaje na swojej godzinie**, rozpięte liniowo
+    /// między pierwszym a ostatnim posiłkiem. To był warunek konieczny:
+    /// przy rozkładzie „każdy po równo" przestawienie obiadu z 14:00 na 12:00
+    /// nie ruszało na łuku niczego, więc łuk przestawał cokolwiek mówić
+    /// o dniu. Teraz obiad przesuwa się dokładnie tak, jak go przesuniesz —
+    /// tylko dwa końce są przybite.
+    ///
+    /// Kropka „teraz" jedzie po tej samej skali, więc dalej mówi prawdę:
+    /// o 09:41 stoi między śniadaniem a obiadem dokładnie tam, gdzie wypada
+    /// proporcją. Zmienia się tylko to, że godzina drogi przed pierwszym
+    /// posiłkiem bywa na łuku krótsza niż godzina drogi między posiłkami.
     private var anchors: [Anchor] {
         let bounds = domain
         let mealMinutes = nodes.map(\.minutes).sorted()
-        guard !mealMinutes.isEmpty else {
+
+        guard let first = mealMinutes.first, let last = mealMinutes.last else {
             return [Anchor(minutes: bounds.lower, position: 0),
                     Anchor(minutes: bounds.upper, position: 1)]
         }
-
-        var result = [Anchor(minutes: bounds.lower, position: 0)]
-        for (index, minutes) in mealMinutes.enumerated() {
-            result.append(Anchor(minutes: minutes, position: mealPosition(index, of: mealMinutes.count)))
+        // Jeden posiłek (albo wszystkie o tej samej porze) nie ma czego
+        // równać z niczym — staje w szczycie łuku.
+        guard last > first else {
+            return [Anchor(minutes: bounds.lower, position: 0),
+                    Anchor(minutes: first, position: 0.5),
+                    Anchor(minutes: bounds.upper, position: 1)]
         }
-        result.append(Anchor(minutes: bounds.upper, position: 1))
-        return result
-    }
-
-    /// Miejsce `index`-tego posiłku dnia na łuku. Jedyny posiłek staje
-    /// w szczycie; reszta rozkłada się równo między marginesami.
-    private func mealPosition(_ index: Int, of count: Int) -> Double {
-        guard count > 1 else { return 0.5 }
-
-        // Dzień gęstszy, niż łuk umie pomieścić z marginesami (kilka
-        // wariantów w tej samej porze), oddaje marginesy na rzecz prześwitu
-        // między zdjęciami. Poniżej tego i tak nie ma czego ratować.
-        var margin = Self.endMargin
-        if Self.sweep * (1 - 2 * margin) / Double(count - 1) < minNodeSpacing {
-            margin = 0
-        }
-        return margin + (1 - 2 * margin) * Double(index) / Double(count - 1)
+        return [
+            Anchor(minutes: bounds.lower, position: 0),
+            Anchor(minutes: first, position: Self.endMargin),
+            Anchor(minutes: last, position: 1 - Self.endMargin),
+            Anchor(minutes: bounds.upper, position: 1)
+        ]
     }
 
     /// Minuta doby → miejsce na łuku, po odcinkach między kotwicami.
@@ -564,10 +651,9 @@ struct CalendarDayArc: View {
     /// Najmniejszy kąt między środkami dwóch zdjęć, przy którym zostaje
     /// między nimi `nodeGap` prześwitu.
     ///
-    /// Odkąd posiłki rozkładają się równo, nic tu nikogo nie rozsuwa —
-    /// ta liczba jest już tylko progiem, po którym `mealPosition` oddaje
-    /// marginesy przy końcach łuku, żeby dzień z sześcioma wariantami nie
-    /// zlepił zdjęć w jedną plamę.
+    /// Po niej rozsuwa węzły `spread` — śniadanie o 08:00 i drugie śniadanie
+    /// o 08:30 dzieli na tej skali kilka stopni i bez tego zlałyby się
+    /// w jedną plamę.
     ///
     /// Liczone po ŁUKU, nie po cięciwie — a łuk jest zawsze dłuższy niż
     /// cięciwa, więc wychodzi z tego próg odrobinę ciaśniejszy, niż
@@ -577,18 +663,65 @@ struct CalendarDayArc: View {
         Double(nodeSize + Self.nodeGap) / Double(radius) * 180 / Double.pi
     }
 
-    /// Węzły biorą swoje miejsce WPROST z kolejności dnia, a nie z godziny —
-    /// to jest cała różnica między tym łukiem a linijką czasu (patrz
-    /// `anchors`). Równe odstępy wychodzą z rachunku, a nie z rozsuwania po
-    /// fakcie, więc nie ma tu czego poprawiać kolizjami.
+    /// Węzły siadają tam, gdzie skala (`anchors`) stawia ich godzinę —
+    /// a potem rozsuwają się, jeśli któreś dwa stanęły na sobie.
+    ///
+    /// Rozsuwanie wróciło razem ze skalą po czasie: śniadanie o 08:00
+    /// i drugie śniadanie o 08:30 dzieli na tym łuku kilka stopni i bez tego
+    /// zlewałyby się w plamę.
     private func layout() -> [Placed] {
         let sorted = nodes.sorted { $0.minutes < $1.minutes }
         guard !sorted.isEmpty else { return [] }
 
-        return sorted.indices.map { index in
-            let position = mealPosition(index, of: sorted.count)
-            return Placed(node: sorted[index], degrees: Self.startAngle + Self.sweep * position)
+        let positions = Self.spread(
+            ideal: sorted.map { progress(forMinutes: $0.minutes) },
+            minSpacing: minNodeSpacing / Self.sweep,
+            lower: Self.endMargin,
+            upper: 1 - Self.endMargin
+        )
+        return sorted.indices.map { Placed(node: sorted[$0], position: positions[$0]) }
+    }
+
+    /// Rozsuwa węzły tak, żeby żadne dwa nie stały bliżej niż `minSpacing`,
+    /// nie ruszając ich kolejności i nie wypuszczając poza `lower…upper`.
+    ///
+    /// Przejście w przód dopycha każdy węzeł za poprzednika; jeśli ostatni
+    /// wyjdzie za koniec, przejście w tył ściąga cały ogon z powrotem. Gdy
+    /// węzłów jest tyle, że nie mieszczą się nawet ciasno upakowane, proporcje
+    /// przestają cokolwiek znaczyć i rozkładamy je równo — lepiej stracić
+    /// informację o godzinie niż zlepić zdjęcia w jedną plamę.
+    ///
+    /// `static` i bez `self`, żeby dało się to przeczytać (i policzyć
+    /// w głowie) w oderwaniu od widoku. Ta sama procedura jechała na poziomej
+    /// osi v2, tylko w punktach zamiast w ułamkach łuku.
+    static func spread(
+        ideal: [Double],
+        minSpacing: Double,
+        lower: Double,
+        upper: Double
+    ) -> [Double] {
+        guard !ideal.isEmpty else { return [] }
+        guard ideal.count > 1 else { return [min(max(ideal[0], lower), upper)] }
+
+        let span = upper - lower
+        let needed = Double(ideal.count - 1) * minSpacing
+        guard needed <= span else {
+            let step = span / Double(ideal.count - 1)
+            return ideal.indices.map { lower + Double($0) * step }
         }
+
+        var values = ideal.map { min(max($0, lower), upper) }
+        for index in 1..<values.count {
+            values[index] = max(values[index], values[index - 1] + minSpacing)
+        }
+
+        if let last = values.last, last > upper {
+            values[values.count - 1] = upper
+            for index in stride(from: values.count - 2, through: 0, by: -1) {
+                values[index] = min(values[index], values[index + 1] - minSpacing)
+            }
+        }
+        return values
     }
 
     /// Odcisk zawartości łuku — po nim animuje się podmiana dnia i odhaczenie
@@ -596,7 +729,7 @@ struct CalendarDayArc: View {
     /// zestawie posiłków nie ma czego animować.
     private func fingerprint(_ placed: [Placed]) -> String {
         placed
-            .map { "\($0.node.id):\(Int($0.degrees.rounded())):\($0.node.status)" }
+            .map { "\($0.node.id):\(Int(($0.position * 1000).rounded())):\($0.node.status)" }
             .joined(separator: "|")
     }
 

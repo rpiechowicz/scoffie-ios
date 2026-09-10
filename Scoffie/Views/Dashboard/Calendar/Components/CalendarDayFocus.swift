@@ -171,9 +171,10 @@ struct CalendarArcCenter: View {
         case .closed:
             return "DZIEŃ DOMKNIĘTY"
         case .next(let meal):
-            if meal.isCooking { return "PORA GOTOWAĆ" }
-            if meal.isDue { return "PORA JEŚĆ" }
-            return meal.slot.title.uppercased()
+            // Pora dnia i godzina razem, w każdym stanie tak samo — żeby
+            // przejście z odliczania w „Pora gotować" zmieniało JEDNĄ linijkę,
+            // a nie przemeblowywało całego środka.
+            return "\(meal.slot.title.uppercased()) · \(meal.time)"
         case .untouched(_, _, let isPast):
             return isPast ? "NIC NIE ODHACZONO" : "W PLANIE"
         case .partial:
@@ -190,7 +191,11 @@ struct CalendarArcCenter: View {
         case .closed(let kcal, _):
             return "\(kcal) kcal"
         case .next(let meal):
-            if meal.isDue { return meal.slot.title }
+            // Odkąd okno gotowania jest otwarte, odliczanie przestaje być
+            // odpowiedzią: „za 3 min" przy daniu, które robi się kwadrans,
+            // mówi, ile zostało do JEDZENIA, a pytanie brzmi już co innego.
+            if meal.isCooking { return "Pora gotować" }
+            if meal.isDue { return "Pora jeść" }
             if meal.isLate { return "Pora minęła" }
             return CalendarRelativeTime.text(inMinutes: meal.minutesAway)
         case .untouched(let planKcal, _, _):
@@ -212,20 +217,20 @@ struct CalendarArcCenter: View {
             if delta < 0 { return "\(-delta) pod celem" }
             return "Równo z celem"
         case .next(let meal):
+            // Ile danie waży, a przy okazji — dopóki gotowanie jest jeszcze
+            // przed nami — od której trzeba stanąć przy garnkach. Samo „od",
+            // bez czasownika: godzina po kaloriach nie może znaczyć nic
+            // innego, a każde dołożone słowo zjada linijkę w kole.
             if meal.isCooking {
-                return "\(meal.slot.title) \(meal.time) · \(meal.prepMinutes) min"
+                return "\(meal.kcal) kcal · \(meal.prepMinutes) min"
             }
             if meal.isDue || meal.isLate {
-                return "\(meal.time) · \(meal.kcal) kcal"
+                return "\(meal.kcal) kcal"
             }
-            // Godzina „od której przy garnkach” jest tu jedyną informacją,
-            // której nie ma ani na łuku, ani w wierszu niżej — i to ona
-            // uprzedza, zanim zapali się „PORA GOTOWAĆ”. Dla dania, którego
-            // się nie gotuje, wraca zwykłe „ile to waży”.
             if meal.showsCookHint, let cookFrom = meal.cookFrom {
-                return "\(meal.time) · gotuj od \(cookFrom)"
+                return "\(meal.kcal) kcal · od \(cookFrom)"
             }
-            return "\(meal.time) · \(meal.kcal) kcal"
+            return "\(meal.kcal) kcal"
         case .untouched(_, let meals, _):
             return "\(PolishPlural.meals(meals)) w planie"
         case .partial(_, let eaten, let total, let planKcal):

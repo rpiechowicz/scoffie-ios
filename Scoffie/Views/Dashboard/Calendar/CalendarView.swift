@@ -500,6 +500,11 @@ struct CalendarView: View {
                 PlanDayGoalBar(
                     nutrition: eatenNutrition,
                     targets: dailyTargets,
+                    // Pigułka liczy ZJEDZONE, więc dzień przed pierwszym
+                    // odhaczeniem ma w niej same zera — i nie da się z niej
+                    // odróżnić dnia z planem od dnia pustego. Poświata mówi
+                    // to jednym spojrzeniem, bez dokładania liczby.
+                    hasPlan: !selectedDayMeals.isEmpty,
                     action: { simpleSheet = .dayGoal }
                 )
                 .frame(width: goalBarWidth)
