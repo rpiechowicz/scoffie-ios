@@ -1370,12 +1370,22 @@ final class SessionStore {
             throw envelope.failure(fallback: "Nie udało się utworzyć zaproszenia.")
         }
 
+        // Link https, nie schemat. `scoffie://invite?token=…` w iMessage czy
+        // WhatsAppie jest martwy — nie klika się, nie ma podglądu, a odbiorca
+        // widzi surowy token. Strona scoffie.app/zaproszenie/ ma kartę
+        // z tytułem i obrazkiem, otwiera się wszędzie i dopiero po kliknięciu
+        // na niej uruchamia aplikację tym samym schematem.
+        //
+        // Token idzie we FRAGMENCIE (`#…`), nie w ścieżce: fragment nigdy nie
+        // opuszcza przeglądarki — nie trafia do serwera ani logów Cloudflare,
+        // nie ma go w nagłówku Referer, a roboty podglądu linków go nie
+        // dostają. Universal Links fragment zachowują, więc ten sam adres
+        // obsłuży kiedyś aplikacja bez strony — `invitationToken(from:)` już go zna.
         var components = URLComponents()
-        components.scheme = "scoffie"
-        components.host = "invite"
-        components.queryItems = [
-            URLQueryItem(name: "token", value: invitation.token)
-        ]
+        components.scheme = "https"
+        components.host = Self.invitationHost
+        components.path = "/zaproszenie/"
+        components.fragment = invitation.token
         guard let url = components.url else {
             throw RecipeDataError.serverError(message: "Nie udało się zbudować linku zaproszenia.")
         }
@@ -1585,10 +1595,35 @@ final class SessionStore {
         await presentInvitation(token: token)
     }
 
+    /// Host strony z zaproszeniami — ten sam, na który wskazuje karta OG.
+    static let invitationHost = "scoffie.app"
+
+    /// Token zaproszenia z linku, w obu postaciach:
+    ///  - `scoffie://invite?token=…` — schemat, którym strona zaproszenia
+    ///    otwiera aplikację;
+    ///  - `https://scoffie.app/zaproszenie/#<token>` (awaryjnie `?t=<token>`) —
+    ///    link, który udostępnia domownik. Dziś trafia tu wyłącznie przez
+    ///    Universal Links, gdy je włączymy; bez nich otwiera go Safari.
+    static func invitationToken(from url: URL) -> String? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        let token: String?
+        if url.scheme == "scoffie", url.host == "invite" {
+            token = components.queryItems?.first(where: { $0.name == "token" })?.value
+        } else if url.scheme == "https",
+                  url.host == invitationHost || url.host == "www.\(invitationHost)" {
+            let parts = url.pathComponents.filter { $0 != "/" }
+            guard parts == ["zaproszenie"] else { return nil }
+            token = components.fragment
+                ?? components.queryItems?.first(where: { $0.name == "t" })?.value
+        } else {
+            return nil
+        }
+        guard let token, !token.isEmpty else { return nil }
+        return token
+    }
+
     func handleIncomingURL(_ url: URL) {
-        guard url.scheme == "scoffie", url.host == "invite" else { return }
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-        guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else { return }
+        guard let token = Self.invitationToken(from: url) else { return }
 
         guard currentUserId?.isEmpty == false else {
             // Odkładamy i wracamy do tego po zalogowaniu — zamiast kazać
