@@ -57,6 +57,16 @@ struct CalendarView: View {
     /// wspólny zostaje tylko tydzień.
     @State private var selectedDate: Date = Date()
 
+    /// Danie, które użytkownik sam przełożył na talerz stuknięciem
+    /// w sekwencję pod nim. `nil` znaczy „pokaż to, co trzeba” — czyli
+    /// następny posiłek dnia (`focusedItem`).
+    ///
+    /// Trzymamy sam identyfikator, a nie cały posiłek: plan potrafi przyjść
+    /// z serwera zmieniony ręką domownika w trakcie oglądania, a wtedy
+    /// przechowana kopia dania byłaby już nieprawdą. Identyfikator, który
+    /// przestał pasować do dnia, po prostu wraca do wartości domyślnej.
+    @State private var pickedCardId: String?
+
     /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
     ///
     /// Szczegół pozwala teraz przestawić liczbę porcji, a zapis musi trafić
@@ -205,8 +215,12 @@ struct CalendarView: View {
 
     /// Pasek kroków: integracja „Zdrowie" włączona i dzień dzisiejszy lub
     /// przeszły — ta sama granica co przy odhaczaniu posiłków.
-    private var stepsBarVisible: Bool {
-        stepsEnabled && canLogEatenMeals(on: selectedDate)
+    ///
+    /// Liczone z podanego dnia, a nie ze stanu ekranu: strona dnia rysuje się
+    /// z własnego argumentu i przez czas zjazdu pokazuje jeszcze poprzedni
+    /// dzień.
+    private func stepsBarVisible(on date: Date) -> Bool {
+        stepsEnabled && canLogEatenMeals(on: date)
     }
 
     /// Set of "yyyy-MM-dd" keys for visible days that already have ≥1 meal — drives the sage planned-dot.
@@ -239,82 +253,153 @@ struct CalendarView: View {
         }
     }
 
-    // MARK: - Łuk doby
+    // MARK: - Talerz dnia
 
-    /// Posiłek łuku razem z tym, czego łuk sam nie niesie: slotem i wpisem
-    /// planu. Po stuknięciu w węzeł trzeba z niego wrócić do tego samego
-    /// arkusza szczegółów, który otwiera wiersz niżej.
-    private typealias ArcEntry = (slot: MealSlot, meal: PlanMeal, minutes: Int)
-
-    /// Posiłki wybranego dnia, KTÓRE MAJĄ GODZINĘ — tylko one trafiają na łuk.
+    /// Dania dnia gotowe do narysowania na talerzu i w sekwencji pod nim.
     ///
-    /// Posiłek bez pory (domyślnie przekąska) zostaje na liście niżej.
-    /// Makieta stawiała go kreskowanego w rynnie obok łuku, ale rynna to
-    /// osobna zasada do nauczenia się, a doba i tak nie wie, gdzie go
-    /// postawić — zgadywanie za użytkownika byłoby gorsze od pominięcia.
+    /// Jedno miejsce, w którym model planu (`PlanMeal`, rozkład gospodarstwa,
+    /// zegar) zamienia się w fakty dla widoku. Talerz nie liczy nic sam:
+    /// „następny”, „za ile” i „od której przy garnkach” zależą od CAŁEGO dnia,
+    /// więc muszą wyjść z jednego rachunku — inaczej pierścień wokół talerza
+    /// i obwódka w sekwencji wskazałyby dwa różne dania.
     ///
-    /// Makieta przesuwała też odhaczony posiłek na GODZINĘ ODHACZENIA. Tego
-    /// nie da się zrobić uczciwie: plan zapamiętuje `eatenByUserIds`, czyli
-    /// KTO odhaczył, a nie KIEDY. Węzeł zostaje więc na porze z rozkładu
-    /// gospodarstwa — zmyślona godzina byłaby gorsza niż zaplanowana.
-    private var arcEntries: [ArcEntry] {
-        dayCards(on: selectedDate).compactMap { card -> ArcEntry? in
-            guard let meal = card.meal,
-                  let minutes = sessionStore.mealSlotSchedule.minutes(for: card.slot)
-            else { return nil }
-            return (card.slot, meal, minutes)
-        }
-    }
+    /// Puste pory też tu wchodzą, jako pozycje bez nazwy. Dawna lista mówiła
+    /// „Nic nie zaplanowano” osobnym wierszem i to była prawdziwa odpowiedź,
+    /// a nie jej brak — kreskowany talerzyk w sekwencji mówi dokładnie to samo,
+    /// tylko ciszej.
+    private func plateItems(on date: Date, now: Date) -> [CalendarPlateItem] {
+        let statuses = statusMap(on: date, now: now)
+        let schedule = sessionStore.mealSlotSchedule
+        let calendar = Calendar.current
+        let isToday = calendar.isDate(date, inSameDayAs: now)
+        let isPast = calendar.startOfDay(for: date) < calendar.startOfDay(for: now)
+        let nowMinutes = Self.minutes(from: now)
+        let userId = sessionStore.currentUserId
 
-    private func arcNodes(now: Date) -> [CalendarDayArc.Node] {
-        let statuses = statusMap(on: selectedDate, now: now)
-        return arcEntries.map { entry in
-            let id = "\(entry.slot.rawValue).\(entry.meal.id)"
-            return CalendarDayArc.Node(
-                id: id,
-                slot: entry.slot,
-                minutes: entry.minutes,
-                kcal: perPersonKcal(entry.meal),
-                status: statuses[id] ?? .planned,
-                title: entry.meal.recipe.name,
-                imageURL: entry.meal.recipe.imageURL
+        return dayCards(on: date).map { card -> CalendarPlateItem in
+            let minutes = schedule.minutes(for: card.slot)
+            let time = schedule.time(for: card.slot)
+
+            // Odliczanie ma sens wyłącznie dzisiaj. We wtorek nikt nie pyta,
+            // ile zostało do czwartkowego obiadu.
+            var minutesAway: Int?
+            if isToday, let minutes { minutesAway = minutes - nowMinutes }
+
+            guard let meal = card.meal else {
+                return CalendarPlateItem(
+                    id: card.id,
+                    slot: card.slot,
+                    status: .planned,
+                    time: time,
+                    title: nil,
+                    imageURL: nil,
+                    kcal: 0,
+                    prepMinutes: 0,
+                    cookFrom: nil,
+                    servingsNote: nil,
+                    minutesAway: minutesAway,
+                    isMissed: false
+                )
+            }
+
+            let prep = max(0, meal.recipe.prepTimeMinutes)
+            // Godzina „od której przy garnkach” liczy się wstecz od pory
+            // posiłku. Danie, którego nie trzeba przygotowywać (jogurt
+            // z lodówki), nie ma czego zapowiadać — i wtedy nie ma też tej
+            // godziny.
+            var cookFrom: String?
+            if prep > 0, let minutes {
+                cookFrom = MealSlotSchedule.format(max(0, minutes - prep))
+            }
+
+            return CalendarPlateItem(
+                id: card.id,
+                slot: card.slot,
+                status: statuses[card.id] ?? .planned,
+                time: time,
+                title: meal.recipe.name,
+                imageURL: meal.recipe.imageURL,
+                kcal: perPersonKcal(meal),
+                prepMinutes: prep,
+                cookFrom: cookFrom,
+                servingsNote: servingsNote(meal),
+                minutesAway: minutesAway,
+                isMissed: isPast && !meal.isEaten(by: userId)
             )
         }
     }
 
-    /// Średnica łuku — tak duża, jak pozwala na to WYSOKOŚĆ zakładki,
+    /// Które danie stoi na talerzu.
+    ///
+    /// Wybór użytkownika ma pierwszeństwo, ale tylko dopóki pasuje do dnia —
+    /// plan potrafi przyjść z serwera zmieniony ręką domownika w trakcie
+    /// oglądania. Dalej idzie reguła, którą niósł kiedyś środek łuku: pokaż
+    /// to, co jest teraz przed użytkownikiem. Dzień domknięty otwiera się na
+    /// ostatnim daniu, bo to ono jest końcem tej historii.
+    private func focusedItem(from items: [CalendarPlateItem]) -> CalendarPlateItem? {
+        if let pickedCardId, let picked = items.first(where: { $0.id == pickedCardId }) {
+            return picked
+        }
+        if let next = items.first(where: { $0.status == .next }) { return next }
+
+        let meals = items.filter { !$0.isEmptySlot }
+        guard !meals.isEmpty else { return items.first }
+        if let firstUneaten = meals.first(where: { !$0.isEaten }) { return firstUneaten }
+        return meals.last
+    }
+
+    /// Kafel dnia stojący za danym talerzem — stąd wraca `PlanMeal` potrzebny
+    /// do odhaczenia i do szczegółów. `CalendarPlateItem` niesie same fakty
+    /// do narysowania i celowo nie ciągnie za sobą modelu.
+    private func card(withId id: String, on date: Date) -> DayCard? {
+        dayCards(on: date).first(where: { $0.id == id })
+    }
+
+    /// „2 porcje” — dopisek pod talerzem tylko wtedy, gdy ktoś świadomie
+    /// odszedł od reguły auto. To, że coś jest domyślne, nie jest informacją.
+    private func servingsNote(_ meal: PlanMeal) -> String? {
+        guard let count = knownHouseholdMemberCount,
+              meal.isCustomServings(householdMemberCount: count)
+        else { return nil }
+        return PolishPlural.servings(meal.effectiveServings(householdMemberCount: count))
+    }
+
+    /// Średnica talerza — tak duża, jak pozwala na to WYSOKOŚĆ zakładki,
     /// przycięta jeszcze jej szerokością.
     ///
     /// Liczone z wymiarów zakładki, a nie z modelu telefonu: ta sama
     /// aplikacja stoi na iPhonie SE i na Pro Max, a między nimi jest prawie
-    /// 200 pt różnicy w pionie — mniej więcej tyle, ile waży cały łuk.
-    /// Na krótkim ekranie schodzi do `minSize`, żeby pod nim zostało miejsce
-    /// na wiersze listy.
-    ///
-    /// Szerokość jest tylko bezpiecznikiem: łuk ma stałą ramkę, więc gdyby
-    /// wyszedł szerszy niż strona, nie skurczyłby się — wystawałby poza
-    /// margines.
-    private var arcSize: CGFloat {
-        var size = CalendarDayArc.defaultSize
+    /// 200 pt różnicy w pionie. Na krótkim ekranie talerz schodzi do
+    /// `minSize`, żeby pod nim zostało miejsce na sekwencję i linię dnia.
+    private var plateSize: CGFloat {
+        var size = CalendarPlate.defaultSize
 
         if pageHeight > 0 {
-            let span = CalendarDayArc.defaultSize - CalendarDayArc.minSize
+            let span = CalendarPlate.defaultSize - CalendarPlate.minSize
             let ratio = min(1, max(0, (pageHeight - 560) / 180))
-            size = CalendarDayArc.minSize + span * ratio
+            size = CalendarPlate.minSize + span * ratio
         }
+        // Rant i poświata wychodzą poza samo zdjęcie, więc zapas: inaczej
+        // pierścień ocierałby się o margines strony.
         if pageWidth > 0 {
-            size = min(size, pageWidth - SCPageMetrics.horizontal * 2)
+            size = min(size, pageWidth - SCPageMetrics.horizontal * 2 - 56)
         }
         return size.rounded()
     }
 
-    /// Co powiedzieć w dziurze po środku łuku — i jaką barwę ma mieć kropka
-    /// „teraz”.
+    /// Szerokość, na której rozkłada się sekwencja dnia. Zero do pierwszego
+    /// pomiaru — wtedy talerzyki idą w rozmiarze z projektu.
+    private var stripWidth: CGFloat {
+        guard pageWidth > 0 else { return 0 }
+        return pageWidth - SCPageMetrics.horizontal * 2
+    }
+
+    /// Jedno zdanie o całym dniu, pod sekwencją.
     ///
-    /// Cała reguła stoi TUTAJ, a nie w komponencie, bo „następny posiłek”
-    /// zależy od całego dnia, od zegara i od rozkładu gospodarstwa. Łuk
-    /// dostaje gotowy stan i tylko go rysuje.
-    private func dayFocus(on date: Date, now: Date) -> CalendarDayFocus {
+    /// Liczy się TUTAJ, bo odpowiedź zależy od wszystkich posiłków naraz, od
+    /// zegara i od celu dnia. `CalendarDayLine` dostaje gotowy stan i tylko go
+    /// wypowiada.
+    private func daySummary(on date: Date, now: Date) -> CalendarDaySummary {
         let cards = dayCards(on: date).filter { $0.meal != nil }
         guard !cards.isEmpty else { return .empty }
 
@@ -330,63 +415,17 @@ struct CalendarView: View {
         if day > today {
             return .plan(meals: cards.count, kcal: planKcal, firstTime: firstMealTime(on: date))
         }
-
         if eaten == cards.count {
             return .closed(kcal: eatenKcal, delta: eatenKcal - dailyTargets.kcal)
         }
-
-        if day == today, let next = nextMeal(on: date, now: now) {
-            return .next(next)
-        }
-
         if eaten == 0 {
             return .untouched(planKcal: planKcal, meals: cards.count, isPast: day < today)
         }
-
-        return .partial(
-            kcal: eatenKcal,
-            eaten: eaten,
-            total: cards.count,
-            planKcal: planKcal
-        )
+        return .partial(kcal: eatenKcal, eaten: eaten, total: cards.count)
     }
 
-    /// Najbliższy nieodhaczony posiłek z godziną — ten sam, który na liście
-    /// nosi status `.next`.
-    ///
-    /// Sięgamy po niego przez `statusMap`, a nie przez własne szukanie:
-    /// „następny” musi znaczyć dokładnie to samo w środku łuku, w obwódce
-    /// węzła i w kółku wiersza. Dwa niezależne wyszukiwania prędzej czy
-    /// później wskazałyby dwa różne posiłki.
-    private func nextMeal(on date: Date, now: Date) -> CalendarDayFocus.NextMeal? {
-        let statuses = statusMap(on: date, now: now)
-
-        guard let card = dayCards(on: date).first(where: { statuses[$0.id] == .next }),
-              let meal = card.meal,
-              let minutes = sessionStore.mealSlotSchedule.minutes(for: card.slot)
-        else { return nil }
-
-        let prep = max(0, meal.recipe.prepTimeMinutes)
-        // Godzina „od której przy garnkach” liczy się wstecz od pory posiłku.
-        // Danie, którego nie trzeba przygotowywać (jogurt z lodówki), nie ma
-        // czego zapowiadać — i wtedy nie ma też tej godziny.
-        var cookFrom: String?
-        if prep > 0 {
-            cookFrom = MealSlotSchedule.format(max(0, minutes - prep))
-        }
-
-        return CalendarDayFocus.NextMeal(
-            slot: card.slot,
-            time: MealSlotSchedule.format(minutes),
-            kcal: perPersonKcal(meal),
-            minutesAway: minutes - Self.minutes(from: now),
-            prepMinutes: prep,
-            cookFrom: cookFrom
-        )
-    }
-
-    /// O której zaczyna się zaplanowany dzień — „od 08:00” w środku łuku
-    /// dla dnia z przyszłości.
+    /// O której zaczyna się zaplanowany dzień — „od 08:00” w linii dnia
+    /// pod sekwencją, dla dnia z przyszłości.
     private func firstMealTime(on date: Date) -> String? {
         let schedule = sessionStore.mealSlotSchedule
         let minutes = dayCards(on: date).compactMap { card -> Int? in
@@ -446,14 +485,8 @@ struct CalendarView: View {
         return map
     }
 
-    /// Dzień z przeszłości — cała trasa na łuku jest już przebyta.
-    private func isPastDay(now: Date) -> Bool {
-        Calendar.current.startOfDay(for: selectedDate)
-            < Calendar.current.startOfDay(for: now)
-    }
-
-    /// Udział jednej osoby w kaloriach posiłku — ta sama liczba, którą wiersz
-    /// pokazuje w podpisie i którą sumuje pigułka celu nad dolnym menu.
+    /// Udział jednej osoby w kaloriach posiłku — ta sama liczba, którą talerz
+    /// pokazuje w pigułce i którą sumuje pigułka celu nad dolnym menu.
     private func perPersonKcal(_ meal: PlanMeal) -> Int {
         Int(
             meal.nutritionPerPerson(knownHouseholdMemberCount: knownHouseholdMemberCount)
@@ -550,6 +583,11 @@ struct CalendarView: View {
             }
             .onChange(of: selectedDate) { _, newValue in
                 datesViewModel.selectDate(newValue)
+                // Nowy dzień otwiera się na tym, co ten dzień ma teraz do
+                // powiedzenia, a nie na porze wybranej ręką we wczorajszym.
+                // Bez tego przełożenie talerza na kolację przenosiło się przez
+                // cały tydzień i „Następny" nie pokazywał się ani razu.
+                pickedCardId = nil
             }
             .task(id: datesViewModel.weekStartISO) {
                 await mealStore.loadWeekPlanFromBackend(
@@ -628,16 +666,18 @@ struct CalendarView: View {
 
     // MARK: - Pieces
 
-    /// Cały ekran przy zadanej chwili. Przypięte zostaje wszystko, co
-    /// odpowiada na „gdzie jestem" — pasek dni, nagłówek dnia i łuk doby;
-    /// przewija się sama lista posiłków.
+    /// Cały ekran przy zadanej chwili. Przypięty zostaje pasek dni i nagłówek
+    /// dnia — wszystko, co odpowiada na „gdzie jestem”. Talerz, sekwencja
+    /// i linia dnia jadą razem z dniem, bo one tym dniem są.
+    ///
+    /// Łuk doby, który stał tu wcześniej, zszedł z ekranu razem z listą
+    /// wierszy pod nim: rysował „gdzie w dobie jestem” kosztem miejsca na
+    /// odpowiedź, po którą otwiera się tę zakładkę — „co teraz jem”.
     private func page(now: Date) -> some View {
-        let nodes = arcNodes(now: now)
         // „Dzisiaj" liczone z zegara strony, nie z `Date()` w trzech
-        // miejscach: kropka na łuku, obwódka „następnego" i odliczanie
-        // w wierszu muszą mówić o TEJ SAMEJ chwili.
+        // miejscach: plakietka w nagłówku, pierścień „następnego" i odliczanie
+        // pod talerzem muszą mówić o TEJ SAMEJ chwili.
         let isToday = Calendar.current.isDate(selectedDate, inSameDayAs: now)
-        let focus = dayFocus(on: selectedDate, now: now)
 
         return VStack(alignment: .leading, spacing: 0) {
             Group {
@@ -653,11 +693,9 @@ struct CalendarView: View {
                 .padding(.horizontal, SCPageMetrics.horizontal)
                 .padding(.top, SCPageMetrics.top)
 
-                // Nagłówek dnia stoi NAD łukiem, a nie pod nim, tak jak
-                // w makiecie v4: nazwa dnia jest podpisem pod datą z paska,
-                // a nie wstępem do listy. Plakietka z kropkami („4 z 5
-                // zjedzone") zostaje bez zmian — to ona, a nie środek łuku,
-                // odpowiada na „ile dnia za mną".
+                // Nazwa dnia i plakietka z kropkami („4 z 5 zjedzone").
+                // Przypięta razem z paskiem dni, bo odpowiada na to samo
+                // pytanie: który to dzień i ile z niego jest już za mną.
                 CalendarDayHeader(
                     date: selectedDate,
                     isToday: isToday,
@@ -666,68 +704,14 @@ struct CalendarView: View {
                 )
                 .padding(.horizontal, SCPageMetrics.horizontal)
                 .padding(.top, 14)
-
-                // Łuk doby jest przypięty razem z paskiem dni. „Gdzie
-                // w dobie jestem" i „co teraz" to pytania zadawane przez cały
-                // czas oglądania listy, nie tylko na jej górze.
-                //
-                // Stoi też w dniu bez posiłków: sam tor z kropką „teraz" to
-                // nadal odpowiedź, a łuk znikający i wracający przy
-                // przewijaniu dni szarpałby całą stroną pod nim.
-                CalendarDayArc(
-                    nodes: nodes,
-                    nowMinutes: isToday ? Self.minutes(from: now) : nil,
-                    isPast: isPastDay(now: now),
-                    focus: focus,
-                    size: arcSize,
-                    onTap: { openArcNode($0) }
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, SCPageMetrics.horizontal)
-                // Łuk oddaje układowi swoje puste marginesy sam (jest
-                // okrągły w kwadratowym pudełku, a dolna ćwiartka pudełka
-                // nie ma czego rysować), więc oddech nad nim i pod nim trzeba
-                // dołożyć tutaj — inaczej sąsiedzi siadają wprost na
-                // podpisach godzin.
-                .padding(.top, 16)
-
-                // Kreska pod łukiem — koniec części przypiętej, początek
-                // listy, po której się przewija. Bez niej wiersze wjeżdżałyby
-                // przy przewijaniu pod sam łuk i nie byłoby widać, gdzie
-                // kończy się to, co stoi, a zaczyna to, co jedzie.
-                //
-                // 26 od góry, bo tyle realnie zostaje między „06"/„23"
-                // a kreską: łuk przycina swój pusty dół co do punktu, więc
-                // ośmiopunktowy odstęp wyglądał jak przyklejenie.
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.top, 26)
-                    .padding(.bottom, 14)
-
-                // Kroki z HealthKit — tylko gdy integracja „Zdrowie"
-                // włączona i dzień nie jest z przyszłości (przyszłość nie ma
-                // czego pokazać, nawet zera).
-                if stepsBarVisible {
-                    let day = sessionStore.healthStepsStore?
-                        .steps(for: selectedDate)
-                    EditorialStepsBar(
-                        steps: day?.steps,
-                        goal: stepsGoal,
-                        source: day?.source
-                    )
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.bottom, 22)
-                }
             }
 
             DayPager(
                 datesViewModel: datesViewModel,
                 selectedDate: $selectedDate,
                 // 16, nie 40: pigułka „Cel dnia" wstawia pod treść własny
-                // bezpieczny obszar, więc to już tylko prześwit MIĘDZY
-                // ostatnim wierszem a szkłem.
+                // bezpieczny obszar, więc to już tylko prześwit MIĘDZY linią
+                // dnia a szkłem.
                 bottomPadding: 16,
                 // Stuknięcie w pasek dni i strzałki tygodnia jadą tak samo
                 // jak machnięcie palcem. Warunek jest jeden: strona MUSI
@@ -744,115 +728,177 @@ struct CalendarView: View {
         .ignoresSafeArea(.container, edges: .top)
     }
 
-    /// Posiłki jednego dnia — lista wierszy z hairline'ami, jak w makiecie
-    /// D6. Jedyna przewijana część ekranu; ruch palcem w bok przestawia
-    /// dzień, tak samo jak w Planie tygodnia.
+    /// Jeden dzień: nadpis z porą, talerz, podpis pod nim, sekwencja dań
+    /// i jedno zdanie na koniec. Ruch palcem w bok przestawia dzień, tak samo
+    /// jak w Planie tygodnia.
     ///
     /// Wszystko liczy się tu z `date`, a nie z `selectedDate`: `DayPager`
-    /// trzyma starą stronę na ekranie przez czas zjazdu, więc strona czytająca
-    /// stan ekranu podmieniałaby treść w połowie animacji — na oczach
-    /// użytkownika, zanim jeszcze zjechała.
+    /// trzyma starą stronę na ekranie przez czas zjazdu, więc strona
+    /// czytająca stan ekranu podmieniałaby treść w połowie animacji — na
+    /// oczach użytkownika, zanim jeszcze zjechała.
     private func dayPage(for date: Date, now: Date) -> some View {
+        let items = plateItems(on: date, now: now)
+        let hasMeals = items.contains { !$0.isEmptySlot }
         let canLog = canLogEatenMeals(on: date)
-        let cards = dayCards(on: date)
-        let statuses = statusMap(on: date, now: now)
-        let nowMinutes = Self.minutes(from: now)
-        let hasMeals = cards.contains { $0.meal != nil }
 
-        return VStack(alignment: .leading, spacing: 0) {
+        // Dzień bez ani jednego dania nie pokazuje ani talerza pierwszej pory,
+        // ani sekwencji samych kreskowanych krążków: trzy razy „nic tu nie
+        // ma” nie mówi trzy razy więcej, tylko trzy razy głośniej. Zostaje
+        // pusty talerz, „Pusty dzień” i dopisek z dwoma wyjściami. Ta sama
+        // lekcja, co przy dawnym stosie wierszy „Nic nie zaplanowano”.
+        var focused: CalendarPlateItem?
+        if hasMeals { focused = focusedItem(from: items) }
+
+        let canToggle = canLog && focused?.isEmptySlot == false
+
+        // „Następny" pod sekwencją tylko wtedy, gdy na talerzu stoi co innego.
+        // Inaczej byłaby to ta sama rzecz napisana dwa razy, jedna pod drugą.
+        var nextAway: CalendarPlateItem?
+        if let next = items.first(where: { $0.status == .next }), next.id != focused?.id {
+            nextAway = next
+        }
+
+        // Szczegóły otwiera nazwa dania. Osobna zmienna, a nie wyrażenie
+        // warunkowe przy wywołaniu: domknięcie postawione obok `nil`
+        // w wyrażeniu warunkowym potrafi w tym projekcie zamienić się
+        // w `ambiguous use of 'init'` zgłoszone kilkadziesiąt linii wyżej
+        // (SE-0418, patrz `CLAUDE.md`).
+        var openDetail: (() -> Void)?
+        if let focused, !focused.isEmptySlot {
+            openDetail = { openMeal(withCardId: focused.id, on: date) }
+        }
+
+        return VStack(spacing: 0) {
+            CalendarPlateKicker(item: focused)
+
+            CalendarPlate(
+                item: focused,
+                size: plateSize,
+                canToggle: canToggle,
+                onToggle: { toggleEaten(withCardId: focused?.id, on: date) }
+            )
+            .padding(.top, 14)
+            .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
+
+            CalendarPlateCaption(item: focused, onOpenDetail: openDetail)
+                .padding(.top, 16)
+
             if hasMeals {
-                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                    let isLast = index == cards.count - 1
-                    let time = sessionStore.mealSlotSchedule.time(for: card.slot)
+                CalendarPlateStrip(
+                    items: items,
+                    selectedId: focused?.id,
+                    width: stripWidth,
+                    onSelect: { pickedCardId = $0.id }
+                )
+                .padding(.top, 20)
+            }
 
-                    if let meal = card.meal {
-                        let status = statuses[card.id] ?? .planned
-                        CalendarMealRow(
-                            slot: card.slot,
-                            recipe: meal.recipe,
-                            status: status,
-                            time: time,
-                            relative: relativeText(
-                                for: card.slot,
-                                status: status,
-                                nowMinutes: nowMinutes
-                            ),
-                            meta: metaText(meal),
-                            isFavourite: isFavourite(meal.recipe),
-                            canToggleEaten: canLog,
-                            isLast: isLast,
-                            onTap: { handleAssignedTap(meal, slot: card.slot, on: date) },
-                            onToggleFavorite: { toggleFavorite(meal.recipe) },
-                            onToggleEaten: { toggleEaten(meal, slot: card.slot, on: date) }
-                        )
-                    } else {
-                        CalendarEmptySlotRow(slot: card.slot, time: time, isLast: isLast)
-                    }
-                }
-            } else {
-                // Dzień bez ani jednego posiłku dostaje JEDEN dopisek zamiast
-                // stosu identycznych pustych pór. Trzy wiersze mówiące „Nic
-                // nie zaplanowano · Zaplanujesz w zakładce Plan" nie mówią
-                // trzy razy więcej, tylko trzy razy głośniej — a zabierają
-                // miejsce na dwa wyjścia, które faktycznie coś robią.
+            CalendarDayLine(
+                summary: daySummary(on: date, now: now),
+                nextAway: nextAway,
+                onReturnToNext: { pickedCardId = nil }
+            )
+            .padding(.top, 16)
+
+            // Kroki z HealthKit — tylko gdy integracja „Zdrowie" włączona
+            // i dzień nie jest z przyszłości (przyszłość nie ma czego
+            // pokazać, nawet zera).
+            if stepsBarVisible(on: date) {
+                let day = sessionStore.healthStepsStore?.steps(for: date)
+                EditorialStepsBar(
+                    steps: day?.steps,
+                    goal: stepsGoal,
+                    source: day?.source
+                )
+                .padding(.top, 26)
+            }
+
+            if !hasMeals {
                 CalendarEmptyDayNote(
                     canPlan: datesViewModel.isEditable(date),
                     onAskAssistant: { sessionStore.dashboardTab = .assistant },
                     onOpenPlan: { sessionStore.dashboardTab = .plan }
                 )
+                .padding(.top, 24)
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 10)
         .padding(.horizontal, SCPageMetrics.horizontal)
-        // Świeża tożsamość na każdy dzień: bez niej kafle próbowałyby
+        // Świeża tożsamość na każdy dzień: bez niej talerz próbowałby
         // przeprowadzić śniadanie poniedziałku w śniadanie wtorku dokładnie
         // wtedy, gdy `DayPager` przesuwa całą stronę — dwie animacje na
         // jednym ruchu. Ta sama reguła co na osi Planu tygodnia.
         .id(MealCalendarStore.dateKey(for: date))
     }
 
-    /// „za 4 h 19 min" — tylko przy posiłku, który jest teraz następny.
-    /// Przy pozostałych odliczanie byłoby szumem: do kolacji „za 10 h" nikt
-    /// się nie szykuje.
-    private func relativeText(
-        for slot: MealSlot,
-        status: CalendarMealStatus,
-        nowMinutes: Int
-    ) -> String? {
-        guard status == .next,
-              let minutes = sessionStore.mealSlotSchedule.minutes(for: slot)
-        else { return nil }
-        return CalendarRelativeTime.text(to: minutes, from: nowMinutes)
-    }
-
-    /// „12 min · 510 kcal" albo „60 min · 1208 kcal · 2 porcje".
+    /// Długie przytrzymanie talerza: odhaczenie, szczegóły i ulubione.
     ///
-    /// Kalorie to udział JEDNEJ osoby — ta sama liczba, którą sumuje pigułka
-    /// celu nad dolnym menu. Liczba porcji dopisuje się tylko wtedy, gdy ktoś
-    /// świadomie odszedł od reguły auto: to, że coś jest domyślne, nie jest
-    /// informacją.
-    private func metaText(_ meal: PlanMeal) -> String {
-        var parts = ["\(meal.recipe.prepTimeMinutes) min", "\(perPersonKcal(meal)) kcal"]
-        if let count = knownHouseholdMemberCount,
-           meal.isCustomServings(householdMemberCount: count) {
-            parts.append(
-                PolishPlural.servings(meal.effectiveServings(householdMemberCount: count))
-            )
+    /// Jeden mechanizm może być niewidoczny, drugi musi być widoczny — i to
+    /// ten drugi uczy pierwszego. Odhaczanie i szczegóły mają swoje
+    /// stuknięcia (sam talerz i nazwa dania pod nim), więc menu jest tu
+    /// przede wszystkim dla serduszka, które zeszło z ekranu razem z listą.
+    @ViewBuilder
+    private func plateActions(
+        for item: CalendarPlateItem?,
+        on date: Date,
+        canLog: Bool
+    ) -> some View {
+        if let item,
+           !item.isEmptySlot,
+           let card = card(withId: item.id, on: date),
+           let meal = card.meal {
+            if canLog {
+                Button {
+                    toggleEaten(meal, slot: card.slot, on: date)
+                } label: {
+                    Label(
+                        item.isEaten ? "Cofnij oznaczenie" : "Oznacz jako zjedzone",
+                        systemImage: item.isEaten ? "arrow.uturn.backward" : "checkmark.circle"
+                    )
+                }
+            }
+
+            Button {
+                handleAssignedTap(meal, slot: card.slot, on: date)
+            } label: {
+                Label("Szczegóły posiłku", systemImage: "text.below.photo")
+            }
+
+            Button {
+                toggleFavorite(meal.recipe)
+            } label: {
+                Label(
+                    isFavourite(meal.recipe) ? "Usuń z ulubionych" : "Dodaj do ulubionych",
+                    systemImage: isFavourite(meal.recipe) ? "heart.slash" : "heart"
+                )
+            }
         }
-        return parts.joined(separator: " · ")
     }
 
     // MARK: - Actions
 
-    /// Stuknięcie w węzeł łuku otwiera to samo, co stuknięcie w wiersz
-    /// niżej — szczegóły posiłku. Łuk nie jest osobnym trybem, tylko drugim
-    /// widokiem tej samej listy, więc nie może odpowiadać na dotyk czymś
-    /// innym.
-    private func openArcNode(_ node: CalendarDayArc.Node) {
-        guard let entry = arcEntries.first(where: {
-            "\($0.slot.rawValue).\($0.meal.id)" == node.id
-        }) else { return }
+    /// Stuknięcie w talerz odhacza danie, które na nim stoi.
+    ///
+    /// Talerz dostaje same fakty do narysowania (`CalendarPlateItem`), więc
+    /// wpis planu trzeba tu odszukać po identyfikatorze kafla. Dzień, który
+    /// w międzyczasie przyszedł z serwera zmieniony, po prostu nie odda
+    /// kafla — i wtedy stuknięcie nic nie robi, zamiast zapisać coś na
+    /// nieistniejącym posiłku.
+    private func toggleEaten(withCardId id: String?, on date: Date) {
+        guard let id,
+              let card = card(withId: id, on: date),
+              let meal = card.meal
+        else { return }
 
-        handleAssignedTap(entry.meal, slot: entry.slot, on: selectedDate)
+        toggleEaten(meal, slot: card.slot, on: date)
+    }
+
+    /// Stuknięcie w nazwę dania otwiera szczegóły — jedyne miejsce, w którym
+    /// przestawia się liczbę porcji.
+    private func openMeal(withCardId id: String, on date: Date) {
+        guard let card = card(withId: id, on: date), let meal = card.meal else { return }
+        handleAssignedTap(meal, slot: card.slot, on: date)
     }
 
     private func handleAssignedTap(_ meal: PlanMeal, slot: MealSlot, on date: Date) {
