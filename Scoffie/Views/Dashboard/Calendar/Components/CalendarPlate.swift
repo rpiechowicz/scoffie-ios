@@ -41,11 +41,11 @@ import SwiftUI
 //     wyglądało jak obiad. Odhaczenie schodzi na neutralny kolor pisma
 //     (`Color.scChecked`), tak jak od dawna robi to sama pieczątka; pory
 //     zostają swoje.
-//  6. **Nowe danie wjeżdża od strony, z której przyszło.** Makieta miała
-//     jeden „pop” w miejscu. U nas dzień do przodu i talerzyk na prawo
-//     wjeżdżają z prawej, do tyłu i na lewo — z lewej; stare danie zawsze
-//     gaśnie w miejscu. Kierunek jest jedyną rzeczą, której krycie nie
-//     umie powiedzieć, a przy machnięciu palcem to on jest treścią ruchu.
+//  6. **Nowe danie rozkwita od środka.** Makieta miała jeden „pop”
+//     w miejscu; my próbowaliśmy wjazdu z boku i czytał się jak przeskok.
+//     Teraz nowe danie rośnie kryciem od 0,86, stare gaśnie i maleje,
+//     a kierunek (dzień do przodu, talerzyk na prawo) zostaje tylko jako
+//     dziesięciopunktowy przechył — cień ruchu, nie ruch.
 
 // MARK: - Danie na talerzu
 
@@ -439,8 +439,14 @@ struct CalendarPlate: View {
         .frame(width: size, height: size)
     }
 
-    /// Nowe danie wjeżdża od strony, z której przyszło; stare gaśnie
-    /// w miejscu.
+    /// Nowe danie rozkwita od środka; stare gaśnie i maleje w miejscu.
+    ///
+    /// Rozkwit, nie wjazd z boku. Wjazd z boku o ćwierć średnicy czytał się
+    /// jako przeskok: zdjęcie pojawiało się przesunięte i dopiero dojeżdżało
+    /// na miejsce. Teraz nowe danie rośnie od 0,86 do pełnego rozmiaru
+    /// kryciem — a kierunek zostaje tylko jako cień: dziesięć punktów
+    /// przechyłu w stronę, z której przyszło. Tyle wystarczy, żeby ruch
+    /// w tył czuć inaczej niż w przód, i za mało, żeby cokolwiek skakało.
     ///
     /// Zejście CELOWO nie ma kierunku. Przejście zejścia bierze się z tego,
     /// co stało w widoku w chwili jego WSTAWIENIA — czyli z kierunku
@@ -449,16 +455,15 @@ struct CalendarPlate: View {
     /// odjeżdżałoby w tę samą stronę, z której wjeżdża nowe, i oba
     /// przecinałyby się na środku.
     private var swap: AnyTransition {
-        let removal = AnyTransition.opacity.combined(with: .scale(scale: 0.96))
+        let removal = AnyTransition.opacity.combined(with: .scale(scale: 0.94))
+        let bloom = AnyTransition.scale(scale: 0.86).combined(with: .opacity)
 
         if direction == 0 || reduceMotion {
-            let pop = AnyTransition.scale(scale: 0.94).combined(with: .opacity)
-            return .asymmetric(insertion: pop, removal: removal)
+            return .asymmetric(insertion: bloom, removal: removal)
         }
 
-        let slide = AnyTransition.offset(x: CGFloat(direction) * (size * 0.26).rounded())
-        let arrival = slide.combined(with: .opacity).combined(with: .scale(scale: 0.96))
-        return .asymmetric(insertion: arrival, removal: removal)
+        let lean = AnyTransition.offset(x: CGFloat(direction) * 10)
+        return .asymmetric(insertion: bloom.combined(with: lean), removal: removal)
     }
 
     private var plate: some View {
@@ -792,7 +797,10 @@ struct CalendarPlateCaption: View {
                     .minimumScaleFactor(0.6)
                     .contentTransition(.numericText())
                     .id(headlineKey)
-                    .transition(.opacity)
+                    // Lekkie uniesienie razem z kryciem — podpis „wypływa”
+                    // spod talerza, który właśnie rozkwitł, a nie pojawia się
+                    // znikąd.
+                    .transition(.opacity.combined(with: .offset(y: 5)))
             }
 
             titleSlot
