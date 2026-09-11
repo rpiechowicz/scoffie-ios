@@ -29,13 +29,16 @@ struct CalendarPlateStrip: View {
     /// Szerokość, którą sekwencja ma do dyspozycji. Zero = jeszcze nie
     /// zmierzona; wtedy kolumny idą w rozmiarze z makiety.
     let width: CGFloat
+    /// Sufit szerokości kolumny. Domyślnie 62 pt z makiety; krótki ekran
+    /// podaje mniej, bo każdy punkt zabrany sekwencji wraca do talerza.
+    var maxColumn: CGFloat = CalendarPlateStrip.designColumn
     let onSelect: (CalendarPlateItem) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dayPagerGate) private var pagerGate
 
     /// Proporcje z makiety: kolumna 62 pt, talerz wybrany 56, reszta 46.
-    private static let designColumn: CGFloat = 62
+    static let designColumn: CGFloat = 62
     private static let selectedRatio: CGFloat = 56 / 62
     private static let restRatio: CGFloat = 46 / 62
     /// Najwęższa kolumna, przy której godzina jest jeszcze godziną, a nie
@@ -46,9 +49,10 @@ struct CalendarPlateStrip: View {
     private var gap: CGFloat { items.count > 4 ? 8 : 10 }
 
     private var column: CGFloat {
-        guard width > 0, !items.isEmpty else { return Self.designColumn }
+        let ceiling = min(Self.designColumn, maxColumn)
+        guard width > 0, !items.isEmpty else { return ceiling }
         let free = width - gap * CGFloat(items.count - 1)
-        return max(Self.minColumn, min(Self.designColumn, free / CGFloat(items.count)))
+        return max(Self.minColumn, min(ceiling, free / CGFloat(items.count)))
     }
 
     private var selectedSize: CGFloat { (column * Self.selectedRatio).rounded() }

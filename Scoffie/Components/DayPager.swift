@@ -98,6 +98,19 @@ struct DayPager<Content: View>: View {
     let bottomPadding: CGFloat
     /// Czy zmiany `selectedDate` spoza gestu też mają zjazd i wjazd strony.
     let animatesSelectionChanges: Bool
+    /// Czy treść dnia przewija się w pionie.
+    ///
+    /// Plan tygodnia bez tego nie istnieje: ma listę kafli dłuższą od ekranu
+    /// i to przewijanie jest jego treścią. Kalendarz jest dokładnie odwrotny —
+    /// cały dzień MA się mieścić w jednym widoku, a talerz sam zjeżdża
+    /// wielkością do miejsca, które zostało.
+    ///
+    /// Różnica jest głębsza niż pasek przewijania: w środku `ScrollView`
+    /// wysokość jest nieskończona, więc nie istnieje coś takiego jak
+    /// „wysokość, która została", i strona nie ma się do czego dopasować.
+    /// Dopiero strona bez przewijania dostaje prawdziwą wysokość zakładki
+    /// i może ją rozdzielić między swoje piętra.
+    let scrolls: Bool
     let content: (Date) -> Content
 
     init(
@@ -105,12 +118,14 @@ struct DayPager<Content: View>: View {
         selectedDate: Binding<Date>,
         bottomPadding: CGFloat = SCPageMetrics.bottom,
         animatesSelectionChanges: Bool = false,
+        scrolls: Bool = true,
         @ViewBuilder content: @escaping (Date) -> Content
     ) {
         self.datesViewModel = datesViewModel
         self._selectedDate = selectedDate
         self.bottomPadding = bottomPadding
         self.animatesSelectionChanges = animatesSelectionChanges
+        self.scrolls = scrolls
         self.content = content
         self._displayedDate = State(initialValue: selectedDate.wrappedValue)
     }
@@ -158,22 +173,7 @@ struct DayPager<Content: View>: View {
     private static var axisLockDistance: CGFloat { 14 }
 
     var body: some View {
-        ScrollView {
-            content(animatesSelectionChanges ? displayedDate : selectedDate)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, bottomPadding)
-                // Zmiana dnia jest animowana ZE WZGLĘDU NA PASEK DNI (patrz
-                // `transition(to:)`), a ta sama animacja obejmowałaby też
-                // przebudowę kafli — wjeżdżałyby na ekran, dopasowując po
-                // drodze wysokości i teksty. Strona podmienia się poza
-                // ekranem, więc nie ma tu czego animować. Zakres jest wąski:
-                // dotyczy wyłącznie zmian dnia, więc animacje wewnątrz kafli
-                // (serduszko, odhaczenie posiłku) zostają nietknięte.
-                .animation(nil, value: selectedDate)
-                .animation(nil, value: displayedDate)
-                .environment(\.dayPagerGate, gate)
-        }
-        .scrollIndicators(.hidden)
+        page
         // Gest łapie się na całej stronie, także w przerwach między kaflami.
         .contentShape(Rectangle())
         .offset(x: dragOffset)
@@ -187,10 +187,12 @@ struct DayPager<Content: View>: View {
                     .onChange(of: geo.size.width) { _, width in pageWidth = width }
             }
         }
-        // `simultaneousGesture`, nie `gesture`: strona jest pionowym
-        // `ScrollView`, a zwykły `DragGesture` przejąłby też ruch w pionie
-        // i zabił przewijanie kafli. Tak oba gesty biegną obok siebie,
-        // a przewaga w poziomie rozstrzyga, który z nich cokolwiek robi.
+        // `simultaneousGesture`, nie `gesture`: w trybie przewijanym strona
+        // jest pionowym `ScrollView`, a zwykły `DragGesture` przejąłby też
+        // ruch w pionie i zabił przewijanie kafli. Tak oba gesty biegną obok
+        // siebie, a przewaga w poziomie rozstrzyga, który z nich cokolwiek
+        // robi. W trybie bez przewijania nie ma z czym konkurować, ale reguła
+        // zostaje jedna dla obu — jeden gest, jedno zachowanie.
         .simultaneousGesture(daySwipe)
         .sensoryFeedback(.selection, trigger: daySteps)
         .onChange(of: selectedDate) { _, target in
@@ -203,6 +205,41 @@ struct DayPager<Content: View>: View {
                 return
             }
             transition(to: target, forward: target > displayedDate, movesSelection: false)
+        }
+    }
+
+    /// Strona dnia — przewijana albo nie, zależnie od `scrolls`.
+    ///
+    /// Obie gałęzie niosą ten sam zestaw modyfikatorów treści, różnią się
+    /// wyłącznie tym, co ją opakowuje. W gałęzi bez przewijania odstęp
+    /// z dołu wchodzi POD ramkę na pełną wysokość, nie nad nią: inaczej
+    /// treść dostałaby do podziału swoją naturalną wysokość zamiast tej,
+    /// która realnie została na ekranie.
+    @ViewBuilder
+    private var page: some View {
+        let day = content(animatesSelectionChanges ? displayedDate : selectedDate)
+            // Zmiana dnia jest animowana ZE WZGLĘDU NA PASEK DNI (patrz
+            // `transition(to:)`), a ta sama animacja obejmowałaby też
+            // przebudowę kafli — wjeżdżałyby na ekran, dopasowując po
+            // drodze wysokości i teksty. Strona podmienia się poza
+            // ekranem, więc nie ma tu czego animować. Zakres jest wąski:
+            // dotyczy wyłącznie zmian dnia, więc animacje wewnątrz kafli
+            // (serduszko, odhaczenie posiłku) zostają nietknięte.
+            .animation(nil, value: selectedDate)
+            .animation(nil, value: displayedDate)
+            .environment(\.dayPagerGate, gate)
+
+        if scrolls {
+            ScrollView {
+                day
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, bottomPadding)
+            }
+            .scrollIndicators(.hidden)
+        } else {
+            day
+                .padding(.bottom, bottomPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 
