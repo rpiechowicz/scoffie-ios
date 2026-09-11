@@ -13,7 +13,7 @@ import SwiftUI
 // „co jadłem o ósmej”. Talerz odpowiada na to jedno pytanie całą planszą,
 // a pozostałe dania zostają widoczne — tylko mniejsze.
 //
-// Pięć rzeczy różni ten talerz od makiety:
+// Sześć rzeczy różni ten talerz od makiety:
 //
 //  1. **„Zjedzone” bez godziny.** Makieta pisała „zjedzone 08:12”, ale plan
 //     zapamiętuje `eatenByUserIds`, czyli KTO odhaczył, a nie KIEDY.
@@ -25,14 +25,23 @@ import SwiftUI
 //     „za 3 min” przy daniu, które robi się kwadrans, odpowiada na pytanie,
 //     którego nikt już nie zadaje.
 //  3. **Talerz woła kolorem pory, kiedy jest co robić.** Poświata za
-//     zdjęciem oddycha, a spod rantu wybija pierścień — ten sam ruch
-//     i ta sama barwa, którymi dawniej wołał węzeł łuku. Kiedy nic nie wisi
+//     zdjęciem oddycha, a spod rantu wybija podwójna echosonda — ten sam
+//     ruch i ta sama barwa, którymi dawniej wołał węzeł łuku, tylko
+//     głośniej, bo talerz jest sześć razy większy. Kiedy nic nie wisi
 //     w powietrzu, talerz stoi nieruchomo.
-//  4. **Nazwa dania otwiera szczegóły.** Makieta nie miała z talerza
-//     żadnego wyjścia — a szczegół posiłku jest jedynym miejscem, w którym
-//     przestawia się porcje. Stuknięcie w sam talerz zostaje przy odhaczaniu,
-//     tak jak w projekcie.
-//  5. **Nowe danie wjeżdża od strony, z której przyszło.** Makieta miała
+//  4. **Zdjęcie otwiera szczegóły, pieczątka odhacza.** Makieta odhaczała
+//     stuknięciem w cały talerz i nie miała z niego żadnego wyjścia —
+//     a szczegół posiłku jest jedynym miejscem, w którym przestawia się
+//     porcje. Dwa osobne przyciski obok siebie: wielkie zdjęcie robi to, co
+//     wielkie zdjęcie robi wszędzie indziej w aplikacji, a znaczek w rogu to,
+//     co znaczek. Zapis (odhaczenie) nie może być tym gestem, który
+//     najłatwiej wykonać przypadkiem.
+//  5. **Zjedzone nie jest zielone.** Makieta malowała odhaczone danie
+//     szałwią — a szałwia jest zarazem kolorem obiadu. Zjedzone śniadanie
+//     wyglądało jak obiad. Odhaczenie schodzi na neutralny kolor pisma
+//     (`Color.scChecked`), tak jak od dawna robi to sama pieczątka; pory
+//     zostają swoje.
+//  6. **Nowe danie wjeżdża od strony, z której przyszło.** Makieta miała
 //     jeden „pop” w miejscu. U nas dzień do przodu i talerzyk na prawo
 //     wjeżdżają z prawej, do tyłu i na lewo — z lewej; stare danie zawsze
 //     gaśnie w miejscu. Kierunek jest jedyną rzeczą, której krycie nie
@@ -129,12 +138,13 @@ extension CalendarPlateItem {
 
     /// Barwa, którą niesie ten talerz.
     ///
-    /// Szałwia znaczy „zjedzone” — to samo, co kropki w plakietce dnia nad
-    /// talerzem. Kolor pory dostaje wyłącznie danie, które jest teraz
-    /// następne; reszta stoi w przygaszonym piśmie, żeby jedna pora nie
-    /// wołała głośniej od drugiej bez powodu.
+    /// Zjedzone jest NEUTRALNE — kolor pisma, nie szałwia: szałwia jest
+    /// kolorem obiadu i zjedzone śniadanie wyglądało jak obiad. Kolor pory
+    /// dostaje wyłącznie danie, które jest teraz następne; reszta stoi
+    /// w przygaszonym piśmie, żeby jedna pora nie wołała głośniej od drugiej
+    /// bez powodu.
     func accent(in scheme: ColorScheme) -> Color {
-        if isEaten { return SCPalette.sage }
+        if isEaten { return Color.scChecked(scheme).opacity(0.55) }
         if status == .next { return slot.cozyAccent }
         return Color.scLabel(scheme).opacity(0.28)
     }
@@ -157,7 +167,7 @@ extension CalendarPlateItem {
     }
 
     func kickerColor(in scheme: ColorScheme) -> Color {
-        if isEaten { return SCPalette.sage }
+        if isEaten { return Color.scChecked(scheme).opacity(0.7) }
         if status == .next && !isLate { return slot.cozyAccent }
         return Color.scMuted(scheme)
     }
@@ -205,8 +215,8 @@ struct CalendarPlateKicker: View {
             .contentTransition(.opacity)
             .animation(DayNavigationMotion.spring, value: item?.id)
             // Odhaczenie zmienia barwę nadpisu w miejscu (kolor pory →
-            // szałwia); bez własnego odcisku przeskakiwałaby w jednej klatce,
-            // podczas gdy pierścień wokół zdjęcia dojeżdża sprężyną.
+            // neutralny); bez własnego odcisku przeskakiwałaby w jednej
+            // klatce, podczas gdy pierścień wokół zdjęcia dojeżdża sprężyną.
             .animation(DayNavigationMotion.spring, value: item?.status)
     }
 }
@@ -303,9 +313,12 @@ struct CalendarPlateFace: View {
 
 /// Wielkie okrągłe zdjęcie dania z podwójnym rantem i pieczątką odhaczenia.
 ///
-/// Stuknięcie odhacza — to jedyna czynność, którą ten ekran w ogóle zapisuje
-/// (Kalendarz nie planuje). Dzień z przyszłości nie ma czego odhaczać, więc
-/// wtedy talerz jest tylko obrazkiem.
+/// Dwa przyciski obok siebie, nie jeden w drugim: zdjęcie otwiera szczegóły
+/// posiłku (jak każde zdjęcie dania w aplikacji), pieczątka w rogu odhacza
+/// — jedyna czynność, którą ten ekran w ogóle zapisuje (Kalendarz nie
+/// planuje). Dzień z przyszłości nie ma czego odhaczać, więc pieczątka jest
+/// wtedy przygaszona; pusta pora nie ma czego otwierać, więc zdjęcie jest
+/// wtedy tylko obrazkiem.
 struct CalendarPlate: View {
     let item: CalendarPlateItem?
     /// Skąd wjeżdża nowe danie: `1` z prawej (dzień albo talerzyk do przodu),
@@ -314,12 +327,15 @@ struct CalendarPlate: View {
     var size: CGFloat = CalendarPlate.defaultSize
     /// Dzień z przyszłości i pusta pora nie mają czego odhaczać.
     let canToggle: Bool
+    /// Pieczątka w rogu — odhacza.
     let onToggle: () -> Void
+    /// Zdjęcie — otwiera szczegóły. `nil` dla pustej pory i pustego dnia.
+    let onOpenDetail: (() -> Void)?
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Talerz zajmuje pół szerokości strony dnia, a strona jeździ palcem
-    /// w bok — bez furtki machnięcie kończące się na talerzu odhaczałoby
+    /// w bok — bez furtki machnięcie kończące się na talerzu otwierałoby
     /// posiłek przy okazji przestawiania dnia.
     @Environment(\.dayPagerGate) private var pagerGate
 
@@ -330,9 +346,10 @@ struct CalendarPlate: View {
     ///
     /// To jest preferencja, nie gwarancja. Talerz jest jedynym piętrem tego
     /// ekranu, które wolno ścisnąć — reszta to tekst, a tekst albo się
-    /// czyta, albo nie — więc na najkrótszych ekranach (SE z paskiem kroków)
-    /// układ oddaje mu tyle, ile zostało, także poniżej tej liczby: talerz
-    /// nigdy nie wychodzi poza swoje pudełko (patrz `CalendarView.plateSize`).
+    /// czyta, albo nie — więc układ dnia oddaje mu tyle, ile zostało, także
+    /// poniżej tej liczby: talerz nigdy nie wychodzi poza swoje pudełko
+    /// (patrz `CalendarView.plateSize`), a o pudełko nie mniejsze od podłogi
+    /// dba wybór trybu układu, który na najkrótszym ekranie zdejmuje kroki.
     static let minSize: CGFloat = 72
     /// O ile cienki rant zewnętrzny wychodzi poza zdjęcie przy pełnym
     /// rozmiarze. Układ dnia liczy z tego odstęp od sąsiadów: rant jest
@@ -350,6 +367,7 @@ struct CalendarPlate: View {
     static func rimInset(for size: CGFloat) -> CGFloat {
         (maxRimInset * size / defaultSize).rounded(.down)
     }
+
     /// Pierścień w kolorze pory — to on niesie stan.
     private var ringInset: CGFloat { (7 * scale).rounded() }
     private var ringWidth: CGFloat { max(2, (3 * scale).rounded()) }
@@ -362,33 +380,18 @@ struct CalendarPlate: View {
     private var isUrgent: Bool { item?.isUrgent == true }
 
     var body: some View {
-        // Na dniu, którego nie da się odhaczać, talerz jest obrazkiem — nie
-        // ma być czytany jako „przyciemniony przycisk”. Jawny typ, bo `[]`
-        // i `.isButton` w jednym wyrażeniu warunkowym nie mają skąd wziąć
-        // typu bez podpowiedzi.
-        let hiddenTraits: AccessibilityTraits = canToggle ? [] : .isButton
-
-        return Button {
-            pagerGate.ifNotSwiping(onToggle)
-        } label: {
-            // `ZStack` nie jest ozdobą: przejście przy podmianie dania gra
-            // tylko wtedy, gdy widok o zmiennej tożsamości siedzi w JAKIMŚ
-            // kontenerze. Etykieta przycisku sama w sobie nim nie jest —
-            // bez tego opakowania talerz podmieniałby się twardym cięciem.
-            ZStack {
-                plate
-                    // Podmiana dania na środku. To samo danie odhaczone
-                    // zostaje na miejscu — zmienia mu się pierścień
-                    // i pieczątka, a nie tożsamość (ekran przypina wtedy
-                    // odhaczone danie, żeby „następny” nie wypchnął go
-                    // z talerza spod palca).
-                    .id(item?.id ?? "empty")
-                    .transition(swap)
-            }
-            .frame(width: size, height: size)
+        // `ZStack` nie jest ozdobą: przejście przy podmianie dania gra tylko
+        // wtedy, gdy widok o zmiennej tożsamości siedzi w JAKIMŚ kontenerze.
+        ZStack {
+            stage
+                // Podmiana dania na środku. To samo danie odhaczone zostaje
+                // na miejscu — zmienia mu się pierścień i pieczątka, a nie
+                // tożsamość (ekran przypina wtedy odhaczone danie, żeby
+                // „następny” nie wypchnął go z talerza spod palca).
+                .id(item?.id ?? "empty")
+                .transition(swap)
         }
-        .buttonStyle(PlatePressStyle())
-        .disabled(!canToggle)
+        .frame(width: size, height: size)
         // Odcisk na identyfikatorze dania, nie na zdjęciu: to on rozstrzyga,
         // czy talerz ma się przełożyć, czy tylko zmienić stan w miejscu.
         // Ta sama sprężyna, którą jedzie strona dnia i podkreślenie na pasku
@@ -397,9 +400,43 @@ struct CalendarPlate: View {
         // w miejscu i bez niego ten jeden ruch przeskakiwałby w klatce.
         .animation(DayNavigationMotion.spring, value: item?.id)
         .animation(DayNavigationMotion.spring, value: item?.status)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(actionHint)
-        .accessibilityRemoveTraits(hiddenTraits)
+    }
+
+    /// Zdjęcie i pieczątka — dwa osobne przyciski w jednym pudełku.
+    ///
+    /// Nie przycisk w przycisku: zagnieżdżone przyciski w SwiftUI dzielą
+    /// jeden obszar dotyku i o tym, który zadziała, decyduje kolejność
+    /// w drzewie, nie miejsce stuknięcia. Obok siebie każdy ma swój obszar.
+    private var stage: some View {
+        // Na pustej porze zdjęcie jest obrazkiem — nie ma być czytane jako
+        // „przyciemniony przycisk”. Jawny typ, bo `[]` i `.isButton` w jednym
+        // wyrażeniu warunkowym nie mają skąd wziąć typu bez podpowiedzi.
+        let hiddenTraits: AccessibilityTraits = onOpenDetail == nil ? .isButton : []
+
+        return ZStack(alignment: .bottomTrailing) {
+            Button {
+                pagerGate.ifNotSwiping { onOpenDetail?() }
+            } label: {
+                plate
+            }
+            .buttonStyle(PlatePressStyle())
+            .disabled(onOpenDetail == nil)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityHint(onOpenDetail == nil ? "" : "Otwiera szczegóły posiłku")
+            .accessibilityRemoveTraits(hiddenTraits)
+
+            if let item, !item.isEmptySlot {
+                CalendarPlateStamp(
+                    status: item.status,
+                    color: item.slot.cozyAccent,
+                    size: badgeSize,
+                    isEnabled: canToggle,
+                    action: { pagerGate.ifNotSwiping(onToggle) }
+                )
+                .offset(x: 4 * scale, y: 4 * scale)
+            }
+        }
+        .frame(width: size, height: size)
     }
 
     /// Nowe danie wjeżdża od strony, z której przyszło; stare gaśnie
@@ -451,21 +488,23 @@ struct CalendarPlate: View {
             // Dwie warstwy pod talerzem, w tej kolejności (pierwsze
             // `.background` leży bliżej wierzchu).
             //
-            // Pierścień wybijający spod rantu — sygnał „pora na to danie”.
-            // Ten sam ruch i ta sama barwa, którymi dawniej wołał węzeł łuku
-            // doby; stoi pod zdjęciem, więc WYCHODZI zza niego, zamiast
-            // pojawiać się w locie.
+            // Echosonda — sygnał „pora na to danie”. Dwa pierścienie
+            // przesunięte o pół cyklu, żeby fala szła bez przerwy: jeden
+            // pierścień co dwie sekundy ginął w tle i wyglądał jak drgnięcie,
+            // nie jak wołanie. Stoi pod zdjęciem, więc WYCHODZI zza niego,
+            // zamiast pojawiać się w locie.
             .background {
                 if isUrgent {
                     if reduceMotion {
-                        // Bez ruchu zostaje sam pierścień — w miejscu,
+                        // Bez ruchu zostaje sam mocny pierścień — w miejscu,
                         // w którym echosonda spędza połowę cyklu.
                         Circle()
-                            .strokeBorder(accent.opacity(0.4), lineWidth: ringWidth)
+                            .strokeBorder(accent.opacity(0.55), lineWidth: ringWidth * 1.5)
                             .frame(width: size, height: size)
-                            .scaleEffect(1.2)
+                            .scaleEffect(1.24)
                     } else {
-                        CalendarPlatePing(tint: accent, diameter: size, lineWidth: ringWidth)
+                        CalendarPlatePing(tint: accent, diameter: size, lineWidth: ringWidth * 1.6, delay: 0)
+                        CalendarPlatePing(tint: accent, diameter: size, lineWidth: ringWidth * 1.6, delay: 1.0)
                     }
                 }
             }
@@ -474,24 +513,10 @@ struct CalendarPlate: View {
             .background {
                 CalendarPlateGlow(
                     tint: accent,
-                    diameter: size * 2.02,
-                    breathes: isUrgent && !reduceMotion
+                    diameter: size * 2.2,
+                    breathes: isUrgent && !reduceMotion,
+                    loud: isUrgent
                 )
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if let item, !item.isEmptySlot {
-                    CalendarMealCheck(
-                        status: item.status,
-                        color: item.slot.cozyAccent,
-                        size: badgeSize
-                    )
-                    .padding(3)
-                    // Pieczątka wycina się z talerza krążkiem tła — inaczej
-                    // kreskowane kółko „dowolnej pory” gubiło się na zdjęciu.
-                    .background(Circle().fill(Color.scPageBase(scheme)))
-                    .opacity(canToggle ? 1 : 0.55)
-                    .offset(x: 4 * scale, y: 4 * scale)
-                }
             }
     }
 
@@ -502,12 +527,59 @@ struct CalendarPlate: View {
         // pokazuje, więc i nie czyta.
         return "\(item.accessibilityDescription), \(item.kcal) kcal"
     }
+}
 
-    /// Co robi stuknięcie w talerz. Pusto, gdy nie robi nic — dzień
-    /// z przyszłości i pusta pora nie mają czego odhaczać.
-    private var actionHint: String {
-        guard canToggle, let item, !item.isEmptySlot else { return "" }
-        return item.isEaten ? "Cofnij oznaczenie zjedzenia" : "Oznacz jako zjedzone"
+// MARK: - Pieczątka
+
+/// Znaczek odhaczenia w rogu talerza — osobny przycisk z własnym obszarem
+/// dotyku (44 pt) i własnym ruchem.
+///
+/// Przy odhaczeniu podskakuje: to jedyny zapis na tym ekranie i ma być
+/// widać, że coś się STAŁO, a nie tylko zmieniło kolor. Powrót sprężyną
+/// z niskim tłumieniem — pieczątka, nie przełącznik.
+private struct CalendarPlateStamp: View {
+    let status: CalendarMealStatus
+    let color: Color
+    let size: CGFloat
+    let isEnabled: Bool
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var popped = false
+
+    var body: some View {
+        Button(action: action) {
+            CalendarMealCheck(status: status, color: color, size: size)
+                .padding(3)
+                // Pieczątka wycina się z talerza krążkiem tła — inaczej
+                // kreskowane kółko „dowolnej pory” gubiło się na zdjęciu.
+                .background(Circle().fill(Color.scPageBase(scheme)))
+                .scaleEffect(popped ? 1.3 : 1)
+                .scTapTarget(44, drawn: size + 6)
+        }
+        .buttonStyle(StampPressStyle())
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.55)
+        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: popped)
+        .onChange(of: status) { _, value in
+            guard value == .eaten, !reduceMotion else { return }
+            popped = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(140))
+                popped = false
+            }
+        }
+        .accessibilityLabel(status.isEaten ? "Cofnij oznaczenie zjedzenia" : "Oznacz jako zjedzone")
+    }
+}
+
+/// Dotknięcie pieczątki: wyraźne ściśnięcie, jak wciśnięcie guzika.
+private struct StampPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.82 : 1)
+            .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -517,11 +589,15 @@ struct CalendarPlate: View {
 ///
 /// Oddycha wyłącznie wtedy, gdy jest co zrobić (`breathes`) — i oddycha
 /// SKALĄ ORAZ KRYCIEM, a nie promieniem gradientu: gradient przeliczany co
-/// klatkę kosztuje tyle, ile cały ten ekran razem wzięty.
+/// klatkę kosztuje tyle, ile cały ten ekran razem wzięty. Kiedy woła
+/// (`loud`), jest mocniejsza i szersza: cicha poświata pod talerzem
+/// o średnicy 168 pt ginęła na ciemnym tle i puls było widać dopiero, gdy
+/// się go szukało.
 private struct CalendarPlateGlow: View {
     let tint: Color
     let diameter: CGFloat
     let breathes: Bool
+    let loud: Bool
 
     @State private var inhaled = false
 
@@ -531,44 +607,47 @@ private struct CalendarPlateGlow: View {
         // składowych potrafi zgłosić się kilkadziesiąt linii wyżej jako
         // `ambiguous use of 'init'` (patrz `CLAUDE.md`).
         let motion: Animation = breathes
-            ? .easeInOut(duration: 2.2).repeatForever(autoreverses: true)
+            ? .easeInOut(duration: 1.9).repeatForever(autoreverses: true)
             : .smooth(duration: 0.4)
 
         return Circle()
             .fill(
                 RadialGradient(
-                    colors: [tint.opacity(0.22), tint.opacity(0)],
+                    colors: [tint.opacity(loud ? 0.42 : 0.22), tint.opacity(0)],
                     center: .center,
                     startRadius: 0,
-                    endRadius: diameter * 0.34
+                    endRadius: diameter * (loud ? 0.4 : 0.34)
                 )
             )
             .frame(width: diameter, height: diameter)
             // Odrobinę w górę: talerz ma stać w świetle, a nie na nim.
             .offset(y: -diameter * 0.05)
-            .scaleEffect(inhaled ? 1.06 : 1)
-            .opacity(inhaled ? 1 : 0.72)
+            .scaleEffect(inhaled ? 1.14 : 1)
+            .opacity(inhaled ? 1 : (loud ? 0.55 : 0.72))
             .animation(motion, value: inhaled)
             .animation(.smooth(duration: 0.45), value: tint)
+            .animation(.smooth(duration: 0.45), value: loud)
             .onAppear { inhaled = breathes }
             .onChange(of: breathes) { _, value in inhaled = value }
             .allowsHitTesting(false)
     }
 }
 
-// MARK: - Pierścień „pora na to danie”
+// MARK: - Echosonda
 
-/// Pierścień wybijający spod talerza i gasnący — echosonda.
+/// Pierścień wybijający spod talerza i gasnący.
 ///
 /// `autoreverses: false`, więc pierścień nie wraca do środka, tylko zaczyna
 /// od nowa: powrót widać jako ruch wsteczny, a echosonda ma bić zawsze w tę
 /// samą stronę. Skok na początek cyklu wypada przy zerowym kryciu, czyli
 /// poza wzrokiem. Ramka jest STAŁA, oddycha `scaleEffect` — rosnąca ramka
-/// kazałaby układowi przeliczać się co klatkę bez końca.
+/// kazałaby układowi przeliczać się co klatkę bez końca. `delay` przesuwa
+/// start o ułamek cyklu, żeby dwa pierścienie szły jeden za drugim.
 private struct CalendarPlatePing: View {
     let tint: Color
     let diameter: CGFloat
     let lineWidth: CGFloat
+    let delay: Double
 
     @State private var expanded = false
 
@@ -576,13 +655,22 @@ private struct CalendarPlatePing: View {
         Circle()
             .strokeBorder(tint, lineWidth: lineWidth)
             .frame(width: diameter, height: diameter)
-            .scaleEffect(expanded ? 1.26 : 1)
-            .opacity(expanded ? 0 : 0.55)
+            .scaleEffect(expanded ? 1.48 : 1)
+            .opacity(expanded ? 0 : 0.85)
             .animation(
-                .easeOut(duration: 2.1).repeatForever(autoreverses: false),
+                .easeOut(duration: 2.0).repeatForever(autoreverses: false),
                 value: expanded
             )
-            .onAppear { expanded = true }
+            .onAppear {
+                guard delay > 0 else {
+                    expanded = true
+                    return
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(Int(delay * 1000)))
+                    expanded = true
+                }
+            }
             .allowsHitTesting(false)
     }
 }
@@ -659,6 +747,8 @@ struct CalendarPlateChip: View {
 /// Cała treść liczy się TUTAJ, z jednego `CalendarPlateItem` — ekran podaje
 /// fakty, a nie zdania. Dzięki temu „Pora gotować” w wielkim wierszu i kolor
 /// pigułki „gotuj od” nie mogą się rozjechać: wynikają z tej samej liczby.
+/// Zdania ze słów mają po kilka wariantów (`CalendarVoice`) — ten sam fakt,
+/// inny ton, stabilnie dla dnia i dania.
 ///
 /// Podpis ma STAŁĄ wysokość — tę samą dla każdego dania, dla pustej pory
 /// i dla pustego dnia: odliczanie to zawsze jedna linijka, nazwa dostaje
@@ -668,6 +758,9 @@ struct CalendarPlateChip: View {
 /// i żeby talerz na pustym dniu stał dokładnie tam, gdzie na pełnym.
 struct CalendarPlateCaption: View {
     let item: CalendarPlateItem?
+    /// Klucz dnia — ziarno doboru wariantów zdań. Ten sam dzień mówi zawsze
+    /// tak samo, kolejny inaczej.
+    let dayKey: String
     /// Ile linijek dostaje nazwa dania. Dwie na normalnym ekranie, jedna na
     /// krótkim, gdzie każde 23 pt idzie na talerz.
     var titleLines: Int = 2
@@ -781,38 +874,62 @@ struct CalendarPlateCaption: View {
 
     // MARK: Treść
 
+    /// Wariant zdania dla tego dnia i tego dania. `kind` rozdziela ziarna,
+    /// żeby „Pora jeść” i „Zjedzone” tego samego dania nie były zawsze tym
+    /// samym numerem wariantu.
+    private func voice(_ variants: [String], _ kind: String) -> String {
+        CalendarVoice.pick(variants, seed: "\(dayKey)|\(item?.id ?? "-")|\(kind)")
+    }
+
     private var headline: String {
-        guard let item else { return "Pusty dzień" }
-        if item.isEmptySlot { return "Nic nie zaplanowano" }
+        guard let item else {
+            return voice(["Pusty dzień", "Czysta karta", "Nic w planie", "Jeszcze bez planu"], "empty-day")
+        }
+        if item.isEmptySlot {
+            return voice(["Nic nie zaplanowano", "Jeszcze pusto", "Wolna pora", "Bez planu"], "empty-slot")
+        }
 
         switch item.status {
         case .eaten:
-            return "Zjedzone"
+            return voice(["Zjedzone", "Odhaczone", "Zaliczone", "Po posiłku"], "eaten")
         case .next:
             // Odkąd okno gotowania jest otwarte, odliczanie przestaje być
             // odpowiedzią: „za 3 min” przy daniu, które robi się kwadrans,
             // mówi, ile zostało do JEDZENIA, a pytanie brzmi już co innego.
-            if item.isCooking { return "Pora gotować" }
-            if item.isDue { return "Pora jeść" }
-            if item.isLate { return "Pora minęła" }
-            guard let away = item.minutesAway else { return item.time ?? "Dowolna pora" }
+            if item.isCooking { return voice(["Pora gotować", "Do kuchni!", "Czas gotować", "Gotujemy!"], "cooking") }
+            if item.isDue { return voice(Self.dueVariants, "due") }
+            if item.isLate { return voice(Self.lateVariants, "late") }
+            guard let away = item.minutesAway else { return item.time ?? anytime }
             return CalendarRelativeTime.text(inMinutes: away)
         case .later:
-            guard let away = item.minutesAway else { return item.time ?? "Dowolna pora" }
+            guard let away = item.minutesAway else { return item.time ?? anytime }
             // Danie „później” może mieć porę za sobą (wieczorem, gdy nic nie
             // odhaczono, „następne” jest śniadanie, a obiad — „później”).
             // Wtedy mówi to samo, co mówiłoby jako następne, tym samym
             // wielkim zdaniem — nie odmieńcem „pora minęła” z małej litery.
             if away <= 0 {
-                return away >= -CalendarRelativeTime.graceMinutes ? "Pora jeść" : "Pora minęła"
+                if away >= -CalendarRelativeTime.graceMinutes {
+                    return voice(Self.dueVariants, "due")
+                }
+                return voice(Self.lateVariants, "late")
             }
             return CalendarRelativeTime.text(inMinutes: away)
         case .anytime:
-            return "Dowolna pora"
+            return anytime
         case .planned:
-            return item.time ?? "Dowolna pora"
+            return item.time ?? anytime
         }
     }
+
+    private var anytime: String {
+        voice(["Dowolna pora", "Kiedy chcesz", "Bez godziny"], "anytime")
+    }
+
+    /// Jedno miejsce dla zdań, które padają z dwóch gałęzi („następne”
+    /// i „później” po porze) — żeby nie rozjechały się przy poprawce.
+    /// „Minęła” bez stopnia: o 22:00 obiad z 14:00 nie jest „trochę” późno.
+    private static let dueVariants = ["Pora jeść", "Smacznego!", "Na stół!", "Czas jeść"]
+    private static let lateVariants = ["Pora minęła", "Już po porze", "Po czasie"]
 
     /// Tożsamość wielkiego wiersza: danie plus RODZAJ zdania. Zdania
     /// z liczbami (odliczanie, godzina) dzielą jeden klucz, żeby cyfry
@@ -827,7 +944,7 @@ struct CalendarPlateCaption: View {
     private var headlineColor: Color {
         guard let item else { return Color.scMuted(scheme) }
         if item.isEmptySlot { return Color.scMuted(scheme) }
-        if item.isEaten { return SCPalette.sage }
+        if item.isEaten { return Color.scLabel(scheme) }
         guard item.status == .next else { return Color.scLabel(scheme) }
         if item.isLate { return Color.scMuted(scheme) }
         // Terakota znaczy „to jest następne”. Kiedy robi się pilnie, wielki
@@ -845,14 +962,18 @@ struct CalendarPlateCaption: View {
     }
 
     /// Pigułki mówią wyłącznie to, czego nie ma nigdzie wyżej na talerzu.
-    /// „Zjedzone” niesie już wielki wiersz, szałwiowy nadpis i pieczątka —
-    /// czwarty raz to samo słowo w pigułce nie było informacją.
+    /// „Zjedzone” niesie już wielki wiersz, nadpis i pieczątka — czwarty raz
+    /// to samo słowo w pigułce nie było informacją.
     private var chips: [Chip] {
         // Pusty dzień i pusta pora mówią to samo: dokąd iść, żeby coś tu
         // stanęło. Ikona z dolnego menu, nie własna — użytkownik ma trafić
         // wzrokiem po tym samym znaku, który widzi w pasku pod spodem.
         guard let item, !item.isEmptySlot else {
-            return [Chip(id: "plan", text: "Zaplanujesz w Planie", icon: MenuConstans.Plan.icon)]
+            // Tożsamość pigułki idzie za doborem słów: inny wariant to inna
+            // pigułka (wchodzi skalą i kryciem), a nie ta sama z literami
+            // rolującymi się pod `numericText`.
+            let text = voice(["Zaplanujesz w Planie", "Ułożysz w Planie", "Dodasz w Planie"], "plan-chip")
+            return [Chip(id: "plan|\(text)", text: text, icon: MenuConstans.Plan.icon)]
         }
 
         var out: [Chip] = []
@@ -872,7 +993,10 @@ struct CalendarPlateCaption: View {
             } else if item.status == .next {
                 tint = SCPalette.terracotta
             }
-            out.append(Chip(id: "cook", text: "gotuj od \(cookFrom)", icon: "flame", tint: tint))
+            // Słowa w tożsamości, godzina poza nią: zmiana wariantu wymienia
+            // pigułkę, zmiana godziny (inne danie) roluje cyfry.
+            let lead = voice(["gotuj od", "start o", "do kuchni o"], "cook-chip")
+            out.append(Chip(id: "cook|\(lead)", text: "\(lead) \(cookFrom)", icon: "flame", tint: tint))
         }
 
         var meta = "\(item.kcal) kcal"
@@ -920,17 +1044,17 @@ struct CalendarPlateCaption: View {
                 ForEach([next, cooking, eaten, missed]) { item in
                     VStack(spacing: 16) {
                         CalendarPlateKicker(item: item)
-                        CalendarPlate(item: item, canToggle: true, onToggle: {})
+                        CalendarPlate(item: item, canToggle: true, onToggle: {}, onOpenDetail: {})
                             .padding(.vertical, CalendarPlate.maxRimInset)
-                        CalendarPlateCaption(item: item, onOpenDetail: {})
+                        CalendarPlateCaption(item: item, dayKey: "2026-09-11", onOpenDetail: {})
                     }
                 }
 
                 VStack(spacing: 16) {
                     CalendarPlateKicker(item: nil)
-                    CalendarPlate(item: nil, canToggle: false, onToggle: {})
+                    CalendarPlate(item: nil, canToggle: false, onToggle: {}, onOpenDetail: nil)
                         .padding(.vertical, CalendarPlate.maxRimInset)
-                    CalendarPlateCaption(item: nil, onOpenDetail: nil)
+                    CalendarPlateCaption(item: nil, dayKey: "2026-09-11", onOpenDetail: nil)
                 }
             }
             .padding(.vertical, 40)
