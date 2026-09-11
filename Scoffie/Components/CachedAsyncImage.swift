@@ -287,7 +287,14 @@ struct CachedAsyncImage<Content: View>: View {
 
         do {
             let image = try await SharedImagePipeline.shared.image(for: url)
-            phase = .success(Image(uiImage: image))
+            // Zdjęcie, które przyszło PO pierwszej klatce, wchodzi kryciem
+            // zamiast wskakiwać w miejsce zastępczego gradientu. Trafienie
+            // w pamięć podręczną tu nie dociera (`initialPhase` oddaje sukces
+            // synchronicznie), więc animuje się wyłącznie prawdziwe
+            // doładowanie — z dysku albo z sieci — i tylko ono mogło mignąć.
+            withAnimation(.smooth(duration: 0.25)) {
+                phase = .success(Image(uiImage: image))
+            }
         } catch is CancellationError {
             return
         } catch {

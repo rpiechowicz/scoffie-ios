@@ -40,12 +40,10 @@ enum CalendarRelativeTime {
     /// stał w „teraz" aż do północy.
     static let graceMinutes = 20
 
-    static func text(to minutes: Int, from nowMinutes: Int) -> String {
-        text(inMinutes: minutes - nowMinutes)
-    }
-
-    /// To samo, ale z gotową różnicą. Talerz liczy ją raz i nie ma po co
-    /// rozkładać jej z powrotem na dwie godziny.
+    /// „teraz” / „pora minęła” / „za 4 h 19 min” dla gotowej różnicy
+    /// w minutach (pora posiłku minus teraz); ujemna = po porze. Ekran
+    /// liczy tę różnicę raz dla całego dnia (`CalendarPlateItem.minutesAway`)
+    /// i nie ma po co rozkładać jej z powrotem na dwie godziny.
     static func text(inMinutes delta: Int) -> String {
         if delta <= 0 {
             return delta >= -graceMinutes ? "teraz" : "pora minęła"
@@ -152,6 +150,20 @@ extension MealSlot {
 
     /// Tło talerza, gdy przepis nie ma zdjęcia.
     var cozyTint: Color { cozyAccent }
+
+    /// Gradient pory pod ikoną dania bez zdjęcia — ten sam ułamek i ten sam
+    /// mikser (gamma sRGB, `mix(black:)`), którym Plan tygodnia rysuje kafel
+    /// bez fotografii. Jedno miejsce, bo cztery kopie tego gradientu już raz
+    /// rozjechały się po cichu: talerz brał inny ułamek i inną przestrzeń
+    /// barw niż kafle, i danie bez zdjęcia było na dwóch zakładkach dwoma
+    /// różnymi kolorami.
+    var cozyGradient: LinearGradient {
+        LinearGradient(
+            colors: [cozyTint, cozyTint.mix(black: 0.32)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 }
 
 #Preview("Kółka stanu") {

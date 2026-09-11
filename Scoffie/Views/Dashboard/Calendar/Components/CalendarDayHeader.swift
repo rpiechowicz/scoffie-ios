@@ -41,9 +41,11 @@ struct CalendarDayHeader: View {
                 .layoutPriority(1)
                 // Nazwa dnia przechodzi kryciem, a nie cięciem: strona pod
                 // spodem przekłada się w nowy dzień jednym ruchem
-                // (`DayPagerMotion.morph`) i nagłówek ma iść tym samym ruchem.
+                // (`DayPagerMotion.morph`) i nagłówek ma iść TĄ SAMĄ sprężyną
+                // — własny, krótszy odcisk kończyłby się przed talerzem
+                // i podkreśleniem na pasku dni.
                 .contentTransition(.opacity)
-                .animation(.smooth(duration: 0.25), value: date)
+                .animation(DayNavigationMotion.spring, value: date)
 
             if isToday {
                 todayBadge

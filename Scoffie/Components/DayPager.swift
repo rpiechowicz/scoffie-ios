@@ -109,8 +109,9 @@ extension EnvironmentValues {
 /// sprężynowało — dwa języki dla jednej czynności. To wymaga, żeby `content`
 /// rysował dzień Z ARGUMENTU, a nie ze stanu ekranu: na czas zjazdu pager
 /// pokazuje jeszcze stary dzień (`displayedDate`), choć `selectedDate` już
-/// wskazuje nowy. Kalendarz rysuje z własnego stanu, więc zostaje przy
-/// domyślnym `false` i twardym przeskoku.
+/// wskazuje nowy. Oba ekrany — Plan i Kalendarz — przekazują `true`
+/// i rysują z argumentu; różnią się tym, czy strona się przewija
+/// (`scrolls`) i jak pokazuje zmianę dnia (`motion`).
 struct DayPager<Content: View>: View {
     let datesViewModel: DatesViewModel
     @Binding var selectedDate: Date
@@ -133,6 +134,15 @@ struct DayPager<Content: View>: View {
     let scrolls: Bool
     /// Zjazd strony albo przejście treści w miejscu — patrz `DayPagerMotion`.
     let motion: DayPagerMotion
+    /// Wołane W TEJ SAMEJ animowanej transakcji, w której zmienia się dzień,
+    /// tuż przed zmianą — z kierunkiem (`true` = dzień do przodu).
+    ///
+    /// Treść, która chce wjechać od strony, z której przyszedł dzień, musi
+    /// znać kierunek W CHWILI wstawiania nowego widoku, a nie po fakcie:
+    /// przejście wstawienia liczy się z tego, co stoi w stanie w tym samym
+    /// przebiegu układu. Osobna zmiana stanu chwilę później byłaby już
+    /// drugim przebiegiem i nowy widok wjechałby zawsze z tej samej strony.
+    let onDayChange: ((_ forward: Bool) -> Void)?
     let content: (Date) -> Content
 
     init(
@@ -142,6 +152,7 @@ struct DayPager<Content: View>: View {
         animatesSelectionChanges: Bool = false,
         scrolls: Bool = true,
         motion: DayPagerMotion = .slide,
+        onDayChange: ((_ forward: Bool) -> Void)? = nil,
         @ViewBuilder content: @escaping (Date) -> Content
     ) {
         self.datesViewModel = datesViewModel
@@ -150,6 +161,7 @@ struct DayPager<Content: View>: View {
         self.animatesSelectionChanges = animatesSelectionChanges
         self.scrolls = scrolls
         self.motion = motion
+        self.onDayChange = onDayChange
         self.content = content
         self._displayedDate = State(initialValue: selectedDate.wrappedValue)
     }
@@ -189,10 +201,15 @@ struct DayPager<Content: View>: View {
     /// wartość co przy tygodniach na pasku dni — jeden ekran, jeden próg.
     private static var commitThreshold: CGFloat { 56 }
     /// Do progu strona jedzie 1:1 z palcem — tyle ruchu, ile gestu.
-    private static var freeTravel: CGFloat { commitThreshold }
+    ///
+    /// W trybie `morph` strona nigdzie nie jedzie, więc i za palcem idzie
+    /// tylko odrobinę: to jest gest, który ma się dać wyczuć, a nie strona,
+    /// którą się przeciąga. Próg zatwierdzenia (`commitThreshold`) zostaje
+    /// ten sam — liczy się z ruchu palca, nie z wychylenia strony.
+    private var freeTravel: CGFloat { motion == .morph ? 8 : Self.commitThreshold }
     /// Sufit wychylenia przy przeciąganiu w bok. Za progiem ruch się
     /// wypłaszcza: widać, że strona jest już na granicy zatwierdzenia.
-    private static var dragLimit: CGFloat { 104 }
+    private var dragLimit: CGFloat { motion == .morph ? 22 : 104 }
     /// Ile palec musi przejechać, żeby oś gestu dała się rozstrzygnąć.
     private static var axisLockDistance: CGFloat { 14 }
 
@@ -293,7 +310,7 @@ struct DayPager<Content: View>: View {
                 // Od tej chwili stuknięcia z tego dotyku są ogonem machnięcia,
                 // a nie wyborem posiłku.
                 gate.noteSwipeMovement()
-                dragOffset = Self.resisted(value.translation.width - dragBaseline)
+                dragOffset = resisted(value.translation.width - dragBaseline)
             }
             .onEnded { value in
                 let wasHorizontal = isHorizontalDrag == true
@@ -374,13 +391,13 @@ struct DayPager<Content: View>: View {
         isPaging = true
 
         if motion == .morph {
-            morph(to: target, movesSelection: movesSelection)
+            morph(to: target, forward: forward, movesSelection: movesSelection)
             return
         }
 
         // Szerokość bywa jeszcze nieznana w pierwszej klatce po wejściu na
         // zakładkę; wtedy lepszy jest twardy przeskok niż zjazd donikąd.
-        let travel = pageWidth > 0 ? pageWidth * Self.exitTravelRatio : Self.dragLimit
+        let travel = pageWidth > 0 ? pageWidth * Self.exitTravelRatio : dragLimit
 
         withAnimation(Self.exitAnimation) {
             dragOffset = forward ? -travel : travel
@@ -430,8 +447,10 @@ struct DayPager<Content: View>: View {
     /// Blokada `isPaging` trwa tyle, ile osiada sprężyna — z tego samego
     /// powodu, co przy zjeździe: drugie machnięcie w trakcie zostawiałoby
     /// stronę w pół drogi.
-    private func morph(to target: Date, movesSelection: Bool) {
+    private func morph(to target: Date, forward: Bool, movesSelection: Bool) {
         withAnimation(Self.enterAnimation) {
+            // Kierunek PRZED datą, w tej samej transakcji — patrz `onDayChange`.
+            onDayChange?(forward)
             if movesSelection { selectedDate = target }
             displayedDate = target
             dragOffset = 0
@@ -441,8 +460,15 @@ struct DayPager<Content: View>: View {
             try? await Task.sleep(for: Self.enterDuration)
             isPaging = false
 
+            // Zmiana, która przyszła w trakcie (szybkie drugie stuknięcie
+            // w pasek dni), została zignorowana przez `onChange`. Strona
+            // dogania datę TĄ SAMĄ drogą, co każda inna zmiana — z kierunkiem
+            // i w animowanej transakcji. Gołe przypisanie animowałoby treść
+            // (odcisk na `displayedDate` stoi zawsze), ale bez wołania
+            // `onDayChange` nowy talerz wjeżdżałby z kierunku POPRZEDNIEJ
+            // zmiany, czyli po „w przód, potem szybko w tył” — z prawej.
             if !Calendar.current.isDate(displayedDate, inSameDayAs: selectedDate) {
-                displayedDate = selectedDate
+                transition(to: selectedDate, forward: selectedDate > displayedDate, movesSelection: false)
             }
         }
     }
@@ -452,7 +478,7 @@ struct DayPager<Content: View>: View {
     ///
     /// Wcześniej opór działał od pierwszego punktu i przy 70 pt gestu strona
     /// przesuwała się o 35 — machnięcie wyglądało, jakby ekran je zignorował.
-    private static func resisted(_ translation: CGFloat) -> CGFloat {
+    private func resisted(_ translation: CGFloat) -> CGFloat {
         let distance = abs(translation)
         guard distance > freeTravel else { return translation }
 
