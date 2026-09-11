@@ -29,10 +29,7 @@ struct ActivityRing: View {
 
     var body: some View {
         let clamped = max(0, min(progress, 1))
-        // Sufit na drugiej pętli: przy 300 % nakładka i tak domknęłaby koło,
-        // a rysowanie trzeciej warstwy niczego już nie dodaje.
-        let overflow = max(0, min(progress - 1, 1))
-        let isOver = overflow > 0
+        let isOver = progress > 1
 
         ZStack {
             // Tor
@@ -42,9 +39,14 @@ struct ActivityRing: View {
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
 
-            // Postęp
-            Circle()
-                .trim(from: 0, to: clamped)
+            // Postęp — pierwsza pętla. Podział na pętle robi KSZTAŁT
+            // (`RingLap`), nie widok: `animatableData` to surowy postęp, więc
+            // każda klatka animacji liczy podział od nowa i druga pętla rusza
+            // dopiero wtedy, gdy pierwsza dojedzie do pełnego koła. Dwa
+            // osobne `trim` liczone w widoku interpolowały się równolegle od
+            // zera i nadmiar rysował się ciemniejszym kolorem od pierwszej
+            // klatki, zanim zwykły postęp skończył jechać.
+            RingLap(progress: progress, lap: 0)
                 .stroke(
                     AngularGradient(
                         gradient: Gradient(colors: [startColor, endColor, startColor]),
@@ -54,24 +56,58 @@ struct ActivityRing: View {
                     ),
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
-                .rotationEffect(.degrees(-90))
                 // Pełne koło zostaje w pełnej mocy także po przekroczeniu
                 // celu: „cel zrobiony" nie przestaje być prawdą dlatego, że
                 // doszło do niego jeszcze trochę.
                 .shadow(color: endColor.opacity(clamped > 0 && !isOver ? 0.35 : 0), radius: 6, x: 0, y: 0)
 
-            // Nadmiar. Rysowany ZAWSZE, nie pod `if` — przy `if` przejście
-            // przez 100 % wstawiałoby widok skokiem i łuk pojawiałby się
-            // gotowy, zamiast wyjeżdżać z zera razem z resztą animacji.
-            // Przycięcie do zera nie rysuje niczego, więc koszt jest żaden.
-            Circle()
-                .trim(from: 0, to: overflow)
+            // Nadmiar — druga pętla, ten sam kolor przyciemniony. Rysowany
+            // ZAWSZE, nie pod `if` — przy `if` przejście przez 100 %
+            // wstawiałoby widok skokiem. Pusta ścieżka nie rysuje niczego,
+            // więc koszt jest żaden. Sufit na drugiej pętli: przy 300 %
+            // nakładka i tak domknęłaby koło.
+            RingLap(progress: progress, lap: 1)
                 .stroke(
                     endColor.mix(black: 0.34),
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
-                .rotationEffect(.degrees(-90))
                 .shadow(color: .black.opacity(isOver ? 0.35 : 0), radius: 3, x: 0, y: 1)
         }
+    }
+}
+
+// MARK: - Pętla pierścienia
+
+/// Łuk jednej pętli pierścienia od godziny dwunastej, w prawo.
+///
+/// `lap` mówi, którą pętlę rysuje ten kształt: zerowa to postęp 0–100 %,
+/// pierwsza to nadmiar 100–200 %. Postęp jest `animatableData`, więc
+/// SwiftUI interpoluje SUROWĄ liczbę, a podział na pętle liczy się z niej
+/// przy każdej klatce — to jedyny sposób, żeby nadmiar zaczął rosnąć dokładnie
+/// w chwili, w której pierwsza pętla się domknie, a nie razem z nią.
+struct RingLap: Shape {
+    var progress: CGFloat
+    let lap: Int
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let fraction = max(0, min(progress - CGFloat(lap), 1))
+        guard fraction > 0 else { return Path() }
+
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        var path = Path()
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(-90),
+            endAngle: .degrees(-90 + 360 * Double(fraction)),
+            clockwise: false
+        )
+        return path
     }
 }

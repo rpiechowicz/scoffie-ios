@@ -1070,6 +1070,7 @@ struct CalendarView: View {
             CalendarPlateStrip(
                 items: items,
                 selectedId: focused?.id,
+                dayKey: dayKey,
                 width: area.width,
                 maxColumn: fit.maxColumn,
                 onSelect: { movePlate(to: $0, pin: true, in: items, from: focused) }
