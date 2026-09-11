@@ -1372,14 +1372,20 @@ final class SessionStore {
 
         // Link https, nie schemat. `scoffie://invite?token=…` w iMessage czy
         // WhatsAppie jest martwy — nie klika się, nie ma podglądu, a odbiorca
-        // widzi surowy token. Strona scoffie.app/zaproszenie/<token> ma kartę
+        // widzi surowy token. Strona scoffie.app/zaproszenie/ ma kartę
         // z tytułem i obrazkiem, otwiera się wszędzie i dopiero po kliknięciu
-        // na niej uruchamia aplikację tym samym schematem. Ten sam adres
-        // obsłużą kiedyś Universal Links — `invitationToken(from:)` już go zna.
+        // na niej uruchamia aplikację tym samym schematem.
+        //
+        // Token idzie we FRAGMENCIE (`#…`), nie w ścieżce: fragment nigdy nie
+        // opuszcza przeglądarki — nie trafia do serwera ani logów Cloudflare,
+        // nie ma go w nagłówku Referer, a roboty podglądu linków go nie
+        // dostają. Universal Links fragment zachowują, więc ten sam adres
+        // obsłuży kiedyś aplikacja bez strony — `invitationToken(from:)` już go zna.
         var components = URLComponents()
         components.scheme = "https"
         components.host = Self.invitationHost
-        components.path = "/zaproszenie/\(invitation.token)"
+        components.path = "/zaproszenie/"
+        components.fragment = invitation.token
         guard let url = components.url else {
             throw RecipeDataError.serverError(message: "Nie udało się zbudować linku zaproszenia.")
         }
@@ -1595,7 +1601,7 @@ final class SessionStore {
     /// Token zaproszenia z linku, w obu postaciach:
     ///  - `scoffie://invite?token=…` — schemat, którym strona zaproszenia
     ///    otwiera aplikację;
-    ///  - `https://scoffie.app/zaproszenie/<token>` (awaryjnie `?t=<token>`) —
+    ///  - `https://scoffie.app/zaproszenie/#<token>` (awaryjnie `?t=<token>`) —
     ///    link, który udostępnia domownik. Dziś trafia tu wyłącznie przez
     ///    Universal Links, gdy je włączymy; bez nich otwiera go Safari.
     static func invitationToken(from url: URL) -> String? {
@@ -1606,10 +1612,9 @@ final class SessionStore {
         } else if url.scheme == "https",
                   url.host == invitationHost || url.host == "www.\(invitationHost)" {
             let parts = url.pathComponents.filter { $0 != "/" }
-            guard parts.first == "zaproszenie" else { return nil }
-            token = parts.count >= 2
-                ? parts[1]
-                : components.queryItems?.first(where: { $0.name == "t" })?.value
+            guard parts == ["zaproszenie"] else { return nil }
+            token = components.fragment
+                ?? components.queryItems?.first(where: { $0.name == "t" })?.value
         } else {
             return nil
         }
