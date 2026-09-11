@@ -32,6 +32,11 @@ enum UserFacingErrorMapper {
     /// błędem łączności — dawne dopasowanie gołego „socket" w treści
     /// wyciszałoby prawdziwe odmowy, gdyby tylko komunikat zawierał to słowo.
     static func isConnectivityIssue(_ error: Error) -> Bool {
+        // Anulowanie nie jest awarią transportu — to aplikacja sama przerwała
+        // żądanie. Liczone jako awaria karmiło pasek „problem z połączeniem"
+        // po każdym powrocie z tła, gdy odświeżenie anulowało poprzednie.
+        guard !isCancellation(error) else { return false }
+
         switch error {
         case RecipeDataError.server:
             return false
@@ -46,6 +51,22 @@ enum UserFacingErrorMapper {
         default:
             return matchesConnectivity(extractMessage(from: error))
         }
+    }
+
+    /// Żądanie przerwane przez SAMĄ aplikację — anulowane zadanie Swifta
+    /// (`Task.sleep` w kolejce na połączenie, `.task(id:)` po zejściu widoku,
+    /// debounce przeładowania anulowany przez kolejne zdarzenie) albo
+    /// anulowany transfer `URLSession`.
+    ///
+    /// To nigdy nie jest informacja dla użytkownika: nic nie zawiodło,
+    /// a to, co miało się załadować, ładuje się właśnie ponownie. Toast
+    /// „Operacja została przerwana" po powrocie z tła mówił o wewnętrznym
+    /// wyścigu dwóch odświeżeń tak, jakby coś się zepsuło.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        let lower = extractMessage(from: error).lowercased()
+        return lower.contains("cancellationerror") || lower.contains("cancelled")
     }
 
     /// Kopia dla kodu, który NIE przyszedł jako błąd HTTP.
@@ -74,6 +95,10 @@ enum UserFacingErrorMapper {
     /// - błąd łączności → dowód kłopotów,
     /// - każdy inny → dowód, że serwer ODPOWIEDZIAŁ, czyli że sieć działa.
     static func inlineMessage(from error: Error) -> String? {
+        // Anulowanie: ani do pokazania, ani do monitora. Nie jest dowodem
+        // kłopotów (transport nie padł) ani dowodem odpowiedzi (serwer jej
+        // nie zdążył dać) — po prostu nic o sieci nie mówi.
+        guard !isCancellation(error) else { return nil }
         guard !isConnectivityIssue(error) else {
             ConnectivityMonitor.noteTransportFailure()
             return nil
