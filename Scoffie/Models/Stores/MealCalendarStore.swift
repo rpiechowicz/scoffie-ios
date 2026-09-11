@@ -406,7 +406,17 @@ class MealCalendarStore {
     private func scheduleWeekReload(weekStart: String, dates: [Date]) {
         pendingWeekReloadTask?.cancel()
         pendingWeekReloadTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            // Anulowany debounce NIE startuje ładowania. `try?` połykał
+            // anulowanie i zadanie szło dalej jako anulowane: pierwszy
+            // rzucający `await` w środku (kolejka na połączenie socketu po
+            // powrocie z tła) kończył się `CancellationError`, a store
+            // pokazywał to jako „Operacja została przerwana" — choć nowe
+            // zadanie, które to anulowało, właśnie ładowało ten sam tydzień.
+            do {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            } catch {
+                return
+            }
             guard let self else { return }
             await self.loadWeekPlanFromBackend(weekStart: weekStart, dates: dates)
         }
