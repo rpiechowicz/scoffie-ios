@@ -14,6 +14,26 @@ enum DayNavigationMotion {
     static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
 }
 
+/// Jak `DayPager` pokazuje zmianę dnia.
+///
+/// Dwa ekrany, dwa różne pytania. Plan tygodnia to LISTA — dzień jest
+/// stroną, a strona wychodzi w bok i wjeżdża nowa (`slide`). Kalendarz to
+/// SCENA — talerz stoi na środku zawsze w tym samym miejscu, a zmienia się
+/// to, co na nim leży (`morph`). Przesuwanie sceny w bok, żeby postawić na
+/// jej miejscu identyczną scenę z innym daniem, mówiło oczom „to jest inny
+/// ekran", a to jest ten sam ekran z innym dniem.
+enum DayPagerMotion {
+    /// Stara strona zjeżdża za krawędź z zanikiem, nowa wjeżdża z przeciwnej.
+    /// W danej chwili istnieje jedna strona, więc wysokość nie skacze.
+    case slide
+    /// Strona zostaje na miejscu (po geście wraca sprężyną spod palca),
+    /// a treść przechodzi w nowy dzień własnymi przejściami: zdjęcie na
+    /// talerzu robi „pop", liczby rolują, sekwencja i dopiski wchodzą
+    /// i schodzą kryciem. Wymaga treści, która rysuje dzień z argumentu
+    /// i NIE ma świeżej tożsamości na dzień — inaczej nie ma co morfować.
+    case morph
+}
+
 /// Furtka między machnięciem palcem a stuknięciem w treść dnia.
 ///
 /// `Button` w SwiftUI odpala akcję przy PUSZCZENIU palca w obrębie swojego
@@ -111,6 +131,8 @@ struct DayPager<Content: View>: View {
     /// Dopiero strona bez przewijania dostaje prawdziwą wysokość zakładki
     /// i może ją rozdzielić między swoje piętra.
     let scrolls: Bool
+    /// Zjazd strony albo przejście treści w miejscu — patrz `DayPagerMotion`.
+    let motion: DayPagerMotion
     let content: (Date) -> Content
 
     init(
@@ -119,6 +141,7 @@ struct DayPager<Content: View>: View {
         bottomPadding: CGFloat = SCPageMetrics.bottom,
         animatesSelectionChanges: Bool = false,
         scrolls: Bool = true,
+        motion: DayPagerMotion = .slide,
         @ViewBuilder content: @escaping (Date) -> Content
     ) {
         self.datesViewModel = datesViewModel
@@ -126,6 +149,7 @@ struct DayPager<Content: View>: View {
         self.bottomPadding = bottomPadding
         self.animatesSelectionChanges = animatesSelectionChanges
         self.scrolls = scrolls
+        self.motion = motion
         self.content = content
         self._displayedDate = State(initialValue: selectedDate.wrappedValue)
     }
@@ -217,16 +241,21 @@ struct DayPager<Content: View>: View {
     /// która realnie została na ekranie.
     @ViewBuilder
     private var page: some View {
+        // W trybie `slide` zmiana dnia jest animowana ZE WZGLĘDU NA PASEK
+        // DNI (patrz `transition(to:)`), a ta sama animacja obejmowałaby
+        // też przebudowę kafli — wjeżdżałyby na ekran, dopasowując po drodze
+        // wysokości i teksty. Strona podmienia się poza ekranem, więc nie ma
+        // tam czego animować i animacja jest wyłączona. Zakres jest wąski:
+        // wyłącznie zmiany dnia, więc serduszko i odhaczenie zostają.
+        //
+        // W trybie `morph` jest dokładnie odwrotnie: ta animacja JEST
+        // przejściem dnia — to w niej zdjęcie na talerzu robi „pop", liczby
+        // rolują, a sekwencja wchodzi kryciem. Zdjęcie jej tutaj zamieniłoby
+        // morfowanie w twarde cięcie na środku ekranu.
+        let dayChange: Animation? = motion == .slide ? nil : DayNavigationMotion.spring
         let day = content(animatesSelectionChanges ? displayedDate : selectedDate)
-            // Zmiana dnia jest animowana ZE WZGLĘDU NA PASEK DNI (patrz
-            // `transition(to:)`), a ta sama animacja obejmowałaby też
-            // przebudowę kafli — wjeżdżałyby na ekran, dopasowując po
-            // drodze wysokości i teksty. Strona podmienia się poza
-            // ekranem, więc nie ma tu czego animować. Zakres jest wąski:
-            // dotyczy wyłącznie zmian dnia, więc animacje wewnątrz kafli
-            // (serduszko, odhaczenie posiłku) zostają nietknięte.
-            .animation(nil, value: selectedDate)
-            .animation(nil, value: displayedDate)
+            .animation(dayChange, value: selectedDate)
+            .animation(dayChange, value: displayedDate)
             .environment(\.dayPagerGate, gate)
 
         if scrolls {
@@ -342,10 +371,16 @@ struct DayPager<Content: View>: View {
     /// jedzie — ruszyło w chwili stuknięcia, czyli tam, gdzie palec; strona
     /// dojeżdża za nim.
     private func transition(to target: Date, forward: Bool, movesSelection: Bool) {
+        isPaging = true
+
+        if motion == .morph {
+            morph(to: target, movesSelection: movesSelection)
+            return
+        }
+
         // Szerokość bywa jeszcze nieznana w pierwszej klatce po wejściu na
         // zakładkę; wtedy lepszy jest twardy przeskok niż zjazd donikąd.
         let travel = pageWidth > 0 ? pageWidth * Self.exitTravelRatio : Self.dragLimit
-        isPaging = true
 
         withAnimation(Self.exitAnimation) {
             dragOffset = forward ? -travel : travel
@@ -374,6 +409,38 @@ struct DayPager<Content: View>: View {
             // Zmiana, która przyszła w trakcie animacji (szybkie dwa
             // stuknięcia), została zignorowana przez `onChange` — strona
             // dogania datę bez drugiego zjazdu, żeby nie ustawiać kolejki.
+            if !Calendar.current.isDate(displayedDate, inSameDayAs: selectedDate) {
+                displayedDate = selectedDate
+            }
+        }
+    }
+
+    /// Przejście dnia w miejscu — jedna faza, jedna sprężyna.
+    ///
+    /// Strona NIE wyjeżdża za krawędź. Po geście wraca sprężyną spod palca
+    /// (wychylenie z przeciągania jest już kierunkowym sygnałem: tyle, ile
+    /// palec przesunął, tyle strona oddaje), a po stuknięciu w pasek dni
+    /// stoi nieruchomo — kierunek niesie wtedy podkreślenie na pasku. W tej
+    /// SAMEJ animowanej transakcji zmienia się dzień, więc wszystko, co
+    /// treść umie animować, animuje się razem z powrotem strony: zdjęcie na
+    /// talerzu robi „pop", odliczanie roluje cyfry, sekwencja i dopiski
+    /// wchodzą kryciem. Zjazd starej strony i wjazd nowej byłyby tu dwiema
+    /// animacjami tej samej rzeczy.
+    ///
+    /// Blokada `isPaging` trwa tyle, ile osiada sprężyna — z tego samego
+    /// powodu, co przy zjeździe: drugie machnięcie w trakcie zostawiałoby
+    /// stronę w pół drogi.
+    private func morph(to target: Date, movesSelection: Bool) {
+        withAnimation(Self.enterAnimation) {
+            if movesSelection { selectedDate = target }
+            displayedDate = target
+            dragOffset = 0
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: Self.enterDuration)
+            isPaging = false
+
             if !Calendar.current.isDate(displayedDate, inSameDayAs: selectedDate) {
                 displayedDate = selectedDate
             }

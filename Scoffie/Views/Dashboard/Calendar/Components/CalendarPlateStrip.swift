@@ -60,13 +60,24 @@ struct CalendarPlateStrip: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: gap) {
-            ForEach(items) { item in
+            // Tożsamość kolumny to jej MIEJSCE w rzędzie, nie danie.
+            //
+            // Zmiana dnia ma przełożyć talerzyki, a nie wymienić rząd:
+            // trzecia kolumna poniedziałku przechodzi w trzecią kolumnę
+            // wtorku (zdjęcie kryciem, podpisy w miejscu), a czwarta —
+            // jeśli wtorek ma o jedno danie więcej — dopiero wtedy wchodzi.
+            // Tożsamość po daniu kazałaby usunąć wszystkie kolumny
+            // poniedziałku i wstawić wszystkie wtorkowe, a że schodzące
+            // kolumny żyją do końca swojego przejścia, rząd miałby przez
+            // chwilę dwa razy tyle talerzyków i ściskałby je w połowie ruchu.
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 Button {
                     pagerGate.ifNotSwiping { onSelect(item) }
                 } label: {
                     cell(item)
                 }
                 .buttonStyle(.plain)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
                 .accessibilityLabel(accessibilityLabel(item))
                 .accessibilityAddTraits(item.id == selectedId ? .isSelected : [])
                 .accessibilityHint("Przekłada danie na talerz")
@@ -111,9 +122,17 @@ struct CalendarPlateStrip: View {
     }
 
     private func plate(_ item: CalendarPlateItem, size: CGFloat, isSelected: Bool) -> some View {
-        face(item, size: size)
-            .frame(width: size, height: size)
-            .clipShape(Circle())
+        // Zdjęcie ma własną tożsamość po adresie, więc przy zmianie dnia
+        // stare przechodzi w nowe kryciem, zamiast podmienić się w klatce.
+        // Pusta pora dostaje jeden wspólny klucz: kreskowany krążek jest
+        // ten sam dla każdej pory i nie ma co w nim przechodzić.
+        ZStack {
+            face(item, size: size)
+                .id(faceKey(item))
+                .transition(.opacity)
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
             .saturation(item.isEaten ? 0.45 : 1)
             .opacity(item.isEaten ? 0.6 : isSelected ? 1 : 0.78)
             .overlay {
@@ -127,6 +146,11 @@ struct CalendarPlateStrip: View {
                 if item.isEaten { eatenBadge(size: size) }
             }
             .animation(.smooth(duration: 0.24), value: item.status)
+    }
+
+    private func faceKey(_ item: CalendarPlateItem) -> String {
+        if item.isEmptySlot { return "empty" }
+        return item.imageURL?.absoluteString ?? item.id
     }
 
     @ViewBuilder
@@ -271,38 +295,65 @@ struct CalendarDayLine: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dayPagerGate) private var pagerGate
 
-    var body: some View {
-        if let nextAway {
-            line(text: nextText(nextAway), color: SCPalette.terracotta, dot: true)
-                .contentShape(Rectangle())
-                .onTapGesture { pagerGate.ifNotSwiping(onReturnToNext) }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Wraca do następnego posiłku")
-        } else if let summaryText {
-            line(text: summaryText, color: summaryColor, dot: summaryHasDot)
-        }
+    /// Jedno zdanie, jedna barwa, jedno stuknięcie — wszystko policzone
+    /// naraz, żeby widok był JEDEN, a nie dwa różne zależnie od gałęzi.
+    private struct Line: Equatable {
+        let text: String
+        let color: Color
+        let dot: Bool
+        let returnsToNext: Bool
     }
 
-    private func line(text: String, color: Color, dot: Bool) -> some View {
-        HStack(spacing: 8) {
-            if dot {
-                Circle()
-                    .fill(color)
-                    .frame(width: 7, height: 7)
-                    .overlay(Circle().strokeBorder(color.opacity(0.2), lineWidth: 3).padding(-3))
-            }
-
-            Text(text)
-                .font(.system(size: 13, weight: .bold))
-                .tracking(-0.2)
-                .monospacedDigit()
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+    private var line: Line? {
+        if let nextAway {
+            return Line(
+                text: nextText(nextAway),
+                color: SCPalette.terracotta,
+                dot: true,
+                returnsToNext: true
+            )
         }
-        .frame(maxWidth: .infinity)
-        .contentTransition(.numericText())
-        .animation(.smooth(duration: 0.28), value: text)
+        guard let summaryText else { return nil }
+        return Line(text: summaryText, color: summaryColor, dot: summaryHasDot, returnsToNext: false)
+    }
+
+    var body: some View {
+        // Jeden widok o zmiennej treści, a nie dwa różne w gałęziach
+        // `if / else if`: gałęzie mają w SwiftUI różne tożsamości, więc
+        // przejście z „Następny: obiad…" w „2 z 4 zjedzone" wymieniałoby
+        // widok zamiast przerolować tekst. Zdanie zmienia się w miejscu,
+        // a znika i wraca wyłącznie wtedy, gdy nie ma nic do powiedzenia
+        // (pusty dzień).
+        if let line {
+            HStack(spacing: 8) {
+                if line.dot {
+                    Circle()
+                        .fill(line.color)
+                        .frame(width: 7, height: 7)
+                        .overlay(Circle().strokeBorder(line.color.opacity(0.2), lineWidth: 3).padding(-3))
+                        .transition(.scale.combined(with: .opacity))
+                }
+
+                Text(line.text)
+                    .font(.system(size: 13, weight: .bold))
+                    .tracking(-0.2)
+                    .monospacedDigit()
+                    .foregroundStyle(line.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .contentTransition(.numericText())
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard line.returnsToNext else { return }
+                pagerGate.ifNotSwiping(onReturnToNext)
+            }
+            .animation(.smooth(duration: 0.28), value: line)
+            .transition(.opacity.combined(with: .offset(y: 6)))
+            .accessibilityAddTraits(line.returnsToNext ? .isButton : [])
+            .accessibilityHint(line.returnsToNext ? "Wraca do następnego posiłku" : "")
+        }
     }
 
     /// „Następny: obiad za 4 h 19 min · gotuj od 13:00”.

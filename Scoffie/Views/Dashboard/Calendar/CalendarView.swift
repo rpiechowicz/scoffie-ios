@@ -715,7 +715,13 @@ struct CalendarView: View {
                 // niego zostało, i zamiast maleć — wypychał resztę dnia poza
                 // krawędź. (Plan tygodnia zostaje przewijany: tam lista kafli
                 // JEST dłuższa od ekranu.)
-                scrolls: false
+                scrolls: false,
+                // Scena stoi, dane się przekładają. Zjazd całej strony w bok
+                // mówił oczom „to inny ekran", a to ten sam talerz z innym
+                // dniem — zdjęcie ma zrobić „pop", odliczanie przerolować,
+                // sekwencja wejść kryciem. Pusty dzień to w tym języku po
+                // prostu talerz bez dania, a nie osobna strona.
+                motion: .morph
             ) { date in
                 dayPage(for: date, now: now)
             }
@@ -742,11 +748,15 @@ struct CalendarView: View {
             dayBody(for: date, now: now, area: geo.size)
         }
         .padding(.horizontal, SCPageMetrics.horizontal)
-        // Świeża tożsamość na każdy dzień: bez niej talerz próbowałby
-        // przeprowadzić śniadanie poniedziałku w śniadanie wtorku dokładnie
-        // wtedy, gdy `DayPager` przesuwa całą stronę — dwie animacje na
-        // jednym ruchu. Ta sama reguła co na osi Planu tygodnia.
-        .id(MealCalendarStore.dateKey(for: date))
+        // BEZ `.id(dateKey)` — celowo, i wbrew osi Planu tygodnia.
+        //
+        // Tam świeża tożsamość na dzień chroni przed przeprowadzaniem
+        // śniadania poniedziałku w śniadanie wtorku w chwili, gdy cała strona
+        // zjeżdża w bok. Tutaj strona NIE zjeżdża (`motion: .morph`), a to
+        // przeprowadzenie jest dokładnie tym, o co chodzi: talerz zostaje
+        // na miejscu i tylko zmienia danie, sekwencja przekłada talerzyki,
+        // liczby rolują. Nowa tożsamość na dzień zamieniłaby to wszystko
+        // w twarde cięcie.
     }
 
     /// Piętra dnia w zmierzonym pudełku.
@@ -830,6 +840,11 @@ struct CalendarView: View {
             )
             .padding(.top, 12)
 
+            // Piętra pod talerzem wchodzą i schodzą kryciem z lekkim
+            // uniesieniem — to samo przejście dla sekwencji, kroków
+            // i dopisku pustego dnia, żeby zmiana dnia czytała się jako jeden
+            // ruch, a nie trzy. Pusty dzień → dzień z planem: sekwencja
+            // wypływa spod talerza, dopisek gaśnie; w drugą stronę odwrotnie.
             if hasMeals {
                 CalendarPlateStrip(
                     items: items,
@@ -839,6 +854,7 @@ struct CalendarView: View {
                     onSelect: { pickedCardId = $0.id }
                 )
                 .padding(.top, compact ? 14 : 20)
+                .transition(Self.tierTransition)
             }
 
             CalendarDayLine(
@@ -859,6 +875,7 @@ struct CalendarView: View {
                     source: day?.source
                 )
                 .padding(.top, compact ? 14 : 22)
+                .transition(Self.tierTransition)
             }
 
             if !hasMeals {
@@ -868,10 +885,17 @@ struct CalendarView: View {
                     onOpenPlan: { sessionStore.dashboardTab = .plan }
                 )
                 .padding(.top, 20)
+                .transition(Self.tierTransition)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
+
+    /// Wejście i zejście piętra pod talerzem: krycie plus kilkanaście
+    /// punktów uniesienia. Uniesienie mówi „to wypływa spod talerza", samo
+    /// krycie mówiłoby tylko „to się pojawiło".
+    private static let tierTransition: AnyTransition = .opacity
+        .combined(with: .offset(y: 12))
 
     /// Długie przytrzymanie talerza: odhaczenie, szczegóły i ulubione.
     ///
