@@ -33,10 +33,6 @@ import SwiftUI
 struct CalendarPlateStrip: View {
     let items: [CalendarPlateItem]
     let selectedId: String?
-    /// Klucz dnia — tożsamość treści talerzyków. Zmiana dnia przekłada każdy
-    /// talerzyk kryciem i skalą, falą od wybranego na zewnątrz
-    /// (`revealDelay`), zamiast podmieniać go w miejscu.
-    let dayKey: String
     /// Szerokość, którą sekwencja ma do dyspozycji. Zero = jeszcze nie
     /// zmierzona; wtedy kolumny idą w rozmiarze z makiety.
     let width: CGFloat
@@ -109,7 +105,7 @@ struct CalendarPlateStrip: View {
             // poniedziałku i wstawić wszystkie wtorkowe, a że schodzące
             // kolumny żyją do końca swojego przejścia, rząd miałby przez
             // chwilę dwa razy tyle talerzyków i ściskałby je w połowie ruchu.
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 Button {
                     pagerGate.ifNotSwiping { onSelect(item) }
                 } label: {
@@ -117,11 +113,6 @@ struct CalendarPlateStrip: View {
                 }
                 .buttonStyle(.plain)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
-                // Fala od wybranego talerzyka: przy zmianie dnia każda kolumna
-                // przekłada treść tą samą sprężyną, ale z opóźnieniem rosnącym
-                // z odległością od środka. Bez tego wszystkie talerzyki
-                // podmieniały się w jednej klatce i cały rząd „przeskakiwał”.
-                .animation(DayNavigationMotion.spring.delay(revealDelay(at: index)), value: dayKey)
                 .accessibilityLabel(item.accessibilityDescription)
                 .accessibilityAddTraits(item.id == selectedId ? .isSelected : [])
                 .accessibilityHint("Przekłada danie na talerz")
@@ -139,55 +130,38 @@ struct CalendarPlateStrip: View {
         .animation(DayNavigationMotion.spring, value: fingerprint)
     }
 
-    /// Opóźnienie fali dla kolumny: zero na wybranym talerzyku (albo na
-    /// środku rzędu, gdy nic nie jest wybrane), dalej po 45 ms na kolumnę.
-    /// Sześć kolumn to najwyżej ćwierć sekundy — fala, nie kolejka.
-    private func revealDelay(at index: Int) -> Double {
-        let center = items.firstIndex(where: { $0.id == selectedId }) ?? items.count / 2
-        return Double(abs(index - center)) * 0.045
-    }
-
     private func cell(_ item: CalendarPlateItem) -> some View {
         let on = item.id == selectedId
         let size = on ? selectedSize : restSize
 
-        // Kolumna (szerokość, miejsce w rzędzie) jest stała, a jej TREŚĆ ma
-        // tożsamość po dniu: zmiana dnia wymienia zdjęcie, godzinę i porę
-        // jednym przejściem — stare gaśnie i maleje, nowe rozkwita —
-        // a `ZStack` jest kontenerem, w którym to przejście ma gdzie zagrać.
-        return ZStack {
-            VStack(spacing: 8) {
-                // Pudełko stałej wysokości, niezależnie od tego, który talerzyk
-                // jest wybrany i ile ich jest: bez niego rosnący talerz
-                // podnosiłby i opuszczał podpisy w całym rzędzie przy każdym
-                // stuknięciu.
-                ZStack {
-                    plate(item, size: size, isSelected: on)
-                }
-                .frame(width: column, height: boxSize)
-
-                VStack(spacing: 2) {
-                    Text(item.time ?? "dowolna")
-                        .font(.system(size: 11.5, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(on ? Color.scLabel(scheme) : Color.scMuted(scheme))
-
-                    Text(item.slot.shortTitle)
-                        .font(.system(size: 9.5, weight: .semibold))
-                        .tracking(0.3)
-                        .foregroundStyle(labelColor(item, isSelected: on))
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(width: column)
+        return VStack(spacing: 8) {
+            // Pudełko stałej wysokości, niezależnie od tego, który talerzyk
+            // jest wybrany i ile ich jest: bez niego rosnący talerz podnosiłby
+            // i opuszczał podpisy w całym rzędzie przy każdym stuknięciu.
+            ZStack {
+                plate(item, size: size, isSelected: on)
             }
-            .id(dayKey)
-            .transition(
-                .asymmetric(
-                    insertion: .scale(scale: 0.78).combined(with: .opacity),
-                    removal: .scale(scale: 0.9).combined(with: .opacity)
-                )
-            )
+            .frame(width: column, height: boxSize)
+
+            VStack(spacing: 2) {
+                // Godzina przechodzi kryciem, nie rolowaniem cyfr: gdy plan
+                // przyjdzie zmieniony, w tej samej kolumnie potrafi stanąć
+                // „dowolna” zamiast „20:00” i rolowanie robiło z tego zlepek.
+                Text(item.time ?? "dowolna")
+                    .font(.system(size: 11.5, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(on ? Color.scLabel(scheme) : Color.scMuted(scheme))
+                    .contentTransition(.opacity)
+
+                Text(item.slot.shortTitle)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .tracking(0.3)
+                    .foregroundStyle(labelColor(item, isSelected: on))
+                    .contentTransition(.opacity)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(width: column)
         }
         .contentShape(Rectangle())
     }
@@ -514,7 +488,7 @@ struct CalendarDayLine: View {
         SCPageBackground(scheme: .dark).ignoresSafeArea()
 
         VStack(spacing: 28) {
-            CalendarPlateStrip(items: items, selectedId: "ob", dayKey: "2026-09-11", width: 353, onSelect: { _ in })
+            CalendarPlateStrip(items: items, selectedId: "ob", width: 353, onSelect: { _ in })
 
             CalendarDayLine(note: .after(items[2]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
             CalendarDayLine(note: .next(items[1]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })

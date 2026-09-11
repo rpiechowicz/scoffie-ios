@@ -339,20 +339,56 @@ extension EnvironmentValues {
 private struct SCErrorToastBridge: ViewModifier {
     let message: () -> String?
 
+    /// Ile błąd musi się UTRZYMAĆ, zanim stanie się toastem.
+    ///
+    /// Store'y meldują każdą nieudaną próbę od razu, a większość z nich
+    /// naprawia się sama w ciągu sekundy: odświeżenie po powrocie z tła
+    /// strzela w socket, który dopiero się odbudowuje, ponowienie dowozi
+    /// dane, a `errorMessage` wraca do `nil`. Toast pokazany w tej sekundzie
+    /// mówił użytkownikowi, że coś jest zepsute, w chwili gdy nic nie było.
+    /// Trzy i pół sekundy to więcej niż ponowienie i mniej niż cierpliwość.
+    static let grace: Duration = .milliseconds(3500)
+
     @Environment(\.toasts) private var toasts
+    /// Otwarte okno łaski (0 = brak). Licznik, nie flaga — `.task(id:)`
+    /// rusza od nowa przy każdej zmianie wartości, a po zamknięciu okna ma
+    /// się dać otworzyć następne.
+    @State private var window = 0
 
     func body(content: Content) -> some View {
-        content.onChange(of: message()) { _, new in
-            guard let new,
-                  !new.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else { return }
-            toasts.error(new)
-        }
+        content
+            .onChange(of: message()) { _, new in
+                guard let new,
+                      !new.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else { return }
+                // Błąd w trakcie otwartego okna nie otwiera drugiego —
+                // liczy się, czy PO oknie nadal coś jest nie tak, a nie ile
+                // razy po drodze store zmienił zdanie.
+                guard window == 0 else { return }
+                window += 1
+            }
+            .task(id: window) {
+                guard window > 0 else { return }
+                do {
+                    try await Task.sleep(for: Self.grace)
+                } catch {
+                    return
+                }
+                // Po oknie pytamy o STAN, nie o zdarzenie: błąd, który
+                // w międzyczasie zniknął (udane ponowienie), nie zasługuje
+                // na toast; ten, który został — tak, w aktualnym brzmieniu.
+                if let current = message(),
+                   !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    toasts.error(current)
+                }
+                window = 0
+            }
     }
 }
 
 extension View {
-    /// Wystawia `errorMessage` store jako toast.
+    /// Wystawia `errorMessage` store jako toast — dopiero gdy błąd utrzyma
+    /// się przez okno łaski (`SCErrorToastBridge.grace`).
     func scErrorToast(_ message: @autoclosure @escaping () -> String?) -> some View {
         modifier(SCErrorToastBridge(message: message))
     }
