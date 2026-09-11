@@ -82,6 +82,10 @@ struct CalendarView: View {
     /// zegar gaszący kierunek wisi na nim, a nie na samej wartości.
     @State private var plateMotion = 0
 
+    /// Licznik odhaczeń z pieczątki — haptyka zapisu. Odhaczenie to jedyny
+    /// zapis na tym ekranie i ma być czuć pod palcem, że coś się stało.
+    @State private var eatenToggles = 0
+
     /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
     ///
     /// Szczegół pozwala teraz przestawić liczbę porcji, a zapis musi trafić
@@ -940,8 +944,10 @@ struct CalendarView: View {
         }
         .padding(.horizontal, SCPageMetrics.horizontal)
         // Jedna haptyka na jedno przełożenie talerza — stuknięcie w talerzyk
-        // albo w linię dnia. Zmiana dnia ma swój sygnał w pagerze.
+        // albo w linię dnia. Zmiana dnia ma swój sygnał w pagerze. Odhaczenie
+        // ma własny, cięższy: to zapis, nie nawigacja.
         .sensoryFeedback(.selection, trigger: plateMoves)
+        .sensoryFeedback(.impact(weight: .medium), trigger: eatenToggles)
         // Kierunek wjazdu talerza gaśnie, gdy sprężyna osiądzie. Bez tego
         // danie, które zmieniło się z innego powodu niż ruch użytkownika
         // (plan przyszedł z serwera zmieniony ręką domownika), wjeżdżałoby
@@ -1007,9 +1013,12 @@ struct CalendarView: View {
         let focused = focusedItem(from: items)
         let canToggle = canLog && focused?.isEmptySlot == false
         let note = dayNote(items: items, focused: focused)
+        // Ziarno wariantów zdań: ten sam dzień mówi zawsze tak samo, kolejny
+        // inaczej (`CalendarVoice`).
+        let dayKey = MealCalendarStore.dateKey(for: date)
 
-        // Szczegóły otwiera nazwa dania. Osobna zmienna, a nie wyrażenie
-        // warunkowe przy wywołaniu: domknięcie postawione obok `nil`
+        // Szczegóły otwiera zdjęcie na talerzu i nazwa dania pod nim. Osobna
+        // zmienna, a nie wyrażenie warunkowe przy wywołaniu: domknięcie obok `nil`
         // w wyrażeniu warunkowym potrafi w tym projekcie zamienić się
         // w `ambiguous use of 'init'` zgłoszone kilkadziesiąt linii wyżej
         // (SE-0418, patrz `CLAUDE.md`).
@@ -1040,7 +1049,8 @@ struct CalendarView: View {
                     direction: plateDirection,
                     size: size,
                     canToggle: canToggle,
-                    onToggle: { toggleEaten(withCardId: focused?.id, on: date) }
+                    onToggle: { toggleEaten(withCardId: focused?.id, on: date) },
+                    onOpenDetail: openDetail
                 )
                 .contentShape(.contextMenuPreview, Circle().inset(by: -CalendarPlate.rimInset(for: size)))
                 .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
@@ -1050,6 +1060,7 @@ struct CalendarView: View {
 
             CalendarPlateCaption(
                 item: focused,
+                dayKey: dayKey,
                 titleLines: fit.titleLines,
                 showsChips: fit.showsChips,
                 onOpenDetail: openDetail
@@ -1067,6 +1078,7 @@ struct CalendarView: View {
 
             CalendarDayLine(
                 note: note,
+                dayKey: dayKey,
                 onReturnToNext: {
                     guard let next = items.first(where: { $0.status == .next }) else { return }
                     movePlate(to: next, pin: false, in: items, from: focused)
@@ -1110,7 +1122,7 @@ struct CalendarView: View {
     ///
     /// Jeden mechanizm może być niewidoczny, drugi musi być widoczny — i to
     /// ten drugi uczy pierwszego. Odhaczanie i szczegóły mają swoje
-    /// stuknięcia (sam talerz i nazwa dania pod nim), więc menu jest tu
+    /// stuknięcia (pieczątka w rogu i samo zdjęcie), więc menu jest tu
     /// przede wszystkim dla serduszka, które zeszło z ekranu razem z listą.
     /// Pusty talerz nie ma czego oferować — pusty budowniczy menu znaczy
     /// w SwiftUI „bez menu".
@@ -1157,8 +1169,8 @@ struct CalendarView: View {
 
     // MARK: - Actions
 
-    /// Stuknięcie w talerz odhacza danie, które na nim stoi — i ZOSTAWIA je
-    /// na talerzu.
+    /// Stuknięcie w pieczątkę w rogu talerza odhacza danie, które na nim
+    /// stoi — i ZOSTAWIA je na talerzu.
     ///
     /// Bez przypięcia „następny” przechodziłby na kolejne danie w tej samej
     /// chwili, w której sklep zapisuje odhaczenie, i talerz odjeżdżałby
@@ -1183,11 +1195,12 @@ struct CalendarView: View {
 
         pickedCardId = id
         plateDirection = 0
+        eatenToggles += 1
         toggleEaten(meal, slot: card.slot, on: date)
     }
 
-    /// Stuknięcie w nazwę dania otwiera szczegóły — jedyne miejsce, w którym
-    /// przestawia się liczbę porcji.
+    /// Stuknięcie w zdjęcie na talerzu albo w nazwę dania otwiera szczegóły
+    /// — jedyne miejsce, w którym przestawia się liczbę porcji.
     private func openMeal(withCardId id: String, on date: Date) {
         guard let card = card(withId: id, on: date), let meal = card.meal else { return }
         handleAssignedTap(meal, slot: card.slot, on: date)

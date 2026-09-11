@@ -205,7 +205,9 @@ struct CalendarPlateStrip: View {
     /// przekładając talerze, gubi się miejsce, do którego się wraca.
     private func ringColor(_ item: CalendarPlateItem, isSelected: Bool) -> Color? {
         if isSelected {
-            if item.isEaten { return SCPalette.sage }
+            // Zjedzone neutralnie, nie szałwią — szałwia to obiad i zjedzone
+            // śniadanie w sekwencji wyglądało jak drugi obiad.
+            if item.isEaten { return Color.scChecked(scheme).opacity(0.55) }
             if item.status == .next { return item.slot.cozyAccent }
             return Color.scLabel(scheme).opacity(0.5)
         }
@@ -215,7 +217,7 @@ struct CalendarPlateStrip: View {
 
     private func labelColor(_ item: CalendarPlateItem, isSelected: Bool) -> Color {
         guard isSelected else { return Color.scFaint(scheme) }
-        if item.isEaten { return SCPalette.sage }
+        if item.isEaten { return Color.scChecked(scheme).opacity(0.7) }
         return item.slot.cozyAccent
     }
 }
@@ -259,6 +261,8 @@ enum CalendarDayNote: Equatable {
 /// zamiast przerolować tekst.
 struct CalendarDayLine: View {
     let note: CalendarDayNote
+    /// Klucz dnia — ziarno doboru wariantów zdań (`CalendarVoice`).
+    let dayKey: String
     /// Wraca do następnego posiłku (dla `.next`).
     let onReturnToNext: () -> Void
     /// Przekłada na talerz podane danie (dla `.after`).
@@ -281,6 +285,12 @@ struct CalendarDayLine: View {
         let color: Color
         let dot: Bool
         let tappable: Bool
+    }
+
+    /// Wariant zdania dla tego dnia — ten sam fakt, inny ton
+    /// (`CalendarVoice`). Ziarno bierze klucz dnia, danie i rodzaj zdania.
+    private func voice(_ variants: [String], _ kind: String, item: CalendarPlateItem? = nil) -> String {
+        CalendarVoice.pick(variants, seed: "\(dayKey)|\(item?.id ?? "-")|line-\(kind)")
     }
 
     private var line: Line {
@@ -306,23 +316,39 @@ struct CalendarDayLine: View {
                 tappable: true
             )
         case .last(let item):
+            // Bez „dziś”: ta linia stoi też pod wczorajszym i czwartkowym
+            // dniem, a wariant, który dokłada fakt, nie jest wariantem.
+            let text = item.isEmptySlot
+                ? voice(["Koniec dnia", "Dalej już nic", "Nic więcej tego dnia"], "last-empty", item: item)
+                : voice(["Ostatni posiłek dnia", "To już wszystko", "Tym kończysz dzień", "Koniec menu na ten dzień"], "last", item: item)
             return Line(
                 key: "last-\(item.isEmptySlot)",
-                text: item.isEmptySlot ? "Koniec dnia" : "Ostatni posiłek dnia",
+                text: text,
                 color: Color.scFaint(scheme),
                 dot: false,
                 tappable: false
             )
         case .closed:
-            return Line(key: "closed", text: "Dzień domknięty", color: SCPalette.sage, dot: true, tappable: false)
+            return Line(
+                key: "closed",
+                text: voice(["Dzień domknięty", "Wszystko zjedzone", "Komplet zjedzony", "Dzień zaliczony"], "closed"),
+                color: SCPalette.sage,
+                dot: true,
+                tappable: false
+            )
         case .empty(let slots):
             // Ile pór czeka na zaplanowanie — jedyna rzecz, której pusty
             // dzień nie mówi nigdzie indziej (pigułka pod talerzem mówi,
-            // GDZIE się planuje).
+            // GDZIE się planuje). Warianty bez czasownika, bo liczebnik
+            // zmieniałby jego formę („3 pory czekają”, „5 pór czeka”).
             let count = PolishPlural.form(slots, one: "pora", few: "pory", many: "pór")
+            let text = voice(
+                ["\(slots) \(count) do zaplanowania", "Do ułożenia: \(slots) \(count)", "Wolne: \(slots) \(count)"],
+                "empty"
+            )
             return Line(
                 key: "empty",
-                text: "\(slots) \(count) do zaplanowania",
+                text: text,
                 color: Color.scFaint(scheme),
                 dot: false,
                 tappable: false
@@ -353,7 +379,11 @@ struct CalendarDayLine: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .contentTransition(.numericText())
-                    .id(line.key)
+                    // Dzień w tożsamości: zdania różnią się wariantem między
+                    // dniami (`CalendarVoice`), więc zmiana dnia ma przejść
+                    // kryciem, nie rolowaniem liter pod tym samym kluczem.
+                    // W obrębie dnia klucz stoi i cyfry odliczania rolują.
+                    .id("\(dayKey)|\(line.key)")
                     .transition(.opacity)
             }
         }
@@ -391,16 +421,22 @@ struct CalendarDayLine: View {
     /// „Pora gotować obiad · na 14:00” odpowiada na pytanie, które właśnie
     /// zastąpiło poprzednie.
     private func nextText(_ item: CalendarPlateItem) -> String {
-        let name = item.slot.title.lowercased()
+        // Mianownik po dwukropku („Na stół: kolacja”), biernik po czasowniku
+        // („Pora jeść kolację”) — `title.lowercased()` dawał „kolacja”
+        // w obu i psuł „II śniadanie” w „ii śniadanie”.
+        let name = item.slot.lowercaseName
+        let object = item.slot.accusativeName
 
         if item.isCooking {
-            guard let time = item.time else { return "Pora gotować \(name)" }
-            return "Pora gotować \(name) · na \(time)"
+            let lead = voice(["Pora gotować \(object)", "Do kuchni: \(name)", "Czas gotować \(object)"], "next-cooking", item: item)
+            guard let time = item.time else { return lead }
+            return "\(lead) · na \(time)"
         }
-        if item.isDue { return "Pora jeść \(name)" }
+        if item.isDue { return voice(["Pora jeść \(object)", "Na stół: \(name)", "Czas jeść \(object)"], "next-due", item: item) }
         if item.isLate { return "Następny: \(name) · pora minęła" }
 
-        var head = "Następny: \(name)"
+        let lead = voice(["Następny:", "Przed tobą:", "Na horyzoncie:"], "next-lead", item: item)
+        var head = "\(lead) \(name)"
         if let away = item.minutesAway {
             head += " \(CalendarRelativeTime.text(inMinutes: away))"
         } else if let time = item.time {
@@ -413,7 +449,8 @@ struct CalendarDayLine: View {
 
     /// „Potem: kolacja · 20:00”, „Potem: przekąska · dowolna pora · bez planu”.
     private func afterText(_ item: CalendarPlateItem) -> String {
-        var parts = ["Potem: \(item.slot.title.lowercased())", item.time ?? "dowolna pora"]
+        let lead = voice(["Potem:", "Dalej:", "Później:", "A potem:"], "after-lead", item: item)
+        var parts = ["\(lead) \(item.slot.lowercaseName)", item.time ?? "dowolna pora"]
         if item.isEmptySlot {
             parts.append("bez planu")
         } else if item.isEaten {
@@ -453,11 +490,11 @@ struct CalendarDayLine: View {
         VStack(spacing: 28) {
             CalendarPlateStrip(items: items, selectedId: "ob", width: 353, onSelect: { _ in })
 
-            CalendarDayLine(note: .after(items[2]), onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .next(items[1]), onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .last(items[3]), onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .closed, onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .empty(slots: 3), onReturnToNext: {}, onSelect: { _ in })
+            CalendarDayLine(note: .after(items[2]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
+            CalendarDayLine(note: .next(items[1]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
+            CalendarDayLine(note: .last(items[3]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
+            CalendarDayLine(note: .closed, dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
+            CalendarDayLine(note: .empty(slots: 3), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
         }
         .padding(.horizontal, SCPageMetrics.horizontal)
     }
