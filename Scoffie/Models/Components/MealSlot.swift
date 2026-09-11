@@ -94,6 +94,35 @@ enum MealSlot: String, CaseIterable, Identifiable, Codable, Comparable {
         }
     }
 
+    /// Nazwa pory w środku zdania, mianownik: „Następny: kolacja”.
+    ///
+    /// Osobno od `title.lowercased()`, bo to psuje liczebnik rzymski —
+    /// „II śniadanie” wychodziło jako „ii śniadanie”.
+    var lowercaseName: String {
+        switch self {
+        case .breakfast:       return "śniadanie"
+        case .secondBreakfast: return "II śniadanie"
+        case .lunch:           return "obiad"
+        case .afternoonSnack:  return "podwieczorek"
+        case .dinner:          return "kolacja"
+        case .snack:           return "przekąska"
+        }
+    }
+
+    /// Nazwa pory po czasowniku, biernik: „Pora jeść kolację”, „Czas
+    /// gotować przekąskę”. Pory żeńskie odmieniają się, męskie i nijakie nie
+    /// — mianownik po „jeść” dawał „Pora jeść kolacja”.
+    var accusativeName: String {
+        switch self {
+        case .breakfast:       return "śniadanie"
+        case .secondBreakfast: return "II śniadanie"
+        case .lunch:           return "obiad"
+        case .afternoonSnack:  return "podwieczorek"
+        case .dinner:          return "kolację"
+        case .snack:           return "przekąskę"
+        }
+    }
+
     // Pora posiłku **nie** jest już własnością slotu — ustawia ją gospodarstwo
     // w Ustawieniach → „Posiłki w planie". Czytaj ją z
     // `MealSlotSchedule.time(for:)` (`sessionStore.mealSlotSchedule`);
