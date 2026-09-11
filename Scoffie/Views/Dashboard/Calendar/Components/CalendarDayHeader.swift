@@ -39,8 +39,18 @@ struct CalendarDayHeader: View {
                 // Nazwa dnia ma pierwszeństwo przy dzieleniu wiersza —
                 // „Poniedziałek” nie skraca się pod plakietkę.
                 .layoutPriority(1)
+                // Nazwa dnia przechodzi kryciem, a nie cięciem: strona pod
+                // spodem przekłada się w nowy dzień jednym ruchem
+                // (`DayPagerMotion.morph`) i nagłówek ma iść TĄ SAMĄ sprężyną
+                // — własny, krótszy odcisk kończyłby się przed talerzem
+                // i podkreśleniem na pasku dni.
+                .contentTransition(.opacity)
+                .animation(DayNavigationMotion.spring, value: date)
 
-            if isToday { todayBadge }
+            if isToday {
+                todayBadge
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
 
             Spacer(minLength: 10)
 
