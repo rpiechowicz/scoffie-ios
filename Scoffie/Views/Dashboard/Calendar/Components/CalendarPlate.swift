@@ -13,7 +13,7 @@ import SwiftUI
 // „co jadłem o ósmej”. Talerz odpowiada na to jedno pytanie całą planszą,
 // a pozostałe dania zostają widoczne — tylko mniejsze.
 //
-// Cztery rzeczy różnią ten talerz od makiety:
+// Pięć rzeczy różni ten talerz od makiety:
 //
 //  1. **„Zjedzone” bez godziny.** Makieta pisała „zjedzone 08:12”, ale plan
 //     zapamiętuje `eatenByUserIds`, czyli KTO odhaczył, a nie KIEDY.
@@ -32,6 +32,11 @@ import SwiftUI
 //     żadnego wyjścia — a szczegół posiłku jest jedynym miejscem, w którym
 //     przestawia się porcje. Stuknięcie w sam talerz zostaje przy odhaczaniu,
 //     tak jak w projekcie.
+//  5. **Nowe danie wjeżdża od strony, z której przyszło.** Makieta miała
+//     jeden „pop” w miejscu. U nas dzień do przodu i talerzyk na prawo
+//     wjeżdżają z prawej, do tyłu i na lewo — z lewej; stare danie zawsze
+//     gaśnie w miejscu. Kierunek jest jedyną rzeczą, której krycie nie
+//     umie powiedzieć, a przy machnięciu palcem to on jest treścią ruchu.
 
 // MARK: - Danie na talerzu
 
@@ -88,6 +93,14 @@ extension CalendarPlateItem {
 
     /// Czy o tym daniu jest sens uprzedzać z wyprzedzeniem.
     var showsCookHint: Bool { prepMinutes >= Self.minPrepHint }
+
+    /// Czy pora tego dania jest jeszcze przed nami (dzisiaj) albo w ogóle
+    /// nie jest dzisiaj. Godzina „gotuj od” po minionej porze już o niczym
+    /// nie mówi.
+    var isAhead: Bool {
+        guard let away = minutesAway else { return true }
+        return away > 0
+    }
 
     /// Pora gotować: okno przygotowania już się otworzyło, a posiłek jeszcze
     /// przed nami.
@@ -148,6 +161,17 @@ extension CalendarPlateItem {
         if status == .next && !isLate { return slot.cozyAccent }
         return Color.scMuted(scheme)
     }
+
+    /// Jedno zdanie dla VoiceOver: „Obiad, 14:00, Pierś z indyka, zjedzone”.
+    /// Wspólne dla wielkiego talerza i talerzyka w sekwencji — ten sam
+    /// element ma się przedstawiać tak samo, niezależnie od rozmiaru.
+    var accessibilityDescription: String {
+        var parts = [slot.title]
+        if let time { parts.append(time) }
+        parts.append(title ?? "nic nie zaplanowano")
+        if isEaten { parts.append("zjedzone") }
+        return parts.joined(separator: ", ")
+    }
 }
 
 // MARK: - Nadpis nad talerzem
@@ -173,10 +197,105 @@ struct CalendarPlateKicker: View {
             .frame(maxWidth: .infinity)
             // Pusty dzień nie ma pory, ale ma mieć tę samą wysokość: bez
             // spacji w miejscu nadpisu talerz podskakiwałby o trzynaście
-            // punktów przy każdym wejściu w dzień bez planu.
+            // punktów przy każdym wejściu w dzień bez planu. Krycie zostawia
+            // element w drzewie dostępności, więc VoiceOver trzeba odesłać
+            // osobno — inaczej zatrzymywałby się na pustym polu nad talerzem.
             .opacity(item == nil ? 0 : 1)
+            .accessibilityHidden(item == nil)
             .contentTransition(.opacity)
-            .animation(.smooth(duration: 0.3), value: item?.id)
+            .animation(DayNavigationMotion.spring, value: item?.id)
+            // Odhaczenie zmienia barwę nadpisu w miejscu (kolor pory →
+            // szałwia); bez własnego odcisku przeskakiwałaby w jednej klatce,
+            // podczas gdy pierścień wokół zdjęcia dojeżdża sprężyną.
+            .animation(DayNavigationMotion.spring, value: item?.status)
+    }
+}
+
+// MARK: - Powierzchnia talerza
+
+/// Okrągłe zdjęcie dania — albo gradient pory, gdy przepis nie ma zdjęcia,
+/// albo kreskowany krążek, gdy pora jest pusta.
+///
+/// JEDEN widok dla wielkiego talerza i dla talerzyków w sekwencji, bo to jest
+/// ten sam znak w dwóch rozmiarach. Wcześniej każdy z nich miał własną kopię
+/// gradientu i własny kreskowany krążek — i od pierwszej poprawki koloru
+/// rozjeżdżałyby się po cichu.
+///
+/// Zdjęcie ma tożsamość po adresie: przy zmianie dnia stare przechodzi w nowe
+/// kryciem, zamiast podmienić się w klatce. Pusta pora dostaje jeden wspólny
+/// klucz — kreskowany krążek jest ten sam dla każdej pory i nie ma co w nim
+/// przechodzić.
+struct CalendarPlateFace: View {
+    let item: CalendarPlateItem?
+    let size: CGFloat
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack {
+            surface
+                .id(key)
+                .transition(.opacity)
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
+    private var key: String {
+        guard let item, !item.isEmptySlot else { return "empty" }
+        return item.imageURL?.absoluteString ?? item.id
+    }
+
+    @ViewBuilder
+    private var surface: some View {
+        if let item, !item.isEmptySlot {
+            if let url = item.imageURL {
+                CachedAsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        fallback(item.slot)
+                    }
+                }
+            } else {
+                fallback(item.slot)
+            }
+        } else {
+            // Pusta pora i pusty dzień dostają ten sam kreskowany krążek, co
+            // kreskowane kółko „dowolnej pory” — jeden znak na „nic tu
+            // jeszcze nie stoi”. Pusty dzień nie ma pory, więc nie ma
+            // i jej ikony; zostaje sam kalendarz.
+            ZStack {
+                Circle().fill(Color.scChipBg(scheme))
+
+                Circle()
+                    .strokeBorder(
+                        Color.scRule(scheme),
+                        style: StrokeStyle(lineWidth: size > 100 ? 1.5 : 1.2, dash: dash)
+                    )
+
+                Image(systemName: item?.slot.icon ?? "calendar")
+                    .font(.system(size: iconSize, weight: .light))
+                    .foregroundStyle(Color.scFaint(scheme))
+            }
+        }
+    }
+
+    private var dash: [CGFloat] { size > 100 ? [5, 4] : [3.5, 3] }
+    private var iconSize: CGFloat { max(13, (size * (size > 100 ? 0.2 : 0.34)).rounded()) }
+
+    /// Gradient pory pod ikoną — ten sam, którym Plan tygodnia rysuje kafel
+    /// bez zdjęcia (`MealSlot.cozyGradient`), więc danie bez fotografii
+    /// wygląda tak samo na obu zakładkach.
+    private func fallback(_ slot: MealSlot) -> some View {
+        ZStack {
+            slot.cozyGradient
+
+            Image(systemName: slot.icon)
+                .font(.system(size: iconSize, weight: .light))
+                .foregroundStyle(Color.white.opacity(0.65))
+        }
     }
 }
 
@@ -189,6 +308,9 @@ struct CalendarPlateKicker: View {
 /// wtedy talerz jest tylko obrazkiem.
 struct CalendarPlate: View {
     let item: CalendarPlateItem?
+    /// Skąd wjeżdża nowe danie: `1` z prawej (dzień albo talerzyk do przodu),
+    /// `-1` z lewej, `0` w miejscu (odhaczenie, pierwsze wejście).
+    var direction: Int = 0
     var size: CGFloat = CalendarPlate.defaultSize
     /// Dzień z przyszłości i pusta pora nie mają czego odhaczać.
     let canToggle: Bool
@@ -203,18 +325,31 @@ struct CalendarPlate: View {
 
     /// Średnica z makiety — od niej liczą się wszystkie proporcje.
     static let defaultSize: CGFloat = 168
-    /// Najmniejsza, przy której zdjęcie jeszcze niesie danie, a nie ikonkę.
+    /// Najmniejsza, PRZY KTÓREJ TALERZ JESZCZE WOLI TRZYMAĆ ROZMIAR: poniżej
+    /// zdjęcie przestaje nieść danie i staje się ikonką.
     ///
-    /// Nisko, bo talerz jest jedynym piętrem tego ekranu, które wolno
-    /// ścisnąć: reszta (nadpis, odliczanie, nazwa, pigułki, sekwencja, linia
-    /// dnia) to tekst, a tekst albo się czyta, albo nie. Na iPhonie SE
-    /// z włączonymi krokami talerz schodzi właśnie tutaj — i to jest lepsze
-    /// niż ekran, który się przewija albo ucina linię dnia.
+    /// To jest preferencja, nie gwarancja. Talerz jest jedynym piętrem tego
+    /// ekranu, które wolno ścisnąć — reszta to tekst, a tekst albo się
+    /// czyta, albo nie — więc na najkrótszych ekranach (SE z paskiem kroków)
+    /// układ oddaje mu tyle, ile zostało, także poniżej tej liczby: talerz
+    /// nigdy nie wychodzi poza swoje pudełko (patrz `CalendarView.plateSize`).
     static let minSize: CGFloat = 72
+    /// O ile cienki rant zewnętrzny wychodzi poza zdjęcie przy pełnym
+    /// rozmiarze. Układ dnia liczy z tego odstęp od sąsiadów: rant jest
+    /// rysowany poza ramką talerza, więc bez tego zapasu dotykałby nadpisu.
+    static let maxRimInset: CGFloat = 13
 
     private var scale: CGFloat { size / Self.defaultSize }
     /// Cienki rant zewnętrzny — sam kształt talerza, bez znaczenia.
-    private var rimInset: CGFloat { (13 * scale).rounded() }
+    private var rimInset: CGFloat { Self.rimInset(for: size) }
+
+    /// Rant zewnętrzny dla zadanej średnicy — JEDNO miejsce, z którego
+    /// korzysta i sam talerz, i obrys podglądu menu kontekstowego w ekranie.
+    /// W dół, jak średnica (`CalendarView.plateSize`): zdjęcie plus dwa
+    /// ranty nie mogą przekroczyć pudełka nawet o punkt.
+    static func rimInset(for size: CGFloat) -> CGFloat {
+        (maxRimInset * size / defaultSize).rounded(.down)
+    }
     /// Pierścień w kolorze pory — to on niesie stan.
     private var ringInset: CGFloat { (7 * scale).rounded() }
     private var ringWidth: CGFloat { max(2, (3 * scale).rounded()) }
@@ -227,7 +362,13 @@ struct CalendarPlate: View {
     private var isUrgent: Bool { item?.isUrgent == true }
 
     var body: some View {
-        Button {
+        // Na dniu, którego nie da się odhaczać, talerz jest obrazkiem — nie
+        // ma być czytany jako „przyciemniony przycisk”. Jawny typ, bo `[]`
+        // i `.isButton` w jednym wyrażeniu warunkowym nie mają skąd wziąć
+        // typu bez podpowiedzi.
+        let hiddenTraits: AccessibilityTraits = canToggle ? [] : .isButton
+
+        return Button {
             pagerGate.ifNotSwiping(onToggle)
         } label: {
             // `ZStack` nie jest ozdobą: przejście przy podmianie dania gra
@@ -236,45 +377,71 @@ struct CalendarPlate: View {
             // bez tego opakowania talerz podmieniałby się twardym cięciem.
             ZStack {
                 plate
-                    // Podmiana dania na środku: krótki „pop”, jak w makiecie.
-                    // To samo danie odhaczone zostaje na miejscu — zmienia mu
-                    // się pierścień i pieczątka, a nie tożsamość.
+                    // Podmiana dania na środku. To samo danie odhaczone
+                    // zostaje na miejscu — zmienia mu się pierścień
+                    // i pieczątka, a nie tożsamość (ekran przypina wtedy
+                    // odhaczone danie, żeby „następny” nie wypchnął go
+                    // z talerza spod palca).
                     .id(item?.id ?? "empty")
-                    .transition(
-                        .scale(scale: 0.94)
-                        .combined(with: .opacity)
-                    )
+                    .transition(swap)
             }
             .frame(width: size, height: size)
         }
         .buttonStyle(PlatePressStyle())
         .disabled(!canToggle)
         // Odcisk na identyfikatorze dania, nie na zdjęciu: to on rozstrzyga,
-        // czy talerz ma się przełożyć („pop” z makiety), czy tylko zmienić
-        // stan w miejscu. Bez tego modyfikatora podmiana byłaby twardym
-        // cięciem — przejścia w SwiftUI grają tylko wtedy, gdy zmiana
-        // identyczności leci w animowanej transakcji.
-        .animation(.smooth(duration: 0.34), value: item?.id)
+        // czy talerz ma się przełożyć, czy tylko zmienić stan w miejscu.
+        // Ta sama sprężyna, którą jedzie strona dnia i podkreślenie na pasku
+        // dni — jeden ruch na jedną czynność, także wtedy, gdy ta czynność
+        // to zmiana dnia. Drugi odcisk na stan: odhaczenie przygasza zdjęcie
+        // w miejscu i bez niego ten jeden ruch przeskakiwałby w klatce.
+        .animation(DayNavigationMotion.spring, value: item?.id)
+        .animation(DayNavigationMotion.spring, value: item?.status)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(actionHint)
+        .accessibilityRemoveTraits(hiddenTraits)
+    }
+
+    /// Nowe danie wjeżdża od strony, z której przyszło; stare gaśnie
+    /// w miejscu.
+    ///
+    /// Zejście CELOWO nie ma kierunku. Przejście zejścia bierze się z tego,
+    /// co stało w widoku w chwili jego WSTAWIENIA — czyli z kierunku
+    /// poprzedniej zmiany, nie tej. Gdyby stare danie odjeżdżało „w drugą
+    /// stronę”, to przy zmianie kierunku (dzień w przód, potem w tył)
+    /// odjeżdżałoby w tę samą stronę, z której wjeżdża nowe, i oba
+    /// przecinałyby się na środku.
+    private var swap: AnyTransition {
+        let removal = AnyTransition.opacity.combined(with: .scale(scale: 0.96))
+
+        if direction == 0 || reduceMotion {
+            let pop = AnyTransition.scale(scale: 0.94).combined(with: .opacity)
+            return .asymmetric(insertion: pop, removal: removal)
+        }
+
+        let slide = AnyTransition.offset(x: CGFloat(direction) * (size * 0.26).rounded())
+        let arrival = slide.combined(with: .opacity).combined(with: .scale(scale: 0.96))
+        return .asymmetric(insertion: arrival, removal: removal)
     }
 
     private var plate: some View {
-        face
-            .frame(width: size, height: size)
-            .clipShape(Circle())
+        CalendarPlateFace(item: item, size: size)
+            // Zjedzone przygasa — zostaje czytelne, ale przestaje konkurować
+            // z tym, co dopiero przed użytkownikiem. Ta sama reguła, co
+            // w miniaturach w Planie tygodnia.
+            .saturation(item?.isEaten == true ? 0.5 : 1)
+            .opacity(item?.isEaten == true ? 0.78 : 1)
             // Cień pod talerzem, nie pod pierścieniem: rant ma leżeć na
             // planszy, a samo danie unosić się nad nią.
             .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.22), radius: 26 * scale, y: 14 * scale)
             // Dwa ranty, licząc od zdjęcia na zewnątrz: pierścień pory tuż
             // przy krawędzi, a za nim cienka obwódka, która jest już samym
-            // kształtem talerza. Makieta miała je odwrotnie ustawione
-            // w kodzie, ale rysują się w tej samej kolejności.
+            // kształtem talerza.
             .overlay {
                 Circle()
                     .strokeBorder(accent, lineWidth: ringWidth)
                     .padding(-ringInset)
-                    .animation(.smooth(duration: 0.32), value: accent)
+                    .animation(DayNavigationMotion.spring, value: accent)
             }
             .overlay {
                 Circle()
@@ -328,75 +495,12 @@ struct CalendarPlate: View {
             }
     }
 
-    @ViewBuilder
-    private var face: some View {
-        if let item, !item.isEmptySlot {
-            photo(item)
-        } else {
-            // Pusta pora i pusty dzień dostają ten sam kreskowany talerz, co
-            // kreskowane kółko na liście — jeden znak na „nic tu jeszcze nie
-            // stoi”.
-            ZStack {
-                Circle().fill(Color.scChipBg(scheme))
-
-                Circle()
-                    .strokeBorder(
-                        Color.scRule(scheme),
-                        style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])
-                    )
-
-                Image(systemName: item?.slot.icon ?? "calendar")
-                    .font(.system(size: size * 0.2, weight: .light))
-                    .foregroundStyle(Color.scFaint(scheme))
-            }
-        }
-    }
-
-    private func photo(_ item: CalendarPlateItem) -> some View {
-        Group {
-            if let url = item.imageURL {
-                CachedAsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        fallback(item.slot)
-                    }
-                }
-            } else {
-                fallback(item.slot)
-            }
-        }
-        // Zjedzone przygasa — zostaje czytelne, ale przestaje konkurować
-        // z tym, co dopiero przed użytkownikiem. Ta sama reguła, co
-        // w miniaturach w Planie tygodnia.
-        .saturation(item.isEaten ? 0.5 : 1)
-        .opacity(item.isEaten ? 0.78 : 1)
-    }
-
-    private func fallback(_ slot: MealSlot) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [slot.cozyTint, slot.cozyTint.mix(with: .black, by: 0.40)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Image(systemName: slot.icon)
-                .font(.system(size: size * 0.22, weight: .light))
-                .foregroundStyle(Color.white.opacity(0.65))
-        }
-    }
-
     private var accessibilityLabel: String {
         guard let item else { return "Pusty dzień" }
-        guard let title = item.title else {
-            return "\(item.slot.title): nic nie zaplanowano"
-        }
-        var parts = [item.slot.title, title, "\(item.kcal) kcal"]
-        if let time = item.time { parts.insert(time, at: 1) }
-        if item.isEaten { parts.append("zjedzone") }
-        return parts.joined(separator: ", ")
+        guard !item.isEmptySlot else { return item.accessibilityDescription }
+        // Kalorie tylko na wielkim talerzu — talerzyk w sekwencji ich nie
+        // pokazuje, więc i nie czyta.
+        return "\(item.accessibilityDescription), \(item.kcal) kcal"
     }
 
     /// Co robi stuknięcie w talerz. Pusto, gdy nie robi nic — dzień
@@ -498,9 +602,9 @@ private struct PlatePressStyle: ButtonStyle {
 
 // MARK: - Pigułka szczegółu
 
-/// Pigułka 30 pt pod nazwą dania: „gotuj od 13:00”, „60 min · 1208 kcal”,
-/// „zjedzone”. Tapowalna wysokość, bo w makiecie pigułki stoją w jednym
-/// rzędzie z odliczaniem i muszą się czytać z tej samej odległości.
+/// Pigułka 30 pt pod nazwą dania: „gotuj od 13:00”, „60 min · 1208 kcal”.
+/// Tapowalna wysokość, bo w makiecie pigułki stoją w jednym rzędzie
+/// z odliczaniem i muszą się czytać z tej samej odległości.
 struct CalendarPlateChip: View {
     let text: String
     var icon: String?
@@ -526,6 +630,9 @@ struct CalendarPlateChip: View {
                 // i „gotuj od”, i własną liczbę porcji, zamiast schodzić do
                 // drugiego rzędu i podnosić wszystko pod spodem.
                 .minimumScaleFactor(0.75)
+                // Liczby w pigułce rolują się przy zmianie dania — „60 min ·
+                // 1208 kcal” w „12 min · 510 kcal” — zamiast przeskakiwać.
+                .contentTransition(.numericText())
         }
         .foregroundStyle(color)
         .lineLimit(1)
@@ -540,25 +647,34 @@ struct CalendarPlateChip: View {
                 lineWidth: 1
             )
         )
+        .animation(DayNavigationMotion.spring, value: tint)
     }
 }
 
 // MARK: - Podpis talerza
 
-/// Trzy piętra pod talerzem: nadpis z porą, wielkie zdanie o czasie, nazwa
-/// dania i rząd pigułek ze szczegółami.
+/// Trzy piętra pod talerzem: wielkie zdanie o czasie, nazwa dania i rząd
+/// pigułek ze szczegółami.
 ///
 /// Cała treść liczy się TUTAJ, z jednego `CalendarPlateItem` — ekran podaje
 /// fakty, a nie zdania. Dzięki temu „Pora gotować” w wielkim wierszu i kolor
 /// pigułki „gotuj od” nie mogą się rozjechać: wynikają z tej samej liczby.
+///
+/// Podpis ma STAŁĄ wysokość — tę samą dla każdego dania, dla pustej pory
+/// i dla pustego dnia: odliczanie to zawsze jedna linijka, nazwa dostaje
+/// z góry `titleLines` linijek (także wtedy, gdy jest krótsza albo nie ma
+/// jej wcale), pigułki to zawsze jeden rząd. To jest warunek konieczny,
+/// żeby sekwencja pod spodem stała w miejscu przy przekładaniu talerzy
+/// i żeby talerz na pustym dniu stał dokładnie tam, gdzie na pełnym.
 struct CalendarPlateCaption: View {
     let item: CalendarPlateItem?
-    /// WSZYSTKIE nazwy dań tego dnia — nie po to, żeby je pokazać, tylko
-    /// żeby wiedzieć, ile miejsca zarezerwować. Patrz `titleSlot`.
-    let titles: [String]
     /// Ile linijek dostaje nazwa dania. Dwie na normalnym ekranie, jedna na
     /// krótkim, gdzie każde 23 pt idzie na talerz.
     var titleLines: Int = 2
+    /// Czy w ogóle rysować rząd pigułek. Na najkrótszych ekranach (SE)
+    /// czterdzieści punktów rzędu to różnica między talerzem a ikonką —
+    /// wtedy szczegóły zostają w arkuszu posiłku, a tu zostaje nazwa.
+    var showsChips: Bool = true
     /// Otwiera szczegóły posiłku. `nil` dla pustej pory — nie ma czego
     /// otwierać.
     let onOpenDetail: (() -> Void)?
@@ -568,80 +684,68 @@ struct CalendarPlateCaption: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(headline)
-                .font(.system(size: 34, weight: .bold))
-                .tracking(-1.3)
-                .monospacedDigit()
-                .foregroundStyle(headlineColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                // Odliczanie tyka co minutę. Bez tego liczby podmieniałyby
-                // się skokiem w miejscu, na które patrzy się najdłużej.
-                .contentTransition(.numericText())
-
-            if item?.title != nil {
-                titleSlot
-                    .padding(.top, 5)
+            // Wielki wiersz ma tożsamość po daniu I po rodzaju zdania: między
+            // daniami oraz między „za 4 h 19 min” a „Pora gotować” przechodzi
+            // kryciem, a w obrębie tego samego odliczania (tyknięcie zegara)
+            // roluje cyfry. Rolowanie „za 4 h 19 min” w „Pusty dzień” literka
+            // po literce wyglądało jak usterka renderowania.
+            ZStack {
+                Text(headline)
+                    .font(.system(size: 34, weight: .bold))
+                    .tracking(-1.3)
+                    .monospacedDigit()
+                    .foregroundStyle(headlineColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                    .id(headlineKey)
+                    .transition(.opacity)
             }
 
-            if !chips.isEmpty {
-                // Jeden rząd, zawsze. Pigułki, których jest za dużo, ściskają
-                // się pismem (`minimumScaleFactor`), a nie schodzą do drugiego
-                // rzędu: drugi rząd pojawiałby się i znikał zależnie od tego,
-                // czy danie ma własną liczbę porcji — i cała sekwencja pod
-                // spodem podskakiwałaby o trzydzieści sześć punktów.
-                chipRow(chips)
-                    .frame(height: 30)
-                    .padding(.top, 12)
+            titleSlot
+                .padding(.top, 5)
+
+            // Jeden rząd, zawsze — także pusty. Pigułki, których jest za
+            // dużo, ściskają się pismem, a nie schodzą do drugiego rzędu:
+            // drugi rząd pojawiałby się i znikał zależnie od dania i cała
+            // sekwencja pod spodem podskakiwałaby o trzydzieści sześć
+            // punktów.
+            if showsChips {
+                HStack(spacing: 6) {
+                    ForEach(chips) { chip in
+                        CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
+                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    }
+                }
+                .frame(height: 30)
+                .padding(.top, 12)
             }
         }
         .frame(maxWidth: .infinity)
-        // Cały podpis ma STAŁĄ wysokość przez cały dzień: odliczanie to jedna
-        // linijka, pigułki jeden rząd, a nazwa dostaje tyle, ile potrzebuje
-        // najdłuższa nazwa dnia (`titleSlot`). To warunek konieczny, żeby
-        // sekwencja pod spodem stała w miejscu przy przekładaniu talerzy —
-        // bez niego wybranie dania o dłuższej nazwie podnosiło pół ekranu.
-        //
-        // Dlatego też podpis podmienia się TREŚCIĄ, a nie tożsamością: makieta
-        // unosiła go w całości („rise”), ale przejście przez tożsamość
-        // trzymałoby przez chwilę oba podpisy naraz i wysokość znów by
-        // zatańczyła. Tekst przechodzi kryciem w miejscu
-        // (`contentTransition`), a liczby rolują się `numericText`.
-        .animation(.smooth(duration: 0.3), value: item?.id)
-        // Odliczanie tyka co minutę osobno od podmiany dania: bez własnego
-        // odcisku liczby przeskakiwałyby bez `numericText`.
+        // Jedna sprężyna na przełożenie dania — ta sama, którą jedzie strona
+        // dnia — druga na zmianę stanu w miejscu (odhaczenie przygasza nazwę
+        // i wymienia pigułki) i osobny, krótszy odcisk na tyknięcie zegara.
+        .animation(DayNavigationMotion.spring, value: item?.id)
+        .animation(DayNavigationMotion.spring, value: item?.status)
         .animation(.smooth(duration: 0.25), value: headline)
         .accessibilityElement(children: .contain)
     }
 
-    private func chipRow(_ row: [Chip]) -> some View {
-        HStack(spacing: 6) {
-            ForEach(row) { chip in
-                CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
-            }
-        }
-    }
-
-    /// Nazwa dania w pudełku o wysokości NAJDŁUŻSZEJ nazwy tego dnia.
+    /// Nazwa dania w pudełku o wysokości `titleLines` linijek — zawsze,
+    /// niezależnie od tego, ile nazwa faktycznie zajmuje i czy w ogóle jest.
     ///
-    /// To jest odpowiedź na jedyną rzecz, która w tym układzie skakała:
-    /// „Pierogi z truskawkami” mieszczą się w jednej linijce, a „Pierś
-    /// z indyka pieczona z ziemniakami i brokułem” zajmuje dwie — i przy
-    /// przekładaniu talerzy cała sekwencja pod spodem podnosiła się i opadała
-    /// o dwadzieścia trzy punkty.
-    ///
-    /// Rezerwacja idzie przez NARYSOWANIE wszystkich nazw dnia i schowanie
-    /// ich (`hidden()`): `ZStack` przyjmuje wtedy wysokość najwyższej z nich,
-    /// czyli dokładnie tyle, ile ten dzień naprawdę potrzebuje. Liczenie
-    /// znaków byłoby zgadywaniem — ta sama liczba liter łamie się inaczej
-    /// przy „Ł" i przy „i" — a sztywne dwie linijki kradłyby 23 pt w dniu,
-    /// w którym żadna nazwa się nie łamie. Tekst jest ułożony do GÓRY, więc
-    /// pierwsza linijka nazwy stoi zawsze w tym samym miejscu.
+    /// Wysokość bierze się z NARYSOWANEJ i schowanej próbki o tylu
+    /// linijkach, a nie z liczby: linijka pisma 18 pt to nie jest okrągłe
+    /// 23 pt (interlinia kroju systemowego, `tracking`, zaokrąglanie do
+    /// piksela), a próbka w tym samym kroju mierzy się sama i nie rozjedzie
+    /// się przy pierwszej zmianie wielkości pisma. Tekst jest ułożony do
+    /// góry, więc pierwsza linijka nazwy stoi zawsze w tym samym miejscu —
+    /// także po zmianie dnia.
     private var titleSlot: some View {
         ZStack(alignment: .top) {
-            ForEach(Array(titles.enumerated()), id: \.offset) { _, name in
-                titleText(name, eaten: false).hidden()
-            }
+            titleText(probe, eaten: false)
+                .hidden()
+                .accessibilityHidden(true)
 
             if let title = item?.title {
                 Button {
@@ -652,10 +756,16 @@ struct CalendarPlateCaption: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(onOpenDetail == nil)
+                .transition(.opacity)
                 .accessibilityHint("Otwiera szczegóły posiłku")
             }
         }
         .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    /// Próbka o dokładnie `titleLines` linijkach.
+    private var probe: String {
+        Array(repeating: "X", count: max(1, titleLines)).joined(separator: "\n")
     }
 
     private func titleText(_ name: String, eaten: Bool) -> some View {
@@ -674,9 +784,10 @@ struct CalendarPlateCaption: View {
     private var headline: String {
         guard let item else { return "Pusty dzień" }
         if item.isEmptySlot { return "Nic nie zaplanowano" }
-        if item.isEaten { return "Zjedzone" }
 
         switch item.status {
+        case .eaten:
+            return "Zjedzone"
         case .next:
             // Odkąd okno gotowania jest otwarte, odliczanie przestaje być
             // odpowiedzią: „za 3 min” przy daniu, które robi się kwadrans,
@@ -688,14 +799,29 @@ struct CalendarPlateCaption: View {
             return CalendarRelativeTime.text(inMinutes: away)
         case .later:
             guard let away = item.minutesAway else { return item.time ?? "Dowolna pora" }
+            // Danie „później” może mieć porę za sobą (wieczorem, gdy nic nie
+            // odhaczono, „następne” jest śniadanie, a obiad — „później”).
+            // Wtedy mówi to samo, co mówiłoby jako następne, tym samym
+            // wielkim zdaniem — nie odmieńcem „pora minęła” z małej litery.
+            if away <= 0 {
+                return away >= -CalendarRelativeTime.graceMinutes ? "Pora jeść" : "Pora minęła"
+            }
             return CalendarRelativeTime.text(inMinutes: away)
         case .anytime:
             return "Dowolna pora"
         case .planned:
             return item.time ?? "Dowolna pora"
-        case .eaten:
-            return "Zjedzone"
         }
+    }
+
+    /// Tożsamość wielkiego wiersza: danie plus RODZAJ zdania. Zdania
+    /// z liczbami (odliczanie, godzina) dzielą jeden klucz, żeby cyfry
+    /// rolowały; zdania ze słów mają klucz po treści, żeby zmiana rodzaju
+    /// przechodziła kryciem.
+    private var headlineKey: String {
+        let base = item?.id ?? "empty"
+        let kind = headline.contains(where: { $0.isNumber }) ? "digits" : headline
+        return "\(base)|\(kind)"
     }
 
     private var headlineColor: Color {
@@ -718,26 +844,28 @@ struct CalendarPlateCaption: View {
         var tint: Color?
     }
 
+    /// Pigułki mówią wyłącznie to, czego nie ma nigdzie wyżej na talerzu.
+    /// „Zjedzone” niesie już wielki wiersz, szałwiowy nadpis i pieczątka —
+    /// czwarty raz to samo słowo w pigułce nie było informacją.
     private var chips: [Chip] {
-        guard let item else { return [] }
-
-        if item.isEmptySlot {
-            return [Chip(id: "plan", text: "Zaplanujesz w Planie", icon: "square.and.pencil")]
+        // Pusty dzień i pusta pora mówią to samo: dokąd iść, żeby coś tu
+        // stanęło. Ikona z dolnego menu, nie własna — użytkownik ma trafić
+        // wzrokiem po tym samym znaku, który widzi w pasku pod spodem.
+        guard let item, !item.isEmptySlot else {
+            return [Chip(id: "plan", text: "Zaplanujesz w Planie", icon: MenuConstans.Plan.icon)]
         }
 
         var out: [Chip] = []
 
-        if item.isEaten {
-            out.append(Chip(id: "eaten", text: "zjedzone", icon: "checkmark", tint: SCPalette.sage))
-        } else if item.isMissed {
+        if item.isMissed {
             out.append(Chip(id: "missed", text: "nie odhaczone", icon: "xmark"))
         }
 
         // „Gotuj od” tylko dopóki gotowanie jest jeszcze przed nami — przy
-        // zjedzonym daniu i przy minionej porze ta godzina już o niczym nie
-        // mówi. Terakota, gdy to danie jest następne; kolor pory, gdy okno
-        // gotowania właśnie się otworzyło.
-        if !item.isEaten, !item.isMissed, item.showsCookHint, let cookFrom = item.cookFrom {
+        // zjedzonym daniu, przy minionej porze (także dzisiejszej) ta godzina
+        // już o niczym nie mówi. Terakota, gdy to danie jest następne; kolor
+        // pory, gdy okno gotowania właśnie się otworzyło.
+        if !item.isEaten, !item.isMissed, item.isAhead, item.showsCookHint, let cookFrom = item.cookFrom {
             var tint: Color?
             if item.isCooking {
                 tint = item.slot.cozyAccent
@@ -790,17 +918,19 @@ struct CalendarPlateCaption: View {
         ScrollView {
             VStack(spacing: 46) {
                 ForEach([next, cooking, eaten, missed]) { item in
-                    VStack(spacing: 0) {
+                    VStack(spacing: 16) {
                         CalendarPlateKicker(item: item)
-                            .padding(.bottom, 14)
                         CalendarPlate(item: item, canToggle: true, onToggle: {})
-                        CalendarPlateCaption(
-                            item: item,
-                            titles: [item.title ?? ""],
-                            onOpenDetail: {}
-                        )
-                            .padding(.top, 18)
+                            .padding(.vertical, CalendarPlate.maxRimInset)
+                        CalendarPlateCaption(item: item, onOpenDetail: {})
                     }
+                }
+
+                VStack(spacing: 16) {
+                    CalendarPlateKicker(item: nil)
+                    CalendarPlate(item: nil, canToggle: false, onToggle: {})
+                        .padding(.vertical, CalendarPlate.maxRimInset)
+                    CalendarPlateCaption(item: nil, onOpenDetail: nil)
                 }
             }
             .padding(.vertical, 40)
