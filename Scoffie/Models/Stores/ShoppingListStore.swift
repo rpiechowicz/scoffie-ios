@@ -363,7 +363,15 @@ final class ShoppingListStore {
     private func scheduleReload(weekStart: String) {
         pendingReloadTask?.cancel()
         pendingReloadTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            // Anulowany debounce NIE startuje ładowania — `try?` połykał
+            // anulowanie, a anulowane zadanie ładowało listę dalej, aż
+            // pierwszy rzucający `await` w środku kończył się
+            // `CancellationError` pokazanym jako awaria.
+            do {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            } catch {
+                return
+            }
             guard let self else { return }
             await self.load(weekStart: weekStart, force: true)
         }

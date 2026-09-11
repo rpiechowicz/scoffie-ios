@@ -104,7 +104,15 @@ final class RecipeCatalogStore {
     private func scheduleRealtimeReload() {
         pendingRealtimeReloadTask?.cancel()
         pendingRealtimeReloadTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            // Anulowany debounce NIE startuje przeładowania — `try?` połykał
+            // anulowanie i zadanie ciągnęło katalog jako anulowane, aż
+            // pierwszy rzucający `await` (odczekanie na socket, backoff
+            // ponowienia) rzucił `CancellationError` prosto do `errorMessage`.
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000)
+            } catch {
+                return
+            }
             guard let self else { return }
             await self.reload()
         }

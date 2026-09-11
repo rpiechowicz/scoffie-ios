@@ -43,43 +43,65 @@ struct MacroProgressTrack: View {
     private var isOverTarget: Bool { progress > 1 }
 
     var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            let filled = CGFloat(min(max(progress, 0), 1))
-            // Sufit na drugiej warstwie: przy 300 % nadmiar i tak domknąłby
-            // pasek, a trzecia warstwa niczego już nie dodaje.
-            let over = CGFloat(min(max(progress - 1, 0), 1))
-            let planned = CGFloat(min(max(plannedProgress ?? 0, 0), 1))
+        let planned = CGFloat(min(max(plannedProgress ?? 0, 0), 1))
 
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.scBarTrack(scheme))
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.scBarTrack(scheme))
 
-                // Plan pod spodem, zjedzone na wierzchu — plan jest tłem dla
-                // wyniku, nie drugim wynikiem. Krycie 0,3: na tyle, żeby
-                // barwę dało się rozpoznać, i na tyle mało, żeby ani przez
-                // chwilę nie dało się jej pomylić z pełnym wypełnieniem.
-                Capsule()
-                    .fill(color.opacity(scheme == .dark ? 0.30 : 0.26))
-                    .frame(width: width * planned, height: height)
+            // Plan pod spodem, zjedzone na wierzchu — plan jest tłem dla
+            // wyniku, nie drugim wynikiem. Krycie 0,3: na tyle, żeby barwę
+            // dało się rozpoznać, i na tyle mało, żeby ani przez chwilę nie
+            // dało się jej pomylić z pełnym wypełnieniem.
+            BarLap(progress: planned, lap: 0)
+                .fill(color.opacity(scheme == .dark ? 0.30 : 0.26))
 
-                Capsule()
-                    .fill(color)
-                    .frame(width: width * filled, height: height)
+            // Postęp i nadmiar to dwie PĘTLE jednego postępu, dzielone
+            // w kształcie (`BarLap`), nie w widoku: dwie szerokości liczone
+            // tutaj interpolowałyby się równolegle od zera i nadmiar
+            // ciemniałby od pierwszej klatki, zanim zwykłe wypełnienie
+            // dojechało do końca toru. Sufit na drugiej pętli: przy 300 %
+            // nadmiar i tak domknąłby pasek.
+            BarLap(progress: CGFloat(max(progress, 0)), lap: 0)
+                .fill(color)
 
-                // Rysowany ZAWSZE, nie pod `if` — przy `if` przejście przez
-                // 100 % wstawiałoby warstwę skokiem. Przycięta do zera kapsuła
-                // nie rysuje niczego, więc kosztu nie ma.
-                Capsule()
-                    .fill(color.mix(black: 0.34))
-                    .frame(width: width * over, height: height)
-            }
-            .frame(height: height)
+            // Rysowany ZAWSZE, nie pod `if` — przy `if` przejście przez 100 %
+            // wstawiałoby warstwę skokiem. Pusta ścieżka nie rysuje niczego.
+            BarLap(progress: CGFloat(max(progress, 0)), lap: 1)
+                .fill(color.mix(black: 0.34))
         }
         .frame(height: height)
         .animation(animation, value: progress)
         .animation(animation, value: plannedProgress)
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Pętla paska
+
+/// Kapsuła jednej pętli postępu od lewej krawędzi toru.
+///
+/// `lap` mówi, którą pętlę rysuje ten kształt: zerowa to postęp 0–100 %,
+/// pierwsza to nadmiar 100–200 %. Postęp jest `animatableData`, więc podział
+/// na pętle liczy się przy każdej klatce z SUROWEJ liczby i druga pętla
+/// rusza dokładnie wtedy, gdy pierwsza domknie tor — to samo, co `RingLap`
+/// robi dla pierścienia.
+struct BarLap: Shape {
+    var progress: CGFloat
+    let lap: Int
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let fraction = max(0, min(progress - CGFloat(lap), 1))
+        guard fraction > 0 else { return Path() }
+
+        let width = rect.width * fraction
+        let slice = CGRect(x: rect.minX, y: rect.minY, width: width, height: rect.height)
+        return Capsule(style: .continuous).path(in: slice)
     }
 }
 

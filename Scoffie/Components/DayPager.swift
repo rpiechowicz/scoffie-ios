@@ -12,6 +12,13 @@ import SwiftUI
 /// przestrzeliłaby poza krawędź i mignęła tłem.
 enum DayNavigationMotion {
     static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
+
+    /// Wzniesienie dania z tacy na talerz (i opadanie z powrotem) —
+    /// odrobinę dłuższe i z wyraźniejszym odbiciem niż zmiana dnia, bo to
+    /// ruch JEDNEGO przedmiotu, który ma wylądować, a nie sceny, która ma
+    /// się przestawić. Tą samą sprężyną rośnie wybrany talerzyk w sekwencji,
+    /// żeby oba końce ruchu osiadały razem.
+    static let lift: Animation = .spring(response: 0.46, dampingFraction: 0.78)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.
@@ -22,6 +29,14 @@ enum DayNavigationMotion {
 /// to, co na nim leży (`morph`). Przesuwanie sceny w bok, żeby postawić na
 /// jej miejscu identyczną scenę z innym daniem, mówiło oczom „to jest inny
 /// ekran", a to jest ten sam ekran z innym dniem.
+/// Jedna zmiana dnia w pagerze: skąd, dokąd i w którą stronę.
+struct DayPagerChange {
+    let from: Date
+    let to: Date
+    /// `true` = dzień do przodu.
+    let forward: Bool
+}
+
 enum DayPagerMotion {
     /// Stara strona zjeżdża za krawędź z zanikiem, nowa wjeżdża z przeciwnej.
     /// W danej chwili istnieje jedna strona, więc wysokość nie skacze.
@@ -134,15 +149,20 @@ struct DayPager<Content: View>: View {
     let scrolls: Bool
     /// Zjazd strony albo przejście treści w miejscu — patrz `DayPagerMotion`.
     let motion: DayPagerMotion
-    /// Wołane W TEJ SAMEJ animowanej transakcji, w której zmienia się dzień,
-    /// tuż przed zmianą — z kierunkiem (`true` = dzień do przodu).
+    /// Faza pierwsza zmiany dnia w trybie `morph` — BEZ animacji, w tej
+    /// samej klatce, w której pager przestawia `displayedDate`.
     ///
-    /// Treść, która chce wjechać od strony, z której przyszedł dzień, musi
-    /// znać kierunek W CHWILI wstawiania nowego widoku, a nie po fakcie:
-    /// przejście wstawienia liczy się z tego, co stoi w stanie w tym samym
-    /// przebiegu układu. Osobna zmiana stanu chwilę później byłaby już
-    /// drugim przebiegiem i nowy widok wjechałby zawsze z tej samej strony.
-    let onDayChange: ((_ forward: Bool) -> Void)?
+    /// Treść ustawia tu nowy dzień poza kadrem i zapamiętuje stary
+    /// (`DayPagerChange.from`), żeby chwilę później oba mogły jechać naraz.
+    /// Musi to być ta sama klatka co zmiana daty: gdyby nowy dzień pojawił
+    /// się na miejscu, zanim treść zdąży odsunąć go poza kadr, mignąłby
+    /// gotowy, a potem odskoczył.
+    let onDayChange: ((DayPagerChange) -> Void)?
+    /// Faza druga — klatkę później, POZA transakcją pagera: treść uruchamia
+    /// własną animację wjazdu. Osobna transakcja, bo pager nie ma tu żadnej
+    /// animacji do narzucenia, a wspólna transakcja ze zmianą `selectedDate`
+    /// mieszałaby sprężynę paska dni z ruchem treści.
+    let onDayTurn: (() -> Void)?
     let content: (Date) -> Content
 
     init(
@@ -152,7 +172,8 @@ struct DayPager<Content: View>: View {
         animatesSelectionChanges: Bool = false,
         scrolls: Bool = true,
         motion: DayPagerMotion = .slide,
-        onDayChange: ((_ forward: Bool) -> Void)? = nil,
+        onDayChange: ((DayPagerChange) -> Void)? = nil,
+        onDayTurn: (() -> Void)? = nil,
         @ViewBuilder content: @escaping (Date) -> Content
     ) {
         self.datesViewModel = datesViewModel
@@ -162,6 +183,7 @@ struct DayPager<Content: View>: View {
         self.scrolls = scrolls
         self.motion = motion
         self.onDayChange = onDayChange
+        self.onDayTurn = onDayTurn
         self.content = content
         self._displayedDate = State(initialValue: selectedDate.wrappedValue)
     }
@@ -258,21 +280,7 @@ struct DayPager<Content: View>: View {
     /// która realnie została na ekranie.
     @ViewBuilder
     private var page: some View {
-        // W trybie `slide` zmiana dnia jest animowana ZE WZGLĘDU NA PASEK
-        // DNI (patrz `transition(to:)`), a ta sama animacja obejmowałaby
-        // też przebudowę kafli — wjeżdżałyby na ekran, dopasowując po drodze
-        // wysokości i teksty. Strona podmienia się poza ekranem, więc nie ma
-        // tam czego animować i animacja jest wyłączona. Zakres jest wąski:
-        // wyłącznie zmiany dnia, więc serduszko i odhaczenie zostają.
-        //
-        // W trybie `morph` jest dokładnie odwrotnie: ta animacja JEST
-        // przejściem dnia — to w niej zdjęcie na talerzu robi „pop", liczby
-        // rolują, a sekwencja wchodzi kryciem. Zdjęcie jej tutaj zamieniłoby
-        // morfowanie w twarde cięcie na środku ekranu.
-        let dayChange: Animation? = motion == .slide ? nil : DayNavigationMotion.spring
-        let day = content(animatesSelectionChanges ? displayedDate : selectedDate)
-            .animation(dayChange, value: selectedDate)
-            .animation(dayChange, value: displayedDate)
+        let day = calmed(content(animatesSelectionChanges ? displayedDate : selectedDate))
             .environment(\.dayPagerGate, gate)
 
         if scrolls {
@@ -286,6 +294,32 @@ struct DayPager<Content: View>: View {
             day
                 .padding(.bottom, bottomPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+    }
+
+    /// W trybie `slide` zmiana dnia jest animowana ZE WZGLĘDU NA PASEK DNI
+    /// (patrz `transition(to:)`), a ta sama animacja obejmowałaby też
+    /// przebudowę kafli — wjeżdżałyby na ekran, dopasowując po drodze
+    /// wysokości i teksty. Strona podmienia się poza ekranem, więc nie ma
+    /// tam czego animować i animacja jest wyłączona. Zakres jest wąski:
+    /// wyłącznie zmiany dnia, więc serduszko i odhaczenie zostają.
+    ///
+    /// W trybie `morph` pager NIE dotyka animacji treści w ogóle — ani jej
+    /// nie wyłącza, ani nie narzuca. Zmiana dnia idzie tam dwiema fazami
+    /// (`morph(to:)`), a ruch treści jest jej własny (`onDayTurn`).
+    /// Wyłączenie z trybu `slide` w tej samej klatce, w której treść
+    /// uruchamia własny ruch, gasiłoby ten ruch razem z resztą.
+    ///
+    /// Gałęzie mają różne typy, ale `motion` jest stały przez całe życie
+    /// pagera, więc tożsamość widoku nigdy się tu nie przełącza.
+    @ViewBuilder
+    private func calmed<V: View>(_ view: V) -> some View {
+        if motion == .slide {
+            view
+                .animation(nil, value: selectedDate)
+                .animation(nil, value: displayedDate)
+        } else {
+            view
         }
     }
 
@@ -448,15 +482,29 @@ struct DayPager<Content: View>: View {
     /// powodu, co przy zjeździe: drugie machnięcie w trakcie zostawiałoby
     /// stronę w pół drogi.
     private func morph(to target: Date, forward: Bool, movesSelection: Bool) {
-        withAnimation(Self.enterAnimation) {
-            // Kierunek PRZED datą, w tej samej transakcji — patrz `onDayChange`.
-            onDayChange?(forward)
-            if movesSelection { selectedDate = target }
-            displayedDate = target
-            dragOffset = 0
-        }
+        // Faza pierwsza, BEZ animacji, w tej klatce: treść dostaje nowy dzień
+        // i sama stawia go poza kadrem, a stary zostaje na miejscu jako
+        // kopia wychodząca. Na ekranie nic się jeszcze nie rusza — klatka
+        // wygląda dokładnie jak poprzednia.
+        let change = DayPagerChange(from: displayedDate, to: target, forward: forward)
+        onDayChange?(change)
+        displayedDate = target
 
         Task { @MainActor in
+            // Faza druga, klatkę później: dopiero teraz jest co animować —
+            // nowy dzień stoi poza kadrem, stary na miejscu. Jedna klatka
+            // odstępu gwarantuje, że faza pierwsza zdążyła się narysować;
+            // bez niej obie zmiany scaliłyby się w jedną i ruch zaczynałby
+            // się z nowym dniem już na miejscu.
+            try? await Task.sleep(for: .milliseconds(16))
+            onDayTurn?()
+            // Data zaznaczenia i powrót spod palca — osobną transakcją, tą
+            // samą sprężyną, którą jedzie podkreślenie na pasku dni.
+            withAnimation(Self.enterAnimation) {
+                if movesSelection { selectedDate = target }
+                dragOffset = 0
+            }
+
             try? await Task.sleep(for: Self.enterDuration)
             isPaging = false
 
