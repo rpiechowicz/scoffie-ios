@@ -39,7 +39,17 @@ struct CalendarPlateStrip: View {
     /// Sufit szerokości kolumny. Domyślnie 62 pt z makiety; krótki ekran
     /// podaje mniej, bo każdy punkt zabrany sekwencji wraca do talerza.
     var maxColumn: CGFloat = CalendarPlateStrip.designColumn
+    /// Środek talerzyka danego dania (w przestrzeni `daySpace`) i rozmiar,
+    /// jaki ma talerzyk NIEWYBRANY. Z tego talerz wie, skąd danie wznosi się
+    /// na środek i dokąd opada z powrotem (`CalendarPlate.origin`).
+    var onCellCenter: ((CalendarPlateItem, CGPoint, CGFloat) -> Void)?
     let onSelect: (CalendarPlateItem) -> Void
+
+    /// Nazwa przestrzeni współrzędnych, którą dzień zakłada na swojej
+    /// kolumnie: w niej sekwencja melduje środki talerzyków, a talerz mierzy
+    /// własny środek. Jedno miejsce dla obu, żeby różnica była w tych samych
+    /// punktach.
+    static let daySpace = "calendar-day"
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dayPagerGate) private var pagerGate
@@ -119,14 +129,14 @@ struct CalendarPlateStrip: View {
             }
         }
         .frame(maxWidth: .infinity)
-        // Wybrany talerz rośnie, poprzedni maleje — jedną sprężyną, tą samą,
-        // którą jedzie strona dnia i podkreślenie na pasku dni. Drugi odcisk
-        // na dania i stany: przy zmianie dnia kolumny przekładają się tym
-        // samym ruchem, którym rośnie wybrany talerz. Haptyka przekładania
-        // należy do ekranu (`CalendarView`), nie do sekwencji: wybrany
-        // talerzyk zmienia się także przy zmianie dnia, a wtedy stuknięcie
-        // ma już swój własny sygnał z pagera.
-        .animation(DayNavigationMotion.spring, value: selectedId)
+        // Wybrany talerz rośnie, poprzedni maleje — tą samą sprężyną, którą
+        // danie wznosi się z tacy na talerz (`DayNavigationMotion.lift`),
+        // żeby oba końce ruchu osiadały razem. Drugi odcisk na dania i stany:
+        // gdy plan przyjdzie zmieniony, kolumny przekładają się tym samym
+        // ruchem. Haptyka przekładania należy do ekranu (`CalendarView`),
+        // nie do sekwencji: wybrany talerzyk zmienia się także przy zmianie
+        // dnia, a wtedy stuknięcie ma już swój własny sygnał z pagera.
+        .animation(DayNavigationMotion.lift, value: selectedId)
         .animation(DayNavigationMotion.spring, value: fingerprint)
     }
 
@@ -142,6 +152,16 @@ struct CalendarPlateStrip: View {
                 plate(item, size: size, isSelected: on)
             }
             .frame(width: column, height: boxSize)
+            // Meldunek o miejscu talerzyka — w przestrzeni dnia, żeby talerz
+            // mógł policzyć, skąd danie wznosi się na środek. Zmienia się
+            // tylko wtedy, gdy zmienia się układ (obrót tacy, inna liczba
+            // pór), więc nie kosztuje przebiegów.
+            .onGeometryChange(for: CGPoint.self) { proxy in
+                let frame = proxy.frame(in: .named(Self.daySpace))
+                return CGPoint(x: frame.midX, y: frame.midY)
+            } action: { center in
+                onCellCenter?(item, center, restSize)
+            }
 
             VStack(spacing: 2) {
                 // Godzina przechodzi kryciem, nie rolowaniem cyfr: gdy plan

@@ -12,6 +12,13 @@ import SwiftUI
 /// przestrzeliłaby poza krawędź i mignęła tłem.
 enum DayNavigationMotion {
     static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
+
+    /// Wzniesienie dania z tacy na talerz (i opadanie z powrotem) —
+    /// odrobinę dłuższe i z wyraźniejszym odbiciem niż zmiana dnia, bo to
+    /// ruch JEDNEGO przedmiotu, który ma wylądować, a nie sceny, która ma
+    /// się przestawić. Tą samą sprężyną rośnie wybrany talerzyk w sekwencji,
+    /// żeby oba końce ruchu osiadały razem.
+    static let lift: Animation = .spring(response: 0.46, dampingFraction: 0.78)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.
