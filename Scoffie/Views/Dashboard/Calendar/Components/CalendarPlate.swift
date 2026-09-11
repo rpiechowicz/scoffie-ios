@@ -204,7 +204,13 @@ struct CalendarPlate: View {
     /// Średnica z makiety — od niej liczą się wszystkie proporcje.
     static let defaultSize: CGFloat = 168
     /// Najmniejsza, przy której zdjęcie jeszcze niesie danie, a nie ikonkę.
-    static let minSize: CGFloat = 128
+    ///
+    /// Nisko, bo talerz jest jedynym piętrem tego ekranu, które wolno
+    /// ścisnąć: reszta (nadpis, odliczanie, nazwa, pigułki, sekwencja, linia
+    /// dnia) to tekst, a tekst albo się czyta, albo nie. Na iPhonie SE
+    /// z włączonymi krokami talerz schodzi właśnie tutaj — i to jest lepsze
+    /// niż ekran, który się przewija albo ucina linię dnia.
+    static let minSize: CGFloat = 72
 
     private var scale: CGFloat { size / Self.defaultSize }
     /// Cienki rant zewnętrzny — sam kształt talerza, bez znaczenia.
@@ -516,6 +522,10 @@ struct CalendarPlateChip: View {
                 .font(.system(size: 12.5, weight: .bold))
                 .tracking(-0.15)
                 .monospacedDigit()
+                // Bez `fixedSize`: rząd pigułek ma się ŚCISNĄĆ, gdy danie ma
+                // i „gotuj od”, i własną liczbę porcji, zamiast schodzić do
+                // drugiego rzędu i podnosić wszystko pod spodem.
+                .minimumScaleFactor(0.75)
         }
         .foregroundStyle(color)
         .lineLimit(1)
@@ -530,7 +540,6 @@ struct CalendarPlateChip: View {
                 lineWidth: 1
             )
         )
-        .fixedSize()
     }
 }
 
@@ -544,6 +553,12 @@ struct CalendarPlateChip: View {
 /// pigułki „gotuj od” nie mogą się rozjechać: wynikają z tej samej liczby.
 struct CalendarPlateCaption: View {
     let item: CalendarPlateItem?
+    /// WSZYSTKIE nazwy dań tego dnia — nie po to, żeby je pokazać, tylko
+    /// żeby wiedzieć, ile miejsca zarezerwować. Patrz `titleSlot`.
+    let titles: [String]
+    /// Ile linijek dostaje nazwa dania. Dwie na normalnym ekranie, jedna na
+    /// krótkim, gdzie każde 23 pt idzie na talerz.
+    var titleLines: Int = 2
     /// Otwiera szczegóły posiłku. `nil` dla pustej pory — nie ma czego
     /// otwierać.
     let onOpenDetail: (() -> Void)?
@@ -564,54 +579,34 @@ struct CalendarPlateCaption: View {
                 // się skokiem w miejscu, na które patrzy się najdłużej.
                 .contentTransition(.numericText())
 
-            if let title = item?.title {
-                Button {
-                    pagerGate.ifNotSwiping { onOpenDetail?() }
-                } label: {
-                    Text(title)
-                        .font(.system(size: 18, weight: .semibold))
-                        .tracking(-0.45)
-                        .foregroundStyle(item?.isEaten == true ? Color.scMuted(scheme) : Color.scLabel(scheme))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 310)
-                        .contentTransition(.opacity)
-                }
-                .buttonStyle(.plain)
-                .disabled(onOpenDetail == nil)
-                .padding(.top, 5)
-                .accessibilityHint("Otwiera szczegóły posiłku")
+            if item?.title != nil {
+                titleSlot
+                    .padding(.top, 5)
             }
 
             if !chips.isEmpty {
-                // Pigułki nie skracają się i nie zawijają w pół słowa —
-                // „gotuj od 13:00” przełamane po „od” nie jest krótsze, tylko
-                // gorsze. `ViewThatFits` próbuje najpierw jednego rzędu,
-                // a gdy się nie mieści (długa godzina + porcje na SE),
-                // schodzi na dwa. Kolejność jest ważna: pierwszy wariant,
-                // który się mieści, wygrywa.
-                ViewThatFits(in: .horizontal) {
-                    chipRow(chips)
-
-                    VStack(spacing: 6) {
-                        chipRow(Array(chips.prefix(2)))
-                        chipRow(Array(chips.dropFirst(2)))
-                    }
-                }
-                .padding(.top, 12)
+                // Jeden rząd, zawsze. Pigułki, których jest za dużo, ściskają
+                // się pismem (`minimumScaleFactor`), a nie schodzą do drugiego
+                // rzędu: drugi rząd pojawiałby się i znikał zależnie od tego,
+                // czy danie ma własną liczbę porcji — i cała sekwencja pod
+                // spodem podskakiwałaby o trzydzieści sześć punktów.
+                chipRow(chips)
+                    .frame(height: 30)
+                    .padding(.top, 12)
             }
         }
         .frame(maxWidth: .infinity)
-        // Podpis podmienia się treścią, a NIE tożsamością.
+        // Cały podpis ma STAŁĄ wysokość przez cały dzień: odliczanie to jedna
+        // linijka, pigułki jeden rząd, a nazwa dostaje tyle, ile potrzebuje
+        // najdłuższa nazwa dnia (`titleSlot`). To warunek konieczny, żeby
+        // sekwencja pod spodem stała w miejscu przy przekładaniu talerzy —
+        // bez niego wybranie dania o dłuższej nazwie podnosiło pół ekranu.
         //
-        // Makieta unosiła go w całości („rise”), ale tam każdy talerz miał
-        // podpis tej samej wysokości. U nas nazwa dania łamie się na jedną
-        // albo dwie linijki, a pigułek bywa dwie albo cztery — przejście
-        // przez tożsamość trzymałoby przez chwilę oba podpisy naraz i cała
-        // strona podskakiwałaby o wysokość tego wyższego. Tekst przechodzi
-        // więc kryciem w miejscu (`contentTransition`), a sam blok dojeżdża
-        // do nowej wysokości tą samą sprężyną.
+        // Dlatego też podpis podmienia się TREŚCIĄ, a nie tożsamością: makieta
+        // unosiła go w całości („rise”), ale przejście przez tożsamość
+        // trzymałoby przez chwilę oba podpisy naraz i wysokość znów by
+        // zatańczyła. Tekst przechodzi kryciem w miejscu
+        // (`contentTransition`), a liczby rolują się `numericText`.
         .animation(.smooth(duration: 0.3), value: item?.id)
         // Odliczanie tyka co minutę osobno od podmiany dania: bez własnego
         // odcisku liczby przeskakiwałyby bez `numericText`.
@@ -619,13 +614,59 @@ struct CalendarPlateCaption: View {
         .accessibilityElement(children: .contain)
     }
 
-    @ViewBuilder
     private func chipRow(_ row: [Chip]) -> some View {
         HStack(spacing: 6) {
             ForEach(row) { chip in
                 CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
             }
         }
+    }
+
+    /// Nazwa dania w pudełku o wysokości NAJDŁUŻSZEJ nazwy tego dnia.
+    ///
+    /// To jest odpowiedź na jedyną rzecz, która w tym układzie skakała:
+    /// „Pierogi z truskawkami” mieszczą się w jednej linijce, a „Pierś
+    /// z indyka pieczona z ziemniakami i brokułem” zajmuje dwie — i przy
+    /// przekładaniu talerzy cała sekwencja pod spodem podnosiła się i opadała
+    /// o dwadzieścia trzy punkty.
+    ///
+    /// Rezerwacja idzie przez NARYSOWANIE wszystkich nazw dnia i schowanie
+    /// ich (`hidden()`): `ZStack` przyjmuje wtedy wysokość najwyższej z nich,
+    /// czyli dokładnie tyle, ile ten dzień naprawdę potrzebuje. Liczenie
+    /// znaków byłoby zgadywaniem — ta sama liczba liter łamie się inaczej
+    /// przy „Ł" i przy „i" — a sztywne dwie linijki kradłyby 23 pt w dniu,
+    /// w którym żadna nazwa się nie łamie. Tekst jest ułożony do GÓRY, więc
+    /// pierwsza linijka nazwy stoi zawsze w tym samym miejscu.
+    private var titleSlot: some View {
+        ZStack(alignment: .top) {
+            ForEach(Array(titles.enumerated()), id: \.offset) { _, name in
+                titleText(name, eaten: false).hidden()
+            }
+
+            if let title = item?.title {
+                Button {
+                    pagerGate.ifNotSwiping { onOpenDetail?() }
+                } label: {
+                    titleText(title, eaten: item?.isEaten == true)
+                        .contentTransition(.opacity)
+                }
+                .buttonStyle(.plain)
+                .disabled(onOpenDetail == nil)
+                .accessibilityHint("Otwiera szczegóły posiłku")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private func titleText(_ name: String, eaten: Bool) -> some View {
+        Text(name)
+            .font(.system(size: 18, weight: .semibold))
+            .tracking(-0.45)
+            .foregroundStyle(eaten ? Color.scMuted(scheme) : Color.scLabel(scheme))
+            .multilineTextAlignment(.center)
+            .lineLimit(titleLines)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 310)
     }
 
     // MARK: Treść
@@ -753,7 +794,11 @@ struct CalendarPlateCaption: View {
                         CalendarPlateKicker(item: item)
                             .padding(.bottom, 14)
                         CalendarPlate(item: item, canToggle: true, onToggle: {})
-                        CalendarPlateCaption(item: item, onOpenDetail: {})
+                        CalendarPlateCaption(
+                            item: item,
+                            titles: [item.title ?? ""],
+                            onOpenDetail: {}
+                        )
                             .padding(.top, 18)
                     }
                 }

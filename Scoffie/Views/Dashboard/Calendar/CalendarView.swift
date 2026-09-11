@@ -364,34 +364,23 @@ struct CalendarView: View {
         return PolishPlural.servings(meal.effectiveServings(householdMemberCount: count))
     }
 
-    /// Średnica talerza — tak duża, jak pozwala na to WYSOKOŚĆ zakładki,
-    /// przycięta jeszcze jej szerokością.
+    /// Średnica talerza dopasowana do miejsca, które dla niego zostało.
     ///
-    /// Liczone z wymiarów zakładki, a nie z modelu telefonu: ta sama
-    /// aplikacja stoi na iPhonie SE i na Pro Max, a między nimi jest prawie
-    /// 200 pt różnicy w pionie. Na krótkim ekranie talerz schodzi do
-    /// `minSize`, żeby pod nim zostało miejsce na sekwencję i linię dnia.
-    private var plateSize: CGFloat {
-        var size = CalendarPlate.defaultSize
-
-        if pageHeight > 0 {
-            let span = CalendarPlate.defaultSize - CalendarPlate.minSize
-            let ratio = min(1, max(0, (pageHeight - 560) / 180))
-            size = CalendarPlate.minSize + span * ratio
-        }
-        // Rant i poświata wychodzą poza samo zdjęcie, więc zapas: inaczej
-        // pierścień ocierałby się o margines strony.
-        if pageWidth > 0 {
-            size = min(size, pageWidth - SCPageMetrics.horizontal * 2 - 56)
-        }
-        return size.rounded()
-    }
-
-    /// Szerokość, na której rozkłada się sekwencja dnia. Zero do pierwszego
-    /// pomiaru — wtedy talerzyki idą w rozmiarze z projektu.
-    private var stripWidth: CGFloat {
-        guard pageWidth > 0 else { return 0 }
-        return pageWidth - SCPageMetrics.horizontal * 2
+    /// `slot` to zmierzona wysokość zachłannego pudełka w kolumnie dnia —
+    /// czyli dokładnie to, czego nie wzięły piętra o własnej wysokości
+    /// (nadpis, odliczanie, nazwa, pigułki, sekwencja, linia dnia, kroki).
+    /// Dzięki temu strona dnia mieści się bez przewijania na każdym
+    /// telefonie: między iPhonem SE a Pro Max jest prawie 200 pt różnicy
+    /// w pionie i to talerz je pochłania, a nie linia dnia znikająca za
+    /// krawędzią.
+    private func plateSize(in slot: CGSize) -> CGFloat {
+        // Rant i poświata wychodzą poza samo zdjęcie — stąd zapas z obu
+        // stron, żeby pierścień nie ocierał się o nadpis nad talerzem ani
+        // o odliczanie pod nim.
+        let byHeight = slot.height - 16
+        let byWidth = slot.width - 48
+        let fit = min(CalendarPlate.defaultSize, min(byHeight, byWidth))
+        return max(CalendarPlate.minSize, fit).rounded()
     }
 
     /// Jedno zdanie o całym dniu, pod sekwencją.
@@ -717,7 +706,16 @@ struct CalendarView: View {
                 // jak machnięcie palcem. Warunek jest jeden: strona MUSI
                 // rysować dzień z argumentu, bo na czas zjazdu pager
                 // pokazuje jeszcze poprzedni dzień.
-                animatesSelectionChanges: true
+                animatesSelectionChanges: true,
+                // Kalendarz się NIE przewija. Cały dzień to jeden widok
+                // i ma się zmieścić — a żeby strona mogła się do czegokolwiek
+                // dopasować, musi najpierw dostać prawdziwą wysokość. Wewnątrz
+                // `ScrollView` nie ma czegoś takiego: tam wysokość jest
+                // nieskończona, więc talerz nie wiedziałby, ile miejsca dla
+                // niego zostało, i zamiast maleć — wypychał resztę dnia poza
+                // krawędź. (Plan tygodnia zostaje przewijany: tam lista kafli
+                // JEST dłuższa od ekranu.)
+                scrolls: false
             ) { date in
                 dayPage(for: date, now: now)
             }
@@ -737,9 +735,31 @@ struct CalendarView: View {
     /// czytająca stan ekranu podmieniałaby treść w połowie animacji — na
     /// oczach użytkownika, zanim jeszcze zjechała.
     private func dayPage(for date: Date, now: Date) -> some View {
+        // Jeden pomiar na całą stronę dnia. Z niego bierze się i szerokość
+        // sekwencji, i decyzja, czy ekran jest na tyle krótki, żeby ścisnąć
+        // resztę na rzecz talerza.
+        GeometryReader { geo in
+            dayBody(for: date, now: now, area: geo.size)
+        }
+        .padding(.horizontal, SCPageMetrics.horizontal)
+        // Świeża tożsamość na każdy dzień: bez niej talerz próbowałby
+        // przeprowadzić śniadanie poniedziałku w śniadanie wtorku dokładnie
+        // wtedy, gdy `DayPager` przesuwa całą stronę — dwie animacje na
+        // jednym ruchu. Ta sama reguła co na osi Planu tygodnia.
+        .id(MealCalendarStore.dateKey(for: date))
+    }
+
+    /// Piętra dnia w zmierzonym pudełku.
+    ///
+    /// Kolejność jest kolejnością czytania: pora → danie → co z nim → reszta
+    /// dnia → jedno zdanie na koniec. Wszystkie piętra poza talerzem mają
+    /// WŁASNĄ wysokość i nie zmieniają jej przy przekładaniu talerzy — to
+    /// jest warunek tego, żeby sekwencja stała w miejscu.
+    private func dayBody(for date: Date, now: Date, area: CGSize) -> some View {
         let items = plateItems(on: date, now: now)
         let hasMeals = items.contains { !$0.isEmptySlot }
         let canLog = canLogEatenMeals(on: date)
+        let showsSteps = stepsBarVisible(on: date)
 
         // Dzień bez ani jednego dania nie pokazuje ani talerza pierwszej pory,
         // ani sekwencji samych kreskowanych krążków: trzy razy „nic tu nie
@@ -750,6 +770,12 @@ struct CalendarView: View {
         if hasMeals { focused = focusedItem(from: items) }
 
         let canToggle = canLog && focused?.isEmptySlot == false
+
+        // Krótki ekran (SE, a z paskiem kroków także zwykła „czternastka"):
+        // sekwencja i nazwa dania oddają talerzowi po kilkanaście punktów,
+        // zamiast wypychać linię dnia poza krawędź. Próg z zapasem na kroki,
+        // bo one dokładają osiemdziesiąt punktów jednym blokiem.
+        let compact = area.height < (showsSteps ? 470 : 390)
 
         // „Następny" pod sekwencją tylko wtedy, gdy na talerzu stoi co innego.
         // Inaczej byłaby to ta sama rzecz napisana dwa razy, jedna pod drugą.
@@ -771,26 +797,48 @@ struct CalendarView: View {
         return VStack(spacing: 0) {
             CalendarPlateKicker(item: focused)
 
-            CalendarPlate(
-                item: focused,
-                size: plateSize,
-                canToggle: canToggle,
-                onToggle: { toggleEaten(withCardId: focused?.id, on: date) }
-            )
-            .padding(.top, 14)
-            .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
+            // Talerz bierze CAŁĄ wysokość, która została po reszcie dnia.
+            //
+            // `GeometryReader` w kolumnie jest zachłanny: dostaje dokładnie
+            // to, czego nie wzięły piętra o własnej wysokości. To ON, a nie
+            // rachunek z ołówkiem, mówi, ile miejsca realnie jest — i dlatego
+            // strona nie musi się przewijać ani na SE, ani na Pro Max.
+            // Rachunek z ołówkiem rozjechałby się przy pierwszej poprawce
+            // odstępu, i to po cichu.
+            GeometryReader { slot in
+                CalendarPlate(
+                    item: focused,
+                    size: plateSize(in: slot.size),
+                    canToggle: canToggle,
+                    onToggle: { toggleEaten(withCardId: focused?.id, on: date) }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
+            }
+            .frame(minHeight: CalendarPlate.minSize)
+            .padding(.top, 10)
 
-            CalendarPlateCaption(item: focused, onOpenDetail: openDetail)
-                .padding(.top, 16)
+            CalendarPlateCaption(
+                item: focused,
+                // Nazwy WSZYSTKICH dań dnia — nie po to, żeby je pokazać,
+                // tylko żeby podpis zarezerwował tyle miejsca, ile potrzebuje
+                // najdłuższa z nich. Inaczej przełożenie talerza z dania
+                // o krótkiej nazwie na danie o długiej podnosiło sekwencję.
+                titles: items.compactMap { $0.title },
+                titleLines: compact ? 1 : 2,
+                onOpenDetail: openDetail
+            )
+            .padding(.top, 12)
 
             if hasMeals {
                 CalendarPlateStrip(
                     items: items,
                     selectedId: focused?.id,
-                    width: stripWidth,
+                    width: area.width,
+                    maxColumn: compact ? 48 : CalendarPlateStrip.designColumn,
                     onSelect: { pickedCardId = $0.id }
                 )
-                .padding(.top, 20)
+                .padding(.top, compact ? 14 : 20)
             }
 
             CalendarDayLine(
@@ -798,19 +846,19 @@ struct CalendarView: View {
                 nextAway: nextAway,
                 onReturnToNext: { pickedCardId = nil }
             )
-            .padding(.top, 16)
+            .padding(.top, compact ? 10 : 14)
 
             // Kroki z HealthKit — tylko gdy integracja „Zdrowie" włączona
             // i dzień nie jest z przyszłości (przyszłość nie ma czego
             // pokazać, nawet zera).
-            if stepsBarVisible(on: date) {
+            if showsSteps {
                 let day = sessionStore.healthStepsStore?.steps(for: date)
                 EditorialStepsBar(
                     steps: day?.steps,
                     goal: stepsGoal,
                     source: day?.source
                 )
-                .padding(.top, 26)
+                .padding(.top, compact ? 14 : 22)
             }
 
             if !hasMeals {
@@ -819,17 +867,10 @@ struct CalendarView: View {
                     onAskAssistant: { sessionStore.dashboardTab = .assistant },
                     onOpenPlan: { sessionStore.dashboardTab = .plan }
                 )
-                .padding(.top, 24)
+                .padding(.top, 20)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 10)
-        .padding(.horizontal, SCPageMetrics.horizontal)
-        // Świeża tożsamość na każdy dzień: bez niej talerz próbowałby
-        // przeprowadzić śniadanie poniedziałku w śniadanie wtorku dokładnie
-        // wtedy, gdy `DayPager` przesuwa całą stronę — dwie animacje na
-        // jednym ruchu. Ta sama reguła co na osi Planu tygodnia.
-        .id(MealCalendarStore.dateKey(for: date))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     /// Długie przytrzymanie talerza: odhaczenie, szczegóły i ulubione.
