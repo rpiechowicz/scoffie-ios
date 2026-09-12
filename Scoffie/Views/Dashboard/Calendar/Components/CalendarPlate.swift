@@ -42,16 +42,31 @@ import SwiftUI
 //     wyglądało jak obiad. Odhaczenie schodzi na neutralny kolor pisma
 //     (`Color.scChecked`), tak jak od dawna robi to sama pieczątka; pory
 //     zostają swoje.
-//  6. **Przełożone danie WZNOSI SIĘ z tacy.** Makieta miała jeden „pop”
-//     w miejscu; my próbowaliśmy wjazdu z boku (przeskok) i rozkwitu od
-//     środka (poprawny, ale niemy — nie mówił, skąd danie przyszło). Teraz
-//     stuknięty talerzyk unosi się ze swojego miejsca w sekwencji na środek,
-//     rosnąc w locie, a dotychczasowe danie opada z powrotem do swojej pory
-//     i gaśnie — jak podniesienie talerza z tacy. Każdy talerz zna miejsce
-//     własnej pory (`origin`), więc wznoszenie i opadanie są dokładne w obu
-//     kierunkach. Zmiana DNIA to co innego: wtedy cały dzień jedzie w bok
-//     obrotem tacy (`CalendarView.dayPage`). Rozkwit zostaje jako zapas,
-//     dopóki sekwencja nie zamelduje miejsc (pierwsza klatka).
+//  6. **Przełożone danie WZNOSI SIĘ z tacy — i jest JEDNO.** Makieta miała
+//     jeden „pop” w miejscu; my próbowaliśmy wjazdu z boku (przeskok),
+//     rozkwitu od środka (poprawny, ale niemy — nie mówił, skąd danie
+//     przyszło) i pierwszego wzniesienia, w którym latała półprzezroczysta
+//     KOPIA nad talerzykiem, który dalej stał na tacy, a razem z nią cała
+//     poświata i cień (dwa zdjęcia tego samego dania naraz, plama światła
+//     zjeżdżająca do sekwencji, sprężyna dygocząca na końcu). Teraz stuknięty
+//     talerzyk SCHODZI z tacy w tej samej klatce, w której danie rusza —
+//     w sekwencji zostaje po nim puste miejsce z godziną i porą — a wraca
+//     kryciem dopiero, gdy danie wyląduje (`CalendarPlateStrip.liftingId`).
+//     Leci sam talerz: zdjęcie z rantami, pieczątką i cieniem. Poświata
+//     i echosonda to światło sceny, nie danie — stoją na środku i tylko
+//     zmieniają barwę (`CalendarPlateLight`). Tor jest lekko wygięty w górę
+//     i na zewnątrz, skala wyprzedza drogę (danie idzie ku oczom, zanim
+//     dojedzie na miejsce), a poprzednie danie opada na swój talerzyk
+//     krócej i szybszą krzywą, żeby zejść z drogi, zanim nowe wyląduje
+//     (`PlateFlight`). Każdy talerz zna miejsce własnej pory (`origin`).
+//     **Lot jest odpowiedzią na STUKNIĘCIE i tylko na nie** (`lifts`):
+//     danie, które zmieniło się samo — bo minęła pora i „następny” przeskoczył
+//     na kolejne, albo bo plan przyszedł z serwera zmieniony ręką domownika —
+//     rozkwita w miejscu. Gdyby leciało, leciałoby znad talerzyka, którego
+//     nikt nie zdjął z tacy, i znowu byłyby dwa zdjęcia tego samego dania.
+//     Zmiana DNIA to jeszcze co innego: wtedy cały dzień jedzie w bok obrotem
+//     tacy (`CalendarView.dayPage`). Rozkwit zostaje też jako zapas, dopóki
+//     sekwencja nie zamelduje miejsc (pierwsza klatka).
 
 // MARK: - Danie na talerzu
 
@@ -397,6 +412,13 @@ struct CalendarPlate: View {
     let onToggle: () -> Void
     /// Zdjęcie — otwiera szczegóły. `nil` dla pustej pory i pustego dnia.
     let onOpenDetail: (() -> Void)?
+    /// Czy to danie WŁAŚNIE zostało podniesione stuknięciem — jedyny
+    /// przypadek, w którym wznosi się z tacy. Ekran zdejmuje wtedy jego
+    /// talerzyk z sekwencji na czas lotu, więc na ekranie jest jedno
+    /// zdjęcie. Zmiana, której nikt nie wywołał palcem (minęła pora, plan
+    /// przyszedł z serwera), ma talerzyk na swoim miejscu i dlatego
+    /// rozkwita w miejscu, zamiast lecieć znad własnej kopii.
+    var lifts: Bool = false
     /// Skąd to danie wznosi się na talerz i dokąd z niego opada: środek
     /// jego talerzyka w sekwencji, jako przesunięcie WZGLĘDEM środka talerza.
     /// `nil` = miejsce nieznane (sekwencja jeszcze nie zameldowała) —
@@ -459,6 +481,20 @@ struct CalendarPlate: View {
         // `ZStack` nie jest ozdobą: przejście przy podmianie dania gra tylko
         // wtedy, gdy widok o zmiennej tożsamości siedzi w JAKIMŚ kontenerze.
         ZStack {
+            // Światło sceny POD daniem, poza jego tożsamością: poświata
+            // i echosonda zostają na środku, gdy danie leci z tacy albo na
+            // tacę, i tylko przechodzą barwą pory. Wcześniej siedziały pod
+            // zdjęciem i leciały razem z nim — plama światła zjeżdżała do
+            // sekwencji, a środek gasł na czas lotu.
+            CalendarPlateLight(
+                tint: accent,
+                diameter: size,
+                ringWidth: ringWidth,
+                loud: isUrgent,
+                beats: beats,
+                reduceMotion: reduceMotion
+            )
+
             stage
                 // Podmiana dania na środku. To samo danie odhaczone zostaje
                 // na miejscu — zmienia mu się pierścień i pieczątka, a nie
@@ -525,77 +561,80 @@ struct CalendarPlate: View {
     /// kierunkowego zejścia — kierunek zależał od CELU, a cel przy zejściu
     /// jest już inny.)
     ///
+    /// Dwa ruchy, dwa czasy. Wznoszenie jedzie sprężyną (`lift`) — to ono
+    /// ma uwagę i ma wylądować. Opadanie ma własną, krótszą i szybciej
+    /// startującą krzywą (`settle`, doczepioną do przejścia, więc niezależną
+    /// od transakcji): stare danie najpierw maleje i rusza, dopiero potem
+    /// dojeżdża, więc środek jest wolny, zanim przyleci nowe. Gaśnie po
+    /// drodze, a kończy na talerzyku, który cały czas stoi na tacy i pokazuje
+    /// to samo zdjęcie — lądowanie czyta się jako „wróciło na miejsce”,
+    /// a nie „zniknęło”.
+    ///
+    /// Wznoszenie dostaje tylko danie podniesione PALCEM (`lifts`): wtedy
+    /// i tylko wtedy ekran zdjął jego talerzyk z tacy
+    /// (`CalendarPlateStrip.liftingId`), więc lecące zdjęcie jest jedyne
+    /// na ekranie. Danie, które zmieniło się samo, ma swój talerzyk na
+    /// miejscu i rozkwita w miejscu — lot znad własnej, widocznej kopii
+    /// to dokładnie ten artefakt, dla którego ta wersja powstała.
+    ///
     /// Dopóki sekwencja nie zameldowała miejsc (pierwsza klatka dnia),
-    /// zostaje rozkwit od środka: nowe danie rośnie kryciem od 0,86, stare
-    /// gaśnie i maleje, a kierunek jest tylko dziesięciopunktowym
+    /// zostaje sam rozkwit od środka: nowe danie rośnie kryciem od 0,86,
+    /// stare gaśnie i maleje, a kierunek jest tylko dziesięciopunktowym
     /// przechyłem.
     private var swap: AnyTransition {
         if reduceMotion { return .opacity }
 
+        let bloom = AnyTransition.scale(scale: 0.86).combined(with: .opacity)
+        let fade = AnyTransition.opacity.combined(with: .scale(scale: 0.94))
+
         if let origin {
-            // Wznoszenie zaczyna się od 0,35 krycia: talerzyk pod spodem
-            // i tak stoi, więc danie „odkleja się” od niego, a nie wyłania
-            // z niczego w połowie drogi. Opadanie gaśnie do zera: ląduje na
-            // talerzyku, który już pokazuje to samo zdjęcie, i nie ma czego
-            // zostawiać po sobie — zejście do 0,35 zostawiałoby na talerzyku
-            // przezroczystą kopię, która znikała skokiem po ostatniej klatce.
-            let rise = AnyTransition.modifier(
-                active: PlateLiftEffect(active: true, origin: origin, scale: originScale, dimmed: 0.35),
-                identity: PlateLiftEffect(active: false, origin: origin, scale: originScale, dimmed: 0.35)
-            )
+            // Opadanie należy do KAŻDEJ zmiany dania — także tej, której
+            // nikt nie wywołał palcem: talerz zwalnia środek, wracając tam,
+            // skąd go widać w sekwencji. Przejście zejścia i tak czyta się
+            // z ostatniego przebiegu, w którym stare danie istniało, a wtedy
+            // `lifts` było fałszem (stuknięcie dopiero nadchodziło).
             let settle = AnyTransition.modifier(
-                active: PlateLiftEffect(active: true, origin: origin, scale: originScale, dimmed: 0),
-                identity: PlateLiftEffect(active: false, origin: origin, scale: originScale, dimmed: 0)
+                active: PlateFlight(progress: 0, origin: origin, scale: originScale, fadesOnTray: true),
+                identity: PlateFlight(progress: 1, origin: origin, scale: originScale, fadesOnTray: true)
             )
+            .animation(DayNavigationMotion.settle)
+
+            guard lifts else { return .asymmetric(insertion: bloom, removal: settle) }
+
+            let rise = AnyTransition.modifier(
+                active: PlateFlight(progress: 0, origin: origin, scale: originScale, fadesOnTray: false),
+                identity: PlateFlight(progress: 1, origin: origin, scale: originScale, fadesOnTray: false)
+            )
+            .animation(DayNavigationMotion.lift)
             return .asymmetric(insertion: rise, removal: settle)
         }
 
-        let removal = AnyTransition.opacity.combined(with: .scale(scale: 0.94))
-        let bloom = AnyTransition.scale(scale: 0.86).combined(with: .opacity)
         if direction == 0 {
-            return .asymmetric(insertion: bloom, removal: removal)
+            return .asymmetric(insertion: bloom, removal: fade)
         }
         let lean = AnyTransition.offset(x: CGFloat(direction) * 10)
-        return .asymmetric(insertion: bloom.combined(with: lean), removal: removal)
+        return .asymmetric(insertion: bloom.combined(with: lean), removal: fade)
     }
 
     /// Talerz w rytmie serca.
     ///
     /// `TimelineView` z harmonogramem animacji odczytuje zegar co klatkę,
     /// ALE tylko dopóki serce bije (`paused`): talerz, który stoi, nie
-    /// kosztuje ani jednej klatki. Z jednej chwili zegara biorą się trzy
-    /// rzeczy naraz — skala talerza, poświata i fale echosondy — więc nie
-    /// mają jak się rozjechać.
+    /// kosztuje ani jednej klatki. Poświata i fale (`CalendarPlateLight`)
+    /// mają własny odczyt tego samego harmonogramu — obie warstwy pauzują
+    /// i ruszają tym samym `beats` w tym samym przebiegu, a `CalendarHeartbeat`
+    /// liczy z czasu czystą funkcją, więc różnica faz jest podklatkowa przy
+    /// 84-milisekundowym zboczu uderzenia. Mieszkają osobno, bo talerz ma
+    /// tożsamość dania i leci z nim na tacę, a światło zostaje na scenie.
     private var plate: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beats)) { context in
             let beat = beats ? CalendarHeartbeat.beat(at: context.date) : 0
-            let waves = beats ? CalendarHeartbeat.waves(at: context.date) : []
 
             plateBody
                 // Talerz oddycha razem z uderzeniem — dwa i pół procenta to
                 // tyle, ile widać jako życie, a za mało, żeby zdjęcie
                 // „skakało”.
                 .scaleEffect(1 + 0.024 * beat)
-                // Dwie warstwy pod talerzem, w tej kolejności (pierwsze
-                // `.background` leży bliżej wierzchu): echosonda, głębiej
-                // poświata.
-                .background {
-                    if isUrgent, reduceMotion {
-                        // Bez ruchu zostaje sam mocny pierścień — w miejscu,
-                        // w którym fala spędza połowę swojego życia.
-                        Circle()
-                            .strokeBorder(accent.opacity(0.55), lineWidth: ringWidth * 1.5)
-                            .frame(width: size, height: size)
-                            .scaleEffect(1.24)
-                    } else {
-                        ForEach(Array(waves.enumerated()), id: \.offset) { _, wave in
-                            CalendarPlateWave(tint: accent, diameter: size, lineWidth: ringWidth * 1.6, progress: wave)
-                        }
-                    }
-                }
-                .background {
-                    CalendarPlateGlow(tint: accent, diameter: size * 2.2, loud: isUrgent, beat: beat)
-                }
         }
     }
 
@@ -721,8 +760,11 @@ private struct CalendarPlateGlow: View {
             .offset(y: -diameter * 0.05)
             .scaleEffect(1 + 0.16 * beat)
             .opacity((loud ? 0.55 : 0.72) + 0.45 * beat)
-            .animation(.smooth(duration: 0.45), value: tint)
-            .animation(.smooth(duration: 0.45), value: loud)
+            // Barwa i siła światła osiadają razem z daniem, nie po nim:
+            // przy 0,45 s poświata dochodziła do koloru nowej pory grubo po
+            // tym, jak talerz już stał.
+            .animation(.smooth(duration: 0.3), value: tint)
+            .animation(.smooth(duration: 0.3), value: loud)
             .allowsHitTesting(false)
     }
 }
@@ -755,28 +797,137 @@ private struct CalendarPlateWave: View {
     }
 }
 
-// MARK: - Wzniesienie z tacy
+// MARK: - Światło sceny
 
-/// Danie w drodze między swoim talerzykiem a talerzem.
+/// Poświata i echosonda pod talerzem — w rytmie serca, ale POZA daniem.
 ///
-/// `active` = na talerzyku: zmniejszone do jego rozmiaru, przesunięte na
-/// jego środek i przygaszone do `dimmed`. `identity` = na talerzu. SwiftUI
-/// interpoluje skalę, przesunięcie i krycie między tymi dwoma stanami
-/// sprężyną wzniesienia — modyfikator nie musi być `Animatable`, bo
-/// animowalne są modyfikatory, które nakłada. Skala PRZED przesunięciem:
-/// zdjęcie kurczy się wokół własnego środka, a ten środek jedzie po prostej
-/// między talerzem a talerzykiem, w punktach kolumny dnia.
-private struct PlateLiftEffect: ViewModifier {
-    let active: Bool
+/// Osobny widok z własnym odczytem zegara, bo talerz ma tożsamość dania
+/// i przy przełożeniu leci z tacy albo na tacę — a światło jest sceną
+/// i ma stać na środku, tylko zmieniając barwę pory. Harmonogram jest ten
+/// sam co w `CalendarPlate.plate`, oba widoki pauzują i ruszają tym samym
+/// `beats` w tym samym przebiegu, a `CalendarHeartbeat` liczy z czasu
+/// czystą funkcją — więc oddech talerza i uderzenie poświaty padają razem
+/// z dokładnością do klatki (zbocze uderzenia trwa 84 ms, więc tego nie
+/// widać). Dwie warstwy w kolejności od spodu: głębiej poświata, bliżej
+/// wierzchu echosonda.
+private struct CalendarPlateLight: View {
+    let tint: Color
+    let diameter: CGFloat
+    let ringWidth: CGFloat
+    /// Czy jest co robić — mocniejsza poświata i fale.
+    let loud: Bool
+    /// Czy serce bije: jest co robić i ruch nie jest wyłączony w dostępności.
+    let beats: Bool
+    let reduceMotion: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beats)) { context in
+            let beat = beats ? CalendarHeartbeat.beat(at: context.date) : 0
+            let waves = beats ? CalendarHeartbeat.waves(at: context.date) : []
+
+            ZStack {
+                CalendarPlateGlow(tint: tint, diameter: diameter * 2.2, loud: loud, beat: beat)
+
+                if loud, reduceMotion {
+                    // Bez ruchu zostaje sam mocny pierścień — w miejscu,
+                    // w którym fala spędza połowę swojego życia.
+                    Circle()
+                        .strokeBorder(tint.opacity(0.55), lineWidth: ringWidth * 1.5)
+                        .frame(width: diameter, height: diameter)
+                        .scaleEffect(1.24)
+                } else {
+                    ForEach(Array(waves.enumerated()), id: \.offset) { _, wave in
+                        CalendarPlateWave(tint: tint, diameter: diameter, lineWidth: ringWidth * 1.6, progress: wave)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Lot z tacy
+
+/// Danie w drodze między swoim talerzykiem a talerzem — cała geometria lotu
+/// policzona z JEDNEJ interpolowanej liczby.
+///
+/// `progress` 0 = na talerzyku (zmniejszone do jego rozmiaru, na jego
+/// środku), 1 = na talerzu. `Animatable` po `progress`: SwiftUI interpoluje
+/// surową liczbę sprężyną albo krzywą doczepioną do przejścia, a kształt
+/// ruchu liczy się z niej w każdej klatce. Dzięki temu CZAS i TOR są dwiema
+/// osobnymi decyzjami — przy interpolowaniu gotowych `scaleEffect` i `offset`
+/// (tak robił poprzedni `PlateLiftEffect`) tor był z konieczności prostą,
+/// a skala jechała dokładnie w takt drogi.
+///
+/// To samo `animatableData` niesie `SCIslandMorph` i `DayTurnEffect`, ale one
+/// są nakładane przez `.modifier(...)` ze stanem animowanym `withAnimation`;
+/// tutaj modyfikator jest PRZEJŚCIEM (`AnyTransition.modifier(active:identity:)`),
+/// gdzie interpoluje go `ModifiedContent: Animatable`. Gdyby ta droga kiedyś
+/// przestała działać, objaw jest jednoznaczny: danie przeskakuje z talerzyka
+/// na talerz w jednej klatce, zamiast lecieć.
+///
+/// Tor: prosta od talerzyka do talerza, wygięta łukiem w GÓRĘ — danie
+/// podniesione z tacy najpierw się unosi, potem idzie nad resztą dań na
+/// środek. Łuk jest pionowy, a nie prostopadły do drogi, bo prostopadła
+/// dla talerzyka stojącego wprost pod talerzem jest pozioma i danie
+/// wahałoby się na boki. Amplituda rośnie z odległością (12 %) i ma sufit,
+/// żeby skrajna pora nie zataczała półkola; przy najczęstszym ruchu —
+/// na sąsiednią porę — wychodzi ~25 pt, czyli tyle, ile widać.
+///
+/// Skala prowadzi albo zostaje w tyle, zależnie od kierunku. Wznoszenie:
+/// 1 − (1 − t)^1,3 — danie rośnie ku oczom, zanim dojedzie na miejsce, jak
+/// przedmiot podnoszony do twarzy. Opadanie: t^1,3 — najpierw maleje (czyli
+/// oddala się od oka), dopiero potem dojeżdża, więc zwalnia środek dla dania,
+/// które nadlatuje. Ta sama krzywa odwrócona, nie dwie różne.
+///
+/// Skala PRZED przesunięciem: zdjęcie kurczy się wokół własnego środka,
+/// a ten środek jedzie po torze w punktach kolumny dnia.
+///
+/// Krycie: danie wznoszące się leci pełne od pierwszej klatki (jego
+/// talerzyk zszedł z tacy, więc nie ma czego dublować). Danie opadające
+/// (`fadesOnTray`) gaśnie przez ostatnią POŁOWĘ drogi — dość wcześnie, żeby
+/// nie zniknąć skokiem w powietrzu, i dość późno, żeby rozpłynąć się dopiero
+/// w talerzyku, który pokazuje to samo zdjęcie.
+///
+/// `zIndex` rozstrzyga spór, którego SwiftUI nie rozstrzyga sam: przy
+/// wymianie tożsamości oba wystąpienia żyją przez chwilę obok siebie w tym
+/// samym `ZStack`, a kolejność ich rysowania nie jest udokumentowana.
+/// Nadlatujące danie ma leżeć NA odchodzącym — inaczej przez pół lotu
+/// chowałoby się za nim.
+private struct PlateFlight: ViewModifier, Animatable {
+    var progress: CGFloat
+    /// Środek talerzyka względem środka talerza.
     let origin: CGPoint
+    /// Rozmiar talerzyka w stosunku do talerza.
     let scale: CGFloat
-    let dimmed: Double
+    /// Czy to danie ODCHODZI na tacę (`true`) czy z niej wznosi się (`false`).
+    let fadesOnTray: Bool
+
+    /// Sufit łuku. Powyżej ruch przestaje czytać się jako podniesienie,
+    /// a zaczyna jako huśtawka.
+    private static let maxBow: CGFloat = 30
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
 
     func body(content: Content) -> some View {
+        let t = min(max(progress, 0), 1)
+        let grow = fadesOnTray
+            ? CGFloat(pow(Double(t), 1.3))
+            : 1 - CGFloat(pow(Double(1 - t), 1.3))
+        // Sinus po drodze: zero na obu końcach, więc start i lądowanie są
+        // dokładnie na talerzyku i na talerzu, a maksimum w połowie lotu.
+        let length = (origin.x * origin.x + origin.y * origin.y).squareRoot()
+        let bow = min(Self.maxBow, 0.12 * length) * CGFloat(sin(Double(t) * Double.pi))
+        let opacity: Double = fadesOnTray ? Double(min(1, t / 0.5)) : 1
+
         content
-            .scaleEffect(active ? scale : 1)
-            .offset(x: active ? origin.x : 0, y: active ? origin.y : 0)
-            .opacity(active ? dimmed : 1)
+            .scaleEffect(scale + (1 - scale) * grow)
+            .offset(x: origin.x * (1 - t), y: origin.y * (1 - t) - bow)
+            .opacity(opacity)
+            .zIndex(fadesOnTray ? 0 : 1)
     }
 }
 

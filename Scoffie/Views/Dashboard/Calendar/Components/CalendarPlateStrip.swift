@@ -43,6 +43,11 @@ struct CalendarPlateStrip: View {
     /// jaki ma talerzyk NIEWYBRANY. Z tego talerz wie, skąd danie wznosi się
     /// na środek i dokąd opada z powrotem (`CalendarPlate.origin`).
     var onCellCenter: ((CalendarPlateItem, CGPoint, CGFloat) -> Void)?
+    /// Danie, które właśnie unosi się z tacy na talerz: jego talerzyk stoi
+    /// pusty (zostaje godzina i pora), dopóki danie nie wyląduje. Na ekranie
+    /// jest wtedy JEDNO zdjęcie tego dania — to, które leci — a nie kopia
+    /// nad talerzykiem, który dalej stoi. `nil` = nic nie leci.
+    var liftingId: String? = nil
     let onSelect: (CalendarPlateItem) -> Void
 
     /// Nazwa przestrzeni współrzędnych, którą dzień zakłada na swojej
@@ -67,6 +72,11 @@ struct CalendarPlateStrip: View {
     /// wyższe, żeby obwódka nie wchodziła w odstęp nad sekwencją ani
     /// w podpis pod nią.
     private static let ringOverhang: CGFloat = 3
+    /// Powrót talerzyka na tacę po locie dania. Jawna stała, a nie wyrażenie
+    /// w argumencie: warunek z `nil` po jednej stronie i wnioskowanym typem
+    /// po drugiej potrafi w tym projekcie dać „ambiguous use of 'init'”
+    /// zgłoszone kilkadziesiąt linii wyżej (patrz `ShoppingClosedHero`).
+    private static let trayReturn: Animation = .easeOut(duration: 0.22)
 
     private var gap: CGFloat { items.count > 4 ? 8 : 10 }
 
@@ -187,7 +197,9 @@ struct CalendarPlateStrip: View {
     }
 
     private func plate(_ item: CalendarPlateItem, size: CGFloat, isSelected: Bool) -> some View {
-        CalendarPlateFace(item: item, size: size)
+        let lifted = item.id == liftingId
+
+        return CalendarPlateFace(item: item, size: size)
             .saturation(item.isEaten ? 0.45 : 1)
             .opacity(item.isEaten ? 0.6 : isSelected ? 1 : 0.78)
             .overlay {
@@ -215,6 +227,15 @@ struct CalendarPlateStrip: View {
                 }
             }
             .animation(DayNavigationMotion.spring, value: item.status)
+            // Talerzyk w locie schodzi z tacy BEZ animacji, w tej samej
+            // klatce, w której danie rusza (gasnący talerzyk pod startującym
+            // daniem to znowu dwa zdjęcia), a wraca kryciem, gdy danie
+            // wyląduje. Odcisk na `lifted`, nie na `selectedId`: wybór
+            // zmienia się też przy zmianie dnia i przy odhaczeniu, a wtedy
+            // nic nie leci. Godzina i pora pod spodem stoją cały czas —
+            // to one trzymają miejsce, z którego danie wyszło.
+            .opacity(lifted ? 0 : 1)
+            .animation(lifted ? nil : Self.trayReturn, value: lifted)
     }
 
     /// Obwódka talerzyka. `nil` = bez obwódki (zwykłe danie, nie wybrane).
