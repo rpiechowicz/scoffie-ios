@@ -74,7 +74,7 @@ jobs:
         # SHA = tag v5.0.3 (sprawdzone 13.09.2026). Dependabot ma otwarty PR
         # na 7.0.0; podniesienie wymaga przejrzenia zmian w akcji, nie samego
         # przyjęcia PR-a — i buildu, którego dziś nie ma jak uruchomić.
-        uses: apple-actions/import-codesign-certs@95e84a1a18f2bdbc5c6ab9b7f4429372e4b13a8b # v5.0.3
+        uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
         with:
           p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
           p12-password: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
