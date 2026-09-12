@@ -163,11 +163,27 @@ enum AssistantAnswerParser {
 
     /// Markdown liniowy (`**pogrubienie**`) na `AttributedString`. Gdy tekst
     /// nie da się sparsować, wraca goły — lepszy niż pusty dymek.
+    ///
+    /// LINKI SĄ ZDEJMOWANE (audyt 12.09.2026). Parser markdownu zachowuje
+    /// atrybut `.link`, a `Text` renderuje go jako dotykalny i otwiera
+    /// środowiskowym `openURL` — czyli, przy braku nadpisania, dowolny adres
+    /// i dowolny schemat, także cudzej aplikacji. Treść odpowiedzi pochodzi
+    /// od modelu, a model czyta tytuły przepisów gospodarstwa, które wpisuje
+    /// domownik: to gotowa droga na podsunięcie komuś „Odnów subskrypcję”
+    /// prowadzącego na obcą stronę. Serwer takiej składni już nie zapisuje,
+    /// ale stare rozmowy w historii mają ją nadal, a klient nie ma prawa
+    /// polegać na tym, że druga strona zawsze posprząta.
+    ///
+    /// Formatowanie zostaje, znika sama klikalność.
     static func inline(_ text: String) -> AttributedString {
-        (try? AttributedString(
+        var parsed = (try? AttributedString(
             markdown: text,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         )) ?? AttributedString(text)
+        for run in parsed.runs where run.link != nil {
+            parsed[run.range].link = nil
+        }
+        return parsed
     }
 }
 

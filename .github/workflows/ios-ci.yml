@@ -26,12 +26,17 @@ jobs:
       # bez tego uprawnienia kończy się 403 „Resource not accessible".
       pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+          persist-credentials: false
+      # Przypięte do commita, nie do ruchomego taga `v2`: akcja dostaje
+      # GITHUB_TOKEN, a tag można przestawić na dowolny kod w dowolnej chwili.
+      # SHA = tag v2 (sprawdzone 13.09.2026).
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.30.1
 
   build:
     runs-on: macos-latest
@@ -44,6 +49,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Select Xcode 26
         run: |
