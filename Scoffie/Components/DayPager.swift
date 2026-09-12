@@ -13,12 +13,41 @@ import SwiftUI
 enum DayNavigationMotion {
     static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
 
-    /// Wzniesienie dania z tacy na talerz (i opadanie z powrotem) —
-    /// odrobinę dłuższe i z wyraźniejszym odbiciem niż zmiana dnia, bo to
-    /// ruch JEDNEGO przedmiotu, który ma wylądować, a nie sceny, która ma
-    /// się przestawić. Tą samą sprężyną rośnie wybrany talerzyk w sekwencji,
-    /// żeby oba końce ruchu osiadały razem.
-    static let lift: Animation = .spring(response: 0.46, dampingFraction: 0.78)
+    /// Wzniesienie dania z tacy na talerz — ruch JEDNEGO przedmiotu, który
+    /// ma wylądować, a nie sceny, która ma się przestawić.
+    ///
+    /// Wolniejszy od zmiany dnia o całą klasę, nie o kilka setnych: talerz
+    /// ma 168 pt średnicy i przebywa pół ekranu, a `spring` (0,34) domyka
+    /// taki ruch w ~175 ms, czyli tak samo szybko jak przeskok bąbla na
+    /// pasku dni. Apple przenosi obiekty tej wielkości (zdjęcie siatka →
+    /// pełny ekran, karta App Store) w 0,35–0,5 s. Tłumienie 0,86: przy
+    /// 0,78 ostatnie klatki były dygotaniem zdjęcia o kilka punktów,
+    /// tu przeregulowanie to pół procenta. Tą samą sprężyną jedzie nadpis,
+    /// podpis i wybrany talerzyk w sekwencji, żeby wszystko osiadało razem.
+    static let lift: Animation = .spring(response: 0.44, dampingFraction: 0.86)
+
+    /// Opadanie poprzedniego dania z talerza na jego talerzyk.
+    ///
+    /// `easeOut`, nie `easeIn`: oko idzie za daniem, które przychodzi,
+    /// a to, które odchodzi, ma ZEJŚĆ Z DROGI, zanim tamto dojedzie.
+    /// Krzywa zwlekająca na starcie (easeIn) trzymała stare danie w pełnym
+    /// rozmiarze na środku jeszcze wtedy, gdy nowe już nadlatywało — przez
+    /// ~120 ms leżały na sobie dwa prawie identycznej wielkości talerze
+    /// i nie było widać, które jest ważne. Tu ruch zaczyna się od razu
+    /// i wygasa dopiero przy talerzyku, więc lądowanie jest miękkie,
+    /// a środek pusty, zanim przyleci nowe danie.
+    static let settle: Animation = .easeOut(duration: 0.28)
+
+    /// Kiedy talerzyk w sekwencji wraca na tacę po locie dania.
+    ///
+    /// Nie „gdy sprężyna osiądzie”, tylko gdy danie jest już wizualnie na
+    /// miejscu (sprężyna `lift` ma wtedy ~75 % drogi za sobą, a talerz jest
+    /// o kilkanaście punktów od środka i trzy razy większy od talerzyka —
+    /// pomylić się nie da). Powrót ma się NAŁOŻYĆ na osiadanie: talerzyk
+    /// wracający po tym, jak na ekranie wszystko już stanęło, jest samotnym
+    /// ruchem, który przyciąga oko i czyta się jako „coś się pojawiło”,
+    /// a nie jako koniec gestu.
+    static let liftDuration: Duration = .milliseconds(260)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.
