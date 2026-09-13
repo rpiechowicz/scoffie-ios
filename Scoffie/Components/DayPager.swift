@@ -38,16 +38,23 @@ enum DayNavigationMotion {
     /// a środek pusty, zanim przyleci nowe danie.
     static let settle: Animation = .easeOut(duration: 0.28)
 
-    /// Kiedy talerzyk w sekwencji wraca na tacę po locie dania.
+    /// Kiedy sprężyna lotu jest NAPRAWDĘ po wszystkim — jedyna chwila,
+    /// w której wolno zmienić stan mówiący, CZY danie leci.
     ///
-    /// Nie „gdy sprężyna osiądzie”, tylko gdy danie jest już wizualnie na
-    /// miejscu (sprężyna `lift` ma wtedy ~75 % drogi za sobą, a talerz jest
-    /// o kilkanaście punktów od środka i trzy razy większy od talerzyka —
-    /// pomylić się nie da). Powrót ma się NAŁOŻYĆ na osiadanie: talerzyk
-    /// wracający po tym, jak na ekranie wszystko już stanęło, jest samotnym
-    /// ruchem, który przyciąga oko i czyta się jako „coś się pojawiło”,
-    /// a nie jako koniec gestu.
-    static let liftDuration: Duration = .milliseconds(260)
+    /// SwiftUI czyta `.transition(...)` przy każdym przebiegu, także wtedy,
+    /// gdy widok jest w połowie wstawiania. Zmiana wartości przejścia
+    /// w locie zdejmuje z widoku modyfikator, który go prowadzi
+    /// (`PlateFlight`) — i danie dokańcza drogę w jednej klatce, a na koniec
+    /// jeszcze „pyknie” skalą przejścia, które weszło na jego miejsce.
+    /// Dokładnie ten objaw dawał zegar 260 ms: sprężyna `lift` jest wtedy
+    /// na ~95 % drogi (nie na 75 %, jak zakładała poprzednia wersja), więc
+    /// przeskok wypadał punkt w punkt na lądowaniu — czyli tam, gdzie oko
+    /// już patrzy.
+    ///
+    /// 700 ms to sprężyna 0,44/0,86 osiadła do promila (~600 ms) plus zapas
+    /// na klatkę. Nic się o tej chwili nie rusza: gaśnie tylko kierunek
+    /// i pamięć stuknięcia, a talerz stoi już od dawna.
+    static let liftSettled: Duration = .milliseconds(700)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.

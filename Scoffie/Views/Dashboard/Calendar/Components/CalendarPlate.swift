@@ -42,31 +42,40 @@ import SwiftUI
 //     wyglądało jak obiad. Odhaczenie schodzi na neutralny kolor pisma
 //     (`Color.scChecked`), tak jak od dawna robi to sama pieczątka; pory
 //     zostają swoje.
-//  6. **Przełożone danie WZNOSI SIĘ z tacy — i jest JEDNO.** Makieta miała
-//     jeden „pop” w miejscu; my próbowaliśmy wjazdu z boku (przeskok),
-//     rozkwitu od środka (poprawny, ale niemy — nie mówił, skąd danie
-//     przyszło) i pierwszego wzniesienia, w którym latała półprzezroczysta
-//     KOPIA nad talerzykiem, który dalej stał na tacy, a razem z nią cała
-//     poświata i cień (dwa zdjęcia tego samego dania naraz, plama światła
-//     zjeżdżająca do sekwencji, sprężyna dygocząca na końcu). Teraz stuknięty
-//     talerzyk SCHODZI z tacy w tej samej klatce, w której danie rusza —
-//     w sekwencji zostaje po nim puste miejsce z godziną i porą — a wraca
-//     kryciem dopiero, gdy danie wyląduje (`CalendarPlateStrip.liftingId`).
-//     Leci sam talerz: zdjęcie z rantami, pieczątką i cieniem. Poświata
-//     i echosonda to światło sceny, nie danie — stoją na środku i tylko
-//     zmieniają barwę (`CalendarPlateLight`). Tor jest lekko wygięty w górę
-//     i na zewnątrz, skala wyprzedza drogę (danie idzie ku oczom, zanim
-//     dojedzie na miejsce), a poprzednie danie opada na swój talerzyk
-//     krócej i szybszą krzywą, żeby zejść z drogi, zanim nowe wyląduje
-//     (`PlateFlight`). Każdy talerz zna miejsce własnej pory (`origin`).
-//     **Lot jest odpowiedzią na STUKNIĘCIE i tylko na nie** (`lifts`):
-//     danie, które zmieniło się samo — bo minęła pora i „następny” przeskoczył
-//     na kolejne, albo bo plan przyszedł z serwera zmieniony ręką domownika —
-//     rozkwita w miejscu. Gdyby leciało, leciałoby znad talerzyka, którego
-//     nikt nie zdjął z tacy, i znowu byłyby dwa zdjęcia tego samego dania.
-//     Zmiana DNIA to jeszcze co innego: wtedy cały dzień jedzie w bok obrotem
-//     tacy (`CalendarView.dayPage`). Rozkwit zostaje też jako zapas, dopóki
-//     sekwencja nie zamelduje miejsc (pierwsza klatka).
+//  6. **Przełożone danie WZNOSI SIĘ z tacy.** Makieta miała jeden „pop”
+//     w miejscu; my próbowaliśmy wjazdu z boku (przeskok), rozkwitu od
+//     środka (poprawny, ale niemy — nie mówił, skąd danie przyszło),
+//     wzniesienia półprzezroczystej KOPII razem z poświatą i cieniem
+//     (plama światła zjeżdżająca do sekwencji), a potem — trzy wydania —
+//     gaszenia stukniętego talerzyka na czas lotu. To ostatnie było
+//     lekarstwem na chorobę, której nie ma: sekwencja jest wskaźnikiem,
+//     nie tacą, więc wybrane danie widać na talerzu i w sekwencji CAŁY
+//     CZAS, także gdy nic się nie rusza. Gaszenie nie usuwało duplikatu,
+//     tylko dokładało mrugnięcie pod palcem — na własnym zegarze, obok
+//     zegara lotu. Teraz jest odwrotnie: talerzyk STOI, a lot zaczyna się
+//     i kończy dokładnie na nim i w jego rozmiarze, więc na obu końcach
+//     kopia i talerzyk leżą punkt w punkt i duplikatu nie da się zobaczyć.
+//     Rusza się jedna rzecz.
+//
+//     Leci sam talerz: zdjęcie z rantami, pieczątką i cieniem. Tor jest
+//     lekko wygięty w górę i na zewnątrz, skala wyprzedza drogę (danie
+//     idzie ku oczom, zanim dojedzie na miejsce), a poprzednie danie opada
+//     na swój talerzyk krócej i szybszą krzywą, żeby zejść z drogi, zanim
+//     nowe wyląduje (`PlateFlight`). Każdy talerz zna miejsce własnej pory
+//     (`origin`). Poświata i echosonda zostają na środku — ale przygasają
+//     na czas przelotu i wzbierają z lądowaniem (`swap` i `seat`): świeci
+//     danie na talerzu, a nie sam talerz, więc pusta świecąca obręcz
+//     w kolorze pory była trzecim objawem tej samej usterki.
+//
+//     **Lot jest odpowiedzią na STUKNIĘCIE i tylko na nie** (`lifts`) —
+//     danie, które zmieniło się samo (minęła pora, plan przyszedł z serwera
+//     zmieniony ręką domownika), rozkwita w miejscu. I **`lifts` nie wolno
+//     zgasić, dopóki sprężyna nie osiądzie**: przejście czytane w połowie
+//     wstawiania zdejmuje z dania modyfikator lotu, a wtedy ostatni odcinek
+//     zalicza w jednej klatce. Zmiana DNIA to jeszcze co innego: wtedy cały
+//     dzień jedzie w bok obrotem tacy (`CalendarView.dayPage`). Rozkwit
+//     zostaje też jako zapas, dopóki sekwencja nie zamelduje miejsc
+//     (pierwsza klatka).
 
 // MARK: - Danie na talerzu
 
@@ -413,11 +422,14 @@ struct CalendarPlate: View {
     /// Zdjęcie — otwiera szczegóły. `nil` dla pustej pory i pustego dnia.
     let onOpenDetail: (() -> Void)?
     /// Czy to danie WŁAŚNIE zostało podniesione stuknięciem — jedyny
-    /// przypadek, w którym wznosi się z tacy. Ekran zdejmuje wtedy jego
-    /// talerzyk z sekwencji na czas lotu, więc na ekranie jest jedno
-    /// zdjęcie. Zmiana, której nikt nie wywołał palcem (minęła pora, plan
-    /// przyszedł z serwera), ma talerzyk na swoim miejscu i dlatego
-    /// rozkwita w miejscu, zamiast lecieć znad własnej kopii.
+    /// przypadek, w którym wznosi się z tacy. Zmiana, której nikt nie
+    /// wywołał palcem (minęła pora, plan przyszedł z serwera), rozkwita
+    /// w miejscu: ruch przez pół ekranu jest odpowiedzią na gest, a nie
+    /// komunikatem.
+    ///
+    /// Ekran MUSI trzymać tę prawdę przez cały lot i zgasić ją dopiero
+    /// po `DayNavigationMotion.liftSettled` — zmiana w locie zdejmuje
+    /// z lecącego dania jego modyfikator (patrz `swap`).
     var lifts: Bool = false
     /// Skąd to danie wznosi się na talerz i dokąd z niego opada: środek
     /// jego talerzyka w sekwencji, jako przesunięcie WZGLĘDEM środka talerza.
@@ -481,11 +493,14 @@ struct CalendarPlate: View {
         // `ZStack` nie jest ozdobą: przejście przy podmianie dania gra tylko
         // wtedy, gdy widok o zmiennej tożsamości siedzi w JAKIMŚ kontenerze.
         ZStack {
-            // Światło sceny POD daniem, poza jego tożsamością: poświata
-            // i echosonda zostają na środku, gdy danie leci z tacy albo na
-            // tacę, i tylko przechodzą barwą pory. Wcześniej siedziały pod
-            // zdjęciem i leciały razem z nim — plama światła zjeżdżała do
-            // sekwencji, a środek gasł na czas lotu.
+            // Światło sceny POD daniem: poświata i echosonda zostają na
+            // środku, gdy danie leci z tacy albo na tacę, i nie jadą razem
+            // z nim (plama światła zjeżdżająca do sekwencji to był poprzedni
+            // objaw). Ale nie stoją NIERUCHOMO: świeci talerz z daniem, nie
+            // sam talerz, więc na czas lotu światło przygasa i wraca wraz
+            // z lądowaniem (`seat`). Bez tego przez ~350 ms — tyle trwa
+            // przelot — na środku świeciła pusta obręcz w kolorze pory,
+            // z falą echosondy i bez zdjęcia w środku.
             CalendarPlateLight(
                 tint: accent,
                 diameter: size,
@@ -494,6 +509,8 @@ struct CalendarPlate: View {
                 beats: beats,
                 reduceMotion: reduceMotion
             )
+            .id(item?.id ?? "empty")
+            .transition(seat)
 
             stage
                 // Podmiana dania na środku. To samo danie odhaczone zostaje
@@ -570,12 +587,22 @@ struct CalendarPlate: View {
     /// to samo zdjęcie — lądowanie czyta się jako „wróciło na miejsce”,
     /// a nie „zniknęło”.
     ///
-    /// Wznoszenie dostaje tylko danie podniesione PALCEM (`lifts`): wtedy
-    /// i tylko wtedy ekran zdjął jego talerzyk z tacy
-    /// (`CalendarPlateStrip.liftingId`), więc lecące zdjęcie jest jedyne
-    /// na ekranie. Danie, które zmieniło się samo, ma swój talerzyk na
-    /// miejscu i rozkwita w miejscu — lot znad własnej, widocznej kopii
-    /// to dokładnie ten artefakt, dla którego ta wersja powstała.
+    /// Wznoszenie dostaje tylko danie podniesione PALCEM (`lifts`) — nie
+    /// dlatego, że lot nad stojącym talerzykiem szkodzi (nie szkodzi, patrz
+    /// `CalendarPlateStrip`), a dlatego, że ruch bez przyczyny szkodzi:
+    /// danie, które zmieniło się samo — bo minęła pora albo plan przyszedł
+    /// z serwera zmieniony ręką domownika — rozkwita w miejscu, bo nikt
+    /// nie pytał o podróż przez pół ekranu.
+    ///
+    /// **`lifts` nie wolno zgasić w trakcie lotu.** SwiftUI czyta
+    /// `.transition(...)` przy KAŻDYM przebiegu, także gdy widok jest
+    /// w połowie wstawiania, więc zmiana `lifts` z prawdy na fałsz zdejmuje
+    /// z lecącego dania `PlateFlight` i zastępuje go rozkwitem: danie kończy
+    /// drogę w jednej klatce i jeszcze pyka skalą 0,86. Ekran gasi więc
+    /// pamięć stuknięcia dopiero po `DayNavigationMotion.liftSettled`,
+    /// grubo po osiadnięciu sprężyny — a nie, jak przez trzy wydania, razem
+    /// z powrotem talerzyka na tacę (260 ms, czyli 95 % drogi: przeskok
+    /// wypadał punkt w punkt na lądowaniu).
     ///
     /// Dopóki sekwencja nie zameldowała miejsc (pierwsza klatka dnia),
     /// zostaje sam rozkwit od środka: nowe danie rośnie kryciem od 0,86,
@@ -614,6 +641,38 @@ struct CalendarPlate: View {
         }
         let lean = AnyTransition.offset(x: CGFloat(direction) * 10)
         return .asymmetric(insertion: bloom.combined(with: lean), removal: fade)
+    }
+
+    /// Światło talerza: przygasa, gdy danie z niego zeszło, i wzbiera, gdy
+    /// nowe siada.
+    ///
+    /// Poświata stoi na środku i nie jeździ z daniem — ale świeci DANIE na
+    /// talerzu, nie sam talerz, więc nie ma prawa świecić pełnym blaskiem
+    /// w chwili, gdy na środku nie ma nic. Bez tego przelot pokazywał pustą
+    /// obręcz w kolorze pory z falą echosondy w środku, przez cały czas lotu.
+    ///
+    /// Dwa czasy, jak przy daniu, tylko odwrotnie rozstawione. Stare światło
+    /// gaśnie SZYBCIEJ niż stare danie odjeżdża (0,18 s), a nowe wzbiera
+    /// WOLNIEJ, niż nowe danie leci, i krzywą, która zwleka na starcie
+    /// (`easeIn` 0,40 s — sprężyna lotu jest na 95 % drogi już po 0,26 s).
+    /// Dzięki temu w połowie przelotu suma obu jest niska: światło wyraźnie
+    /// przygasa, a potem dochodzi do pełni chwilę PO tym, jak danie stanie
+    /// na talerzu. Czyta się to jak zapalanie się talerza pod daniem, a nie
+    /// jak miganie.
+    ///
+    /// Tożsamość po daniu, nie po kolorze: barwa pory zmienia się skokiem
+    /// razem z daniem, a przenikanie robią dwie warstwy. Interpolowanie
+    /// samego `tint` między porami prowadziło przez szarość w połowie drogi.
+    /// Rytm serca nie gubi taktu przy podmianie — `CalendarHeartbeat` liczy
+    /// z zegara bezwzględnego, więc świeży widok wchodzi w tej samej fazie.
+    private var seat: AnyTransition {
+        if reduceMotion { return .opacity }
+
+        let glow = AnyTransition.opacity.combined(with: .scale(scale: 0.9))
+        return .asymmetric(
+            insertion: glow.animation(.easeIn(duration: 0.40)),
+            removal: glow.animation(.easeOut(duration: 0.18))
+        )
     }
 
     /// Talerz w rytmie serca.
@@ -883,11 +942,17 @@ private struct CalendarPlateLight: View {
 /// Skala PRZED przesunięciem: zdjęcie kurczy się wokół własnego środka,
 /// a ten środek jedzie po torze w punktach kolumny dnia.
 ///
-/// Krycie: danie wznoszące się leci pełne od pierwszej klatki (jego
-/// talerzyk zszedł z tacy, więc nie ma czego dublować). Danie opadające
+/// Krycie: danie wznoszące się leci pełne od pierwszej klatki — nie ma czego
+/// dublować, bo w pierwszej klatce LEŻY na swoim talerzyku, w jego rozmiarze
+/// i na jego środku, więc kopia i talerzyk są nieodróżnialne, a potem kopia
+/// od niego odjeżdża. (Talerzyk stoi cały czas; gaszenie go na czas lotu
+/// dawało tylko mrugnięcie — patrz `CalendarPlateStrip`.) Danie opadające
 /// (`fadesOnTray`) gaśnie przez ostatnią POŁOWĘ drogi — dość wcześnie, żeby
 /// nie zniknąć skokiem w powietrzu, i dość późno, żeby rozpłynąć się dopiero
-/// w talerzyku, który pokazuje to samo zdjęcie.
+/// w talerzyku, który pokazuje to samo zdjęcie w tym samym rozmiarze.
+/// Tam ten sam mechanizm działa w drugą stronę: kopia dojeżdża do zera
+/// krycia dokładnie tam, gdzie leży jej odpowiednik, więc przejęcie jest
+/// niewidoczne i nie potrzebuje żadnego zegara.
 ///
 /// `zIndex` rozstrzyga spór, którego SwiftUI nie rozstrzyga sam: przy
 /// wymianie tożsamości oba wystąpienia żyją przez chwilę obok siebie w tym
