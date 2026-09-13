@@ -9,25 +9,45 @@ enum KeychainService {
 
     // MARK: - Public API
 
-    /// Zapisuje wartość w Keychain. Nadpisuje istniejącą wartość jeśli istnieje.
+    /// Zapisuje wartość w Keychain. Nadpisuje istniejącą, jeśli istnieje.
+    ///
+    /// **Nadpisanie idzie `SecItemUpdate`, nie „usuń i dodaj".** Poprzednia
+    /// wersja kasowała wpis, a potem dodawała nowy — i jeśli `SecItemAdd`
+    /// odmówił (Keychain chwilowo niedostępny, brak uprawnienia, pełny
+    /// pęcherz), zostawało PUSTE MIEJSCE zamiast starej wartości. Dla tokenów
+    /// to nie jest nieudany zapis, to koniec sesji: `SessionStore` czyta
+    /// refresh token z Keychaina, brak wpisu znaczy „sesji nie da się
+    /// uratować" i telefon wylogowuje się sam, bez udziału serwera i bez
+    /// jednego żądania w logach. `SecItemUpdate` albo podmienia wartość, albo
+    /// nie robi nic — nigdy nie zostawia dziury.
+    ///
+    /// `kSecAttrAccessible` ustawiamy tylko przy DODAWANIU: przy nadpisaniu
+    /// wpis zachowuje atrybut, z którym powstał, a podmienianie go przy okazji
+    /// zapisu tokenu zmieniałoby po cichu warunki dostępu do już istniejącego
+    /// wpisu.
     @discardableResult
     static func save(_ value: String, forKey key: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
 
-        // Usuń stary wpis przed zapisem (update = delete + add)
-        delete(forKey: key)
-
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String:   data,
-            // Dostępne po odblokowania urządzenia, nie migrowane do innych urządzeń
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccount as String: key
         ]
 
-        let status = SecItemAdd(query as CFDictionary, nil)
-        return status == errSecSuccess
+        let update = SecItemUpdate(
+            query as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary
+        )
+        if update == errSecSuccess { return true }
+        guard update == errSecItemNotFound else { return false }
+
+        var insert = query
+        insert[kSecValueData as String] = data
+        // Dostępne po pierwszym odblokowaniu urządzenia, nie migrowane
+        // do innych urządzeń ani do kopii zapasowej.
+        insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(insert as CFDictionary, nil) == errSecSuccess
     }
 
     /// Odczytuje wartość z Keychain. Zwraca nil jeśli klucz nie istnieje.
