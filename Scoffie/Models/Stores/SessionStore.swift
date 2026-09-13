@@ -2804,8 +2804,32 @@ final class SessionStore {
                     }
                     return .unavailable
                 }
-                KeychainService.save(pair.accessToken, forKey: Keys.accessToken)
-                KeychainService.save(pair.refreshToken, forKey: Keys.refreshToken)
+                // REFRESH TOKEN PIERWSZY, i to nie jest kosmetyka.
+                //
+                // Serwer zrotował parę, więc token, którym właśnie się
+                // posłużyliśmy, jest już martwy — jedyne, co trzyma sesję, to
+                // nowy refresh token. Gdy zapisywany był drugi, a proces ginął
+                // między zapisami (iOS ubija aplikację w tle, aktualizacja
+                // z TestFlighta), w Keychainie zostawał ŚWIEŻY access token
+                // obok MARTWEGO refresh tokenu. Objaw przychodził dopiero po
+                // godzinie albo po nocy: access token wygasał, telefon szedł
+                // po nową parę tym martwym tokenem i dostawał 401.
+                // W tej kolejności ta sama śmierć procesu zostawia świeży
+                // refresh token obok starego access tokenu — a to stan, z
+                // którego aplikacja wychodzi sama, jednym odświeżeniem.
+                let refreshStored = KeychainService.save(pair.refreshToken, forKey: Keys.refreshToken)
+                let accessStored = KeychainService.save(pair.accessToken, forKey: Keys.accessToken)
+                guard refreshStored, accessStored else {
+                    // Nieudany zapis nie jest odmową serwera. Nie kończymy
+                    // sesji: `.unavailable` zostawia ją przy życiu i uzbraja
+                    // termin, więc będzie kolejna próba. Log jest tu jedynym
+                    // śladem — po stronie serwera ta sytuacja wygląda jak
+                    // udane odświeżenie i nie widać jej w żadnym żądaniu.
+                    debugLog(
+                        "[SessionStore] refreshSessionTokens — KEYCHAIN WRITE FAILED refresh=\(refreshStored) access=\(accessStored)"
+                    )
+                    return .unavailable
+                }
                 return .refreshed
             } catch AuthAPIError.unauthorized {
                 return .rejected
