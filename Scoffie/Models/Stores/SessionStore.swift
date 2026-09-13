@@ -234,8 +234,12 @@ final class SessionStore {
         // socket). Chroni to socket po wcześniejszej odmowie; własny
         // auto-reconnect biblioteki może jeszcze wysłać stary token — ewentualna
         // druga rotacja jest ograniczona licznikiem odmów.
-        let tokenAlreadyExpired = accessTokenExpiry().map { $0 <= Date() } ?? false
-        if !tokenAlreadyExpired {
+        // Brak access tokenu liczy się tak samo jak wygasły: nie ma czym budzić
+        // socketu, a próba kończyłaby się odmową serwera i pętlą ponowień
+        // zamiast jednym odświeżeniem.
+        let tokenUsable = currentAccessToken?.isEmpty == false
+            && accessTokenExpiry().map { $0 > Date() } != false
+        if tokenUsable {
             realtimeSocket?.reconnectIfNeeded()
         }
         // Token mógł zbliżyć się do wygaśnięcia, gdy aplikacja spała.
@@ -621,19 +625,32 @@ final class SessionStore {
         // Od Fazy 0 socket i REST wymagają tokenu. `userId` w UserDefaults
         // migruje z backupem telefonu, Keychain (ThisDeviceOnly) nie — bez
         // tokenu „zalogowana" sesja byłaby martwa na każdym ekranie.
-        guard let accessToken = currentAccessToken, !accessToken.isEmpty else {
+        //
+        // ALE: o sesji decyduje REFRESH token, nie access. Access token żyje
+        // godzinę i jest odtwarzalny jednym żądaniem; refresh token jest
+        // jedynym, którego nie da się odzyskać. Brak samego access tokenu przy
+        // ŻYWYM refresh tokenie to nie koniec sesji, tylko stan przejściowy —
+        // i to stan, który `refreshSessionTokens` zostawia CELOWO, gdy zapis
+        // nowej pary padnie w połowie (refresh zapisany, access nie). Kasowanie
+        // sesji w tym miejscu zamieniałoby jeden nieudany zapis w wylogowanie.
+        let accessToken = currentAccessToken
+        if accessToken?.isEmpty != false {
             let status = KeychainService.status(forKey: Keys.accessToken)
-            if status == errSecItemNotFound {
-                debugLog("[SessionStore] restoreSession EARLY RETURN — access token missing")
-                clearPersistedSession()
-            } else {
+            let hasRefreshToken = currentRefreshToken?.isEmpty == false
+            if status != errSecItemNotFound {
                 // Keychain chwilowo niedostępny (proces obudzony przed pierwszym
                 // odblokowaniem po restarcie, przejściowy błąd) — sesja żyje,
                 // wrócimy do niej przy pierwszym wejściu na pierwszy plan.
                 debugLog("[SessionStore] restoreSession deferred — keychain status \(status)")
                 restoreDeferredUntilKeychainAvailable = true
+                return
             }
-            return
+            guard hasRefreshToken else {
+                debugLog("[SessionStore] restoreSession EARLY RETURN — both tokens missing")
+                clearPersistedSession()
+                return
+            }
+            debugLog("[SessionStore] restoreSession — brak access tokenu, ale refresh token żyje: odzyskuję sesję")
         }
         restoreDeferredUntilKeychainAvailable = false
 
@@ -643,8 +660,10 @@ final class SessionStore {
         let householdName = (snapshot.householdName?.isEmpty == false) ? snapshot.householdName : nil
         // Wygasły access token: socket łączyłby się od razu martwym tokenem
         // i każde żądanie startu dostawałoby odmowę, zanim refresh zdąży —
-        // wtedy bootstrap czeka na nową parę.
-        let tokenAlreadyExpired = accessTokenExpiry().map { $0 <= Date() } ?? false
+        // wtedy bootstrap czeka na nową parę. Brak access tokenu liczy się tak
+        // samo jak wygasły: nie ma czym wołać, więc bootstrap czeka.
+        let tokenAlreadyExpired =
+            accessToken?.isEmpty != false || accessTokenExpiry().map { $0 <= Date() } == true
         var deferredBootstrap = false
         if let householdId, !householdId.isEmpty, !tokenAlreadyExpired {
             bootstrapSession(
@@ -2913,7 +2932,18 @@ final class SessionStore {
 
     private func refreshSessionTokensIfExpiringSoon() async {
         guard isAuthenticated || currentUserId != nil else { return }
-        guard let expiry = accessTokenExpiry() else { return }
+        guard let expiry = accessTokenExpiry() else {
+            // Brak access tokenu (albo token bez daty ważności) przy ŻYWYM
+            // refresh tokenie to nie jest „nie ma czego pilnować" — to jest
+            // jedyny moment, w którym trzeba odświeżyć NATYCHMIAST. Wcześniej
+            // ten `guard` wychodził po cichu, więc sesja odzyskana w
+            // `restoreSession` bez access tokenu zostawała bez niego na zawsze:
+            // każde żądanie 401, a nic nie sięgało po nową parę.
+            if currentRefreshToken?.isEmpty == false {
+                await refreshSessionTokens()
+            }
+            return
+        }
         guard expiry.timeIntervalSinceNow < Self.proactiveRefreshWindow else {
             armProactiveRefresh()
             return
@@ -2928,11 +2958,16 @@ final class SessionStore {
     private func armProactiveRefresh() {
         proactiveRefreshTimerTask?.cancel()
         proactiveRefreshTimerTask = nil
-        // Brak `exp` = brak tokenu w Keychain (albo token bez daty) — nie ma
-        // czego pilnować.
-        guard let expiry = accessTokenExpiry() else { return }
+        // Brak `exp` przy ŻYWYM refresh tokenie nie znaczy „nie ma czego
+        // pilnować" — znaczy, że nie ma czym wołać i trzeba spróbować jak
+        // najszybciej. Ten `guard` wychodził tu po cichu, więc sesja bez access
+        // tokenu (nieudany zapis jednej połówki pary) zostawała BEZ TERMINU:
+        // nic samo nie sięgało po nową parę aż do następnego wejścia na
+        // pierwszy plan. Bez refresh tokenu nadal nie ma czego pilnować.
+        let expiry = accessTokenExpiry()
+        guard expiry != nil || currentRefreshToken?.isEmpty == false else { return }
         let delay = max(
-            expiry.timeIntervalSinceNow - Self.proactiveRefreshLead,
+            (expiry?.timeIntervalSinceNow ?? 0) - Self.proactiveRefreshLead,
             Self.minProactiveRefreshDelay
         )
         proactiveRefreshTimerTask = Task { @MainActor [weak self] in
