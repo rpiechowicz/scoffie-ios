@@ -7,7 +7,6 @@ struct CalendarView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
     // czytamy go tymi samymi kluczami, co Plan tygodnia, bo tylko
@@ -87,12 +86,6 @@ struct CalendarView: View {
     /// zapis na tym ekranie i ma być czuć pod palcem, że coś się stało.
     @State private var eatenToggles = 0
 
-    /// Danie, które właśnie leci z tacy na talerz — jego talerzyk w sekwencji
-    /// stoi pusty do lądowania (`CalendarPlateStrip.liftingId`). Ustawiane
-    /// w tej samej zmianie stanu, co wybór, gaszone zegarem lotu razem
-    /// z kierunkiem (`.task(id: plateMotion)`).
-    @State private var liftingCardId: String?
-
     // MARK: Obrót tacy
 
     /// Dzień, który właśnie wyjeżdża z kadru — rysowany jako druga, martwa
@@ -109,50 +102,6 @@ struct CalendarView: View {
     @State private var turnDirection: Int = 0
     /// Licznik obrotów — zegar sprzątający kopię wyjeżdżającą wisi na nim.
     @State private var turnCount = 0
-
-    /// Miejsca talerzyków w sekwencji — skąd danie wznosi się na talerz.
-    ///
-    /// Klasa, nie wartość w `@State`: sekwencja melduje miejsca z układu
-    /// (`onGeometryChange`), także klatka po klatce w trakcie obrotu tacy,
-    /// a każdy zapis do `@State` przebudowywałby całą stronę dnia. Zapis
-    /// do pola klasy nie przebudowuje niczego; odczyt następuje przy
-    /// najbliższym przebiegu — czyli przy stuknięciu, kiedy miejsca są
-    /// potrzebne i od dawna osiadłe.
-    @State private var geometry = CalendarDayGeometry()
-    /// Rośnie, gdy sekwencja zgłosi talerzyk, którego jeszcze nie znała
-    /// (nowy dzień, zmieniony plan). Talerz czyta tę liczbę przy liczeniu
-    /// miejsca, więc przebudowuje się raz po pierwszym meldunku dnia — i od
-    /// tej chwili jego przejście zejścia zna drogę powrotną. Bez tego
-    /// pierwsze przełożenie po wejściu w dzień gasiłoby stare danie
-    /// w miejscu: SwiftUI bierze przejście zejścia z ostatniego przebiegu,
-    /// w którym widok istniał, a ten przebieg był PRZED meldunkiem.
-    @State private var cellRevision = 0
-
-    private final class CalendarDayGeometry {
-        /// Dzień, z którego pochodzą meldunki. Inny dzień zaczyna od zera:
-        /// miejsca poprzedniego nie mają już adresata, a słownik nie ma
-        /// rosnąć z każdym przewiniętym tygodniem.
-        var dayKey = ""
-        var cellCenters: [String: CGPoint] = [:]
-        var cellPlateSize: CGFloat = 46
-
-        /// `true`, gdy sekwencja zgłosiła talerzyk, którego jeszcze nie było
-        /// — jedyny meldunek, po którym strona ma się przebudować. Zwykły
-        /// ruch (obrót tacy klatka po klatce) tylko nadpisuje liczby.
-        func report(_ item: CalendarPlateItem, at center: CGPoint, size: CGFloat, on dayKey: String) -> Bool {
-            var changed = false
-            if self.dayKey != dayKey {
-                self.dayKey = dayKey
-                cellCenters.removeAll(keepingCapacity: true)
-                changed = true
-            }
-            if cellCenters.updateValue(center, forKey: item.id) == nil {
-                changed = true
-            }
-            cellPlateSize = size
-            return changed
-        }
-    }
 
     /// Posiłek otwarty w szczegółach, razem ze slotem, z którego przyszedł.
     ///
@@ -637,13 +586,11 @@ struct CalendarView: View {
 
     /// Przekłada talerz na `target`, zapamiętując kierunek ruchu.
     ///
-    /// Kierunek liczy się z MIEJSC w sekwencji: danie na prawo wjeżdża na
-    /// talerz z prawej, na lewo — z lewej. Z pustego talerza (dzień bez dań)
-    /// nowy talerzyk wskakuje w miejscu — pusty krążek nie ma pozycji
-    /// w sekwencji, więc nie ma skąd wjeżdżać — ale to nadal ruch, z haptyką.
-    /// Ustawiany W TEJ SAMEJ zmianie stanu, co wybór, bo przejście wstawienia
-    /// nowego talerza czyta go w tym samym przebiegu układu (patrz
-    /// `CalendarPlate.swap`).
+    /// Kierunek liczy się z MIEJSC w sekwencji i niesie go jedna rzecz:
+    /// dziesięciopunktowy przechył nazwy dania pod talerzem. Sam talerz
+    /// przenika zdjęciem, bez kierunku — a to, DOKĄD danie się przełożyło,
+    /// mówi rosnący talerzyk z obwódką w sekwencji. Z pustego talerza (dzień
+    /// bez dań) kierunku nie ma: pusty krążek nie ma pozycji w sekwencji.
     ///
     /// `pin` mówi, czy wybór ma zostać zapamiętany (stuknięcie w talerzyk),
     /// czy tylko wrócić do tego, co ekran uznaje za właściwe (powrót do
@@ -655,8 +602,7 @@ struct CalendarView: View {
         to target: CalendarPlateItem,
         pin: Bool,
         in items: [CalendarPlateItem],
-        from current: CalendarPlateItem?,
-        on dayKey: String
+        from current: CalendarPlateItem?
     ) {
         let from = current.flatMap { c in items.firstIndex(where: { $0.id == c.id }) }
         let to = items.firstIndex(where: { $0.id == target.id }) ?? from ?? 0
@@ -665,21 +611,6 @@ struct CalendarView: View {
             plateDirection = 0
         } else {
             plateDirection = from.map { to > $0 ? 1 : -1 } ?? 0
-            // Talerzyk schodzi z tacy tylko wtedy, gdy danie naprawdę
-            // poleci; inaczej talerz rozkwita w miejscu, a pusta kolumna
-            // mówiłaby o locie, którego nie było. Warunek jest DOKŁADNIE
-            // ten sam, którym talerz liczy swoje `origin` — żeby
-            // „talerzyk schodzi z tacy” i „danie leci” nigdy nie rozjechały
-            // się na jedno bez drugiego (środek talerza nie wpływa na to,
-            // czy miejsce jest znane). Obrót tacy wyklucza lot osobno:
-            // sekwencja melduje wtedy miejsca klatka po klatce, ze swoim
-            // piętrem paralaksy, więc `origin` byłby o kilkanaście punktów
-            // obok — a talerzyk zniknąłby dokładnie tam, gdzie użytkownik
-            // patrzy.
-            let flies = !reduceMotion
-                && outgoingDate == nil
-                && liftOrigin(for: target, on: dayKey, plateCenter: .zero, revision: cellRevision) != nil
-            liftingCardId = flies ? target.id : nil
             plateMotion += 1
             plateMoves += 1
         }
@@ -1004,10 +935,6 @@ struct CalendarView: View {
                     outgoingPick = pickedCardId
                     pickedCardId = nil
                     plateDirection = 0
-                    // Pusta pora ma ten sam identyfikator każdego dnia
-                    // („lunch.empty”), więc lot z wczoraj nie ma prawa
-                    // chować talerzyka jutra.
-                    liftingCardId = nil
                     turnDirection = change.forward ? 1 : -1
                     dayTurn = 1
                     turnCount += 1
@@ -1092,21 +1019,14 @@ struct CalendarView: View {
         // — anulowane zadanie, które mimo to zeruje kierunek, gasiłoby go
         // klatkę po tym, jak nowy ruch właśnie go ustawił.
         //
-        // Tym samym zegarem wraca na tacę talerzyk dania, które leciało:
-        // lot trwa `liftDuration`, a talerzyk ma się pojawić, gdy danie
-        // stoi już na talerzu — nie w połowie drogi, bo wtedy znowu byłyby
-        // dwa zdjęcia. Drugie stuknięcie w trakcie lotu przestawia zegar
-        // i talerzyk nowego dania; poprzedni wraca od razu (jego danie
-        // i tak już opada na swoje miejsce).
         .task(id: plateMotion) {
             guard plateMotion > 0 else { return }
             do {
-                try await Task.sleep(for: DayNavigationMotion.liftDuration)
+                try await Task.sleep(for: DayNavigationMotion.plateFadeSettled)
             } catch {
                 return
             }
             plateDirection = 0
-            liftingCardId = nil
         }
         // Kopia wyjeżdżająca schodzi z drzewa, gdy sprężyna osiądzie —
         // niewidoczna i tak, ale rysowana. Zegar na liczniku obrotów,
@@ -1243,25 +1163,6 @@ struct CalendarView: View {
             openDetail = { openMeal(withCardId: focused.id, on: date) }
         }
 
-        // Miejsca talerzyków melduje tylko dzień WCHODZĄCY. Kopia wyjeżdżająca
-        // ma te same kolumny, tylko w drodze — jej meldunki byłyby szumem.
-        // Czy TO danie właśnie zostało podniesione palcem i jest w locie.
-        // Porównanie z `focused`, a nie samo „coś leci”: plan potrafi przyjść
-        // z serwera w oknie lotu i podmienić danie na talerzu — wtedy cel
-        // stuknięcia nie stoi już na talerzu, nic nie leci i nic nie wolno
-        // chować. Jedna liczba na trzy rzeczy: lot talerza, dziurę w tacy
-        // i kierunek podpisu.
-        let lifts = !turn.outgoing && liftingCardId != nil && liftingCardId == focused?.id
-
-        var reportCell: ((CalendarPlateItem, CGPoint, CGFloat) -> Void)?
-        if !turn.outgoing {
-            reportCell = { item, center, size in
-                if geometry.report(item, at: center, size: size, on: dayKey) {
-                    cellRevision += 1
-                }
-            }
-        }
-
         return VStack(spacing: fit.gap) {
             CalendarPlateKicker(item: focused)
                 .modifier(turn.effect(travel: 36, lift: 0, shrink: 0))
@@ -1279,25 +1180,13 @@ struct CalendarView: View {
             // i marginesami.
             GeometryReader { slot in
                 let size = plateSize(in: slot.size)
-                let slotFrame = slot.frame(in: .named(CalendarPlateStrip.daySpace))
 
                 CalendarPlate(
                     item: focused,
-                    direction: plateDirection,
                     size: size,
                     canToggle: canToggle,
                     onToggle: { toggleEaten(withCardId: focused?.id, on: date) },
-                    onOpenDetail: openDetail,
-                    lifts: lifts,
-                    origin: liftOrigin(
-                        for: focused,
-                        on: dayKey,
-                        plateCenter: CGPoint(x: slotFrame.midX, y: slotFrame.midY),
-                        revision: cellRevision
-                    ),
-                    // Pierwszy przebieg pudełka bywa zerowy — bez sufitu od dołu
-                    // skala wychodziłaby nieskończona.
-                    originScale: geometry.cellPlateSize / max(size, 1)
+                    onOpenDetail: openDetail
                 )
                 .contentShape(.contextMenuPreview, Circle().inset(by: -CalendarPlate.rimInset(for: size)))
                 .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
@@ -1306,11 +1195,10 @@ struct CalendarView: View {
             .frame(maxHeight: CalendarPlate.defaultSize + CalendarPlate.maxRimInset * 2)
             // Talerz jedzie najdalej i najwyżej — to on jest daniem na tacy.
             .modifier(turn.effect(travel: 140, lift: 24, shrink: 0.16))
-            // Nad podpisem i sekwencją: danie w drodze między talerzykiem
-            // a talerzem przechodzi przez oba piętra i ma lecieć NAD nimi,
-            // a nie chować się pod nazwą dania i sąsiednimi talerzykami.
-            // Bez tego rysowałoby się pod nimi, bo w kolumnie późniejsze
-            // piętro leży wyżej.
+            // Nad podpisem i sekwencją: cień pod talerzem ma 26 pt rozmycia
+            // i wychodzi poza jego pudełko. Bez tego chowałby się pod nazwą
+            // dania i sąsiednimi talerzykami, bo w kolumnie późniejsze piętro
+            // leży wyżej.
             .zIndex(1)
 
             CalendarPlateCaption(
@@ -1318,11 +1206,10 @@ struct CalendarView: View {
                 dayKey: dayKey,
                 titleLines: fit.titleLines,
                 showsChips: fit.showsChips,
-                // Kierunek niesie wtedy 250-punktowy lot talerza tuż nad tym
-                // wierszem; przesuwający się pod nim tekst byłby trzecim
-                // ruchem mówiącym to samo. Bez lotu (rozkwit w miejscu)
-                // przechył zostaje jedyną wskazówką, skąd przyszło danie.
-                lean: lifts ? 0 : plateDirection,
+                // Dziesięciopunktowy przechył nazwy w stronę, z której przyszło
+                // danie — tyle, żeby podpis należał do tego samego ruchu, co
+                // talerz nad nim, i za mało, żeby był drugim ruchem obok niego.
+                lean: plateDirection,
                 onOpenDetail: openDetail
             )
             .modifier(turn.effect(travel: 72, lift: 6, shrink: 0.04))
@@ -1333,9 +1220,7 @@ struct CalendarView: View {
                 selectedId: focused?.id,
                 width: area.width,
                 maxColumn: fit.maxColumn,
-                onCellCenter: reportCell,
-                liftingId: lifts ? focused?.id : nil,
-                onSelect: { movePlate(to: $0, pin: true, in: items, from: focused, on: dayKey) }
+                onSelect: { movePlate(to: $0, pin: true, in: items, from: focused) }
             )
             .modifier(turn.effect(travel: 56, lift: 0, shrink: 0.05))
             .layoutPriority(1)
@@ -1345,9 +1230,9 @@ struct CalendarView: View {
                 dayKey: dayKey,
                 onReturnToNext: {
                     guard let next = items.first(where: { $0.status == .next }) else { return }
-                    movePlate(to: next, pin: false, in: items, from: focused, on: dayKey)
+                    movePlate(to: next, pin: false, in: items, from: focused)
                 },
-                onSelect: { movePlate(to: $0, pin: true, in: items, from: focused, on: dayKey) }
+                onSelect: { movePlate(to: $0, pin: true, in: items, from: focused) }
             )
             .modifier(turn.effect(travel: 36, lift: 0, shrink: 0))
             .layoutPriority(1)
@@ -1382,26 +1267,6 @@ struct CalendarView: View {
         // i bez tego nazwa dnia siedziała nadpisowi na karku.
         .padding(.top, fit.gap)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Jedna przestrzeń współrzędnych dla talerza i sekwencji — w niej
-        // sekwencja melduje środki talerzyków, a talerz mierzy własny środek.
-        .coordinateSpace(.named(CalendarPlateStrip.daySpace))
-    }
-
-    /// Skąd danie wznosi się na talerz: środek jego talerzyka w sekwencji
-    /// względem środka talerza. `nil`, gdy sekwencja tego dnia jeszcze nie
-    /// zameldowała (pierwsza klatka dnia) albo talerz jest pusty — wtedy
-    /// talerz rozkwita w miejscu. `revision` to licznik meldunków
-    /// (`cellRevision`): zero znaczy „nikt się nie zameldował”, a sam odczyt
-    /// wiąże talerz z licznikiem, żeby przebudował się po meldunku.
-    private func liftOrigin(
-        for item: CalendarPlateItem?,
-        on dayKey: String,
-        plateCenter: CGPoint,
-        revision: Int
-    ) -> CGPoint? {
-        guard let item, revision > 0, geometry.dayKey == dayKey,
-              let cell = geometry.cellCenters[item.id] else { return nil }
-        return CGPoint(x: cell.x - plateCenter.x, y: cell.y - plateCenter.y)
     }
 
     /// Długie przytrzymanie talerza: odhaczenie, szczegóły i ulubione.

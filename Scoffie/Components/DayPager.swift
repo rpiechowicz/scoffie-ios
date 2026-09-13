@@ -13,41 +13,37 @@ import SwiftUI
 enum DayNavigationMotion {
     static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
 
-    /// Wzniesienie dania z tacy na talerz — ruch JEDNEGO przedmiotu, który
-    /// ma wylądować, a nie sceny, która ma się przestawić.
+    /// Talerzyk w sekwencji rośnie na wybrany, poprzedni maleje.
     ///
-    /// Wolniejszy od zmiany dnia o całą klasę, nie o kilka setnych: talerz
-    /// ma 168 pt średnicy i przebywa pół ekranu, a `spring` (0,34) domyka
-    /// taki ruch w ~175 ms, czyli tak samo szybko jak przeskok bąbla na
-    /// pasku dni. Apple przenosi obiekty tej wielkości (zdjęcie siatka →
-    /// pełny ekran, karta App Store) w 0,35–0,5 s. Tłumienie 0,86: przy
-    /// 0,78 ostatnie klatki były dygotaniem zdjęcia o kilka punktów,
-    /// tu przeregulowanie to pół procenta. Tą samą sprężyną jedzie nadpis,
-    /// podpis i wybrany talerzyk w sekwencji, żeby wszystko osiadało razem.
+    /// Sprężyna, a nie krzywa: talerzyk zmienia ROZMIAR, a zmiana rozmiaru
+    /// bez śladu odbicia czyta się jak podmiana obrazka. Tłumienie 0,86: przy
+    /// 0,78 ostatnie klatki były dygotaniem zdjęcia o kilka punktów, tu
+    /// przeregulowanie to pół procenta. Tą samą sprężyną jedzie nadpis
+    /// i podpis pod talerzem.
     static let lift: Animation = .spring(response: 0.44, dampingFraction: 0.86)
 
-    /// Opadanie poprzedniego dania z talerza na jego talerzyk.
+    /// Przenikanie dania na talerzu — jedna krzywa na całe przełożenie.
     ///
-    /// `easeOut`, nie `easeIn`: oko idzie za daniem, które przychodzi,
-    /// a to, które odchodzi, ma ZEJŚĆ Z DROGI, zanim tamto dojedzie.
-    /// Krzywa zwlekająca na starcie (easeIn) trzymała stare danie w pełnym
-    /// rozmiarze na środku jeszcze wtedy, gdy nowe już nadlatywało — przez
-    /// ~120 ms leżały na sobie dwa prawie identycznej wielkości talerze
-    /// i nie było widać, które jest ważne. Tu ruch zaczyna się od razu
-    /// i wygasa dopiero przy talerzyku, więc lądowanie jest miękkie,
-    /// a środek pusty, zanim przyleci nowe danie.
-    static let settle: Animation = .easeOut(duration: 0.28)
+    /// Talerz nie jeździ, nie rośnie i się nie obraca: stare zdjęcie gaśnie,
+    /// nowe wzbiera, oba w tym samym miejscu i w tym samym rozmiarze.
+    /// Ruch przez pół ekranu i obrót wokół osi ten ekran już miał — i oba
+    /// padły na tym, że każdy dodatkowy wymiar ruchu to dodatkowy sposób,
+    /// żeby się rozjechać. Przenikanie nie ma geometrii, którą można zepsuć:
+    /// jest tylko krycie, a krycie animuje w SwiftUI zawsze.
+    ///
+    /// `easeInOut` 0,30 s. Krzywa symetryczna, bo przenikanie jest
+    /// symetryczne — nic tu nie startuje ani nie ląduje. Krócej czyta się
+    /// jak cięcie, dłużej — jak zdjęcie, które się nie doczytało.
+    static let plateFade: Animation = .easeInOut(duration: 0.30)
 
-    /// Kiedy talerzyk w sekwencji wraca na tacę po locie dania.
+    /// Kiedy przełożenie jest po wszystkim i wolno zgasić kierunek.
     ///
-    /// Nie „gdy sprężyna osiądzie”, tylko gdy danie jest już wizualnie na
-    /// miejscu (sprężyna `lift` ma wtedy ~75 % drogi za sobą, a talerz jest
-    /// o kilkanaście punktów od środka i trzy razy większy od talerzyka —
-    /// pomylić się nie da). Powrót ma się NAŁOŻYĆ na osiadanie: talerzyk
-    /// wracający po tym, jak na ekranie wszystko już stanęło, jest samotnym
-    /// ruchem, który przyciąga oko i czyta się jako „coś się pojawiło”,
-    /// a nie jako koniec gestu.
-    static let liftDuration: Duration = .milliseconds(260)
+    /// Kierunek (`CalendarView.plateDirection`) niesie tylko przechył nazwy
+    /// dania pod talerzem i musi zgasnąć, żeby zmiana, której nikt nie wywołał
+    /// palcem, nie przechylała podpisu w stronę ostatniego stuknięcia. Nic się
+    /// o tej chwili nie rusza, więc zegar może się spóźnić — jest o 80 ms
+    /// dłuższy od przenikania, zamiast celować w jego koniec.
+    static let plateFadeSettled: Duration = .milliseconds(380)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.

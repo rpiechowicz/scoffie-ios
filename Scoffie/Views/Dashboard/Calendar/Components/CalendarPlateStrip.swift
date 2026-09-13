@@ -27,6 +27,17 @@ import SwiftUI
 //     „2 z 4 zjedzone · 1665 kcal” — a to samo mówią kropki w nagłówku dnia
 //     i pigułka kcal nad dolnym menu. Zostało wyłącznie to, czego nie ma
 //     nigdzie indziej: co jest dalej w sekwencji (`CalendarDayNote`).
+//
+// Sekwencja nie bierze udziału w przekładaniu dania na talerz i o niczym
+// przy tym nie melduje. Trzy wydania z rzędu brała: talerzyk gasł na czas
+// lotu („dziura w tacy”), a każda kolumna meldowała układowi swój środek,
+// żeby wielki talerz wiedział, skąd nadlecieć. Jedno i drugie wyszło razem
+// z lotem (`CalendarPlate`), bo oba wynikały z tego samego błędnego
+// założenia: że sekwencja jest TACĄ, z której danie się zdejmuje. Jest
+// WSKAŹNIKIEM — mówi, przy której porze stoi wielki talerz, i wybrane danie
+// widać tu i tam cały czas, także gdy nic się nie rusza. Talerzyk ma więc
+// jedno zadanie przy przekładaniu: urosnąć i dostać obwódkę. Obrót talerza
+// nie potrzebuje od sekwencji ani jednej liczby.
 
 // MARK: - Sekwencja dnia
 
@@ -39,22 +50,7 @@ struct CalendarPlateStrip: View {
     /// Sufit szerokości kolumny. Domyślnie 62 pt z makiety; krótki ekran
     /// podaje mniej, bo każdy punkt zabrany sekwencji wraca do talerza.
     var maxColumn: CGFloat = CalendarPlateStrip.designColumn
-    /// Środek talerzyka danego dania (w przestrzeni `daySpace`) i rozmiar,
-    /// jaki ma talerzyk NIEWYBRANY. Z tego talerz wie, skąd danie wznosi się
-    /// na środek i dokąd opada z powrotem (`CalendarPlate.origin`).
-    var onCellCenter: ((CalendarPlateItem, CGPoint, CGFloat) -> Void)?
-    /// Danie, które właśnie unosi się z tacy na talerz: jego talerzyk stoi
-    /// pusty (zostaje godzina i pora), dopóki danie nie wyląduje. Na ekranie
-    /// jest wtedy JEDNO zdjęcie tego dania — to, które leci — a nie kopia
-    /// nad talerzykiem, który dalej stoi. `nil` = nic nie leci.
-    var liftingId: String? = nil
     let onSelect: (CalendarPlateItem) -> Void
-
-    /// Nazwa przestrzeni współrzędnych, którą dzień zakłada na swojej
-    /// kolumnie: w niej sekwencja melduje środki talerzyków, a talerz mierzy
-    /// własny środek. Jedno miejsce dla obu, żeby różnica była w tych samych
-    /// punktach.
-    static let daySpace = "calendar-day"
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dayPagerGate) private var pagerGate
@@ -72,11 +68,6 @@ struct CalendarPlateStrip: View {
     /// wyższe, żeby obwódka nie wchodziła w odstęp nad sekwencją ani
     /// w podpis pod nią.
     private static let ringOverhang: CGFloat = 3
-    /// Powrót talerzyka na tacę po locie dania. Jawna stała, a nie wyrażenie
-    /// w argumencie: warunek z `nil` po jednej stronie i wnioskowanym typem
-    /// po drugiej potrafi w tym projekcie dać „ambiguous use of 'init'”
-    /// zgłoszone kilkadziesiąt linii wyżej (patrz `ShoppingClosedHero`).
-    private static let trayReturn: Animation = .easeOut(duration: 0.22)
 
     private var gap: CGFloat { items.count > 4 ? 8 : 10 }
 
@@ -139,9 +130,11 @@ struct CalendarPlateStrip: View {
             }
         }
         .frame(maxWidth: .infinity)
-        // Wybrany talerz rośnie, poprzedni maleje — tą samą sprężyną, którą
-        // danie wznosi się z tacy na talerz (`DayNavigationMotion.lift`),
-        // żeby oba końce ruchu osiadały razem. Drugi odcisk na dania i stany:
+        // Wybrany talerz rośnie, poprzedni maleje — sprężyną `lift`. To
+        // JEDYNY ruch, jaki niesie przełożenie dania: wielki talerz nad
+        // sekwencją tylko przenika zdjęciem (`DayNavigationMotion.plateFade`),
+        // więc rosnący talerzyk i jego obwódka są tym, co mówi, że coś się
+        // stało i gdzie. Drugi odcisk na dania i stany:
         // gdy plan przyjdzie zmieniony, kolumny przekładają się tym samym
         // ruchem. Haptyka przekładania należy do ekranu (`CalendarView`),
         // nie do sekwencji: wybrany talerzyk zmienia się także przy zmianie
@@ -162,16 +155,6 @@ struct CalendarPlateStrip: View {
                 plate(item, size: size, isSelected: on)
             }
             .frame(width: column, height: boxSize)
-            // Meldunek o miejscu talerzyka — w przestrzeni dnia, żeby talerz
-            // mógł policzyć, skąd danie wznosi się na środek. Zmienia się
-            // tylko wtedy, gdy zmienia się układ (obrót tacy, inna liczba
-            // pór), więc nie kosztuje przebiegów.
-            .onGeometryChange(for: CGPoint.self) { proxy in
-                let frame = proxy.frame(in: .named(Self.daySpace))
-                return CGPoint(x: frame.midX, y: frame.midY)
-            } action: { center in
-                onCellCenter?(item, center, restSize)
-            }
 
             VStack(spacing: 2) {
                 // Godzina przechodzi kryciem, nie rolowaniem cyfr: gdy plan
@@ -197,9 +180,7 @@ struct CalendarPlateStrip: View {
     }
 
     private func plate(_ item: CalendarPlateItem, size: CGFloat, isSelected: Bool) -> some View {
-        let lifted = item.id == liftingId
-
-        return CalendarPlateFace(item: item, size: size)
+        CalendarPlateFace(item: item, size: size)
             .saturation(item.isEaten ? 0.45 : 1)
             .opacity(item.isEaten ? 0.6 : isSelected ? 1 : 0.78)
             .overlay {
@@ -227,15 +208,6 @@ struct CalendarPlateStrip: View {
                 }
             }
             .animation(DayNavigationMotion.spring, value: item.status)
-            // Talerzyk w locie schodzi z tacy BEZ animacji, w tej samej
-            // klatce, w której danie rusza (gasnący talerzyk pod startującym
-            // daniem to znowu dwa zdjęcia), a wraca kryciem, gdy danie
-            // wyląduje. Odcisk na `lifted`, nie na `selectedId`: wybór
-            // zmienia się też przy zmianie dnia i przy odhaczeniu, a wtedy
-            // nic nie leci. Godzina i pora pod spodem stoją cały czas —
-            // to one trzymają miejsce, z którego danie wyszło.
-            .opacity(lifted ? 0 : 1)
-            .animation(lifted ? nil : Self.trayReturn, value: lifted)
     }
 
     /// Obwódka talerzyka. `nil` = bez obwódki (zwykłe danie, nie wybrane).
