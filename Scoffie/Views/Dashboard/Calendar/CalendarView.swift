@@ -87,10 +87,16 @@ struct CalendarView: View {
     /// zapis na tym ekranie i ma być czuć pod palcem, że coś się stało.
     @State private var eatenToggles = 0
 
-    /// Danie, które właśnie leci z tacy na talerz — jego talerzyk w sekwencji
-    /// stoi pusty do lądowania (`CalendarPlateStrip.liftingId`). Ustawiane
-    /// w tej samej zmianie stanu, co wybór, gaszone zegarem lotu razem
-    /// z kierunkiem (`.task(id: plateMotion)`).
+    /// Danie, które użytkownik podniósł palcem i które dlatego wznosi się
+    /// z tacy na talerz (`CalendarPlate.lifts`). Ustawiane w tej samej
+    /// zmianie stanu, co wybór.
+    ///
+    /// Gaszone dopiero po `DayNavigationMotion.liftSettled`, czyli grubo po
+    /// osiadnięciu sprężyny lotu — nie „gdy danie jest już prawie na
+    /// miejscu”. SwiftUI czyta przejście widoku przy każdym przebiegu, także
+    /// w połowie wstawiania, więc zgaszenie tego stanu w locie zdejmuje
+    /// z lecącego dania modyfikator, który je prowadzi, i resztę drogi
+    /// pokonuje ono w jednej klatce.
     @State private var liftingCardId: String?
 
     // MARK: Obrót tacy
@@ -665,17 +671,14 @@ struct CalendarView: View {
             plateDirection = 0
         } else {
             plateDirection = from.map { to > $0 ? 1 : -1 } ?? 0
-            // Talerzyk schodzi z tacy tylko wtedy, gdy danie naprawdę
-            // poleci; inaczej talerz rozkwita w miejscu, a pusta kolumna
-            // mówiłaby o locie, którego nie było. Warunek jest DOKŁADNIE
-            // ten sam, którym talerz liczy swoje `origin` — żeby
-            // „talerzyk schodzi z tacy” i „danie leci” nigdy nie rozjechały
-            // się na jedno bez drugiego (środek talerza nie wpływa na to,
-            // czy miejsce jest znane). Obrót tacy wyklucza lot osobno:
+            // Pamięć stuknięcia zapala się tylko wtedy, gdy danie naprawdę
+            // ma czym polecieć. Warunek jest DOKŁADNIE ten sam, którym talerz
+            // liczy swoje `origin` (środek talerza nie wpływa na to, czy
+            // miejsce jest znane), więc „podniesione palcem” i „zna drogę”
+            // nie mogą się rozjechać. Obrót tacy wyklucza lot osobno:
             // sekwencja melduje wtedy miejsca klatka po klatce, ze swoim
             // piętrem paralaksy, więc `origin` byłby o kilkanaście punktów
-            // obok — a talerzyk zniknąłby dokładnie tam, gdzie użytkownik
-            // patrzy.
+            // obok i danie wystartowałoby obok swojego talerzyka.
             let flies = !reduceMotion
                 && outgoingDate == nil
                 && liftOrigin(for: target, on: dayKey, plateCenter: .zero, revision: cellRevision) != nil
@@ -1005,8 +1008,9 @@ struct CalendarView: View {
                     pickedCardId = nil
                     plateDirection = 0
                     // Pusta pora ma ten sam identyfikator każdego dnia
-                    // („lunch.empty”), więc lot z wczoraj nie ma prawa
-                    // chować talerzyka jutra.
+                    // („lunch.empty”), więc stuknięcie z wczoraj kazałoby
+                    // daniu jutra wznieść się z talerzyka, którego nikt nie
+                    // dotknął. Zmianę dnia niesie obrót tacy, nie lot.
                     liftingCardId = nil
                     turnDirection = change.forward ? 1 : -1
                     dayTurn = 1
@@ -1092,16 +1096,20 @@ struct CalendarView: View {
         // — anulowane zadanie, które mimo to zeruje kierunek, gasiłoby go
         // klatkę po tym, jak nowy ruch właśnie go ustawił.
         //
-        // Tym samym zegarem wraca na tacę talerzyk dania, które leciało:
-        // lot trwa `liftDuration`, a talerzyk ma się pojawić, gdy danie
-        // stoi już na talerzu — nie w połowie drogi, bo wtedy znowu byłyby
-        // dwa zdjęcia. Drugie stuknięcie w trakcie lotu przestawia zegar
-        // i talerzyk nowego dania; poprzedni wraca od razu (jego danie
-        // i tak już opada na swoje miejsce).
+        // Tym samym zegarem gaśnie pamięć stuknięcia (`liftingCardId`),
+        // i dlatego zegar mierzy `liftSettled`, a nie „kiedy danie jest już
+        // prawie na miejscu”: oba te stany rozstrzygają, JAKIE przejście ma
+        // widok, a SwiftUI czyta przejście przy każdym przebiegu — także
+        // w połowie wstawiania. Zmiana w locie zdejmuje z lecącego dania
+        // `PlateFlight` i resztę drogi robi ono w jednej klatce (to był
+        // przeskok na końcu lotu, bo poprzednie 260 ms wypadało na 95 %
+        // drogi, czyli dokładnie na lądowaniu). Po osiadnięciu sprężyny
+        // zerowanie nie rusza już niczego: tożsamość talerza się nie zmienia,
+        // a stuknięcie w trakcie lotu i tak przestawia zegar od nowa.
         .task(id: plateMotion) {
             guard plateMotion > 0 else { return }
             do {
-                try await Task.sleep(for: DayNavigationMotion.liftDuration)
+                try await Task.sleep(for: DayNavigationMotion.liftSettled)
             } catch {
                 return
             }
@@ -1245,12 +1253,12 @@ struct CalendarView: View {
 
         // Miejsca talerzyków melduje tylko dzień WCHODZĄCY. Kopia wyjeżdżająca
         // ma te same kolumny, tylko w drodze — jej meldunki byłyby szumem.
-        // Czy TO danie właśnie zostało podniesione palcem i jest w locie.
-        // Porównanie z `focused`, a nie samo „coś leci”: plan potrafi przyjść
-        // z serwera w oknie lotu i podmienić danie na talerzu — wtedy cel
-        // stuknięcia nie stoi już na talerzu, nic nie leci i nic nie wolno
-        // chować. Jedna liczba na trzy rzeczy: lot talerza, dziurę w tacy
-        // i kierunek podpisu.
+        // Czy TO danie zostało podniesione palcem — czyli czy jego pojawienie
+        // się na talerzu jest odpowiedzią na gest. Porównanie z `focused`,
+        // a nie samo „ktoś stuknął”: plan potrafi przyjść z serwera w oknie
+        // lotu i podmienić danie na talerzu, a wtedy na środku stoi już coś,
+        // czego nikt nie podnosił, i to coś ma rozkwitnąć, nie lecieć.
+        // Jedna liczba na dwie rzeczy: lot talerza i kierunek podpisu.
         let lifts = !turn.outgoing && liftingCardId != nil && liftingCardId == focused?.id
 
         var reportCell: ((CalendarPlateItem, CGPoint, CGFloat) -> Void)?
@@ -1334,7 +1342,6 @@ struct CalendarView: View {
                 width: area.width,
                 maxColumn: fit.maxColumn,
                 onCellCenter: reportCell,
-                liftingId: lifts ? focused?.id : nil,
                 onSelect: { movePlate(to: $0, pin: true, in: items, from: focused, on: dayKey) }
             )
             .modifier(turn.effect(travel: 56, lift: 0, shrink: 0.05))
