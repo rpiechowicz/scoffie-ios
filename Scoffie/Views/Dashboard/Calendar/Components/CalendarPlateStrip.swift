@@ -28,19 +28,16 @@ import SwiftUI
 //     i pigułka kcal nad dolnym menu. Zostało wyłącznie to, czego nie ma
 //     nigdzie indziej: co jest dalej w sekwencji (`CalendarDayNote`).
 //
-// Talerzyk STOI, także gdy jego danie leci na talerz. Przez trzy wydania
-// gasł na czas lotu („dziura w tacy”), żeby na ekranie nie było dwóch zdjęć
-// tego samego dania — i to był błąd w założeniu: sekwencja nie jest tacą,
-// z której coś się zdejmuje, tylko WSKAŹNIKIEM, który mówi, przy której
-// porze stoi wielki talerz. Wybrane danie widać tu i tam CAŁY CZAS, także
-// gdy nic się nie rusza, więc gaszenie talerzyka nie usuwało duplikatu —
-// dokładało mrugnięcie w miejscu, na które właśnie stuknął palec, i to
-// dwukrotne (zgaśnięcie i powrót), każde na innym zegarze niż lot.
-// Duplikat nie przeszkadza, bo lot zaczyna się i kończy DOKŁADNIE na
-// talerzyku, w jego rozmiarze: w pierwszych klatkach kopia leży na nim
-// punkt w punkt (nie da się jej odróżnić), potem od niego odjeżdża,
-// a wracając wtapia się w niego z powrotem (`CalendarPlate.swap`).
-// Rusza się jedna rzecz — ta, która ma się ruszać.
+// Sekwencja nie bierze udziału w przekładaniu dania na talerz i o niczym
+// przy tym nie melduje. Trzy wydania z rzędu brała: talerzyk gasł na czas
+// lotu („dziura w tacy”), a każda kolumna meldowała układowi swój środek,
+// żeby wielki talerz wiedział, skąd nadlecieć. Jedno i drugie wyszło razem
+// z lotem (`CalendarPlate`), bo oba wynikały z tego samego błędnego
+// założenia: że sekwencja jest TACĄ, z której danie się zdejmuje. Jest
+// WSKAŹNIKIEM — mówi, przy której porze stoi wielki talerz, i wybrane danie
+// widać tu i tam cały czas, także gdy nic się nie rusza. Talerzyk ma więc
+// jedno zadanie przy przekładaniu: urosnąć i dostać obwódkę. Obrót talerza
+// nie potrzebuje od sekwencji ani jednej liczby.
 
 // MARK: - Sekwencja dnia
 
@@ -53,17 +50,7 @@ struct CalendarPlateStrip: View {
     /// Sufit szerokości kolumny. Domyślnie 62 pt z makiety; krótki ekran
     /// podaje mniej, bo każdy punkt zabrany sekwencji wraca do talerza.
     var maxColumn: CGFloat = CalendarPlateStrip.designColumn
-    /// Środek talerzyka danego dania (w przestrzeni `daySpace`) i rozmiar,
-    /// jaki ma talerzyk NIEWYBRANY. Z tego talerz wie, skąd danie wznosi się
-    /// na środek i dokąd opada z powrotem (`CalendarPlate.origin`).
-    var onCellCenter: ((CalendarPlateItem, CGPoint, CGFloat) -> Void)?
     let onSelect: (CalendarPlateItem) -> Void
-
-    /// Nazwa przestrzeni współrzędnych, którą dzień zakłada na swojej
-    /// kolumnie: w niej sekwencja melduje środki talerzyków, a talerz mierzy
-    /// własny środek. Jedno miejsce dla obu, żeby różnica była w tych samych
-    /// punktach.
-    static let daySpace = "calendar-day"
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dayPagerGate) private var pagerGate
@@ -143,9 +130,10 @@ struct CalendarPlateStrip: View {
             }
         }
         .frame(maxWidth: .infinity)
-        // Wybrany talerz rośnie, poprzedni maleje — tą samą sprężyną, którą
-        // danie wznosi się z tacy na talerz (`DayNavigationMotion.lift`),
-        // żeby oba końce ruchu osiadały razem. Drugi odcisk na dania i stany:
+        // Wybrany talerz rośnie, poprzedni maleje — sprężyną `lift`, dobraną
+        // tak, żeby osiadła razem z obrotem wielkiego talerza nad sekwencją
+        // (`DayNavigationMotion.plateTurn`): jedno stuknięcie, jeden koniec
+        // ruchu w dwóch miejscach. Drugi odcisk na dania i stany:
         // gdy plan przyjdzie zmieniony, kolumny przekładają się tym samym
         // ruchem. Haptyka przekładania należy do ekranu (`CalendarView`),
         // nie do sekwencji: wybrany talerzyk zmienia się także przy zmianie
@@ -166,16 +154,6 @@ struct CalendarPlateStrip: View {
                 plate(item, size: size, isSelected: on)
             }
             .frame(width: column, height: boxSize)
-            // Meldunek o miejscu talerzyka — w przestrzeni dnia, żeby talerz
-            // mógł policzyć, skąd danie wznosi się na środek. Zmienia się
-            // tylko wtedy, gdy zmienia się układ (obrót tacy, inna liczba
-            // pór), więc nie kosztuje przebiegów.
-            .onGeometryChange(for: CGPoint.self) { proxy in
-                let frame = proxy.frame(in: .named(Self.daySpace))
-                return CGPoint(x: frame.midX, y: frame.midY)
-            } action: { center in
-                onCellCenter?(item, center, restSize)
-            }
 
             VStack(spacing: 2) {
                 // Godzina przechodzi kryciem, nie rolowaniem cyfr: gdy plan

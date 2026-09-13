@@ -13,48 +13,40 @@ import SwiftUI
 enum DayNavigationMotion {
     static let spring: Animation = .spring(response: 0.34, dampingFraction: 0.86)
 
-    /// Wzniesienie dania z tacy na talerz — ruch JEDNEGO przedmiotu, który
-    /// ma wylądować, a nie sceny, która ma się przestawić.
+    /// Talerzyk w sekwencji rośnie na wybrany, poprzedni maleje.
     ///
-    /// Wolniejszy od zmiany dnia o całą klasę, nie o kilka setnych: talerz
-    /// ma 168 pt średnicy i przebywa pół ekranu, a `spring` (0,34) domyka
-    /// taki ruch w ~175 ms, czyli tak samo szybko jak przeskok bąbla na
-    /// pasku dni. Apple przenosi obiekty tej wielkości (zdjęcie siatka →
-    /// pełny ekran, karta App Store) w 0,35–0,5 s. Tłumienie 0,86: przy
-    /// 0,78 ostatnie klatki były dygotaniem zdjęcia o kilka punktów,
-    /// tu przeregulowanie to pół procenta. Tą samą sprężyną jedzie nadpis,
-    /// podpis i wybrany talerzyk w sekwencji, żeby wszystko osiadało razem.
+    /// Sprężyna, a nie krzywa: talerzyk zmienia ROZMIAR, a zmiana rozmiaru
+    /// bez śladu odbicia czyta się jak podmiana obrazka. Tłumienie 0,86: przy
+    /// 0,78 ostatnie klatki były dygotaniem zdjęcia o kilka punktów, tu
+    /// przeregulowanie to pół procenta. Czas dobrany tak, żeby osiadła razem
+    /// z obrotem talerza (`plateTurn`) — jedno stuknięcie ma mieć jeden
+    /// koniec ruchu, także gdy rusza się w dwóch miejscach naraz. Tą samą
+    /// sprężyną jedzie nadpis i podpis pod talerzem.
     static let lift: Animation = .spring(response: 0.44, dampingFraction: 0.86)
 
-    /// Opadanie poprzedniego dania z talerza na jego talerzyk.
+    /// Obrót talerza przy przełożeniu dania — pół obrotu w jedną stronę,
+    /// pół w drugą, ale JEDNA krzywa na całość (`PlateTurn`).
     ///
-    /// `easeOut`, nie `easeIn`: oko idzie za daniem, które przychodzi,
-    /// a to, które odchodzi, ma ZEJŚĆ Z DROGI, zanim tamto dojedzie.
-    /// Krzywa zwlekająca na starcie (easeIn) trzymała stare danie w pełnym
-    /// rozmiarze na środku jeszcze wtedy, gdy nowe już nadlatywało — przez
-    /// ~120 ms leżały na sobie dwa prawie identycznej wielkości talerze
-    /// i nie było widać, które jest ważne. Tu ruch zaczyna się od razu
-    /// i wygasa dopiero przy talerzyku, więc lądowanie jest miękkie,
-    /// a środek pusty, zanim przyleci nowe danie.
-    static let settle: Animation = .easeOut(duration: 0.28)
+    /// `easeInOut`, nie sprężyna: talerz obraca się wokół osi i najszybszy
+    /// ma być dokładnie w chwili przejęcia, czyli w połowie czasu, kiedy oba
+    /// zdjęcia stoją krawędzią do oka. Sprężyna ma maksimum prędkości na
+    /// początku, więc pierwsza połowa przelatywałaby, a druga wlokła się —
+    /// i obrót przestałby czytać się jako jeden przedmiot. Do tego sprężyna
+    /// przeregulowuje, a przeregulowany obrót to talerz, który minął pozycję
+    /// i się cofa.
+    ///
+    /// 0,46 s na pełny obrót, czyli 0,23 s na połowę. Krócej i przejęcie
+    /// staje się mrugnięciem; dłużej i zaczyna się czekanie na talerz.
+    static let plateTurn: Animation = .easeInOut(duration: 0.46)
 
-    /// Kiedy sprężyna lotu jest NAPRAWDĘ po wszystkim — jedyna chwila,
-    /// w której wolno zmienić stan mówiący, CZY danie leci.
+    /// Kiedy po obrocie wolno posprzątać: kopia dania, które zeszło
+    /// z talerza, przestaje istnieć, a kierunek się zeruje.
     ///
-    /// SwiftUI czyta `.transition(...)` przy każdym przebiegu, także wtedy,
-    /// gdy widok jest w połowie wstawiania. Zmiana wartości przejścia
-    /// w locie zdejmuje z widoku modyfikator, który go prowadzi
-    /// (`PlateFlight`) — i danie dokańcza drogę w jednej klatce, a na koniec
-    /// jeszcze „pyknie” skalą przejścia, które weszło na jego miejsce.
-    /// Dokładnie ten objaw dawał zegar 260 ms: sprężyna `lift` jest wtedy
-    /// na ~95 % drogi (nie na 75 %, jak zakładała poprzednia wersja), więc
-    /// przeskok wypadał punkt w punkt na lądowaniu — czyli tam, gdzie oko
-    /// już patrzy.
-    ///
-    /// 700 ms to sprężyna 0,44/0,86 osiadła do promila (~600 ms) plus zapas
-    /// na klatkę. Nic się o tej chwili nie rusza: gaśnie tylko kierunek
-    /// i pamięć stuknięcia, a talerz stoi już od dawna.
-    static let liftSettled: Duration = .milliseconds(700)
+    /// Nie ma tu nic do zgrania w klatkę — kopia jest od połowy obrotu
+    /// niewidoczna (stoi krawędzią i ma zerowe krycie), więc ten zegar może
+    /// się spóźnić i nikt tego nie zobaczy. Dlatego jest o 60 ms dłuższy od
+    /// obrotu, zamiast celować w jego koniec.
+    static let plateTurnSettled: Duration = .milliseconds(520)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.
