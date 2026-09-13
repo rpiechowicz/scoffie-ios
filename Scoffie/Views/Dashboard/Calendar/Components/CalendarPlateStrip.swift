@@ -130,10 +130,11 @@ struct CalendarPlateStrip: View {
             }
         }
         .frame(maxWidth: .infinity)
-        // Wybrany talerz rośnie, poprzedni maleje — sprężyną `lift`, dobraną
-        // tak, żeby osiadła razem z obrotem wielkiego talerza nad sekwencją
-        // (`DayNavigationMotion.plateTurn`): jedno stuknięcie, jeden koniec
-        // ruchu w dwóch miejscach. Drugi odcisk na dania i stany:
+        // Wybrany talerz rośnie, poprzedni maleje — sprężyną `lift`. To
+        // JEDYNY ruch, jaki niesie przełożenie dania: wielki talerz nad
+        // sekwencją tylko przenika zdjęciem (`DayNavigationMotion.plateFade`),
+        // więc rosnący talerzyk i jego obwódka są tym, co mówi, że coś się
+        // stało i gdzie. Drugi odcisk na dania i stany:
         // gdy plan przyjdzie zmieniony, kolumny przekładają się tym samym
         // ruchem. Haptyka przekładania należy do ekranu (`CalendarView`),
         // nie do sekwencji: wybrany talerzyk zmienia się także przy zmianie
