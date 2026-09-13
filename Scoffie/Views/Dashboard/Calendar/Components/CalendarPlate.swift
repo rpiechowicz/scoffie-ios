@@ -42,44 +42,38 @@ import SwiftUI
 //     wyglądało jak obiad. Odhaczenie schodzi na neutralny kolor pisma
 //     (`Color.scChecked`), tak jak od dawna robi to sama pieczątka; pory
 //     zostają swoje.
-//  6. **Przełożone danie PRZYCHODZI OBROTEM TALERZA.** Makieta miała jeden
+//  6. **Przełożone danie PRZENIKA — i to wszystko.** Makieta miała jeden
 //     „pop” w miejscu. Próbowaliśmy wjazdu z boku (czytał się jak cięcie),
-//     rozkwitu od środka (poprawny, ale niemy — nie mówił, skąd danie
-//     przyszło) i trzy razy — lotu z talerzyka w sekwencji na środek, za
-//     każdym razem inaczej dostrojonego. Lot poszedł do kosza w całości,
-//     bo miał wadę nie do dostrojenia: SwiftUI nie interpolował modyfikatora
-//     wstawionego PRZEZ PRZEJŚCIE (`AnyTransition.modifier(active:identity:)`),
-//     więc zdjęcie pojawiało się małe przy talerzyku i przeskakiwało na
-//     środek w jednej klatce. Do tego wisiał na zmierzonych miejscach
-//     talerzyków, na dwóch zegarach, które musiały się zgadzać, i na stanie,
-//     którego nie wolno było ruszyć w trakcie ruchu.
+//     rozkwitu od środka, trzy razy lotu z talerzyka w sekwencji na środek
+//     i raz obrotu talerza wokół pionowej osi. Zostało przenikanie: stare
+//     zdjęcie gaśnie, nowe wzbiera, oba w tym samym miejscu i w tym samym
+//     rozmiarze (`DayNavigationMotion.plateFade`).
 //
-//     Teraz talerz OBRACA SIĘ wokół pionowej osi, jak odwracana moneta:
-//     danie schodzące odwraca się od oka i znika za krawędzią, a w tej samej
-//     chwili nowe wychodzi z krawędzi po drugiej stronie (`PlateTurn`).
-//     Obie połowy jadą w tę samą stronę, więc oko widzi jeden przedmiot,
-//     który się obrócił — nie dwa, które się wymieniły. Strona obrotu bierze
-//     się z tego, czy danie stoi w sekwencji na prawo, czy na lewo od
-//     poprzedniego, więc ruch nadal mówi, SKĄD przyszło danie. Przejęcie
-//     wypada tam, gdzie oba zdjęcia są zwrócone krawędzią do oka i mają
-//     zerową szerokość — cięcie jest niewidoczne i nie potrzebuje zgrania
-//     w klatkę.
+//     To nie jest kapitulacja, tylko wniosek z tych pięciu podejść. Lot padł
+//     na tym, że SwiftUI nie interpolował modyfikatora wstawionego PRZEZ
+//     PRZEJŚCIE (`AnyTransition.modifier(active:identity:)`): zdjęcie
+//     pojawiało się małe przy talerzyku i przeskakiwało na środek w jednej
+//     klatce. Wisiał przy tym na zmierzonych miejscach talerzyków, na dwóch
+//     zegarach, które musiały się zgadzać, i na stanie, którego nie wolno było
+//     ruszyć w trakcie ruchu. Obrót naprawiał mechanizm, ale kosztował drugą
+//     kopię dania na scenie, cięcie w połowie i zakaz zaczynania drugiego
+//     obrotu w trakcie pierwszego. Każdy wymiar ruchu, który tu dodawaliśmy,
+//     był dodatkowym sposobem, żeby się rozjechać.
 //
-//     Trzy rzeczy, których w tym ruchu NIE MA i mieć nie może: pomiaru
-//     (obrót nie wie i nie musi wiedzieć, gdzie stoją talerzyki), drugiego
-//     zegara (jedna liczba prowadzi całą geometrię, a nieciągłość siedzi
-//     w czystej funkcji tej liczby, nie w stanie) i skali — nic nie rośnie
-//     od małego, bo „pojawia się małe i rośnie” to był właśnie ten objaw.
-//     Gdyby obrót kiedyś przestał się interpolować, danie po prostu
-//     zmieniłoby się w miejscu.
+//     Przenikanie nie ma geometrii, którą można zepsuć. Nie mierzy niczego,
+//     nie ma drugiego zegara, nie ma drugiej kopii dania, nie ma stanu ruchu,
+//     nie ma skali — a krycie animuje w SwiftUI zawsze. Ma jeden odcisk
+//     (`item?.id`) i jedną krzywą, wspólną ze światłem pod spodem.
 //
-//     Stan obrotu prowadzi EKRAN (`CalendarPlateSwap` w `CalendarView`),
-//     bo musi wejść w tej samej klatce, co podmiana dania — dokładnie tak,
-//     jak `DayPager` ustawia `dayTurn` razem z datą. Poświata i echosonda
-//     nie obracają się razem z talerzem, ale przygasają na czas obrotu
-//     i wzbierają, gdy nowe danie stanie płasko (`seat`): świeci talerz
-//     z daniem, a nie sam talerz. Zmiana DNIA to nadal co innego — wtedy
-//     cały dzień jedzie w bok obrotem tacy (`CalendarView.dayPage`).
+//     Czego to kosztuje: przenikanie nie mówi, SKĄD przyszło danie. Mówi to
+//     sekwencja pod talerzem — wybrany talerzyk rośnie i dostaje obwódkę tą
+//     samą sprężyną (`lift`), i to jest teraz jedyny ruch, jaki niesie
+//     przełożenie. Nazwa dania pod talerzem dokłada dziesięciopunktowy
+//     przechył w stronę, z której przyszło.
+//
+//     Zmiana DNIA to nadal co innego: wtedy cały dzień jedzie w bok obrotem
+//     tacy (`CalendarView.dayPage`), z paralaksą pięter.
+
 // MARK: - Danie na talerzu
 
 /// Jedno danie dnia — albo pusta pora — gotowe do narysowania.
@@ -285,7 +279,11 @@ struct CalendarPlateFace: View {
     }
 
     private var key: String {
-        guard let item, !item.isEmptySlot else { return "empty" }
+        guard let item else { return "empty" }
+        // Pusta pora nie ma zdjęcia, ale ma ikonę pory — a bez tego dwie różne
+        // puste pory miałyby ten sam klucz i ikona przeskakiwałaby w klatce,
+        // podczas gdy wszystko inne przenika.
+        guard !item.isEmptySlot else { return "empty.\(item.slot.rawValue)" }
         return item.imageURL?.absoluteString ?? item.id
     }
 
@@ -420,10 +418,6 @@ struct CalendarPlate: View {
     let onToggle: () -> Void
     /// Zdjęcie — otwiera szczegóły. `nil` dla pustej pory i pustego dnia.
     let onOpenDetail: (() -> Void)?
-    /// Gdzie jest talerz w obrocie i co z niego schodzi. Ekran prowadzi ten
-    /// ruch, bo musi ustawić go w TEJ SAMEJ zmianie stanu, co podmianę dania
-    /// (patrz `CalendarPlateSwap`).
-    var swap: CalendarPlateSwap = .settled
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -466,7 +460,7 @@ struct CalendarPlate: View {
     private var ringWidth: CGFloat { max(2, (3 * scale).rounded()) }
     private var badgeSize: CGFloat { max(26, (32 * scale).rounded()) }
 
-    private func accent(of item: CalendarPlateItem?) -> Color {
+    private var accent: Color {
         item?.accent(in: scheme) ?? Color.scLabel(scheme).opacity(0.14)
     }
 
@@ -476,58 +470,30 @@ struct CalendarPlate: View {
 
     var body: some View {
         ZStack {
-            // Światło sceny POD daniem: poświata i echosonda nie obracają się
-            // razem z talerzem (obracająca się plama światła to byłaby
-            // latarnia, nie talerz). Ale nie stoją NIERUCHOMO: świeci talerz
-            // Z DANIEM, nie sam talerz, więc w chwili, w której talerz stoi
-            // krawędzią do oka, światło jest najsłabsze i wzbiera dopiero,
-            // gdy nowe danie staje płasko (`seat`).
+            // Światło sceny POD daniem — bez własnej tożsamości i bez
+            // przejścia: poświata przechodzi na barwę nowej pory sama
+            // (`CalendarPlateGlow`, `.smooth` 0,3 s, czyli w takt przenikania
+            // zdjęcia), a echosonda liczy fazę z zegara bezwzględnego i nie
+            // ma czego przenikać. Nic tu nie przygasa, bo na talerzu nie ma
+            // chwili, w której nic nie stoi.
             CalendarPlateLight(
-                tint: accent(of: item),
+                tint: accent,
                 diameter: size,
                 ringWidth: ringWidth,
                 loud: isUrgent,
                 beats: beats,
                 reduceMotion: reduceMotion
             )
-            .id(item?.id ?? "empty")
-            .transition(seat)
-            // Własny odcisk, żeby światło przechodziło także wtedy, gdy danie
-            // zmieniło się BEZ obrotu (minęła pora, plan przyszedł z serwera):
-            // wtedy `swap.turn` stoi i transakcja obrotu nie powstaje. Czasy
-            // niosą krzywe doczepione do `seat`, nie ta sprężyna.
-            .animation(DayNavigationMotion.spring, value: item?.id)
 
-            // Danie SCHODZĄCE z talerza — rysowane obok wchodzącego tylko na
-            // czas obrotu i tylko w jego pierwszej połowie. Martwa kopia:
-            // nie przyjmuje dotyku i nie istnieje dla VoiceOvera, bo to samo
-            // danie jest w tej chwili osiągalne w sekwencji pod talerzem.
-            //
-            // `.identity` nie jest ozdobą: bez niej SwiftUI wstawiłby tę kopię
-            // domyślnym przejściem kryciem, w transakcji obrotu, więc zdjęcie,
-            // które JUŻ stoi na ekranie, wzbierałoby od zera — a nowe jest
-            // w tej chwili schowane za krawędzią. Efekt: pół sekundy pustego
-            // talerza na starcie. Kopia ma się pojawić w pełni i natychmiast,
-            // bo to nie jest nic nowego: to jest to, co widać.
-            if let leaving = swap.leaving {
-                stage(leaving, live: false)
-                    .transition(.identity)
-                    .modifier(swap.effect(isLeaving: true, flat: reduceMotion))
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-
-            stage(item, live: true)
-                .modifier(swap.effect(isLeaving: false, flat: reduceMotion))
+            stage
         }
-        // Obrót ma WŁASNY odcisk i własną krzywą, założoną tuż nad ruchem:
-        // wewnętrzny `.animation` wygrywa z każdą transakcją z góry, więc
-        // odhaczenie ani tyknięcie zegara nie mogą mu podmienić czasu.
-        .animation(DayNavigationMotion.plateTurn, value: swap.turn)
         .frame(width: size, height: size)
-        // Odhaczenie przygasza zdjęcie i przestawia pierścień W MIEJSCU —
-        // bez tożsamości i bez obrotu, więc potrzebuje własnego odcisku,
-        // inaczej ten jeden ruch przeskakiwałby w klatce.
+        // Odcisk na identyfikatorze dania — to on wywołuje przenikanie zdjęć
+        // w środku talerza (`CalendarPlateFace` ma tożsamość po zdjęciu i wymienia
+        // je kryciem; tu dostaje na to transakcję i czas). Odhaczenie ma osobny,
+        // bo zmienia stan, nie danie: przygasza zdjęcie i przestawia pierścień
+        // w miejscu, sprężyną.
+        .animation(DayNavigationMotion.plateFade, value: item?.id)
         .animation(DayNavigationMotion.spring, value: item?.status)
     }
 
@@ -536,10 +502,7 @@ struct CalendarPlate: View {
     /// Nie przycisk w przycisku: zagnieżdżone przyciski w SwiftUI dzielą
     /// jeden obszar dotyku i o tym, który zadziała, decyduje kolejność
     /// w drzewie, nie miejsce stuknięcia. Obok siebie każdy ma swój obszar.
-    /// `live` = to danie stoi na talerzu teraz. Kopia schodząca z obrotu ma
-    /// `false`: nie bije rytmem serca (dwa bijące zdjęcia w jednym miejscu to
-    /// dwa rytmy) i nie zużywa klatek na zegar, którego nikt nie zobaczy.
-    private func stage(_ item: CalendarPlateItem?, live: Bool) -> some View {
+    private var stage: some View {
         // Na pustej porze zdjęcie jest obrazkiem — nie ma być czytane jako
         // „przyciemniony przycisk”. Jawny typ, bo `[]` i `.isButton` w jednym
         // wyrażeniu warunkowym nie mają skąd wziąć typu bez podpowiedzi.
@@ -549,11 +512,11 @@ struct CalendarPlate: View {
             Button {
                 pagerGate.ifNotSwiping { onOpenDetail?() }
             } label: {
-                plate(item, live: live)
+                plate
             }
             .buttonStyle(PlatePressStyle())
             .disabled(onOpenDetail == nil)
-            .accessibilityLabel(accessibilityLabel(of: item))
+            .accessibilityLabel(accessibilityLabel)
             .accessibilityHint(onOpenDetail == nil ? "" : "Otwiera szczegóły posiłku")
             .accessibilityRemoveTraits(hiddenTraits)
 
@@ -571,34 +534,6 @@ struct CalendarPlate: View {
         .frame(width: size, height: size)
     }
 
-    /// Światło talerza: przygasa, gdy talerz staje krawędzią, i wzbiera, gdy
-    /// nowe danie staje płasko.
-    ///
-    /// Poświata nie obraca się razem z talerzem — ale świeci DANIE na
-    /// talerzu, nie sam talerz, więc nie ma prawa świecić pełnym blaskiem
-    /// w chwili, gdy żadne zdjęcie nie jest zwrócone do oka.
-    ///
-    /// Dwa czasy, nierówno rozstawione. Stare światło gaśnie szybko (0,18 s,
-    /// czyli zanim talerz dojdzie do krawędzi), a nowe wzbiera krzywą, która
-    /// zwleka na starcie (`easeIn` 0,40 s). Dzięki temu w chwili obrotu suma
-    /// obu jest niska, a pełnia przychodzi chwilę PO tym, jak nowe danie
-    /// stanie płasko. Czyta się to jak zapalanie się talerza pod daniem.
-    ///
-    /// Tożsamość po daniu, nie po kolorze: barwa pory zmienia się skokiem
-    /// razem z daniem, a przenikanie robią dwie warstwy. Interpolowanie
-    /// samego `tint` między porami prowadziło przez szarość w połowie drogi.
-    /// Rytm serca nie gubi taktu przy podmianie — `CalendarHeartbeat` liczy
-    /// z zegara bezwzględnego, więc świeży widok wchodzi w tej samej fazie.
-    private var seat: AnyTransition {
-        if reduceMotion { return .opacity }
-
-        let glow = AnyTransition.opacity.combined(with: .scale(scale: 0.9))
-        return .asymmetric(
-            insertion: glow.animation(.easeIn(duration: 0.40)),
-            removal: glow.animation(.easeOut(duration: 0.18))
-        )
-    }
-
     /// Talerz w rytmie serca.
     ///
     /// `TimelineView` z harmonogramem animacji odczytuje zegar co klatkę,
@@ -607,19 +542,14 @@ struct CalendarPlate: View {
     /// mają własny odczyt tego samego harmonogramu — obie warstwy pauzują
     /// i ruszają tym samym `beats` w tym samym przebiegu, a `CalendarHeartbeat`
     /// liczy z czasu czystą funkcją, więc różnica faz jest podklatkowa przy
-    /// 84-milisekundowym zboczu uderzenia. Mieszkają osobno, bo talerz obraca
-    /// się razem z daniem, a światło zostaje na scenie.
-    ///
-    /// Kopia schodząca z obrotu ma `live: false` i nie bije wcale: dwa
-    /// zdjęcia oddychające w jednym miejscu to dwa rytmy, a jedno z nich
-    /// i tak zaraz zniknie za krawędzią.
-    private func plate(_ item: CalendarPlateItem?, live: Bool) -> some View {
-        let beating = live && item?.isUrgent == true && !reduceMotion
+    /// 84-milisekundowym zboczu uderzenia. Mieszkają osobno, bo zdjęcie ma
+    /// tożsamość dania i przenika przy przełożeniu, a rytm jest nałożony
+    /// wyżej i nie ma go co przenikać.
+    private var plate: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beats)) { context in
+            let beat = beats ? CalendarHeartbeat.beat(at: context.date) : 0
 
-        return TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beating)) { context in
-            let beat = beating ? CalendarHeartbeat.beat(at: context.date) : 0
-
-            plateBody(item)
+            plateBody
                 // Talerz oddycha razem z uderzeniem — dwa i pół procenta to
                 // tyle, ile widać jako życie, a za mało, żeby zdjęcie
                 // „skakało”.
@@ -629,31 +559,8 @@ struct CalendarPlate: View {
 
     /// Zdjęcie z rantami i cieniem — bez rytmu. To, co bije, jest nałożone
     /// wyżej (`plate`), żeby zegar nie przebudowywał zdjęcia co klatkę.
-    private func plateBody(_ item: CalendarPlateItem?) -> some View {
-        // W OBROCIE zdjęcie podmienia się natychmiast, poza nim przenika.
-        //
-        // Talerz zachowuje tożsamość przez cały obrót (musi, inaczej
-        // `PlateTurn` nie miałby czego interpolować), więc zmiana dania
-        // dochodzi do środka jako zmiana samego zdjęcia — a `CalendarPlateFace`
-        // przenika zdjęcia kryciem. W transakcji obrotu to przenikanie
-        // wypadałoby DOKŁADNIE na jego drugiej połowie i danie wychodziłoby
-        // z krawędzi jako zlepek dwóch zdjęć. Obrót pokazuje zamianę sam,
-        // i lepiej — więc w obrocie przenikania nie ma.
-        //
-        // Bez obrotu jest odwrotnie: danie, które zmieniło się samo (minęła
-        // pora, plan przyszedł z serwera), nie ma żadnego ruchu, który by
-        // o tym powiedział, i twarde cięcie zdjęcia czyta się jak usterka
-        // odświeżania. Zostaje mu więc krótkie przenikanie.
-        //
-        // Jawny typ, bo `nil` obok wywołania w wyrażeniu warunkowym potrafi
-        // w tym projekcie zgubić wnioskowanie (SE-0418, patrz `CLAUDE.md`).
-        var faceFade: Animation? = .easeInOut(duration: 0.28)
-        if swap.turning { faceFade = nil }
-
-        return CalendarPlateFace(item: item, size: size)
-            // Odcisk na identyfikatorze, nie na wszystkim: odhaczenie
-            // (`item?.status`) ma dalej swoją sprężynę z wierzchu.
-            .animation(faceFade, value: item?.id)
+    private var plateBody: some View {
+        CalendarPlateFace(item: item, size: size)
             // Zjedzone przygasa — zostaje czytelne, ale przestaje konkurować
             // z tym, co dopiero przed użytkownikiem. Ta sama reguła, co
             // w miniaturach w Planie tygodnia.
@@ -667,9 +574,9 @@ struct CalendarPlate: View {
             // kształtem talerza.
             .overlay {
                 Circle()
-                    .strokeBorder(accent(of: item), lineWidth: ringWidth)
+                    .strokeBorder(accent, lineWidth: ringWidth)
                     .padding(-ringInset)
-                    .animation(DayNavigationMotion.spring, value: accent(of: item))
+                    .animation(DayNavigationMotion.spring, value: accent)
             }
             .overlay {
                 Circle()
@@ -678,7 +585,7 @@ struct CalendarPlate: View {
             }
     }
 
-    private func accessibilityLabel(of item: CalendarPlateItem?) -> String {
+    private var accessibilityLabel: String {
         guard let item else { return "Pusty dzień" }
         guard !item.isEmptySlot else { return item.accessibilityDescription }
         // Kalorie tylko na wielkim talerzu — talerzyk w sekwencji ich nie
@@ -855,175 +762,6 @@ private struct CalendarPlateLight: View {
             }
         }
         .allowsHitTesting(false)
-    }
-}
-
-// MARK: - Obrót talerza
-
-/// Gdzie jest talerz w obrocie i co z niego schodzi.
-///
-/// Stan obrotu mieszka w EKRANIE (`CalendarView`), a nie w talerzu, i to nie
-/// jest szczegół implementacji — to jedyny sposób, żeby ruch zaczął się
-/// w tej samej klatce, w której zmienia się danie. Gdyby talerz wykrywał
-/// zmianę u siebie (`onChange`), pierwszą klatkę nowe danie stałoby już
-/// płasko na środku, a obrót ruszałby dopiero z drugiej: mignięcie, po
-/// którym „coś się jeszcze obraca”. Ekran ustawia `turn` razem
-/// z `pickedCardId` (dokładnie tak, jak `DayPager` ustawia `dayTurn` razem
-/// z datą), więc pierwsza klatka jest już początkiem ruchu.
-///
-/// `turn` chodzi między 0 i 1 NAPRZEMIENNIE, a `reversed` mówi, w którą
-/// stronę leci bieżący obrót. Brzmi dziwniej, niż jest, i bierze się
-/// z jednego twardego ograniczenia SwiftUI: „ustaw 0 bez animacji, potem
-/// animuj do 1” nie działa, bo obie zmiany trafiają w jedną aktualizację
-/// i skracają się do zera. Wartość, która po prostu jedzie na drugi koniec,
-/// nie potrzebuje zerowania — a `reversed` (zwykłe pole, nieanimowane)
-/// przelicza ją na postęp liczony zawsze od zera:
-///
-///     t = reversed ? 1 - turn : turn
-///
-/// W spoczynku `t` wynosi 1 (obrót skończony, danie stoi płasko), dlatego
-/// stan początkowy to `turn = 0` PRZY `reversed = true`.
-struct CalendarPlateSwap: Equatable {
-    /// Postęp obrotu jako surowa liczba: 0 albo 1, naprzemiennie.
-    var turn: CGFloat = 0
-    /// Czy bieżący obrót jedzie z 1 do 0.
-    var reversed: Bool = true
-    /// W którą stronę obraca się talerz: `1` = danie z prawej strony
-    /// sekwencji, `-1` = z lewej. Nieanimowane — zmienia się skokiem razem
-    /// z daniem.
-    var spin: CGFloat = 1
-    /// Danie schodzące z talerza — rysowane tylko na czas obrotu. `nil`
-    /// = talerz stoi albo nie ma czego zdejmować (pierwsze wejście w dzień).
-    var leaving: CalendarPlateItem?
-    /// Czy obrót właśnie trwa.
-    var turning = false
-
-    /// Talerz w spoczynku: obrót skończony, nic nie schodzi.
-    static let settled = CalendarPlateSwap()
-
-    /// Zaczyna obrót. Woła się to w TEJ SAMEJ zmianie stanu, co podmianę
-    /// dania na talerzu. `false` = obrót już trwa i to stuknięcie zostało
-    /// wchłonięte.
-    ///
-    /// Wchłonięcie nie jest ustępstwem, tylko warunkiem poprawności.
-    /// `reversed` przelicza surową liczbę na postęp (`t = reversed ? 1 - turn
-    /// : turn`), a przestawienie go, gdy poprzedni obrót jest w połowie,
-    /// przerzuciłoby `t` z `x` na `1 − x`: talerz skoczyłby o tyle stopni,
-    /// ile zdążył się obrócić, i to na odwrót. Wolno więc zaczynać obrót
-    /// dopiero wtedy, gdy poprzedni osiadł — a wtedy `t` wynosi 1 i oba
-    /// przeliczenia dają to samo, więc zamiana jest niewidoczna.
-    ///
-    /// Wchłonięte stuknięcie i tak dojdzie na talerz i to bez opóźnienia:
-    /// danie WCHODZĄCE zawsze rysuje to, co ekran ma za bieżące, a w pierwszej
-    /// połowie obrotu stoi ono schowane za krawędzią. Stuknięcie w tym czasie
-    /// podmienia więc zdjęcie, którego nikt jeszcze nie widzi, i z krawędzi
-    /// wychodzi już najnowsze danie. W drugiej połowie widać zamianę samego
-    /// zdjęcia — bez obrotu, bo obrót jest w toku.
-    mutating func begin(leaving: CalendarPlateItem?, spin: CGFloat) -> Bool {
-        guard !turning else { return false }
-        self.leaving = leaving
-        self.spin = spin
-        turning = true
-        reversed = turn == 1
-        turn = reversed ? 0 : 1
-        return true
-    }
-
-    /// Kończy obrót: kopia schodząca przestaje istnieć i wolno zacząć
-    /// następny. Nie rusza `turn`, więc nie jest animacją — to sprzątanie
-    /// po niej.
-    mutating func end() {
-        leaving = nil
-        turning = false
-    }
-
-    func effect(isLeaving: Bool, flat: Bool) -> PlateTurn {
-        PlateTurn(turn: turn, reversed: reversed, spin: spin, leaving: isLeaving, flat: flat)
-    }
-}
-
-/// Jedna połowa obrotu talerza — cała geometria z JEDNEJ interpolowanej
-/// liczby.
-///
-/// Talerz obraca się wokół pionowej osi, jak odwracana moneta: danie
-/// schodzące odwraca się od oka i znika za krawędzią (0° → 90°), a w tej
-/// samej chwili danie wchodzące wychodzi z krawędzi po drugiej stronie
-/// (−90° → 0°). Obie połowy jadą w TĘ SAMĄ stronę, więc oko widzi jeden
-/// przedmiot, który się obrócił, a nie dwa, które się wymieniły.
-///
-/// **Dlaczego akurat obrót.** Przez trzy podejścia danie leciało z talerzyka
-/// w sekwencji na środek, rosnąc po drodze — i nie dało się tego doprowadzić
-/// do porządku. Ruch zależał od zmierzonych miejsc talerzyków (a te melduje
-/// układ, więc bywały nieznane albo mierzone w trakcie innego ruchu), od
-/// dwóch zegarów, które musiały się zgadzać, i od tego, żeby SwiftUI
-/// interpolował modyfikator wstawiony PRZEZ PRZEJŚCIE
-/// (`AnyTransition.modifier(active:identity:)`) — a tego nie robił: zdjęcie
-/// pojawiało się małe przy talerzyku i przeskakiwało na środek w jednej
-/// klatce. Obrót nie mierzy niczego, nie ma drugiego zegara i nic w nim nie
-/// rośnie od małego: gdyby przestał się interpolować, danie po prostu
-/// zmieniłoby się w miejscu.
-///
-/// **Mechanizm.** `Animatable` po jednej liczbie, nakładane przez
-/// `.modifier(...)` — ta sama droga, którą jedzie obrót dnia na tacy
-/// (`CalendarView.DayTurnEffect`) i wysepka (`SCIslandMorph`). To jedyny
-/// sposób animowania, który w tej aplikacji sprawdził się na ekranie.
-/// Nieciągłość (przejęcie w połowie) siedzi w CZYSTEJ funkcji tej liczby,
-/// a nie w stanie, więc nie ma czego zerować w połowie ruchu i nie ma dwóch
-/// zmian stanu, które musiałyby trafić w dwie różne aktualizacje.
-///
-/// **Przejęcie.** Pierwsza połowa czasu należy do dania schodzącego, druga
-/// do wchodzącego — w danej chwili widać dokładnie jedno. Zamiana wypada
-/// tam, gdzie oba są zwrócone krawędzią do oka, czyli mają zerową szerokość
-/// na ekranie: cięcie kryciem jest wtedy niewidoczne i nie potrzebuje
-/// zgrania w klatkę.
-///
-/// **Perspektywa** 0,45 — tyle, żeby obrót był obrotem, a nie zwężaniem
-/// zdjęcia. Skali celowo NIE ma: nic nie rośnie i nic nie maleje, bo
-/// „pojawia się małe i rośnie” to dokładnie ten objaw, dla którego lot
-/// z tacy poszedł do kosza.
-///
-/// Z wyłączonym ruchem w dostępności (`flat`) zostaje samo przenikanie
-/// kryciem, bez obrotu i bez cięcia: oba dania są wtedy widoczne przez cały
-/// czas, jedno gaśnie, drugie wzbiera.
-struct PlateTurn: ViewModifier, Animatable {
-    var turn: CGFloat
-    let reversed: Bool
-    let spin: CGFloat
-    /// Czy ten modyfikator prowadzi danie SCHODZĄCE z talerza.
-    let leaving: Bool
-    /// Ruch wyłączony w dostępności — zostaje przenikanie kryciem.
-    let flat: Bool
-
-    var animatableData: CGFloat {
-        get { turn }
-        set { turn = newValue }
-    }
-
-    func body(content: Content) -> some View {
-        // Postęp liczony zawsze od zera, bez względu na to, w którą stronę
-        // jedzie surowa liczba.
-        let t = min(max(reversed ? 1 - turn : turn, 0), 1)
-        // Ile ma za sobą TA połowa obrotu: pierwsza połowa czasu jest
-        // schodzącej, druga wchodzącej.
-        let half = leaving ? min(1, t / 0.5) : max(0, (t - 0.5) / 0.5)
-        // Schodzące: 0° → 90°. Wchodzące: −90° → 0°. Ten sam kierunek.
-        let angle = 90 * (leaving ? half : half - 1)
-        let mine = leaving ? (t < 0.5) : (t >= 0.5)
-
-        return content
-            .rotation3DEffect(
-                .degrees(flat ? 0 : Double(spin * angle)),
-                axis: (x: 0, y: 1, z: 0),
-                perspective: 0.45
-            )
-            .opacity(opacity(t: t, mine: mine))
-    }
-
-    private func opacity(t: CGFloat, mine: Bool) -> Double {
-        guard !flat else { return Double(leaving ? 1 - t : t) }
-        // Krycie jest tu tylko ubezpieczeniem cięcia: przy 90° zdjęcie ma
-        // zerową szerokość i tak, więc nie widać, że gaśnie.
-        return mine ? 1 : 0
     }
 }
 

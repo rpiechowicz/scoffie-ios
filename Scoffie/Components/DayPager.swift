@@ -18,35 +18,32 @@ enum DayNavigationMotion {
     /// Sprężyna, a nie krzywa: talerzyk zmienia ROZMIAR, a zmiana rozmiaru
     /// bez śladu odbicia czyta się jak podmiana obrazka. Tłumienie 0,86: przy
     /// 0,78 ostatnie klatki były dygotaniem zdjęcia o kilka punktów, tu
-    /// przeregulowanie to pół procenta. Czas dobrany tak, żeby osiadła razem
-    /// z obrotem talerza (`plateTurn`) — jedno stuknięcie ma mieć jeden
-    /// koniec ruchu, także gdy rusza się w dwóch miejscach naraz. Tą samą
-    /// sprężyną jedzie nadpis i podpis pod talerzem.
+    /// przeregulowanie to pół procenta. Tą samą sprężyną jedzie nadpis
+    /// i podpis pod talerzem.
     static let lift: Animation = .spring(response: 0.44, dampingFraction: 0.86)
 
-    /// Obrót talerza przy przełożeniu dania — pół obrotu w jedną stronę,
-    /// pół w drugą, ale JEDNA krzywa na całość (`PlateTurn`).
+    /// Przenikanie dania na talerzu — jedna krzywa na całe przełożenie.
     ///
-    /// `easeInOut`, nie sprężyna: talerz obraca się wokół osi i najszybszy
-    /// ma być dokładnie w chwili przejęcia, czyli w połowie czasu, kiedy oba
-    /// zdjęcia stoją krawędzią do oka. Sprężyna ma maksimum prędkości na
-    /// początku, więc pierwsza połowa przelatywałaby, a druga wlokła się —
-    /// i obrót przestałby czytać się jako jeden przedmiot. Do tego sprężyna
-    /// przeregulowuje, a przeregulowany obrót to talerz, który minął pozycję
-    /// i się cofa.
+    /// Talerz nie jeździ, nie rośnie i się nie obraca: stare zdjęcie gaśnie,
+    /// nowe wzbiera, oba w tym samym miejscu i w tym samym rozmiarze.
+    /// Ruch przez pół ekranu i obrót wokół osi ten ekran już miał — i oba
+    /// padły na tym, że każdy dodatkowy wymiar ruchu to dodatkowy sposób,
+    /// żeby się rozjechać. Przenikanie nie ma geometrii, którą można zepsuć:
+    /// jest tylko krycie, a krycie animuje w SwiftUI zawsze.
     ///
-    /// 0,46 s na pełny obrót, czyli 0,23 s na połowę. Krócej i przejęcie
-    /// staje się mrugnięciem; dłużej i zaczyna się czekanie na talerz.
-    static let plateTurn: Animation = .easeInOut(duration: 0.46)
+    /// `easeInOut` 0,30 s. Krzywa symetryczna, bo przenikanie jest
+    /// symetryczne — nic tu nie startuje ani nie ląduje. Krócej czyta się
+    /// jak cięcie, dłużej — jak zdjęcie, które się nie doczytało.
+    static let plateFade: Animation = .easeInOut(duration: 0.30)
 
-    /// Kiedy po obrocie wolno posprzątać: kopia dania, które zeszło
-    /// z talerza, przestaje istnieć, a kierunek się zeruje.
+    /// Kiedy przełożenie jest po wszystkim i wolno zgasić kierunek.
     ///
-    /// Nie ma tu nic do zgrania w klatkę — kopia jest od połowy obrotu
-    /// niewidoczna (stoi krawędzią i ma zerowe krycie), więc ten zegar może
-    /// się spóźnić i nikt tego nie zobaczy. Dlatego jest o 60 ms dłuższy od
-    /// obrotu, zamiast celować w jego koniec.
-    static let plateTurnSettled: Duration = .milliseconds(520)
+    /// Kierunek (`CalendarView.plateDirection`) niesie tylko przechył nazwy
+    /// dania pod talerzem i musi zgasnąć, żeby zmiana, której nikt nie wywołał
+    /// palcem, nie przechylała podpisu w stronę ostatniego stuknięcia. Nic się
+    /// o tej chwili nie rusza, więc zegar może się spóźnić — jest o 80 ms
+    /// dłuższy od przenikania, zamiast celować w jego koniec.
+    static let plateFadeSettled: Duration = .milliseconds(380)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.

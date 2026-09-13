@@ -82,31 +82,9 @@ struct CalendarView: View {
     /// zegar gaszący kierunek wisi na nim, a nie na samej wartości.
     @State private var plateMotion = 0
 
-    /// Licznik obrotów, które NAPRAWDĘ ruszyły — zegar sprzątający po obrocie
-    /// wisi na nim, a nie na liczniku ruchów.
-    ///
-    /// Różnica jest widoczna przy szybkim stukaniu: stuknięcie w trakcie
-    /// obrotu zostaje wchłonięte (`CalendarPlateSwap.begin`) i nie ma po sobie
-    /// czego sprzątać, a gdyby przestawiało zegar, trzymałoby obrót w stanie
-    /// „trwa" długo po tym, jak stanął — i kolejne stuknięcia przestałyby
-    /// obracać talerzem, bo każde wchłaniałoby się w obrót, którego już nie ma.
-    @State private var plateTurns = 0
-
     /// Licznik odhaczeń z pieczątki — haptyka zapisu. Odhaczenie to jedyny
     /// zapis na tym ekranie i ma być czuć pod palcem, że coś się stało.
     @State private var eatenToggles = 0
-
-    /// Obrót talerza przy przełożeniu dania: postęp, strona i danie, które
-    /// z talerza schodzi (`CalendarPlateSwap`).
-    ///
-    /// Stan jest TUTAJ, a nie w talerzu, i to jest cała istota tego ruchu:
-    /// `movePlate` ustawia go w TEJ SAMEJ zmianie stanu, co `pickedCardId`,
-    /// więc pierwsza klatka nowego dania jest już początkiem obrotu. Talerz,
-    /// który wykrywałby zmianę u siebie (`onChange`), stałby tę pierwszą
-    /// klatkę płasko na środku i zaczynał obrót z drugiej — mignięcie,
-    /// po którym „coś się jeszcze obraca”. Tak samo prowadzi się obrót tacy:
-    /// `DayPager` ustawia `dayTurn` razem z datą, nie po niej.
-    @State private var plateSwap = CalendarPlateSwap.settled
 
     // MARK: Obrót tacy
 
@@ -606,14 +584,13 @@ struct CalendarView: View {
         return .last(focused)
     }
 
-    /// Przekłada talerz na `target` i zaczyna jego obrót.
+    /// Przekłada talerz na `target`, zapamiętując kierunek ruchu.
     ///
-    /// Kierunek liczy się z MIEJSC w sekwencji: danie leżące na prawo obraca
-    /// talerz w jedną stronę, na lewo — w drugą, więc ruch mówi, skąd przyszło
-    /// danie. Z pustego talerza (dzień bez dań) kierunku nie ma i obrót idzie
-    /// w stronę domyślną. Kierunek i obrót ustawiają się W TEJ SAMEJ zmianie
-    /// stanu, co wybór — pierwsza klatka nowego dania ma być już początkiem
-    /// ruchu (patrz `CalendarPlateSwap`).
+    /// Kierunek liczy się z MIEJSC w sekwencji i niesie go jedna rzecz:
+    /// dziesięciopunktowy przechył nazwy dania pod talerzem. Sam talerz
+    /// przenika zdjęciem, bez kierunku — a to, DOKĄD danie się przełożyło,
+    /// mówi rosnący talerzyk z obwódką w sekwencji. Z pustego talerza (dzień
+    /// bez dań) kierunku nie ma: pusty krążek nie ma pozycji w sekwencji.
     ///
     /// `pin` mówi, czy wybór ma zostać zapamiętany (stuknięcie w talerzyk),
     /// czy tylko wrócić do tego, co ekran uznaje za właściwe (powrót do
@@ -634,35 +611,6 @@ struct CalendarView: View {
             plateDirection = 0
         } else {
             plateDirection = from.map { to > $0 ? 1 : -1 } ?? 0
-            // Obrót zaczyna się TU, w tej samej zmianie stanu, co wybór —
-            // i tylko dlatego pierwsza klatka nowego dania jest już
-            // początkiem ruchu, a nie płaskim zdjęciem na środku.
-            //
-            // Strona obrotu z miejsca w sekwencji: danie z prawej obraca
-            // talerz w jedną stronę, z lewej w drugą, więc ruch mówi, skąd
-            // przyszło. Z pustego talerza (dzień bez dań) kierunku nie ma
-            // i obrót idzie w stronę domyślną — to nadal obrót, bo coś na
-            // talerzu stanęło.
-            //
-            // Kopia schodząca dostaje `current`, czyli danie, które ZOSTAŁO
-            // na talerzu do tej chwili, a nie „to, co ekran uznaje za
-            // właściwe”: przy powrocie do następnego posiłku (`pin: false`)
-            // to są dwie różne rzeczy. Obrót tacy nie ma tu nic do rzeczy —
-            // zmiana dnia prowadzi się osobno i wtedy talerz się nie obraca.
-            //
-            // Wyłączony ruch w dostępności NIE jest tu wyjątkiem: ruch zdejmuje
-            // z tego sam `PlateTurn` (zostaje przenikanie kryciem), a gdyby
-            // obrót się tu nie zaczynał, danie zmieniałoby się twardym cięciem.
-            if outgoingDate == nil {
-                // Osobna zmienna, a nie wywołanie w warunku `if`: klamra po
-                // wywołaniu czyta się wtedy jak domknięcie doczepione do
-                // argumentów, a nie jak treść warunku.
-                let started = plateSwap.begin(
-                    leaving: current,
-                    spin: plateDirection < 0 ? -1 : 1
-                )
-                if started { plateTurns += 1 }
-            }
             plateMotion += 1
             plateMoves += 1
         }
@@ -987,11 +935,6 @@ struct CalendarView: View {
                     outgoingPick = pickedCardId
                     pickedCardId = nil
                     plateDirection = 0
-                    // Talerz się nie obraca, gdy zmienia się dzień: cały dzień
-                    // jedzie w bok obrotem tacy, a drugi obrót w tej samej
-                    // chwili byłby ruchem o jeden za dużo. Kopia schodząca
-                    // musi też wyjść z drzewa, bo należy do wczorajszego dnia.
-                    plateSwap = .settled
                     turnDirection = change.forward ? 1 : -1
                     dayTurn = 1
                     turnCount += 1
@@ -1079,28 +1022,11 @@ struct CalendarView: View {
         .task(id: plateMotion) {
             guard plateMotion > 0 else { return }
             do {
-                try await Task.sleep(for: DayNavigationMotion.plateTurnSettled)
+                try await Task.sleep(for: DayNavigationMotion.plateFadeSettled)
             } catch {
                 return
             }
             plateDirection = 0
-        }
-        // Sprzątanie po obrocie: kopia dania, które zeszło z talerza, przestaje
-        // istnieć i wolno zacząć następny obrót. Nie ma tu czego zgrywać
-        // w klatkę — od połowy obrotu ta kopia stoi krawędzią do oka i ma
-        // zerowe krycie, więc zegar może się spóźnić i nikt tego nie zobaczy;
-        // ważne jest tylko, żeby się nie spieszył, bo do połowy obrotu kopia
-        // JEST tym, co widać. Zegar wisi na liczniku obrotów, nie ruchów:
-        // wchłonięte stuknięcie nie ma po sobie czego sprzątać i nie ma prawa
-        // przedłużać obrotu, który już stanął.
-        .task(id: plateTurns) {
-            guard plateTurns > 0 else { return }
-            do {
-                try await Task.sleep(for: DayNavigationMotion.plateTurnSettled)
-            } catch {
-                return
-            }
-            plateSwap.end()
         }
         // Kopia wyjeżdżająca schodzi z drzewa, gdy sprężyna osiądzie —
         // niewidoczna i tak, ale rysowana. Zegar na liczniku obrotów,
@@ -1237,14 +1163,6 @@ struct CalendarView: View {
             openDetail = { openMeal(withCardId: focused.id, on: date) }
         }
 
-        // Obraca się tylko dzień WCHODZĄCY. Kopia wyjeżdżająca jest martwa:
-        // pokazuje dzień taki, jaki był w chwili machnięcia, i obrót talerza
-        // w środku odjeżdżającej strony byłby drugim ruchem w tej samej
-        // chwili — a mówiłby o czymś, czego już nie ma na ekranie.
-        // Jawny typ, bo w tym projekcie wnioskowanie z `.settled` w wyrażeniu
-        // warunkowym potrafi zgłosić błąd kilkadziesiąt linii wyżej (SE-0418).
-        let swap: CalendarPlateSwap = turn.outgoing ? .settled : plateSwap
-
         return VStack(spacing: fit.gap) {
             CalendarPlateKicker(item: focused)
                 .modifier(turn.effect(travel: 36, lift: 0, shrink: 0))
@@ -1268,8 +1186,7 @@ struct CalendarView: View {
                     size: size,
                     canToggle: canToggle,
                     onToggle: { toggleEaten(withCardId: focused?.id, on: date) },
-                    onOpenDetail: openDetail,
-                    swap: swap
+                    onOpenDetail: openDetail
                 )
                 .contentShape(.contextMenuPreview, Circle().inset(by: -CalendarPlate.rimInset(for: size)))
                 .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
@@ -1278,11 +1195,10 @@ struct CalendarView: View {
             .frame(maxHeight: CalendarPlate.defaultSize + CalendarPlate.maxRimInset * 2)
             // Talerz jedzie najdalej i najwyżej — to on jest daniem na tacy.
             .modifier(turn.effect(travel: 140, lift: 24, shrink: 0.16))
-            // Nad podpisem i sekwencją: talerz obraca się w perspektywie, więc
-            // w połowie obrotu jego krawędzie wychodzą poza własne pudełko,
-            // a cień pod nim sięga jeszcze dalej. Bez tego chowałyby się pod
-            // nazwą dania i sekwencją, bo w kolumnie późniejsze piętro leży
-            // wyżej.
+            // Nad podpisem i sekwencją: cień pod talerzem ma 26 pt rozmycia
+            // i wychodzi poza jego pudełko. Bez tego chowałby się pod nazwą
+            // dania i sąsiednimi talerzykami, bo w kolumnie późniejsze piętro
+            // leży wyżej.
             .zIndex(1)
 
             CalendarPlateCaption(
