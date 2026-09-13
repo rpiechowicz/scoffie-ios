@@ -1810,9 +1810,13 @@ final class SessionStore {
     private func persistSession(_ response: SessionResponse, appleUserIdentifier: String? = nil) {
         debugLog("[SessionStore] persistSession START userId=\(response.user.id) household=\(response.household?.id ?? "nil")")
 
-        // Tokeny auth trafiają do Keychain (szyfrowany, chroniony przez Secure Enclave)
-        let accessSaved = KeychainService.save(response.accessToken, forKey: Keys.accessToken)
+        // Tokeny auth trafiają do Keychain (szyfrowany, chroniony przez Secure
+        // Enclave). Refresh token PIERWSZY, tą samą zasadą co przy odświeżaniu
+        // (`refreshSessionTokens`): to on jest jedynym, z którego da się
+        // odzyskać sesję, więc jeśli któryś zapis ma nie dojść, niech to będzie
+        // ten odzyskiwalny.
         let refreshSaved = KeychainService.save(response.refreshToken, forKey: Keys.refreshToken)
+        let accessSaved = KeychainService.save(response.accessToken, forKey: Keys.accessToken)
         let userIdSaved = KeychainService.save(response.user.id, forKey: Keys.userId)
         debugLog("[SessionStore] keychain saved accessToken=\(accessSaved) refreshToken=\(refreshSaved)")
         debugLog("[SessionStore] keychain saved userId=\(userIdSaved)")
@@ -2804,30 +2808,52 @@ final class SessionStore {
                     }
                     return .unavailable
                 }
-                // REFRESH TOKEN PIERWSZY, i to nie jest kosmetyka.
+                // REFRESH TOKEN PIERWSZY — i w OSOBNYM `guard`, nie jako drugi
+                // warunek obok access tokenu. Jedno i drugie z tego samego
+                // powodu.
                 //
                 // Serwer zrotował parę, więc token, którym właśnie się
-                // posłużyliśmy, jest już martwy — jedyne, co trzyma sesję, to
-                // nowy refresh token. Gdy zapisywany był drugi, a proces ginął
-                // między zapisami (iOS ubija aplikację w tle, aktualizacja
-                // z TestFlighta), w Keychainie zostawał ŚWIEŻY access token
-                // obok MARTWEGO refresh tokenu. Objaw przychodził dopiero po
-                // godzinie albo po nocy: access token wygasał, telefon szedł
-                // po nową parę tym martwym tokenem i dostawał 401.
-                // W tej kolejności ta sama śmierć procesu zostawia świeży
-                // refresh token obok starego access tokenu — a to stan, z
-                // którego aplikacja wychodzi sama, jednym odświeżeniem.
-                let refreshStored = KeychainService.save(pair.refreshToken, forKey: Keys.refreshToken)
-                let accessStored = KeychainService.save(pair.accessToken, forKey: Keys.accessToken)
-                guard refreshStored, accessStored else {
-                    // Nieudany zapis nie jest odmową serwera. Nie kończymy
-                    // sesji: `.unavailable` zostawia ją przy życiu i uzbraja
-                    // termin, więc będzie kolejna próba. Log jest tu jedynym
-                    // śladem — po stronie serwera ta sytuacja wygląda jak
-                    // udane odświeżenie i nie widać jej w żadnym żądaniu.
+                // posłużyliśmy, jest już martwy: jedyne, co trzyma sesję, to
+                // nowy refresh token. Stan, którego trzeba za wszelką cenę
+                // uniknąć, to ŚWIEŻY access token obok MARTWEGO refresh tokenu
+                // — bo on wygląda zdrowo przez godzinę i pęka dopiero potem.
+                // Można w niego wejść na dwa sposoby i oba są tu zamknięte:
+                // proces ginie między zapisami (iOS ubija aplikację w tle,
+                // aktualizacja z TestFlighta) albo zapis refresh tokenu pada,
+                // a zapis access tokenu przechodzi.
+                //
+                // Ten drugi sposób jest gorszy, bo cichy i systematyczny:
+                // `armProactiveRefresh` czyta `exp` ze świeżo zapisanego access
+                // tokenu, więc następną próbę uzbraja dopiero za ~55 minut.
+                // Godzinę później telefon pokazuje serwerowi zrotowany token
+                // grubo POZA oknem łaski (60 s), a to dla backendu nie jest
+                // zgubiona odpowiedź, tylko kradzież: `revokeTokenFamily`
+                // kasuje rodzinę, podbija `tokenVersion` i zrywa socket na
+                // WSZYSTKICH urządzeniach. Czyli dokładnie „wylogowanie po
+                // godzinie" — objaw, który ta poprawka miała usunąć, gdyby
+                // oba zapisy szły bezwarunkowo.
+                guard await Self.persistRefreshToken(pair.refreshToken) else {
+                    // Nie zapisaliśmy następcy, więc w Keychainie został token,
+                    // który serwer właśnie zrotował. Backend oddałby za niego
+                    // świeżą parę, dopóki nikt nie użył następcy — ale tylko
+                    // przez okno łaski, a nasze jedyne automatyczne ponowienie
+                    // (`minProactiveRefreshDelay`) celuje dokładnie w jego
+                    // granicę. Kończymy więc sesję CZYSTO i od razu, zamiast
+                    // zostawiać ponowienie, które z równym prawdopodobieństwem
+                    // wyglądałoby dla serwera na kradzież i zabrało ze sobą
+                    // sesje na pozostałych urządzeniach.
                     debugLog(
-                        "[SessionStore] refreshSessionTokens — KEYCHAIN WRITE FAILED refresh=\(refreshStored) access=\(accessStored)"
+                        "[SessionStore] refreshSessionTokens — REFRESH TOKEN NOT PERSISTED, ending session"
                     )
+                    return .rejected
+                }
+                // Access token jest odzyskiwalny: gdy jego zapis padnie,
+                // w Keychainie zostaje stary (najwyżej wygasły) obok ŚWIEŻEGO
+                // refresh tokenu, a z tego stanu wychodzi się jednym
+                // odświeżeniem. Dlatego to nie koniec sesji, tylko
+                // `.unavailable` — bez udawania, że para jest na miejscu.
+                guard KeychainService.save(pair.accessToken, forKey: Keys.accessToken) else {
+                    debugLog("[SessionStore] refreshSessionTokens — access token write failed")
                     return .unavailable
                 }
                 return .refreshed
@@ -2860,6 +2886,29 @@ final class SessionStore {
             armProactiveRefresh()
         }
         return outcome
+    }
+
+    /// Zapisuje refresh token, ponawiając próbę GRUBO w oknie łaski serwera.
+    ///
+    /// Odmowa Keychaina bywa chwilowa (pęcherz zajęty, proces obudzony w złym
+    /// momencie), a stawką jest cała sesja — więc jedna próba to za mało.
+    /// Trzy podejścia w sumie przez ~0,6 s: to nic wobec 60-sekundowego okna
+    /// łaski backendu, w którym zrotowany token da się jeszcze wymienić na
+    /// świeżą parę, a jednocześnie nie zamienia odświeżenia w zawieszkę.
+    ///
+    /// Odstępy rosną, bo jeśli pierwsza próba padła na zajętym pęcherzu, to
+    /// druga w tej samej milisekundzie padnie z tego samego powodu.
+    private static func persistRefreshToken(_ token: String) async -> Bool {
+        for attempt in 0..<3 {
+            if KeychainService.save(token, forKey: Keys.refreshToken) { return true }
+            guard attempt < 2 else { break }
+            // 0,2 s, potem 0,4 s. Jawny typ i jawne liczby, bez przesunięć
+            // bitowych: tego pliku nie skompiluję na Windowsie, więc im mniej
+            // wnioskowania, tym mniej okazji na literówkę widoczną dopiero w CI.
+            let delay: UInt64 = attempt == 0 ? 200_000_000 : 400_000_000
+            try? await Task.sleep(nanoseconds: delay)
+        }
+        return false
     }
 
     private func refreshSessionTokensIfExpiringSoon() async {
