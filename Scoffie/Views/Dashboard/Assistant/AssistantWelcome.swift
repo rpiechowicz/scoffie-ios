@@ -107,10 +107,18 @@ struct AssistantWelcome: Equatable {
     }
 
     /// Pierwsze słowo z profilu — „Rafał Piechowicz" wita się jak „Rafał".
-    private static func firstName(_ raw: String?) -> String? {
+    ///
+    /// Login nie jest imieniem: konto z Apple bez podanego imienia ma w profilu
+    /// zastępczy identyfikator („rpiechowicz"), a „Dobry wieczór, rpiechowicz"
+    /// brzmi jak formularz, nie jak powitanie. Imię zaczyna się wielką literą
+    /// i nie ma w sobie cyfr ani „@" — wszystko inne dostaje powitanie bez
+    /// imienia, co jest lepsze niż złe imię.
+    static func firstName(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let first = raw.split(separator: " ").first.map(String.init) ?? ""
         let trimmed = first.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        guard let initial = trimmed.first, initial.isUppercase else { return nil }
+        guard !trimmed.contains("@"), !trimmed.contains(where: { $0.isNumber }) else { return nil }
+        return trimmed
     }
 }

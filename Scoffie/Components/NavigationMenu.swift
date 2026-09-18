@@ -51,6 +51,11 @@ struct NavigationMenu: View {
             }
         }
         .tint(SCPalette.terracotta)
+        // Systemowe zachowanie Liquid Glass z iOS 26: przy przewijaniu w dół
+        // pasek zwija się do samej ikony bieżącej zakładki, przy przewijaniu
+        // w górę wraca — to, co robi Revolut. Bez własnej animacji: reaguje na
+        // każdy ScrollView w zakładce, także na rozmowę z asystentem.
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 }
 
