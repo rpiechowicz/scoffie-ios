@@ -130,12 +130,19 @@ struct AssistantHeader<MenuContent: View>: View {
 
 // MARK: - Ślad kroków tury
 
-/// Kroki tury zamiast kręciołka.
+/// Dymek „myślę" zamiast kręciołka.
 ///
-/// Tura trwa 25–60 s i jedyne, co o niej wiadomo, to kroki przysyłane przez
-/// serwer (`progress[].label`). Zrobione zostają na ekranie wyszarzone —
-/// dzięki temu widać PRZEBYTĄ drogę, a nie jeden migający napis, przy którym
-/// nie sposób ocenić, czy cokolwiek się dzieje.
+/// Tura trwa 25–240 s i jedyne, co o niej wiadomo, to kroki przysyłane przez
+/// serwer (`progress[].label`). Wcześniej rosły tu jako lista wierszy: po
+/// dziesiątym kroku zajmowała pół ekranu i spychała pytanie użytkownika poza
+/// widok, a każda linijka i tak mówiła o tej samej jednej rzeczy — że trwa.
+///
+/// Teraz to jest JEDEN dymek: orb pokazuje CHARAKTER pracy (szukanie,
+/// układanie planu, zapis), gruby wiersz mówi, co dzieje się teraz, a droga
+/// dotąd kurczy się do dwóch wyszarzonych linijek i licznika. Dymek stoi po
+/// lewej, w miejscu, w którym za chwilę pojawi się odpowiedź — i znika
+/// przejściem, a nie skokiem, więc rozmowa nie drga w momencie, w którym
+/// przychodzi to, na co użytkownik czekał.
 struct AssistantProgressTrail: View {
     let steps: [AgentProgressStepDTO]
     let startedAt: Date?
@@ -145,206 +152,154 @@ struct AssistantProgressTrail: View {
     /// szumem pod każdym pytaniem — i tak właśnie była odbierana.
     private static let patienceAfter: TimeInterval = 18
 
+    /// Ile przebytych kroków zostaje na ekranie. Dwa, bo tyle wystarczy, żeby
+    /// pokazać DROGĘ („sprawdziłem profile, przeczytałem plan"), a każdy
+    /// kolejny wiersz to już wyłącznie wysokość.
+    private static let visiblePastSteps = 2
+
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            if steps.isEmpty {
-                row(label: "Zastanawiam się…", isCurrent: true)
-                    .transition(.opacity)
-            } else {
-                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                    // Przekazanie planiście to MOMENT, nie kolejna linijka:
-                    // od tej chwili dzieje się droższa i dłuższa część tury,
-                    // a użytkownik ma wiedzieć, że to normalne.
-                    if step.isHandoff {
-                        HandoffTile(
-                            label: step.label,
-                            since: AgentStore.parseTimestamp(step.at),
-                            isCurrent: index == steps.count - 1
-                        )
-                        .transition(.opacity.combined(with: .offset(y: 8)))
-                    } else {
-                        row(label: step.label, isCurrent: index == steps.count - 1)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity.combined(with: .offset(y: 8)),
-                                    removal: .opacity
-                                )
-                            )
-                    }
-                }
-            }
+    private var current: AgentProgressStepDTO? { steps.last }
 
-            if let startedAt {
-                footer(from: startedAt)
-            }
-        }
-        .padding(.vertical, 4)
-        // Kroki dochodzą po jednym co kilka sekund — bez tego lista skacze,
-        // a wiersz, który właśnie się skończył, zmienia się w ptaszek bez
-        // żadnego przejścia.
-        .animation(.smooth(duration: 0.3), value: steps.count)
+    private var activity: SCThinkingOrb.Activity {
+        guard let current else { return .idle }
+        return .forStep(isHandoff: current.isHandoff, writes: current.writes ?? false)
     }
 
-    @ViewBuilder
-    private func row(label: String, isCurrent: Bool) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            StepIcon(isCurrent: isCurrent)
+    /// Przekazanie planiście to MOMENT, nie kolejna linijka: od tej chwili
+    /// dzieje się droższa i dłuższa część tury, a użytkownik ma wiedzieć,
+    /// że to normalne. Dymek zmienia wtedy ton, zamiast dokładać kafel.
+    private var isHandoff: Bool { current?.isHandoff == true }
 
-            Text(label)
-                .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
-                .tracking(-0.15)
-                .foregroundStyle(isCurrent ? Color.scLabel(scheme) : Color.scFaint(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .contentTransition(.opacity)
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            SCThinkingOrb(activity: activity, size: 30)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 6) {
+                headline
+                if isHandoff { handoffNote }
+                past
+                footer
+            }
 
             Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(bubbleFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(bubbleStroke, lineWidth: 1)
+        )
+        // Krok dochodzi co kilka sekund — bez tego dymek skacze, a wiersz,
+        // który właśnie się skończył, podmienia się bez żadnego przejścia.
+        .animation(.smooth(duration: 0.3), value: steps.count)
+        .animation(.smooth(duration: 0.35), value: isHandoff)
+        .transition(
+            .asymmetric(
+                insertion: .opacity.combined(with: .offset(y: 10)),
+                // Dymek nie znika w nic: gaśnie lekko opadając, dokładnie
+                // tam, gdzie wjeżdża odpowiedź. Skok w tym miejscu czyta się
+                // jak błąd, bo zdarza się w sekundzie, na którą się czeka.
+                removal: .opacity.combined(with: .scale(scale: 0.96))
+            )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(current?.label ?? "Zastanawiam się")
+    }
+
+    private var headline: some View {
+        Text(current?.label ?? "Zastanawiam się…")
+            .font(.system(size: 14.5, weight: .semibold))
+            .tracking(-0.15)
+            .foregroundStyle(Color.scLabel(scheme))
+            .fixedSize(horizontal: false, vertical: true)
+            .contentTransition(.opacity)
+    }
+
+    private var handoffNote: some View {
+        Text("Dokładniejszy model — ta część trwa 30–60 s")
+            .font(.system(size: 12))
+            .foregroundStyle(Color.scMuted(scheme))
+            .transition(.opacity)
+    }
+
+    /// Droga dotąd — wyszarzona, bez ikon stanu. Ptaszek przy każdej linijce
+    /// dokładał kolumnę znaczków, które mówiły to samo co samo wyszarzenie.
+    @ViewBuilder
+    private var past: some View {
+        let done = steps.dropLast()
+        if !done.isEmpty {
+            let shown = Array(done.suffix(Self.visiblePastSteps))
+            VStack(alignment: .leading, spacing: 2) {
+                if done.count > shown.count {
+                    Text("+\(done.count - shown.count) wcześniej")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.scFaint(scheme))
+                }
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, step in
+                    Text(step.label)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.scFaint(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .transition(.opacity)
         }
     }
 
     /// Licznik sekund plus — dopiero po chwili — zdanie o tym, że nie trzeba
     /// tu siedzieć.
-    private func footer(from startedAt: Date) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let elapsed = max(0, context.date.timeIntervalSince(startedAt))
-            let seconds = Int(elapsed)
+    @ViewBuilder
+    private var footer: some View {
+        if let startedAt {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let elapsed = max(0, context.date.timeIntervalSince(startedAt))
+                let seconds = Int(elapsed)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(seconds) s")
-                    .font(.system(size: 12))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scFaint(scheme))
-                    // Ta sama animacja liczby co przy kaloriach w szczegółach
-                    // przepisu: cyfra przewija się, zamiast podmieniać skokiem.
-                    .contentTransition(.numericText(value: Double(seconds)))
-                    .animation(.snappy(duration: 0.25), value: seconds)
-
-                if elapsed >= Self.patienceAfter {
-                    Text("Możesz wyjść — wrócę z odpowiedzią.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(seconds) s")
                         .font(.system(size: 12))
+                        .monospacedDigit()
                         .foregroundStyle(Color.scFaint(scheme))
-                        .transition(.opacity.combined(with: .offset(y: -4)))
-                }
-            }
-            .padding(.leading, 28)
-            .animation(.smooth(duration: 0.35), value: elapsed >= Self.patienceAfter)
-        }
-    }
+                        // Ta sama animacja liczby co przy kaloriach
+                        // w szczegółach przepisu: cyfra przewija się,
+                        // zamiast podmieniać skokiem.
+                        .contentTransition(.numericText(value: Double(seconds)))
+                        .animation(.snappy(duration: 0.25), value: seconds)
 
-    /// Kafel „Biorę się za plan” — z licznikiem sekund od przekazania
-    /// i uczciwym „30–60 s”. Terakota, bo to jedyny krok, na który warto
-    /// zwrócić uwagę; reszta śladu jest szara.
-    private struct HandoffTile: View {
-        let label: String
-        let since: Date?
-        let isCurrent: Bool
-
-        @Environment(\.colorScheme) private var scheme
-
-        var body: some View {
-            HStack(alignment: .center, spacing: 10) {
-                ZStack {
-                    Circle().fill(SCPalette.terracotta.opacity(0.22))
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                }
-                .frame(width: 30, height: 30)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(label)
-                        .font(.system(size: 14, weight: .bold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.scLabel(scheme))
-                    Text("Dokładniejszy model — ta część trwa 30–60 s")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.scMuted(scheme))
-                }
-
-                Spacer(minLength: 8)
-
-                if let since {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        let seconds = max(0, Int(context.date.timeIntervalSince(since)))
-                        Text(String(format: "%d:%02d", seconds / 60, seconds % 60))
-                            .font(.system(size: 12.5, weight: .bold))
-                            .monospacedDigit()
-                            .foregroundStyle(SCPalette.terracotta)
+                    if elapsed >= Self.patienceAfter {
+                        Text("Możesz wyjść — wrócę z odpowiedzią.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.scFaint(scheme))
+                            .transition(.opacity.combined(with: .offset(y: -4)))
                     }
                 }
+                .animation(.smooth(duration: 0.35), value: elapsed >= Self.patienceAfter)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.scAccentTint(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(SCPalette.terracotta.opacity(0.26), lineWidth: 1)
-            )
-            .opacity(isCurrent ? 1 : 0.8)
-            .padding(.vertical, 2)
         }
     }
 
-    /// Znacznik kroku: kręciołek albo ptaszek, ZAWSZE tej samej wielkości.
-    ///
-    /// Wcześniej kółko postępu było obrysem, a znacznik zrobionego kroku
-    /// wypełnionym kołem tej samej ramki — obrys ma pół grubości linii poza
-    /// promieniem, więc oba wyglądały na różne. Teraz obrys jest wsunięty
-    /// o tę grubość i oba kończą się na tej samej średnicy.
-    private struct StepIcon: View {
-        let isCurrent: Bool
-
-        private static let diameter: CGFloat = 18
-        private static let lineWidth: CGFloat = 2
-
-        @Environment(\.colorScheme) private var scheme
-
-        var body: some View {
-            ZStack {
-                if isCurrent {
-                    Spinner(lineWidth: Self.lineWidth)
-                        .padding(Self.lineWidth / 2)
-                } else {
-                    Circle().fill(Color.scSageTint(scheme))
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(SCPalette.sage)
-                }
-            }
-            .frame(width: Self.diameter, height: Self.diameter)
-            .transition(.scale(scale: 0.6).combined(with: .opacity))
+    /// Ton dymka idzie za tym, co się dzieje: układanie planu jest indygo
+    /// (jak karta analizy), zapis szałwiowy (jak karta zapisanego planu),
+    /// reszta neutralna. Kolor nie jest ozdobą — po nim widać zmianę etapu
+    /// wcześniej, niż zdąży się przeczytać wiersz.
+    private var bubbleFill: Color {
+        switch activity {
+        case .planning: return Color.scIndigoTint(scheme)
+        case .saving: return Color.scSageTint(scheme)
+        case .idle, .searching: return Color.scCardSurface(scheme)
         }
     }
 
-    /// Kręciołek liczony z ZEGARA, nie ze stanu.
-    ///
-    /// Wersja na `@State` + `repeatForever` zatrzymywała się w połowie tury:
-    /// każdy nowy krok postępu tworzył NOWY widok kółka, którego stan był już
-    /// ustawiony na „po animacji" — `value:` nigdy się nie zmieniało, więc
-    /// animacja nie ruszała i kółko zastygało pod kątem 360°. Kąt liczony
-    /// z czasu nie ma stanu, który dałoby się zgubić przy przebudowie widoku.
-    private struct Spinner: View {
-        let lineWidth: CGFloat
-
-        /// Pełny obrót; 0,9 s to tempo, przy którym oko widzi ruch, a nie miga.
-        private static let period: TimeInterval = 0.9
-
-        var body: some View {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-                let phase = context.date.timeIntervalSinceReferenceDate
-                    .truncatingRemainder(dividingBy: Self.period)
-                Circle()
-                    .trim(from: 0, to: 0.72)
-                    .stroke(
-                        SCPalette.terracotta,
-                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(phase / Self.period * 360))
-            }
+    private var bubbleStroke: Color {
+        switch activity {
+        case .planning: return SCPalette.indigo.opacity(0.26)
+        case .saving: return SCPalette.sage.opacity(0.24)
+        case .idle, .searching: return Color.scCardStroke(scheme)
         }
     }
 }

@@ -254,6 +254,26 @@ struct SwapCardDTO: Decodable, Equatable {
     var state: AgentCardStateDTO
 }
 
+/// Usunięcie jednego posiłku z planu.
+///
+/// Osobna karta, a nie podmiana z pustym „po": `SwapCardDTO.to` jest celowo
+/// nieopcjonalne, bo cała karta podmiany opiera się na zestawieniu dwóch dań,
+/// a tutaj nic nie wchodzi w to miejsce.
+struct RemoveMealCardDTO: Decodable, Equatable {
+    let v: Int
+    let proposalId: String
+    let weekStart: String
+    let date: String
+    let eyebrow: String
+    let title: String
+    /// Co znika z planu.
+    let removed: SwapCardSideDTO
+    /// Powód od modelu, gdy nie zmieścił się w tytule.
+    let note: String?
+    let actions: [AgentCardActionDTO]
+    var state: AgentCardStateDTO
+}
+
 /// Jedna osoba przy wspólnym daniu.
 struct HouseholdSplitPortionDTO: Decodable, Equatable, Identifiable {
     let userId: String
@@ -410,6 +430,7 @@ enum AgentCardDTO: Decodable, Equatable {
     case planDay(PlanDayCardDTO)
     case options(OptionsCardDTO)
     case swap(SwapCardDTO)
+    case removeMeal(RemoveMealCardDTO)
     case householdSplit(HouseholdSplitCardDTO)
     case macroGap(MacroGapCardDTO)
     case shoppingList(ShoppingListCardDTO)
@@ -450,6 +471,12 @@ enum AgentCardDTO: Decodable, Equatable {
         case "SWAP":
             if let card = try? SwapCardDTO(from: decoder) {
                 self = .swap(card)
+            } else {
+                self = .unknown
+            }
+        case "REMOVE_MEAL":
+            if let card = try? RemoveMealCardDTO(from: decoder) {
+                self = .removeMeal(card)
             } else {
                 self = .unknown
             }
@@ -495,6 +522,7 @@ enum AgentCardDTO: Decodable, Equatable {
         case .planWeek(let card): return card.proposalId
         case .planDay(let card): return card.proposalId
         case .swap(let card): return card.proposalId
+        case .removeMeal(let card): return card.proposalId
         case .householdSplit(let card): return card.proposalId
         case .applied(let card): return card.proposalId
         case .options, .macroGap, .shoppingList, .clarify, .unknown:
@@ -525,6 +553,7 @@ enum AgentCardDTO: Decodable, Equatable {
         case .planWeek(let card): return card.state
         case .planDay(let card): return card.state
         case .swap(let card): return card.state
+        case .removeMeal(let card): return card.state
         case .householdSplit(let card): return card.state
         case .applied(let card): return card.state
         case .options, .macroGap, .shoppingList, .clarify, .unknown:
@@ -549,6 +578,9 @@ enum AgentCardDTO: Decodable, Equatable {
         case .swap(var card):
             card.state = state
             return .swap(card)
+        case .removeMeal(var card):
+            card.state = state
+            return .removeMeal(card)
         case .householdSplit(var card):
             card.state = state
             return .householdSplit(card)

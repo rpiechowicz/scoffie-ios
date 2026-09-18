@@ -12,6 +12,7 @@ let planDayJSON = #"{"kind": "PLAN_DAY", "v": 1, "proposalId": "66666666-6666-46
 let clarifyJSON = #"{"kind": "CLARIFY", "v": 1, "question": "Dla ilu osób mam planować ten tydzień?", "hint": "W profilu są cztery osoby, ale wspominałeś o weekendzie we dwoje.", "actions": [{"type": "ASK", "proposalId": null, "label": "Dla czterech", "style": "PRIMARY", "prompt": "Dla czterech"}, {"type": "ASK", "proposalId": null, "label": "Dla dwóch", "style": "SECONDARY", "prompt": "Dla dwóch"}, {"type": "ASK", "proposalId": null, "label": "Inaczej w weekend", "style": "SECONDARY", "prompt": "Inaczej w weekend"}]}"#
 let optionsJSON = #"{"kind": "OPTIONS", "v": 1, "eyebrow": "Kolacja · wtorek", "title": "Trzy szybkie kolacje", "options": [{"recipeId": "r-5", "title": "Omlet ze szpinakiem i fetą", "kcalPerServing": 393, "prepTimeMinutes": 12, "imageUrl": "https://example.invalid/omlet.jpg", "tag": "Najszybsze", "prompt": "Wybieram: Omlet ze szpinakiem i fetą"}, {"recipeId": "r-7", "title": "Sałatka z tuńczykiem", "kcalPerServing": 340, "prepTimeMinutes": 15, "imageUrl": null, "tag": null, "prompt": "Wybieram: Sałatka z tuńczykiem"}, {"recipeId": "r-8", "title": "Tost z awokado i jajkiem", "kcalPerServing": 420, "prepTimeMinutes": 10, "imageUrl": null, "tag": "Najwięcej białka", "prompt": "Wybieram: Tost z awokado i jajkiem"}], "actions": [{"type": "ASK", "proposalId": null, "label": "Coś innego", "style": "SECONDARY", "prompt": "Żadne z tych mi nie pasuje. Zaproponuj coś innego."}]}"#
 let swapJSON = #"{"kind": "SWAP", "v": 1, "proposalId": "77777777-7777-4777-8777-777777777777", "weekStart": "2026-08-31", "date": "2026-09-01", "eyebrow": "Podmiana · wtorek, kolacja", "title": "Szybciej o 43 min", "from": {"recipeId": "r-1", "title": "Gulasz wołowy z kaszą", "kcalPerServing": 720, "prepTimeMinutes": 55}, "to": {"recipeId": "r-5", "title": "Omlet ze szpinakiem i fetą", "kcalPerServing": 393, "prepTimeMinutes": 12}, "deltas": [{"value": "−43 min", "label": "szybciej", "good": true}, {"value": "−327 kcal", "label": "na porcję", "good": true}], "actions": [{"type": "APPLY", "proposalId": "77777777-7777-4777-8777-777777777777", "label": "Podmień", "style": "PRIMARY"}], "state": {"status": "PENDING", "canApply": true, "canUndo": false, "until": "2026-09-03T10:00:00.000Z"}}"#
+let removeMealJSON = #"{"kind": "REMOVE_MEAL", "v": 1, "proposalId": "99999999-9999-4999-8999-999999999999", "weekStart": "2026-08-31", "date": "2026-09-03", "eyebrow": "Usunięcie · czwartek, kolacja", "title": "Jemy u teściów", "removed": {"recipeId": "r-9", "title": "Zapiekanka z cukinią", "kcalPerServing": 640, "prepTimeMinutes": 55}, "note": null, "actions": [{"type": "APPLY", "proposalId": "99999999-9999-4999-8999-999999999999", "label": "Usuń z planu", "style": "PRIMARY"}], "state": {"status": "PENDING", "canApply": true, "canUndo": false, "until": "2026-09-03T10:00:00.000Z"}}"#
 let splitJSON = #"{"kind": "HOUSEHOLD_SPLIT", "v": 1, "proposalId": "88888888-8888-4888-8888-888888888888", "weekStart": "2026-08-31", "date": "2026-09-02", "eyebrow": "Jedna baza · trzy porcje", "title": "Gulasz wołowy z kaszą gryczaną", "prepTimeMinutes": 55, "portions": [{"userId": "u-1", "displayName": "Rafał", "goalLabel": "2100 kcal", "note": "Duża porcja + kasza 100 g", "kcal": 740}, {"userId": "u-2", "displayName": "Ania", "goalLabel": "1750 kcal · wegetariańska", "note": "Bez mięsa, więcej kaszy", "kcal": 590}, {"userId": "u-3", "displayName": "Zosia", "goalLabel": "1400 kcal · bez laktozy", "note": "Śmietana osobno", "kcal": 420}], "actions": [{"type": "APPLY", "proposalId": "88888888-8888-4888-8888-888888888888", "label": "Zapisz na środę", "style": "PRIMARY"}], "state": {"status": "PENDING", "canApply": true, "canUndo": false, "until": "2026-09-03T10:00:00.000Z"}}"#
 let macroJSON = #"{"kind": "MACRO_GAP", "v": 1, "eyebrow": "Białko · ten tydzień", "title": "Brakuje średnio 44 g dziennie", "macro": "PROTEIN", "unit": "g", "current": 96, "target": 140, "boosters": [{"text": "Twarożek zamiast musli (śr.)", "amount": 24}, {"text": "Jogurt grecki do owsianki (pon., czw.)", "amount": 18}, {"text": "Kurczak zamiast makaronu na kolację (pt.)", "amount": 22}], "actions": [{"type": "ASK", "proposalId": null, "label": "Zastosuj wszystkie trzy", "style": "PRIMARY", "prompt": "Zastosuj te zmiany w planie i pokaż mi je jako propozycję."}]}"#
 let shoppingJSON = #"{"kind": "SHOPPING_LIST", "v": 1, "weekStart": "2026-08-31", "eyebrow": "Lista zakupów · 31 sierpnia – 6 września", "title": "4 rzeczy do kupienia", "groups": [{"department": "Warzywa", "items": ["Cukinia 2 szt.", "Dynia 1 kg"]}, {"department": "Ryby", "items": ["Dorsz 600 g"]}, {"department": "Nabiał", "items": ["Feta 2 op."]}], "summary": {"remaining": 4, "checked": 1}, "checkedNote": "1 pozycja już odhaczona", "actions": [{"type": "OPEN_SHOPPING", "proposalId": null, "label": "Otwórz listę zakupów", "style": "PRIMARY"}]}"#
@@ -94,6 +95,18 @@ check("sposób podania od modelu", split.portions[2].note == "Śmietana osobno")
 check("inicjał do awatara", split.portions[0].initial == "R")
 check("przycisk mówi zdaniem", split.actions.first { $0.type == .apply }?.label == "Zapisz na środę")
 
+print("REMOVE_MEAL")
+guard case .removeMeal(let removal) = card(removeMealJSON) else {
+    print("  BŁĄD  karta usunięcia nie zdekodowała się"); exit(1)
+}
+check("nadtytuł mówi, z którego slotu znika", removal.eyebrow == "Usunięcie · czwartek, kolacja")
+check("powód użytkownika w tytule", removal.title == "Jemy u teściów")
+check("danie do usunięcia z bazy, nie od modelu", removal.removed.title == "Zapiekanka z cukinią")
+check("kalorie i czas znikającego dania", removal.removed.kcalPerServing == 640 && removal.removed.prepTimeMinutes == 55)
+check("przycisk mówi, że czegoś UBĘDZIE", removal.actions.first { $0.type == .apply }?.label == "Usuń z planu")
+check("stan pozwala kliknąć", removal.state.canApply && !removal.state.canUndo)
+check("usunięcie NIE zastępuje tekstu wiadomości", !card(removeMealJSON).replacesText)
+
 print("MACRO_GAP")
 guard case .macroGap(let macro) = card(macroJSON) else {
     print("  BŁĄD  karta makro nie zdekodowała się"); exit(1)
@@ -144,6 +157,7 @@ let after = AgentCardStateDTO(status: "APPLIED", canApply: false, canUndo: true,
 check("po zapisie karta propozycji gaśnie", card(planWeekJSON).withState(after).state?.canApply == false)
 check("to samo dla karty dnia", card(planDayJSON).withState(after).state?.canApply == false)
 check("to samo dla podmiany", card(swapJSON).withState(after).state?.canApply == false)
+check("to samo dla usunięcia", card(removeMealJSON).withState(after).state?.canApply == false)
 check("wybór nie ma stanu do podmiany", card(optionsJSON).withState(after).state == nil)
 check("pytanie nie ma stanu i nie udaje, że ma", card(clarifyJSON).withState(after).state == nil)
 check("podmiana stanu nie gubi treści", {
