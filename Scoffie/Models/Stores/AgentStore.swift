@@ -76,6 +76,14 @@ final class AgentStore {
     private static let maxHistoryPages = 20
 
     private(set) var messages: [AgentChatMessage] = []
+    /// Ostatni ruch w rozmowie — pytanie albo odpowiedź — z zegara telefonu,
+    /// a po wczytaniu historii z `lastMessageAt` serwera. Od niego liczy się
+    /// przerwa, po której następne wejście zaczyna NOWĄ rozmowę.
+    private(set) var lastActivityAt: Date?
+    /// Po przerwie: rozmowa ma zacząć się od zera, ale wiersz na serwerze
+    /// powstaje dopiero z pierwszym pytaniem — inaczej każde zerknięcie na
+    /// zakładkę zostawiałoby po sobie pustą rozmowę w historii.
+    private var wantsFreshConversation = false
     private(set) var isSending = false
     /// `send()` zakłada rozmowę, a pytania jeszcze nie ma w liście — to okno
     /// (~0,5–2 s na zimnej ścieżce: pierwsze pytanie po zgodzie, po usunięciu
@@ -192,13 +200,62 @@ final class AgentStore {
         }
     }
 
+    /// Po takiej przerwie od ostatniego ruchu rozmowa jest STARA: następne
+    /// wejście zaczyna nową. Pół godziny, bo tyle trwa „wyszedłem do sklepu"
+    /// — krótsza przerwa to wciąż ta sama sprawa („a podmień jeszcze wtorek"),
+    /// a dopisywanie do wczorajszej rozmowy kończyło się tym, że pytanie
+    /// o dzisiejszy obiad lądowało pod planem sprzed tygodnia i asystent
+    /// odpowiadał w tamtym kontekście.
+    static let staleAfter: TimeInterval = 30 * 60
+    /// Zimny start jest surowszy: aplikacja zamknięta i otwarta „po chwili"
+    /// ma zaczynać od czystej kartki. Trzy minuty zostają na jeden przypadek —
+    /// odpowiedź doszła, iOS ubił proces, użytkownik wraca ją przeczytać.
+    static let staleAfterRelaunch: TimeInterval = 3 * 60
+
     /// Otwarcie zakładki: historia rozmowy i ewentualny powrót do tury w biegu.
     func openIfNeeded() async {
-        if conversationId == nil {
+        if conversationId == nil, !wantsFreshConversation {
             await loadOrCreateConversation()
+        } else {
+            rotateIfStale()
         }
         if let pendingTurnId, !isSending {
             await follow(turnId: pendingTurnId)
+        }
+    }
+
+    /// Powrót na wierzch (zakładka, pierwszy plan) po przerwie: zaczynamy
+    /// od zera, chyba że tura jeszcze biegnie — wtedy jest do czego wracać.
+    func rotateIfStale() {
+        guard conversationId != nil, !isSending, pendingTurnId == nil else { return }
+        guard let lastActivityAt,
+              Date().timeIntervalSince(lastActivityAt) > Self.staleAfter else { return }
+        beginFreshConversation()
+    }
+
+    /// Czysta kartka bez wiersza na serwerze — powstanie z pierwszym pytaniem.
+    private func beginFreshConversation() {
+        resetTurnState()
+        conversationId = nil
+        messages = []
+        lastActivityAt = nil
+        wantsFreshConversation = true
+    }
+
+    /// Rozmowa do wysłania: świeża po przerwie albo ostatnia z serwera.
+    private func ensureConversation() async {
+        if conversationId != nil { return }
+        if wantsFreshConversation {
+            do {
+                let conversation = try await client.createConversation(householdId: householdId)
+                conversationId = conversation.id
+                conversations.insert(conversation, at: 0)
+                wantsFreshConversation = false
+            } catch {
+                handle(error)
+            }
+        } else {
+            await loadOrCreateConversation()
         }
     }
 
@@ -227,9 +284,7 @@ final class AgentStore {
         // Nie `defer`: flaga ma żyć tylko przez zakładanie rozmowy, a `send()`
         // wraca dopiero po całej turze (`follow`).
         isPreparing = true
-        if conversationId == nil {
-            await loadOrCreateConversation()
-        }
+        await ensureConversation()
         isPreparing = false
         guard let conversationId else {
             // Bez rozmowy nie ma dokąd wysłać, ale tekst musi mieć drogę
@@ -248,6 +303,7 @@ final class AgentStore {
         isSending = true
         progress = []
         turnStartedAt = Date()
+        lastActivityAt = Date()
         isStopping = false
         hasLiveTurnSlot = true
         defer { isSending = false }
@@ -444,6 +500,11 @@ final class AgentStore {
         resetTurnState()
         conversationId = id
         messages = []
+        // Świadomy wybór z historii: to jest „teraz", nie data ostatniej
+        // wiadomości — inaczej stara rozmowa zamykałaby się przy najbliższym
+        // powrocie na zakładkę, zanim ktokolwiek zdążył coś w niej napisać.
+        wantsFreshConversation = false
+        lastActivityAt = Date()
         await loadMessages(conversationId: id)
     }
 
@@ -452,6 +513,8 @@ final class AgentStore {
     func startNewConversation() async {
         resetTurnState()
         messages = []
+        wantsFreshConversation = false
+        lastActivityAt = nil
         isLoadingHistory = true
         defer { isLoadingHistory = false }
         do {
@@ -540,6 +603,19 @@ final class AgentStore {
                 .filter { $0.householdId == householdId }
             conversations = mine
 
+            // Zimny start po przerwie: ostatnia rozmowa zostaje w historii,
+            // a zakładka otwiera się na czystej kartce. Wyjątek to tura,
+            // która wciąż biegnie — wtedy trzeba do niej wrócić po odpowiedź.
+            if let existing = mine.first, existing.activeTurnId == nil,
+               Self.isStale(existing, after: Self.staleAfterRelaunch) {
+                conversationId = nil
+                messages = []
+                lastActivityAt = nil
+                wantsFreshConversation = true
+                isUnavailable = false
+                return
+            }
+
             let conversation: AgentConversationDTO
             if let existing = mine.first {
                 conversation = existing
@@ -555,6 +631,7 @@ final class AgentStore {
             pendingTurnId = conversation.activeTurnId
             messages = try await loadAllMessages(conversationId: conversation.id)
             hasLiveTurnSlot = false
+            lastActivityAt = Self.parseTimestamp(conversation.lastMessageAt)
             isUnavailable = false
         } catch {
             handle(error)
@@ -742,6 +819,7 @@ final class AgentStore {
     }
 
     private func apply(finished turn: AgentTurnDTO) {
+        lastActivityAt = Date()
         switch turn.status {
         case "DONE":
             // `apply_week_plan` biegnie w każdej turze najpierw jako próba,
@@ -1000,6 +1078,14 @@ final class AgentStore {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
+
+    /// Rozmowa bez ruchu dłużej niż `after`. Brak `lastMessageAt` (rozmowa
+    /// założona i porzucona bez pytania) liczy się jako stara — nie ma do
+    /// czego wracać.
+    private static func isStale(_ conversation: AgentConversationDTO, after: TimeInterval) -> Bool {
+        guard let last = parseTimestamp(conversation.lastMessageAt) else { return true }
+        return Date().timeIntervalSince(last) > after
+    }
 
     static func parseTimestamp(_ raw: String?) -> Date? {
         guard let raw else { return nil }

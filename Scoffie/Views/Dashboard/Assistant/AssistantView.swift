@@ -100,6 +100,7 @@ struct AssistantView: View {
     @State private var isAutoScrolling = false
     @State private var autoScrollGeneration = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var isComposerFocused: Bool
 
     var body: some View {
@@ -122,8 +123,13 @@ struct AssistantView: View {
                     if let step = activeIntroStep {
                         introFlow(step)
                     } else {
+                        // Pole jako wcięcie bezpiecznego obszaru, nie wiersz
+                        // pod listą: rozmowa przewija się POD szkłem pola
+                        // i widać ją przez nie — tak samo jak pod dolnym menu,
+                        // nad którym pole stoi. To jest cała różnica między
+                        // „pole w stylu iOS" a paskiem z kreską.
                         conversation
-                        composer
+                            .safeAreaInset(edge: .bottom, spacing: 0) { composer }
                     }
                 }
                 .transition(.assistantIntroStep)
@@ -147,8 +153,18 @@ struct AssistantView: View {
             // po pierwszym 429. Bez zgody to żądanie po prostu nic nie zwraca.
             _ = await store.loadUsage()
         }
-        .onAppear { store.setVisible(true) }
+        .onAppear {
+            store.setVisible(true)
+            // Powrót na zakładkę po przerwie: czysta kartka zamiast
+            // dopisywania do rozmowy sprzed pół dnia.
+            store.rotateIfStale()
+        }
         .onDisappear { store.setVisible(false) }
+        .onChange(of: scenePhase) { _, phase in
+            // Ten sam próg dla powrotu z tła: aplikacja zminimalizowana
+            // w sklepie i otwarta w kuchni to dwie różne rozmowy.
+            if phase == .active { store.rotateIfStale() }
+        }
         .task {
             // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
             // użytkownik widział rozmowę, dopóki serwer nie odpowiedział.
@@ -520,15 +536,69 @@ struct AssistantView: View {
 
     // MARK: - Rozmowa
 
+    /// Powitanie z tego, co aplikacja wie o tej chwili — patrz `AssistantWelcome`.
+    private var welcome: AssistantWelcome {
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today
+        // Tydzień od poniedziałku, jak wszędzie w aplikacji (`PlanWeek`).
+        let weekday = calendar.component(.weekday, from: today)
+        let sinceMonday = (weekday + 5) % 7
+        let monday = calendar.date(byAdding: .day, value: -sinceMonday, to: today) ?? today
+        let plan = sessionStore.mealCalendarStore
+        func planned(_ date: Date) -> Int { plan?.plan(for: date).plannedSlots.count ?? 0 }
+        func plannedDays(from start: Date) -> Int {
+            (0..<7).reduce(0) { total, offset in
+                let day = calendar.date(byAdding: .day, value: offset, to: start) ?? start
+                return total + (planned(day) > 0 ? 1 : 0)
+            }
+        }
+        let nextMonday = calendar.date(byAdding: .day, value: 7, to: monday) ?? monday
+        return AssistantWelcome.compose(
+            .init(
+                now: now,
+                calendar: calendar,
+                displayName: UserDefaults.standard.string(forKey: "settings.user.displayName"),
+                plannedToday: planned(today),
+                plannedTomorrow: planned(tomorrow),
+                plannedDaysThisWeek: plannedDays(from: monday),
+                plannedDaysNextWeek: plannedDays(from: nextMonday)
+            )
+        )
+    }
+
+    /// Pusta rozmowa NIE jest listą: nie ma czego przewijać, więc nie ma
+    /// przewijania ani odbicia. Powitanie stoi na środku wolnego miejsca
+    /// między nagłówkiem a polem; lista z kotwicami i rozpórką wchodzi
+    /// dopiero z pierwszym pytaniem.
+    private var isConversationEmpty: Bool {
+        store.messages.isEmpty && !store.isLoadingHistory && !store.isSending
+    }
+
+    @ViewBuilder
     private var conversation: some View {
+        if isConversationEmpty {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                emptyState
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, SCPageMetrics.horizontal)
+            .transition(.opacity)
+        } else {
+            messageList
+        }
+    }
+
+    private var messageList: some View {
         ScrollViewReader { proxy in
             ZStack(alignment: .bottom) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         if store.isLoadingHistory && store.messages.isEmpty {
                             ChatSkeleton()
-                        } else if store.messages.isEmpty {
-                            emptyState
                         }
 
                         // Wszystko PRZED ostatnim pytaniem — bez żadnej animacji.
@@ -697,8 +767,7 @@ struct AssistantView: View {
     }
 
     private var emptyState: some View {
-        AssistantEmptyState()
-            .padding(.bottom, 8)
+        AssistantEmptyState(welcome: welcome)
     }
 
     /// Podpowiedzi tuż nad polem, dosunięte do prawej jak dymki
@@ -707,7 +776,7 @@ struct AssistantView: View {
     /// szumem, a po błędzie czasu wystarczy komunikat z ponowieniem.
     private var composerHints: [String]? {
         guard !store.isSending, store.messages.isEmpty else { return nil }
-        return AssistantCapabilities.quickStarts
+        return welcome.quickStarts
     }
 
     // MARK: - Pole wiadomości
@@ -722,8 +791,6 @@ struct AssistantView: View {
                     .padding(.bottom, 10)
                     .transition(.opacity)
             }
-
-            Divider().overlay(Color.scRule(scheme))
 
             if editing != nil {
                 editingBar
@@ -782,21 +849,21 @@ struct AssistantView: View {
                 // wpisanego tekstu i rosło dopiero z nim, zamiast od razu
                 // zająć cały wiersz obok przycisku.
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.scInsetSurface(scheme))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                // Liquid Glass jak dolne menu tuż pod nim (precedens:
+                // `PlanDayGoalBar`). Kapsuła, nie prostokąt: przy jednym
+                // wierszu to dokładnie kształt pola wyszukiwania systemu,
+                // a przy ośmiu wierszach `.capsule` zaokrągla rogi do
+                // połowy wysokości i dalej wygląda jak pole, nie jak karta.
+                // Warstwa tła POD szkłem przygasza przelatującą rozmowę —
+                // samo szkło przepuszczało litery na tyle wyraźnie, że przy
+                // krawędzi wyglądały jak artefakt.
+                .glassEffect(
+                    .regular.tint(Color.scPageBase(scheme).opacity(0.35)).interactive(),
+                    in: .capsule
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(
-                            isComposerFocused
-                                ? SCPalette.terracotta.opacity(0.45)
-                                : Color.scTileStroke(scheme),
-                            lineWidth: 1
-                        )
-                )
+                .background(Color.scPageBase(scheme).opacity(0.6), in: .capsule)
 
                 // W trakcie tury strzałka zamienia się w „stop": po dziesięciu
                 // sekundach widać już, że pytanie było źle zadane, a czekanie
@@ -818,19 +885,25 @@ struct AssistantView: View {
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 13 : 16, weight: .bold))
                         .foregroundStyle(sendTint)
-                        .frame(width: 40, height: 40)
-                        .scSoftSurface(Circle(), accent: sendTint)
+                        .frame(width: 44, height: 44)
+                        // Ten sam materiał co pole obok — dwa kształty z jednego
+                        // szkła czytają się jako jeden pasek, nie pole + guzik.
+                        .glassEffect(
+                            .regular.tint(sendTint.opacity(0.18)).interactive(),
+                            in: .circle
+                        )
+                        .background(Color.scPageBase(scheme).opacity(0.6), in: .circle)
                 }
                 .buttonStyle(.plain)
                 .disabled((!store.isSending && !canSend) || store.isStopping)
                 .accessibilityLabel(sendAccessibilityLabel)
                 .animation(.easeOut(duration: 0.2), value: store.isStopping)
             }
-            .padding(.horizontal, 8)
-            // 12, nie 8: pole stoi teraz bezpośrednio pod kreską — chipy
-            // zakresu, które wcześniej robiły tu odstęp, zostały usunięte.
-            .padding(.top, 12)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            // 8 nad dolnym menu: pole ma wisieć tuż nad szkłem menu, tak jak
+            // pasek celu dnia na Planie — nie na własnej półce.
+            .padding(.bottom, 8)
         }
         // Chipy nad polem znikają przy pierwszym pytaniu — composer kurczył
         // się wtedy o ~46 pt skokiem, razem z nagłówkiem i pustym stanem.
