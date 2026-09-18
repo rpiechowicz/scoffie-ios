@@ -288,6 +288,49 @@ struct AssistantThinkingLine: View {
     }
 }
 
+/// Szkic odpowiedzi w trakcie tury — tekst „pisze się" pod wskaźnikiem.
+///
+/// Serwer streamuje z modelu, ale telefon odpytuje co sekundę, więc bez
+/// tego widoku tekst wskakiwałby akapitami raz na sekundę. Tu odsłania się
+/// znak po znaku i DOGANIA serwer w ~0,9 s od każdej porcji — oko widzi
+/// ciągłe pisanie, a nie serię skoków. Liczone z zegara względem kotwicy
+/// ustawianej przy każdej zmianie tekstu; żadnej pętli na `@State`, więc
+/// przebudowy widoku (nowy krok postępu, nowa porcja) niczego nie zatrzymują.
+///
+/// Serwer oddaje CAŁY dotychczasowy tekst, nie przyrost — i potrafi go
+/// wyzerować, gdy runda skończyła się narzędziem (preambuła „sprawdzę plan…"
+/// nie jest odpowiedzią). Gdy nowy tekst nie zaczyna się od pokazanego,
+/// odsłanianie rusza od zera zamiast pokazywać znaki, których już nie ma.
+struct AssistantDraftAnswer: View {
+    let text: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var anchorDate = Date()
+    @State private var anchorCount = 0
+    /// Znaki na sekundę; rośnie z zaległością, żeby nigdy nie zostać w tyle.
+    @State private var rate: Double = 45
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { context in
+            let shown = reduceMotion ? text.count : revealedCount(at: context.date)
+            AssistantAnswer(text: String(text.prefix(shown)))
+        }
+        .onChange(of: text) { old, new in
+            let now = Date()
+            let current = min(revealedCount(at: now), new.count)
+            let continues = new.hasPrefix(String(old.prefix(current)))
+            anchorCount = continues ? current : 0
+            anchorDate = now
+            rate = max(45, Double(new.count - anchorCount) / 0.9)
+        }
+    }
+
+    private func revealedCount(at date: Date) -> Int {
+        let elapsed = max(0, date.timeIntervalSince(anchorDate))
+        return min(text.count, anchorCount + Int(elapsed * rate))
+    }
+}
+
 /// To, w co zamienia się wskaźnik po turze: ta sama geometria (glif 14 pt
 /// w x = 0, tekst od 22 pt, wiersz 22 pt), więc odpowiedź wyłania się
 /// w miejscu, a nie obok. Jak „Thought for 12 s ›" u Claude'a: czas po

@@ -10,6 +10,10 @@ import SwiftUI
 // wierszami, które nic nie rysowały. Wersja, do której warto wracać, jest
 // w historii repozytorium, a nie w pliku.
 struct AssistantEmptyState: View {
+    /// Zdania składa `AssistantWelcome` z godziny, imienia i planu —
+    /// ten widok tylko je rysuje.
+    let welcome: AssistantWelcome
+
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -24,21 +28,21 @@ struct AssistantEmptyState: View {
                 )
 
             VStack(spacing: 4) {
-                Text("Co dziś planujemy?")
+                Text(welcome.title)
                     .font(.system(size: 20, weight: .bold))
                     .tracking(-0.45)
                     .foregroundStyle(Color.scLabel(scheme))
 
-                Text("Zacznij od jednego z poleceń nad polem albo napisz własne.")
+                Text(welcome.subtitle)
                     .font(.system(size: 14))
                     .tracking(-0.15)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.scMuted(scheme))
-                    .frame(maxWidth: 270)
+                    .frame(maxWidth: 300)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 260)
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
     }
 }
