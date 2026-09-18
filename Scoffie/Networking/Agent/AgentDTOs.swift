@@ -103,8 +103,13 @@ struct AgentProgressStepDTO: Decodable, Equatable {
     /// (`start_planning`). Rysowane jako osobny moment z licznikiem, nie
     /// jako kolejna linijka.
     let phase: String?
+    /// Krok PRZEJŚCIOWY (`think`): model czyta wyniki narzędzi i decyduje, co
+    /// dalej — pokazywany na żywo, pomijany w podsumowaniu po turze. Brak
+    /// pola = zwykły krok (starszy serwer go nie oddaje).
+    let transient: Bool?
 
     var isHandoff: Bool { phase == "PLANNING" }
+    var isTransient: Bool { transient == true }
 }
 
 struct AgentTurnUsageDTO: Decodable, Equatable {

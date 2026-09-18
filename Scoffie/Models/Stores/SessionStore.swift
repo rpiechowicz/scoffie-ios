@@ -2806,6 +2806,20 @@ final class SessionStore {
         }
         let baseURL = self.baseURL
         let refreshToken = currentRefreshToken
+        // ROTACJA MUSI SIĘ DOKOŃCZYĆ, RAZ ZACZĘTA.
+        //
+        // Serwer unieważnia stary token w chwili, gdy wydaje nowy — więc od
+        // wysłania żądania do zapisu odpowiedzi w Keychainie jest okno, w
+        // którym uśpienie procesu kosztuje CAŁĄ SESJĘ: telefon zostaje ze
+        // zrotowanym tokenem i przy następnym uruchomieniu wygląda dla serwera
+        // na kradzież. Najłatwiej wejść w to okno po cichym pushu (system
+        // uznaje pracę za skończoną, gdy wraca `completionHandler`), ale wpada
+        // się w nie też terminem `armProactiveRefresh`, który trafi w moment
+        // schodzenia w tło.
+        //
+        // Asercja obejmuje ŻĄDANIE RAZEM Z ZAPISEM, nie samo żądanie — to
+        // zapis jest tu rzeczą nieodwracalną.
+        let activity = BackgroundActivity.begin(name: "session-token-refresh")
         let task = Task<SessionRefreshOutcome, Never> {
             guard let refreshToken, !refreshToken.isEmpty else {
                 // Brak refresh tokenu nie minie sam — bez ponownego logowania
@@ -2884,6 +2898,7 @@ final class SessionStore {
         }
         refreshTask = task
         let outcome = await task.value
+        activity.end()
         // Nie zeruj nowszego taska założonego po logout()+relogin.
         if refreshTask == task { refreshTask = nil }
         switch outcome {
