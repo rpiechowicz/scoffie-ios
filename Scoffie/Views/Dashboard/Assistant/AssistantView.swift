@@ -586,6 +586,12 @@ struct AssistantView: View {
                     }
                     .padding(.horizontal, SCPageMetrics.horizontal)
                     .padding(.bottom, 12)
+                    // Żeby dymek „myślę" wchodził i gasł przejściem, a nie
+                    // skokiem: `transition` na widoku nic nie robi, dopóki
+                    // ZMIANA, która go wstawia i zdejmuje, nie jest animowana.
+                    // Wartością jest `isSending`, a nie cała treść — inaczej
+                    // animowałoby się też dopisywanie wiadomości do historii.
+                    .animation(.smooth(duration: 0.28), value: store.isSending)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
@@ -1178,6 +1184,15 @@ private struct MessageBubble: View {
                 onRevise: onRevise,
                 onAskNew: onAskNew,
                 onUndo: { onUndo(swap.proposalId) }
+            )
+        case .removeMeal(let removal):
+            AssistantRemoveMealCard(
+                card: removal,
+                isBusy: isBusy,
+                onApply: { force in onApply(removal.proposalId, force) },
+                onRevise: onRevise,
+                onAskNew: onAskNew,
+                onUndo: { onUndo(removal.proposalId) }
             )
         case .householdSplit(let split):
             AssistantHouseholdSplitCard(
