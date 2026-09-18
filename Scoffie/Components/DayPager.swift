@@ -315,6 +315,9 @@ struct DayPager<Content: View>: View {
                     .padding(.bottom, bottomPadding)
             }
             .scrollIndicators(.hidden)
+            // Strona dnia jest jedynym przewijaniem na Planie — to ona
+            // melduje kierunek, od którego zwija się dolne menu.
+            .scTracksTabBarCompaction()
         } else {
             day
                 .padding(.bottom, bottomPadding)
