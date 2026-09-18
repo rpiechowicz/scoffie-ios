@@ -586,6 +586,11 @@ struct AssistantView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, SCPageMetrics.horizontal)
+            // Bez ScrollView nie działa `scrollDismissesKeyboard`, więc na
+            // pustym ekranie klawiatury nie dało się schować niczym poza
+            // wysłaniem. Całe wolne tło łapie stuknięcie i zdejmuje fokus.
+            .contentShape(Rectangle())
+            .onTapGesture { isComposerFocused = false }
             .transition(.opacity)
         } else {
             messageList
@@ -899,7 +904,12 @@ struct AssistantView: View {
                 .accessibilityLabel(sendAccessibilityLabel)
                 .animation(.easeOut(duration: 0.2), value: store.isStopping)
             }
-            .padding(.horizontal, 12)
+            // 20 pt = margines boczny pływającego paska zakładek z iOS 26
+            // (zmierzone na 402-pt ekranie: pasek stoi od 20 do 382 pt).
+            // Pole z przyciskiem ma być z nim w jednej linii, bo stoi tuż nad
+            // nim i z tego samego szkła — inna szerokość czyta się jak dwa
+            // elementy z dwóch różnych ekranów.
+            .padding(.horizontal, 20)
             .padding(.top, 8)
             // 8 nad dolnym menu: pole ma wisieć tuż nad szkłem menu, tak jak
             // pasek celu dnia na Planie — nie na własnej półce.
