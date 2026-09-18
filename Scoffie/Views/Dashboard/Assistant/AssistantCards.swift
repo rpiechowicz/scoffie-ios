@@ -233,6 +233,10 @@ private struct RemovalsSection: View {
 struct AssistantPlanWeekCard: View {
     let card: PlanWeekCardDTO
     let isBusy: Bool
+    /// Rozwinięcie należy do ekranu rozmowy, nie do karty: karta ostatniej
+    /// tury zmienia miejsce w drzewie po następnym pytaniu i `@State`
+    /// zwijałby tydzień skokiem w klatce wysyłki.
+    @Binding var isExpanded: Bool
     /// `force` = „Zapisz mimo to” przy propozycji nieaktualnej.
     let onApply: (_ force: Bool) -> Void
     let onRevise: () -> Void
@@ -243,7 +247,6 @@ struct AssistantPlanWeekCard: View {
     /// bez przewijania — a karta ma być do ogarnięcia jednym spojrzeniem.
     private static let previewDays = 3
 
-    @State private var isExpanded = false
     @Environment(\.colorScheme) private var scheme
 
     private var visibleDays: [PlanWeekCardDayDTO] {
