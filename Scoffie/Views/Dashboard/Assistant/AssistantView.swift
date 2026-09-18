@@ -563,7 +563,8 @@ struct AssistantView: View {
                 plannedToday: planned(today),
                 plannedTomorrow: planned(tomorrow),
                 plannedDaysThisWeek: plannedDays(from: monday),
-                plannedDaysNextWeek: plannedDays(from: nextMonday)
+                plannedDaysNextWeek: plannedDays(from: nextMonday),
+                trialExhausted: store.isLockedByTrialQuota
             )
         )
     }
@@ -586,6 +587,11 @@ struct AssistantView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, SCPageMetrics.horizontal)
+            // Bez ScrollView nie działa `scrollDismissesKeyboard`, więc na
+            // pustym ekranie klawiatury nie dało się schować niczym poza
+            // wysłaniem. Całe wolne tło łapie stuknięcie i zdejmuje fokus.
+            .contentShape(Rectangle())
+            .onTapGesture { isComposerFocused = false }
             .transition(.opacity)
         } else {
             messageList
@@ -776,7 +782,8 @@ struct AssistantView: View {
     /// szumem, a po błędzie czasu wystarczy komunikat z ponowieniem.
     private var composerHints: [String]? {
         guard !store.isSending, store.messages.isEmpty else { return nil }
-        return welcome.quickStarts
+        let starts = welcome.quickStarts
+        return starts.isEmpty ? nil : starts
     }
 
     // MARK: - Pole wiadomości
@@ -796,30 +803,17 @@ struct AssistantView: View {
                 editingBar
             }
 
-            // Jedyny moment, w którym aplikacja sama zaczyna rozmowę o
-            // pieniądzach — i mówi wtedy jedną linijką, bez kafla, bez ikony
-            // i bez przycisku. Pole tekstowe zostaje na miejscu.
-            if store.isLockedByTrialQuota {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("Darmowe wiadomości wykorzystane.")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Color.scMuted(scheme))
-                    Button { showPaywall = true } label: {
-                        Text("Zobacz plany")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(SCPalette.terracotta)
-                            .underline()
-                    }
-                    .buttonStyle(.plain)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
-            }
             // Bez linijki „Zostały 2 wiadomości" nad polem: to samo mówią
             // kropki w nagłówku (5 z zaznaczonymi pozostałymi), a stuknięcie
             // w nie otwiera limity.
 
+            // Wykorzystana pula na próbę: zamiast wygaszonego pola z napisem
+            // „limit wykorzystany" (pole, w które nie da się pisać, jest
+            // wyłącznie frustracją) stoi karta z tego samego szkła, która mówi,
+            // co zostaje, i ma JEDEN przycisk, który coś zmienia.
+            if store.isLockedByTrialQuota {
+                trialExhaustedCard
+            } else {
             // Pole i przycisk stoją ciaśniej niż reszta ekranu (8 pt zamiast
             // marginesu strony, 6 pt między nimi, przycisk 40 zamiast 44) —
             // każdy z tych punktów idzie na szerokość tekstu. Przy poprzednim
@@ -899,15 +893,93 @@ struct AssistantView: View {
                 .accessibilityLabel(sendAccessibilityLabel)
                 .animation(.easeOut(duration: 0.2), value: store.isStopping)
             }
-            .padding(.horizontal, 12)
+            // 20 pt = margines boczny pływającego paska zakładek z iOS 26
+            // (zmierzone na 402-pt ekranie: pasek stoi od 20 do 382 pt).
+            // Pole z przyciskiem ma być z nim w jednej linii, bo stoi tuż nad
+            // nim i z tego samego szkła — inna szerokość czyta się jak dwa
+            // elementy z dwóch różnych ekranów.
+            .padding(.horizontal, 20)
             .padding(.top, 8)
             // 8 nad dolnym menu: pole ma wisieć tuż nad szkłem menu, tak jak
             // pasek celu dnia na Planie — nie na własnej półce.
             .padding(.bottom, 8)
+            }
         }
         // Chipy nad polem znikają przy pierwszym pytaniu — composer kurczył
         // się wtedy o ~46 pt skokiem, razem z nagłówkiem i pustym stanem.
         .animation(.easeInOut(duration: 0.2), value: composerHints == nil)
+    }
+
+    /// Karta „pula na próbę wykorzystana" — w miejscu pola, z tego samego szkła.
+    ///
+    /// Liczba pochodzi z serwera (`usage.messages.limit`), nie z kodu: to on
+    /// wie, ile było darmowych. Przycisk główny prowadzi PROSTO do wyboru
+    /// planu; drugi — do listy możliwości, bo ktoś, kto wyczerpał próbę w pięć
+    /// pytań, często nie wie jeszcze, co dostaje za plan.
+    private var trialExhaustedCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle().fill(Color.scAccentTint(scheme))
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SCPalette.terracotta)
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(trialExhaustedTitle)
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .tracking(-0.25)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Rozmowy i plan zostają. Z planem Scoffie zaczniemy tam, gdzie skończyliśmy.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button { showPaywall = true } label: {
+                    Text("Zobacz plany")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(Capsule().fill(SCPalette.terracotta))
+                }
+                .buttonStyle(.plain)
+
+                Button { showCapabilities = true } label: {
+                    Text("Co potrafi")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(SCPalette.terracotta)
+                        .frame(height: 40)
+                        .padding(.horizontal, 16)
+                        .background(Capsule().fill(Color.scAccentTint(scheme)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(
+            .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
+            in: .rect(cornerRadius: 24)
+        )
+        .background(Color.scPageBase(scheme).opacity(0.6), in: .rect(cornerRadius: 24))
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var trialExhaustedTitle: String {
+        if let limit = store.usage?.messages.limit, limit > 0 {
+            return "Wykorzystałeś \(limit) darmowych wiadomości"
+        }
+        return "Darmowe wiadomości są wykorzystane"
     }
 
     /// Pasek „Poprawiasz pytanie".

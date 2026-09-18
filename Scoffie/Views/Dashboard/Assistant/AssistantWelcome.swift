@@ -27,6 +27,9 @@ struct AssistantWelcome: Equatable {
         /// Dni z choć jednym posiłkiem w bieżącym tygodniu (pon–niedz).
         var plannedDaysThisWeek: Int
         var plannedDaysNextWeek: Int
+        /// Pula na próbę wykorzystana: powitanie nie ma prawa obiecywać
+        /// „ułożę w minutę" nad polem, w które nie da się nic wpisać.
+        var trialExhausted: Bool = false
     }
 
     static func compose(_ c: Context) -> AssistantWelcome {
@@ -47,6 +50,16 @@ struct AssistantWelcome: Equatable {
         // Aniu, ale Rafał → Rafale, Beata → Beato) — mianownik po przecinku
         // czyta się naturalnie i nigdy nie wychodzi z niego potworek.
         let title = name.map { "\(greeting), \($0)" } ?? greeting
+
+        if c.trialExhausted {
+            // Zero podpowiedzi: chip, którego nie da się wysłać, jest gorszy
+            // niż brak chipa. Zdanie mówi, co ZOSTAJE, zanim powie, co kupić.
+            return AssistantWelcome(
+                title: title,
+                subtitle: "Darmowe wiadomości są wykorzystane. Rozmowy i plan zostają — z planem Scoffie zaczniemy dokładnie tam, gdzie skończyliśmy.",
+                quickStarts: []
+            )
+        }
 
         // Kolejność = waga sprawy: pusty tydzień bije pusty obiad, a pusty
         // obiad bije jutro. Ostatnia gałąź to „wszystko jest" i wtedy
@@ -107,10 +120,18 @@ struct AssistantWelcome: Equatable {
     }
 
     /// Pierwsze słowo z profilu — „Rafał Piechowicz" wita się jak „Rafał".
-    private static func firstName(_ raw: String?) -> String? {
+    ///
+    /// Login nie jest imieniem: konto z Apple bez podanego imienia ma w profilu
+    /// zastępczy identyfikator („rpiechowicz"), a „Dobry wieczór, rpiechowicz"
+    /// brzmi jak formularz, nie jak powitanie. Imię zaczyna się wielką literą
+    /// i nie ma w sobie cyfr ani „@" — wszystko inne dostaje powitanie bez
+    /// imienia, co jest lepsze niż złe imię.
+    static func firstName(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let first = raw.split(separator: " ").first.map(String.init) ?? ""
         let trimmed = first.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        guard let initial = trimmed.first, initial.isUppercase else { return nil }
+        guard !trimmed.contains("@"), !trimmed.contains(where: { $0.isNumber }) else { return nil }
+        return trimmed
     }
 }
