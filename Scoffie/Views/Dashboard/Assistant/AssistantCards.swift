@@ -1122,6 +1122,101 @@ struct AssistantSwapCard: View {
     }
 }
 
+// MARK: - Usunięcie posiłku
+
+/// Danie, które ma zniknąć z planu.
+///
+/// Karta podmiany odpowiada na „co się zmieni” zestawieniem dwóch dań; tutaj
+/// nic nie wchodzi w to miejsce, więc pytanie brzmi „czego nie będzie”.
+/// Pusta prawa strona karty podmiany wyglądałaby jak błąd renderowania.
+///
+/// Ton neutralny, nie czerwony: to jest zwykła zmiana planu, którą użytkownik
+/// sam zamówił i którą cofnie jednym przyciskiem — straszenie kolorem robiłoby
+/// z niej wydarzenie.
+struct AssistantRemoveMealCard: View {
+    let card: RemoveMealCardDTO
+    let isBusy: Bool
+    let onApply: (_ force: Bool) -> Void
+    let onRevise: () -> Void
+    let onAskNew: () -> Void
+    var onUndo: (() -> Void)? = nil
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        AssistantCard(tone: .neutral) {
+            AssistantCardHead(eyebrow: card.eyebrow, title: card.title) {
+                EmptyView()
+            }
+
+            row
+                .padding(.horizontal, 16)
+
+            if let note = card.note, !note.isEmpty {
+                Text(note)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+            }
+
+            AssistantProposalFooter(
+                state: card.state,
+                applyLabel: applyLabel,
+                applyIcon: "trash",
+                reviseLabel: "Zostaw",
+                reviseIcon: "ellipsis",
+                isBusy: isBusy,
+                onApply: onApply,
+                onRevise: onRevise,
+                onAskNew: onAskNew,
+                onUndo: onUndo
+            )
+        }
+    }
+
+    /// Ten sam wygląd, co strona „znika” w karcie podmiany: przekreślone
+    /// i wyszarzone. Użytkownik ma rozpoznać tę linię z innej karty, zamiast
+    /// uczyć się drugiego sposobu pokazywania tej samej rzeczy.
+    private var row: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Color.scFaint(scheme))
+                .frame(width: 16)
+
+            Text(card.removed.title)
+                .font(.system(size: 14))
+                .tracking(-0.2)
+                .foregroundStyle(Color.scFaint(scheme))
+                .strikethrough(true, color: Color.scStrike(scheme))
+                .lineLimit(2)
+
+            Spacer(minLength: 8)
+
+            Text(detail)
+                .font(.system(size: 12))
+                .monospacedDigit()
+                .foregroundStyle(Color.scFaint(scheme))
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
+        }
+    }
+
+    private var detail: String {
+        card.removed.prepTimeMinutes > 0
+            ? "\(card.removed.kcalPerServing) · \(card.removed.prepTimeMinutes)′"
+            : "\(card.removed.kcalPerServing)"
+    }
+
+    private var applyLabel: String {
+        card.actions.first { $0.kind == .apply }?.label ?? "Usuń z planu"
+    }
+}
+
 // MARK: - Jedno danie, kilka talerzy
 
 /// Podział wspólnego dania na porcje.
