@@ -131,6 +131,9 @@ struct AgentTurnDTO: Decodable, Equatable {
     /// Gotowe podpowiedzi pod błędem (po `AI_TIMEOUT` / `AI_CANCELLED`):
     /// mniejszy zakres, bo to najczęstsza przyczyna przekroczenia czasu.
     let suggestions: [String]?
+    /// Narastający tekst odpowiedzi, TYLKO gdy tura biegnie — cały
+    /// dotychczasowy, nie przyrost. Starszy serwer go nie oddaje.
+    let draftText: String?
     let startedAt: String
     let finishedAt: String?
 

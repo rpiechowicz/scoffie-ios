@@ -92,6 +92,9 @@ final class AgentStore {
     private(set) var isPreparing = false
     /// Kroki bieżącej tury — „Czytam plan tygodnia", „Zapisuję plan tygodnia".
     private(set) var progress: [AgentProgressStepDTO] = []
+    /// Szkic odpowiedzi w trakcie tury (streaming z modelu przez odpytywanie):
+    /// cały dotychczasowy tekst z serwera. Pusty = model jeszcze nie pisze.
+    private(set) var draftText = ""
     /// Epoka bieżącej tury — od niej wskaźnik liczy oddech glifu, połysk
     /// i próg „Możesz wyjść". Ustawiana w `send()`/`editMessage()` razem
     /// z `isSending`, żeby istniała od pierwszej klatki wskaźnika, a nie od
@@ -302,6 +305,7 @@ final class AgentStore {
         // wskaźnika, nie od powrotu POST — inaczej wiersz stał bez zegara.
         isSending = true
         progress = []
+        draftText = ""
         turnStartedAt = Date()
         lastActivityAt = Date()
         isStopping = false
@@ -421,6 +425,7 @@ final class AgentStore {
                 self.isSending = false
                 self.isStopping = false
                 self.progress = []
+                self.draftText = ""
             } catch {
                 guard self.pendingTurnId == turnId else { return }
                 // Starszy serwer bez trasy: dawne zachowanie.
@@ -438,6 +443,7 @@ final class AgentStore {
         isSending = false
         isStopping = false
         progress = []
+        draftText = ""
         errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
     }
 
@@ -677,6 +683,7 @@ final class AgentStore {
         isSending = false
         isStopping = false
         progress = []
+        draftText = ""
         // Tu podmienia się cała lista, więc skok epoki jest niewidoczny.
         turnStartedAt = nil
         hasLiveTurnSlot = false
@@ -719,6 +726,7 @@ final class AgentStore {
                 isSending = false
                 isStopping = false
                 progress = []
+                draftText = ""
                 // `turnStartedAt` ZOSTAJE: to epoka gasnącego wskaźnika. Nową
                 // ustawia następne `send()`, a `resetTurnState()` zeruje ją
                 // razem z całą listą.
@@ -752,6 +760,8 @@ final class AgentStore {
                     // powiadamia bez porównania i co sekundę przebudowywał
                     // cały ekran rozmowy.
                     if progress != turn.progress { progress = turn.progress }
+                    let draft = turn.draftText ?? ""
+                    if draft != draftText { draftText = draft }
                     try await Task.sleep(for: Self.pollInterval)
                     continue
                 }
@@ -909,6 +919,7 @@ final class AgentStore {
         retryClientMessageId = nil
         isSending = true
         progress = []
+        draftText = ""
         // Jak w `send()`: epoka i slot od pierwszej klatki wskaźnika.
         turnStartedAt = Date()
         hasLiveTurnSlot = true

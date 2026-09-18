@@ -1183,14 +1183,25 @@ struct AssistantView: View {
             }
             ZStack(alignment: .topLeading) {
                 if store.isSending {
-                    AssistantThinkingLine(
-                        steps: store.progress,
-                        // `.distantPast` nie ma prawa wejść: `send()`,
-                        // `editMessage()` i start `followTurn` ustawiają epokę
-                        // razem z `isSending`.
-                        startedAt: store.turnStartedAt ?? .distantPast,
-                        isStopping: store.isStopping
-                    )
+                    VStack(alignment: .leading, spacing: 12) {
+                        AssistantThinkingLine(
+                            steps: store.progress,
+                            // `.distantPast` nie ma prawa wejść: `send()`,
+                            // `editMessage()` i start `followTurn` ustawiają epokę
+                            // razem z `isSending`.
+                            startedAt: store.turnStartedAt ?? .distantPast,
+                            isStopping: store.isStopping
+                        )
+                        // Odpowiedź pisze się POD wierszem, zanim tura się
+                        // domknie — a po domknięciu ten sam tekst zostaje
+                        // w miejscu jako `AssistantAnswer`, więc crossfade
+                        // niżej podmienia identyczne piksele.
+                        if !store.draftText.isEmpty {
+                            AssistantDraftAnswer(text: store.draftText)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: store.draftText.isEmpty)
                     // Wyjście (wiersz → odpowiedź) animuje ten `ZStack`; wejście
                     // pod NOWYM pytaniem robi sam wiersz (`appeared`), bo
                     // `.id(slotKey)` niżej stawia go w nieanimowanej transakcji.
