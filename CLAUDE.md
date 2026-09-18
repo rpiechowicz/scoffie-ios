@@ -69,7 +69,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zakładką — lista zakupów wchodzi przyciskiem z nagłówka Planu tygodnia (`ProductsView` jako
   arkusz z `topPadding: 24`, bo domyślne 78 pt odsuwa tytuł od Dynamic Island, a nie od uchwytu
   arkusza). Piąte miejsce w menu jest zajęte — nowa zakładka wymaga wyjęcia innej, inaczej iOS
-  schowa obie pod „Więcej".
+  schowa obie pod „Więcej". Pasek jest WŁASNY (`SCFloatingTabBar` w `overlay` nad `TabView`,
+  systemowy schowany przez `toolbarVisibility(.hidden, for: .tabBar)`): przy przewijaniu w dół
+  zwija się do samych ikon jak w Revolucie, a nie do jednej ikony jak `tabBarMinimizeBehavior`.
+  Główny `ScrollView` każdej zakładki melduje kierunek przez `scTracksTabBarCompaction()`;
+  rezerwa miejsca pod treścią (`reservedHeight`) jest stała i schodzi do zera przy klawiaturze.
 - Asystent AI (Faza 1) jedzie po REST, NIE po sockecie: `POST /agent/conversations/:id/messages`
   oddaje `202` z `turnId`, a odpowiedź zbiera się odpytywaniem `GET /agent/turns/:id` co sekundę
   (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–240 s (sufit `AI_TURN_TIMEOUT_MS`,
