@@ -454,7 +454,11 @@ final class AgentStore {
             usage = loaded
             // Po włączeniu PRO (albo ręcznym nadaniu) blokada „do PRO" znika
             // bez restartu aplikacji.
-            if !loaded.isTrial, lockReason == .quota, lockedUntil == .distantFuture {
+            // Także pula PRÓBNA, która znów ma zapas (reset po stronie serwera,
+            // korekta limitu): blokada „do PRO" była wieczna niezależnie od
+            // tego, co mówił serwer, i schodziła dopiero z restartem aplikacji.
+            let trialHasRoom = loaded.isTrial && loaded.messages.remaining > 0
+            if (!loaded.isTrial || trialHasRoom), lockReason == .quota, lockedUntil == .distantFuture {
                 lockedUntil = nil
                 lockReason = nil
             }

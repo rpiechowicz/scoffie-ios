@@ -27,6 +27,9 @@ struct AssistantWelcome: Equatable {
         /// Dni z choć jednym posiłkiem w bieżącym tygodniu (pon–niedz).
         var plannedDaysThisWeek: Int
         var plannedDaysNextWeek: Int
+        /// Pula na próbę wykorzystana: powitanie nie ma prawa obiecywać
+        /// „ułożę w minutę" nad polem, w które nie da się nic wpisać.
+        var trialExhausted: Bool = false
     }
 
     static func compose(_ c: Context) -> AssistantWelcome {
@@ -47,6 +50,16 @@ struct AssistantWelcome: Equatable {
         // Aniu, ale Rafał → Rafale, Beata → Beato) — mianownik po przecinku
         // czyta się naturalnie i nigdy nie wychodzi z niego potworek.
         let title = name.map { "\(greeting), \($0)" } ?? greeting
+
+        if c.trialExhausted {
+            // Zero podpowiedzi: chip, którego nie da się wysłać, jest gorszy
+            // niż brak chipa. Zdanie mówi, co ZOSTAJE, zanim powie, co kupić.
+            return AssistantWelcome(
+                title: title,
+                subtitle: "Darmowe wiadomości są wykorzystane. Rozmowy i plan zostają — z planem Scoffie zaczniemy dokładnie tam, gdzie skończyliśmy.",
+                quickStarts: []
+            )
+        }
 
         // Kolejność = waga sprawy: pusty tydzień bije pusty obiad, a pusty
         // obiad bije jutro. Ostatnia gałąź to „wszystko jest" i wtedy
