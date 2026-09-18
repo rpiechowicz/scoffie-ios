@@ -89,7 +89,10 @@ struct SCScoffieMark: View {
     /// Dysk minus kęs — `subtracting`, a nie `evenOdd`, bo koło kęsa wystaje
     /// poza dysk i przy regule parzystości jego zewnętrzny fragment zostałby
     /// wypełniony.
-    private static func markPath(scale: CGFloat) -> Path {
+    ///
+    /// `nonisolated`, bo to czysta geometria bez stanu — woła ją także
+    /// `SCMarkShape.path(in:)`, a `Shape` nie obiecuje izolacji do aktora.
+    nonisolated static func markPath(scale: CGFloat) -> Path {
         let disc = Path(ellipseIn: CGRect(
             x: (50 - 25) * scale,
             y: (50 - 25) * scale,
@@ -103,6 +106,21 @@ struct SCScoffieMark: View {
             height: 23.52929688 * scale
         ))
         return disc.subtracting(bite)
+    }
+}
+
+/// Sam znak (dysk minus kęs) jako `Shape`, bez płyty w tle — do wierszy
+/// tekstu, gdzie `SCScoffieMark` byłby ikoną aplikacji, nie glifem.
+/// `Shape`, nie `Canvas`: `fill(Color)` jest animowalne, więc ton etapu
+/// tury przenika zamiast przełączać się w jednej klatce. Geometria
+/// z `markPath` — nie rysujemy znaku od nowa (`branding/LOGO_NOTES.md`).
+struct SCMarkShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        // Dysk w `markPath` zajmuje 25…75 ze 100, czyli 50 jednostek —
+        // skalujemy tak, żeby wypełnił krótszy bok ramki, i centrujemy.
+        let scale = min(rect.width, rect.height) / 50
+        return SCScoffieMark.markPath(scale: scale)
+            .offsetBy(dx: rect.midX - 50 * scale, dy: rect.midY - 50 * scale)
     }
 }
 

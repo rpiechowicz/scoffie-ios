@@ -147,6 +147,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     /// Cichy push (albo push dostarczony, gdy aplikacja ma chwilę na pracę).
+    ///
+    /// `completionHandler` dochodzi PO pracy, nie przed nią — i to nie jest
+    /// kosmetyka. Dotąd wracał natychmiast, a robota szła w odpalonych obok
+    /// `Task`-ach: dla systemu znaczyło to „skończyłem", więc miał prawo uśpić
+    /// proces w dowolnym momencie tego, co jeszcze trwało. Gdy akurat trwała
+    /// rotacja refresh tokenu, telefon zostawał ze zrotowanym tokenem i przy
+    /// następnym uruchomieniu — choćby za cztery dni — wyglądał dla serwera
+    /// na kradzież. Objawem było „Sesja wygasła" po dłuższej przerwie
+    /// od aplikacji, bez żadnej winy użytkownika.
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
@@ -154,42 +163,45 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) {
         let type = Self.payloadType(ofUserInfo: userInfo)
         Self.cancelLocalFallback(for: type)
-        handle(payloadType: type)
-        completionHandler(.newData)
+        Task { @MainActor in
+            let activity = BackgroundActivity.begin(name: "silent-push")
+            await self.perform(payloadType: type)
+            activity.end()
+            completionHandler(.newData)
+        }
     }
 
+    /// Stuknięcie w powiadomienie: aplikacja i tak wchodzi na pierwszy plan,
+    /// więc nie ma czego podtrzymywać — praca leci obok.
     private func handle(payloadType: PushPayloadType, tapped: Bool = false) {
+        Task { @MainActor in
+            await perform(payloadType: payloadType, tapped: tapped)
+        }
+    }
+
+    @MainActor
+    private func perform(payloadType: PushPayloadType, tapped: Bool = false) async {
         guard let sessionStore else { return }
         switch payloadType {
         case .assistantTurn:
             // „Asystent odpowiedział" ma otwierać rozmowę — ale tylko po
             // stuknięciu; cichy push nie przełącza zakładek nikomu pod ręką.
             if tapped {
-                Task { @MainActor in
-                    sessionStore.dashboardTab = .assistant
-                }
+                sessionStore.dashboardTab = .assistant
             }
         case .householdMembers:
-            Task { @MainActor in
-                await sessionStore.refreshHouseholdMembers(force: true)
-            }
+            await sessionStore.refreshHouseholdMembers(force: true)
         case .householdInvitation:
-            Task { @MainActor in
-                await sessionStore.refreshPendingInvitations()
-            }
+            await sessionStore.refreshPendingInvitations()
         case .weeklyPlan, .shoppingList:
-            Task { @MainActor in
-                sessionStore.refreshRealtimeStoresOnForeground()
-            }
+            sessionStore.refreshRealtimeStoresOnForeground()
         case .mealReminder:
             // „Pora gotować" prowadzi do Kalendarza — tam stoi łuk doby
             // z tym samym posiłkiem, jego godziną i przyciskiem odhaczenia.
             // Tylko po stuknięciu: powiadomienie, które samo przestawia
             // zakładkę komuś pod ręką, byłoby napadem, nie przypomnieniem.
             if tapped {
-                Task { @MainActor in
-                    sessionStore.dashboardTab = .calendar
-                }
+                sessionStore.dashboardTab = .calendar
             }
         case .unknown:
             break

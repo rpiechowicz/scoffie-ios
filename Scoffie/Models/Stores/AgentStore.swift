@@ -25,6 +25,20 @@ struct AgentChatMessage: Identifiable, Equatable {
     var card: AgentCardDTO?
     /// „Uwzględniłem: …" — z czym serwer policzył tę odpowiedź.
     var usedContext: [String] = []
+    /// Ślad tury nad odpowiedzią („Myślałem 42 s ›"). Tylko dla odpowiedzi
+    /// zebranych W TEJ SESJI — patrz `AgentThinkingSummary`.
+    var thinking: AgentThinkingSummary? = nil
+}
+
+/// Ślad tury, który zostaje nad odpowiedzią: ile trwała i przez co przeszła.
+/// Tylko dla odpowiedzi zebranych W TEJ SESJI — historia z serwera go nie
+/// niesie (`AgentMessageDTO` nie ma kroków), i wtedy linii po prostu nie ma.
+/// Gdyby serwer kiedyś dołożył `progress`/`startedAt`/`finishedAt` do
+/// wiadomości, wystarczy wypełnić to pole w `chatMessage(from:)`.
+struct AgentThinkingSummary: Equatable {
+    /// `nil` = nie dało się policzyć (brak znaczników z serwera i lokalnie).
+    let seconds: Int?
+    let steps: [AgentProgressStepDTO]
 }
 
 /// Stan rozmowy z asystentem AI.
@@ -63,11 +77,28 @@ final class AgentStore {
 
     private(set) var messages: [AgentChatMessage] = []
     private(set) var isSending = false
+    /// `send()` zakłada rozmowę, a pytania jeszcze nie ma w liście — to okno
+    /// (~0,5–2 s na zimnej ścieżce: pierwsze pytanie po zgodzie, po usunięciu
+    /// rozmowy, wolna sieć) blokuje `canSend`, ale NIE jest turą: wskaźnik
+    /// i „Stop" nie mają czego wskazywać, dopóki nie ma pytania.
+    private(set) var isPreparing = false
     /// Kroki bieżącej tury — „Czytam plan tygodnia", „Zapisuję plan tygodnia".
     private(set) var progress: [AgentProgressStepDTO] = []
-    /// Kiedy ruszyła bieżąca tura — ekran pokazuje przy postępie upływ sekund,
-    /// bo między krokami bywa kilkanaście sekund ciszy.
+    /// Epoka bieżącej tury — od niej wskaźnik liczy oddech glifu, połysk
+    /// i próg „Możesz wyjść". Ustawiana w `send()`/`editMessage()` razem
+    /// z `isSending`, żeby istniała od pierwszej klatki wskaźnika, a nie od
+    /// powrotu POST; `followTurn` co najwyżej cofa ją na znacznik serwera.
     private(set) var turnStartedAt: Date?
+    /// „Stop" wciśnięty, serwer jeszcze nie domknął — wiersz mówi „Zatrzymuję…".
+    private(set) var isStopping = false
+    /// Ostatnia tura powstała W TEJ SESJI: slot ostatniej tury dostaje wtedy
+    /// minimalną wysokość okna (pytanie pod górną krawędzią, odpowiedź wyłania
+    /// się pod nim). Rozmowa wczytana z historii tego nie dostaje — nie ma
+    /// zostawiać ekranu pustki pod ostatnią odpowiedzią.
+    private(set) var hasLiveTurnSlot = false
+    /// Tożsamość tury w `followTurn` — `turnStartedAt` już nią nie jest, bo
+    /// epoka wskaźnika nie ma prawa zniknąć w klatce, w której wskaźnik gaśnie.
+    private var activeTurnToken: UUID?
     private(set) var errorMessage: String?
     /// Gotowe podpowiedzi pod błędem tury (po przekroczeniu czasu albo
     /// „Stop"): mniejszy zakres, bo to najczęstsza przyczyna przekroczenia
@@ -142,7 +173,7 @@ final class AgentStore {
         self.householdId = householdId
     }
 
-    var canSend: Bool { !isSending && !isUnavailable && !isLocked }
+    var canSend: Bool { !isSending && !isPreparing && !isUnavailable && !isLocked }
     var isLocked: Bool { lockedUntil.map { $0 > Date() } ?? false }
 
     /// Po udanej zgodzie arkusz wraca do rozmowy; tekst do ponowienia czeka.
@@ -193,13 +224,13 @@ final class AgentStore {
         suggestions = []
         retryText = nil
         retryClientMessageId = nil
-        isSending = true
-        progress = []
-        defer { isSending = false }
-
+        // Nie `defer`: flaga ma żyć tylko przez zakładanie rozmowy, a `send()`
+        // wraca dopiero po całej turze (`follow`).
+        isPreparing = true
         if conversationId == nil {
             await loadOrCreateConversation()
         }
+        isPreparing = false
         guard let conversationId else {
             // Bez rozmowy nie ma dokąd wysłać, ale tekst musi mieć drogę
             // powrotu — inaczej użytkownik zostaje z błędem i pustym polem.
@@ -208,6 +239,18 @@ final class AgentStore {
             return false
         }
         let sentInConversation = conversationId
+        // Cała tura rusza dopiero TU, w JEDNEJ transakcji z dopisaniem pytania.
+        // Wcześniej `isSending` szło w górę przed założeniem rozmowy i wiersz
+        // „Zastanawiam się…" stał pod pustym stanem albo szkieletem historii,
+        // a potem przeskakiwał pod pytanie, gdy `loadOrCreateConversation()`
+        // podmieniła listę. Epoka razem z `isSending`: od pierwszej klatki
+        // wskaźnika, nie od powrotu POST — inaczej wiersz stał bez zegara.
+        isSending = true
+        progress = []
+        turnStartedAt = Date()
+        isStopping = false
+        hasLiveTurnSlot = true
+        defer { isSending = false }
         messages.append(
             AgentChatMessage(
                 id: clientMessageId,
@@ -252,6 +295,7 @@ final class AgentStore {
             messages.removeAll { $0.id == clientMessageId }
             retryText = trimmed
             retryClientMessageId = clientMessageId
+            hasLiveTurnSlot = false
             return false
         }
     }
@@ -278,47 +322,67 @@ final class AgentStore {
     /// domyka turę jako `AI_CANCELLED`, oddaje kwotę i podpowiada mniejszy
     /// zakres. Gdy serwer jest starszy i nie zna tej trasy, zostaje dawne
     /// zachowanie: przestajemy czekać, identyfikator tury zostaje.
+    ///
+    /// Wskaźnik NIE gaśnie przed odpowiedzią serwera: wiersz mówi
+    /// „Zatrzymuję…", a pętla odpytywania sama zobaczy domknięcie (DONE =
+    /// odpowiedź, CANCELLED = notka). Dotąd wskaźnik znikał i wracał od zera
+    /// z czerwoną notką pod spodem, co czytało się jak zignorowany przycisk.
     func stopWaiting() {
-        guard isSending else { return }
-        let turnId = pendingTurnId
-        turnTask?.cancel()
-        turnTask = nil
-        isSending = false
-        progress = []
-        turnStartedAt = nil
-
-        guard let turnId else {
-            errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
+        guard isSending, !isStopping else { return }
+        guard let turnId = pendingTurnId else {
+            // Tura nie zdążyła ruszyć na serwerze — jak dotąd: przestajemy czekać.
+            abandonTurnLocally()
             return
         }
+        isStopping = true
         Task { [weak self] in
             guard let self else { return }
             do {
                 let turn = try await self.client.cancelTurn(id: turnId)
-                // Strażnik tożsamości jak w `followTurn`: użytkownik mógł już
-                // wysłać NOWĄ wiadomość, a ten komunikat dotyczy poprzedniej.
-                guard self.pendingTurnId == turnId else { return }
-                if turn.isFinished {
-                    self.pendingTurnId = nil
-                    if turn.status == "DONE" {
-                        // Zdążył przed sygnałem — odpowiedź jest, pokazujemy ją.
-                        self.apply(finished: turn)
-                    } else {
-                        self.errorMessage = UserFacingErrorMapper.copy(forCode: "AI_CANCELLED")
-                            ?? "Zatrzymane. Plan bez zmian."
-                        self.suggestions = turn.suggestions ?? []
-                    }
+                // Strażnik tożsamości: użytkownik mógł już wysłać NOWĄ wiadomość
+                // albo pętla sama zdążyła domknąć tę turę.
+                guard self.pendingTurnId == turnId, self.isStopping else { return }
+                // Runner jest w środku narzędzia (`stopRequested`) — pętla
+                // odpytywania dokończy, wiersz dalej mówi „Zatrzymuję…".
+                guard turn.isFinished else { return }
+                // Domykamy TU, bo pętla może właśnie spać: najpierw odbieramy
+                // jej tożsamość, żeby jej `defer` niczego nie ruszył dwa razy.
+                // Wszystko poniżej jest synchroniczne — jedna transakcja,
+                // jeden crossfade w slocie tury.
+                self.activeTurnToken = nil
+                self.turnTask?.cancel()
+                self.turnTask = nil
+                self.pendingTurnId = nil
+                if turn.status == "DONE" {
+                    // Zdążył przed sygnałem — odpowiedź jest, pokazujemy ją.
+                    self.errorMessage = nil
+                    self.apply(finished: turn)
                 } else {
-                    // Runner jest w środku narzędzia i nie zdążył domknąć
-                    // (serwer mówi `stopRequested`). Mówimy to wprost i
-                    // odpytujemy dalej — inaczej „Stop" wyglądał na zignorowany.
-                    self.errorMessage = "Zatrzymuję. Asystent kończy bieżący krok — chwila."
-                    await self.follow(turnId: turnId)
+                    self.errorMessage = UserFacingErrorMapper.copy(forCode: "AI_CANCELLED")
+                        ?? "Zatrzymane. Plan bez zmian."
+                    self.suggestions = turn.suggestions ?? []
                 }
+                self.isSending = false
+                self.isStopping = false
+                self.progress = []
             } catch {
-                self.errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
+                guard self.pendingTurnId == turnId else { return }
+                // Starszy serwer bez trasy: dawne zachowanie.
+                self.abandonTurnLocally()
             }
         }
+    }
+
+    /// Przestajemy czekać po stronie telefonu; tura na serwerze biegnie dalej
+    /// i identyfikator zostaje, żeby po powrocie na zakładkę do niej wrócić.
+    private func abandonTurnLocally() {
+        activeTurnToken = nil
+        turnTask?.cancel()
+        turnTask = nil
+        isSending = false
+        isStopping = false
+        progress = []
+        errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
     }
 
     /// „Ile mi zostało" — do arkusza limitów; nie zasłania błędów rozmowy.
@@ -490,6 +554,7 @@ final class AgentStore {
             // przychodzi z serwera, bo w pamięci telefonu go już nie ma.
             pendingTurnId = conversation.activeTurnId
             messages = try await loadAllMessages(conversationId: conversation.id)
+            hasLiveTurnSlot = false
             isUnavailable = false
         } catch {
             handle(error)
@@ -501,6 +566,7 @@ final class AgentStore {
         defer { isLoadingHistory = false }
         do {
             messages = try await loadAllMessages(conversationId: id)
+            hasLiveTurnSlot = false
             pendingTurnId = conversations
                 .first { $0.id == id }?
                 .activeTurnId
@@ -528,11 +594,15 @@ final class AgentStore {
     }
 
     private func resetTurnState() {
+        activeTurnToken = nil
         turnTask?.cancel()
         turnTask = nil
         isSending = false
+        isStopping = false
         progress = []
+        // Tu podmienia się cała lista, więc skok epoki jest niewidoczny.
         turnStartedAt = nil
+        hasLiveTurnSlot = false
         pendingTurnId = nil
         errorMessage = nil
         suggestions = []
@@ -556,18 +626,25 @@ final class AgentStore {
     }
 
     private func followTurn(turnId: String) async {
-        // Znacznik startu jest tożsamością TEJ tury. Sprzątamy po sobie tylko
-        // wtedy, gdy nikt nas nie zastąpił: anulowana tura kończy się po tym,
-        // jak użytkownik zdążył wysłać następną, i bez tego warunku gasiłaby
-        // jej kręciołek i kroki postępu.
-        let startedAt = Date()
+        // Token jest tożsamością TEJ tury. Sprzątamy po sobie tylko wtedy, gdy
+        // nikt nas nie zastąpił: anulowana tura kończy się po tym, jak
+        // użytkownik zdążył wysłać następną, i bez tego gasiłaby jej wskaźnik.
+        let token = UUID()
+        activeTurnToken = token
         isSending = true
-        turnStartedAt = startedAt
+        // Powrót na zakładkę / relaunch: `send()` nie ustawiło epoki, a widok
+        // nie ma prawa dostać `nil` — inaczej „Możesz wyjść" pojawia się od razu.
+        if turnStartedAt == nil { turnStartedAt = Date() }
+        var adoptedServerStart = false
         defer {
-            if turnStartedAt == startedAt {
+            if activeTurnToken == token {
+                activeTurnToken = nil
                 isSending = false
+                isStopping = false
                 progress = []
-                turnStartedAt = nil
+                // `turnStartedAt` ZOSTAJE: to epoka gasnącego wskaźnika. Nową
+                // ustawia następne `send()`, a `resetTurnState()` zeruje ją
+                // razem z całą listą.
             }
         }
 
@@ -578,14 +655,33 @@ final class AgentStore {
             if Task.isCancelled { return }
             do {
                 let turn = try await client.turn(id: turnId)
+                // „Stop" mógł domknąć turę w czasie tego żądania — wtedy
+                // odpowiedź jest już w rozmowie i nie wolno dopisać jej drugi raz.
+                guard activeTurnToken == token, !Task.isCancelled else { return }
                 failures = 0
-                progress = turn.progress
+                if !adoptedServerStart, let serverStart = Self.parseTimestamp(turn.startedAt) {
+                    adoptedServerStart = true
+                    // Jeden zegar (serwera) i nigdy w przód: powrót na zakładkę
+                    // w minucie tury nie ma pokazywać jej jako świeżej.
+                    if let local = turnStartedAt {
+                        if serverStart < local { turnStartedAt = serverStart }
+                    } else {
+                        turnStartedAt = serverStart
+                    }
+                }
 
                 guard turn.isFinished else {
+                    // Bez przypisania przy każdym odpytaniu: `@Observable`
+                    // powiadamia bez porównania i co sekundę przebudowywał
+                    // cały ekran rozmowy.
+                    if progress != turn.progress { progress = turn.progress }
                     try await Task.sleep(for: Self.pollInterval)
                     continue
                 }
 
+                // Ostatniego kroku NIE przypisujemy — kroki trafią do „Myślałem"
+                // z `turn.progress`, a wskaźnik nie ma zmieniać koloru w klatce,
+                // w której gaśnie.
                 pendingTurnId = nil
                 // Komunikat z poprzedniej, nieudanej próby nie ma prawa wisieć
                 // pod świeżą odpowiedzią.
@@ -612,7 +708,9 @@ final class AgentStore {
 
         // Sufit czasu. Zanim powiemy „nie zdążył", pytamy JESZCZE RAZ: pętla
         // mogła stać w tle razem z całą aplikacją, a odpowiedź czekać od dawna.
-        if let turn = try? await client.turn(id: turnId), turn.isFinished {
+        let lastLook = try? await client.turn(id: turnId)
+        guard activeTurnToken == token else { return }
+        if let turn = lastLook, turn.isFinished {
             pendingTurnId = nil
             apply(finished: turn)
             return
@@ -656,6 +754,9 @@ final class AgentStore {
                 .map { Self.chatMessage(from: $0) }
             if savedPlan, !answers.isEmpty {
                 answers[answers.count - 1].savedPlan = true
+            }
+            if !answers.isEmpty {
+                answers[answers.count - 1].thinking = Self.thinkingSummary(for: turn, localStart: turnStartedAt)
             }
             if answers.isEmpty {
                 errorMessage = "Asystent nie miał nic do powiedzenia. Spróbuj zapytać inaczej."
@@ -730,6 +831,10 @@ final class AgentStore {
         retryClientMessageId = nil
         isSending = true
         progress = []
+        // Jak w `send()`: epoka i slot od pierwszej klatki wskaźnika.
+        turnStartedAt = Date()
+        hasLiveTurnSlot = true
+        isStopping = false
         defer { isSending = false }
 
         let withdrawn = Array(messages[index...])
@@ -767,6 +872,7 @@ final class AgentStore {
             // wiadomości, a ponowne pobranie w błędzie sieci i tak by padło.
             messages.removeAll { $0.id == clientMessageId }
             messages.append(contentsOf: withdrawn)
+            hasLiveTurnSlot = false
             return false
         }
     }
@@ -898,6 +1004,24 @@ final class AgentStore {
     static func parseTimestamp(_ raw: String?) -> Date? {
         guard let raw else { return nil }
         return timestampParser.date(from: raw)
+    }
+
+    /// Czas z PARY serwerowej (`startedAt`/`finishedAt` — jeden zegar), więc
+    /// nie zależy od zegara telefonu; lokalny start tylko w zastępstwie.
+    private static func thinkingSummary(for turn: AgentTurnDTO, localStart: Date?) -> AgentThinkingSummary {
+        let start = parseTimestamp(turn.startedAt) ?? localStart
+        let end = parseTimestamp(turn.finishedAt) ?? Date()
+        var seconds: Int?
+        if let start {
+            seconds = max(0, Int(end.timeIntervalSince(start).rounded()))
+        }
+        // Bez kroków przejściowych (`think`): na żywo mówią, że model czyta
+        // wyniki narzędzi, ale po turze byłyby tym samym zdaniem co drugi
+        // wiersz listy „Myślałem".
+        return AgentThinkingSummary(
+            seconds: seconds,
+            steps: turn.progress.filter { !$0.isTransient }
+        )
     }
 
     private static func chatMessage(from dto: AgentMessageDTO) -> AgentChatMessage {
