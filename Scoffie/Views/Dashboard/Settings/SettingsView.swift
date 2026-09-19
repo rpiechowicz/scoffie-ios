@@ -515,6 +515,9 @@ struct SettingsView: View {
                 .scTracksTabBarCompaction()
                 .ignoresSafeArea(.container, edges: .top)
             }
+            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
+            // `NavigationStack`, patrz `scReservesTabBarSpace`.
+            .scReservesTabBarSpace()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

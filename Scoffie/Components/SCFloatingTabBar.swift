@@ -104,10 +104,14 @@ struct SCFloatingTabBar: View {
     private func tabButton(_ item: SCTabBarItem) -> some View {
         let selected = item.tab == selection
         return Button {
-            // Bez `withAnimation`: przełączenie zakładki w `TabView` ma
-            // zostać cięciem, jak w systemie. Pigułkę i kolor animuje
-            // `.animation(value: selection)` na pasku.
-            selection = item.tab
+            // Zmiana wyboru spoza systemowego paska jest dla `TabView` zmianą
+            // „programową", a taką od iOS 18 pokazuje przenikaniem treści —
+            // stąd animacja, której z systemowym paskiem nie było. Transakcja
+            // bez animacji przywraca cięcie. Pigułkę na pasku animuje osobno
+            // `.animation(value: selection)`, więc ona nadal się przesuwa.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { selection = item.tab }
         } label: {
             VStack(spacing: isCompact ? 0 : 3) {
                 Image(systemName: item.icon)
@@ -225,10 +229,42 @@ private struct SCTabBarCompactionTracker: ViewModifier {
     }
 }
 
+/// Rezerwa miejsca pod własnym paskiem — KORZEŃ każdej zakładki, WEWNĄTRZ
+/// jej `NavigationStack`.
+///
+/// Wchodzi bezpiecznym obszarem, nie paddingiem: `ScrollView` przewija wtedy
+/// treść POD szkłem paska (widać ją przez nie), a kończy nad nim — jak
+/// z paskiem systemowym. Wysokość jest stała (od pełnego paska), więc
+/// zwijanie nie rusza układu. Przy klawiaturze schodzi do zera, bo pasek
+/// i tak jest pod nią — inaczej pole asystenta wisiałoby 70 pt nad klawiaturą.
+///
+/// Dlaczego wewnątrz `NavigationStack`, a nie raz na `TabView`: wcięcie
+/// założone NA ZEWNĄTRZ stosu nie dochodzi do jego korzenia (stos bierze
+/// bezpieczny obszar od UIKit), więc pigułka „Cel dnia" i ostatnie wiersze
+/// list lądowały pod paskiem. Nakładać PO wcięciach własnych ekranu
+/// (pigułka celu dnia), żeby rezerwa była najniżej.
+private struct SCTabBarSpaceReservation: ViewModifier {
+    @Environment(\.scTabBarChrome) private var chrome
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: chrome.isKeyboardVisible ? 0 : SCFloatingTabBar.reservedHeight)
+                .animation(.easeOut(duration: 0.25), value: chrome.isKeyboardVisible)
+        }
+    }
+}
+
 extension View {
     /// Główny `ScrollView` zakładki melduje kierunek przewijania do paska.
     func scTracksTabBarCompaction() -> some View {
         modifier(SCTabBarCompactionTracker())
+    }
+
+    /// Korzeń zakładki trzyma pod treścią miejsce na pasek — patrz
+    /// `SCTabBarSpaceReservation`.
+    func scReservesTabBarSpace() -> some View {
+        modifier(SCTabBarSpaceReservation())
     }
 }
 

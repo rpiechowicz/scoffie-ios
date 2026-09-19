@@ -737,6 +737,9 @@ struct CalendarView: View {
             // nagłówek ekranu jest przypięty, więc nie ma czego pod niego
             // wsunąć i materiał `.bar` już się nie zapala. Pusty element
             // trzyma pasek przed zwinięciem.
+            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
+            // `NavigationStack`, patrz `scReservesTabBarSpace`.
+            .scReservesTabBarSpace()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

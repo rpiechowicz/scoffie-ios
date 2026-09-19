@@ -50,6 +50,7 @@ struct NavigationMenu: View {
                         AssistantView(store: agentStore)
                     } else {
                         AssistantUnavailableView()
+                            .scReservesTabBarSpace()
                     }
                 }
             }
@@ -97,21 +98,15 @@ struct NavigationMenu: View {
         ]
     }
 
-    /// Treść zakładki bez paska systemowego, z rezerwą miejsca pod własny.
+    /// Treść zakładki bez paska systemowego.
     ///
-    /// Rezerwa wchodzi bezpiecznym obszarem, nie paddingiem: `ScrollView`
-    /// przewija wtedy treść POD szkłem paska (widać ją przez nie), a kończy
-    /// nad nim — dokładnie jak z paskiem systemowym. Wysokość jest stała
-    /// (od pełnego paska), więc zwijanie nie rusza układu. Przy klawiaturze
-    /// rezerwa schodzi do zera, bo pasek i tak jest pod nią.
+    /// Rezerwy miejsca pod własny pasek NIE ma tutaj: wcięcie założone na
+    /// zewnątrz `NavigationStack` nie dochodzi do jego korzenia i pigułka
+    /// „Cel dnia" lądowała pod paskiem. Każdy ekran zakładki zakłada ją sam,
+    /// wewnątrz stosu — `scReservesTabBarSpace()`.
     private func page<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         content()
             .toolbarVisibility(.hidden, for: .tabBar)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear
-                    .frame(height: chrome.isKeyboardVisible ? 0 : SCFloatingTabBar.reservedHeight)
-                    .animation(.easeOut(duration: 0.25), value: chrome.isKeyboardVisible)
-            }
     }
 }
 
