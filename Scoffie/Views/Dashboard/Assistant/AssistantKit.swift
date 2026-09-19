@@ -182,3 +182,55 @@ struct AssistantUsedContextLine: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+// MARK: - Plakietka puli
+
+/// „● 1 pozostała” w nagłówku — stan puli na próbie, jak na makiecie.
+///
+/// Kropka w kolorze marki, liczba przewija się (`CountingNumber`), słowo
+/// odmienia się po liczbie. Przy zerze plakietka mówi „pula wyczerpana”
+/// i przechodzi na terakotę — to jedyna sytuacja, w której ma wołać.
+struct AssistantQuotaPill: View {
+    let remaining: Int
+    let limit: Int
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var isEmpty: Bool { remaining <= 0 }
+
+    private var word: String {
+        let n = max(0, remaining)
+        if n == 1 { return "pozostała" }
+        let mod10 = n % 10
+        let mod100 = n % 100
+        if (2...4).contains(mod10), !(12...14).contains(mod100) { return "pozostałe" }
+        return "pozostałych"
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isEmpty ? SCPalette.terracotta : SCPalette.terracotta)
+                .frame(width: 6, height: 6)
+            if isEmpty {
+                Text("pula wyczerpana")
+            } else {
+                HStack(spacing: 3) {
+                    CountingNumber(target: remaining)
+                    Text(word)
+                }
+            }
+        }
+        .font(.system(size: 12.5, weight: .semibold))
+        .foregroundStyle(isEmpty ? SCPalette.terracotta : Color.scLabel(scheme))
+        .padding(.horizontal, 11)
+        .frame(height: 30)
+        .background(Capsule().fill(isEmpty ? Color.scAccentTint(scheme) : Color.scTileBg(scheme)))
+        .overlay(Capsule().stroke(isEmpty ? SCPalette.terracotta.opacity(0.3) : Color.scTileStroke(scheme), lineWidth: 1))
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isEmpty
+            ? "Pula wiadomości na próbę wyczerpana"
+            : "Zostało \(remaining) z \(limit) wiadomości na próbę")
+    }
+}

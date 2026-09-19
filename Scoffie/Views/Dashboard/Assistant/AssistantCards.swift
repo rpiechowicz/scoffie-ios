@@ -92,7 +92,19 @@ private struct TargetSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            AssistantCardSummaryRow(label: label, value: "\(value) \(unit)")
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(label)
+                    .font(.system(size: 12.5))
+                    .tracking(-0.15)
+                    .foregroundStyle(Color.scMuted(scheme))
+                Spacer(minLength: 8)
+                HStack(spacing: 3) {
+                    CountingNumber(target: value)
+                    Text(unit)
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.scLabel(scheme))
+            }
 
             if let target, target > 0 {
                 AssistantTargetBar(value: value, target: target)
@@ -1304,7 +1316,15 @@ struct AssistantAppliedCard: View {
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    AssistantCardSummaryRow(label: row.0, value: "\(row.1)")
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(row.0)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Color.scMuted(scheme))
+                        Spacer(minLength: 8)
+                        CountingNumber(target: row.1)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.scLabel(scheme))
+                    }
                 }
             }
             .padding(.horizontal, AssistantCardMetrics.inset)
