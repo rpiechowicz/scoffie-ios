@@ -283,8 +283,8 @@ enum AssistantBriefingResolver {
                 supporting: "Rozmowy i zapisany plan zostają. Z planem Scoffie zaczniemy tam, gdzie skończyliśmy.",
                 visual: .none,
                 summary: nil,
-                primary: Action(title: "Zobacz plany", kind: .openPlans),
-                secondary: [Action(title: "Historia rozmów", kind: .openHistory)],
+                primary: AssistantBriefing.Action(title: "Zobacz plany", kind: .openPlans),
+                secondary: [AssistantBriefing.Action(title: "Historia rozmów", kind: .openHistory)],
                 helper: nil
             )
         }
