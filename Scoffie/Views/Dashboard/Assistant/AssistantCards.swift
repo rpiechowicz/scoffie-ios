@@ -492,15 +492,31 @@ struct AssistantOptionsCard: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+    /// Dwa kafelki w rzędzie; nieparzysty rząd dostaje pustą połowę.
+    /// `HStack` zamiast `LazyVGrid`: siatka w karcie w `LazyVStack`
+    /// proponowała kafelkom szerokość spoza kolumny i nazwy nachodziły
+    /// na sąsiada.
+    private var rows: [[OptionsCardItemDTO]] {
+        stride(from: 0, to: card.options.count, by: 2).map { start in
+            Array(card.options[start..<min(start + 2, card.options.count)])
+        }
+    }
 
     var body: some View {
         AssistantCard {
             AssistantCardHead(eyebrow: card.eyebrow, title: card.title, subtitle: "Wybierz jedno.")
 
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                ForEach(card.options) { option in
-                    OptionTile(option: option) { onAsk(option.prompt) }
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(row) { option in
+                            OptionTile(option: option) { onAsk(option.prompt) }
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                        if row.count == 1 {
+                            Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, AssistantCardMetrics.inset)
@@ -546,10 +562,13 @@ struct AssistantOptionsCard: View {
                         .shadow(color: Color.black.opacity(0.12), radius: 1, y: 1)
 
                         if let tag = option.tag, !tag.isEmpty {
+                            // Pigułka jest biała w obu motywach, więc tusz też
+                            // musi być stały — w ciemnym motywie jasny tusz
+                            // znikał na białym.
                             Text(tag)
                                 .font(.system(size: 11, weight: .bold))
                                 .tracking(0.2)
-                                .foregroundStyle(AssistantLook.ink(scheme))
+                                .foregroundStyle(AssistantLook.ink(.light))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(Capsule().fill(Color.white.opacity(0.9)))
@@ -564,7 +583,7 @@ struct AssistantOptionsCard: View {
                         .foregroundStyle(AssistantLook.ink(scheme))
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 9)
 
                     Text(option.prepTimeMinutes > 0 ? "\(option.kcalPerServing) kcal · \(option.prepTimeMinutes) min" : "\(option.kcalPerServing) kcal")

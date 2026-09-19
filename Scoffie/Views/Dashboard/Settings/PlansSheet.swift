@@ -37,63 +37,41 @@ struct PlansSheet: View {
 
     var body: some View {
         NavigationStack {
-            // Karty mają WYPEŁNIĆ ekran między nagłówkiem a stopką, nie
-            // stać skulone u góry nad pustką: treść dostaje co najmniej
-            // wysokość widoku, a wolne miejsce rozchodzi się po równo na
-            // trzy karty. Na małym ekranie, gdzie miejsca brakuje, całość
-            // po prostu się przewija.
-            GeometryReader { geometry in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        EditorialSheetHeader(eyebrow: "Plany · miesięcznie", title: "Wybierz plan") {
-                            dismiss()
+            // Ten sam szkielet co arkusze asystenta (eyebrow · tytuł · X,
+            // stopka nad gradientem). Bez `GeometryReader`: pierwszy przebieg
+            // układu dostawał szerokość zero i treść rysowała się „od boku”,
+            // zanim arkusz dojechał na miejsce.
+            AssistantSheetScaffold(
+                eyebrow: "Plany · miesięcznie",
+                title: "Wybierz plan",
+                subtitle: "Pula wspólna dla całego domu, odnawia się co miesiąc.",
+                onClose: { dismiss() },
+                footer: { footer }
+            ) {
+                // Trzy kafle do wyboru, jedna karta szczegółów: przy
+                // zmianie planu liczby i paski przeliczają się w miejscu,
+                // zamiast kazać porównywać trzy karty po kawałku.
+                HStack(spacing: 8) {
+                    ForEach(SubscriptionCatalog.all) { plan in
+                        PlanTile(
+                            plan: plan,
+                            price: price(for: plan),
+                            isSelected: plan.id == selected.id,
+                            isHome: plan.id == homePlan?.id
+                        ) {
+                            select(plan)
                         }
-
-                        Text("Pula wspólna dla całego domu, odnawia się co miesiąc.")
-                            .font(.system(size: 13))
-                            .lineSpacing(2)
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 6)
-
-                        // Trzy kafle do wyboru, jedna karta szczegółów: przy
-                        // zmianie planu liczby i paski przeliczają się w miejscu,
-                        // zamiast kazać porównywać trzy karty po kawałku.
-                        HStack(spacing: 8) {
-                            ForEach(SubscriptionCatalog.all) { plan in
-                                PlanTile(
-                                    plan: plan,
-                                    price: price(for: plan),
-                                    isSelected: plan.id == selected.id,
-                                    isHome: plan.id == homePlan?.id
-                                ) {
-                                    select(plan)
-                                }
-                            }
-                        }
-                        .padding(.top, 16)
-
-                        PlanDetailCard(
-                            plan: selected,
-                            price: price(for: selected),
-                            isHome: selected.id == homePlan?.id
-                        )
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 10)
                     }
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.top, 18)
-                    .padding(.bottom, 14)
-                    .frame(minHeight: geometry.size.height)
                 }
-                .scrollBounceBehavior(.basedOnSize)
+                .padding(.top, 14)
+
+                PlanDetailCard(
+                    plan: selected,
+                    price: price(for: selected),
+                    isHome: selected.id == homePlan?.id
+                )
+                .padding(.top, 10)
             }
-            .scrollIndicators(.hidden)
-            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
-            // Wstawka w strefie bezpiecznej: treść dostaje tyle miejsca, ile
-            // stopka zajmuje NAPRAWDĘ (z komunikatem albo bez), więc ostatnia
-            // karta nigdy nie chowa się pod przyciskiem.
-            .safeAreaInset(edge: .bottom, spacing: 0) { footer }
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)
@@ -155,7 +133,7 @@ struct PlansSheet: View {
     // MARK: - Stopka i zakup
 
     private var footer: some View {
-        AssistantStickyFooter {
+        VStack(spacing: 10) {
             // Wynik zakupu i „Przywróć zakupy" ląduje TU, przy przyciskach,
             // które go wywołały — nie gdzieś w treści, gdzie trzeba by go
             // szukać przewijaniem.
@@ -171,15 +149,12 @@ struct PlansSheet: View {
                     .transition(.opacity.combined(with: .offset(y: 4)))
             }
 
-            SCSoftButton(
-                title: purchaseTitle,
-                leadingIcon: "sparkles",
-                trailingIcon: nil,
-                isEnabled: canPurchase,
-                isLoading: subscriptions.isPurchasing
-            ) {
-                buy()
-            }
+            AssistantPrimaryButton(
+                action: AssistantCardAction(title: purchaseTitle, icon: "arrow.right") { buy() },
+                isBusy: subscriptions.isPurchasing
+            )
+            .disabled(!canPurchase)
+            .opacity(canPurchase ? 1 : 0.5)
 
             // WARUNKI ODNOWIENIA MUSZĄ STAĆ PRZY PRZYCISKU ZAKUPU, a nie tylko
             // w regulaminie — App Store 3.1.2 wymaga, żeby przed pobraniem

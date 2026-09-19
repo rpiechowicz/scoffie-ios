@@ -24,7 +24,7 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    header
+                    AssistantSheetHeader(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: action)
                     content()
                         .padding(.horizontal, 16)
                         .padding(.top, 4)
@@ -37,8 +37,46 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
             AssistantSheetFooter { footer() }
         }
     }
+}
 
-    private var header: some View {
+extension AssistantSheetScaffold where Action == EmptyView {
+    init(
+        eyebrow: String = "Asystent",
+        title: String,
+        subtitle: String? = nil,
+        onClose: @escaping () -> Void,
+        @ViewBuilder footer: @escaping () -> Footer,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() }, footer: footer, content: content)
+    }
+}
+
+extension AssistantSheetScaffold where Action == EmptyView, Footer == EmptyView {
+    init(
+        eyebrow: String = "Asystent",
+        title: String,
+        subtitle: String? = nil,
+        onClose: @escaping () -> Void,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() }, footer: { EmptyView() }, content: content)
+    }
+}
+
+/// Nagłówek arkusza — TEN SAM dla każdego arkusza asystenta, także tych,
+/// które nie przewijają listy (onboarding z kartami): eyebrow · tytuł ·
+/// podtytuł po lewej, opcjonalna akcja i X po prawej.
+struct AssistantSheetHeader<Action: View>: View {
+    var eyebrow: String = "Asystent"
+    let title: String
+    var subtitle: String? = nil
+    var onClose: () -> Void
+    @ViewBuilder var action: () -> Action
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(eyebrow)
@@ -85,28 +123,9 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
     }
 }
 
-extension AssistantSheetScaffold where Action == EmptyView {
-    init(
-        eyebrow: String = "Asystent",
-        title: String,
-        subtitle: String? = nil,
-        onClose: @escaping () -> Void,
-        @ViewBuilder footer: @escaping () -> Footer,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() }, footer: footer, content: content)
-    }
-}
-
-extension AssistantSheetScaffold where Action == EmptyView, Footer == EmptyView {
-    init(
-        eyebrow: String = "Asystent",
-        title: String,
-        subtitle: String? = nil,
-        onClose: @escaping () -> Void,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() }, footer: { EmptyView() }, content: content)
+extension AssistantSheetHeader where Action == EmptyView {
+    init(eyebrow: String = "Asystent", title: String, subtitle: String? = nil, onClose: @escaping () -> Void) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() })
     }
 }
 

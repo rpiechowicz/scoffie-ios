@@ -990,7 +990,7 @@ struct AssistantView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
             .frame(minHeight: 50)
-            .background(Capsule(style: .continuous).fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.82)))
+            .background(Capsule(style: .continuous).fill(AssistantLook.input(scheme)))
             .overlay(
                 Capsule(style: .continuous).stroke(
                     editing == nil ? AssistantLook.cardStroke(scheme) : AssistantLook.terraFill(scheme).opacity(0.5),
@@ -1013,7 +1013,7 @@ struct AssistantView: View {
                 if store.isSending { store.stopWaiting() } else { send() }
             } label: {
                 ZStack {
-                    Circle().fill(active ? AssistantLook.terra(scheme) : (scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.82)))
+                    Circle().fill(active ? AssistantLook.terra(scheme) : AssistantLook.input(scheme))
                     Circle().stroke(active ? Color.clear : AssistantLook.cardStroke(scheme), lineWidth: 1)
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
@@ -1065,6 +1065,7 @@ struct AssistantView: View {
             .padding(.horizontal, AssistantCardMetrics.inset)
             .padding(.vertical, 16)
         }
+        .background(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).fill(AssistantLook.input(scheme)))
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 8)
@@ -1102,7 +1103,7 @@ struct AssistantView: View {
         .padding(.leading, 12)
         .padding(.trailing, 8)
         .frame(height: 36)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.82)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AssistantLook.input(scheme)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
         .padding(.horizontal, 16)
         .padding(.top, 8)

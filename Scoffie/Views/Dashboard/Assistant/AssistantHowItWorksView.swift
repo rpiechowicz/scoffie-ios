@@ -56,19 +56,15 @@ struct AssistantHowItWorksView: View {
     private var content: some View {
         VStack(spacing: 0) {
             if presentation == .sheet {
-                HStack {
-                    Text("Jak działa asystent")
-                        .font(.system(size: 17, weight: .bold))
-                        .tracking(-0.4)
-                        .foregroundStyle(Color.scLabel(scheme))
-                    Spacer()
-                    Button("Zamknij") { finish() }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.scMuted(scheme))
-                }
-                .padding(.horizontal, SCPageMetrics.horizontal)
-                .padding(.top, 18)
-                .padding(.bottom, 6)
+                // Ten sam nagłówek, co w pozostałych arkuszach asystenta
+                // (eyebrow · tytuł · podtytuł · X) — własny pasek z tekstowym
+                // „Zamknij” wyglądał jak z innej aplikacji.
+                AssistantSheetHeader(
+                    title: "Jak działa asystent",
+                    subtitle: "Cztery karty: co potrafi, jak wygląda odpowiedź i co zostaje w Twoich rękach.",
+                    onClose: { finish() }
+                )
+                .padding(.bottom, 10)
             } else {
                 AssistantIntroNavRow(
                     trailingTitle: "Pomiń",

@@ -1,20 +1,23 @@
 import SwiftUI
 
-/// Wiersz tury — 1:1 z makietą „2 · Asystent pracuje” i „14 · Thought summary”.
+/// Wiersz tury — 1:1 z makietą „Stan pracy · finał: Oddech łuku”
+/// (`MWorking`) i „14 · Thought summary” (`LThought`).
 ///
-/// W TRAKCIE tury (`LWorking`): znak marki orbituje w pulsującej poświacie
-/// 44 pt, obok JEDEN bieżący status (16/600, połysk w kolorze fazy — indygo
-/// dla analizy i planowania, szałwia dla zapisu), po prawej realny czas
-/// w całych sekundach, pod statusem kontekst trzema słowami, niżej pasek
-/// aktywności NIEOKREŚLONY (sunie, nie pokazuje procentu), a po 18 s zdanie
-/// „Możesz wyjść — wrócę z odpowiedzią.”. Żadnej listy ukończonych kroków:
-/// status zmienia się w miejscu.
+/// W TRAKCIE tury: znak marki stoi NIERUCHOMO w terakocie w środku
+/// pierścienia 44 pt, a wokół niego krąży łuk w kolorze fazy (indygo dla
+/// analizy i planowania, szałwia dla zapisu) — obrót 2,4 s liniowo, a łuk
+/// jednocześnie „oddycha” 1,8 s: rośnie od kropki (5 % obwodu) do ok. 55 %
+/// i kurczy się z powrotem. Obwód nigdy się nie zamyka — to aktywność, nie
+/// postęp. Obok JEDEN bieżący status (16/600, przebłysk w kolorze fazy
+/// 2,6 s), po prawej realny licznik sekund, pod statusem kontekst słowami
+/// z aplikacji, a po 18 s „Możesz wyjść — wrócę z odpowiedzią.”. Bez paska,
+/// bez procentu, bez listy kroków i bez nazw narzędzi.
 ///
 /// PO turze (`LThought`): „Myślałem 42 s” z chevronem, wcięte pod tekst
-/// odpowiedzi (28 pt), a po rozwinięciu kroki jako kropka + zdanie po
-/// ludzku — wgląd dla ciekawych, nie log.
+/// odpowiedzi (28 pt); licznik z wiersza pracy STAJE SIĘ tą liczbą.
+/// Po rozwinięciu kroki jako kropka + zdanie po ludzku.
 ///
-/// Zatrzymane przez użytkownika: szary znak, bez poświaty i bez paska.
+/// Zatrzymane (`MStopped`): łuk znika, zostaje cichy pierścień i szary znak.
 struct AssistantThoughtLine: View {
     enum Phase: Equatable {
         /// Tura biegnie. `startedAt` = epoka zegara.
@@ -66,10 +69,6 @@ struct AssistantThoughtLine: View {
     /// Kolor fazy: analiza i planowanie w indygo, zapis w szałwii.
     private var phaseColor: Color {
         hasWritten ? AssistantLook.sage(scheme) : AssistantLook.indigo(scheme)
-    }
-
-    private var phaseTint: Color {
-        hasWritten ? AssistantLook.sageTint(scheme) : AssistantLook.indigoTint(scheme)
     }
 
     /// Jeden bieżący status — ostatni krok z serwera, gotowe zdanie po polsku.
@@ -158,9 +157,9 @@ struct AssistantThoughtLine: View {
                         statusText(t: t)
                         Spacer(minLength: 0)
                         if !isStopping {
-                            Text("\(Int(t)) s")
+                            // Sekundy rolują się jak czas w szczegółach posiłku.
+                            SCRollingNumber(value: Int(t), unit: "s")
                                 .font(.system(size: 12.5))
-                                .monospacedDigit()
                                 .foregroundStyle(AssistantLook.faint(scheme))
                                 .fixedSize()
                                 .accessibilityHidden(true)
@@ -174,11 +173,6 @@ struct AssistantThoughtLine: View {
                             .lineLimit(1)
                             .padding(.top, 3)
                             .transition(.opacity)
-                    }
-
-                    if !isStopping {
-                        AssistantActivityLine(t: t, color: phaseColor, tint: phaseTint, still: reduceMotion)
-                            .padding(.top, 12)
                     }
 
                     if showsPatience, !isStopping {
@@ -199,26 +193,18 @@ struct AssistantThoughtLine: View {
         .accessibilityAddTraits(.updatesFrequently)
     }
 
-    /// Znak marki 26 pt orbituje w poświacie 44 pt (`kesHalo` 2,8 s).
-    /// Zatrzymane: szary znak, bez poświaty.
+    /// `SpinDash` 44: pierścień-tor w tincie fazy (12 %), łuk w kolorze fazy
+    /// krąży i oddycha wokół NIERUCHOMEGO znaku w terakocie (22 pt = 50 %).
+    /// Zatrzymane: łuk znika, tor szarzeje, znak szary.
     private func glyph(t: TimeInterval) -> some View {
-        ZStack {
-            if !isStopping {
-                let pulse = reduceMotion ? 0.5 : (1 - cos(t * 2 * .pi / 2.8)) / 2
-                Circle()
-                    .fill(phaseTint)
-                    .scaleEffect(1 + 0.18 * pulse)
-                    .opacity(0.55 - 0.35 * pulse)
-                    .animation(.smooth(duration: 0.5), value: hasWritten)
-            }
-            AssistantSpinningMark(
-                size: 26,
-                color: isStopping ? AssistantLook.ink(scheme).opacity(0.35) : AssistantLook.terraFill(scheme),
-                spinning: !isStopping
-            )
-        }
-        .frame(width: 44, height: 44)
-        .accessibilityHidden(true)
+        AssistantArcSpinner(
+            size: 44,
+            color: phaseColor,
+            t: t,
+            stopped: isStopping,
+            still: reduceMotion
+        )
+        .animation(.smooth(duration: 0.5), value: hasWritten)
     }
 
     /// Status 16/600 z połyskiem w kolorze fazy (`lShimmer` 2,6 s).
@@ -346,43 +332,74 @@ struct AssistantThoughtLine: View {
     }
 }
 
-// MARK: - Pasek aktywności
+// MARK: - Oddech łuku
 
-/// Pasek aktywności z makiety (`lBar`): tor 3 pt w tincie fazy, pasmo 38 %
-/// szerokości w kolorze fazy sunie od lewej do prawej co 2,2 s
-/// (`cubic-bezier(.4,0,.6,1)`). To NIE jest pasek postępu — nigdy nie
-/// „dojeżdża” do końca. Przy Reduce Motion pasmo stoi na środku.
-struct AssistantActivityLine: View {
-    let t: TimeInterval
+/// `SpinDash` z makiety w trzech rozmiarach: 44 (wiersz statusu), 28
+/// (kapsułka), 20 (inline). Grubość łuku = 6,8 % rozmiaru (3 pt przy 44,
+/// 2 pt przy 28), znak = 50 % rozmiaru, tor = kolor fazy 12 %.
+///
+/// Dwa niezależne rytmy, jak w CSS: obrót całego łuku 2,4 s liniowo
+/// (`spArc`) i „oddech” 1,8 s ease-in-out (`spDash`: dasharray 6 → 70 → 6
+/// z 126, offset 0 → −30 → −126), więc łuk rośnie do ok. 55 % obwodu, kurczy
+/// się do kropki i przy tym przesuwa się po torze. Nigdy się nie zamyka.
+/// Czas `t` przychodzi z zewnątrz (jeden `TimelineView` na wiersz), żeby
+/// łuk, licznik i przebłysk statusu szły z tego samego zegara.
+///
+/// Reduce Motion: łuk stoi na 30 % obwodu. `stopped`: łuk znika, zostaje
+/// szary tor i szary znak (`MStopped`).
+struct AssistantArcSpinner: View {
+    var size: CGFloat = 44
     let color: Color
-    var tint: Color? = nil
+    let t: TimeInterval
+    var stopped: Bool = false
     var still: Bool = false
-    var period: TimeInterval = 2.2
 
     @Environment(\.colorScheme) private var scheme
 
+    private var lineWidth: CGFloat { max(2, (size * 0.068).rounded()) }
+
     var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let band = width * 0.38
-            let phase = still ? 0.5 : Self.eased(t.truncatingRemainder(dividingBy: period) / period)
-            let x = -band + (width + band) * phase
-            ZStack(alignment: .leading) {
-                Capsule().fill(tint ?? color.opacity(0.12))
-                Capsule()
-                    .fill(color.opacity(0.85))
-                    .frame(width: band)
-                    .offset(x: still ? (width - band) / 2 : x)
+        let arc = Self.arc(at: t, still: still)
+        ZStack {
+            Circle()
+                .stroke(stopped ? AssistantLook.ink(scheme).opacity(0.10) : color.opacity(0.12), lineWidth: lineWidth)
+            if !stopped {
+                Circle()
+                    .trim(from: 0, to: arc.length)
+                    .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(arc.start * 360))
             }
-            .clipShape(Capsule())
+            SCMarkShape()
+                .fill(stopped ? AssistantLook.ink(scheme).opacity(0.35) : AssistantLook.terraFill(scheme))
+                .frame(width: (size * 0.5).rounded(), height: (size * 0.5).rounded())
         }
-        .frame(height: 3)
-        .animation(.smooth(duration: 0.5), value: color)
+        .padding(lineWidth / 2)
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 
-    private static func eased(_ p: Double) -> Double {
-        // Przybliżenie cubic-bezier(.4,0,.6,1): łagodny start i koniec.
+    /// Początek łuku (ułamek obwodu, rośnie zgodnie z ruchem wskazówek)
+    /// i jego długość (ułamek obwodu).
+    static func arc(at t: TimeInterval, still: Bool) -> (start: Double, length: Double) {
+        if still { return (start: -0.25, length: 0.30) }
+        let spin = t.truncatingRemainder(dividingBy: 2.4) / 2.4
+        let breath = t.truncatingRemainder(dividingBy: 1.8) / 1.8
+        let dash: Double
+        let shift: Double
+        if breath < 0.5 {
+            let e = easeInOut(breath / 0.5)
+            dash = 6 + 64 * e
+            shift = 30 * e
+        } else {
+            let e = easeInOut((breath - 0.5) / 0.5)
+            dash = 70 - 64 * e
+            shift = 30 + 96 * e
+        }
+        return (start: spin + shift / 126, length: dash / 126)
+    }
+
+    /// `ease-in-out` (`cubic-bezier(.42,0,.58,1)`) — przybliżenie.
+    private static func easeInOut(_ p: Double) -> Double {
         p < 0.5 ? 2 * p * p : 1 - pow(-2 * p + 2, 2) / 2
     }
 }

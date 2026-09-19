@@ -852,6 +852,11 @@ final class AgentStore {
 
     private func apply(finished turn: AgentTurnDTO) {
         lastActivityAt = Date()
+        // Każda domknięta tura zjadła wiadomość z puli (kwota schodzi na
+        // starcie i wraca tylko przy porażce serwera), a kapsułka w nagłówku
+        // liczyła ją z JEDNEGO odczytu przy otwarciu zakładki — po trzech
+        // pytaniach dalej pokazywała stan sprzed rozmowy.
+        Task { [weak self] in _ = await self?.loadUsage() }
         switch turn.status {
         case "DONE":
             // `apply_week_plan` biegnie w każdej turze najpierw jako próba,

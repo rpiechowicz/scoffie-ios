@@ -101,8 +101,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Liczby z `kit.jsx` (`L`) siedzą w `AssistantLook` (`AssistantCardKit.swift`) — jasny motyw co do
   wartości, ciemny na palecie aplikacji. Arkusze stoją na `AssistantSheetKit.swift`
   (`AssistantSheetScaffold` = eyebrow · tytuł · X, `AssistantGroup`, `AssistantRow`). Stan pracy
-  (`AssistantThoughtLine`, faza `working`) to JEDEN status w kolorze fazy + pasek nieokreślony,
-  bez listy kroków; „Myślałem 42 s” stoi POD tekstem odpowiedzi (`AssistantVoice`), nie nad nim.
+  (`AssistantThoughtLine`, faza `working`) to „Oddech łuku” (artefakt `claude.ai/artifact/7vwJmr2mCR8xTYnjAJ9F3s`):
+  znak stoi w terakocie, wokół krąży łuk w kolorze fazy (obrót 2,4 s, oddech 5 → 55 % obwodu 1,8 s,
+  nigdy zamknięty) + JEDEN status z przebłyskiem, bez paska i bez listy kroków; „Myślałem 42 s” stoi POD tekstem odpowiedzi (`AssistantVoice`), nie nad nim.
 - UI asystenta (redesign 19.09.2026): wszystkie karty stoją na atomach z `AssistantCardKit.swift`
   (`AssistantCard` z tonem neutral/sage/indigo/muted, `AssistantCardHead` z pigułką stanu
   `AssistantStatusChip`, `AssistantCardActions` — jedna akcja = pełna szerokość, dwie = wtórna
@@ -110,7 +111,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   akcje ze stanu z serwera). Stan propozycji jest TEKSTEM (`AssistantCardStatus.title`), nie
   tylko kolorem. Porażka tury to `AssistantOutcomeCard` (bez czerwieni; „Nic nie zmieniłem
   w planie” tylko gdy `AgentStore.lastTurnWrote == false`), nie notka z wykrzyknikiem. Na żywo
-  wiersz „myślę” pokazuje JEDEN bieżący status + `AssistantActivityLine` (sygnał, nie procent)
+  wiersz „myślę” pokazuje JEDEN bieżący status + `AssistantArcSpinner` (łuk krąży i oddycha, sygnał, nie procent)
   + kontekst słowami z aplikacji — nazwy narzędzi nie wychodzą na ekran. Podglądy kart biorą
   wzorce z `Previews/AssistantPreviewFixtures.swift` (kopia JSON-ów z `Scripts/CardContract`).
 - REST-owy błąd nazywa się `BackendAPIError` (dawniej `IntegrationsAPIError`) — od asystenta klientów
