@@ -343,6 +343,9 @@ struct WeeklyPlanView: View {
                         }
                 }
             }
+            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
+            // `NavigationStack`, patrz `scReservesTabBarSpace`.
+            .scReservesTabBarSpace()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

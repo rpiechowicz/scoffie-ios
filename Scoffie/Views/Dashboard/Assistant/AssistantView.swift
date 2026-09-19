@@ -146,6 +146,9 @@ struct AssistantView: View {
             // a composer wszedłby pod pasek zakładek. NIE skracać do
             // `.ignoresSafeArea()`.
             .ignoresSafeArea(.container, edges: .top)
+            // Miejsce pod własnym paskiem zakładek: pole wiadomości siada
+            // nad nim, a przy klawiaturze rezerwa schodzi do zera.
+            .scReservesTabBarSpace()
         }
         .task {
             await store.openIfNeeded()
