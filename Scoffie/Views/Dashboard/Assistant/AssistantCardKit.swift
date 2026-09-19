@@ -36,6 +36,14 @@ enum AssistantLook {
     static func cardStroke(_ scheme: ColorScheme) -> Color { scheme == .dark ? inkDark.opacity(0.08) : warmLight.opacity(0.08) }
     /// Białe pola na karcie (kafelek ikony, składnik wiersza).
     static func field(_ scheme: ColorScheme) -> Color { scheme == .dark ? inkDark.opacity(0.06) : Color.white.opacity(0.85) }
+    /// Pole nad przewijaną treścią (composer, pasek edycji, szukanie):
+    /// NIEPRZEZROCZYSTE, bo rozmowa przelatuje pod nim — w ciemnym motywie
+    /// półprzezroczysty tint pokazywał litery przez pole.
+    static func input(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 38 / 255, green: 30 / 255, blue: 26 / 255)
+            : Color(red: 253 / 255, green: 250 / 255, blue: 246 / 255)
+    }
 
     static func terra(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? SCPalette.terracotta : Color(red: 168 / 255, green: 80 / 255, blue: 47 / 255)   // #A8502F
@@ -630,12 +638,19 @@ struct AssistantWeightedRow: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-        return CGSize(width: proposal.width ?? 0, height: height)
+        // Propozycja bywa `nil` albo nieskończona (sonda „ile chcesz”) —
+        // wtedy oddajemy sumę szerokości własnych, NIGDY nieskończoność:
+        // nieskończony wymiar ramki wywraca aplikację.
+        if let width = proposal.width, width.isFinite {
+            return CGSize(width: width, height: height)
+        }
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }.reduce(0, +)
+        return CGSize(width: ideal + spacing * CGFloat(max(0, subviews.count - 1)), height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let total = weights.prefix(subviews.count).reduce(0, +)
-        let free = bounds.width - spacing * CGFloat(max(0, subviews.count - 1))
+        let free = max(0, bounds.width - spacing * CGFloat(max(0, subviews.count - 1)))
         var x = bounds.minX
         for (index, subview) in subviews.enumerated() {
             let weight = index < weights.count ? weights[index] : 1

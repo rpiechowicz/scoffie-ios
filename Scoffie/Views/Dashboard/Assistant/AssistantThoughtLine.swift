@@ -158,9 +158,9 @@ struct AssistantThoughtLine: View {
                         statusText(t: t)
                         Spacer(minLength: 0)
                         if !isStopping {
-                            Text("\(Int(t)) s")
+                            // Sekundy rolują się jak czas w szczegółach posiłku.
+                            SCRollingNumber(value: Int(t), unit: "s")
                                 .font(.system(size: 12.5))
-                                .monospacedDigit()
                                 .foregroundStyle(AssistantLook.faint(scheme))
                                 .fixedSize()
                                 .accessibilityHidden(true)

@@ -60,3 +60,28 @@ struct CountingNumber: View {
             }
     }
 }
+
+// MARK: - Rolowanie cyfr
+
+/// Liczba, której cyfry ROLUJĄ się w miejscu przy każdej zmianie — ta sama
+/// animacja co w szczegółach posiłku (`CalendarPlate`: „60 min · 1208 kcal”
+/// w „12 min · 510 kcal”). Do wartości, które TYKAJĄ (sekundy tury, licznik
+/// puli, odliczanie), w przeciwieństwie do `CountingNumber`, które liczy od
+/// zera przy wejściu. Jedno miejsce, żeby każdy zegar w aplikacji ruszał
+/// się tak samo; `unit` doklejane po spacji („24 s”).
+struct SCRollingNumber: View {
+    let value: Int
+    var unit: String? = nil
+    var duration: Double = 0.3
+
+    private var text: String {
+        unit.map { "\(value) \($0)" } ?? String(value)
+    }
+
+    var body: some View {
+        Text(verbatim: text)
+            .monospacedDigit()
+            .contentTransition(.numericText(value: Double(value)))
+            .animation(.easeOut(duration: duration), value: value)
+    }
+}

@@ -102,7 +102,7 @@ struct AssistantConversationsSheet: View {
         }
         .padding(.horizontal, 18)
         .frame(height: 48)
-        .background(Capsule().fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.88)))
+        .background(Capsule().fill(AssistantLook.input(scheme)))
         .overlay(Capsule().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
         .shadow(color: Color.black.opacity(scheme == .dark ? 0 : 0.04), radius: 1, y: 1)
         .shadow(color: Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(scheme == .dark ? 0 : 0.10), radius: 12, y: 8)
