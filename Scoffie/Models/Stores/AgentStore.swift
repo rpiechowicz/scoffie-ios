@@ -36,8 +36,10 @@ struct AgentChatMessage: Identifiable, Equatable {
 /// Gdyby serwer kiedyś dołożył `progress`/`startedAt`/`finishedAt` do
 /// wiadomości, wystarczy wypełnić to pole w `chatMessage(from:)`.
 struct AgentThinkingSummary: Equatable {
-    /// `nil` = nie dało się policzyć (brak znaczników z serwera i lokalnie).
-    let seconds: Int?
+    /// Czas tury w sekundach, z dziesiątymi — wiersz „Myślałem 12,3 s" ma
+    /// pokazać tę samą liczbę, na której stanął licznik. `nil` = nie dało
+    /// się policzyć (brak znaczników z serwera i lokalnie).
+    let duration: TimeInterval?
     let steps: [AgentProgressStepDTO]
 }
 
@@ -1110,15 +1112,16 @@ final class AgentStore {
     private static func thinkingSummary(for turn: AgentTurnDTO, localStart: Date?) -> AgentThinkingSummary {
         let start = parseTimestamp(turn.startedAt) ?? localStart
         let end = parseTimestamp(turn.finishedAt) ?? Date()
-        var seconds: Int?
+        var duration: TimeInterval?
         if let start {
-            seconds = max(0, Int(end.timeIntervalSince(start).rounded()))
+            duration = max(0, end.timeIntervalSince(start))
         }
-        // Bez kroków przejściowych (`think`): na żywo mówią, że model czyta
-        // wyniki narzędzi, ale po turze byłyby tym samym zdaniem co drugi
-        // wiersz listy „Myślałem".
+        // Bez kroków przejściowych (`think`, `read`, `reason`, `write`): na
+        // żywo mówią, co dzieje się teraz, ale po turze byłyby tym samym
+        // zdaniem co drugi wiersz listy „Myślałem". Serwer od 19.09.2026 sam
+        // je zdejmuje przy domknięciu; filtr zostaje dla starszego serwera.
         return AgentThinkingSummary(
-            seconds: seconds,
+            duration: duration,
             steps: turn.progress.filter { !$0.isTransient }
         )
     }
