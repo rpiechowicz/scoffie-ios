@@ -33,6 +33,23 @@ struct AssistantCapabilitiesSheet: View {
                 ruleCard
                     .padding(.top, 10)
 
+                // Jedno zdanie, które mówi, co robi stuknięcie w wiersz niżej:
+                // przykład idzie od razu jako pierwsza wiadomość.
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "hand.tap")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AssistantLook.terra(scheme))
+                        .padding(.top, 1)
+                    Text("Stuknij przykład, a wyślę go od razu — rozmowa zacznie się w tej samej chwili.")
+                        .font(.system(size: 13))
+                        .lineSpacing(3)
+                        .foregroundStyle(AssistantLook.muted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .accessibilityElement(children: .combine)
+
                 ForEach(AssistantCapabilities.groups) { group in
                     AssistantGroup(title: group.label, aside: group.lead, titleColor: group.accent.color) {
                         ForEach(Array(group.items.enumerated()), id: \.element) { index, id in
