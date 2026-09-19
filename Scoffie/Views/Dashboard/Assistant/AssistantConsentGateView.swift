@@ -103,36 +103,32 @@ struct AssistantConsentGateView: View {
         }
     }
 
+    @ViewBuilder
     private var content: some View {
-        VStack(spacing: 0) {
-            if presentation == .sheet {
-                EditorialSheetHeader(eyebrow: "Asystent AI", title: isGranted ? "Zgoda na asystenta" : "Zanim zaczniemy") {
-                    dismiss()
+        if presentation == .sheet {
+            // „20 · Zgoda na asystenta”: nagłówek Prywatność · tytuł · X,
+            // status w szałwii, „co wysyłamy” jako lista, „czego nie” jedną
+            // linią, potwierdzenia jako wiersze z zaznaczeniem, „Cofnij
+            // zgodę” w stopce.
+            AssistantSheetScaffold(
+                eyebrow: "Prywatność",
+                title: isGranted ? "Zgoda na asystenta" : "Zanim zaczniemy",
+                onClose: { dismiss() },
+                footer: { footer }
+            ) {
+                if isGranted {
+                    statusBar
+                        .padding(.top, 10)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
+                sections
             }
-
-            // Pasek „Zgoda włączona" tylko w arkuszu: w przepływie bramka
-            // znika chwilę po zapisie i pasek wjeżdżający w trakcie animacji
-            // wyjścia szarpał całą treścią.
-            if isGranted, presentation == .sheet {
-                statusBar
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.top, 12)
-                    .padding(.bottom, 4)
-            }
-
-            ScrollView {
-                // Odstępy i rozmiary jak na kroku przewodnika (tytuł 27,
-                // opis 15, sekcje co 14 pt) — wcześniej 26/13,5 i 10 pt,
-                // przez co ekran z najdłuższą treścią był zarazem najciaśniej
-                // złożony.
-                VStack(alignment: .leading, spacing: 14) {
-                    if presentation == .inline {
+        } else {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: 8) {
                             if !isGranted {
-                                AssistantSectionLabel(text: "Asystent AI", color: SCPalette.terracotta)
+                                AssistantSectionLabel(text: "Asystent", color: SCPalette.terracotta)
                             }
                             Text("Zanim zaczniemy")
                                 .font(.system(size: 27, weight: .bold))
@@ -148,75 +144,70 @@ struct AssistantConsentGateView: View {
                             }
                         }
                         .padding(.bottom, 6)
+
+                        sections
                     }
-
-                    dataCard
-
-                    if isUnderage, !isGranted {
-                        underageNotice
-                    }
-
-                    AssistantSurfaceCard {
-                        HStack(alignment: .center) {
-                            AssistantSectionLabel(text: "Twoje potwierdzenia")
-                            Spacer()
-                            if !isUnderage { confirmationsBadge }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .padding(.bottom, 6)
-                        confirmRow(
-                            isOn: isGranted ? .constant(true) : draftBinding.confirmsAge,
-                            title: "Mam ukończone 16 lat",
-                            caption: ageFromProfile ? "Zaznaczone według roku urodzenia z Twojego profilu" : nil,
-                            first: true
-                        )
-                        confirmRow(
-                            isOn: isGranted ? .constant(true) : draftBinding.confirmsData,
-                            title: "Zgadzam się, żeby Scoffie przetwarzał moje dane o diecie i alergiach w asystencie AI",
-                            caption: "Wyraźna zgoda (art. 9 ust. 2 lit. a RODO) w zakresie opisanym wyżej. Szczegóły w polityce prywatności.",
-                            first: false
-                        )
-                    }
-                    .opacity(isGranted || isUnderage ? 0.85 : 1)
-                    .disabled(isGranted || isUnderage)
-
-                    // Dostawca i podwykonawcy zostają w polityce prywatności
-                    // (sekcja 6, link niżej) — na ekranie asystent występuje
-                    // jako Scoffie, bez nazw modeli i firm trzecich.
-                    Text("Asystent to program — może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
-                        .font(.system(size: 12))
-                        .lineSpacing(2.5)
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 2)
-
-                    Button {
-                        showPrivacyPolicy = true
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text("Polityka prywatności, sekcja 6")
-                            Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
-                        }
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, SCPageMetrics.horizontal)
+                    .padding(.top, 6)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, presentation == .sheet ? 20 : SCPageMetrics.horizontal)
-                .padding(.top, 6)
-                .padding(.bottom, presentation == .sheet ? 24 : 16)
-            }
-            .scrollIndicators(.hidden)
-
-            // W zakładce stopkę składa `AssistantView` poza animowaną treścią.
-            if presentation == .sheet {
-                AssistantStickyFooter { footer }
-                    .padding(.bottom, 12)
+                .scrollIndicators(.hidden)
             }
         }
-        .background(presentation == .sheet ? AnyView(SCPageBackground(scheme: scheme).ignoresSafeArea()) : AnyView(Color.clear))
+    }
+
+    /// Wspólne sekcje zakładki i arkusza.
+    @ViewBuilder
+    private var sections: some View {
+        dataCard
+
+        if isUnderage, !isGranted {
+            underageNotice
+                .padding(.top, 14)
+        }
+
+        AssistantGroup(title: "Twoje potwierdzenia", aside: { confirmationsBadge }) {
+            confirmRow(
+                isOn: isGranted ? .constant(true) : draftBinding.confirmsAge,
+                title: "Mam ukończone 16 lat",
+                caption: ageFromProfile ? "Zaznaczone według roku urodzenia z Twojego profilu" : nil,
+                first: true
+            )
+            confirmRow(
+                isOn: isGranted ? .constant(true) : draftBinding.confirmsData,
+                title: "Zgadzam się, żeby Scoffie przetwarzał moje dane o diecie i alergiach w asystencie",
+                caption: "Wyraźna zgoda (art. 9 ust. 2 lit. a RODO) w zakresie opisanym wyżej.",
+                first: false
+            )
+        }
+        .padding(.top, 2)
+        .opacity(isGranted || isUnderage ? 0.9 : 1)
+        .disabled(isGranted || isUnderage)
+
+        // Dostawca i podwykonawcy zostają w polityce prywatności
+        // (sekcja 6, link niżej) — na ekranie asystent występuje
+        // jako Scoffie, bez nazw modeli i firm trzecich.
+        Text("Asystent to program — może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
+            .font(.system(size: 12.5))
+            .lineSpacing(3)
+            .foregroundStyle(AssistantLook.faint(scheme))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.top, 14)
+
+        Button {
+            showPrivacyPolicy = true
+        } label: {
+            HStack(spacing: 5) {
+                Text("Polityka prywatności, sekcja 6")
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
+            }
+            .font(.system(size: 13.5, weight: .semibold))
+            .foregroundStyle(AssistantLook.terra(scheme))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
     }
 
     // MARK: - Klocki
@@ -250,60 +241,54 @@ struct AssistantConsentGateView: View {
     private var confirmationsBadge: some View {
         let done = isGranted ? 2 : (currentDraft.confirmsAge ? 1 : 0) + (currentDraft.confirmsData ? 1 : 0)
         let complete = done == 2
-        return HStack(spacing: 4) {
-            if complete {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .heavy))
-            }
-            Text(isGranted ? "Zapisane" : "\(done) z 2")
-                .font(.system(size: 11, weight: .semibold))
-                .monospacedDigit()
-        }
-        .foregroundStyle(complete ? SCPalette.sage : Color.scFaint(scheme))
-        .padding(.horizontal, 8)
-        .frame(height: 22)
-        .background(Capsule().fill(complete ? Color.scSageTint(scheme) : Color.scChipBg(scheme)))
-        .animation(.easeInOut(duration: 0.18), value: done)
+        return Text(isGranted ? "Zapisane" : "\(done) z 2")
+            .font(.system(size: 12, weight: complete ? .bold : .regular))
+            .monospacedDigit()
+            .foregroundStyle(complete ? AssistantLook.sage(scheme) : AssistantLook.faint(scheme))
+            .animation(.easeInOut(duration: 0.18), value: done)
     }
 
+    /// Pasek „Zgoda włączona · wersja …” w tincie szałwii.
     private var statusBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SCPalette.sage)
-            (Text("Zgoda włączona").fontWeight(.semibold)
-                + Text(" · wersja dokumentów \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)").foregroundColor(Color.scMuted(scheme)))
-                .font(.system(size: 12))
-                .foregroundStyle(Color.scLabel(scheme))
+            Image(systemName: "checkmark.shield")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AssistantLook.sage(scheme))
+            (Text("Zgoda włączona").fontWeight(.bold).foregroundColor(AssistantLook.sage(scheme))
+                + Text(" · wersja \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)"))
+                .font(.system(size: 13.5))
+                .foregroundStyle(AssistantLook.muted(scheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.scSageTint(scheme)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AssistantLook.sageTint(scheme)))
     }
 
-    /// Dwie sekcje jedna pod drugą, nie dwie kolumny: prawa kolumna o
-    /// szerokości 118 pt łamała własny nagłówek na dwie linie, a lewa
-    /// mieściła 11,5-punktowy tekst po trzy wiersze. „Czego nie wysyłamy"
-    /// to pięć krótkich haseł — jedno zdanie z kropkami mówi to samo w dwóch
-    /// wierszach.
+    /// „Co wysyłamy do modelu” jako lista z kropkami szałwii; „Czego nie
+    /// wysyłamy” jedną linią na półce `wash`.
     private var dataCard: some View {
-        AssistantSurfaceCard(padding: 0) {
+        AssistantGroup {
             VStack(alignment: .leading, spacing: 10) {
-                AssistantSectionLabel(text: "Co wysyłamy do modelu", color: SCPalette.sage)
-                VStack(alignment: .leading, spacing: 7) {
+                Text("Co wysyłamy do modelu")
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(0.7)
+                    .textCase(.uppercase)
+                    .foregroundStyle(AssistantLook.sage(scheme))
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(Self.sentItems, id: \.self) { item in
-                        HStack(alignment: .firstTextBaseline, spacing: 9) {
+                        HStack(alignment: .top, spacing: 10) {
                             Circle()
-                                .fill(SCPalette.sage)
+                                .fill(AssistantLook.sage(scheme))
                                 .frame(width: 6, height: 6)
-                                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                                .padding(.top, 7)
                             Text(item)
-                                .font(.system(size: 14))
+                                .font(.system(size: 14.5))
+                                .tracking(-0.2)
                                 .lineSpacing(2)
-                                .foregroundStyle(Color.scLabel(scheme))
+                                .foregroundStyle(AssistantLook.ink(scheme))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -311,21 +296,26 @@ struct AssistantConsentGateView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 14)
+            .padding(.bottom, 12)
 
-            VStack(alignment: .leading, spacing: 6) {
-                AssistantSectionLabel(text: "Czego nie wysyłamy", color: Color.scFaint(scheme))
-                Text(Self.notSentItems.joined(separator: "  ·  "))
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Czego nie wysyłamy")
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(0.7)
+                    .textCase(.uppercase)
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                Text(Self.notSentItems.joined(separator: " · "))
                     .font(.system(size: 13.5))
                     .lineSpacing(3)
-                    .foregroundStyle(Color.scMuted(scheme))
+                    .foregroundStyle(AssistantLook.muted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
+            .padding(.top, 11)
+            .padding(.bottom, 13)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
+            .background(AssistantLook.wash(scheme))
+            .overlay(alignment: .top) { AssistantCardRule() }
         }
     }
 
@@ -341,51 +331,35 @@ struct AssistantConsentGateView: View {
     ]
     private static let notSentItems = ["Wzrost, waga, płeć", "Rok urodzenia", "Kroki", "E-mail", "Hasło Cookidoo"]
 
+    /// `ConsentRow`: tytuł i podpis z zawijaniem, po prawej kółko 28 —
+    /// szałwia z ptaszkiem, gdy zaznaczone (= zapisane).
     private func confirmRow(isOn: Binding<Bool>, title: String, caption: String?, first: Bool) -> some View {
         Button {
             isOn.wrappedValue.toggle()
         } label: {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(title)
-                        .font(.system(size: 15.5, weight: .semibold))
-                        .tracking(-0.25)
-                        .lineSpacing(2)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let caption {
-                        Text(caption)
-                            .font(.system(size: 12.5))
-                            .lineSpacing(2)
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
+            AssistantRow(
+                title: title,
+                subtitle: caption,
+                first: first,
+                subtitleWraps: true,
+                verticalPadding: 12,
+                alignment: .top,
+                leading: { EmptyView() },
+                trailing: {
+                    ZStack {
+                        Circle().fill(isOn.wrappedValue ? AssistantLook.sage(scheme) : Color.clear)
+                        Circle().stroke(isOn.wrappedValue ? Color.clear : AssistantLook.ink(scheme).opacity(0.28), lineWidth: 1.5)
+                        if isOn.wrappedValue {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 13, weight: .black))
+                                .foregroundStyle(Color.white)
+                        }
                     }
+                    .frame(width: 28, height: 28)
+                    .padding(.top, 4)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isOn.wrappedValue)
                 }
-                Spacer(minLength: 0)
-                ZStack {
-                    Circle().fill(isOn.wrappedValue ? SCPalette.terracotta : Color.clear)
-                    Circle().stroke(isOn.wrappedValue ? Color.clear : Color.scFaint(scheme), lineWidth: 1.5)
-                    if isOn.wrappedValue {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .heavy))
-                            .foregroundStyle(Color.scPageBase(scheme))
-                    }
-                }
-                .frame(width: 30, height: 30)
-                .shadow(color: isOn.wrappedValue ? SCPalette.terracotta.opacity(0.35) : .clear, radius: 6, y: 3)
-                .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isOn.wrappedValue)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            // Dół odrobinę większy: zaznaczony wiersz ma tło i bez tego
-            // wyglądał na przyklejony do krawędzi karty.
-            .padding(.bottom, 18)
-            .background(isOn.wrappedValue ? SCPalette.terracotta.opacity(0.07) : Color.clear)
-            .overlay(alignment: .top) {
-                if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
-            }
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -414,18 +388,25 @@ struct AssistantConsentGateView: View {
             }
 
             if isGranted {
-                AssistantTextButton(title: consents.isBusy ? "Cofam…" : "Cofnij zgodę", role: .destructive) {
+                Button {
                     confirmsRevoke = true
+                } label: {
+                    Text(consents.isBusy ? "Cofam…" : "Cofnij zgodę")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AssistantLook.terra(scheme))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .disabled(consents.isBusy)
             } else {
-                SCSoftButton(
-                    title: "Włącz asystenta",
-                    leadingIcon: "sparkles",
-                    isEnabled: canGrant && !consents.isBusy,
-                    isLoading: consents.isBusy,
-                    action: grant
+                AssistantPrimaryButton(
+                    action: AssistantCardAction(title: "Włącz asystenta", icon: "arrow.right", action: grant),
+                    isBusy: consents.isBusy
                 )
+                .disabled(!canGrant)
+                .opacity(canGrant ? 1 : 0.5)
                 .accessibilityHint(canGrant ? "" : "Najpierw zaznacz oba potwierdzenia")
             }
         }

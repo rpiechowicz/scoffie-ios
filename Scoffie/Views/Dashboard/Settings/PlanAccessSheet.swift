@@ -54,28 +54,19 @@ struct PlanAccessSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    EditorialSheetHeader(eyebrow: "Konto", title: "Asystent i plan") {
-                        dismiss()
+            AssistantSheetScaffold(
+                eyebrow: "Konto",
+                title: "Asystent i plan",
+                onClose: { dismiss() },
+                footer: {
+                    if let usage, accessState(for: usage) == .trial {
+                        legalFooter
                     }
-                    content
                 }
-                .padding(.horizontal, SCPageMetrics.horizontal)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
-                // Treść wjeżdża po wczytaniu, zamiast wskakiwać pod spinner.
-                .animation(.smooth(duration: 0.3), value: usage)
-            }
-            .scrollIndicators(.hidden)
-            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
-            // Stopka jako wstawka w strefie bezpiecznej, nie warstwa nad
-            // scrollem: treść dostaje dokładnie tyle miejsca, ile stopka
-            // zajmuje, więc nic nie chowa się pod nią i nic nie jest ucięte.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let usage, accessState(for: usage) == .trial {
-                    legalFooter
-                }
+            ) {
+                content
+                    // Treść wjeżdża po wczytaniu, zamiast wskakiwać pod spinner.
+                    .animation(.smooth(duration: 0.3), value: usage)
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -113,18 +104,19 @@ struct PlanAccessSheet: View {
     private var content: some View {
         if let usage {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
                     badge(for: usage)
                     if usage.isTrial {
                         // Próba nie odnawia się — to jedyna rzecz, którą
                         // trzeba wiedzieć obok plakietki.
                         Text("jednorazowo, bez odnowienia")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.scMuted(scheme))
+                            .font(.system(size: 14))
+                            .foregroundStyle(AssistantLook.muted(scheme))
                             .lineLimit(1)
                     }
                 }
-                .padding(.top, 12)
+                .padding(.horizontal, 2)
+                .padding(.top, 10)
 
                 switch accessState(for: usage) {
                 case .trial: trialBody(usage)
@@ -172,7 +164,7 @@ struct PlanAccessSheet: View {
 
     private func badgeColor(_ usage: AgentUsageDTO) -> Color {
         switch accessState(for: usage) {
-        case .trial: return SCPalette.butter
+        case .trial: return AssistantLook.butter(scheme)
         case .granted: return SCPalette.indigo
         case .paying, .member: return SCPalette.sage
         }
@@ -186,142 +178,125 @@ struct PlanAccessSheet: View {
 
     @ViewBuilder
     private func trialBody(_ usage: AgentUsageDTO) -> some View {
-        PlanSectionLabel("Pula próbna")
-            .padding(.top, 24)
-
-        AssistantSurfaceCard {
+        // „18a · Asystent i plan”: dwie pule jak w aplikacji (wiadomości,
+        // zapisy planu) — pierścienie w terakocie, pod nimi jedno zdanie
+        // o tym, co zjada pulę.
+        AssistantGroup(title: "Pula próbna") {
             HStack(spacing: 0) {
-                trialRing(title: "Wiadomości", quota: usage.messages)
+                quotaColumn(title: "Wiadomości", quota: usage.messages)
                 Rectangle()
-                    .fill(Color.scRule(scheme))
+                    .fill(AssistantLook.hair(scheme))
                     .frame(width: 1)
-                    .padding(.vertical, 14)
-                trialRing(title: "Zapisy planu", quota: usage.plans)
+                    .padding(.vertical, 18)
+                quotaColumn(title: "Zapisy planu", quota: usage.plans)
             }
 
-            // Co zjada pulę — jedno zdanie zamiast tabeli zasad. To jedyna
-            // rzecz, o którą ludzie pytają: „Zmień" to wiadomość, oglądanie
-            // propozycji jest darmowe.
-            HStack(alignment: .firstTextBaseline, spacing: 9) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.scFaint(scheme))
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(AssistantLook.faint(scheme))
                 Text("Liczy się każda wysłana wiadomość i każde „Dodaj do planu”. Oglądanie propozycji jest darmowe.")
-                    .font(.system(size: 12.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Color.scMuted(scheme))
+                    .font(.system(size: 13.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(AssistantLook.muted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 11)
+            .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .top) { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
+            .background(AssistantLook.wash(scheme))
+            .overlay(alignment: .top) { AssistantCardRule() }
         }
+        .padding(.top, 4)
 
         // Zdanie o SKUTKU, nie o sprzedaży: zdejmuje lęk („stracę plany?"),
         // zamiast go budować.
         Text("Kiedy pula się skończy, rozmowy i zapisane plany zostają w aplikacji. Nowe wiadomości wracają z planem.")
-            .font(.system(size: 13.5))
-            .lineSpacing(3)
-            .foregroundStyle(Color.scMuted(scheme))
+            .font(.system(size: 14))
+            .lineSpacing(4)
+            .foregroundStyle(AssistantLook.muted(scheme))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 4)
-            .padding(.top, 12)
+            .padding(.horizontal, 12)
+            .padding(.top, 14)
 
-        // Bez nagłówka „Plan" — planu jeszcze NIE MA i sekcja o nazwie
-        // „Plan" sugerowała coś przeciwnego. Wiersz mówi wprost, co tu jest
-        // do zrobienia.
-        PlanSectionLabel("Plan miesięczny")
-            .padding(.top, 26)
-
-        plansEntry
+        AssistantGroup(title: "Plan miesięczny") {
+            plansEntry
+        }
+        .padding(.top, 4)
     }
 
-    private func trialRing(title: String, quota: AgentQuotaDTO) -> some View {
-        // Wyczerpana pula schodzi na terakotę: przy zerze musztardowy
-        // pierścień był prawie niewidoczny, a zero wyglądało na brak danych.
-        let exhausted = quota.remaining <= 0
-        return VStack(spacing: 11) {
+    /// `QuotaCol`: pierścień 84 z liczbą, która ZOSTAŁA, pod nim nazwa puli
+    /// i „4 z 5 użyte”.
+    private func quotaColumn(title: String, quota: AgentQuotaDTO) -> some View {
+        VStack(spacing: 10) {
             PlanRing(
                 remaining: quota.remaining,
                 limit: quota.limit,
-                color: exhausted ? SCPalette.terracotta : SCPalette.butter,
-                size: 100
+                color: AssistantLook.terraFill(scheme),
+                size: 84
             )
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .tracking(-0.2)
-                    .foregroundStyle(Color.scLabel(scheme))
-                Text(exhausted ? "\(quota.limit) z \(quota.limit) · wyczerpane" : "\(quota.used) z \(quota.limit) użyte")
+                    .foregroundStyle(AssistantLook.ink(scheme))
+                Text("\(quota.used) z \(quota.limit) użyte")
                     .font(.system(size: 12.5))
                     .monospacedDigit()
-                    .foregroundStyle(exhausted ? SCPalette.terracotta : Color.scFaint(scheme))
+                    .foregroundStyle(AssistantLook.faint(scheme))
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 20)
-        .padding(.bottom, 18)
+        .padding(.top, 16)
+        .padding(.bottom, 15)
+        .padding(.horizontal, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title): zostało \(quota.remaining) z \(quota.limit)")
     }
 
-    /// Wejście do planów — zwykły wiersz, jak w Ustawieniach. Cena „od"
-    /// z App Store, a gdy jej jeszcze nie ma, z cennika.
+    /// Wejście do planów — wiersz ze znakiem marki w kafelku 40, jak na makiecie.
     private var plansEntry: some View {
-        AssistantSurfaceCard {
-            Button {
-                showsPlans = true
-            } label: {
-                HStack(spacing: 13) {
+        Button {
+            showsPlans = true
+        } label: {
+            AssistantRow(
+                title: "Wybierz plan",
+                subtitle: plansEntrySubtitle,
+                chevron: true,
+                first: true,
+                verticalPadding: 12,
+                leading: {
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(Color.scAccentTint(scheme))
-                        .frame(width: 42, height: 42)
+                        .fill(AssistantLook.terraTint(scheme))
+                        .frame(width: 40, height: 40)
                         .overlay(
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 19, weight: .semibold))
-                                .foregroundStyle(SCPalette.terracotta)
+                            SCMarkShape()
+                                .fill(AssistantLook.terraFill(scheme))
+                                .frame(width: 20, height: 20)
                         )
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Wybierz plan")
-                            .font(.system(size: 15.5, weight: .semibold))
-                            .tracking(-0.3)
-                            .foregroundStyle(Color.scLabel(scheme))
-                        Text(plansEntrySubtitle)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.9)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color.scFaint(scheme))
-                }
-                .padding(.leading, 15)
-                .padding(.trailing, 14)
-                .padding(.vertical, 14)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PlanPressButtonStyle())
-            .accessibilityHint("Otwiera wybór planu")
+                        .accessibilityHidden(true)
+                },
+                trailing: { EmptyView() }
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(PlanPressButtonStyle())
+        .accessibilityHint("Otwiera wybór planu")
     }
 
     private var plansEntrySubtitle: String {
         let solo = SubscriptionCatalog.solo
         let from = subscriptions.product(for: solo)?.displayPrice ?? solo.fallbackPrice
         let names = SubscriptionCatalog.all.map(\.name).joined(separator: ", ")
-        return "Od \(from) / mies. · \(names) · wspólna pula domu"
+        return "Od \(from) / mies. · \(names)"
     }
 
     /// Odnośniki prawne i „Przywróć zakupy" — App Store wymaga ich tam,
     /// gdzie mowa o subskrypcji, a przywrócenie jest uczciwością wobec
     /// kogoś, kto już kiedyś kupił.
     private var legalFooter: some View {
-        AssistantStickyFooter {
+        VStack(spacing: 10) {
             if let notice {
                 Text(notice)
                     .font(.system(size: 12.5))
@@ -609,10 +584,11 @@ struct PlanBadge: View {
     var body: some View {
         Text(label)
             .font(.system(size: 12, weight: .bold))
+            .tracking(0.3)
             .foregroundStyle(color)
-            .padding(.horizontal, 11)
-            .frame(height: 26)
-            .background(Capsule().fill(color.opacity(scheme == .dark ? 0.15 : 0.10)))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(color.opacity(scheme == .dark ? 0.16 : 0.18)))
             .lineLimit(1)
     }
 }
@@ -675,8 +651,8 @@ struct PlanLegalLinks: View {
             .disabled(isRestoring)
         }
         .buttonStyle(.plain)
-        .font(.system(size: 12.5, weight: .semibold))
-        .foregroundStyle(Color.scMuted(scheme))
+        .font(.system(size: 13.5, weight: .semibold))
+        .foregroundStyle(AssistantLook.terra(scheme))
         .frame(maxWidth: .infinity)
         .frame(minHeight: 28)
         .animation(.smooth(duration: 0.2), value: isRestoring)
@@ -709,22 +685,20 @@ struct PlanRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.scBarTrack(scheme), lineWidth: size * 0.1)
+            Circle().stroke(AssistantLook.ink(scheme).opacity(0.09), lineWidth: 8)
             Circle()
                 .trim(from: 0, to: revealed ? fraction : 0.03)
-                .stroke(color, style: StrokeStyle(lineWidth: size * 0.1, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 1) {
-                Text("\(remaining)")
-                    .font(.system(size: size > 88 ? 26 : 21, weight: .bold))
+                CountingNumber(target: remaining)
+                    .font(.system(size: size > 88 ? 26 : 24, weight: .bold))
                     .tracking(-0.6)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .contentTransition(.numericText())
+                    .foregroundStyle(AssistantLook.ink(scheme))
                 Text("ZOSTAŁO")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(0.6)
-                    .foregroundStyle(Color.scMuted(scheme))
+                    .foregroundStyle(AssistantLook.faint(scheme))
             }
         }
         .frame(width: size, height: size)
