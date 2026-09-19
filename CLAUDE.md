@@ -34,6 +34,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   rozwiązania typu. Kompilator NIE wskazuje tej linii — mówi `ambiguous use of 'init'`
   o kilkadziesiąt linii wyżej, przy najbliższym kontenerze SwiftUI (np. `ScrollView`).
   Jawny typ nie pomaga; pomaga domknięcie: `cond ? nil : { metoda() }`.
+- **Logika briefingu asystenta**: `sh Scripts/assistant-logic-check.sh` — kompiluje
+  `Models/Assistant/AssistantBriefing.swift` (TYLKO Foundation) ze scenariuszami
+  w `Scripts/AssistantLogic/main.swift` i sprawdza priorytety pustego ekranu (pula > nowe konto
+  > pusty tydzień > dziś > wieczór+jutro > brakująca pora główna > przyszły tydzień pod koniec
+  tygodnia > realny brak w bilansie > gotowe > weekend). Nowa sytuacja = nowy `Kind` w resolverze
+  + scenariusz tutaj. Widok (`AssistantBriefingCard`) NIE liczy nic sam.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
@@ -74,6 +80,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zwija się do samych ikon jak w Revolucie, a nie do jednej ikony jak `tabBarMinimizeBehavior`.
   Główny `ScrollView` każdej zakładki melduje kierunek przez `scTracksTabBarCompaction()`;
   rezerwa miejsca pod treścią (`reservedHeight`) jest stała i schodzi do zera przy klawiaturze.
+  Przełączenie zakładki ma być CIĘCIEM jak w systemie: `selection` zmienia się w transakcji
+  z `disablesAnimations` (inaczej `TabView` od iOS 18 przenika treść), a pigułka na pasku jedzie
+  po własnej kopii `highlighted` — nie dokładać `.animation(value: selection)` ani haptyki.
 - Asystent AI (Faza 1) jedzie po REST, NIE po sockecie: `POST /agent/conversations/:id/messages`
   oddaje `202` z `turnId`, a odpowiedź zbiera się odpytywaniem `GET /agent/turns/:id` co sekundę
   (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–240 s (sufit `AI_TURN_TIMEOUT_MS`,
@@ -85,6 +94,16 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `AgentStore` wisi na `SessionStore`, a nie na arkuszu — rozmowa przeżywa zamknięcie asystenta.
   Kroki postępu (`turn.progress`) przychodzą z serwera jako gotowe zdania po polsku; nie tłumaczyć
   ich po stronie klienta. `AI_ENABLED=false` na serwerze = `503 AI_DISABLED` i ekran mówi to wprost.
+- UI asystenta (redesign 19.09.2026): wszystkie karty stoją na atomach z `AssistantCardKit.swift`
+  (`AssistantCard` z tonem neutral/sage/indigo/muted, `AssistantCardHead` z pigułką stanu
+  `AssistantStatusChip`, `AssistantCardActions` — jedna akcja = pełna szerokość, dwie = wtórna
+  po lewej i główna po prawej, nawigacja = wiersz z chevronem; `AssistantProposalFooter` liczy
+  akcje ze stanu z serwera). Stan propozycji jest TEKSTEM (`AssistantCardStatus.title`), nie
+  tylko kolorem. Porażka tury to `AssistantOutcomeCard` (bez czerwieni; „Nic nie zmieniłem
+  w planie” tylko gdy `AgentStore.lastTurnWrote == false`), nie notka z wykrzyknikiem. Na żywo
+  wiersz „myślę” pokazuje JEDEN bieżący status + `AssistantActivityLine` (sygnał, nie procent)
+  + kontekst słowami z aplikacji — nazwy narzędzi nie wychodzą na ekran. Podglądy kart biorą
+  wzorce z `Previews/AssistantPreviewFixtures.swift` (kopia JSON-ów z `Scripts/CardContract`).
 - REST-owy błąd nazywa się `BackendAPIError` (dawniej `IntegrationsAPIError`) — od asystenta klientów
   uwierzytelnionych jest dwóch (`IntegrationsAPIClient`, `AgentAPIClient`) i oba rzucają ten sam typ.
 - `recipes:changed` (`{householdId, recipeId, action, changedByUserId}`) — przepis gospodarstwa

@@ -240,7 +240,11 @@ struct CalendarPlateKicker: View {
             .opacity(item == nil ? 0 : 1)
             .accessibilityHidden(item == nil)
             .contentTransition(.opacity)
-            .animation(DayNavigationMotion.lift, value: item?.id)
+            // Ta sama krzywa, którą przenika zdjęcie na talerzu: nadpis,
+            // talerz i podpis są jednym przełożeniem i mają skończyć się
+            // w tej samej klatce. Sprężyna `lift` zostaje dla talerzyków
+            // w sekwencji — tam coś naprawdę zmienia rozmiar.
+            .animation(DayNavigationMotion.plateFade, value: item?.id)
             // Odhaczenie zmienia barwę nadpisu w miejscu (kolor pory →
             // neutralny); bez własnego odcisku przeskakiwałaby w jednej
             // klatce, podczas gdy pierścień wokół zdjęcia dojeżdża sprężyną.
@@ -858,10 +862,6 @@ struct CalendarPlateCaption: View {
     /// czterdzieści punktów rzędu to różnica między talerzem a ikonką —
     /// wtedy szczegóły zostają w arkuszu posiłku, a tu zostaje nazwa.
     var showsChips: Bool = true
-    /// Skąd wjeżdża nowe zdanie: `1` z prawej (danie na prawo), `-1` z lewej,
-    /// `0` w miejscu. Ten sam kierunek, w którym danie przełożyło się na
-    /// talerz — podpis idzie za daniem.
-    var lean: Int = 0
     /// Otwiera szczegóły posiłku. `nil` dla pustej pory — nie ma czego
     /// otwierać.
     let onOpenDetail: (() -> Void)?
@@ -886,17 +886,13 @@ struct CalendarPlateCaption: View {
                     .minimumScaleFactor(0.6)
                     .contentTransition(.numericText())
                     .id(headlineKey)
-                    // Nowe zdanie wjeżdża od strony, z której przyszło danie
-                    // (i odrobinę z dołu), stare gaśnie w miejscu — zejście
-                    // celowo bez kierunku, z tego samego powodu co na
-                    // talerzu: kierunek zależy od celu, a cel przy zejściu
-                    // jest już inny.
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .offset(x: CGFloat(lean) * 16, y: 5)),
-                            removal: .opacity
-                        )
-                    )
+                    // Samo krycie, w miejscu — jak zdjęcie na talerzu nad
+                    // nim. Wjazd z boku i z dołu (16 pt w stronę stuknięcia)
+                    // czytał się jako tekst, który „się przesuwa": dwa
+                    // zdania w dwóch miejscach naraz, a przy szybkim
+                    // stukaniu po talerzykach — trzy. Przenikanie nie ma
+                    // geometrii, którą można zepsuć.
+                    .transition(.opacity)
             }
 
             titleSlot
@@ -911,7 +907,10 @@ struct CalendarPlateCaption: View {
                 HStack(spacing: 6) {
                     ForEach(chips) { chip in
                         CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
-                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                            // Krycie, nie skala: pigułka rosnąca w rzędzie
+                            // rozpychała sąsiadki w trakcie przejścia i cały
+                            // rząd falował.
+                            .transition(.opacity)
                     }
                 }
                 .frame(height: 30)
@@ -919,13 +918,19 @@ struct CalendarPlateCaption: View {
             }
         }
         .frame(maxWidth: .infinity)
-        // Sprężyna wzniesienia na przełożenie dania — ta sama, którą jedzie
-        // talerz — druga na zmianę stanu w miejscu (odhaczenie przygasza
-        // nazwę i wymienia pigułki) i osobny, krótszy odcisk na tyknięcie
-        // zegara.
-        .animation(DayNavigationMotion.lift, value: item?.id)
+        // JEDNA krzywa na przełożenie dania — ta sama, którą przenika zdjęcie
+        // na talerzu (`plateFade`): wielki wiersz, nazwa i pigułki gasną
+        // i wzbierają razem ze zdjęciem, w tej samej klatce. Dotąd podpis
+        // jechał sprężyną 0,44 s, a wiersz miał do tego trzeci odcisk
+        // 0,25 s na treść — trzy zegary na jeden ruch, i ten najdłuższy
+        // wygrywał (najbliższy treści), więc stare zdanie wisiało pod
+        // nowym o wiele dłużej niż zdjęcie nad nimi. Odhaczenie ma osobną
+        // sprężynę, bo zmienia stan, nie danie. Tyknięcie zegara w tym
+        // samym daniu (`headline` bez zmiany tożsamości) roluje cyfry
+        // tą samą krzywą — wystarczy jeden odcisk na treść.
+        .animation(DayNavigationMotion.plateFade, value: item?.id)
         .animation(DayNavigationMotion.spring, value: item?.status)
-        .animation(.smooth(duration: 0.25), value: headline)
+        .animation(DayNavigationMotion.plateFade, value: headline)
         .accessibilityElement(children: .contain)
     }
 

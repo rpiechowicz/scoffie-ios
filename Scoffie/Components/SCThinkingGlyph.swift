@@ -20,9 +20,11 @@ struct SCThinkingGlyph: View {
     var size: CGFloat = 14
     /// `true` = pełny, nieruchomy glif (Reduce Motion).
     var still: Bool = false
+    /// Okres oddechu w sekundach.
+    var period: TimeInterval = 1.3
 
     var body: some View {
-        let s = still ? 1.0 : (1 + sin(t * 2 * .pi / 1.3)) / 2
+        let s = still ? 1.0 : (1 + sin(t * 2 * .pi / period)) / 2
         SCMarkShape()
             .fill(color)
             // Etap tury zmienia TYLKO barwę i ta barwa PRZENIKA. Modyfikator
@@ -48,6 +50,8 @@ struct SCShimmerText: View {
     /// Sekundy od początku tury.
     let t: TimeInterval
     var still: Bool = false
+    /// Okres jednego przejścia połysku w sekundach.
+    var period: TimeInterval = 2.4
 
     @Environment(\.colorScheme) private var scheme
 
@@ -58,7 +62,7 @@ struct SCShimmerText: View {
                 .font(.system(size: 15))
                 .foregroundStyle(base)
         } else {
-            let phase = t.truncatingRemainder(dividingBy: 2.4) / 2.4
+            let phase = t.truncatingRemainder(dividingBy: period) / period
             // −0,6 … 1,6: na obu końcach cyklu pasmo leży CAŁE poza tekstem,
             // więc zawinięcie fazy jest niewidoczne. Ruch liniowy — easing
             // robi z połysku „pulsowanie". Nie domykać do 0…1: wtedy pasmo

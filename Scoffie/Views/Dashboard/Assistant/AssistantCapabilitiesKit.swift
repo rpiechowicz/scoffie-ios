@@ -201,7 +201,7 @@ struct AssistantExchangePreview: View {
 
             if let reply {
                 HStack(alignment: .top, spacing: 10) {
-                    AssistantIconTile(icon: "sparkles", accent: .terracotta, size: 26, radius: 8)
+                    AssistantMarkBadge(size: 26)
                         .padding(.top, 1)
                     Text(reply)
                         .font(.system(size: 15))
@@ -275,12 +275,15 @@ enum AssistantCapabilities {
         let items: [String]
     }
 
-    /// Cztery grupy po tym, co użytkownik ROBI: planuje → liczy → dzieli na dom → kupuje.
+    /// Pięć grup po tym, co użytkownik ROBI: planuje → liczy → kupuje →
+    /// gotuje → dzieli na dom. Każda pozycja ma przykład, który da się
+    /// wysłać jednym stuknięciem.
     static let groups: [Group] = [
-        .init(id: "plan", label: "Plan i posiłki", accent: .terracotta, lead: "To, co asystent robi najczęściej", items: ["week", "day", "swap", "options"]),
-        .init(id: "goal", label: "Cel i makro", accent: .indigo, lead: "Liczy pod Twoje zapotrzebowanie", items: ["macro", "scope"]),
-        .init(id: "home", label: "Dom", accent: .sage, lead: "Różne osoby, jeden plan", items: ["split", "memory"]),
-        .init(id: "kitchen", label: "Zakupy i przepisy", accent: .butter, lead: "Z planu do sklepu i z powrotem", items: ["shopping", "recipes"]),
+        .init(id: "plan", label: "Plan i posiłki", accent: .terracotta, lead: "Najczęściej", items: ["week", "day", "swap", "options", "remove"]),
+        .init(id: "goal", label: "Cel i makro", accent: .indigo, lead: "Pod Twoje zapotrzebowanie", items: ["macro", "scope"]),
+        .init(id: "shopping", label: "Zakupy", accent: .sage, lead: "Z planu do sklepu", items: ["shopping", "checkoff"]),
+        .init(id: "recipes", label: "Przepisy", accent: .butter, lead: "Katalog i Wasze dania", items: ["cook", "byingredient", "recipes"]),
+        .init(id: "home", label: "Domownicy", accent: .sage, lead: "Różne osoby, jeden plan", items: ["split", "memory"]),
     ]
 
     struct Rule: Identifiable {
