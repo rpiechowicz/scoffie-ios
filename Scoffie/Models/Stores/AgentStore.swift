@@ -28,6 +28,11 @@ struct AgentChatMessage: Identifiable, Equatable {
     /// Ślad tury nad odpowiedzią („Myślałem 42 s ›"). Tylko dla odpowiedzi
     /// zebranych W TEJ SESJI — patrz `AgentThinkingSummary`.
     var thinking: AgentThinkingSummary? = nil
+    /// Od którego znaku odpowiedź ma się jeszcze „dopisać” na ekranie
+    /// (znak po znaku, jak szkic w trakcie tury). `nil` = pokazać od razu
+    /// w całości: historia z serwera i odpowiedzi już odsłonięte. Ustawiane
+    /// TYLKO dla odpowiedzi domkniętej w tej sesji; zdejmuje `markRevealed`.
+    var revealFrom: Int? = nil
 }
 
 /// Ślad tury, który zostaje nad odpowiedzią: ile trwała i przez co przeszła.
@@ -504,6 +509,13 @@ final class AgentStore {
         }
     }
 
+    /// Odpowiedź odsłoniła się do końca — od teraz rysuje się w całości,
+    /// także po przeprowadzce wiersza ze slotu do części przed nim.
+    func markRevealed(id: String) {
+        guard let index = messages.firstIndex(where: { $0.id == id }), messages[index].revealFrom != nil else { return }
+        messages[index].revealFrom = nil
+    }
+
     /// Odświeżenie listy w tle — bez dotykania komunikatu błędu.
     ///
     /// Wołane po udanej turze, żeby lista dostała tytuł nowej rozmowy. Gdyby
@@ -872,6 +884,16 @@ final class AgentStore {
             }
             if !answers.isEmpty {
                 answers[answers.count - 1].thinking = Self.thinkingSummary(for: turn, localStart: turnStartedAt)
+                // Odpowiedź ma się DOPISAĆ, nie wskoczyć: szkic w trakcie tury
+                // odsłaniał się znak po znaku, a gotowa odpowiedź podmieniała
+                // go całą naraz — najczęściej z pustego, bo szkic dochodzi
+                // dopiero w ostatniej porcji. Ciąg dalszy od miejsca, w którym
+                // stanął szkic, jeśli odpowiedź go kontynuuje.
+                for index in answers.indices {
+                    let text = answers[index].text
+                    let continues = index == answers.count - 1 && !draftText.isEmpty && text.hasPrefix(draftText)
+                    answers[index].revealFrom = continues ? draftText.count : 0
+                }
             }
             if answers.isEmpty {
                 errorMessage = "Asystent nie miał nic do powiedzenia. Spróbuj zapytać inaczej."
