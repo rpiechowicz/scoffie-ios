@@ -26,6 +26,23 @@ struct AssistantView: View {
     // żeby chip kontekstu nie obiecywał innej liczby niż reszta aplikacji.
     @AppStorage(RecipePersonalization.Keys.calorieGoal)
     private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
+    // Reszta profilu pod dzienny cel makro — te same klucze, co Plan
+    // i Kalendarz, bo briefing „brakuje Ci białka” ma mówić o TYM SAMYM celu,
+    // który pokazuje pigułka „Cel dnia”.
+    @AppStorage(RecipePersonalization.Keys.goal)
+    private var goalRaw: String = UserGoal.healthy.rawValue
+    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @AppStorage(BodyMetrics.Keys.activityLevel)
+    private var profileActivityRaw: Int = ActivityLevel.light.rawValue
+    @AppStorage(DailyNutritionTargets.Keys.proteinG)
+    private var proteinOverride: Int = DailyNutritionTargets.Keys.noOverride
+    @AppStorage(DailyNutritionTargets.Keys.fatG)
+    private var fatOverride: Int = DailyNutritionTargets.Keys.noOverride
+    @AppStorage(DailyNutritionTargets.Keys.carbsG)
+    private var carbsOverride: Int = DailyNutritionTargets.Keys.noOverride
 
     @State private var draft = ""
     /// Wiadomość poprawiana w tej chwili — razem z jej pierwotną treścią,
@@ -270,7 +287,7 @@ struct AssistantView: View {
                 Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
                 Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
             }
-            Button { showCapabilities = true } label: { Label("Co potrafi asystent", systemImage: "sparkles") }
+            Button { showCapabilities = true } label: { Label("Co potrafi asystent", systemImage: "rectangle.stack") }
             Button { showHowItWorks = true } label: { Label("Jak działa asystent", systemImage: "questionmark.bubble") }
             if !inIntro {
                 Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
@@ -539,37 +556,144 @@ struct AssistantView: View {
 
     // MARK: - Rozmowa
 
-    /// Powitanie z tego, co aplikacja wie o tej chwili — patrz `AssistantWelcome`.
-    private var welcome: AssistantWelcome {
+    /// Briefing pustej rozmowy — z tego, co aplikacja WIE o tej chwili:
+    /// plan tego i przyszłego tygodnia, godziny posiłków, bilans, pula.
+    /// Priorytety liczy `AssistantBriefingResolver`; tu tylko zbieramy fakty.
+    private var briefing: AssistantBriefing {
+        AssistantBriefingResolver.resolve(briefingContext)
+    }
+
+    private var briefingContext: AssistantBriefingContext {
         let calendar = Calendar.current
         let now = Date()
-        let today = calendar.startOfDay(for: now)
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today
-        // Tydzień od poniedziałku, jak wszędzie w aplikacji (`PlanWeek`).
-        let weekday = calendar.component(.weekday, from: today)
-        let sinceMonday = (weekday + 5) % 7
-        let monday = calendar.date(byAdding: .day, value: -sinceMonday, to: today) ?? today
-        let plan = sessionStore.mealCalendarStore
-        func planned(_ date: Date) -> Int { plan?.plan(for: date).plannedSlots.count ?? 0 }
-        func plannedDays(from start: Date) -> Int {
-            (0..<7).reduce(0) { total, offset in
-                let day = calendar.date(byAdding: .day, value: offset, to: start) ?? start
-                return total + (planned(day) > 0 ? 1 : 0)
+        let monday = PlanWeek.monday(of: now)
+        let nextMonday = calendar.date(byAdding: .day, value: 7, to: monday) ?? monday
+        let thisWeek = (0..<7).map { offset in
+            briefingDay(calendar.date(byAdding: .day, value: offset, to: monday) ?? monday)
+        }
+        let nextWeek = (0..<7).map { offset in
+            briefingDay(calendar.date(byAdding: .day, value: offset, to: nextMonday) ?? nextMonday)
+        }
+        var slotMinutes: [AssistantBriefingSlot: Int] = [:]
+        for slot in MealSlot.allCases {
+            if let briefingSlot = AssistantBriefingSlot(rawValue: slot.rawValue),
+               let minutes = sessionStore.mealSlotSchedule.minutes(for: slot) {
+                slotMinutes[briefingSlot] = minutes
             }
         }
-        let nextMonday = calendar.date(byAdding: .day, value: 7, to: monday) ?? monday
-        return AssistantWelcome.compose(
-            .init(
-                now: now,
-                calendar: calendar,
-                displayName: UserDefaults.standard.string(forKey: "settings.user.displayName"),
-                plannedToday: planned(today),
-                plannedTomorrow: planned(tomorrow),
-                plannedDaysThisWeek: plannedDays(from: monday),
-                plannedDaysNextWeek: plannedDays(from: nextMonday),
-                trialExhausted: store.isLockedByTrialQuota
-            )
+        // Nowe konto: żadnego planu w pamięci i żadnej rozmowy. Cokolwiek
+        // z tych dwóch znaczy, że Scoffie ten dom już zna.
+        let plan = sessionStore.mealCalendarStore
+        let isNewUser = (plan?.plans.isEmpty ?? true) && store.conversations.isEmpty
+        return AssistantBriefingContext(
+            now: now,
+            calendar: calendar,
+            displayName: UserDefaults.standard.string(forKey: "settings.user.displayName"),
+            trialExhausted: store.isLockedByTrialQuota,
+            isNewUser: isNewUser,
+            thisWeek: thisWeek,
+            nextWeek: nextWeek,
+            slotMinutes: slotMinutes,
+            balance: weeklyProteinBalance(thisWeek: thisWeek.map(\.date))
         )
+    }
+
+    /// Jeden dzień planu w słowniku briefingu — soczewka bieżącego użytkownika
+    /// (jego danie bije wspólne), pory włączone w domu plus te, w których
+    /// coś stoi.
+    private func briefingDay(_ date: Date) -> AssistantBriefingDay {
+        let plan = sessionStore.mealCalendarStore
+        let planned = plan?.plan(for: date).plannedSlots ?? []
+        let slots = sessionStore.mealSlots.visibleSlots(planned: planned)
+        let memberCount = knownHouseholdMemberCount
+        var meals: [AssistantBriefingDay.Meal] = []
+        for slot in slots {
+            guard let briefingSlot = AssistantBriefingSlot(rawValue: slot.rawValue) else { continue }
+            let visible = visibleMeals(on: date, slot: slot)
+            guard let meal = visible.first else { continue }
+            let nutrition = meal.nutritionPerPerson(knownHouseholdMemberCount: memberCount)
+            meals.append(
+                AssistantBriefingDay.Meal(
+                    slot: briefingSlot,
+                    title: meal.recipe.name,
+                    kcal: Int(nutrition.kcal.rounded()),
+                    imageURL: meal.recipe.imageURL
+                )
+            )
+        }
+        return AssistantBriefingDay(
+            date: date,
+            enabledSlots: slots.compactMap { AssistantBriefingSlot(rawValue: $0.rawValue) },
+            meals: meals
+        )
+    }
+
+    /// Posiłki slotu widziane przez zalogowaną osobę — jak w Planie tygodnia.
+    private func visibleMeals(on date: Date, slot: MealSlot) -> [PlanMeal] {
+        let all = sessionStore.mealCalendarStore?.meals(for: date, slot: slot) ?? []
+        guard let memberId = sessionStore.currentUserId else { return all }
+        return all.visibleTo(memberId: memberId)
+    }
+
+    /// Ilu domowników dzieli się porcjami — `nil`, dopóki lista nie doszła.
+    private var knownHouseholdMemberCount: Int? {
+        guard sessionStore.didLoadHouseholdMembers else { return nil }
+        return max(1, sessionStore.householdMembers.count)
+    }
+
+    /// Średnie białko z ZAPLANOWANYCH dni tygodnia wobec celu z profilu.
+    /// `nil`, gdy nie ma celu makro (brak sylwetki) albo nie ma czego liczyć —
+    /// briefing nie zmyśla liczb.
+    private func weeklyProteinBalance(thisWeek dates: [Date]) -> AssistantBriefingBalance? {
+        let targets = DailyNutritionTargets.resolve(
+            calorieGoal: calorieGoal,
+            goal: UserGoal(rawValue: goalRaw) ?? .healthy,
+            metrics: BodyMetrics(
+                heightCm: profileHeightCm,
+                weightKg: profileWeightKg,
+                yearOfBirth: profileYearOfBirth,
+                activityRaw: profileActivityRaw,
+                sexRaw: profileSexRaw
+            ),
+            proteinOverride: proteinOverride,
+            fatOverride: fatOverride,
+            carbsOverride: carbsOverride
+        )
+        guard let proteinTarget = targets.macros?.proteinG, proteinTarget > 0 else { return nil }
+        let memberCount = knownHouseholdMemberCount
+        var total = 0.0
+        var counted = 0
+        for date in dates {
+            let planned = sessionStore.mealCalendarStore?.plan(for: date).plannedSlots ?? []
+            guard !planned.isEmpty else { continue }
+            let slots = sessionStore.mealSlots.visibleSlots(planned: planned)
+            let day = PlanDayNutrition.make(
+                slots: slots,
+                meals: { visibleMeals(on: date, slot: $0) },
+                knownHouseholdMemberCount: memberCount
+            )
+            guard !day.isEmpty else { continue }
+            total += day.total.protein
+            counted += 1
+        }
+        guard counted > 0 else { return nil }
+        return AssistantBriefingBalance(
+            macroGenitive: "białka",
+            macroAccusative: "białko",
+            unit: "g",
+            averagePerDay: Int((total / Double(counted)).rounded()),
+            target: proteinTarget,
+            daysCounted: counted
+        )
+    }
+
+    /// Akcja z karty briefingu.
+    private func perform(_ action: AssistantBriefing.Action) {
+        switch action.kind {
+        case let .ask(prompt): ask(prompt)
+        case .openPlans: showPaywall = true
+        case .openHistory: showConversations = true
+        }
     }
 
     /// Pusta rozmowa NIE jest listą: nie ma czego przewijać, więc nie ma
@@ -591,13 +715,21 @@ struct AssistantView: View {
     private var conversation: some View {
         ZStack {
             if isConversationEmpty {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
+                // Briefing stoi u góry, pod nagłówkiem — nie na środku:
+                // karta z listą pór albo paskiem tygodnia bywa wysoka i na
+                // małym ekranie centrowanie wypychało jej dół pod pole.
+                // Przewijanie tylko wtedy, gdy naprawdę nie mieści się
+                // (Dynamic Type, iPhone SE) — `basedOnSize`.
+                ScrollView {
                     emptyState
-                    Spacer(minLength: 0)
+                        .padding(.horizontal, SCPageMetrics.horizontal)
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, SCPageMetrics.horizontal)
                 // Bez ScrollView nie działa `scrollDismissesKeyboard`, więc na
                 // pustym ekranie klawiatury nie dało się schować niczym poza
                 // wysłaniem. Całe wolne tło łapie stuknięcie i zdejmuje fokus.
@@ -803,159 +935,103 @@ struct AssistantView: View {
     }
 
     private var emptyState: some View {
-        AssistantEmptyState(welcome: welcome)
-    }
-
-    /// Podpowiedzi tuż nad polem, dosunięte do prawej jak dymki
-    /// użytkownika. TYLKO na pustej rozmowie — pomagają zacząć. W trwającej
-    /// rozmowie ich nie ma: „Podmień jedno danie" pod każdą odpowiedzią było
-    /// szumem, a po błędzie czasu wystarczy komunikat z ponowieniem.
-    private var composerHints: [String]? {
-        guard !store.isSending, store.messages.isEmpty else { return nil }
-        let starts = welcome.quickStarts
-        return starts.isEmpty ? nil : starts
+        AssistantEmptyState(briefing: briefing, onAction: perform)
     }
 
     // MARK: - Pole wiadomości
 
     private var composer: some View {
         VStack(spacing: 0) {
-            // Podpowiedzi NAD kreską pola — należą do rozmowy, nie do
-            // klawiatury; dosunięte do prawej jak dymki użytkownika.
-            if let hints = composerHints {
-                AssistantQuickReplies(items: hints, alignment: .trailing, onTap: ask)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.bottom, 10)
+            if editing != nil {
+                editingBar
                     .transition(.opacity)
             }
 
-            if editing != nil {
-                editingBar
-            }
-
-            // Bez linijki „Zostały 2 wiadomości" nad polem: to samo mówią
-            // kropki w nagłówku (5 z zaznaczonymi pozostałymi), a stuknięcie
-            // w nie otwiera limity.
-
-            // Wykorzystana pula na próbę: zamiast wygaszonego pola z napisem
-            // „limit wykorzystany" (pole, w które nie da się pisać, jest
-            // wyłącznie frustracją) stoi karta z tego samego szkła, która mówi,
-            // co zostaje, i ma JEDEN przycisk, który coś zmienia.
+            // Wykorzystana pula na próbę: pole, w które nie da się pisać, jest
+            // wyłącznie frustracją. W rozmowie stoi zamiast niego karta
+            // z jednym przyciskiem, który coś zmienia; na pustym ekranie
+            // to samo mówi briefing, więc composera nie ma wcale.
             if store.isLockedByTrialQuota {
-                trialExhaustedCard
-            } else {
-            // Pole i przycisk stoją ciaśniej niż reszta ekranu (8 pt zamiast
-            // marginesu strony, 6 pt między nimi, przycisk 40 zamiast 44) —
-            // każdy z tych punktów idzie na szerokość tekstu. Przy poprzednim
-            // układzie dłuższe pytanie („zaplanuj mi obiady na cały tydzień
-            // bez laktozy") mieściło w wierszu kilka słów i użytkownik nie
-            // widział, co pisze.
-            HStack(alignment: .bottom, spacing: 6) {
-                TextField(
-                    store.isUnavailable
-                        ? "Asystent jest teraz niedostępny"
-                        : (store.isLockedByTrialQuota
-                            ? "Limit na próbę wykorzystany"
-                            : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…")),
-                    text: $draft,
-                    axis: .vertical
-                )
-                // Do ośmiu wierszy: pytanie do asystenta bywa całym akapitem
-                // („mamy gości w sobotę, dwie osoby bez glutenu…"), a przy
-                // pięciu wierszach początek uciekał poza pole.
-                .lineLimit(1...8)
-                .font(.system(size: 15.5))
-                .tracking(-0.25)
-                .foregroundStyle(Color.scLabel(scheme))
-                .focused($isComposerFocused)
-                .disabled(store.isUnavailable || store.isLocked)
-                // Jawne `maxWidth: .infinity`: bez tego pole brało szerokość
-                // wpisanego tekstu i rosło dopiero z nim, zamiast od razu
-                // zająć cały wiersz obok przycisku.
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                // Liquid Glass jak dolne menu tuż pod nim (precedens:
-                // `PlanDayGoalBar`). Kapsuła, nie prostokąt: przy jednym
-                // wierszu to dokładnie kształt pola wyszukiwania systemu,
-                // a przy ośmiu wierszach `.capsule` zaokrągla rogi do
-                // połowy wysokości i dalej wygląda jak pole, nie jak karta.
-                // Warstwa tła POD szkłem przygasza przelatującą rozmowę —
-                // samo szkło przepuszczało litery na tyle wyraźnie, że przy
-                // krawędzi wyglądały jak artefakt.
-                .glassEffect(
-                    .regular.tint(Color.scPageBase(scheme).opacity(0.35)).interactive(),
-                    in: .capsule
-                )
-                .background(Color.scPageBase(scheme).opacity(0.6), in: .capsule)
-
-                // W trakcie tury strzałka zamienia się w „stop": po dziesięciu
-                // sekundach widać już, że pytanie było źle zadane, a czekanie
-                // do końca nie daje nic poza czekaniem.
-                //
-                // Wariant „soft" jak reszta akcji w aplikacji: terakota na
-                // własnym tincie z obwódką, nie pełne koło — pełne było
-                // jedynym nasyconym punktem na ekranie i ciągnęło wzrok
-                // bardziej niż sama rozmowa.
-                //
-                // Po wciśnięciu „stop" przycisk WYGASA razem z wierszem
-                // „Zatrzymuję…": `stopWaiting()` i tak ignoruje kolejne
-                // stuknięcia (serwer domyka turę w swoim tempie, w środku
-                // narzędzia planisty to bywa 30–60 s), a pełna terakota bez
-                // reakcji czytała się jak zignorowany przycisk.
-                Button {
-                    if store.isSending { store.stopWaiting() } else { send() }
-                } label: {
-                    Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
-                        .font(.system(size: store.isSending ? 13 : 16, weight: .bold))
-                        .foregroundStyle(sendTint)
-                        .frame(width: 44, height: 44)
-                        // Ten sam materiał co pole obok — dwa kształty z jednego
-                        // szkła czytają się jako jeden pasek, nie pole + guzik.
-                        .glassEffect(
-                            .regular.tint(sendTint.opacity(0.18)).interactive(),
-                            in: .circle
-                        )
-                        .background(Color.scPageBase(scheme).opacity(0.6), in: .circle)
+                if !isConversationEmpty {
+                    trialExhaustedCard
                 }
-                .buttonStyle(.plain)
-                .disabled((!store.isSending && !canSend) || store.isStopping)
-                .accessibilityLabel(sendAccessibilityLabel)
-                .animation(.easeOut(duration: 0.2), value: store.isStopping)
-            }
-            // 20 pt = margines boczny pływającego paska zakładek z iOS 26
-            // (zmierzone na 402-pt ekranie: pasek stoi od 20 do 382 pt).
-            // Pole z przyciskiem ma być z nim w jednej linii, bo stoi tuż nad
-            // nim i z tego samego szkła — inna szerokość czyta się jak dwa
-            // elementy z dwóch różnych ekranów.
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            // 8 nad dolnym menu: pole ma wisieć tuż nad szkłem menu, tak jak
-            // pasek celu dnia na Planie — nie na własnej półce.
-            .padding(.bottom, 8)
+            } else {
+                composerField
             }
         }
-        // Chipy nad polem znikają przy pierwszym pytaniu — composer kurczył
-        // się wtedy o ~46 pt skokiem, razem z nagłówkiem i pustym stanem.
-        .animation(.easeInOut(duration: 0.2), value: composerHints == nil)
+        .animation(.easeInOut(duration: 0.2), value: editing != nil)
+        .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
     }
 
-    /// Karta „pula na próbę wykorzystana" — w miejscu pola, z tego samego szkła.
-    ///
-    /// Liczba pochodzi z serwera (`usage.messages.limit`), nie z kodu: to on
-    /// wie, ile było darmowych. Przycisk główny prowadzi PROSTO do wyboru
-    /// planu; drugi — do listy możliwości, bo ktoś, kto wyczerpał próbę w pięć
-    /// pytań, często nie wie jeszcze, co dostaje za plan.
+    /// Pole i przycisk. Kapsuła z Liquid Glass jak dolne menu tuż pod nim —
+    /// warstwa tła POD szkłem przygasza przelatującą rozmowę, żeby litery
+    /// przy krawędzi nie wyglądały jak artefakt.
+    private var composerField: some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            TextField(
+                store.isUnavailable
+                    ? "Asystent jest teraz niedostępny"
+                    : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…"),
+                text: $draft,
+                axis: .vertical
+            )
+            // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
+            // w sobotę, dwie osoby bez glutenu…").
+            .lineLimit(1...8)
+            .font(.system(size: 15.5))
+            .tracking(-0.25)
+            .foregroundStyle(Color.scLabel(scheme))
+            .focused($isComposerFocused)
+            .disabled(store.isUnavailable || store.isLocked)
+            .submitLabel(.send)
+            // Jawne `maxWidth: .infinity`: bez tego pole brało szerokość
+            // wpisanego tekstu i rosło dopiero z nim.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .glassEffect(
+                .regular.tint(Color.scPageBase(scheme).opacity(0.35)).interactive(),
+                in: .capsule
+            )
+            .background(Color.scPageBase(scheme).opacity(0.6), in: .capsule)
+            .accessibilityLabel(editing == nil ? "Wiadomość do asystenta" : "Poprawiana wiadomość")
+
+            // W trakcie tury strzałka zamienia się w „stop"; po „stop"
+            // przycisk WYGASA razem z wierszem „Zatrzymuję…", bo drugi stop
+            // nic nie zrobi. Przy poprawce pytania strzałka to „zatwierdź".
+            Button {
+                if store.isSending { store.stopWaiting() } else { send() }
+            } label: {
+                Image(systemName: store.isSending ? "stop.fill" : (editing == nil ? "arrow.up" : "checkmark"))
+                    .font(.system(size: store.isSending ? 13 : 16, weight: .bold))
+                    .foregroundStyle(sendTint)
+                    .frame(width: 44, height: 44)
+                    .contentTransition(.symbolEffect(.replace))
+                    .glassEffect(
+                        .regular.tint(sendTint.opacity(0.18)).interactive(),
+                        in: .circle
+                    )
+                    .background(Color.scPageBase(scheme).opacity(0.6), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .disabled((!store.isSending && !canSend) || store.isStopping)
+            .accessibilityLabel(sendAccessibilityLabel)
+            .animation(.easeOut(duration: 0.2), value: store.isStopping)
+            .animation(.easeOut(duration: 0.2), value: store.isSending)
+        }
+        // 20 pt = margines boczny pływającego paska zakładek — pole ma być
+        // z nim w jednej linii, bo stoi tuż nad nim i z tego samego szkła.
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
+    /// Karta „pula na próbę wykorzystana" — w miejscu pola, z tego samego
+    /// szkła. Liczba pochodzi z serwera (`usage.messages.limit`).
     private var trialExhaustedCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    Circle().fill(Color.scAccentTint(scheme))
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                }
-                .frame(width: 36, height: 36)
+                AssistantMarkBadge(size: 36)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(trialExhaustedTitle)
@@ -963,7 +1039,7 @@ struct AssistantView: View {
                         .tracking(-0.25)
                         .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Rozmowy i plan zostają. Z planem Scoffie zaczniemy tam, gdzie skończyliśmy.")
+                    Text("Rozmowy i zapisany plan zostają.")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -971,34 +1047,35 @@ struct AssistantView: View {
             }
 
             HStack(spacing: 8) {
-                Button { showPaywall = true } label: {
-                    Text("Zobacz plany")
+                Button { showConversations = true } label: {
+                    Text("Historia rozmów")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(Capsule().fill(SCPalette.terracotta))
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .padding(.horizontal, 16)
+                        .frame(height: AssistantCardMetrics.ctaHeight)
+                        .background(Capsule().fill(Color.scTileBg(scheme)))
+                        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
 
-                Button { showCapabilities = true } label: {
-                    Text("Co potrafi")
-                        .font(.system(size: 14, weight: .semibold))
+                Button { showPaywall = true } label: {
+                    Text("Zobacz plany")
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
-                        .frame(height: 40)
-                        .padding(.horizontal, 16)
-                        .background(Capsule().fill(Color.scAccentTint(scheme)))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: AssistantCardMetrics.ctaHeight)
+                        .scSoftCapsule()
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(16)
+        .padding(AssistantCardMetrics.inset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(
             .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
-            in: .rect(cornerRadius: 24)
+            in: .rect(cornerRadius: AssistantCardMetrics.radius)
         )
-        .background(Color.scPageBase(scheme).opacity(0.6), in: .rect(cornerRadius: 24))
+        .background(Color.scPageBase(scheme).opacity(0.6), in: .rect(cornerRadius: AssistantCardMetrics.radius))
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 8)
@@ -1012,22 +1089,21 @@ struct AssistantView: View {
         return "Darmowe wiadomości są wykorzystane"
     }
 
-    /// Pasek „Poprawiasz pytanie".
-    ///
-    /// Bez niego pole z wpisanym starym tekstem wygląda jak zwykłe pole,
-    /// a wysłanie kasuje pół rozmowy bez ostrzeżenia. Pasek mówi, co się
-    /// stanie, i daje drogę odwrotu.
+    /// Pasek „Edytujesz wiadomość” nad polem: co się stanie i droga odwrotu.
+    /// Bez niego pole ze starym tekstem wygląda jak zwykłe pole, a wysłanie
+    /// kasuje pół rozmowy bez ostrzeżenia. Zatwierdzenie jest w polu
+    /// (strzałka zmienia się w ptaszek) i tu, obok „Anuluj”.
     private var editingBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: "pencil")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(SCPalette.butter)
+                .foregroundStyle(SCPalette.terracotta)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("Poprawiasz pytanie")
+                Text("Edytujesz wiadomość")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
-                Text("Odpowiedzi po nim znikną z rozmowy")
+                Text("Odpowiedzi po niej znikną z rozmowy")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.scFaint(scheme))
             }
@@ -1042,15 +1118,31 @@ struct AssistantView: View {
                 Text("Anuluj")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
+                    .frame(height: 32)
+                    .padding(.horizontal, 6)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
+            Button(action: send) {
+                Text("Zatwierdź")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .padding(.horizontal, 12)
+                    .frame(height: 32)
+                    .background(Capsule().fill(Color.scAccentTint(scheme)))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .opacity(canSend ? 1 : 0.5)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(Color.scButterTint(scheme))
+        .padding(.vertical, 8)
+        .background(Color.scAccentTint(scheme).opacity(0.6))
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
         }
+        .accessibilityElement(children: .contain)
     }
 
     private var canSend: Bool {
@@ -1160,6 +1252,17 @@ struct AssistantView: View {
         Task {
             await store.retry(weekStart: datesViewModel.weekStartISO)
         }
+    }
+
+    /// Treść ostatniego pytania — „Spróbuj ponownie” po nieudanej turze
+    /// zadaje je jeszcze raz jako NOWĄ turę (tamta już się domknęła).
+    private var lastUserText: String? {
+        store.messages.last { $0.author == .user }?.text
+    }
+
+    private func askAgain() {
+        guard let text = lastUserText else { return }
+        ask(text)
     }
 
     private func scroll(_ proxy: ScrollViewProxy, to id: String?, anchor: UnitPoint) {
@@ -1360,17 +1463,18 @@ struct AssistantView: View {
                                 bubble(at: index, message, showsThinking: message.id != slotThinkingAnswer?.id)
                             }
                             if let errorMessage = store.errorMessage {
-                                ErrorNote(
-                                    text: errorMessage,
-                                    // Domknięcie, a nie referencja `retry`: pod
-                                    // `InferSendableFromCaptures` (SE-0418, włączone
-                                    // w tym projekcie) referencja do metody obok `nil`
-                                    // w wyrażeniu warunkowym daje dwa równorzędne
-                                    // rozwiązania typu i CAŁY `ScrollView` przestaje
-                                    // się kompilować („ambiguous use of 'init'"),
-                                    // ze wskazaniem na linię 60 wierszy wyżej.
-                                    // Jawny typ tu nie pomaga — tylko domknięcie.
-                                    onRetry: store.retryText == nil ? nil : { retry() }
+                                AssistantOutcomeCard(
+                                    code: store.lastTurnErrorCode,
+                                    message: errorMessage,
+                                    wrote: store.lastTurnWrote,
+                                    suggestions: store.suggestions,
+                                    onAsk: { prompt in ask(prompt) },
+                                    // Domknięcia, nie referencje do metod: pod
+                                    // `InferSendableFromCaptures` (SE-0418) referencja
+                                    // obok `nil` w wyrażeniu warunkowym wywraca typowanie
+                                    // CAŁEGO `ScrollView` („ambiguous use of 'init'").
+                                    onRetry: store.retryText == nil ? nil : { retry() },
+                                    onAskAgain: lastUserText == nil ? nil : { askAgain() }
                                 )
                                 .id(Self.errorAnchor)
                             }
@@ -1645,7 +1749,8 @@ private struct MessageBubble: View {
                 onApply: { force in onApply(planWeek.proposalId, force) },
                 onRevise: onRevise,
                 onAskNew: onAskNew,
-                onUndo: { onUndo(planWeek.proposalId) }
+                onUndo: { onUndo(planWeek.proposalId) },
+                onOpenPlan: onOpenPlan
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -1654,7 +1759,8 @@ private struct MessageBubble: View {
                 onApply: { force in onApply(planDay.proposalId, force) },
                 onRevise: onRevise,
                 onAskNew: onAskNew,
-                onUndo: { onUndo(planDay.proposalId) }
+                onUndo: { onUndo(planDay.proposalId) },
+                onOpenPlan: onOpenPlan
             )
         case .options(let options):
             AssistantOptionsCard(card: options, onAsk: onAsk)
@@ -1665,7 +1771,9 @@ private struct MessageBubble: View {
                 onApply: { force in onApply(swap.proposalId, force) },
                 onRevise: onRevise,
                 onAskNew: onAskNew,
-                onUndo: { onUndo(swap.proposalId) }
+                onAsk: onAsk,
+                onUndo: { onUndo(swap.proposalId) },
+                onOpenPlan: onOpenPlan
             )
         case .removeMeal(let removal):
             AssistantRemoveMealCard(
@@ -1674,7 +1782,9 @@ private struct MessageBubble: View {
                 onApply: { force in onApply(removal.proposalId, force) },
                 onRevise: onRevise,
                 onAskNew: onAskNew,
-                onUndo: { onUndo(removal.proposalId) }
+                onAsk: onAsk,
+                onUndo: { onUndo(removal.proposalId) },
+                onOpenPlan: onOpenPlan
             )
         case .householdSplit(let split):
             AssistantHouseholdSplitCard(
@@ -1683,7 +1793,8 @@ private struct MessageBubble: View {
                 onApply: { force in onApply(split.proposalId, force) },
                 onRevise: onRevise,
                 onAskNew: onAskNew,
-                onUndo: { onUndo(split.proposalId) }
+                onUndo: { onUndo(split.proposalId) },
+                onOpenPlan: onOpenPlan
             )
         case .macroGap(let macro):
             AssistantMacroGapCard(card: macro, onAsk: onAsk)
@@ -1737,52 +1848,5 @@ private struct ChatSkeleton: View {
 
             if !isMine { Spacer(minLength: 40) }
         }
-    }
-}
-
-// MARK: - Błąd
-
-private struct ErrorNote: View {
-    let text: String
-    /// `nil`, gdy nie ma czego ponawiać — tura, która ruszyła i się nie
-    /// domknęła, przy ponowieniu kosztowałaby drugi raz to samo.
-    var onRetry: (() -> Void)?
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(SCPalette.terracotta)
-                    .padding(.top, 1)
-
-                Text(text)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .multilineTextAlignment(.leading)
-
-                Spacer(minLength: 0)
-            }
-
-            if let onRetry {
-                Button(action: onRetry) {
-                    Text("Spróbuj ponownie")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.scTileBg(scheme)))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scAccentTint(scheme))
-        )
     }
 }

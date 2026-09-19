@@ -39,10 +39,12 @@ struct AssistantThoughtLine: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Ślad W TRAKCIE tury: otwarty od pierwszego kroku, do zwinięcia
-    /// stuknięciem. Po domknięciu decyduje `isExpanded` (domyślnie zwinięty —
-    /// `collapseOnSettle`).
-    @State private var isOpenWhileWorking = true
+    /// Ślad W TRAKCIE tury: ZWINIĘTY — na żywo głowa mówi jeden bieżący
+    /// status („Sprawdzam plan tygodnia”), a pod nią stoi linia aktywności
+    /// i opis kontekstu. Cała lista kroków jest pod chevronem, bo kilkanaście
+    /// wierszy narastających pod pytaniem czytało się jak log, nie jak
+    /// rozmowa. Po domknięciu decyduje `isExpanded`.
+    @State private var isOpenWhileWorking = false
     @State private var showsPatience = false
     /// Jednorazowe wejście: nowy slot powstaje w NIEANIMOWANEJ transakcji
     /// (`.id(slotKey)`), więc `.transition` nie ma czego animować — wiersz
@@ -110,6 +112,34 @@ struct AssistantThoughtLine: View {
         return steps.last?.label ?? "Myślę…"
     }
 
+    /// Kontekst pod statusem: z czego asystent właśnie korzysta, słowami
+    /// z aplikacji („Przepisy · cele domowników · plan”), nigdy nazwami
+    /// narzędzi. Liczone z KROKÓW, więc rośnie w miarę tury.
+    private var contextDescriptor: String? {
+        var parts: [String] = []
+        for step in steps {
+            let tool = step.tool.lowercased()
+            let word: String?
+            if tool.contains("recipe") || tool.contains("ingredient") {
+                word = "przepisy"
+            } else if tool.contains("household") || tool.contains("split") {
+                word = "cele domowników"
+            } else if tool.contains("shopping") {
+                word = "zakupy"
+            } else if tool.contains("memory") || tool.contains("note") {
+                word = "pamięć domu"
+            } else if tool.contains("plan") || tool.contains("balance") || tool.contains("conflict") || tool.contains("meal") || tool.contains("macro") {
+                word = "plan"
+            } else {
+                word = nil
+            }
+            if let word, !parts.contains(word) { parts.append(word) }
+        }
+        guard !parts.isEmpty else { return nil }
+        let joined = parts.joined(separator: " · ")
+        return joined.prefix(1).uppercased() + joined.dropFirst()
+    }
+
     private var settledLabel: String {
         settledDuration == nil ? "Myślałem chwilę" : "Myślałem"
     }
@@ -146,6 +176,11 @@ struct AssistantThoughtLine: View {
                 // Bez kroków wiersz nie jest przyciskiem — przycisk, który
                 // nic nie rozwija, jest gorszy niż brak przycisku.
                 head
+            }
+
+            if isWorking {
+                activity
+                    .transition(.opacity)
             }
 
             if isOpen {
@@ -219,6 +254,32 @@ struct AssistantThoughtLine: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isWorking ? workingLabel : settledAnnouncement)
         .accessibilityAddTraits(accessibilityTraits)
+    }
+
+    /// Linia aktywności i opis kontekstu pod statusem.
+    ///
+    /// To NIE jest pasek postępu: nie ma procentu i nigdy nie „dojeżdża”
+    /// do końca — jest samym sygnałem, że coś się dzieje, w kolorze etapu.
+    /// Przy Reduce Motion podświetlenie stoi (bez przesuwającego się pasma).
+    private var activity: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || !isWorking)) { context in
+            let t = startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? 0
+            VStack(alignment: .leading, spacing: 6) {
+                AssistantActivityLine(t: t, color: accent, still: reduceMotion)
+                if let contextDescriptor {
+                    Text(contextDescriptor)
+                        .font(.system(size: 12))
+                        .tracking(-0.1)
+                        .foregroundStyle(Color.scFaint(scheme))
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.leading, Self.indent)
+            .padding(.top, 8)
+            .animation(.easeInOut(duration: 0.25), value: contextDescriptor)
+        }
+        .accessibilityHidden(true)
     }
 
     /// Jawny typ: `[]` i `.updatesFrequently` w jednym wyrażeniu warunkowym
@@ -440,6 +501,49 @@ struct AssistantThoughtLine: View {
         let minutes = whole / 60
         let rest = whole % 60
         return rest == 0 ? "\(minutes) minut" : "\(minutes) minut \(rest) sekund"
+    }
+}
+
+// MARK: - Linia aktywności
+
+/// Cienka linia z pasmem światła, które płynie od lewej do prawej — czysta
+/// funkcja czasu `t` od rodzica, bez własnego zegara. Faza liniowa: easing
+/// robiłby z płynięcia „pulsowanie”. Pasmo zaczyna i kończy poza linią, więc
+/// zawinięcie cyklu jest niewidoczne.
+struct AssistantActivityLine: View {
+    let t: TimeInterval
+    let color: Color
+    var still: Bool = false
+    var period: TimeInterval = 1.9
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let phase = t.truncatingRemainder(dividingBy: period) / period
+        let p = -0.5 + phase * 2.0
+        Capsule()
+            .fill(Color.scBarTrack(scheme))
+            .frame(height: 2)
+            .overlay {
+                if still {
+                    Capsule().fill(color.opacity(0.5))
+                } else {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: color.opacity(0), location: 0),
+                                    .init(color: color, location: 0.5),
+                                    .init(color: color.opacity(0), location: 1),
+                                ],
+                                startPoint: UnitPoint(x: p - 0.3, y: 0.5),
+                                endPoint: UnitPoint(x: p + 0.3, y: 0.5)
+                            )
+                        )
+                }
+            }
+            .frame(maxWidth: 160)
+            .animation(.smooth(duration: 0.5), value: color)
     }
 }
 
