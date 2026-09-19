@@ -664,6 +664,47 @@ struct AssistantWeightedRow: Layout {
     }
 }
 
+/// Rząd o RÓWNYCH kolumnach: każde dziecko dostaje dokładnie
+/// `(szerokość − odstępy) / n`, a wysokość rzędu to najwyższe dziecko
+/// zmierzone przy TEJ szerokości (nie przy nieskończonej — tytuł na dwie
+/// linie musi się zmieścić). Kafelki w karcie opcji stoją na tym, bo
+/// `HStack` rozdawał szerokość po długości tekstu i rząd wychodził krzywy.
+struct AssistantEqualColumns: Layout {
+    var spacing: CGFloat = 10
+
+    private func columnWidth(_ total: CGFloat, count: Int) -> CGFloat {
+        guard count > 0 else { return 0 }
+        return max(0, (total - spacing * CGFloat(count - 1)) / CGFloat(count))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let width = proposal.width, width.isFinite else {
+            // Sonda bez szerokości — suma szerokości własnych, nigdy nieskończoność.
+            let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }.reduce(0, +)
+            let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
+            return CGSize(width: ideal + spacing * CGFloat(max(0, subviews.count - 1)), height: height)
+        }
+        let column = columnWidth(width, count: subviews.count)
+        let height = subviews
+            .map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
+            .max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let column = columnWidth(bounds.width, count: subviews.count)
+        var x = bounds.minX
+        for subview in subviews {
+            subview.place(
+                at: CGPoint(x: x, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: column, height: bounds.height)
+            )
+            x += column + spacing
+        }
+    }
+}
+
 /// Pasek akcji karty. Główna = pełna terakota z białym tekstem (ikona po
 /// prawej tylko, gdy podana); poboczna = obrys. Nawigacja = wiersz z chevronem.
 struct AssistantCardActions: View {

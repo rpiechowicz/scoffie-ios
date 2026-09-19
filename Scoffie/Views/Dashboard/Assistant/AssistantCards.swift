@@ -493,9 +493,11 @@ struct AssistantOptionsCard: View {
     @Environment(\.colorScheme) private var scheme
 
     /// Dwa kafelki w rzędzie; nieparzysty rząd dostaje pustą połowę.
-    /// `HStack` zamiast `LazyVGrid`: siatka w karcie w `LazyVStack`
-    /// proponowała kafelkom szerokość spoza kolumny i nazwy nachodziły
-    /// na sąsiada.
+    /// Własny `Layout` o RÓWNYCH kolumnach zamiast `HStack`/`LazyVGrid`:
+    /// `HStack` dawał kafelkom szerokość z długości nazwy (rząd z „Curry
+    /// z kurczaka na mleku kokosowym…” był krzywy — lewa kolumna szersza od
+    /// prawej), a siatka w karcie w `LazyVStack` proponowała szerokość spoza
+    /// kolumny i nazwy nachodziły na sąsiada.
     private var rows: [[OptionsCardItemDTO]] {
         stride(from: 0, to: card.options.count, by: 2).map { start in
             Array(card.options[start..<min(start + 2, card.options.count)])
@@ -508,13 +510,12 @@ struct AssistantOptionsCard: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    HStack(alignment: .top, spacing: 10) {
+                    AssistantEqualColumns(spacing: 10) {
                         ForEach(row) { option in
                             OptionTile(option: option) { onAsk(option.prompt) }
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                         if row.count == 1 {
-                            Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+                            Color.clear.frame(height: 0)
                         }
                     }
                 }
@@ -583,6 +584,7 @@ struct AssistantOptionsCard: View {
                         .foregroundStyle(AssistantLook.ink(scheme))
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 9)
 

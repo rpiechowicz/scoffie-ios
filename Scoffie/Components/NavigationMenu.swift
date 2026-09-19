@@ -107,6 +107,9 @@ struct NavigationMenu: View {
     private func page<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         content()
             .toolbarVisibility(.hidden, for: .tabBar)
+            // Pierwsze wejście na zakładkę wyłania się, zamiast skakać
+            // (szkielet → dane w jednej klatce). Raz na uruchomienie.
+            .scFirstAppearance()
     }
 }
 
