@@ -141,9 +141,10 @@ struct AssistantHeader<MenuContent: View>: View {
 
 // MARK: - Kapsuła limitu
 
-/// `TrialChip`: „1 pozostała” — mała, cicha kapsuła z drobnym znakiem.
-/// Bez kropek (to nie paginacja), bez paska. Liczba przewija się
-/// (`CountingNumber`), słowo odmienia się po liczbie.
+/// `TrialChip` z makiety mówi „1 pozostała” — samo „3 pozostałe” w nagłówku
+/// nie mówi jednak, CZEGO zostało trzy, i czyta się jak błąd. Kapsułka mówi
+/// więc wprost: „3 z 5 wiadomości” — liczba przewija się (`CountingNumber`),
+/// po „z” zawsze dopełniacz. Bez kropek (to nie paginacja), bez paska.
 struct AssistantQuotaPill: View {
     let remaining: Int
     let limit: Int
@@ -152,13 +153,6 @@ struct AssistantQuotaPill: View {
 
     private var isEmpty: Bool { remaining <= 0 }
 
-    private var word: String {
-        let n = max(0, remaining)
-        if n == 1 { return "pozostała" }
-        if (2...4).contains(n) { return "pozostałe" }
-        return "pozostało"
-    }
-
     var body: some View {
         HStack(spacing: 6) {
             SCMarkShape()
@@ -166,7 +160,8 @@ struct AssistantQuotaPill: View {
                 .frame(width: 9, height: 9)
             HStack(spacing: 3) {
                 CountingNumber(target: max(0, remaining))
-                Text(word)
+                // Po „z” dopełniacz — „z 5 wiadomości”, „z 1 wiadomości”.
+                Text("z \(max(limit, remaining)) wiadomości")
             }
             .font(.system(size: 12, weight: .semibold))
             .tracking(-0.1)
