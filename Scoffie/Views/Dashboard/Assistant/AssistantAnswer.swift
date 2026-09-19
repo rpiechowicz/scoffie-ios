@@ -214,7 +214,9 @@ struct AssistantAnswer: View {
 
                 case let .paragraph(paragraph):
                     Text(AssistantAnswerParser.inline(paragraph))
-                        .font(.system(size: 15))
+                        .font(.system(size: 16))
+                        .tracking(-0.3)
+                        .lineSpacing(4)
                         .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 

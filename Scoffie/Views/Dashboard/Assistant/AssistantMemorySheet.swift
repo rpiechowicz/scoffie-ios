@@ -1,12 +1,9 @@
 import SwiftUI
 
-/// Co asystent pamięta o gospodarstwie.
-///
-/// Pamięć, o której użytkownik wie tylko stąd, że asystent nagle coś „wie",
-/// jest nie do sprawdzenia i nie do cofnięcia. Ten ekran pokazuje ją wprost,
-/// w trzech grupach (preferencje, ograniczenia, zwyczaje), i pozwala skasować
-/// każdą notatkę z osobna. Limit stoi w stopce jako cicha metadana — nie
-/// w nagłówku, bo „6 z 30” nad listą czytało się jak licznik do wypełnienia.
+/// „16 · Co o Was pamięta” — 1:1 z makietą: nagłówek o treści, nie
+/// o limicie; trzy grupy (preferencje, ograniczenia, zwyczaje), każda
+/// notatka ze źródłem; „6 z 30 notatek” w stopce jako cicha metadana.
+/// Stuknięcie w notatkę pyta, czy ją zapomnieć.
 ///
 /// Notatki są WSPÓLNE dla domu — tak samo jak plan tygodnia i lista zakupów.
 struct AssistantMemorySheet: View {
@@ -18,40 +15,29 @@ struct AssistantMemorySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var showsForgetAllAlert = false
+    @State private var pendingForget: AgentMemoryNoteDTO?
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .top) {
-                SCPageBackground(scheme: scheme).ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        EditorialSheetHeader(eyebrow: "Asystent", title: "Pamięć domu") {
-                            dismiss()
-                        }
-
-                        if store.memory.isEmpty && !store.isLoadingMemory {
-                            emptyState
-                        } else {
-                            Text("Notatki z rozmów, których asystent używa przy każdej odpowiedzi. Usuń to, co nieaktualne — nowe dopisuje sam.")
-                                .font(.system(size: 13.5))
-                                .lineSpacing(2)
-                                .foregroundStyle(Color.scMuted(scheme))
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            ForEach(grouped) { section in
-                                groupCard(section)
+            AssistantSheetScaffold(
+                title: "Co o Was pamięta",
+                subtitle: "Trwałe rzeczy o Waszym domu, zapamiętane z rozmów. Każdą możesz poprawić albo usunąć.",
+                onClose: { dismiss() },
+                footer: { footerMeta }
+            ) {
+                if store.memory.isEmpty && !store.isLoadingMemory {
+                    AssistantGroup {
+                        emptyState
+                    }
+                } else {
+                    ForEach(grouped) { section in
+                        AssistantGroup(title: section.group.title) {
+                            ForEach(Array(section.notes.enumerated()), id: \.element.id) { index, note in
+                                noteRow(note, first: index == 0)
                             }
-
-                            footerMeta
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 32)
                 }
-                .scrollIndicators(.hidden)
-                .refreshable { await store.refreshMemory() }
             }
             .toolbar(.hidden, for: .navigationBar)
             .alert("Usunąć wszystkie notatki?", isPresented: $showsForgetAllAlert) {
@@ -61,6 +47,22 @@ struct AssistantMemorySheet: View {
                 Button("Anuluj", role: .cancel) {}
             } message: {
                 Text("Nieodwracalne. Plan tygodnia i przepisy zostają; rozmowy kasujesz osobno w menu asystenta.")
+            }
+            .alert(
+                "Zapomnieć tę notatkę?",
+                isPresented: Binding(
+                    get: { pendingForget != nil },
+                    set: { if !$0 { pendingForget = nil } }
+                )
+            ) {
+                Button("Zapomnij", role: .destructive) {
+                    guard let note = pendingForget else { return }
+                    pendingForget = nil
+                    Task { await store.forgetMemory(noteId: note.id) }
+                }
+                Button("Anuluj", role: .cancel) { pendingForget = nil }
+            } message: {
+                Text(pendingForget?.text ?? "")
             }
         }
         .presentationDragIndicator(.visible)
@@ -81,75 +83,55 @@ struct AssistantMemorySheet: View {
         }
     }
 
-    private func accent(for group: AgentMemoryGroup) -> Color {
-        switch group {
-        case .preference: return SCPalette.terracotta
-        case .constraint: return SCPalette.indigo
-        case .habit: return SCPalette.sage
-        }
-    }
-
-    private func groupCard(_ section: GroupSection) -> some View {
-        AssistantSurfaceCard {
-            AssistantSectionLabel(text: section.group.title, color: accent(for: section.group))
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 4)
-
-            ForEach(Array(section.notes.enumerated()), id: \.element.id) { index, note in
-                noteRow(note, first: index == 0)
-            }
-        }
-    }
-
+    /// Wiersz notatki: treść 15/500, źródło „Z rozmowy · 14 wrz”, chevron.
     private func noteRow(_ note: AgentMemoryNoteDTO, first: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(note.text)
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                if let date = AgentStore.parseTimestamp(note.createdAt) {
-                    Text("Zapamiętane \(Self.dayFormatter.string(from: date))")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Color.scFaint(scheme))
-                }
-            }
-            Spacer(minLength: 0)
-            Button {
-                Task { await store.forgetMemory(noteId: note.id) }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(Color.scChipBg(scheme)))
-                    .scTapTarget(44, drawn: 28)
-            }
-            .buttonStyle(PlanPressStyle(scale: 0.9))
-            .accessibilityLabel("Zapomnij: \(note.text)")
+        Button {
+            pendingForget = note
+        } label: {
+            AssistantRow(
+                title: note.text,
+                subtitle: source(note),
+                chevron: true,
+                first: first,
+                titleSize: 15,
+                titleWeight: .medium
+            )
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .overlay(alignment: .top) {
-            if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1).padding(.leading, 16) }
-        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .accessibilityHint("Pyta, czy zapomnieć tę notatkę")
     }
 
-    /// Limit i „usuń wszystko” — u dołu, ściszone.
-    private var footerMeta: some View {
-        VStack(spacing: 10) {
-            Text("\(store.memory.count) z \(Self.memoryLimit) notatek · wspólne dla domu")
-                .font(.system(size: 12))
-                .monospacedDigit()
-                .foregroundStyle(Color.scFaint(scheme))
-                .frame(maxWidth: .infinity)
+    private func source(_ note: AgentMemoryNoteDTO) -> String {
+        guard let date = AgentStore.parseTimestamp(note.createdAt) else { return "Z rozmowy" }
+        return "Z rozmowy · \(Self.dayFormatter.string(from: date))"
+    }
 
-            AssistantTextButton(title: "Usuń wszystkie notatki", role: .destructive) {
-                showsForgetAllAlert = true
+    /// Limit jako cicha metadana; „usuń wszystko” tuż pod nim.
+    private var footerMeta: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                CountingNumber(target: store.memory.count)
+                Text("z \(Self.memoryLimit) notatek")
+            }
+            .font(.system(size: 12.5))
+            .foregroundStyle(AssistantLook.faint(scheme))
+            .frame(maxWidth: .infinity)
+
+            if !store.memory.isEmpty {
+                Button {
+                    showsForgetAllAlert = true
+                } label: {
+                    Text("Usuń wszystkie notatki")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(AssistantLook.terra(scheme))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(.top, 8)
     }
 
     private static let dayFormatter: DateFormatter = {
@@ -159,25 +141,32 @@ struct AssistantMemorySheet: View {
         return formatter
     }()
 
+    /// `MemoryEmpty`: znak w szarości, „Na razie nic” i jedno zdanie.
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            AssistantMarkBadge(size: 56)
-                .padding(.top, 24)
+        VStack(spacing: 0) {
+            SCMarkShape()
+                .fill(AssistantLook.ink(scheme).opacity(0.28))
+                .frame(width: 30, height: 30)
+                .accessibilityHidden(true)
 
             Text("Na razie nic")
                 .font(.system(size: 17, weight: .bold))
                 .tracking(-0.3)
-                .foregroundStyle(Color.scLabel(scheme))
+                .foregroundStyle(AssistantLook.ink(scheme))
+                .padding(.top, 14)
 
-            Text("Gdy powiesz asystentowi coś trwałego o Waszym domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
+            Text("Gdy powiesz asystentowi coś trwałego o swoim domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
                 .font(.system(size: 14))
-                .lineSpacing(3)
-                .foregroundStyle(Color.scMuted(scheme))
+                .lineSpacing(4)
+                .foregroundStyle(AssistantLook.muted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 24)
+        .padding(.top, 36)
+        .padding(.bottom, 32)
         .accessibilityElement(children: .combine)
     }
 }

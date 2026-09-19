@@ -533,7 +533,9 @@ struct AssistantView: View {
     /// pula jest na tyle duża, że licznik w nagłówku byłby szumem.
     /// W kompaktowym pasku bez etykiety — miejsce ma tytuł rozmowy.
     private var quotaPips: AnyView? {
-        guard let usage = store.usage, usage.isTrial else { return nil }
+        // Przy zerze kapsułki nie ma — zera nie trzeba pokazywać dwa razy
+        // (briefing i karta zamiast pola już o tym mówią).
+        guard let usage = store.usage, usage.isTrial, usage.messages.remaining > 0 else { return nil }
         return AnyView(
             Button { showUsage = true } label: {
                 AssistantQuotaPill(remaining: usage.messages.remaining, limit: usage.messages.limit)
@@ -659,6 +661,7 @@ struct AssistantView: View {
         let memberCount = knownHouseholdMemberCount
         var total = 0.0
         var counted = 0
+        var below = 0
         for date in dates {
             let planned = sessionStore.mealCalendarStore?.plan(for: date).plannedSlots ?? []
             guard !planned.isEmpty else { continue }
@@ -671,6 +674,7 @@ struct AssistantView: View {
             guard !day.isEmpty else { continue }
             total += day.total.protein
             counted += 1
+            if day.total.protein < Double(proteinTarget) { below += 1 }
         }
         guard counted > 0 else { return nil }
         return AssistantBriefingBalance(
@@ -679,7 +683,8 @@ struct AssistantView: View {
             unit: "g",
             averagePerDay: Int((total / Double(counted)).rounded()),
             target: proteinTarget,
-            daysCounted: counted
+            daysCounted: counted,
+            daysBelowTarget: below
         )
     }
 
@@ -959,11 +964,13 @@ struct AssistantView: View {
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
     }
 
-    /// Pole i przycisk. Kapsuła z Liquid Glass jak dolne menu tuż pod nim —
-    /// warstwa tła POD szkłem przygasza przelatującą rozmowę, żeby litery
-    /// przy krawędzi nie wyglądały jak artefakt.
+    /// `LComposer` z makiety: pole 50 pt w pigułce z włoskowatym obrysem,
+    /// obok krążek 50 — terakotowy, gdy jest co wysłać albo tura biegnie
+    /// (wtedy strzałka staje się stopem); przy poprawce pytania pole
+    /// dostaje obrys terakoty i poświatę.
     private var composerField: some View {
-        HStack(alignment: .bottom, spacing: 6) {
+        let active = store.isSending || editing != nil || canSend
+        return HStack(alignment: .bottom, spacing: 10) {
             TextField(
                 store.isUnavailable
                     ? "Asystent jest teraz niedostępny"
@@ -974,135 +981,107 @@ struct AssistantView: View {
             // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
             // w sobotę, dwie osoby bez glutenu…").
             .lineLimit(1...8)
-            .font(.system(size: 15.5))
-            .tracking(-0.25)
-            .foregroundStyle(Color.scLabel(scheme))
+            .font(.system(size: 16.5))
+            .tracking(-0.3)
+            .foregroundStyle(AssistantLook.ink(scheme))
             .focused($isComposerFocused)
             .disabled(store.isUnavailable || store.isLocked)
             .submitLabel(.send)
-            // Jawne `maxWidth: .infinity`: bez tego pole brało szerokość
-            // wpisanego tekstu i rosło dopiero z nim.
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .glassEffect(
-                .regular.tint(Color.scPageBase(scheme).opacity(0.35)).interactive(),
-                in: .capsule
+            .padding(.horizontal, 18)
+            .frame(minHeight: 50)
+            .background(Capsule(style: .continuous).fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.82)))
+            .overlay(
+                Capsule(style: .continuous).stroke(
+                    editing == nil ? AssistantLook.cardStroke(scheme) : AssistantLook.terraFill(scheme).opacity(0.5),
+                    lineWidth: 1
+                )
             )
-            .background(Color.scPageBase(scheme).opacity(0.6), in: .capsule)
+            .background(
+                Capsule(style: .continuous)
+                    .stroke(AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.12), lineWidth: 3)
+                    .padding(-2)
+            )
+            .shadow(color: Color.black.opacity(scheme == .dark || editing != nil ? 0 : 0.04), radius: 1, y: 1)
+            .animation(.easeOut(duration: 0.2), value: editing != nil)
             .accessibilityLabel(editing == nil ? "Wiadomość do asystenta" : "Poprawiana wiadomość")
 
             // W trakcie tury strzałka zamienia się w „stop"; po „stop"
-            // przycisk WYGASA razem z wierszem „Zatrzymuję…", bo drugi stop
-            // nic nie zrobi. Przy poprawce pytania strzałka to „zatwierdź".
+            // przycisk WYGASA razem ze statusem „Zatrzymuję…", bo drugi stop
+            // nic nie zrobi.
             Button {
                 if store.isSending { store.stopWaiting() } else { send() }
             } label: {
-                Image(systemName: store.isSending ? "stop.fill" : (editing == nil ? "arrow.up" : "checkmark"))
-                    .font(.system(size: store.isSending ? 13 : 16, weight: .bold))
-                    .foregroundStyle(sendTint)
-                    .frame(width: 44, height: 44)
-                    .contentTransition(.symbolEffect(.replace))
-                    .glassEffect(
-                        .regular.tint(sendTint.opacity(0.18)).interactive(),
-                        in: .circle
-                    )
-                    .background(Color.scPageBase(scheme).opacity(0.6), in: .circle)
+                ZStack {
+                    Circle().fill(active ? AssistantLook.terra(scheme) : (scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.82)))
+                    Circle().stroke(active ? Color.clear : AssistantLook.cardStroke(scheme), lineWidth: 1)
+                    Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
+                        .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
+                        .foregroundStyle(active ? Color.white : AssistantLook.ink(scheme).opacity(0.45))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .frame(width: 50, height: 50)
+                .opacity(store.isStopping ? 0.5 : 1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlanPressStyle(scale: 0.92))
             .disabled((!store.isSending && !canSend) || store.isStopping)
             .accessibilityLabel(sendAccessibilityLabel)
+            .animation(.easeOut(duration: 0.2), value: active)
             .animation(.easeOut(duration: 0.2), value: store.isStopping)
             .animation(.easeOut(duration: 0.2), value: store.isSending)
         }
-        // 20 pt = margines boczny pływającego paska zakładek — pole ma być
-        // z nim w jednej linii, bo stoi tuż nad nim i z tego samego szkła.
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 8)
     }
 
-    /// Karta „pula na próbę wykorzystana" — w miejscu pola, z tego samego
-    /// szkła. Liczba pochodzi z serwera (`usage.messages.limit`).
+    /// `TrialCard` — karta zastępuje pole po wykorzystaniu puli na próbę:
+    /// znak marki, dwa zdania i jedna akcja „Zobacz plany”.
     private var trialExhaustedCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                AssistantMarkBadge(size: 36)
+        AssistantCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    SCMarkShape()
+                        .fill(AssistantLook.terraFill(scheme))
+                        .frame(width: 20, height: 20)
+                        .padding(.top, 1)
+                        .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(trialExhaustedTitle)
-                        .font(.system(size: 15.5, weight: .semibold))
-                        .tracking(-0.25)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Rozmowy i zapisany plan zostają.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Darmowe wiadomości wykorzystane")
+                            .font(.system(size: 16.5, weight: .bold))
+                            .tracking(-0.4)
+                            .foregroundStyle(AssistantLook.ink(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Rozmowy i plan zostają.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AssistantLook.muted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+
+                AssistantPrimaryButton(action: AssistantCardAction(title: "Zobacz plany", icon: "arrow.right") { showPaywall = true })
             }
-
-            HStack(spacing: 8) {
-                Button { showConversations = true } label: {
-                    Text("Historia rozmów")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .padding(.horizontal, 16)
-                        .frame(height: AssistantCardMetrics.ctaHeight)
-                        .background(Capsule().fill(Color.scTileBg(scheme)))
-                        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-
-                Button { showPaywall = true } label: {
-                    Text("Zobacz plany")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: AssistantCardMetrics.ctaHeight)
-                        .scSoftCapsule()
-                }
-                .buttonStyle(.plain)
-            }
+            .padding(.horizontal, AssistantCardMetrics.inset)
+            .padding(.vertical, 16)
         }
-        .padding(AssistantCardMetrics.inset)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(
-            .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
-            in: .rect(cornerRadius: AssistantCardMetrics.radius)
-        )
-        .background(Color.scPageBase(scheme).opacity(0.6), in: .rect(cornerRadius: AssistantCardMetrics.radius))
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 8)
         .accessibilityElement(children: .contain)
     }
 
-    private var trialExhaustedTitle: String {
-        if let limit = store.usage?.messages.limit, limit > 0 {
-            return "Wykorzystałeś \(limit) darmowych wiadomości"
-        }
-        return "Darmowe wiadomości są wykorzystane"
-    }
-
-    /// Pasek „Edytujesz wiadomość” nad polem: co się stanie i droga odwrotu.
-    /// Bez niego pole ze starym tekstem wygląda jak zwykłe pole, a wysłanie
-    /// kasuje pół rozmowy bez ostrzeżenia. Zatwierdzenie jest w polu
-    /// (strzałka zmienia się w ptaszek) i tu, obok „Anuluj”.
+    /// `LEditBar`: pasek 36 pt nad polem — „Edytujesz wiadomość” i „Anuluj”.
+    /// Zatwierdzenie to strzałka w polu; bez osobnego przycisku, jak na makiecie.
     private var editingBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 7) {
             Image(systemName: "pencil")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(SCPalette.terracotta)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Edytujesz wiadomość")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                Text("Odpowiedzi po niej znikną z rozmowy")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.scFaint(scheme))
-            }
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AssistantLook.terra(scheme))
+            Text("Edytujesz wiadomość")
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(AssistantLook.ink(scheme))
 
             Spacer(minLength: 0)
 
@@ -1113,47 +1092,25 @@ struct AssistantView: View {
             } label: {
                 Text("Anuluj")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(height: 32)
+                    .foregroundStyle(AssistantLook.terra(scheme))
+                    .frame(height: 36)
                     .padding(.horizontal, 6)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            Button(action: send) {
-                Text("Zatwierdź")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(SCPalette.terracotta)
-                    .padding(.horizontal, 12)
-                    .frame(height: 32)
-                    .background(Capsule().fill(Color.scAccentTint(scheme)))
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
-            .opacity(canSend ? 1 : 0.5)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Color.scAccentTint(scheme).opacity(0.6))
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
-        }
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .frame(height: 36)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.82)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
         .accessibilityElement(children: .contain)
     }
 
     private var canSend: Bool {
         store.canSend && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    /// Akcent przycisku wysyłania. Nieaktywny schodzi na przygaszony
-    /// neutralny — tint i obwódka liczą się z tego samego koloru, więc
-    /// przycisk wygasa w całości, a nie tylko glifem.
-    private var sendTint: Color {
-        // „Zatrzymuję…" gasi przycisk jak każdy nieaktywny — stop już
-        // poszedł i drugi nic nie zrobi.
-        if store.isStopping { return Color.scMuted(scheme).opacity(0.55) }
-        if store.isSending { return SCPalette.terracotta }
-        return canSend ? SCPalette.terracotta : Color.scMuted(scheme).opacity(0.55)
     }
 
     private var sendAccessibilityLabel: String {
@@ -1347,6 +1304,7 @@ struct AssistantView: View {
             // z serwera.
             reply: reply(after: index),
             showsThinking: showsThinking,
+            isEditing: editing?.id == message.id,
             isCardExpanded: expansion(of: message.id, in: $expandedCards),
             isThoughtExpanded: expansion(of: message.id, in: $expandedThoughts),
             onOpenPlan: { sessionStore.dashboardTab = .plan },
@@ -1427,12 +1385,15 @@ struct AssistantView: View {
                 // własnego wiersza (`showsThinking: false`); dostaje go
                 // z powrotem od `MessageBubble`, gdy po następnym pytaniu
                 // przejdzie do części przed slotem.
-                if let phase = thoughtPhase {
+                if store.isSending, let phase = thoughtPhase {
                     AssistantThoughtLine(
                         phase: phase,
-                        steps: store.isSending ? store.progress : (slotThinkingAnswer?.thinking?.steps ?? []),
-                        isExpanded: expansion(of: slotThinkingAnswer?.id ?? Self.liveThoughtKey, in: $expandedThoughts)
+                        steps: store.progress,
+                        isExpanded: expansion(of: Self.liveThoughtKey, in: $expandedThoughts)
                     )
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 2)
+                    .transition(.opacity)
                 }
 
                 ZStack(alignment: .topLeading) {
@@ -1456,7 +1417,7 @@ struct AssistantView: View {
                     } else {
                         VStack(alignment: .leading, spacing: 14) {
                             ForEach(Array(store.messages.enumerated().dropFirst(slotStart + 1)), id: \.element.id) { index, message in
-                                bubble(at: index, message, showsThinking: message.id != slotThinkingAnswer?.id)
+                                bubble(at: index, message)
                             }
                             if let errorMessage = store.errorMessage {
                                 AssistantOutcomeCard(
@@ -1605,6 +1566,8 @@ private struct MessageBubble: View {
     /// w slocie ostatniej tury — tam wiersz stoi NAD dymkiem, jako ten sam
     /// widok, który pracował przez całą turę (`AssistantView.turnSlot`).
     var showsThinking: Bool = true
+    /// Pytanie właśnie poprawiane — dymek dostaje obrys terakoty.
+    var isEditing: Bool = false
     /// Rozwinięcia trzyma ekran (po id wiadomości), nie wiersz — wiersz
     /// zmienia miejsce w drzewie między slotem a częścią przed nim.
     @Binding var isCardExpanded: Bool
@@ -1665,30 +1628,7 @@ private struct MessageBubble: View {
     }
 
     private var userBubble: some View {
-        HStack {
-            Spacer(minLength: 40)
-
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(message.text)
-                .font(.system(size: 15))
-                .foregroundStyle(Color.scLabel(scheme))
-                .multilineTextAlignment(.leading)
-                .textSelection(.enabled)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.scAccentTint(scheme))
-                )
-            }
-            // Wysłana, jeszcze niepotwierdzona — subtelnie, bo w 99 %
-            // przypadków potwierdzenie przychodzi zanim ktokolwiek zdąży
-            // to zauważyć.
-            .opacity(message.isPending ? 0.6 : 1)
-            // Potwierdzenie przychodzi w osobnej transakcji, po powrocie
-            // POST — bez tego dymek mrugał z 60 % na 100 % skokiem.
-            .animation(.easeOut(duration: 0.2), value: message.isPending)
-        }
+        AssistantUserBubble(text: message.text, editing: isEditing, pending: message.isPending)
     }
 
     /// Odpowiedź asystenta NIE dostaje dymka.
@@ -1699,9 +1639,23 @@ private struct MessageBubble: View {
     /// nie ma jak dać; rozmowę czyta się po stronie ekranu, nie po ramce.
     private var assistantCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Pierwszy wiersz ma geometrię wskaźnika tury — to w niego
-            // wskaźnik się zamienia. Tylko dla odpowiedzi z tej sesji.
-            if showsThinking, let thinking = message.thinking {
+            // `LAsstMsg` + `LThought`: znak marki obok treści, a POD nią
+            // „Myślałem 42 s” wcięte pod tekst. Karta pytania NIESIE treść
+            // wypowiedzi, więc obok niej nie ma `text`.
+            if !message.text.isEmpty, message.card?.replacesText != true {
+                VStack(alignment: .leading, spacing: 6) {
+                    AssistantVoice {
+                        AssistantAnswer(text: message.text)
+                    }
+                    if showsThinking, let thinking = message.thinking {
+                        AssistantThoughtLine(
+                            phase: .settled(duration: thinking.duration),
+                            steps: thinking.steps,
+                            isExpanded: $isThoughtExpanded
+                        )
+                    }
+                }
+            } else if showsThinking, let thinking = message.thinking {
                 AssistantThoughtLine(
                     phase: .settled(duration: thinking.duration),
                     steps: thinking.steps,
@@ -1711,12 +1665,6 @@ private struct MessageBubble: View {
 
             if message.savedPlan {
                 AssistantSavedPlanCard(onOpenPlan: onOpenPlan)
-            }
-
-            // Karta pytania NIESIE treść wypowiedzi, więc pokazanie obok niej
-            // jeszcze `text` znaczyłoby to samo pytanie dwa razy pod rząd.
-            if !message.text.isEmpty, message.card?.replacesText != true {
-                AssistantAnswer(text: message.text)
             }
 
             card
