@@ -1,66 +1,42 @@
 import SwiftUI
 
-/// Wiersz „myślę" nad odpowiedzią — JEDEN widok na całe życie tury.
+/// Wiersz tury — 1:1 z makietą „2 · Asystent pracuje” i „14 · Thought summary”.
 ///
-/// Wzorzec: ThoughtLine z React Bits. Głowa wiersza to glif, etykieta,
-/// licznik i chevron; pod nią ślad kroków. W trakcie tury glif oddycha,
-/// etykieta ma połysk, licznik tyka co dziesiątą sekundy, a ślad rośnie:
-/// każdy kolejny krok wjeżdża z góry, poprzedni dostaje ptaszek, bieżący
-/// pulsuje kropką. Gdy tura się domyka, NIC nie znika i nie wskakuje:
-/// „Myślę…" przechodzi w „Myślałem" rozmyciem w miejscu, licznik zjeżdża
-/// za nową etykietę, glif gaśnie do znaku, ślad zwija się pod chevron.
-/// To dlatego jest jeden widok z dwiema fazami, a nie dwa widoki
-/// z przenikaniem — przenikanie było podmianą pikseli, a to jest ruch.
+/// W TRAKCIE tury (`LWorking`): znak marki orbituje w pulsującej poświacie
+/// 44 pt, obok JEDEN bieżący status (16/600, połysk w kolorze fazy — indygo
+/// dla analizy i planowania, szałwia dla zapisu), po prawej realny czas
+/// w całych sekundach, pod statusem kontekst trzema słowami, niżej pasek
+/// aktywności NIEOKREŚLONY (sunie, nie pokazuje procentu), a po 18 s zdanie
+/// „Możesz wyjść — wrócę z odpowiedzią.”. Żadnej listy ukończonych kroków:
+/// status zmienia się w miejscu.
 ///
-/// Czas i faza ruchu liczą się z JEDNEGO zegara (`TimelineView` względem
-/// epoki tury): żaden element nie ma własnego `@State` z pętlą, więc
-/// przebudowy przy kolejnych krokach niczego nie zatrzymują ani nie
-/// rozjeżdżają w fazie.
+/// PO turze (`LThought`): „Myślałem 42 s” z chevronem, wcięte pod tekst
+/// odpowiedzi (28 pt), a po rozwinięciu kroki jako kropka + zdanie po
+/// ludzku — wgląd dla ciekawych, nie log.
 ///
-/// W slocie ostatniej tury `AssistantView` trzyma go w JEDNYM miejscu
-/// drzewa od pierwszej klatki tury do końca życia odpowiedzi w slocie —
-/// po następnym pytaniu odpowiedź przechodzi do części przed slotem
-/// i tam ten sam wiersz (faza `settled`) rysuje `MessageBubble`.
+/// Zatrzymane przez użytkownika: szary znak, bez poświaty i bez paska.
 struct AssistantThoughtLine: View {
     enum Phase: Equatable {
-        /// Tura biegnie. `startedAt` = epoka zegara (oddech, połysk, licznik).
+        /// Tura biegnie. `startedAt` = epoka zegara.
         case working(startedAt: Date, isStopping: Bool)
         /// Tura domknięta. `nil` = czasu nie dało się policzyć.
         case settled(duration: TimeInterval?)
     }
 
     let phase: Phase
-    /// Kroki tury: na żywo wszystkie (z przejściowymi — „Czytam pytanie",
-    /// „Piszę odpowiedź"), po turze tylko narzędzia i zapis.
+    /// Kroki tury: na żywo wszystkie (bieżący status = ostatni), po turze
+    /// tylko narzędzia i zapis.
     let steps: [AgentProgressStepDTO]
-    /// Rozwinięcie śladu PO turze — stan trzyma ekran po id wiadomości,
-    /// bo wiersz zmienia miejsce w drzewie (slot → część przed slotem).
+    /// Rozwinięcie kroków PO turze — stan trzyma ekran po id wiadomości.
     @Binding var isExpanded: Bool
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Ślad W TRAKCIE tury: ZWINIĘTY — na żywo głowa mówi jeden bieżący
-    /// status („Sprawdzam plan tygodnia”), a pod nią stoi linia aktywności
-    /// i opis kontekstu. Cała lista kroków jest pod chevronem, bo kilkanaście
-    /// wierszy narastających pod pytaniem czytało się jak log, nie jak
-    /// rozmowa. Po domknięciu decyduje `isExpanded`.
-    @State private var isOpenWhileWorking = false
     @State private var showsPatience = false
-    /// Jednorazowe wejście: nowy slot powstaje w NIEANIMOWANEJ transakcji
-    /// (`.id(slotKey)`), więc `.transition` nie ma czego animować — wiersz
-    /// wchodzi sam.
     @State private var appeared = false
 
     /// Po tylu sekundach warto powiedzieć, że nie trzeba tu siedzieć.
     private static let patienceAfter: TimeInterval = 18
-    /// Osiadanie: rozmycie etykiety, zjazd licznika, zwinięcie śladu.
-    private static let settleDuration: TimeInterval = 0.35
-    /// Oddech glifu i puls kropki — jeden okres, żeby nie migały w kontrze.
-    private static let breathPeriod: TimeInterval = 1.6
-    private static let shimmerPeriod: TimeInterval = 1.8
-    private static let glyphSize: CGFloat = 14
-    /// Wcięcie śladu i linijki „Możesz wyjść": glif 14 + odstęp 8.
-    private static let indent: CGFloat = 22
 
     // MARK: Stan pochodny
 
@@ -84,38 +60,29 @@ struct AssistantThoughtLine: View {
         return nil
     }
 
-    private var hasTrace: Bool { !steps.isEmpty }
-
-    private var isOpen: Bool {
-        hasTrace && (isWorking ? isOpenWhileWorking : isExpanded)
-    }
-
-    /// Planowanie trwa OD kroku z `phase` do końca — liczenie z ostatniego
-    /// kroku cofało ton po pierwszym narzędziu planisty.
-    private var inPlanning: Bool { steps.contains { $0.isHandoff } }
     /// Zapis to fakt, który się nie cofa.
     private var hasWritten: Bool { steps.contains { $0.writes == true } }
 
-    /// Terakota → indygo (planista) → szałwia (zapisano); tylko w jedną stronę.
-    private var accent: Color {
-        if hasWritten { return SCPalette.sage }
-        if inPlanning { return SCPalette.indigo }
-        return SCPalette.terracotta
+    /// Kolor fazy: analiza i planowanie w indygo, zapis w szałwii.
+    private var phaseColor: Color {
+        hasWritten ? AssistantLook.sage(scheme) : AssistantLook.indigo(scheme)
     }
 
-    /// Etykieta głowy. Przy otwartym śladzie bieżący krok widać niżej,
-    /// więc głowa mówi po prostu „Myślę…"; przy zwiniętym śladzie głowa
-    /// przejmuje bieżący krok — zwinięcie nie ma odbierać informacji.
-    private var workingLabel: String {
+    private var phaseTint: Color {
+        hasWritten ? AssistantLook.sageTint(scheme) : AssistantLook.indigoTint(scheme)
+    }
+
+    /// Jeden bieżący status — ostatni krok z serwera, gotowe zdanie po polsku.
+    private var status: String {
         if isStopping { return "Zatrzymuję…" }
-        if isOpen { return "Myślę…" }
-        return steps.last?.label ?? "Myślę…"
+        return steps.last?.label ?? "Czytam pytanie"
     }
 
     /// Kontekst pod statusem: z czego asystent właśnie korzysta, słowami
     /// z aplikacji („Przepisy · cele domowników · plan”), nigdy nazwami
     /// narzędzi. Liczone z KROKÓW, więc rośnie w miarę tury.
     private var contextDescriptor: String? {
+        if isStopping { return "Nic nie zmieniłem w planie." }
         var parts: [String] = []
         for step in steps {
             let tool = step.tool.lowercased()
@@ -141,67 +108,25 @@ struct AssistantThoughtLine: View {
     }
 
     private var settledLabel: String {
-        settledDuration == nil ? "Myślałem chwilę" : "Myślałem"
+        guard let duration = settledDuration else { return "Myślałem chwilę" }
+        return "Myślałem \(Self.clock(duration))"
     }
 
-    private var activeLabel: String { isWorking ? workingLabel : settledLabel }
-
-    private var settleAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.2) : .easeOut(duration: Self.settleDuration)
-    }
-
-    /// Rozmycie 2 pt + krycie, jak w pierwowzorze; przy Reduce Motion samo krycie.
-    private var labelTransition: AnyTransition {
-        reduceMotion ? .opacity : .blurFade(radius: 2)
-    }
-
-    private var stepTransition: AnyTransition {
-        if reduceMotion { return .opacity }
-        return .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: -4)),
-            removal: .opacity
-        )
-    }
+    private var hasTrace: Bool { !steps.isEmpty }
 
     // MARK: Widok
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if hasTrace {
-                Button { toggle() } label: { head }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(isOpen ? "Zwija kroki" : "Pokazuje kroki")
-                    .accessibilityValue("kroki: \(steps.count)")
-            } else {
-                // Bez kroków wiersz nie jest przyciskiem — przycisk, który
-                // nic nie rozwija, jest gorszy niż brak przycisku.
-                head
-            }
-
+        Group {
             if isWorking {
-                activity
-                    .transition(.opacity)
-            }
-
-            if isOpen {
-                trace
-                    .transition(stepTransition)
-            }
-
-            if showsPatience, isWorking {
-                Text("Możesz wyjść — wrócę z odpowiedzią.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .padding(.leading, Self.indent)
-                    .padding(.top, 8)
-                    .transition(.opacity)
+                working
+            } else {
+                thought
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(appeared ? 1 : 0)
         .onAppear { reveal() }
-        // Raz na epokę tury; po domknięciu `startedAt` jest `nil` i linijka
-        // znika razem z fazą. Sam się anuluje, gdy wiersz schodzi.
         .task(id: startedAt) {
             showsPatience = false
             guard let startedAt else { return }
@@ -212,260 +137,192 @@ struct AssistantThoughtLine: View {
             if Task.isCancelled { return }
             withAnimation(.easeInOut(duration: 0.4)) { showsPatience = true }
         }
-        // VoiceOver słyszy zmianę ETAPU (planista, zapis) i koniec tury —
-        // nie każdy krok, bo kroków bywa kilkanaście.
-        .onChange(of: inPlanning) { _, now in
-            if now, let label = steps.last?.label { announce(label) }
-        }
         .onChange(of: hasWritten) { _, now in
             if now, let label = steps.last?.label { announce(label) }
         }
         .onChange(of: isWorking) { _, working in
-            if !working { announce(settledAnnouncement) }
+            if !working { announce(settledLabel) }
         }
     }
 
-    /// Glif · etykieta · licznik · chevron. Jeden zegar dla całej głowy;
-    /// po domknięciu zegar STAJE (`paused`) i nic już tu nie tyka.
-    private var head: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || !isWorking)) { context in
+    // MARK: Praca
+
+    private var working: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || isStopping)) { context in
             let t = startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? 0
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .top, spacing: 14) {
                 glyph(t: t)
 
-                HStack(alignment: .center, spacing: 5) {
-                    label(t: t)
-                    timer(t: t)
-                    chevron
-                }
-                .layoutPriority(1)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        statusText(t: t)
+                        Spacer(minLength: 0)
+                        if !isStopping {
+                            Text("\(Int(t)) s")
+                                .font(.system(size: 12.5))
+                                .monospacedDigit()
+                                .foregroundStyle(AssistantLook.faint(scheme))
+                                .fixedSize()
+                                .accessibilityHidden(true)
+                        }
+                    }
 
-                Spacer(minLength: 0)
+                    if let contextDescriptor {
+                        Text(contextDescriptor)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(AssistantLook.muted(scheme))
+                            .lineLimit(1)
+                            .padding(.top, 3)
+                            .transition(.opacity)
+                    }
+
+                    if !isStopping {
+                        AssistantActivityLine(t: t, color: phaseColor, tint: phaseTint, still: reduceMotion)
+                            .padding(.top, 12)
+                    }
+
+                    if showsPatience, !isStopping {
+                        Text("Możesz wyjść — wrócę z odpowiedzią.")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(AssistantLook.faint(scheme))
+                            .padding(.top, 12)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.top, 1)
+                .animation(.easeInOut(duration: 0.25), value: contextDescriptor)
+                .animation(.easeInOut(duration: 0.25), value: status)
             }
-            .frame(height: 22)
-            // Osiadanie i zmiana etykiety w JEDNEJ transakcji na całej głowie:
-            // etykieta zmienia szerokość, licznik ZJEŻDŻA za nią (ruch układu
-            // animuje się tylko, gdy transakcja rodzica jest animowana — sam
-            // modyfikator na etykiecie zostawiłby licznik ze skokiem).
-            .animation(settleAnimation, value: activeLabel)
-            .animation(settleAnimation, value: isWorking)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(status)
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    /// Znak marki 26 pt orbituje w poświacie 44 pt (`kesHalo` 2,8 s).
+    /// Zatrzymane: szary znak, bez poświaty.
+    private func glyph(t: TimeInterval) -> some View {
+        ZStack {
+            if !isStopping {
+                let pulse = reduceMotion ? 0.5 : (1 - cos(t * 2 * .pi / 2.8)) / 2
+                Circle()
+                    .fill(phaseTint)
+                    .scaleEffect(1 + 0.18 * pulse)
+                    .opacity(0.55 - 0.35 * pulse)
+                    .animation(.smooth(duration: 0.5), value: hasWritten)
+            }
+            AssistantSpinningMark(
+                size: 26,
+                color: isStopping ? AssistantLook.ink(scheme).opacity(0.35) : AssistantLook.terraFill(scheme),
+                spinning: !isStopping
+            )
+        }
+        .frame(width: 44, height: 44)
+        .accessibilityHidden(true)
+    }
+
+    /// Status 16/600 z połyskiem w kolorze fazy (`lShimmer` 2,6 s).
+    @ViewBuilder
+    private func statusText(t: TimeInterval) -> some View {
+        if isStopping {
+            Text(status)
+                .font(.system(size: 16, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(AssistantLook.muted(scheme))
+                .lineLimit(1)
+        } else if reduceMotion {
+            Text(status)
+                .font(.system(size: 16, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(phaseColor)
+                .lineLimit(1)
+        } else {
+            let phase = t.truncatingRemainder(dividingBy: 2.6) / 2.6
+            let p = 1.2 - phase * 2.4
+            Text(status)
+                .font(.system(size: 16, weight: .semibold))
+                .tracking(-0.3)
+                .lineLimit(1)
+                .foregroundStyle(
+                    LinearGradient(
+                        stops: [
+                            .init(color: phaseColor, location: 0),
+                            .init(color: phaseColor, location: 0.35),
+                            .init(color: phaseColor.opacity(0.4), location: 0.5),
+                            .init(color: phaseColor, location: 0.65),
+                            .init(color: phaseColor, location: 1),
+                        ],
+                        startPoint: UnitPoint(x: p - 1.2, y: 0.5),
+                        endPoint: UnitPoint(x: p + 1.2, y: 0.5)
+                    )
+                )
+                .animation(.smooth(duration: 0.5), value: hasWritten)
+        }
+    }
+
+    // MARK: Po turze
+
+    private var thought: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Group {
+                if hasTrace {
+                    Button {
+                        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .easeOut(duration: 0.35)) {
+                            isExpanded.toggle()
+                        }
+                    } label: { thoughtHead }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(isExpanded ? "Zwija kroki" : "Pokazuje kroki")
+                    .accessibilityValue("kroki: \(steps.count)")
+                } else {
+                    thoughtHead
+                }
+            }
+
+            if isExpanded, hasTrace {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                        HStack(alignment: .center, spacing: 9) {
+                            Circle()
+                                .fill(AssistantLook.ink(scheme).opacity(0.35))
+                                .frame(width: 4, height: 4)
+                            Text(step.label)
+                                .font(.system(size: 13))
+                                .foregroundStyle(AssistantLook.faint(scheme))
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -4)))
+                .accessibilityHidden(true)
+            }
+        }
+        .padding(.leading, 28)
+    }
+
+    private var thoughtHead: some View {
+        HStack(spacing: 2) {
+            Text(settledLabel)
+                .font(.system(size: 12.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(AssistantLook.faint(scheme))
+                .lineLimit(1)
+            if hasTrace {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .animation(.easeOut(duration: 0.2), value: isExpanded)
+                    .accessibilityHidden(true)
+            }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isWorking ? workingLabel : settledAnnouncement)
-        .accessibilityAddTraits(accessibilityTraits)
-    }
-
-    /// Linia aktywności i opis kontekstu pod statusem.
-    ///
-    /// To NIE jest pasek postępu: nie ma procentu i nigdy nie „dojeżdża”
-    /// do końca — jest samym sygnałem, że coś się dzieje, w kolorze etapu.
-    /// Przy Reduce Motion podświetlenie stoi (bez przesuwającego się pasma).
-    private var activity: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || !isWorking)) { context in
-            let t = startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? 0
-            VStack(alignment: .leading, spacing: 6) {
-                AssistantActivityLine(t: t, color: accent, still: reduceMotion)
-                if let contextDescriptor {
-                    Text(contextDescriptor)
-                        .font(.system(size: 12))
-                        .tracking(-0.1)
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .lineLimit(1)
-                        .transition(.opacity)
-                }
-            }
-            .padding(.leading, Self.indent)
-            .padding(.top, 8)
-            .animation(.easeInOut(duration: 0.25), value: contextDescriptor)
-        }
-        .accessibilityHidden(true)
-    }
-
-    /// Jawny typ: `[]` i `.updatesFrequently` w jednym wyrażeniu warunkowym
-    /// nie mają skąd wziąć typu bez podpowiedzi.
-    private var accessibilityTraits: AccessibilityTraits {
-        isWorking ? .updatesFrequently : []
-    }
-
-    /// Oddychający znak w trakcie tury; po domknięciu ten sam znak, cichy.
-    /// Przenikanie w miejscu: kolor etapu gaśnie do `scFaint`.
-    @ViewBuilder
-    private func glyph(t: TimeInterval) -> some View {
-        ZStack {
-            if isWorking {
-                SCThinkingGlyph(
-                    t: t,
-                    color: accent,
-                    size: Self.glyphSize,
-                    still: reduceMotion,
-                    period: Self.breathPeriod
-                )
-                .transition(.opacity)
-            } else {
-                SCMarkShape()
-                    .fill(Color.scFaint(scheme))
-                    .frame(width: Self.glyphSize, height: Self.glyphSize)
-                    .transition(.opacity)
-            }
-        }
-        .frame(width: Self.glyphSize, height: Self.glyphSize)
-        .accessibilityHidden(true)
-    }
-
-    /// Etykieta w dwóch warstwach: NIEWIDOCZNY tekst bieżącej etykiety
-    /// wymiaruje wiersz (to on przesuwa licznik), a nakładka rysuje stary
-    /// i nowy tekst jeden na drugim — stary rozmywa się i gaśnie, nowy
-    /// wyostrza. Nakładka nie liczy się do układu, więc wiersz nie trzyma
-    /// szerokości schodzącego tekstu do końca przejścia. Oba teksty mają
-    /// ten sam krój i to samo ucięcie (`lineLimit(1)`, bez `fixedSize`), więc
-    /// w stanie spoczynku nakładka pokrywa się z wymiarującym tekstem co do
-    /// punktu, a długi krok („Składam tydzień tak, żeby…") ucina się tak samo
-    /// w obu i nigdy nie wchodzi pod licznik.
-    private func label(t: TimeInterval) -> some View {
-        Text(activeLabel)
-            .font(.system(size: 15))
-            .lineLimit(1)
-            .opacity(0)
-            .accessibilityHidden(true)
-            .overlay(alignment: .leading) {
-                ZStack(alignment: .leading) {
-                    if isWorking {
-                        SCShimmerText(
-                            text: workingLabel,
-                            t: t,
-                            still: reduceMotion,
-                            period: Self.shimmerPeriod
-                        )
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .id("work|" + workingLabel)
-                        .transition(labelTransition)
-                    } else {
-                        Text(settledLabel)
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .lineLimit(1)
-                            .id("done|" + settledLabel)
-                            .transition(labelTransition)
-                    }
-                }
-                .animation(settleAnimation, value: activeLabel)
-            }
-    }
-
-    /// Licznik od pierwszej dziesiątej sekundy — jak w pierwowzorze: cyfry
-    /// stałej szerokości, bez rolowania (dziesięć zmian na sekundę z animacją
-    /// byłoby smugą). Po domknięciu ten sam licznik zostaje z czasem z serwera
-    /// i ciemnieje o stopień: to już fakt, nie sygnał życia.
-    @ViewBuilder
-    private func timer(t: TimeInterval) -> some View {
-        if let text = timerText(t: t) {
-            Text(text)
-                .font(.system(size: 13, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(isWorking ? Color.scFaint(scheme) : Color.scMuted(scheme))
-                .lineLimit(1)
-                .fixedSize()
-                .accessibilityHidden(true)
-        }
-    }
-
-    private func timerText(t: TimeInterval) -> String? {
-        switch phase {
-        case .working:
-            return Self.clock(t)
-        case let .settled(duration):
-            return duration.map(Self.clock)
-        }
-    }
-
-    /// Chevron tylko, gdy jest co rozwinąć; obraca się o 180° przy otwarciu.
-    private var chevron: some View {
-        Image(systemName: "chevron.down")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Color.scFaint(scheme))
-            .rotationEffect(.degrees(isOpen ? 180 : 0))
-            .opacity(hasTrace ? 1 : 0)
-            .animation(.easeOut(duration: 0.2), value: isOpen)
-            .animation(.easeOut(duration: 0.2), value: hasTrace)
-            .accessibilityHidden(true)
-    }
-
-    /// Ślad kroków. Tożsamość po pozycji: serwer tylko dopisuje, więc nowy
-    /// krok to nowa pozycja (wjeżdża z góry), a poprzednia zostaje i dostaje
-    /// ptaszek w miejscu. Osobny, wolniejszy zegar — tylko dla pulsu kropki.
-    private var trace: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion || !isWorking)) { context in
-            let t = startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? 0
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                    let done = !isWorking || index < steps.count - 1
-                    HStack(alignment: .center, spacing: 8) {
-                        mark(done: done, t: t)
-                        Text(step.label)
-                            .font(.system(size: 13))
-                            .foregroundStyle(stepColor(step, done: done))
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .transition(stepTransition)
-                }
-            }
-            .padding(.leading, Self.indent)
-            .padding(.top, 8)
-            .padding(.bottom, 2)
-            .animation(.easeOut(duration: 0.2), value: steps.count)
-        }
-        .accessibilityHidden(true)
-    }
-
-    /// Ptaszek po kroku; pulsująca kropka w kolorze etapu przy bieżącym.
-    @ViewBuilder
-    private func mark(done: Bool, t: TimeInterval) -> some View {
-        ZStack {
-            if done {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
-            } else {
-                let pulse = reduceMotion
-                    ? 1.0
-                    : 0.55 + 0.45 * (1 - cos(t * 2 * .pi / Self.breathPeriod)) / 2
-                Circle()
-                    .fill(accent)
-                    .frame(width: 6, height: 6)
-                    .opacity(pulse)
-                    .transition(.opacity)
-            }
-        }
-        .frame(width: Self.glyphSize, height: Self.glyphSize)
-        .animation(.easeOut(duration: 0.2), value: done)
-    }
-
-    /// Zrobione kroki gasną do `scFaint`; bieżący jest o stopień jaśniejszy.
-    /// Tony etapów zostają w obu: szałwia = zapis, indygo = planista.
-    private func stepColor(_ step: AgentProgressStepDTO, done: Bool) -> Color {
-        if step.writes == true { return SCPalette.sage.opacity(done ? 0.75 : 1) }
-        if step.isHandoff { return SCPalette.indigo.opacity(done ? 0.75 : 1) }
-        return done ? Color.scFaint(scheme) : Color.scMuted(scheme)
+        .accessibilityLabel(settledLabel)
     }
 
     // MARK: Akcje i teksty
-
-    /// `withAnimation`, nie `.animation(value:)`: rozwinięcie ZMIENIA układ
-    /// sąsiadów w `LazyVStack`, a modyfikator na samym wierszu tego nie obejmie.
-    private func toggle() {
-        guard hasTrace else { return }
-        withAnimation(settleAnimation) {
-            if isWorking {
-                isOpenWhileWorking.toggle()
-            } else {
-                isExpanded.toggle()
-            }
-        }
-    }
 
     private func reveal() {
         if reduceMotion {
@@ -479,79 +336,59 @@ struct AssistantThoughtLine: View {
         AccessibilityNotification.Announcement(text).post()
     }
 
-    private var settledAnnouncement: String {
-        guard let duration = settledDuration else { return "Myślałem chwilę" }
-        return "Myślałem \(Self.spoken(duration))"
-    }
-
-    /// „12,3 s", od minuty „1 min 12,3 s" — dziesiąte, jak w pierwowzorze,
-    /// z polskim przecinkiem.
+    /// „42 s”, od minuty „1 min 12 s” — całe sekundy, jak na makiecie.
     static func clock(_ seconds: TimeInterval) -> String {
-        let tenths = max(0, Int((seconds * 10).rounded(.down)))
-        if tenths < 600 { return "\(tenths / 10),\(tenths % 10) s" }
-        let minutes = tenths / 600
-        let rest = tenths % 600
-        return "\(minutes) min \(rest / 10),\(rest % 10) s"
-    }
-
-    /// Dla VoiceOver: bez dziesiątych, pełnymi słowami.
-    static func spoken(_ seconds: TimeInterval) -> String {
         let whole = max(0, Int(seconds.rounded()))
-        if whole < 60 { return "\(whole) sekund" }
+        if whole < 60 { return "\(whole) s" }
         let minutes = whole / 60
         let rest = whole % 60
-        return rest == 0 ? "\(minutes) minut" : "\(minutes) minut \(rest) sekund"
+        return rest == 0 ? "\(minutes) min" : "\(minutes) min \(rest) s"
     }
 }
 
-// MARK: - Linia aktywności
+// MARK: - Pasek aktywności
 
-/// Cienka linia z pasmem światła, które płynie od lewej do prawej — czysta
-/// funkcja czasu `t` od rodzica, bez własnego zegara. Faza liniowa: easing
-/// robiłby z płynięcia „pulsowanie”. Pasmo zaczyna i kończy poza linią, więc
-/// zawinięcie cyklu jest niewidoczne.
+/// Pasek aktywności z makiety (`lBar`): tor 3 pt w tincie fazy, pasmo 38 %
+/// szerokości w kolorze fazy sunie od lewej do prawej co 2,2 s
+/// (`cubic-bezier(.4,0,.6,1)`). To NIE jest pasek postępu — nigdy nie
+/// „dojeżdża” do końca. Przy Reduce Motion pasmo stoi na środku.
 struct AssistantActivityLine: View {
     let t: TimeInterval
     let color: Color
+    var tint: Color? = nil
     var still: Bool = false
-    var period: TimeInterval = 1.9
+    var period: TimeInterval = 2.2
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let phase = t.truncatingRemainder(dividingBy: period) / period
-        let p = -0.5 + phase * 2.0
-        Capsule()
-            .fill(Color.scBarTrack(scheme))
-            .frame(height: 2)
-            .overlay {
-                if still {
-                    Capsule().fill(color.opacity(0.5))
-                } else {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: color.opacity(0), location: 0),
-                                    .init(color: color, location: 0.5),
-                                    .init(color: color.opacity(0), location: 1),
-                                ],
-                                startPoint: UnitPoint(x: p - 0.3, y: 0.5),
-                                endPoint: UnitPoint(x: p + 0.3, y: 0.5)
-                            )
-                        )
-                }
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let band = width * 0.38
+            let phase = still ? 0.5 : Self.eased(t.truncatingRemainder(dividingBy: period) / period)
+            let x = -band + (width + band) * phase
+            ZStack(alignment: .leading) {
+                Capsule().fill(tint ?? color.opacity(0.12))
+                Capsule()
+                    .fill(color.opacity(0.85))
+                    .frame(width: band)
+                    .offset(x: still ? (width - band) / 2 : x)
             }
-            .frame(maxWidth: 160)
-            .animation(.smooth(duration: 0.5), value: color)
+            .clipShape(Capsule())
+        }
+        .frame(height: 3)
+        .animation(.smooth(duration: 0.5), value: color)
+        .accessibilityHidden(true)
+    }
+
+    private static func eased(_ p: Double) -> Double {
+        // Przybliżenie cubic-bezier(.4,0,.6,1): łagodny start i koniec.
+        p < 0.5 ? 2 * p * p : 1 - pow(-2 * p + 2, 2) / 2
     }
 }
 
 // MARK: - Przejście z rozmyciem
 
-/// Krycie + rozmycie, jak `filter: blur()` w pierwowzorze: tekst nie tyle
-/// znika, ile traci ostrość, a nowy ją zyskuje — dwa zdania w tym samym
-/// miejscu przestają być dwoma zdaniami.
 private struct BlurFadeModifier: ViewModifier {
     let radius: CGFloat
     let opacity: Double
@@ -578,10 +415,9 @@ extension AnyTransition {
         @State private var working = true
         private let steps = [
             AgentProgressStepDTO(tool: "read", label: "Czytam pytanie", at: "2026-09-19T10:00:00.000Z", writes: nil, phase: nil, transient: true),
-            AgentProgressStepDTO(tool: "get_week_plan", label: "Czytam plan tygodnia", at: "2026-09-19T10:00:02.000Z", writes: false, phase: nil, transient: nil),
-            AgentProgressStepDTO(tool: "start_planning", label: "Biorę się za plan", at: "2026-09-19T10:00:05.000Z", writes: nil, phase: "PLANNING", transient: nil),
+            AgentProgressStepDTO(tool: "get_week_plan", label: "Sprawdzam plan tygodnia", at: "2026-09-19T10:00:02.000Z", writes: false, phase: nil, transient: nil),
+            AgentProgressStepDTO(tool: "start_planning", label: "Układam propozycję tygodnia", at: "2026-09-19T10:00:05.000Z", writes: nil, phase: "PLANNING", transient: nil),
             AgentProgressStepDTO(tool: "apply_week_plan", label: "Zapisuję plan tygodnia", at: "2026-09-19T10:00:09.000Z", writes: true, phase: nil, transient: nil),
-            AgentProgressStepDTO(tool: "write", label: "Piszę odpowiedź", at: "2026-09-19T10:00:12.000Z", writes: nil, phase: nil, transient: true),
         ]
 
         var body: some View {
@@ -589,14 +425,13 @@ extension AnyTransition {
                 AssistantThoughtLine(
                     phase: working
                         ? .working(startedAt: Date().addingTimeInterval(-7), isStopping: false)
-                        : .settled(duration: 12.3),
+                        : .settled(duration: 42),
                     steps: working ? steps : steps.filter { !$0.isTransient },
                     isExpanded: $expanded
                 )
                 Toggle("Tura biegnie", isOn: $working)
             }
             .padding(24)
-            .animation(.easeOut(duration: 0.35), value: working)
         }
     }
     return Demo()

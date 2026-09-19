@@ -1,11 +1,10 @@
 import SwiftUI
 
-/// Historia rozmów z asystentem — arkusz w tym samym języku co reszta
-/// asystenta: redakcyjny nagłówek z krzyżykiem, własne pole szukania,
-/// grupy „Dziś / Wczoraj / W tym tygodniu / Wcześniej” jako karty
-/// z wierszami (tytuł, początek ostatniej wiadomości, godzina), plakietka
-/// „W toku” przy rozmowie z turą w biegu i ptaszek przy bieżącej.
-/// Usuwanie przez przytrzymanie wiersza — bez systemowej listy.
+/// „15 · Rozmowy” — 1:1 z makietą: nagłówek `Asystent · Rozmowy` z krążkiem
+/// „nowa rozmowa” i X, grupy Dziś / Wczoraj / W tym tygodniu / Wcześniej,
+/// wiersz = tytuł, podgląd ostatniej odpowiedzi, godzina po prawej;
+/// rozmowa z biegnącą turą ma plakietkę „W toku”. Szukanie przypięte do
+/// dołu. Usuwanie przez przytrzymanie wiersza.
 struct AssistantConversationsSheet: View {
     let store: AgentStore
 
@@ -18,36 +17,39 @@ struct AssistantConversationsSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .top) {
-                SCPageBackground(scheme: scheme).ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        EditorialSheetHeader(eyebrow: "Asystent", title: "Rozmowy") {
+            AssistantSheetScaffold(
+                title: "Rozmowy",
+                onClose: { dismiss() },
+                action: {
+                    AssistantRoundButton(
+                        icon: "square.and.pencil",
+                        size: 34,
+                        tint: AssistantLook.terraTint(scheme),
+                        color: AssistantLook.terra(scheme),
+                        iconSize: 16,
+                        accessibilityTitle: "Nowa rozmowa"
+                    ) {
+                        Task {
+                            await store.startNewConversation()
                             dismiss()
                         }
-
-                        searchField
-
-                        newConversationRow
-
-                        if store.conversations.isEmpty && !store.isLoadingConversations {
-                            emptyState
-                        } else if groups.isEmpty && !query.isEmpty {
-                            noResults
-                        } else {
-                            ForEach(groups, id: \.label) { group in
-                                groupCard(group)
+                    }
+                },
+                footer: { searchBar }
+            ) {
+                if store.conversations.isEmpty && !store.isLoadingConversations {
+                    emptyState
+                } else if groups.isEmpty && !query.isEmpty {
+                    noResults
+                } else {
+                    ForEach(groups, id: \.label) { group in
+                        AssistantGroup(title: group.label) {
+                            ForEach(Array(group.items.enumerated()), id: \.element.id) { index, conversation in
+                                row(conversation, first: index == 0)
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 32)
                 }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .refreshable { await store.refreshConversations() }
             }
             .toolbar(.hidden, for: .navigationBar)
             .alert(
@@ -71,19 +73,18 @@ struct AssistantConversationsSheet: View {
         .task { await store.refreshConversations() }
     }
 
-    // MARK: - Szukanie i nowa rozmowa
+    // MARK: - Szukanie
 
-    /// Własne pole zamiast `.searchable`: bez paska nawigacji systemowe pole
-    /// nie ma gdzie się pokazać, a rozmów po miesiącu jest za dużo na
-    /// przewijanie po datach.
-    private var searchField: some View {
-        HStack(spacing: 8) {
+    /// `SearchBar`: pigułka 48 na dole, jak w aplikacji.
+    private var searchBar: some View {
+        HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.scFaint(scheme))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AssistantLook.faint(scheme))
             TextField("Szukaj w rozmowach", text: $query)
-                .font(.system(size: 15))
-                .foregroundStyle(Color.scLabel(scheme))
+                .font(.system(size: 16))
+                .tracking(-0.2)
+                .foregroundStyle(AssistantLook.ink(scheme))
                 .focused($isSearchFocused)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -93,38 +94,18 @@ struct AssistantConversationsSheet: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
-                        .foregroundStyle(Color.scFaint(scheme))
+                        .foregroundStyle(AssistantLook.faint(scheme))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Wyczyść szukanie")
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .background(Capsule().fill(Color.scTileBg(scheme)))
-        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-    }
-
-    private var newConversationRow: some View {
-        Button {
-            Task {
-                await store.startNewConversation()
-                dismiss()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14, weight: .bold))
-                Text("Nowa rozmowa")
-                    .font(.system(size: 15, weight: .bold))
-                    .tracking(-0.25)
-            }
-            .foregroundStyle(SCPalette.terracotta)
-            .frame(maxWidth: .infinity)
-            .frame(height: AssistantCardMetrics.ctaHeight)
-            .scSoftCapsule()
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .padding(.horizontal, 18)
+        .frame(height: 48)
+        .background(Capsule().fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.88)))
+        .overlay(Capsule().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
+        .shadow(color: Color.black.opacity(scheme == .dark ? 0 : 0.04), radius: 1, y: 1)
+        .shadow(color: Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(scheme == .dark ? 0 : 0.10), radius: 12, y: 8)
     }
 
     // MARK: - Grupy
@@ -134,8 +115,7 @@ struct AssistantConversationsSheet: View {
         let items: [AgentConversationDTO]
     }
 
-    /// Rozmowy pogrupowane po tym, KIEDY się wydarzyły: dzisiejsza,
-    /// wczorajsza, „gdzieś w tym tygodniu” — tak ludzie o tym myślą.
+    /// Rozmowy pogrupowane po tym, KIEDY się wydarzyły.
     private var groups: [ConversationGroup] {
         let matching = store.conversations.filter(matches)
         let calendar = Calendar.current
@@ -169,8 +149,7 @@ struct AssistantConversationsSheet: View {
             .map { ConversationGroup(label: $0.0, items: $0.1) }
     }
 
-    /// Szukanie bez znaków diakrytycznych i wielkości liter — „zurek” ma
-    /// znaleźć „Żurek”.
+    /// Szukanie bez znaków diakrytycznych i wielkości liter.
     private func matches(_ conversation: AgentConversationDTO) -> Bool {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return true }
@@ -183,23 +162,10 @@ struct AssistantConversationsSheet: View {
         ) != nil
     }
 
-    private func groupCard(_ group: ConversationGroup) -> some View {
-        AssistantSurfaceCard {
-            AssistantSectionLabel(text: group.label)
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 2)
-
-            ForEach(Array(group.items.enumerated()), id: \.element.id) { index, conversation in
-                row(conversation, first: index == 0)
-            }
-        }
-    }
-
+    /// `HistRow`: tytuł · podgląd ostatniej odpowiedzi · godzina i „W toku”.
     private func row(_ conversation: AgentConversationDTO, first: Bool) -> some View {
-        let isCurrent = conversation.id == store.conversationId
         let isRunning = conversation.activeTurnId != nil
-        // Podgląd, który powtarza tytuł, nic nie dodaje — wtedy zostaje sama godzina.
+        let isEmpty = conversation.title == nil
         let preview = conversation.preview.flatMap { text -> String? in
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, trimmed != conversation.title else { return nil }
@@ -211,60 +177,33 @@ struct AssistantConversationsSheet: View {
                 dismiss()
             }
         } label: {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .center, spacing: 8) {
-                        Text(conversation.title ?? "Nowa rozmowa")
-                            .font(.system(size: 15, weight: .semibold))
-                            .tracking(-0.25)
-                            .foregroundStyle(Color.scLabel(scheme))
-                            .lineLimit(1)
+            AssistantRow(
+                title: conversation.title ?? "Nowa rozmowa",
+                subtitle: preview ?? (isEmpty ? "Bez wiadomości" : nil),
+                first: first,
+                titleWeight: isEmpty ? .medium : .semibold,
+                titleColor: isEmpty ? AssistantLook.muted(scheme) : nil,
+                verticalPadding: 12,
+                alignment: .top,
+                leading: { EmptyView() },
+                trailing: {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if let stamp = Self.stamp(conversation) {
+                            Text(stamp)
+                                .font(.system(size: 12.5))
+                                .monospacedDigit()
+                                .foregroundStyle(AssistantLook.faint(scheme))
+                        }
                         if isRunning {
-                            runningChip
+                            AssistantWorkingChip()
                         }
                     }
-
-                    if let preview {
-                        Text(preview)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if let stamp = Self.stamp(conversation) {
-                        Text(stamp)
-                            .font(.system(size: 11.5))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.scFaint(scheme))
-                    }
+                    .fixedSize()
                 }
-
-                Spacer(minLength: 0)
-
-                if isCurrent {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .padding(.top, 3)
-                        .accessibilityHidden(true)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .padding(.top, 3)
-                        .accessibilityHidden(true)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
-        .overlay(alignment: .top) {
-            if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1).padding(.leading, 16) }
-        }
         .contextMenu {
             Button(role: .destructive) {
                 pendingDeletion = conversation
@@ -273,47 +212,35 @@ struct AssistantConversationsSheet: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue(isCurrent ? "bieżąca" : (isRunning ? "w toku" : ""))
+        .accessibilityValue(conversation.id == store.conversationId ? "bieżąca" : (isRunning ? "w toku" : ""))
         .accessibilityHint("Otwiera rozmowę. Przytrzymaj, żeby usunąć.")
-    }
-
-    /// Plakietka „W toku” — subtelna, w kolorze marki, bez kręciołka.
-    private var runningChip: some View {
-        HStack(spacing: 4) {
-            SCMarkShape()
-                .fill(SCPalette.terracotta)
-                .frame(width: 9, height: 9)
-            Text("W toku")
-                .font(.system(size: 10.5, weight: .semibold))
-        }
-        .foregroundStyle(SCPalette.terracotta)
-        .padding(.horizontal, 7)
-        .frame(height: 20)
-        .background(Capsule().fill(Color.scAccentTint(scheme)))
-        .fixedSize()
     }
 
     // MARK: - Puste stany
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            AssistantMarkBadge(size: 56)
-                .padding(.top, 24)
+        VStack(spacing: 14) {
+            SCMarkShape()
+                .fill(AssistantLook.ink(scheme).opacity(0.28))
+                .frame(width: 30, height: 30)
+                .padding(.top, 36)
+                .accessibilityHidden(true)
 
             Text("Nie ma jeszcze żadnej rozmowy")
                 .font(.system(size: 17, weight: .bold))
                 .tracking(-0.3)
-                .foregroundStyle(Color.scLabel(scheme))
+                .foregroundStyle(AssistantLook.ink(scheme))
 
             Text("Zapytaj asystenta o plan tygodnia — rozmowa zapisze się tutaj i będzie można do niej wrócić.")
                 .font(.system(size: 14))
-                .lineSpacing(3)
-                .foregroundStyle(Color.scMuted(scheme))
+                .lineSpacing(4)
+                .foregroundStyle(AssistantLook.muted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 24)
+        .padding(.top, 14)
         .accessibilityElement(children: .combine)
     }
 
@@ -321,13 +248,13 @@ struct AssistantConversationsSheet: View {
         VStack(spacing: 6) {
             Text("Nic nie pasuje do „\(query)”")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.scLabel(scheme))
+                .foregroundStyle(AssistantLook.ink(scheme))
             Text("Szukam w tytułach i ostatnich wiadomościach.")
                 .font(.system(size: 13))
-                .foregroundStyle(Color.scMuted(scheme))
+                .foregroundStyle(AssistantLook.muted(scheme))
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 24)
+        .padding(.top, 38)
         .accessibilityElement(children: .combine)
     }
 
@@ -335,11 +262,8 @@ struct AssistantConversationsSheet: View {
         let raw = conversation.lastMessageAt ?? conversation.createdAt
         guard let date = AgentStore.parseTimestamp(raw) else { return nil }
         let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
+        if calendar.isDateInToday(date) || calendar.isDateInYesterday(date) {
             return timeFormatter.string(from: date)
-        }
-        if calendar.isDateInYesterday(date) {
-            return "Wczoraj \(timeFormatter.string(from: date))"
         }
         return dateFormatter.string(from: date)
     }
@@ -354,7 +278,7 @@ struct AssistantConversationsSheet: View {
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "pl_PL")
-        formatter.dateFormat = "d MMMM, HH:mm"
+        formatter.dateFormat = "d MMM"
         return formatter
     }()
 }

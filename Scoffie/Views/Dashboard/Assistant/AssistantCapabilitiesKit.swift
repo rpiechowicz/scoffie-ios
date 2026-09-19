@@ -201,8 +201,10 @@ struct AssistantExchangePreview: View {
 
             if let reply {
                 HStack(alignment: .top, spacing: 10) {
-                    AssistantMarkBadge(size: 26)
-                        .padding(.top, 1)
+                    SCMarkShape()
+                        .fill(AssistantLook.terraFill(scheme))
+                        .frame(width: 18, height: 18)
+                        .padding(.top, 3)
                     Text(reply)
                         .font(.system(size: 15))
                         .lineSpacing(4)

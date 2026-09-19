@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// Karta wyniku nieudanej tury — czas, „Stop”, odmowa, limit.
-///
-/// Bez czerwonego alertu: przekroczony czas to najczęstsza porażka
-/// i najczęściej znaczy „za duży zakres”, a nie awarię. Karta mówi trzy
-/// rzeczy w tej kolejności: co się stało, czy plan został nietknięty
-/// (tylko gdy to prawda) i co zrobić mniejszego. Podpowiedzi zakresu
-/// przychodzą z serwera (`suggestions`); bez nich są dwie własne.
+/// Karta wyniku nieudanej tury — 1:1 z makietą „13 · Timeout”: spokojnie,
+/// bez alertu i bez czerwieni. Znak marki w szarości, eyebrow, plakietka
+/// „Przerwane”; tytuł mówi, co się stało; drugie zdanie — co się NIE
+/// stało („Nic nie zmieniłem w planie.”, tylko gdy to prawda); trzecie —
+/// „Spróbujmy mniejszy zakres.”; pigułki z mniejszym zakresem;
+/// „Spróbuj ponownie” jako poboczna w stopce.
 struct AssistantOutcomeCard: View {
     /// Kod porażki tury (`AgentStore.lastTurnErrorCode`); `nil` = błąd
     /// wysyłki, nie tury.
@@ -59,6 +58,10 @@ struct AssistantOutcomeCard: View {
         }
     }
 
+    private var badge: String {
+        shape == .limited ? "Limit" : "Przerwane"
+    }
+
     /// Czy pokazać własne zdanie z mappera pod nagłówkiem.
     private var showsMessage: Bool {
         switch shape {
@@ -87,50 +90,76 @@ struct AssistantOutcomeCard: View {
     }
 
     var body: some View {
-        AssistantCard(tone: .muted) {
-            AssistantCardHead(
-                eyebrow: eyebrow,
-                eyebrowColor: Color.scMuted(scheme),
-                title: headline,
-                subtitle: showsMessage ? message : nil
-            )
-
-            VStack(alignment: .leading, spacing: 6) {
-                if !wrote {
-                    HStack(spacing: 7) {
-                        Image(systemName: "checkmark.shield")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(SCPalette.sage)
-                        Text("Nic nie zmieniłem w planie.")
-                            .font(.system(size: 14, weight: .semibold))
-                            .tracking(-0.2)
-                            .foregroundStyle(Color.scLabel(scheme))
+        AssistantCard {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 10) {
+                    HStack(spacing: 8) {
+                        SCMarkShape()
+                            .fill(AssistantLook.ink(scheme).opacity(0.35))
+                            .frame(width: 16, height: 16)
+                            .accessibilityHidden(true)
+                        Text(eyebrow)
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(0.9)
+                            .textCase(.uppercase)
+                            .foregroundStyle(AssistantLook.faint(scheme))
+                            .lineLimit(1)
                     }
+                    Spacer(minLength: 0)
+                    Text(badge)
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.3)
+                        .foregroundStyle(AssistantLook.faint(scheme))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(AssistantLook.quietTint(scheme)))
                 }
+
+                Text(headline)
+                    .font(.system(size: 21, weight: .bold))
+                    .tracking(-0.5)
+                    .foregroundStyle(AssistantLook.ink(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+
+                if !wrote {
+                    Text("Nic nie zmieniłem w planie.")
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .tracking(-0.3)
+                        .foregroundStyle(AssistantLook.ink(scheme))
+                        .padding(.top, 6)
+                }
+
+                if showsMessage, !message.isEmpty {
+                    Text(message)
+                        .font(.system(size: 14))
+                        .lineSpacing(2)
+                        .foregroundStyle(AssistantLook.muted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
+
                 if offersSmallerScope {
                     Text("Spróbujmy mniejszy zakres.")
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(Color.scMuted(scheme))
+                        .font(.system(size: 14))
+                        .foregroundStyle(AssistantLook.muted(scheme))
+                        .padding(.top, 2)
+
+                    AssistantQuickReplies(items: scopePrompts) { onAsk(Self.prompt(for: $0)) }
+                        .padding(.top, 14)
                 }
             }
             .padding(.horizontal, AssistantCardMetrics.inset)
-            .padding(.bottom, offersSmallerScope ? 10 : AssistantCardMetrics.section)
+            .padding(.vertical, 16)
             .accessibilityElement(children: .combine)
-
-            if offersSmallerScope {
-                AssistantQuickReplies(items: scopePrompts) { onAsk(Self.prompt(for: $0)) }
-                    .padding(.horizontal, AssistantCardMetrics.inset)
-                    .padding(.bottom, AssistantCardMetrics.section)
-            }
 
             if let onRetry {
                 AssistantCardActions(
-                    primary: AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onRetry)
+                    secondary: AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onRetry)
                 )
             } else if let onAskAgain, shape != .limited {
                 AssistantCardActions(
-                    primary: AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onAskAgain),
-                    style: .navigation
+                    secondary: AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onAskAgain)
                 )
             }
         }
