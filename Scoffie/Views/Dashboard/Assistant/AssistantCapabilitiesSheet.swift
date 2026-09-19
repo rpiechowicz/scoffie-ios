@@ -20,6 +20,7 @@ struct AssistantCapabilitiesSheet: View {
         NavigationStack {
             AssistantSheetScaffold(
                 title: "Co potrafi asystent",
+                subtitle: "Planuje, poprawia, dzieli na dom i zapisuje przepisy — zawsze przez kartę, którą zatwierdzasz.",
                 onClose: { dismiss() },
                 footer: {
                     AssistantPrimaryButton(
@@ -34,13 +35,13 @@ struct AssistantCapabilitiesSheet: View {
                     .padding(.top, 10)
 
                 // Jedno zdanie, które mówi, co robi stuknięcie w wiersz niżej:
-                // przykład idzie od razu jako pierwsza wiadomość.
+                // przykład idzie od razu jako wiadomość i rozmowa rusza.
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "hand.tap")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AssistantLook.terra(scheme))
                         .padding(.top, 1)
-                    Text("Stuknij przykład, a wyślę go od razu — rozmowa zacznie się w tej samej chwili.")
+                    Text("Wiersz ze strzałką uruchamia polecenie: stukasz, arkusz się zamyka, a asystent od razu zabiera się do pracy — bez pisania.")
                         .font(.system(size: 13))
                         .lineSpacing(3)
                         .foregroundStyle(AssistantLook.muted(scheme))
@@ -89,12 +90,26 @@ struct AssistantCapabilitiesSheet: View {
                 .foregroundStyle(AssistantLook.ink(scheme))
                 .padding(.top, 4)
 
-            HStack(spacing: 3) {
-                ruleStep("Piszesz", icon: "arrow.up")
-                ruleArrow
-                ruleStep("Karta", icon: nil)
-                ruleArrow
-                ruleStep("Ty decydujesz", icon: "checkmark", filled: true)
+            // Trzy kroki w jednym rzędzie, gdy się mieszczą w CAŁOŚCI
+            // (pigułki liczą szerokość z treści, nie dzielą się po równo —
+            // „Ty decydujesz” jest dwa razy dłuższe od „Karta” i przy równym
+            // podziale ścinało się w połowie). Na wąskim ekranie albo przy
+            // większej czcionce kroki schodzą w kolumnę ze strzałkami w dół.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ruleStep("Piszesz", icon: "arrow.up")
+                    ruleArrow(down: false)
+                    ruleStep("Karta", icon: nil)
+                    ruleArrow(down: false)
+                    ruleStep("Ty decydujesz", icon: "checkmark", filled: true)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    ruleStep("Piszesz", icon: "arrow.up")
+                    ruleArrow(down: true)
+                    ruleStep("Karta", icon: nil)
+                    ruleArrow(down: true)
+                    ruleStep("Ty decydujesz", icon: "checkmark", filled: true)
+                }
             }
             .padding(.top, 10)
         }
@@ -114,11 +129,12 @@ struct AssistantCapabilitiesSheet: View {
         .accessibilityLabel("Jedna zasada: piszesz zdaniem, dostajesz kartę, Ty decydujesz. Planu nie zmienia sam.")
     }
 
-    private var ruleArrow: some View {
-        Image(systemName: "chevron.right")
+    private func ruleArrow(down: Bool) -> some View {
+        Image(systemName: down ? "chevron.down" : "chevron.right")
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(AssistantLook.ink(scheme).opacity(0.35))
             .fixedSize()
+            .frame(width: down ? 30 : nil, height: down ? 14 : nil)
     }
 
     private func ruleStep(_ title: String, icon: String?, filled: Bool = false) -> some View {
@@ -133,13 +149,13 @@ struct AssistantCapabilitiesSheet: View {
             }
             Text(title)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
         }
         .font(.system(size: 12.5, weight: .semibold))
         .tracking(-0.2)
         .foregroundStyle(filled ? Color.white : AssistantLook.ink(scheme))
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 11)
         .frame(height: 30)
+        .fixedSize()
         .background(Capsule().fill(filled ? AssistantLook.terra(scheme) : AssistantLook.field(scheme)))
         .overlay(Capsule().stroke(filled ? Color.clear : AssistantLook.cardStroke(scheme), lineWidth: 1))
     }
