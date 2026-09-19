@@ -68,7 +68,7 @@ full.isNewUser = false
 
 var empty = context(now: thursday, thisWeek: week(from: monday, planned: 0), nextWeek: week(from: nextMonday, planned: 0))
 check("pusty bieżący tydzień bije pusty następny", resolve(empty).kind == .weekEmpty)
-check("pusty tydzień: 0 z 7 w podsumowaniu", resolve(empty).summary == "0 z 7 dni zaplanowanych")
+check("pusty tydzień: 0 z 7 w podsumowaniu", resolve(empty).summary?.sentence == "0 z 7 dni zaplanowanych")
 check("pusty tydzień: pasek siedmiu dni", { if case .weekStrip(let marks) = resolve(empty).visual { return marks.count == 7 } else { return false } }())
 check("pusty tydzień: dwie podpowiedzi", resolve(empty).secondary.count == 2)
 
@@ -113,6 +113,9 @@ check("pusty podwieczorek nie jest brakującym posiłkiem", resolve(snack).kind 
 let saturday = date(19, hour: 11)
 let nextEmpty = context(now: saturday, thisWeek: week(from: monday, planned: 7), nextWeek: week(from: nextMonday, planned: 0))
 check("weekend + przyszły tydzień pusty", resolve(nextEmpty).kind == .nextWeekEmpty)
+check("skróty dni jak na makiecie", { if case .weekStrip(let marks) = resolve(nextEmpty).visual { return marks.map(\.short) == ["Pn", "Wt", "Śr", "Cz", "Pt", "Sb", "Nd"] && marks.first?.dayNumber == "21" } else { return false } }())
+check("każda akcja wtórna ma podtytuł i ikonę", resolve(nextEmpty).secondary.allSatisfy { $0.subtitle != nil && $0.icon != nil })
+check("briefing planujący ma dopisek o propozycji", resolve(nextEmpty).helper != nil && resolve(balance).helper == nil)
 let tuesdayNextEmpty = context(now: date(15, hour: 11), thisWeek: week(from: monday, planned: 7), nextWeek: week(from: nextMonday, planned: 0))
 check("we wtorek pusty przyszły tydzień jeszcze nie woła", resolve(tuesdayNextEmpty).kind != .nextWeekEmpty)
 

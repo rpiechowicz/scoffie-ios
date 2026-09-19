@@ -1,10 +1,11 @@
 import SwiftUI
 
-// Widok briefingu na pustej rozmowie — rysuje `AssistantBriefing`, nie liczy
-// nic sam. Ta sama anatomia co karty w rozmowie (nadtytuł → tytuł → treść →
-// podsumowanie → akcja), więc pusty ekran i odpowiedź asystenta wyglądają
-// jak jedna rodzina: pierwsze spotkanie z asystentem jest spotkaniem z kartą,
-// nie z ikoną z katalogu.
+// Widok briefingu na pustej rozmowie — 1:1 z makietą „01 · Ekrany główne”:
+// nadtytuł ze znakiem i datą po prawej, nagłówek na dwie linie, jedno zdanie,
+// ilustracja w zagłębionym panelu z podsumowaniem, WYPEŁNIONY przycisk
+// główny ze strzałką, dopisek pod nim i dwie akcje wtórne jako wiersze
+// z kafelkiem ikony i chevronem — wszystko w JEDNEJ karcie. Rysuje
+// `AssistantBriefing`, nie liczy nic sam.
 
 // MARK: - Karta
 
@@ -22,48 +23,130 @@ struct AssistantBriefingCard: View {
         }
     }
 
-    private var eyebrowColor: Color {
+    private var accent: Color {
         briefing.kind == .balanceIssue ? SCPalette.indigo : SCPalette.terracotta
     }
 
     var body: some View {
         AssistantCard(tone: tone) {
-            AssistantCardHead(
-                eyebrow: briefing.eyebrow,
-                eyebrowDetail: briefing.dateLabel,
-                eyebrowColor: eyebrowColor,
-                title: briefing.headline,
-                subtitle: briefing.supporting
-            )
+            head
 
-            visual
+            Text(briefing.headline)
+                .font(.system(size: 24, weight: .bold))
+                .tracking(-0.6)
+                .lineSpacing(1)
+                .foregroundStyle(Color.scLabel(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, AssistantCardMetrics.inset)
+                .padding(.top, 10)
+                .accessibilityAddTraits(.isHeader)
 
-            if let summary = briefing.summary {
-                Text(summary)
-                    .font(.system(size: 12.5))
-                    .tracking(-0.15)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .padding(.horizontal, AssistantCardMetrics.inset)
-                    .padding(.bottom, AssistantCardMetrics.section)
-            }
+            Text(briefing.supporting)
+                .font(.system(size: 14.5))
+                .tracking(-0.15)
+                .lineSpacing(2)
+                .foregroundStyle(Color.scMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, AssistantCardMetrics.inset)
+                .padding(.top, 6)
+
+            visualPanel
+                .padding(.horizontal, AssistantCardMetrics.inset)
+                .padding(.top, 14)
 
             AssistantCardActions(
                 primary: AssistantCardAction(title: briefing.primary.title, icon: primaryIcon) {
                     onAction(briefing.primary)
                 },
                 tone: tone == .muted ? .neutral : tone,
-                showsRule: true
+                showsRule: false,
+                filledPrimary: true
             )
+            .padding(.top, 4)
+
+            if let helper = briefing.helper {
+                Text(helper)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.scFaint(scheme))
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, AssistantCardMetrics.inset)
+                    .padding(.top, -4)
+                    .padding(.bottom, 14)
+            } else {
+                Color.clear.frame(height: 6)
+            }
+
+            if !briefing.secondary.isEmpty {
+                secondaryRows
+            }
         }
         .accessibilityElement(children: .contain)
     }
 
+    /// Znak marki · NADTYTUŁ · data po prawej.
+    private var head: some View {
+        HStack(alignment: .center, spacing: 8) {
+            SCMarkShape()
+                .fill(accent)
+                .frame(width: 13, height: 13)
+                .accessibilityHidden(true)
+            Text(briefing.eyebrow)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.2)
+                .textCase(.uppercase)
+                .foregroundStyle(accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            Spacer(minLength: 8)
+            if let dateLabel = briefing.dateLabel {
+                Text(dateLabel)
+                    .font(.system(size: 12.5))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, AssistantCardMetrics.inset)
+        .padding(.top, AssistantCardMetrics.headTop + 2)
+        .accessibilityElement(children: .combine)
+    }
+
     private var primaryIcon: String? {
         switch briefing.primary.kind {
-        case .ask: return "arrow.up"
-        case .openPlans: return "sparkles"
+        case .ask: return "arrow.right"
+        case .openPlans: return "arrow.right"
         case .openHistory: return "clock"
+        }
+    }
+
+    /// Ilustracja i podsumowanie w jednym zagłębionym panelu.
+    @ViewBuilder
+    private var visualPanel: some View {
+        if briefing.visual != .none || briefing.summary != nil {
+            VStack(alignment: .leading, spacing: 12) {
+                visual
+                if let summary = briefing.summary {
+                    HStack(spacing: 4) {
+                        if let prefix = summary.prefix {
+                            Text(prefix)
+                        }
+                        CountingNumber(target: summary.value)
+                        Text(summary.text)
+                    }
+                    .font(.system(size: 12.5))
+                    .tracking(-0.15)
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(summary.sentence)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: AssistantCardMetrics.innerRadius + 2, style: .continuous)
+                    .fill(Color.scInsetSurface(scheme))
+            )
         }
     }
 
@@ -74,23 +157,19 @@ struct AssistantBriefingCard: View {
             EmptyView()
         case let .weekStrip(days):
             WeekStrip(days: days)
-                .padding(.horizontal, AssistantCardMetrics.inset)
-                .padding(.bottom, briefing.summary == nil ? AssistantCardMetrics.section : 8)
         case let .slots(marks):
             SlotChecklist(marks: marks)
-                .padding(.horizontal, AssistantCardMetrics.inset)
-                .padding(.bottom, AssistantCardMetrics.section)
         case let .meals(meals):
             MealsPreview(meals: meals)
-                .padding(.horizontal, AssistantCardMetrics.inset)
-                .padding(.bottom, AssistantCardMetrics.section)
         case let .balance(current, target, unit):
             VStack(alignment: .leading, spacing: 8) {
                 AssistantTargetBar(value: current, target: target, color: SCPalette.indigo, height: 8)
-                HStack {
-                    Text("\(current) \(unit) dziennie")
+                HStack(spacing: 4) {
+                    CountingNumber(target: current)
                         .font(.system(size: 12, weight: .semibold))
-                        .monospacedDigit()
+                        .foregroundStyle(Color.scLabel(scheme))
+                    Text("\(unit) dziennie")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.scLabel(scheme))
                     Spacer(minLength: 8)
                     Text("cel \(target) \(unit)")
@@ -99,15 +178,82 @@ struct AssistantBriefingCard: View {
                         .foregroundStyle(Color.scMuted(scheme))
                 }
             }
-            .padding(.horizontal, AssistantCardMetrics.inset)
-            .padding(.bottom, briefing.summary == nil ? AssistantCardMetrics.section : 8)
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(current) \(unit) dziennie, cel \(target) \(unit)")
+        }
+    }
+
+    /// Akcje wtórne jako wiersze: kafelek ikony · tytuł i podtytuł · chevron,
+    /// na własnej, o pół tonu ciemniejszej półce pod korpusem karty.
+    private var secondaryRows: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(briefing.secondary.prefix(2).enumerated()), id: \.element.id) { index, action in
+                Button { onAction(action) } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .fill(Color.scCardSurface(scheme))
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+                            if action.icon == "mark" {
+                                SCMarkShape()
+                                    .fill(accent)
+                                    .frame(width: 16, height: 16)
+                            } else {
+                                Image(systemName: action.icon ?? "arrow.up.right")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(accent)
+                            }
+                        }
+                        .frame(width: 40, height: 40)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(action.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .tracking(-0.25)
+                                .foregroundStyle(Color.scLabel(scheme))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.9)
+                            if let subtitle = action.subtitle {
+                                Text(subtitle)
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(Color.scMuted(scheme))
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.scFaint(scheme))
+                    }
+                    .padding(.horizontal, AssistantCardMetrics.inset)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.985))
+                .overlay(alignment: .top) {
+                    AssistantCardRule(leadingInset: index == 0 ? 0 : AssistantCardMetrics.inset + 52)
+                }
+                .accessibilityHint(hint(for: action))
+            }
+        }
+        .background(Color.scInsetSurface(scheme).opacity(scheme == .dark ? 1 : 0.55))
+    }
+
+    private func hint(for action: AssistantBriefing.Action) -> String {
+        switch action.kind {
+        case .ask: return "Wysyła pytanie do asystenta"
+        case .openPlans: return "Otwiera plany"
+        case .openHistory: return "Otwiera historię rozmów"
         }
     }
 
     // MARK: Ilustracje
 
-    /// Siedem dni: skrót, kropka „ma plan” albo miniatura, dziś podkreślone.
+    /// Siedem dni: skrót, kafelek (kreskowany = pusty, ptaszek albo
+    /// miniatura = zaplanowany), numer dnia pod spodem; dziś obwiedzione.
     private struct WeekStrip: View {
         let days: [AssistantBriefing.DayMark]
 
@@ -118,37 +264,43 @@ struct AssistantBriefingCard: View {
                 ForEach(days) { day in
                     VStack(spacing: 6) {
                         Text(day.short)
-                            .font(.system(size: 10.5, weight: day.isToday ? .bold : .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(day.isToday ? SCPalette.terracotta : Color.scMuted(scheme))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
 
                         ZStack {
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(day.planned ? Color.scSageTint(scheme) : Color.scInsetSurface(scheme))
                             if day.planned {
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(Color.scSageTint(scheme))
                                 if let url = day.imageURL {
-                                    AssistantThumbnail(url: url, size: 32)
+                                    AssistantThumbnail(url: url, size: 36)
                                 } else {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 11, weight: .bold))
+                                        .font(.system(size: 12, weight: .bold))
                                         .foregroundStyle(SCPalette.sage)
                                 }
                             } else {
-                                Circle()
-                                    .strokeBorder(Color.scFaint(scheme).opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
-                                    .frame(width: 12, height: 12)
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .strokeBorder(
+                                        Color.scFaint(scheme).opacity(0.7),
+                                        style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                                    )
                             }
                         }
-                        .frame(width: 32, height: 32)
+                        .frame(width: 36, height: 36)
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(day.isToday ? SCPalette.terracotta.opacity(0.7) : Color.clear, lineWidth: 1.5)
+                                .stroke(day.isToday ? SCPalette.terracotta.opacity(0.75) : Color.clear, lineWidth: 1.5)
                         )
+
+                        Text(day.dayNumber)
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(day.short): \(day.planned ? "zaplanowany" : "pusty")\(day.isToday ? ", dziś" : "")")
+                    .accessibilityLabel("\(day.short) \(day.dayNumber): \(day.planned ? "zaplanowany" : "pusty")\(day.isToday ? ", dziś" : "")")
                 }
             }
         }
@@ -179,7 +331,7 @@ struct AssistantBriefingCard: View {
                                 .foregroundStyle(Color.scFaint(scheme))
                         }
                     }
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 6)
                     .overlay(alignment: .top) {
                         if index > 0 { AssistantCardRule(leadingInset: 30) }
                     }
@@ -187,11 +339,6 @@ struct AssistantBriefingCard: View {
                     .accessibilityLabel("\(mark.title): \(mark.filled ? "jest" : "pusto")")
                 }
             }
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: AssistantCardMetrics.innerRadius, style: .continuous)
-                    .fill(Color.scInsetSurface(scheme))
-            )
         }
     }
 
@@ -216,54 +363,20 @@ struct AssistantBriefingCard: View {
                         }
                         Spacer(minLength: 8)
                         if meal.kcal > 0 {
-                            Text("\(meal.kcal) kcal")
-                                .font(.system(size: 12))
-                                .monospacedDigit()
-                                .foregroundStyle(Color.scFaint(scheme))
+                            HStack(spacing: 3) {
+                                CountingNumber(target: meal.kcal)
+                                Text("kcal")
+                            }
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.scFaint(scheme))
                         }
                     }
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 6)
                     .overlay(alignment: .top) {
                         if index > 0 { AssistantCardRule(leadingInset: 46) }
                     }
                     .accessibilityElement(children: .combine)
                 }
-            }
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: AssistantCardMetrics.innerRadius, style: .continuous)
-                    .fill(Color.scInsetSurface(scheme))
-            )
-        }
-    }
-}
-
-// MARK: - Akcje wtórne
-
-/// Najwyżej dwie podpowiedzi pod kartą — chipy w kolorze marki.
-struct AssistantBriefingSecondaryActions: View {
-    let actions: [AssistantBriefing.Action]
-    let onAction: (AssistantBriefing.Action) -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(actions.prefix(2)) { action in
-                Button { onAction(action) } label: {
-                    Text(action.title)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .tracking(-0.2)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                        .foregroundStyle(SCPalette.terracotta)
-                        .padding(.horizontal, 12)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(Capsule().fill(Color.scAccentTint(scheme).opacity(0.5)))
-                        .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.3), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -271,7 +384,7 @@ struct AssistantBriefingSecondaryActions: View {
 
 // MARK: - Znak
 
-/// Znak marki nad briefingiem — ten sam glif, który oddycha w wierszu tury.
+/// Znak marki w miękkim krążku — ten sam glif, który oddycha w wierszu tury.
 struct AssistantMarkBadge: View {
     var size: CGFloat = 56
 

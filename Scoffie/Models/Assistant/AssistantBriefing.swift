@@ -176,6 +176,8 @@ struct AssistantBriefing: Equatable {
         let id: String
         /// „Pon”.
         let short: String
+        /// „22” — numer dnia pod kafelkiem.
+        let dayNumber: String
         let planned: Bool
         let isToday: Bool
         let imageURL: URL?
@@ -215,11 +217,27 @@ struct AssistantBriefing: Equatable {
 
         let title: String
         let kind: Kind
+        /// Drugi wiersz w wierszu akcji wtórnej: „Z tego, co już jest w planie”.
+        var subtitle: String? = nil
+        /// Symbol w kafelku po lewej wiersza akcji wtórnej.
+        var icon: String? = nil
 
         var id: String { title }
 
-        static func ask(_ title: String, _ prompt: String) -> Action {
-            Action(title: title, kind: .ask(prompt))
+        static func ask(_ title: String, _ prompt: String, subtitle: String? = nil, icon: String? = nil) -> Action {
+            Action(title: title, kind: .ask(prompt), subtitle: subtitle, icon: icon)
+        }
+    }
+
+    /// Podsumowanie pod ilustracją z LICZBĄ osobno — liczba przewija się
+    /// (`CountingNumber`), tekst stoi: „0 z 7 dni zaplanowanych”.
+    struct Summary: Equatable {
+        var prefix: String? = nil
+        let value: Int
+        let text: String
+
+        var sentence: String {
+            [prefix, String(value), text].compactMap { $0 }.joined(separator: " ")
         }
     }
 
@@ -234,7 +252,7 @@ struct AssistantBriefing: Equatable {
     let supporting: String
     let visual: Visual
     /// „0 z 7 dni zaplanowanych” — pod ilustracją.
-    let summary: String?
+    let summary: Summary?
     let primary: Action
     /// Najwyżej dwie.
     let secondary: [Action]
@@ -284,7 +302,7 @@ enum AssistantBriefingResolver {
                 visual: .none,
                 summary: nil,
                 primary: AssistantBriefing.Action(title: "Zobacz plany", kind: .openPlans),
-                secondary: [AssistantBriefing.Action(title: "Historia rozmów", kind: .openHistory)],
+                secondary: [AssistantBriefing.Action(title: "Historia rozmów", kind: .openHistory, subtitle: "Wszystkie rozmowy zostają", icon: "clock")],
                 helper: nil
             )
         }
@@ -302,10 +320,10 @@ enum AssistantBriefingResolver {
                 summary: nil,
                 primary: .ask("Ułóż pierwszy dzień", "Ułóż mi dzisiejszy dzień pod mój cel"),
                 secondary: [
-                    .ask("Znajdź pomysł na obiad", "Co zjeść dziś na obiad?"),
-                    .ask("Zaplanuj cały tydzień", "Zaplanuj mi cały ten tydzień"),
+                    .ask("Znajdź pomysł na obiad", "Co zjeść dziś na obiad?", subtitle: "Jeden posiłek z katalogu", icon: "fork.knife"),
+                    .ask("Zaplanuj cały tydzień", "Zaplanuj mi cały ten tydzień", subtitle: "Siedem dni pod Twój cel", icon: "calendar"),
                 ],
-                helper: nil
+                helper: "Najpierw pokażę propozycję do zatwierdzenia."
             )
         }
 
@@ -314,7 +332,7 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .weekEmpty,
                 greeting: greeting,
-                eyebrow: "Ten tydzień",
+                eyebrow: "Widzę w Twoim planie",
                 dateLabel: rangeLabel(c.thisWeek, cal),
                 headline: "Ten tydzień jest jeszcze pusty.",
                 supporting: "Mogę ułożyć go pod Wasze cele i przepisy.",
@@ -322,10 +340,10 @@ enum AssistantBriefingResolver {
                 summary: plannedDaysSummary(c.thisWeek),
                 primary: .ask("Zaplanuj ten tydzień", "Zaplanuj mi cały ten tydzień pod nasze cele i przepisy"),
                 secondary: [
-                    .ask("Ułóż tylko dzisiejszy dzień", "Ułóż mi tylko dzisiejszy dzień"),
-                    .ask("Pokaż szybkie kolacje", "Daj mi trzy szybkie kolacje do wyboru"),
+                    .ask("Ułóż tylko dzisiejszy dzień", "Ułóż mi tylko dzisiejszy dzień", subtitle: "Pod Twój cel na dziś", icon: "calendar"),
+                    .ask("Pokaż szybkie kolacje", "Daj mi trzy szybkie kolacje do wyboru", subtitle: "Trzy do wyboru, do 30 minut", icon: "bolt"),
                 ],
-                helper: nil
+                helper: "Najpierw pokażę propozycję do zatwierdzenia."
             )
         }
 
@@ -342,10 +360,10 @@ enum AssistantBriefingResolver {
                 summary: nil,
                 primary: .ask("Ułóż dzisiejszy dzień", "Ułóż mi dzisiejszy dzień pod mój cel"),
                 secondary: [
-                    .ask("Co dziś na obiad?", "Co zjeść dziś na obiad?"),
-                    .ask("3 szybkie kolacje", "Daj mi trzy szybkie kolacje do wyboru"),
+                    .ask("Co dziś na obiad?", "Co zjeść dziś na obiad?", subtitle: "Jeden posiłek, z Twoich przepisów", icon: "fork.knife"),
+                    .ask("3 szybkie kolacje", "Daj mi trzy szybkie kolacje do wyboru", subtitle: "Do wyboru, do 30 minut", icon: "bolt"),
                 ],
-                helper: nil
+                helper: "Najpierw pokażę propozycję do zatwierdzenia."
             )
         }
 
@@ -362,10 +380,10 @@ enum AssistantBriefingResolver {
                 summary: nil,
                 primary: .ask("Ułóż jutro", "Ułóż mi jutrzejszy dzień"),
                 secondary: [
-                    .ask("Co na śniadanie?", "Co na jutrzejsze śniadanie?"),
-                    .ask("Zakupy na jutro", "Co muszę dokupić na jutro?"),
+                    .ask("Co na śniadanie?", "Co na jutrzejsze śniadanie?", subtitle: "Jeden posiłek na dobry początek", icon: "sunrise"),
+                    .ask("Zakupy na jutro", "Co muszę dokupić na jutro?", subtitle: "Z tego, co już jest w planie", icon: "cart"),
                 ],
-                helper: nil
+                helper: "Najpierw pokażę propozycję do zatwierdzenia."
             )
         }
 
@@ -383,10 +401,10 @@ enum AssistantBriefingResolver {
                 summary: nil,
                 primary: .ask("Dobierz \(missing.accusative)", "Dobierz mi \(missing.accusative) na dziś"),
                 secondary: [
-                    .ask("Coś do 30 minut", "Coś na \(missing.accusative) do 30 minut"),
-                    .ask("Pokaż 3 propozycje", "Daj mi trzy propozycje na \(missing.accusative)"),
+                    .ask("Coś do 30 minut", "Coś na \(missing.accusative) do 30 minut", subtitle: "Szybkie, pod Twój cel", icon: "bolt"),
+                    .ask("Pokaż 3 propozycje", "Daj mi trzy propozycje na \(missing.accusative)", subtitle: "Z Twoich przepisów, do wyboru", icon: "square.grid.2x2"),
                 ],
-                helper: nil
+                helper: "Najpierw pokażę propozycję do zatwierdzenia."
             )
         }
 
@@ -395,7 +413,7 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .nextWeekEmpty,
                 greeting: greeting,
-                eyebrow: "Przyszły tydzień",
+                eyebrow: "Widzę w Twoim planie",
                 dateLabel: rangeLabel(c.nextWeek, cal),
                 headline: "Przyszły tydzień jest jeszcze pusty.",
                 supporting: "Uwzględnię Wasze cele, przepisy i plan dnia.",
@@ -403,10 +421,10 @@ enum AssistantBriefingResolver {
                 summary: plannedDaysSummary(c.nextWeek),
                 primary: .ask("Zaplanuj przyszły tydzień", "Zaplanuj mi przyszły tydzień"),
                 secondary: [
-                    .ask("Zakupy na przyszły tydzień", "Co muszę kupić na przyszły tydzień?"),
-                    .ask("3 pomysły na weekendowy obiad", "Daj mi trzy pomysły na weekendowy obiad"),
+                    .ask("Zakupy na przyszły tydzień", "Co muszę kupić na przyszły tydzień?", subtitle: "Z tego, co już jest w planie", icon: "cart"),
+                    .ask("3 pomysły na weekendowy obiad", "Daj mi trzy pomysły na weekendowy obiad", subtitle: "Z Twoich przepisów, dla całego domu", icon: "frying.pan"),
                 ],
-                helper: nil
+                helper: "Najpierw pokażę propozycję do zatwierdzenia."
             )
         }
 
@@ -420,11 +438,11 @@ enum AssistantBriefingResolver {
                 headline: "W tym tygodniu brakuje Ci \(balance.macroGenitive).",
                 supporting: "Średnio \(balance.deficit) \(balance.unit) dziennie poniżej celu.",
                 visual: .balance(current: balance.averagePerDay, target: balance.target, unit: balance.unit),
-                summary: "Z \(balance.daysCounted) zaplanowanych dni",
+                summary: AssistantBriefing.Summary(prefix: "Z", value: balance.daysCounted, text: "zaplanowanych dni"),
                 primary: .ask("Pokaż, co poprawić", "Czego brakuje w planie, żeby domknąć \(balance.macroAccusative)?"),
                 secondary: [
-                    .ask("Podmień 1 posiłek", "Podmień jeden posiłek w tym tygodniu na taki z większą ilością \(balance.macroGenitive)"),
-                    .ask("Dodaj coś wysokobiałkowego", "Dołóż do planu coś z dużą ilością \(balance.macroGenitive)"),
+                    .ask("Podmień 1 posiłek", "Podmień jeden posiłek w tym tygodniu na taki z większą ilością \(balance.macroGenitive)", subtitle: "Jedna zmiana, reszta bez ruchu", icon: "arrow.triangle.2.circlepath"),
+                    .ask("Dodaj coś wysokobiałkowego", "Dołóż do planu coś z dużą ilością \(balance.macroGenitive)", subtitle: "Dodatek do istniejących posiłków", icon: "plus"),
                 ],
                 helper: nil
             )
@@ -435,7 +453,7 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .weekReady,
                 greeting: greeting,
-                eyebrow: "Ten tydzień",
+                eyebrow: "Widzę w Twoim planie",
                 dateLabel: rangeLabel(c.thisWeek, cal),
                 headline: "Plan wygląda na gotowy.",
                 supporting: "Mogę pomóc z zakupami albo zrobić drobną zmianę.",
@@ -443,8 +461,8 @@ enum AssistantBriefingResolver {
                 summary: plannedDaysSummary(c.thisWeek),
                 primary: .ask("Pokaż listę zakupów", "Co muszę kupić na ten tydzień?"),
                 secondary: [
-                    .ask("Podmień jedno danie", "Podmień jedno danie w tym tygodniu na coś innego"),
-                    .ask("Sprawdź mój bilans", "Jak wychodzi mój bilans w tym tygodniu?"),
+                    .ask("Podmień jedno danie", "Podmień jedno danie w tym tygodniu na coś innego", subtitle: "Jedna zmiana, reszta bez ruchu", icon: "arrow.triangle.2.circlepath"),
+                    .ask("Sprawdź mój bilans", "Jak wychodzi mój bilans w tym tygodniu?", subtitle: "Kalorie i makro wobec celu", icon: "chart.bar"),
                 ],
                 helper: nil
             )
@@ -463,8 +481,8 @@ enum AssistantBriefingResolver {
                 summary: nil,
                 primary: .ask("3 pomysły na weekendowy obiad", "Daj mi trzy pomysły na weekendowy obiad"),
                 secondary: [
-                    .ask("Co muszę kupić?", "Co muszę kupić na ten tydzień?"),
-                    .ask("Sprawdź mój bilans", "Jak wychodzi mój bilans w tym tygodniu?"),
+                    .ask("Co muszę kupić?", "Co muszę kupić na ten tydzień?", subtitle: "Z tego, co już jest w planie", icon: "cart"),
+                    .ask("Sprawdź mój bilans", "Jak wychodzi mój bilans w tym tygodniu?", subtitle: "Kalorie i makro wobec celu", icon: "chart.bar"),
                 ],
                 helper: nil
             )
@@ -483,8 +501,8 @@ enum AssistantBriefingResolver {
             summary: nil,
             primary: .ask("Sprawdź mój bilans", "Jak wychodzi mój bilans w tym tygodniu?"),
             secondary: [
-                .ask("Podmień dzisiejszą kolację", "Podmień dzisiejszą kolację na coś szybszego"),
-                .ask("Co muszę kupić na ten tydzień?", "Co muszę kupić na ten tydzień?"),
+                .ask("Podmień dzisiejszą kolację", "Podmień dzisiejszą kolację na coś szybszego", subtitle: "Jedna zmiana, reszta bez ruchu", icon: "arrow.triangle.2.circlepath"),
+                .ask("Co muszę kupić na ten tydzień?", "Co muszę kupić na ten tydzień?", subtitle: "Z tego, co już jest w planie", icon: "cart"),
             ],
             helper: nil
         )
@@ -519,9 +537,9 @@ enum AssistantBriefingResolver {
         return !remaining.isEmpty && remaining.allSatisfy(\.isPlanned)
     }
 
-    static func plannedDaysSummary(_ week: [AssistantBriefingDay]) -> String {
+    static func plannedDaysSummary(_ week: [AssistantBriefingDay]) -> AssistantBriefing.Summary {
         let planned = week.filter(\.isPlanned).count
-        return "\(planned) z \(week.count) dni zaplanowanych"
+        return AssistantBriefing.Summary(value: planned, text: "z \(week.count) dni zaplanowanych")
     }
 
     static func marks(_ week: [AssistantBriefingDay], now: Date, _ cal: Calendar) -> [AssistantBriefing.DayMark] {
@@ -529,6 +547,7 @@ enum AssistantBriefingResolver {
             AssistantBriefing.DayMark(
                 id: dateKey(day.date, cal),
                 short: shortWeekday(day.date, cal),
+                dayNumber: String(cal.component(.day, from: day.date)),
                 planned: day.isPlanned,
                 isToday: cal.isDate(day.date, inSameDayAs: now),
                 imageURL: day.meals.first?.imageURL
@@ -617,10 +636,16 @@ enum AssistantBriefingResolver {
 
     /// „Czw”.
     static func shortWeekday(_ date: Date, _ cal: Calendar) -> String {
-        let raw = formatter("EEE", cal).string(from: date)
-            .replacingOccurrences(of: ".", with: "")
-        guard let first = raw.first else { return raw }
-        return String(first).uppercased() + raw.dropFirst()
+        // Dwuliterowe jak w makiecie: siedem kafelków musi zmieścić się w karcie.
+        switch cal.component(.weekday, from: date) {
+        case 2: return "Pn"
+        case 3: return "Wt"
+        case 4: return "Śr"
+        case 5: return "Cz"
+        case 6: return "Pt"
+        case 7: return "Sb"
+        default: return "Nd"
+        }
     }
 
     /// „19 września”.
