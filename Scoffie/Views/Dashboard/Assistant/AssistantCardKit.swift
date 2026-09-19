@@ -459,6 +459,10 @@ struct AssistantCardActions: View {
     var isBusy: Bool = false
     /// Kreska nad akcjami — wyłączana, gdy sekcja wyżej sama ją rysuje.
     var showsRule: Bool = true
+    /// Akcja główna WYPEŁNIONA akcentem z białym tekstem — dla jedynej akcji
+    /// na ekranie (briefing). W rozmowie zostaje wariant „soft”, bo pełna
+    /// terakota pod każdą odpowiedzią byłaby jedynym nasyconym punktem ekranu.
+    var filledPrimary: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
@@ -513,8 +517,8 @@ struct AssistantCardActions: View {
         Button(action: primary.action) {
             HStack(spacing: 7) {
                 if isBusy {
-                    ProgressView().controlSize(.small).tint(tone.accent)
-                } else if let icon = primary.icon {
+                    ProgressView().controlSize(.small).tint(filledPrimary ? .white : tone.accent)
+                } else if let icon = primary.icon, !filledPrimary {
                     Image(systemName: icon)
                         .font(.system(size: 14, weight: .bold))
                 }
@@ -523,14 +527,39 @@ struct AssistantCardActions: View {
                     .tracking(-0.25)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
+                if filledPrimary, let icon = primary.icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .bold))
+                }
             }
-            .foregroundStyle(tone.accent)
+            .foregroundStyle(filledPrimary ? Color.white : tone.accent)
             .frame(maxWidth: .infinity)
-            .frame(height: AssistantCardMetrics.ctaHeight)
-            .scSoftCapsule(tone.accent)
+            .frame(height: filledPrimary ? 52 : AssistantCardMetrics.ctaHeight)
+            .background {
+                if filledPrimary {
+                    Capsule(style: .continuous)
+                        .fill(SCPalette.terracottaDeep)
+                        .shadow(color: SCPalette.terracotta.opacity(0.28), radius: 10, y: 5)
+                }
+            }
+            .modifier(SoftUnlessFilled(filled: filledPrimary, accent: tone.accent))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.985))
         .disabled(isBusy)
+    }
+
+    /// Kapsuła „soft” tylko dla wariantu niewypełnionego.
+    private struct SoftUnlessFilled: ViewModifier {
+        let filled: Bool
+        let accent: Color
+
+        func body(content: Content) -> some View {
+            if filled {
+                content
+            } else {
+                content.scSoftCapsule(accent)
+            }
+        }
     }
 
     private func secondaryButton(_ action: AssistantCardAction) -> some View {

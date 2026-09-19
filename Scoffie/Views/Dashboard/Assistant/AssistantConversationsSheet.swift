@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// Historia rozmów z asystentem.
-///
-/// Rozmowa z asystentem nie jest jednorazowa: wraca się do niej, żeby
-/// sprawdzić, co ustaliliśmy w poniedziałek, i zaczyna nową, gdy temat jest
-/// inny. Każdy wiersz to tytuł, początek ostatniej wiadomości i godzina —
-/// nie lista samych dat — a rozmowa z turą w biegu dostaje plakietkę
-/// „W toku”, bo właśnie do niej warto wrócić najpierw.
+/// Historia rozmów z asystentem — arkusz w tym samym języku co reszta
+/// asystenta: redakcyjny nagłówek z krzyżykiem, własne pole szukania,
+/// grupy „Dziś / Wczoraj / W tym tygodniu / Wcześniej” jako karty
+/// z wierszami (tytuł, początek ostatniej wiadomości, godzina), plakietka
+/// „W toku” przy rozmowie z turą w biegu i ptaszek przy bieżącej.
+/// Usuwanie przez przytrzymanie wiersza — bez systemowej listy.
 struct AssistantConversationsSheet: View {
     let store: AgentStore
 
@@ -15,39 +14,42 @@ struct AssistantConversationsSheet: View {
 
     @State private var pendingDeletion: AgentConversationDTO?
     @State private var query = ""
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 SCPageBackground(scheme: scheme).ignoresSafeArea()
 
-                if store.conversations.isEmpty && !store.isLoadingConversations {
-                    emptyState
-                } else {
-                    list
-                }
-            }
-            .navigationTitle("Rozmowy")
-            .navigationBarTitleDisplayMode(.inline)
-            // Rozmów przybywa po jednej dziennie i po miesiącu lista jest
-            // dłuższa niż ekran — szukanie po treści jest szybsze niż
-            // przewijanie po datach.
-            .searchable(text: $query, prompt: "Szukaj w rozmowach")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Zamknij") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task {
-                            await store.startNewConversation()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        EditorialSheetHeader(eyebrow: "Asystent", title: "Rozmowy") {
                             dismiss()
                         }
-                    } label: {
-                        Label("Nowa rozmowa", systemImage: "square.and.pencil")
+
+                        searchField
+
+                        newConversationRow
+
+                        if store.conversations.isEmpty && !store.isLoadingConversations {
+                            emptyState
+                        } else if groups.isEmpty && !query.isEmpty {
+                            noResults
+                        } else {
+                            ForEach(groups, id: \.label) { group in
+                                groupCard(group)
+                            }
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 32)
                 }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .refreshable { await store.refreshConversations() }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .alert(
                 "Usunąć tę rozmowę?",
                 isPresented: Binding(
@@ -65,55 +67,67 @@ struct AssistantConversationsSheet: View {
                 Text("Rozmowa zniknie razem z wiadomościami. Plan tygodnia i przepisy zostają.")
             }
         }
-        .task {
-            await store.refreshConversations()
-        }
+        .presentationDragIndicator(.visible)
+        .task { await store.refreshConversations() }
     }
 
-    private var list: some View {
-        List {
-            ForEach(groups, id: \.label) { group in
-                Section {
-                    ForEach(group.items) { conversation in
-                        Button {
-                            Task {
-                                await store.select(conversationId: conversation.id)
-                                dismiss()
-                            }
-                        } label: {
-                            row(conversation)
-                        }
-                        .buttonStyle(.plain)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparatorTint(Color.scRule(scheme))
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                pendingDeletion = conversation
-                            } label: {
-                                Label("Usuń", systemImage: "trash")
-                            }
-                        }
-                    }
-                } header: {
-                    Text(group.label)
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(1.1)
-                        .textCase(.uppercase)
+    // MARK: - Szukanie i nowa rozmowa
+
+    /// Własne pole zamiast `.searchable`: bez paska nawigacji systemowe pole
+    /// nie ma gdzie się pokazać, a rozmów po miesiącu jest za dużo na
+    /// przewijanie po datach.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.scFaint(scheme))
+            TextField("Szukaj w rozmowach", text: $query)
+                .font(.system(size: 15))
+                .foregroundStyle(Color.scLabel(scheme))
+                .focused($isSearchFocused)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
                         .foregroundStyle(Color.scFaint(scheme))
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Wyczyść szukanie")
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .overlay {
-            if groups.isEmpty && !query.isEmpty {
-                ContentUnavailableView.search(text: query)
-            }
-        }
-        .refreshable {
-            await store.refreshConversations()
-        }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .background(Capsule().fill(Color.scTileBg(scheme)))
+        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
     }
+
+    private var newConversationRow: some View {
+        Button {
+            Task {
+                await store.startNewConversation()
+                dismiss()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 14, weight: .bold))
+                Text("Nowa rozmowa")
+                    .font(.system(size: 15, weight: .bold))
+                    .tracking(-0.25)
+            }
+            .foregroundStyle(SCPalette.terracotta)
+            .frame(maxWidth: .infinity)
+            .frame(height: AssistantCardMetrics.ctaHeight)
+            .scSoftCapsule()
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+    }
+
+    // MARK: - Grupy
 
     private struct ConversationGroup {
         let label: String
@@ -169,53 +183,98 @@ struct AssistantConversationsSheet: View {
         ) != nil
     }
 
-    private func row(_ conversation: AgentConversationDTO) -> some View {
+    private func groupCard(_ group: ConversationGroup) -> some View {
+        AssistantSurfaceCard {
+            AssistantSectionLabel(text: group.label)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 2)
+
+            ForEach(Array(group.items.enumerated()), id: \.element.id) { index, conversation in
+                row(conversation, first: index == 0)
+            }
+        }
+    }
+
+    private func row(_ conversation: AgentConversationDTO, first: Bool) -> some View {
         let isCurrent = conversation.id == store.conversationId
         let isRunning = conversation.activeTurnId != nil
-        return HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .center, spacing: 8) {
-                    Text(conversation.title ?? "Nowa rozmowa")
-                        .font(.system(size: 15, weight: .semibold))
-                        .tracking(-0.25)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(1)
+        // Podgląd, który powtarza tytuł, nic nie dodaje — wtedy zostaje sama godzina.
+        let preview = conversation.preview.flatMap { text -> String? in
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, trimmed != conversation.title else { return nil }
+            return trimmed
+        }
+        return Button {
+            Task {
+                await store.select(conversationId: conversation.id)
+                dismiss()
+            }
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(conversation.title ?? "Nowa rozmowa")
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(-0.25)
+                            .foregroundStyle(Color.scLabel(scheme))
+                            .lineLimit(1)
+                        if isRunning {
+                            runningChip
+                        }
+                    }
 
-                    if isRunning {
-                        runningChip
+                    if let preview {
+                        Text(preview)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let stamp = Self.stamp(conversation) {
+                        Text(stamp)
+                            .font(.system(size: 11.5))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.scFaint(scheme))
                     }
                 }
 
-                if let preview = conversation.preview, !preview.isEmpty {
-                    Text(preview)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
+                Spacer(minLength: 0)
 
-                if let stamp = Self.stamp(conversation) {
-                    Text(stamp)
-                        .font(.system(size: 11))
-                        .monospacedDigit()
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SCPalette.terracotta)
+                        .padding(.top, 3)
+                        .accessibilityHidden(true)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Color.scFaint(scheme))
+                        .padding(.top, 3)
+                        .accessibilityHidden(true)
                 }
             }
-
-            Spacer(minLength: 0)
-
-            if isCurrent {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(SCPalette.terracotta)
-                    .padding(.top, 2)
-                    .accessibilityHidden(true)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .overlay(alignment: .top) {
+            if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1).padding(.leading, 16) }
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                pendingDeletion = conversation
+            } label: {
+                Label("Usuń rozmowę", systemImage: "trash")
             }
         }
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityValue(isCurrent ? "bieżąca" : (isRunning ? "w toku" : ""))
+        .accessibilityHint("Otwiera rozmowę. Przytrzymaj, żeby usunąć.")
     }
 
     /// Plakietka „W toku” — subtelna, w kolorze marki, bez kręciołka.
@@ -234,9 +293,12 @@ struct AssistantConversationsSheet: View {
         .fixedSize()
     }
 
+    // MARK: - Puste stany
+
     private var emptyState: some View {
         VStack(spacing: 12) {
             AssistantMarkBadge(size: 56)
+                .padding(.top, 24)
 
             Text("Nie ma jeszcze żadnej rozmowy")
                 .font(.system(size: 17, weight: .bold))
@@ -250,7 +312,22 @@ struct AssistantConversationsSheet: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(32)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var noResults: some View {
+        VStack(spacing: 6) {
+            Text("Nic nie pasuje do „\(query)”")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.scLabel(scheme))
+            Text("Szukam w tytułach i ostatnich wiadomościach.")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.scMuted(scheme))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 24)
         .accessibilityElement(children: .combine)
     }
 
