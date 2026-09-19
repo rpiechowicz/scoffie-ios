@@ -641,6 +641,8 @@ struct AssistantView: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
+                // Rozmowa też zwija dolne menu przy przewijaniu w dół.
+                .scTracksTabBarCompaction()
                 .onScrollGeometryChange(for: Bool.self) { geometry in
                     // „Na końcu" liczy się od KOŃCA TREŚCI (`tailAnchor`), nie
                     // od końca rozpórki: próg 80 pt był mniejszy niż sama

@@ -511,6 +511,8 @@ struct SettingsView: View {
                     .padding(.bottom, pageBottomPadding)
                 }
                 .scrollIndicators(.hidden)
+                // Kierunek przewijania steruje zwijaniem dolnego menu.
+                .scTracksTabBarCompaction()
                 .ignoresSafeArea(.container, edges: .top)
             }
             .navigationBarTitleDisplayMode(.inline)
