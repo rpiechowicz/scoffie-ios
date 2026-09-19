@@ -2,12 +2,12 @@ import SwiftUI
 
 /// „Co potrafi asystent" — arkusz z menu ⋯ (pełna ściąga); przepływ
 /// startowy pokazuje tylko 4 karty „Poznaj" i linkuje tutaj z ostatniej.
-/// Trzy warstwy: jedna zasada (piszesz → karta → dodajesz),
-/// cztery grupy umiejętności jako akordeony (wszystkie zwinięte na start),
-/// zasady gry i prywatność. Limitów tu nie ma — to ekran „co", nie „ile",
-/// i widzi go też ktoś, kto asystenta jeszcze nie włączył. Przykład
-/// w rozwiniętym wierszu jest przyciskiem: ekran pomocy kończy się pierwszą
-/// wiadomością, nie czytaniem.
+///
+/// Trzy warstwy: jedna zasada w JEDNYM wierszu (piszesz → karta → decydujesz),
+/// pięć grup umiejętności jako listy wierszy (tytuł + przykład, stuknięcie
+/// WYSYŁA przykład — ekran pomocy kończy się pierwszą wiadomością, nie
+/// czytaniem), zasady gry i prywatność. Limitów tu nie ma — to ekran „co",
+/// nie „ile", i widzi go też ktoś, kto asystenta jeszcze nie włączył.
 struct AssistantCapabilitiesSheet: View {
     let store: AgentStore
     /// Wysyła przykład jako wiadomość (arkusz sam się zamyka).
@@ -17,6 +17,7 @@ struct AssistantCapabilitiesSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    /// Rozwinięty wiersz bez przykładu (zasady) — pokazuje opis i miniaturę.
     @State private var openId: String?
 
     var body: some View {
@@ -26,11 +27,11 @@ struct AssistantCapabilitiesSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        EditorialSheetHeader(eyebrow: "Asystent AI", title: "Co potrafi asystent") {
+                        EditorialSheetHeader(eyebrow: "Asystent", title: "Co potrafi asystent") {
                             dismiss()
                         }
 
-                        heroRule
+                        principle
 
                         ForEach(AssistantCapabilities.groups) { group in
                             groupCard(group)
@@ -52,62 +53,51 @@ struct AssistantCapabilitiesSheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    // MARK: - Jedna zasada
+    // MARK: - Jedna zasada, jeden wiersz
 
-    private var heroRule: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            AssistantSectionLabel(text: "Jedna zasada", color: SCPalette.terracotta)
-            Text("Piszesz zdaniem, dostajesz kartę")
-                .font(.system(size: 21, weight: .bold))
-                .tracking(-0.5)
-                .foregroundStyle(Color.scLabel(scheme))
-            Text("Asystent zna dietę, alergeny i cele domu, ale planu nie zmienia sam. Każda propozycja przychodzi jako karta — Ty ją dodajesz.")
-                .font(.system(size: 13.5))
-                .lineSpacing(2)
-                .foregroundStyle(Color.scMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-
-            // Trzy równe pola z „Dodaj do planu" ucinały tekst na węższych
-            // ekranach — etykiety są krótkie, a chip bierze tyle, ile potrzebuje.
-            HStack(spacing: 6) {
-                ruleStep("Piszesz", icon: "arrow.up", filled: false)
-                ruleArrow
-                ruleStep("Karta", icon: "rectangle.stack", filled: false)
-                ruleArrow
-                ruleStep("Dodajesz", icon: "checkmark", filled: true)
-            }
-            .padding(.top, 10)
+    /// „Piszesz zdaniem → dostajesz kartę → Ty decydujesz” — kompaktowo,
+    /// bez bohatera marketingowego: to jest instrukcja, nie reklama.
+    private var principle: some View {
+        HStack(spacing: 6) {
+            principleStep("Piszesz zdaniem", icon: "text.cursor")
+            principleArrow
+            principleStep("Dostajesz kartę", icon: "rectangle.stack")
+            principleArrow
+            principleStep("Ty decydujesz", icon: "checkmark", filled: true)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.scAccentTint(scheme)))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(SCPalette.terracotta.opacity(0.28), lineWidth: 1))
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).fill(Color.scAccentTint(scheme)))
+        .overlay(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).stroke(SCPalette.terracotta.opacity(0.28), lineWidth: 1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Piszesz zdaniem, dostajesz kartę, Ty decydujesz")
     }
 
-    private var ruleArrow: some View {
+    private var principleArrow: some View {
         Image(systemName: "chevron.right")
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(Color.scFaint(scheme))
             .fixedSize()
     }
 
-    private func ruleStep(_ title: String, icon: String, filled: Bool) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 11, weight: .bold))
+    private func principleStep(_ title: String, icon: String, filled: Bool = false) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
             Text(title)
-                .font(.system(size: 11.5, weight: .bold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .font(.system(size: 11, weight: .bold))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 10)
         .foregroundStyle(filled ? Color.scPageBase(scheme) : Color.scLabel(scheme))
         .frame(maxWidth: .infinity)
-        .frame(height: 34)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(filled ? SCPalette.terracotta : Color.scInsetSurface(scheme)))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(filled ? Color.clear : Color.scTileStroke(scheme), lineWidth: 1))
+        .frame(height: 52)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(filled ? SCPalette.terracotta : Color.scInsetSurface(scheme)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(filled ? Color.clear : Color.scTileStroke(scheme), lineWidth: 1))
     }
 
-    // MARK: - Grupy (akordeon)
+    // MARK: - Grupy
 
     private func groupCard(_ group: AssistantCapabilities.Group) -> some View {
         AssistantSurfaceCard {
@@ -118,7 +108,7 @@ struct AssistantCapabilitiesSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 6)
+            .padding(.bottom, 4)
 
             ForEach(Array(group.items.enumerated()), id: \.element) { index, id in
                 abilityRow(AssistantCapabilities.by(id), first: index == 0)
@@ -126,39 +116,51 @@ struct AssistantCapabilitiesSheet: View {
         }
     }
 
+    /// Wiersz umiejętności: tytuł + przykład. Z przykładem stuknięcie WYSYŁA
+    /// go (strzałka w prawo-górę mówi, że coś się wyśle); bez przykładu
+    /// rozwija opis z miniaturą.
     private func abilityRow(_ capability: AssistantCapability, first: Bool) -> some View {
         let open = openId == capability.id
+        let sends = capability.example != nil
         return VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    openId = open ? nil : capability.id
+                if let example = capability.example {
+                    dismiss()
+                    onAsk(example)
+                } else {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        openId = open ? nil : capability.id
+                    }
                 }
             } label: {
                 HStack(spacing: 12) {
                     AssistantIconTile(icon: capability.icon, accent: capability.accent, size: 34, radius: 10)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(capability.title)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 15.5, weight: .semibold))
                             .tracking(-0.3)
                             .foregroundStyle(Color.scLabel(scheme))
-                        if !open, let example = capability.example {
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let example = capability.example {
                             Text("„\(example)”")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Color.scMuted(scheme))
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.down")
+                    Image(systemName: sends ? "arrow.up.right" : "chevron.down")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .rotationEffect(.degrees(open ? 180 : 0))
+                        .foregroundStyle(sends ? SCPalette.terracotta : Color.scFaint(scheme))
+                        .rotationEffect(.degrees(!sends && open ? 180 : 0))
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.vertical, 12)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlanPressStyle(scale: 0.985))
+            .accessibilityHint(sends ? "Wysyła ten przykład do asystenta" : (open ? "Zwija opis" : "Rozwija opis"))
             .accessibilityAddTraits(open ? [.isSelected] : [])
 
             if open {
@@ -168,27 +170,23 @@ struct AssistantCapabilitiesSheet: View {
                         .lineSpacing(3)
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
-                    if let example = capability.example {
-                        AssistantExchangePreview(example: example, reply: capability.reply, thumb: capability.thumb) {
-                            dismiss()
-                            onAsk(example)
-                        }
-                    } else if let thumb = capability.thumb {
+                    if let thumb = capability.thumb {
                         AssistantThumb(kind: thumb)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 2)
                 .padding(.bottom, 18)
+                .transition(.opacity)
             }
         }
         .background(open ? Color.black.opacity(scheme == .dark ? 0.18 : 0.03) : Color.clear)
         .overlay(alignment: .top) {
-            if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) }
+            if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1).padding(.leading, 62) }
         }
     }
 
-    // MARK: - Zasady, limity, prywatność
+    // MARK: - Zasady, prywatność
 
     private var rulesCard: some View {
         AssistantSurfaceCard {
@@ -220,11 +218,12 @@ struct AssistantCapabilitiesSheet: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .overlay(alignment: .top) { if !first { Rectangle().fill(Color.scRule(scheme)).frame(height: 1) } }
+        .accessibilityElement(children: .combine)
     }
 
     private var footer: some View {
         AssistantStickyFooter {
-            SCSoftButton(title: "Napisz do asystenta", leadingIcon: "sparkles") {
+            SCSoftButton(title: "Napisz do asystenta", trailingIcon: "arrow.up") {
                 dismiss()
                 onCompose?()
             }

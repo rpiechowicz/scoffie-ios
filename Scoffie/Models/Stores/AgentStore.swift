@@ -113,6 +113,13 @@ final class AgentStore {
     /// epoka wskaźnika nie ma prawa zniknąć w klatce, w której wskaźnik gaśnie.
     private var activeTurnToken: UUID?
     private(set) var errorMessage: String?
+    /// Kod porażki OSTATNIEJ tury (`AI_TIMEOUT`, `AI_CANCELLED`, …) — ekran
+    /// rysuje z niego kartę wyniku („To trwało za długo”), a nie tylko zdanie.
+    /// `nil`, gdy błąd nie jest porażką tury (np. wysyłka nie doszła).
+    private(set) var lastTurnErrorCode: String?
+    /// Czy nieudana tura zdążyła COŚ zapisać. Karta wyniku mówi „Nic nie
+    /// zmieniłem w planie” tylko wtedy, gdy to prawda.
+    private(set) var lastTurnWrote = false
     /// Gotowe podpowiedzi pod błędem tury (po przekroczeniu czasu albo
     /// „Stop"): mniejszy zakres, bo to najczęstsza przyczyna przekroczenia
     /// czasu tury. Z serwera.
@@ -283,6 +290,8 @@ final class AgentStore {
         guard !trimmed.isEmpty, canSend else { return false }
 
         errorMessage = nil
+        lastTurnErrorCode = nil
+        lastTurnWrote = false
         suggestions = []
         retryText = nil
         retryClientMessageId = nil
@@ -422,6 +431,8 @@ final class AgentStore {
                 } else {
                     self.errorMessage = UserFacingErrorMapper.copy(forCode: "AI_CANCELLED")
                         ?? "Zatrzymane. Plan bez zmian."
+                    self.lastTurnErrorCode = turn.errorCode ?? "AI_CANCELLED"
+                    self.lastTurnWrote = turn.progress.contains { $0.writes == true }
                     self.suggestions = turn.suggestions ?? []
                 }
                 self.isSending = false
@@ -447,6 +458,8 @@ final class AgentStore {
         progress = []
         draftText = ""
         errorMessage = "Przestałem czekać. Asystent kończy w tle — wróć tu za chwilę po odpowiedź."
+        lastTurnErrorCode = "LOCAL_ABANDONED"
+        lastTurnWrote = false
     }
 
     /// „Ile mi zostało" — do arkusza limitów; nie zasłania błędów rozmowy.
@@ -693,6 +706,8 @@ final class AgentStore {
         hasLiveTurnSlot = false
         pendingTurnId = nil
         errorMessage = nil
+        lastTurnErrorCode = nil
+        lastTurnWrote = false
         suggestions = []
     }
 
@@ -777,6 +792,7 @@ final class AgentStore {
                 // Komunikat z poprzedniej, nieudanej próby nie ma prawa wisieć
                 // pod świeżą odpowiedzią.
                 errorMessage = nil
+                lastTurnErrorCode = nil
                 apply(finished: turn)
                 return
             } catch is CancellationError {
@@ -809,6 +825,8 @@ final class AgentStore {
         // Identyfikatora nie kasujemy — po powrocie na zakładkę spróbujemy
         // jeszcze raz.
         errorMessage = "Asystent nie odpowiedział na czas. Wróć tu za chwilę — odpowiedź może już czekać."
+        lastTurnErrorCode = "LOCAL_TIMEOUT"
+        lastTurnWrote = false
         noteUnfinishedTurnInBackground()
     }
 
@@ -852,6 +870,8 @@ final class AgentStore {
             }
             if answers.isEmpty {
                 errorMessage = "Asystent nie miał nic do powiedzenia. Spróbuj zapytać inaczej."
+                lastTurnErrorCode = "AI_EMPTY_ANSWER"
+                lastTurnWrote = savedPlan
                 // Tura się domknęła, ale bez odpowiedzi: `unseenAnswers` nie
                 // rośnie, więc plakietka na zakładce się nie zapali i nikt
                 // poza ekranem by się o tym nie dowiedział.
@@ -877,6 +897,8 @@ final class AgentStore {
         case "LIMITED":
             errorMessage = copy(forCode: turn.errorCode)
                 ?? "Limit asystenta został wyczerpany."
+            lastTurnErrorCode = turn.errorCode ?? "AI_QUOTA_EXCEEDED"
+            lastTurnWrote = false
             // Wyczerpana pula to STAN konta, nie awaria — więc masło („uwaga"),
             // nie alarm. Ta sama kapsuła co przy padniętym serwerze mówiłaby,
             // że coś się zepsuło, a nic się nie zepsuło.
@@ -888,6 +910,8 @@ final class AgentStore {
         default:
             errorMessage = copy(forCode: turn.errorCode)
                 ?? "Asystent nie dokończył zadania. Spróbuj ponownie."
+            lastTurnErrorCode = turn.errorCode ?? "AI_PROVIDER_ERROR"
+            lastTurnWrote = turn.progress.contains { $0.writes == true }
             // Podpowiedzi z serwera („tylko obiady", „3 dni") — tylko tam,
             // gdzie serwer je dał, czyli po czasie i po „Stop".
             suggestions = turn.suggestions ?? []
@@ -919,6 +943,8 @@ final class AgentStore {
         else { return false }
 
         errorMessage = nil
+        lastTurnErrorCode = nil
+        lastTurnWrote = false
         retryText = nil
         retryClientMessageId = nil
         isSending = true

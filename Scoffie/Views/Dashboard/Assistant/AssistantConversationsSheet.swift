@@ -4,8 +4,9 @@ import SwiftUI
 ///
 /// Rozmowa z asystentem nie jest jednorazowa: wraca się do niej, żeby
 /// sprawdzić, co ustaliliśmy w poniedziałek, i zaczyna nową, gdy temat jest
-/// inny. Bez tej listy istniała dokładnie jedna rozmowa — najnowsza — a
-/// wszystkie starsze były na serwerze i nikt nie mógł ich zobaczyć.
+/// inny. Każdy wiersz to tytuł, początek ostatniej wiadomości i godzina —
+/// nie lista samych dat — a rozmowa z turą w biegu dostaje plakietkę
+/// „W toku”, bo właśnie do niej warto wrócić najpierw.
 struct AssistantConversationsSheet: View {
     let store: AgentStore
 
@@ -15,13 +16,12 @@ struct AssistantConversationsSheet: View {
     @State private var pendingDeletion: AgentConversationDTO?
     @State private var query = ""
 
-
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.scCanvas(scheme).ignoresSafeArea()
+                SCPageBackground(scheme: scheme).ignoresSafeArea()
 
-                if store.conversations.isEmpty {
+                if store.conversations.isEmpty && !store.isLoadingConversations {
                     emptyState
                 } else {
                     list
@@ -30,7 +30,7 @@ struct AssistantConversationsSheet: View {
             .navigationTitle("Rozmowy")
             .navigationBarTitleDisplayMode(.inline)
             // Rozmów przybywa po jednej dziennie i po miesiącu lista jest
-            // dłuższa niż ekran — szukanie po treści jest wtedy szybsze niż
+            // dłuższa niż ekran — szukanie po treści jest szybsze niż
             // przewijanie po datach.
             .searchable(text: $query, prompt: "Szukaj w rozmowach")
             .toolbar {
@@ -84,7 +84,8 @@ struct AssistantConversationsSheet: View {
                             row(conversation)
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(Color.scCanvas(scheme))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparatorTint(Color.scRule(scheme))
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 pendingDeletion = conversation
@@ -119,11 +120,8 @@ struct AssistantConversationsSheet: View {
         let items: [AgentConversationDTO]
     }
 
-    /// Rozmowy pogrupowane po tym, KIEDY się wydarzyły.
-    ///
-    /// Płaska lista dat odpowiada na pytanie „która to była”, dopiero gdy pamięta
-    /// się datę. Grupy odpowiadają na to, jak ludzie o tym myślą: dzisiejsza,
-    /// wczorajsza, „gdzieś w tym tygodniu”.
+    /// Rozmowy pogrupowane po tym, KIEDY się wydarzyły: dzisiejsza,
+    /// wczorajsza, „gdzieś w tym tygodniu” — tak ludzie o tym myślą.
     private var groups: [ConversationGroup] {
         let matching = store.conversations.filter(matches)
         let calendar = Calendar.current
@@ -172,20 +170,19 @@ struct AssistantConversationsSheet: View {
     }
 
     private func row(_ conversation: AgentConversationDTO) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        let isCurrent = conversation.id == store.conversationId
+        let isRunning = conversation.activeTurnId != nil
+        return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(conversation.title ?? "Nowa rozmowa")
                         .font(.system(size: 15, weight: .semibold))
+                        .tracking(-0.25)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
-                    // Rozmowa z turą w biegu — bez tego znaku wygląda jak
-                    // każda inna, a właśnie do niej warto wrócić najpierw.
-                    if conversation.activeTurnId != nil {
-                        Image(systemName: "clock")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(SCPalette.terracotta)
+                    if isRunning {
+                        runningChip
                     }
                 }
 
@@ -200,39 +197,61 @@ struct AssistantConversationsSheet: View {
                 if let stamp = Self.stamp(conversation) {
                     Text(stamp)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.scMuted(scheme))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
             }
 
             Spacer(minLength: 0)
 
-            if conversation.id == store.conversationId {
+            if isCurrent {
                 Image(systemName: "checkmark")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(SCPalette.terracotta)
                     .padding(.top, 2)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isCurrent ? "bieżąca" : (isRunning ? "w toku" : ""))
+    }
+
+    /// Plakietka „W toku” — subtelna, w kolorze marki, bez kręciołka.
+    private var runningChip: some View {
+        HStack(spacing: 4) {
+            SCMarkShape()
+                .fill(SCPalette.terracotta)
+                .frame(width: 9, height: 9)
+            Text("W toku")
+                .font(.system(size: 10.5, weight: .semibold))
+        }
+        .foregroundStyle(SCPalette.terracotta)
+        .padding(.horizontal, 7)
+        .frame(height: 20)
+        .background(Capsule().fill(Color.scAccentTint(scheme)))
+        .fixedSize()
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 28, weight: .light))
-                .foregroundStyle(Color.scMuted(scheme))
+        VStack(spacing: 12) {
+            AssistantMarkBadge(size: 56)
 
             Text("Nie ma jeszcze żadnej rozmowy")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 17, weight: .bold))
+                .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
 
-            Text("Zapytaj asystenta o plan tygodnia — rozmowa zapisze się tutaj i będziesz mógł do niej wrócić.")
+            Text("Zapytaj asystenta o plan tygodnia — rozmowa zapisze się tutaj i będzie można do niej wrócić.")
                 .font(.system(size: 14))
+                .lineSpacing(3)
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(32)
+        .accessibilityElement(children: .combine)
     }
 
     private static func stamp(_ conversation: AgentConversationDTO) -> String? {
@@ -258,7 +277,7 @@ struct AssistantConversationsSheet: View {
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "pl_PL")
-        formatter.dateFormat = "d MMMM"
+        formatter.dateFormat = "d MMMM, HH:mm"
         return formatter
     }()
 }

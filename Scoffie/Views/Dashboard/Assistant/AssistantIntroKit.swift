@@ -125,9 +125,12 @@ struct AssistantAIMark: View {
                 .shadow(color: SCPalette.terracotta.opacity(0.22), radius: 23, y: 20)
                 .frame(width: size, height: size)
 
-            Image(systemName: "sparkles")
-                .font(.system(size: size * 0.5, weight: .light))
-                .foregroundStyle(SCPalette.terracotta)
+            // Znak Scoffie, nie systemowe „sparkles": to ten sam glif, który
+            // oddycha w wierszu tury i stoi nad briefingiem — asystent ma
+            // jedną twarz na wszystkich ekranach.
+            SCMarkShape()
+                .fill(SCPalette.terracotta)
+                .frame(width: size * 0.44, height: size * 0.44)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
