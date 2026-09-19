@@ -104,10 +104,14 @@ struct SCFloatingTabBar: View {
     private func tabButton(_ item: SCTabBarItem) -> some View {
         let selected = item.tab == selection
         return Button {
-            // Bez `withAnimation`: przełączenie zakładki w `TabView` ma
-            // zostać cięciem, jak w systemie. Pigułkę i kolor animuje
-            // `.animation(value: selection)` na pasku.
-            selection = item.tab
+            // Zmiana wyboru spoza systemowego paska jest dla `TabView` zmianą
+            // „programową", a taką od iOS 18 pokazuje przenikaniem treści —
+            // stąd animacja, której z systemowym paskiem nie było. Transakcja
+            // bez animacji przywraca cięcie. Pigułkę na pasku animuje osobno
+            // `.animation(value: selection)`, więc ona nadal się przesuwa.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { selection = item.tab }
         } label: {
             VStack(spacing: isCompact ? 0 : 3) {
                 Image(systemName: item.icon)
