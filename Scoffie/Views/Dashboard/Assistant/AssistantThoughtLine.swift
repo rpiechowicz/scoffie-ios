@@ -149,7 +149,9 @@ struct AssistantThoughtLine: View {
     private var working: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || isStopping)) { context in
             let t = startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? 0
-            HStack(alignment: .top, spacing: 14) {
+            // Wyśrodkowane w pionie: bez kontekstu pod statusem sam status
+            // wisiał przy górnej krawędzi 44-punktowego pierścienia.
+            HStack(alignment: .center, spacing: 14) {
                 glyph(t: t)
 
                 VStack(alignment: .leading, spacing: 0) {
@@ -183,7 +185,6 @@ struct AssistantThoughtLine: View {
                             .transition(.opacity)
                     }
                 }
-                .padding(.top, 1)
                 .animation(.easeInOut(duration: 0.25), value: contextDescriptor)
                 .animation(.easeInOut(duration: 0.25), value: status)
             }
@@ -336,7 +337,9 @@ struct AssistantThoughtLine: View {
 
 /// `SpinDash` z makiety w trzech rozmiarach: 44 (wiersz statusu), 28
 /// (kapsułka), 20 (inline). Grubość łuku = 6,8 % rozmiaru (3 pt przy 44,
-/// 2 pt przy 28), znak = 50 % rozmiaru, tor = kolor fazy 12 %.
+/// 2 pt przy 28), znak = 40 % rozmiaru (makieta ma 50 %, ale na telefonie
+/// znak wypełniał pierścień i zlewał się z łukiem), tor = kolor fazy 22 %
+/// — na ciemnym tle 12 % ginęło i pierścień wyglądał na szary.
 ///
 /// Dwa niezależne rytmy, jak w CSS: obrót całego łuku 2,4 s liniowo
 /// (`spArc`) i „oddech” 1,8 s ease-in-out (`spDash`: dasharray 6 → 70 → 6
@@ -362,7 +365,7 @@ struct AssistantArcSpinner: View {
         let arc = Self.arc(at: t, still: still)
         ZStack {
             Circle()
-                .stroke(stopped ? AssistantLook.ink(scheme).opacity(0.10) : color.opacity(0.12), lineWidth: lineWidth)
+                .stroke(stopped ? AssistantLook.ink(scheme).opacity(0.10) : color.opacity(0.22), lineWidth: lineWidth)
             if !stopped {
                 Circle()
                     .trim(from: 0, to: arc.length)
@@ -371,7 +374,7 @@ struct AssistantArcSpinner: View {
             }
             SCMarkShape()
                 .fill(stopped ? AssistantLook.ink(scheme).opacity(0.35) : AssistantLook.terraFill(scheme))
-                .frame(width: (size * 0.5).rounded(), height: (size * 0.5).rounded())
+                .frame(width: (size * 0.4).rounded(), height: (size * 0.4).rounded())
         }
         .padding(lineWidth / 2)
         .frame(width: size, height: size)

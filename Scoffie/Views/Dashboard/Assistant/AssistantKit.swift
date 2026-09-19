@@ -287,6 +287,47 @@ struct AssistantDraftAnswer: View {
     }
 }
 
+/// Gotowa odpowiedź, która jeszcze się „dopisuje”: od znaku `from` (tam
+/// stanął szkic) do końca, w tempie człowieka piszącego szybko — całość
+/// najwyżej w ~2,2 s, nie wolniej niż 60 znaków/s. Gdy wszystko jest na
+/// ekranie, woła `onDone` (raz) — wtedy pod tekstem wchodzą karta, ślad
+/// i „Uwzględniłem”. Reduce Motion: od razu w całości.
+struct AssistantRevealedAnswer: View {
+    let text: String
+    var from: Int = 0
+    let onDone: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var startedAt = Date()
+
+    private var rate: Double {
+        max(60, Double(max(0, text.count - from)) / 2.2)
+    }
+
+    private var duration: TimeInterval {
+        Double(max(0, text.count - from)) / rate
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { context in
+            let shown = reduceMotion ? text.count : revealedCount(at: context.date)
+            AssistantAnswer(text: String(text.prefix(shown)))
+        }
+        .task {
+            if !reduceMotion {
+                try? await Task.sleep(for: .seconds(duration + 0.05))
+            }
+            if Task.isCancelled { return }
+            onDone()
+        }
+    }
+
+    private func revealedCount(at date: Date) -> Int {
+        let elapsed = max(0, date.timeIntervalSince(startedAt))
+        return min(text.count, min(from, text.count) + Int(elapsed * rate))
+    }
+}
+
 // MARK: - „Uwzględniłem: …”
 
 /// Jedna linia pod odpowiedzią: z czym serwer ją policzył.

@@ -335,15 +335,23 @@ struct RecipesView: View {
                 .padding(.top, pageTopPadding)
                 .padding(.bottom, 18)
 
-                if shouldShowSkeleton {
-                    skeletonState
-                } else if !hasVisibleRecipes {
-                    emptyState
-                        .padding(.horizontal, pageHorizontalPadding)
-                        .padding(.top, 8)
-                } else {
-                    body(forRecipes: visibleRecipes)
+                // Szkielet → dane przenika, nie skacze (pierwsze wejście
+                // po uruchomieniu aplikacji).
+                Group {
+                    if shouldShowSkeleton {
+                        skeletonState
+                            .transition(.opacity)
+                    } else if !hasVisibleRecipes {
+                        emptyState
+                            .padding(.horizontal, pageHorizontalPadding)
+                            .padding(.top, 8)
+                            .transition(.opacity)
+                    } else {
+                        body(forRecipes: visibleRecipes)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.easeOut(duration: 0.3), value: shouldShowSkeleton)
 
                 if recipeCatalogStore.isLoadingMore {
                     ProgressView()
