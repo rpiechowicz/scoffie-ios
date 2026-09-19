@@ -520,22 +520,20 @@ final class AgentStore {
 
     /// Zaczyna pustą rozmowę. Nowa rozmowa nie zna poprzednich wiadomości —
     /// od tego jest pamięć asystenta (notatki gospodarstwa).
+    ///
+    /// Czysta kartka OD RAZU, bez żądania do serwera: wiersz rozmowy powstaje
+    /// z pierwszym pytaniem (`ensureConversation`), tak samo jak po przerwie.
+    /// Dotąd przycisk czekał na `POST /agent/conversations`, a przez ten czas
+    /// ekran pokazywał szkielet historii (`isLoadingHistory`) i dopiero potem
+    /// pusty stan — dwa przeskoki zamiast jednego przejścia, do tego każde
+    /// stuknięcie zostawiało w historii pustą rozmowę bez tytułu.
     func startNewConversation() async {
-        resetTurnState()
-        messages = []
-        wantsFreshConversation = false
-        lastActivityAt = nil
-        isLoadingHistory = true
-        defer { isLoadingHistory = false }
-        do {
-            let conversation = try await client.createConversation(
-                householdId: householdId
-            )
-            conversationId = conversation.id
-            conversations.insert(conversation, at: 0)
-        } catch {
-            handle(error)
+        // Już na czystej kartce — nie ma czego zaczynać od nowa.
+        if conversationId == nil, messages.isEmpty, !isSending {
+            wantsFreshConversation = true
+            return
         }
+        beginFreshConversation()
     }
 
     func deleteConversation(id: String) async {

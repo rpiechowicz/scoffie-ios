@@ -156,6 +156,11 @@ struct AssistantThinkingLine: View {
     /// że nie trzeba przy nim siedzieć. Wcześniej ta sama informacja jest
     /// szumem pod każdym pytaniem — i tak właśnie była odbierana.
     private static let patienceAfter: TimeInterval = 18
+    /// Od kiedy obok kroku tyka czas. Pierwsze sekundy każdej tury są
+    /// „chwilą" i licznik przy nich byłby zegarem przy mrugnięciu; od
+    /// kilku sekund wzwyż jest jedynym dowodem, że coś w ogóle biegnie,
+    /// gdy serwer między krokami milczy.
+    private static let clockAfter: TimeInterval = 4
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -235,8 +240,23 @@ struct AssistantThinkingLine: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .animation(labelAnimation, value: label)
+
+                    // Czas tury po prawej, cyframi stałej szerokości —
+                    // tyka co sekundę, więc nawet gdy serwer milczy przez
+                    // pół minuty między krokami, widać, że tura ŻYJE.
+                    // Po turze ten sam czas zostaje jako „Myślałem 42 s".
+                    if t >= Self.clockAfter {
+                        Text(Self.clock(seconds: Int(t)))
+                            .font(.system(size: 12.5, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.scFaint(scheme))
+                            .contentTransition(.numericText())
+                            .animation(.smooth(duration: 0.25), value: Int(t))
+                            .transition(.opacity)
+                    }
                 }
                 .frame(height: 22)
+                .animation(.easeInOut(duration: 0.3), value: t >= Self.clockAfter)
             }
 
             if showsPatience {
@@ -274,6 +294,13 @@ struct AssistantThinkingLine: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    /// „12 s", a od minuty „1:05" — krótko, bo stoi obok zdania, nie zamiast.
+    static func clock(seconds: Int) -> String {
+        let s = max(0, seconds)
+        if s < 60 { return "\(s) s" }
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 
     /// Zwykłe `if/else` zamiast `reduceMotion ? nil : …` w `withAnimation`

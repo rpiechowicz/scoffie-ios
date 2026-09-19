@@ -35,15 +35,6 @@ enum DayNavigationMotion {
     /// symetryczne — nic tu nie startuje ani nie ląduje. Krócej czyta się
     /// jak cięcie, dłużej — jak zdjęcie, które się nie doczytało.
     static let plateFade: Animation = .easeInOut(duration: 0.30)
-
-    /// Kiedy przełożenie jest po wszystkim i wolno zgasić kierunek.
-    ///
-    /// Kierunek (`CalendarView.plateDirection`) niesie tylko przechył nazwy
-    /// dania pod talerzem i musi zgasnąć, żeby zmiana, której nikt nie wywołał
-    /// palcem, nie przechylała podpisu w stronę ostatniego stuknięcia. Nic się
-    /// o tej chwili nie rusza, więc zegar może się spóźnić — jest o 80 ms
-    /// dłuższy od przenikania, zamiast celować w jego koniec.
-    static let plateFadeSettled: Duration = .milliseconds(380)
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.

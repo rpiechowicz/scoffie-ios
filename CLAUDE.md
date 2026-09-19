@@ -74,6 +74,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zwija się do samych ikon jak w Revolucie, a nie do jednej ikony jak `tabBarMinimizeBehavior`.
   Główny `ScrollView` każdej zakładki melduje kierunek przez `scTracksTabBarCompaction()`;
   rezerwa miejsca pod treścią (`reservedHeight`) jest stała i schodzi do zera przy klawiaturze.
+  Przełączenie zakładki ma być CIĘCIEM jak w systemie: `selection` zmienia się w transakcji
+  z `disablesAnimations` (inaczej `TabView` od iOS 18 przenika treść), a pigułka na pasku jedzie
+  po własnej kopii `highlighted` — nie dokładać `.animation(value: selection)` ani haptyki.
 - Asystent AI (Faza 1) jedzie po REST, NIE po sockecie: `POST /agent/conversations/:id/messages`
   oddaje `202` z `turnId`, a odpowiedź zbiera się odpytywaniem `GET /agent/turns/:id` co sekundę
   (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–240 s (sufit `AI_TURN_TIMEOUT_MS`,

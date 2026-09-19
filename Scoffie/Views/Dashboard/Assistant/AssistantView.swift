@@ -580,25 +580,43 @@ struct AssistantView: View {
         store.messages.isEmpty && !store.isLoadingHistory && !store.isSending
     }
 
-    @ViewBuilder
+    /// Pusty stan i lista przechodzą w siebie kryciem — w JEDNEJ transakcji
+    /// z nagłówkiem (duży ↔ kompaktowy) i podpowiedziami nad polem, które
+    /// mają własne odciski na tę samą chwilę. „Nowa rozmowa" była dotąd
+    /// cięciem: lista znikała w klatce, powitanie wskakiwało w następnej.
+    private var conversationSwitch: Animation? {
+        reduceMotion ? nil : .smooth(duration: 0.3)
+    }
+
     private var conversation: some View {
-        if isConversationEmpty {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                emptyState
-                Spacer(minLength: 0)
+        ZStack {
+            if isConversationEmpty {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    emptyState
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, SCPageMetrics.horizontal)
+                // Bez ScrollView nie działa `scrollDismissesKeyboard`, więc na
+                // pustym ekranie klawiatury nie dało się schować niczym poza
+                // wysłaniem. Całe wolne tło łapie stuknięcie i zdejmuje fokus.
+                .contentShape(Rectangle())
+                .onTapGesture { isComposerFocused = false }
+                // Powitanie wyrasta lekko od środka; schodzi samym kryciem,
+                // żeby nie „uciekało" spod pierwszego pytania.
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                        removal: .opacity
+                    )
+                )
+            } else {
+                messageList
+                    .transition(.opacity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, SCPageMetrics.horizontal)
-            // Bez ScrollView nie działa `scrollDismissesKeyboard`, więc na
-            // pustym ekranie klawiatury nie dało się schować niczym poza
-            // wysłaniem. Całe wolne tło łapie stuknięcie i zdejmuje fokus.
-            .contentShape(Rectangle())
-            .onTapGesture { isComposerFocused = false }
-            .transition(.opacity)
-        } else {
-            messageList
         }
+        .animation(conversationSwitch, value: isConversationEmpty)
     }
 
     private var messageList: some View {
@@ -743,10 +761,17 @@ struct AssistantView: View {
                         scroll(proxy, to: last.id, anchor: .bottom)
                     }
                 }
-                // Wibracja tylko przy ODPOWIEDZI — przy każdej wiadomości
-                // (także własnej) byłaby szumem.
-                .sensoryFeedback(.success, trigger: answerCount)
-                .sensoryFeedback(.error, trigger: store.errorMessage)
+                // Wibracja tylko przy NOWEJ odpowiedzi i przy NOWYM błędzie.
+                // Wyzwalacz po samej zmianie wartości odzywał się też, gdy
+                // liczba odpowiedzi SPADAŁA (nowa rozmowa, wybór z historii,
+                // poprawka pytania) i gdy błąd ZNIKAŁ — „sukces" i „błąd"
+                // pod palcem w chwili, w której nic takiego się nie stało.
+                .sensoryFeedback(trigger: answerCount) { old, new in
+                    new > old ? .success : nil
+                }
+                .sensoryFeedback(trigger: store.errorMessage) { old, new in
+                    old == nil && new != nil ? .error : nil
+                }
 
                 // Jak w ChatGPT: pojawia się i znika płynnie, a nie skokiem,
                 // i tylko wtedy, gdy naprawdę jest dokąd zjechać.
