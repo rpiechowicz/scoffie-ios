@@ -580,25 +580,43 @@ struct AssistantView: View {
         store.messages.isEmpty && !store.isLoadingHistory && !store.isSending
     }
 
-    @ViewBuilder
+    /// Pusty stan i lista przechodzą w siebie kryciem — w JEDNEJ transakcji
+    /// z nagłówkiem (duży ↔ kompaktowy) i podpowiedziami nad polem, które
+    /// mają własne odciski na tę samą chwilę. „Nowa rozmowa" była dotąd
+    /// cięciem: lista znikała w klatce, powitanie wskakiwało w następnej.
+    private var conversationSwitch: Animation? {
+        reduceMotion ? nil : .smooth(duration: 0.3)
+    }
+
     private var conversation: some View {
-        if isConversationEmpty {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                emptyState
-                Spacer(minLength: 0)
+        ZStack {
+            if isConversationEmpty {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    emptyState
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, SCPageMetrics.horizontal)
+                // Bez ScrollView nie działa `scrollDismissesKeyboard`, więc na
+                // pustym ekranie klawiatury nie dało się schować niczym poza
+                // wysłaniem. Całe wolne tło łapie stuknięcie i zdejmuje fokus.
+                .contentShape(Rectangle())
+                .onTapGesture { isComposerFocused = false }
+                // Powitanie wyrasta lekko od środka; schodzi samym kryciem,
+                // żeby nie „uciekało" spod pierwszego pytania.
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                        removal: .opacity
+                    )
+                )
+            } else {
+                messageList
+                    .transition(.opacity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, SCPageMetrics.horizontal)
-            // Bez ScrollView nie działa `scrollDismissesKeyboard`, więc na
-            // pustym ekranie klawiatury nie dało się schować niczym poza
-            // wysłaniem. Całe wolne tło łapie stuknięcie i zdejmuje fokus.
-            .contentShape(Rectangle())
-            .onTapGesture { isComposerFocused = false }
-            .transition(.opacity)
-        } else {
-            messageList
         }
+        .animation(conversationSwitch, value: isConversationEmpty)
     }
 
     private var messageList: some View {
@@ -743,10 +761,17 @@ struct AssistantView: View {
                         scroll(proxy, to: last.id, anchor: .bottom)
                     }
                 }
-                // Wibracja tylko przy ODPOWIEDZI — przy każdej wiadomości
-                // (także własnej) byłaby szumem.
-                .sensoryFeedback(.success, trigger: answerCount)
-                .sensoryFeedback(.error, trigger: store.errorMessage)
+                // Wibracja tylko przy NOWEJ odpowiedzi i przy NOWYM błędzie.
+                // Wyzwalacz po samej zmianie wartości odzywał się też, gdy
+                // liczba odpowiedzi SPADAŁA (nowa rozmowa, wybór z historii,
+                // poprawka pytania) i gdy błąd ZNIKAŁ — „sukces" i „błąd"
+                // pod palcem w chwili, w której nic takiego się nie stało.
+                .sensoryFeedback(trigger: answerCount) { old, new in
+                    new > old ? .success : nil
+                }
+                .sensoryFeedback(trigger: store.errorMessage) { old, new in
+                    old == nil && new != nil ? .error : nil
+                }
 
                 // Jak w ChatGPT: pojawia się i znika płynnie, a nie skokiem,
                 // i tylko wtedy, gdy naprawdę jest dokąd zjechać.
@@ -1210,7 +1235,7 @@ struct AssistantView: View {
     /// żeby oba rysowały identycznie. Indeks jest GLOBALNY (separator dnia
     /// i odpowiedź na kartę pytania patrzą na sąsiadów).
     @ViewBuilder
-    private func bubble(at index: Int, _ message: AgentChatMessage) -> some View {
+    private func bubble(at index: Int, _ message: AgentChatMessage, showsThinking: Bool = true) -> some View {
         if let separator = daySeparator(at: index) {
             DaySeparator(text: separator)
         }
@@ -1222,6 +1247,7 @@ struct AssistantView: View {
             // karta pytania zaznacza nią wybraną opcję zamiast domyślnej
             // z serwera.
             reply: reply(after: index),
+            showsThinking: showsThinking,
             isCardExpanded: expansion(of: message.id, in: $expandedCards),
             isThoughtExpanded: expansion(of: message.id, in: $expandedThoughts),
             onOpenPlan: { sessionStore.dashboardTab = .plan },
@@ -1247,67 +1273,117 @@ struct AssistantView: View {
         .id(message.id)
     }
 
-    /// Slot ostatniej tury: pytanie + ALBO wskaźnik, ALBO odpowiedzi tej tury
-    /// (i ewentualna notka błędu). Insert/remove dzieje się w zwykłym `ZStack`,
-    /// nie na poziomie `LazyVStack` — tam przejścia są przewidywalne, a tu
-    /// `apply(finished:)` i `defer` w `followTurn` przełączają obie strony
-    /// w jednej transakcji, więc to czysty crossfade w miejscu: glif tury
-    /// staje się glifem „Myślałem", tekst kroku — czasem, treść wyrasta pod nim.
+    /// Pierwsza odpowiedź asystenta w slocie, jeśli niesie ślad tury — to
+    /// nad nią stoi wiersz „myślę", który przeżył turę.
+    private var slotThinkingAnswer: AgentChatMessage? {
+        let index = slotStart + 1
+        guard index < store.messages.count else { return nil }
+        let answer = store.messages[index]
+        guard answer.author == .assistant, answer.thinking != nil else { return nil }
+        return answer
+    }
+
+    /// Faza wiersza „myślę" w slocie: praca, dopóki tura biegnie; osiadła,
+    /// dopóki odpowiedź z tej sesji stoi w slocie; `nil` = wiersza nie ma
+    /// (historia z serwera, błąd tury bez odpowiedzi).
+    private var thoughtPhase: AssistantThoughtLine.Phase? {
+        if store.isSending {
+            // `.distantPast` nie ma prawa wejść: `send()`, `editMessage()`
+            // i start `followTurn` ustawiają epokę razem z `isSending`.
+            return .working(startedAt: store.turnStartedAt ?? .distantPast, isStopping: store.isStopping)
+        }
+        if let thinking = slotThinkingAnswer?.thinking {
+            return .settled(duration: thinking.duration)
+        }
+        return nil
+    }
+
+    /// Nowy krok postępu zmienia wysokość śladu pod wierszem „myślę" — całe
+    /// wnętrze slotu (szkic odpowiedzi niżej) ma zjechać razem z nim, a nie
+    /// skoczyć. Modyfikator siedzi na slocie, bo animacja na samym śladzie
+    /// nie obejmuje ruchu sąsiadów.
+    private var stepAnimation: Animation? {
+        if reduceMotion { return nil }
+        return .easeOut(duration: 0.25)
+    }
+
+    /// Slot ostatniej tury: pytanie + wiersz „myślę" + ALBO szkic odpowiedzi,
+    /// ALBO odpowiedzi tej tury (i ewentualna notka błędu). Insert/remove
+    /// dzieje się w zwykłym `ZStack`, nie na poziomie `LazyVStack` — tam
+    /// przejścia są przewidywalne, a tu `apply(finished:)` i `defer`
+    /// w `followTurn` przełączają obie strony w jednej transakcji: wiersz
+    /// osiada w miejscu, szkic przenika w odpowiedź, treść wyrasta pod nim.
     private var turnSlot: some View {
         VStack(alignment: .leading, spacing: 14) {
             if slotStart < store.messages.count {
                 bubble(at: slotStart, store.messages[slotStart])
             }
-            ZStack(alignment: .topLeading) {
-                if store.isSending {
-                    VStack(alignment: .leading, spacing: 12) {
-                        AssistantThinkingLine(
-                            steps: store.progress,
-                            // `.distantPast` nie ma prawa wejść: `send()`,
-                            // `editMessage()` i start `followTurn` ustawiają epokę
-                            // razem z `isSending`.
-                            startedAt: store.turnStartedAt ?? .distantPast,
-                            isStopping: store.isStopping
-                        )
+            VStack(alignment: .leading, spacing: 14) {
+                // JEDEN wiersz na całe życie tury: ten sam widok w tym samym
+                // miejscu drzewa od pierwszej klatki do końca życia odpowiedzi
+                // w slocie. Domknięcie tury nie podmienia go na inny widok,
+                // tylko przełącza fazę — dlatego etykieta rozmywa się
+                // w „Myślałem", licznik zjeżdża, ślad zwija się pod chevron,
+                // a odpowiedź wyrasta pod nim. Odpowiedź w slocie NIE rysuje
+                // własnego wiersza (`showsThinking: false`); dostaje go
+                // z powrotem od `MessageBubble`, gdy po następnym pytaniu
+                // przejdzie do części przed slotem.
+                if let phase = thoughtPhase {
+                    AssistantThoughtLine(
+                        phase: phase,
+                        steps: store.isSending ? store.progress : (slotThinkingAnswer?.thinking?.steps ?? []),
+                        isExpanded: expansion(of: slotThinkingAnswer?.id ?? Self.liveThoughtKey, in: $expandedThoughts)
+                    )
+                }
+
+                ZStack(alignment: .topLeading) {
+                    if store.isSending {
                         // Odpowiedź pisze się POD wierszem, zanim tura się
                         // domknie — a po domknięciu ten sam tekst zostaje
                         // w miejscu jako `AssistantAnswer`, więc crossfade
                         // niżej podmienia identyczne piksele.
-                        if !store.draftText.isEmpty {
-                            AssistantDraftAnswer(text: store.draftText)
-                                .transition(.opacity)
+                        Group {
+                            if !store.draftText.isEmpty {
+                                AssistantDraftAnswer(text: store.draftText)
+                                    .transition(.opacity)
+                            }
                         }
+                        .animation(.easeInOut(duration: 0.2), value: store.draftText.isEmpty)
+                        // Wyjście (szkic → odpowiedź) animuje ten `ZStack`;
+                        // wejście pod NOWYM pytaniem robi sam wiersz
+                        // (`appeared`), bo `.id(slotKey)` niżej stawia go
+                        // w nieanimowanej transakcji.
+                        .transition(.opacity)
+                    } else {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(Array(store.messages.enumerated().dropFirst(slotStart + 1)), id: \.element.id) { index, message in
+                                bubble(at: index, message, showsThinking: message.id != slotThinkingAnswer?.id)
+                            }
+                            if let errorMessage = store.errorMessage {
+                                ErrorNote(
+                                    text: errorMessage,
+                                    // Domknięcie, a nie referencja `retry`: pod
+                                    // `InferSendableFromCaptures` (SE-0418, włączone
+                                    // w tym projekcie) referencja do metody obok `nil`
+                                    // w wyrażeniu warunkowym daje dwa równorzędne
+                                    // rozwiązania typu i CAŁY `ScrollView` przestaje
+                                    // się kompilować („ambiguous use of 'init'"),
+                                    // ze wskazaniem na linię 60 wierszy wyżej.
+                                    // Jawny typ tu nie pomaga — tylko domknięcie.
+                                    onRetry: store.retryText == nil ? nil : { retry() }
+                                )
+                                .id(Self.errorAnchor)
+                            }
+                        }
+                        .transition(.opacity)
                     }
-                    .animation(.easeInOut(duration: 0.2), value: store.draftText.isEmpty)
-                    // Wyjście (wiersz → odpowiedź) animuje ten `ZStack`; wejście
-                    // pod NOWYM pytaniem robi sam wiersz (`appeared`), bo
-                    // `.id(slotKey)` niżej stawia go w nieanimowanej transakcji.
-                    .transition(.opacity)
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(Array(store.messages.enumerated().dropFirst(slotStart + 1)), id: \.element.id) { index, message in
-                            bubble(at: index, message)
-                        }
-                        if let errorMessage = store.errorMessage {
-                            ErrorNote(
-                                text: errorMessage,
-                                // Domknięcie, a nie referencja `retry`: pod
-                                // `InferSendableFromCaptures` (SE-0418, włączone
-                                // w tym projekcie) referencja do metody obok `nil`
-                                // w wyrażeniu warunkowym daje dwa równorzędne
-                                // rozwiązania typu i CAŁY `ScrollView` przestaje
-                                // się kompilować („ambiguous use of 'init'"),
-                                // ze wskazaniem na linię 60 wierszy wyżej.
-                                // Jawny typ tu nie pomaga — tylko domknięcie.
-                                onRetry: store.retryText == nil ? nil : { retry() }
-                            )
-                            .id(Self.errorAnchor)
-                        }
-                    }
-                    .transition(.opacity)
                 }
             }
+            // Osiadanie tury to JEDNA transakcja na całym wnętrzu slotu:
+            // wiersz „myślę" przechodzi w „Myślałem", ślad się zwija,
+            // szkic przenika w odpowiedź — i wszystko to zjeżdża razem.
             .animation(slotAnimation, value: store.isSending)
+            .animation(stepAnimation, value: store.progress.count)
             .id(slotKey)
         }
         .frame(minHeight: slotMinHeight, alignment: .top)
@@ -1352,6 +1428,9 @@ struct AssistantView: View {
     }()
 
     private static let turnAnchor = "assistant.turn"
+    /// Klucz rozwinięcia wiersza „myślę" w TRAKCIE tury — nieużywany (ślad na
+    /// żywo ma własny stan), ale `Binding` musi na coś wskazywać.
+    private static let liveThoughtKey = "assistant.thought.live"
     private static let errorAnchor = "assistant.error"
     /// Co stoi pod slotem ostatniej tury: spacing 14 + tail 1 + spacing 14
     /// + rozpórka 120 + padding 12. Slot o wysokości `okno − belowSlot`
@@ -1422,6 +1501,10 @@ private struct MessageBubble: View {
     /// Treść następnej wiadomości użytkownika; `nil`, gdy jeszcze nie
     /// odpowiedział. Tylko karta pytania z tego korzysta.
     var reply: String? = nil
+    /// Czy rysować wiersz „Myślałem" nad odpowiedzią. `false` dla odpowiedzi
+    /// w slocie ostatniej tury — tam wiersz stoi NAD dymkiem, jako ten sam
+    /// widok, który pracował przez całą turę (`AssistantView.turnSlot`).
+    var showsThinking: Bool = true
     /// Rozwinięcia trzyma ekran (po id wiadomości), nie wiersz — wiersz
     /// zmienia miejsce w drzewie między slotem a częścią przed nim.
     @Binding var isCardExpanded: Bool
@@ -1518,8 +1601,12 @@ private struct MessageBubble: View {
         VStack(alignment: .leading, spacing: 12) {
             // Pierwszy wiersz ma geometrię wskaźnika tury — to w niego
             // wskaźnik się zamienia. Tylko dla odpowiedzi z tej sesji.
-            if let thinking = message.thinking {
-                AssistantThoughtSummary(summary: thinking, isExpanded: $isThoughtExpanded)
+            if showsThinking, let thinking = message.thinking {
+                AssistantThoughtLine(
+                    phase: .settled(duration: thinking.duration),
+                    steps: thinking.steps,
+                    isExpanded: $isThoughtExpanded
+                )
             }
 
             if message.savedPlan {

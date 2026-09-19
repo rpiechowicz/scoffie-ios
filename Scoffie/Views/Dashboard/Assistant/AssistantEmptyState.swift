@@ -17,15 +17,22 @@ struct AssistantEmptyState: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.scAccentTint(scheme))
-                .frame(width: 64, height: 64)
-                .overlay(
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                )
+        VStack(spacing: 16) {
+            // Znak marki, nie systemowe „sparkles": to ten sam glif, który
+            // oddycha we wskaźniku tury i stoi nad każdą odpowiedzią —
+            // powitanie ma być pierwszym spotkaniem z NIM, a nie z ikoną
+            // z katalogu. Miękki krążek z cienką obwódką zamiast kwadratu:
+            // wszystko na tym ekranie jest kapsułą albo kołem.
+            ZStack {
+                Circle()
+                    .fill(Color.scAccentTint(scheme))
+                Circle()
+                    .strokeBorder(SCPalette.terracotta.opacity(scheme == .dark ? 0.28 : 0.18), lineWidth: 1)
+                SCMarkShape()
+                    .fill(SCPalette.terracotta)
+                    .frame(width: 30, height: 30)
+            }
+            .frame(width: 72, height: 72)
 
             VStack(spacing: 4) {
                 Text(welcome.title)

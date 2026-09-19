@@ -67,20 +67,15 @@ struct CalendarView: View {
     /// przestał pasować do dnia, po prostu wraca do wartości domyślnej.
     @State private var pickedCardId: String?
 
-    /// Skąd ma wjechać nowe danie na talerz: `1` z prawej, `-1` z lewej,
-    /// `0` w miejscu. Ustawiane W TEJ SAMEJ zmianie stanu, co powód ruchu
-    /// (zmiana dnia, stuknięcie w talerzyk), bo przejście wstawienia czyta
-    /// go w tym samym przebiegu układu — patrz `CalendarPlate.swap`.
-    @State private var plateDirection: Int = 0
-
     /// Licznik przełożeń talerza ręką użytkownika — wyłącznie do haptyki.
     /// Rośnie tylko przy stuknięciu w talerzyk albo w linię dnia, a nie przy
     /// każdej zmianie wybranego dania: dzień ma swój sygnał w pagerze.
+    ///
+    /// Kierunku przełożenia (`plateDirection`) już nie ma: niósł wyłącznie
+    /// wjazd wielkiego wiersza pod talerzem z boku, a ten czytał się jako
+    /// tekst, który „się przesuwa". Podpis przenika teraz w miejscu, jak
+    /// zdjęcie nad nim.
     @State private var plateMoves = 0
-
-    /// Licznik KAŻDEGO ustawienia kierunku (dzień, talerzyk, linia dnia) —
-    /// zegar gaszący kierunek wisi na nim, a nie na samej wartości.
-    @State private var plateMotion = 0
 
     /// Licznik odhaczeń z pieczątki — haptyka zapisu. Odhaczenie to jedyny
     /// zapis na tym ekranie i ma być czuć pod palcem, że coś się stało.
@@ -607,11 +602,7 @@ struct CalendarView: View {
         let from = current.flatMap { c in items.firstIndex(where: { $0.id == c.id }) }
         let to = items.firstIndex(where: { $0.id == target.id }) ?? from ?? 0
 
-        if let from, to == from {
-            plateDirection = 0
-        } else {
-            plateDirection = from.map { to > $0 ? 1 : -1 } ?? 0
-            plateMotion += 1
+        if from == nil || to != from {
             plateMoves += 1
         }
         pickedCardId = pin ? target.id : nil
@@ -937,7 +928,6 @@ struct CalendarView: View {
                     outgoingDate = change.from
                     outgoingPick = pickedCardId
                     pickedCardId = nil
-                    plateDirection = 0
                     turnDirection = change.forward ? 1 : -1
                     dayTurn = 1
                     turnCount += 1
@@ -1010,27 +1000,6 @@ struct CalendarView: View {
         // ma własny, cięższy: to zapis, nie nawigacja.
         .sensoryFeedback(.selection, trigger: plateMoves)
         .sensoryFeedback(.impact(weight: .medium), trigger: eatenToggles)
-        // Kierunek wjazdu talerza gaśnie, gdy sprężyna osiądzie. Bez tego
-        // danie, które zmieniło się z innego powodu niż ruch użytkownika
-        // (plan przyszedł z serwera zmieniony ręką domownika), wjeżdżałoby
-        // z kierunku ostatniego stuknięcia. Zerowanie po osiadnięciu nie
-        // rusza żadnego przejścia: tożsamość talerza się wtedy nie zmienia.
-        //
-        // Zadanie wisi na LICZNIKU ruchów, nie na wartości kierunku: dwa
-        // stuknięcia w tę samą stronę w ciągu pół sekundy nie zmieniają
-        // wartości, a zegar ma ruszyć od nowa. I wychodzi przy anulowaniu
-        // — anulowane zadanie, które mimo to zeruje kierunek, gasiłoby go
-        // klatkę po tym, jak nowy ruch właśnie go ustawił.
-        //
-        .task(id: plateMotion) {
-            guard plateMotion > 0 else { return }
-            do {
-                try await Task.sleep(for: DayNavigationMotion.plateFadeSettled)
-            } catch {
-                return
-            }
-            plateDirection = 0
-        }
         // Kopia wyjeżdżająca schodzi z drzewa, gdy sprężyna osiądzie —
         // niewidoczna i tak, ale rysowana. Zegar na liczniku obrotów,
         // odporny na anulowanie, z tego samego powodu co wyżej.
@@ -1209,10 +1178,6 @@ struct CalendarView: View {
                 dayKey: dayKey,
                 titleLines: fit.titleLines,
                 showsChips: fit.showsChips,
-                // Dziesięciopunktowy przechył nazwy w stronę, z której przyszło
-                // danie — tyle, żeby podpis należał do tego samego ruchu, co
-                // talerz nad nim, i za mało, żeby był drugim ruchem obok niego.
-                lean: plateDirection,
                 onOpenDetail: openDetail
             )
             .modifier(turn.effect(travel: 72, lift: 6, shrink: 0.04))
@@ -1348,7 +1313,6 @@ struct CalendarView: View {
         else { return }
 
         pickedCardId = id
-        plateDirection = 0
         eatenToggles += 1
         toggleEaten(meal, slot: card.slot, on: date)
     }

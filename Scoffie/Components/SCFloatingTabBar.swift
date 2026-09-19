@@ -72,10 +72,23 @@ struct SCFloatingTabBar: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pill
+    /// Zakładka podświetlona NA PASKU — kopia `selection` z własną
+    /// transakcją. `selection` musi zmieniać się BEZ animacji (inaczej
+    /// `TabView` przenika treść), a pigułka ma się przesunąć — jedna
+    /// wartość nie może jechać w dwóch transakcjach naraz, więc są dwie.
+    @State private var highlighted: DashboardTab?
 
     private var motion: Animation {
         reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.38)
     }
+
+    /// Ruch pigułki między zakładkami — jak systemowa pigułka z iOS 26:
+    /// krótka sprężyna, bez odbicia.
+    private var pillMotion: Animation {
+        reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.3, extraBounce: 0)
+    }
+
+    private var current: DashboardTab { highlighted ?? selection }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -95,23 +108,34 @@ struct SCFloatingTabBar: View {
         .background(Color.scPageBase(scheme).opacity(0.72), in: .capsule)
         .padding(.horizontal, isCompact ? Self.compactSideMargin : Self.sideMargin)
         .animation(motion, value: isCompact)
-        .animation(.snappy(duration: 0.3), value: selection)
-        .sensoryFeedback(.selection, trigger: selection)
+        // Zmiana spoza paska (asystent → Plan, wylogowanie): pigułka
+        // dojeżdża tą samą sprężyną, co po stuknięciu.
+        .onChange(of: selection) { _, tab in
+            guard highlighted != tab else { return }
+            withAnimation(pillMotion) { highlighted = tab }
+        }
+        // Bez `sensoryFeedback` i bez `.animation(value: selection)` na całym
+        // pasku: systemowy pasek nie wibruje przy zmianie zakładki, a
+        // animacja na całym `HStack` łapała też wypełnienie symbolu i podpis
+        // — każde stuknięcie było trzema ruchami zamiast jednego.
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Zakładki")
     }
 
     private func tabButton(_ item: SCTabBarItem) -> some View {
-        let selected = item.tab == selection
+        let selected = item.tab == current
         return Button {
+            guard item.tab != selection else { return }
             // Zmiana wyboru spoza systemowego paska jest dla `TabView` zmianą
             // „programową", a taką od iOS 18 pokazuje przenikaniem treści —
             // stąd animacja, której z systemowym paskiem nie było. Transakcja
-            // bez animacji przywraca cięcie. Pigułkę na pasku animuje osobno
-            // `.animation(value: selection)`, więc ona nadal się przesuwa.
+            // bez animacji przywraca cięcie jak w systemie. Pigułka jedzie
+            // w OSOBNEJ transakcji po `highlighted` — gdyby animować
+            // `selection`, `TabView` znów przenikałby treść.
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { selection = item.tab }
+            withAnimation(pillMotion) { highlighted = item.tab }
         } label: {
             VStack(spacing: isCompact ? 0 : 3) {
                 Image(systemName: item.icon)
