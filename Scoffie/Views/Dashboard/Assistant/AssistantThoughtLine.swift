@@ -3,17 +3,15 @@ import SwiftUI
 /// Wiersz tury — 1:1 z makietą „Stan pracy · finał: Oddech łuku”
 /// (`MWorking`) i „14 · Thought summary” (`LThought`).
 ///
-/// W TRAKCIE tury: znak marki stoi NIERUCHOMO w środku pierścienia 44 pt,
-/// a wokół niego krąży łuk — obrót 2,4 s liniowo, a łuk jednocześnie
-/// „oddycha” 1,8 s: rośnie od kropki (5 % obwodu) do ok. 55 % i kurczy się
-/// z powrotem. Obwód nigdy się nie zamyka — to aktywność, nie postęp.
-/// Łuk, status i znak są w TERAKOCIE (odejście od makiety, decyzja Rafała
-/// 21.09.2026: indygo wyglądało obco). Obok JEDEN bieżący status (16/600,
-/// przebłysk 2,6 s; przy zmianie stary odpływa w górę, nowy wpływa od dołu),
-/// po prawej realny licznik sekund, POD statusem ślad zrobionych kroków
-/// (ptaszek + zdanie, trzy ostatnie; zapis ma ptaszek w szałwii), a po 18 s
-/// „Możesz wyjść — wrócę z odpowiedzią.”. Bez paska, bez procentu i bez
-/// nazw narzędzi.
+/// W TRAKCIE tury (poprawka 21.09.2026): dziennik w JEDNEJ kolumnie,
+/// od góry — najpierw ślad zrobionych kroków (ptaszek + zdanie, trzy
+/// ostatnie; zapis ma ptaszek w szałwii), POD nim bieżący krok: łuk 18 pt
+/// (obrót 2,4 s, oddech 5 → 55 % obwodu 1,8 s, nigdy zamknięty), status
+/// 15/600 z przebłyskiem i realny licznik sekund po prawej. Kolumna ikon ma
+/// szerokość znaku marki przy odpowiedzi (18 + 10 pt), więc ptaszki, łuk
+/// i tekst stoją w liniach odpowiedzi. Po 18 s pod statusem, wcięte do
+/// tekstu: „Możesz wyjść — wrócę z odpowiedzią.”. Łuk i status w TERAKOCIE
+/// (decyzja Rafała 21.09.2026). Bez paska, procentu i nazw narzędzi.
 ///
 /// PO turze (`LThought`): „Myślałem 42 s” z chevronem, wcięte pod tekst
 /// odpowiedzi (28 pt); licznik z wiersza pracy STAJE SIĘ tą liczbą.
@@ -77,7 +75,7 @@ struct AssistantThoughtLine: View {
     /// Jeden bieżący status — ostatni krok z serwera, gotowe zdanie po polsku.
     private var status: String {
         if isStopping { return "Zatrzymuję…" }
-        return steps.last?.label ?? "Czytam pytanie"
+        return steps.last?.label ?? "Już się tym zajmuję"
     }
 
     /// Ślad pod statusem: co asystent JUŻ zrobił w tej turze. Wszystko przed
@@ -142,68 +140,81 @@ struct AssistantThoughtLine: View {
 
     // MARK: Praca
 
+    /// Kolumna ikon: tyle, ile znak marki przy odpowiedzi (`AssistantVoice`,
+    /// 18 pt + 10 pt odstępu). Ptaszki, łuk i tekst stoją w tych samych
+    /// liniach co odpowiedź, która za chwilę pojawi się pod spodem.
+    private static let iconColumn: CGFloat = 18
+    private static let iconGap: CGFloat = 10
+    /// Wspólna wysokość wiersza — ślad i bieżący status mają jeden rytm.
+    private static let rowHeight: CGFloat = 22
+
+    /// Dziennik tury, od góry: to, co JUŻ zrobione (ptaszki), a pod spodem
+    /// to, co dzieje się teraz (łuk + status + sekundy). Nowy krok przesuwa
+    /// bieżący status w dół, a stary staje się ptaszkiem nad nim — czyta się
+    /// jak lista, która rośnie, a nie jak napis, pod którym coś się dzieje.
     private var working: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || isStopping)) { context in
             let t = startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? 0
-            // Do góry: ślad kroków rośnie POD statusem, a pierścień ma stać
-            // w miejscu. Wiersz statusu ma wysokość pierścienia, więc sam
-            // status dalej jest wyśrodkowany względem niego.
-            HStack(alignment: .top, spacing: 14) {
-                glyph(t: t)
-
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        // Zmiana stanu: stary status odpływa w górę, nowy
-                        // wpływa od dołu — widać, że COŚ się stało, a nie
-                        // że podmienił się napis.
-                        statusText(t: t)
-                            .id(status)
-                            .transition(statusTransition)
-                        Spacer(minLength: 0)
-                        if !isStopping {
-                            // Sekundy rolują się jak czas w szczegółach posiłku.
-                            SCRollingNumber(value: Int(t), unit: "s")
-                                .font(.system(size: 12.5))
-                                .foregroundStyle(AssistantLook.faint(scheme))
-                                .fixedSize()
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .frame(minHeight: 44)
-                    .clipped()
-
-                    if isStopping {
-                        Text("Nic nie zmieniłem w planie.")
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(AssistantLook.muted(scheme))
-                            .transition(.opacity)
-                    }
-
-                    if !doneSteps.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(doneSteps) { step in
-                                doneRow(step, isOldest: step.id == doneSteps.first?.id && doneSteps.count == Self.trailLimit)
-                                    .transition(doneTransition)
-                            }
-                        }
-                        .padding(.top, 2)
-                    }
-
-                    if showsPatience, !isStopping {
-                        Text("Możesz wyjść — wrócę z odpowiedzią.")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(AssistantLook.faint(scheme))
-                            .padding(.top, 12)
-                            .transition(.opacity)
-                    }
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(doneSteps) { step in
+                    doneRow(step, isOldest: step.id == doneSteps.first?.id && doneSteps.count == Self.trailLimit)
+                        .transition(doneTransition)
                 }
-                .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: status)
-                .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: doneSteps)
+
+                currentRow(t: t)
+
+                if isStopping {
+                    Text("Nic nie zmieniłem w planie.")
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(AssistantLook.muted(scheme))
+                        .padding(.leading, Self.iconColumn + Self.iconGap)
+                        .transition(.opacity)
+                }
+
+                if showsPatience, !isStopping {
+                    Text("Możesz wyjść — wrócę z odpowiedzią.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(AssistantLook.faint(scheme))
+                        .padding(.leading, Self.iconColumn + Self.iconGap)
+                        .padding(.top, 2)
+                        .transition(.opacity)
+                }
             }
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: status)
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: doneSteps)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(status)
         .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    /// Bieżący krok: łuk w kolumnie ikon, status z przebłyskiem, sekundy
+    /// po prawej — wszystko na jednej osi.
+    private func currentRow(t: TimeInterval) -> some View {
+        HStack(alignment: .center, spacing: Self.iconGap) {
+            glyph(t: t)
+                .frame(width: Self.iconColumn, height: Self.iconColumn)
+
+            ZStack(alignment: .leading) {
+                // Zmiana stanu: stary status odpływa w górę, nowy wpływa od
+                // dołu — widać, że COŚ się stało, a nie że podmienił się napis.
+                statusText(t: t)
+                    .id(status)
+                    .transition(statusTransition)
+            }
+            .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+            .clipped()
+
+            if !isStopping {
+                // Sekundy rolują się jak czas w szczegółach posiłku.
+                SCRollingNumber(value: Int(t), unit: "s")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                    .fixedSize()
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(minHeight: Self.rowHeight)
     }
 
     private var statusTransition: AnyTransition {
@@ -217,8 +228,8 @@ struct AssistantThoughtLine: View {
     private var doneTransition: AnyTransition {
         if reduceMotion { return .opacity }
         return .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: -8)),
-            removal: .opacity
+            insertion: .opacity.combined(with: .offset(y: 8)),
+            removal: .opacity.combined(with: .offset(y: -6))
         )
     }
 
@@ -226,15 +237,18 @@ struct AssistantThoughtLine: View {
     /// jedyny krok, który coś zmienił. Najstarszy z trzech przygasa, żeby
     /// było widać, że lista się przesuwa, a nie urywa.
     private func doneRow(_ step: DoneStep, isOldest: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 7) {
+        HStack(alignment: .center, spacing: Self.iconGap) {
             Image(systemName: "checkmark")
-                .font(.system(size: 9.5, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(step.wrote ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme).opacity(0.75))
+                .frame(width: Self.iconColumn, height: Self.iconColumn)
             Text(step.label)
                 .font(.system(size: 13.5))
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(minHeight: Self.rowHeight)
         .opacity(isOldest ? 0.55 : 1)
     }
 
@@ -243,7 +257,7 @@ struct AssistantThoughtLine: View {
     /// Zatrzymane: łuk znika, tor szarzeje, znak szary.
     private func glyph(t: TimeInterval) -> some View {
         AssistantArcSpinner(
-            size: 44,
+            size: Self.iconColumn,
             color: phaseColor,
             t: t,
             stopped: isStopping,
@@ -256,13 +270,13 @@ struct AssistantThoughtLine: View {
     private func statusText(t: TimeInterval) -> some View {
         if isStopping {
             Text(status)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .lineLimit(1)
         } else if reduceMotion {
             Text(status)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(phaseColor)
                 .lineLimit(1)
@@ -270,7 +284,7 @@ struct AssistantThoughtLine: View {
             let phase = t.truncatingRemainder(dividingBy: 2.6) / 2.6
             let p = 1.2 - phase * 2.4
             Text(status)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .tracking(-0.3)
                 .lineLimit(1)
                 .foregroundStyle(
@@ -414,9 +428,13 @@ struct AssistantArcSpinner: View {
                     .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(arc.start * 360))
             }
-            SCMarkShape()
-                .fill(stopped ? AssistantLook.ink(scheme).opacity(0.35) : AssistantLook.terraFill(scheme))
-                .frame(width: (size * 0.4).rounded(), height: (size * 0.4).rounded())
+            // Poniżej 20 pt znak w środku to kilka punktów szumu — w wierszu
+            // tury (18 pt) łuk mówi sam za siebie.
+            if size >= 20 {
+                SCMarkShape()
+                    .fill(stopped ? AssistantLook.ink(scheme).opacity(0.35) : AssistantLook.terraFill(scheme))
+                    .frame(width: (size * 0.4).rounded(), height: (size * 0.4).rounded())
+            }
         }
         .padding(lineWidth / 2)
         .frame(width: size, height: size)
@@ -476,7 +494,7 @@ extension AnyTransition {
         @State private var expanded = false
         @State private var working = true
         private let steps = [
-            AgentProgressStepDTO(tool: "read", label: "Czytam pytanie", at: "2026-09-19T10:00:00.000Z", writes: nil, phase: nil, transient: true),
+            AgentProgressStepDTO(tool: "read", label: "Już się tym zajmuję", at: "2026-09-19T10:00:00.000Z", writes: nil, phase: nil, transient: true),
             AgentProgressStepDTO(tool: "get_week_plan", label: "Sprawdzam plan tygodnia", at: "2026-09-19T10:00:02.000Z", writes: false, phase: nil, transient: nil),
             AgentProgressStepDTO(tool: "start_planning", label: "Układam propozycję tygodnia", at: "2026-09-19T10:00:05.000Z", writes: nil, phase: "PLANNING", transient: nil),
             AgentProgressStepDTO(tool: "apply_week_plan", label: "Zapisuję plan tygodnia", at: "2026-09-19T10:00:09.000Z", writes: true, phase: nil, transient: nil),

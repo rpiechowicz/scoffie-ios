@@ -24,12 +24,14 @@ import SwiftUI
 //     albo wypada pora posiłku, stoi tam „Pora gotować” i „Pora jeść” —
 //     „za 3 min” przy daniu, które robi się kwadrans, odpowiada na pytanie,
 //     którego nikt już nie zadaje.
-//  3. **Talerz BIJE, kiedy jest co robić.** Nie „pulsuje”: bicie serca ma
-//     dwa uderzenia — mocne i słabsze — potem pauzę, szybki wzrost i wolne
-//     opadanie (`CalendarHeartbeat`). Talerz oddycha skalą, poświata
-//     puchnie i jaśnieje z uderzeniem, a fala echosondy startuje przy każdym
-//     uderzeniu — światło i pierścień są jednym rytmem, nie trzema
-//     zegarami. Kiedy nic nie wisi w powietrzu, talerz stoi nieruchomo.
+//  3. **Talerz ODDYCHA, kiedy jest co robić.** Spokojny wdech i dłuższy
+//     wydech (`CalendarBreath`): talerz lekko puchnie, poświata wzbiera
+//     i jaśnieje, a przy rancie żarzy się miękka, rozmyta aureola, która
+//     rośnie i opada razem z nim. Jedna funkcja czasu, więc wszystko idzie
+//     jednym oddechem. Wcześniejsze „bicie serca” (dwa szybkie uderzenia
+//     i fale echosondy) wyglądało jak rant odrywający się od talerza —
+//     ostre pierścienie leciały w bok i gasły. Kiedy nic nie wisi
+//     w powietrzu, talerz stoi nieruchomo.
 //  4. **Zdjęcie otwiera szczegóły, pieczątka odhacza.** Makieta odhaczała
 //     stuknięciem w cały talerz i nie miała z niego żadnego wyjścia —
 //     a szczegół posiłku jest jedynym miejscem, w którym przestawia się
@@ -344,62 +346,36 @@ struct CalendarPlateFace: View {
     }
 }
 
-// MARK: - Bicie serca
+// MARK: - Oddech
 
-/// Rytm talerza, który woła: „lub-dub”, pauza, i od nowa.
+/// Rytm talerza, który czeka na ruch: wdech, dłuższy wydech, bez pauzy.
 ///
-/// Liczone z ZEGARA, nie z trzech niezależnych animacji `repeatForever`.
-/// Poprzedni puls to była poświata jadąca w tę i z powrotem sinusoidą plus
-/// dwa pierścienie startujące co dwie sekundy z własnych stoperów — trzy
-/// zegary, które nigdy nie były w rytmie, i ruch, który wyglądał jak
-/// oddychanie maszyny. Serce ma dwa uderzenia: mocne i zaraz po nim słabsze,
-/// każde z szybkim wzrostem i wolniejszym opadaniem, a potem chwilę ciszy.
-/// Jedna funkcja czasu daje skalę talerza, poświatę i start każdej fali
-/// echosondy — więc wszystko bije razem.
+/// Liczone z ZEGARA, nie z animacji `repeatForever` — jedna funkcja czasu
+/// daje skalę talerza, poświatę i aureolę, więc wszystko oddycha razem,
+/// a dwa talerze (dzień wychodzący i wchodzący) mają ten sam rytm.
 ///
-/// Czas bierze się z `Date` odczytanego przez `TimelineView`, więc dwa
-/// talerze (dzień wychodzący i wchodzący w trakcie obrotu tacy) biją w tym
-/// samym rytmie, a pauza w tle (`paused`) nie zostawia niczego w pół drogi.
-enum CalendarHeartbeat {
-    /// Jeden cykl: dwa uderzenia i pauza. Wolniej niż serce w spoczynku —
-    /// to ma być spokojne przypomnienie, nie alarm.
-    static let cycle: TimeInterval = 2.4
-    /// Kiedy w cyklu (0–1) padają uderzenia i jak mocno drugie w stosunku
-    /// do pierwszego.
-    private static let beats: [(at: Double, strength: Double)] = [(0.06, 1.0), (0.30, 0.55)]
-    /// Fala echosondy żyje ~1,5 s: startuje przy uderzeniu i gaśnie
-    /// w połowie następnego cyklu.
-    private static let waveSpan = 0.62
+/// Wdech 40 % cyklu, wydech 60 %, obie połowy z łagodnym startem
+/// i hamowaniem: tak oddycha człowiek w spoczynku — wolniej wypuszcza, niż
+/// nabiera. Symetryczna sinusoida wyglądała jak wahadło, a „lub-dub” serca
+/// (poprzednia wersja) był za nerwowy na przypomnienie o gotowaniu.
+enum CalendarBreath {
+    /// Jeden oddech — spokojniej niż spoczynkowe ~4 s, żeby nie ponaglał.
+    static let cycle: TimeInterval = 3.6
+    private static let inhale = 0.4
 
-    /// Siła uderzenia w tej chwili, 0–1. Zero między uderzeniami.
-    static func beat(at date: Date) -> Double {
-        let t = phase(at: date)
-        let sum = beats.reduce(0.0) { $0 + $1.strength * bump(t, at: $1.at) }
-        return min(1, sum)
-    }
-
-    /// Postęp każdej żywej fali echosondy, 0 (start przy uderzeniu) – 1
-    /// (zgasła). Najwyżej dwie naraz.
-    static func waves(at date: Date) -> [Double] {
-        let t = phase(at: date)
-        return beats.compactMap { beat in
-            let r = (t - beat.at) / waveSpan
-            return r >= 0 && r <= 1 ? r : nil
-        }
-    }
-
-    private static func phase(at date: Date) -> Double {
+    /// Głębokość oddechu w tej chwili, 0 (wydech) – 1 (pełny wdech).
+    static func depth(at date: Date) -> Double {
         let elapsed = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle)
-        return elapsed / cycle
+        let t = elapsed / cycle
+        if t < inhale {
+            return ease(t / inhale)
+        }
+        return 1 - ease((t - inhale) / (1 - inhale))
     }
 
-    /// Uderzenie: stromy wzrost (szerokość 0,035 cyklu), łagodne opadanie
-    /// (0,09). Krzywa Gaussa po obu stronach, ale z różnymi szerokościami —
-    /// symetryczny garb wyglądał jak wahadło, nie jak skurcz.
-    private static func bump(_ t: Double, at center: Double) -> Double {
-        let width = t < center ? 0.035 : 0.09
-        let d = (t - center) / width
-        return exp(-d * d)
+    /// Sinusoidalne wejście i wyjście — bez szarpnięcia na zwrotach.
+    private static func ease(_ p: Double) -> Double {
+        0.5 - 0.5 * cos(.pi * min(1, max(0, p)))
     }
 }
 
@@ -470,9 +446,9 @@ struct CalendarPlate: View {
     }
 
     private var isUrgent: Bool { item?.isUrgent == true }
-    /// Czy serce bije: jest co robić i ruch nie jest wyłączony w dostępności.
-    /// Na niewybranej zakładce stoi — zegar 60 kl./s liczyłby się na darmo
-    /// pod ekranem, na który nikt nie patrzy.
+    /// Czy talerz oddycha: jest co robić i ruch nie jest wyłączony
+    /// w dostępności. Na niewybranej zakładce stoi — zegar 60 kl./s liczyłby
+    /// się na darmo pod ekranem, na który nikt nie patrzy.
     private var beats: Bool { isUrgent && !reduceMotion && isActiveTab }
 
     var body: some View {
@@ -480,7 +456,7 @@ struct CalendarPlate: View {
             // Światło sceny POD daniem — bez własnej tożsamości i bez
             // przejścia: poświata przechodzi na barwę nowej pory sama
             // (`CalendarPlateGlow`, `.smooth` 0,3 s, czyli w takt przenikania
-            // zdjęcia), a echosonda liczy fazę z zegara bezwzględnego i nie
+            // zdjęcia), a aureola liczy fazę z zegara bezwzględnego i nie
             // ma czego przenikać. Nic tu nie przygasa, bo na talerzu nie ma
             // chwili, w której nic nie stoi.
             CalendarPlateLight(
@@ -541,26 +517,23 @@ struct CalendarPlate: View {
         .frame(width: size, height: size)
     }
 
-    /// Talerz w rytmie serca.
+    /// Talerz w rytmie oddechu.
     ///
     /// `TimelineView` z harmonogramem animacji odczytuje zegar co klatkę,
-    /// ALE tylko dopóki serce bije (`paused`): talerz, który stoi, nie
-    /// kosztuje ani jednej klatki. Poświata i fale (`CalendarPlateLight`)
-    /// mają własny odczyt tego samego harmonogramu — obie warstwy pauzują
-    /// i ruszają tym samym `beats` w tym samym przebiegu, a `CalendarHeartbeat`
-    /// liczy z czasu czystą funkcją, więc różnica faz jest podklatkowa przy
-    /// 84-milisekundowym zboczu uderzenia. Mieszkają osobno, bo zdjęcie ma
-    /// tożsamość dania i przenika przy przełożeniu, a rytm jest nałożony
-    /// wyżej i nie ma go co przenikać.
+    /// ALE tylko dopóki talerz oddycha (`paused`): talerz, który stoi, nie
+    /// kosztuje ani jednej klatki. Poświata i aureola (`CalendarPlateLight`)
+    /// mają własny odczyt tego samego zegara i tej samej czystej funkcji
+    /// (`CalendarBreath`), więc idą w jednym rytmie. Mieszkają osobno, bo
+    /// zdjęcie ma tożsamość dania i przenika przy przełożeniu, a rytm jest
+    /// nałożony wyżej i nie ma go co przenikać.
     private var plate: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beats)) { context in
-            let beat = beats ? CalendarHeartbeat.beat(at: context.date) : 0
+            let breath = beats ? CalendarBreath.depth(at: context.date) : 0
 
             plateBody
-                // Talerz oddycha razem z uderzeniem — dwa i pół procenta to
-                // tyle, ile widać jako życie, a za mało, żeby zdjęcie
-                // „skakało”.
-                .scaleEffect(1 + 0.024 * beat)
+                // Trzy procent na wdechu — widać, że żyje, a zdjęcie nie
+                // „skacze”, bo ruch jest wolny i bez zbocza.
+                .scaleEffect(1 + 0.03 * breath)
         }
     }
 
@@ -659,17 +632,17 @@ private struct StampPressStyle: ButtonStyle {
 
 /// Miękka plama w kolorze pory za talerzem.
 ///
-/// Bez własnego stanu i bez własnego zegara: siłę uderzenia (`beat`) podaje
-/// talerz z jednej chwili zegara, tej samej, z której liczy własną skalę
-/// i fale echosondy. Kiedy woła (`loud`), plama jest mocniejsza i szersza
+/// Bez własnego stanu i bez własnego zegara: głębokość oddechu (`breath`)
+/// podaje scena z tej samej chwili zegara, z której talerz liczy własną
+/// skalę, a aureola swój blask. Kiedy woła (`loud`), plama jest mocniejsza i szersza
 /// — cicha poświata pod talerzem o średnicy 168 pt ginęła na ciemnym tle
 /// i puls było widać dopiero, gdy się go szukało.
 private struct CalendarPlateGlow: View {
     let tint: Color
     let diameter: CGFloat
     let loud: Bool
-    /// Siła uderzenia 0–1; zero, gdy talerz stoi.
-    let beat: Double
+    /// Głębokość oddechu 0–1; zero, gdy talerz stoi.
+    let breath: Double
 
     var body: some View {
         Circle()
@@ -684,8 +657,8 @@ private struct CalendarPlateGlow: View {
             .frame(width: diameter, height: diameter)
             // Odrobinę w górę: talerz ma stać w świetle, a nie na nim.
             .offset(y: -diameter * 0.05)
-            .scaleEffect(1 + 0.16 * beat)
-            .opacity((loud ? 0.55 : 0.72) + 0.45 * beat)
+            .scaleEffect(1 + 0.14 * breath)
+            .opacity((loud ? 0.5 : 0.72) + 0.5 * breath)
             // Barwa i siła światła osiadają razem z daniem, nie po nim:
             // przy 0,45 s poświata dochodziła do koloru nowej pory grubo po
             // tym, jak talerz już stał.
@@ -695,78 +668,67 @@ private struct CalendarPlateGlow: View {
     }
 }
 
-// MARK: - Fala echosondy
+// MARK: - Aureola
 
-/// Jeden pierścień wybijający spod talerza — startuje przy uderzeniu serca
-/// i gaśnie, rozchodząc się.
-///
-/// Bez własnej animacji: postęp 0–1 podaje talerz z zegara serca
-/// (`CalendarHeartbeat.waves`). Ramka jest STAŁA, rośnie `scaleEffect` —
-/// rosnąca ramka kazałaby układowi przeliczać się co klatkę bez końca.
-/// Krycie gaśnie szybciej, niż pierścień rośnie (kwadrat), żeby fala
-/// rozpływała się, a nie „wyłączała”.
-private struct CalendarPlateWave: View {
+/// Aureola przy rancie — miękkie, rozmyte światło w kolorze pory, które
+/// PRZYLEGA do talerza i oddycha z nim: na wdechu grubieje, jaśnieje
+/// i odsuwa się o kilka punktów, na wydechu wraca pod rant. Nigdy się od
+/// niego nie odrywa — tym różni się od dawnych fal echosondy.
+private struct CalendarPlateHalo: View {
     let tint: Color
     let diameter: CGFloat
     let lineWidth: CGFloat
-    let progress: Double
+    let breath: Double
 
     var body: some View {
-        let eased = 1 - pow(1 - progress, 2)
-
         Circle()
-            .strokeBorder(tint, lineWidth: lineWidth)
+            .stroke(tint, lineWidth: lineWidth * (2 + 2.4 * breath))
             .frame(width: diameter, height: diameter)
-            .scaleEffect(1 + 0.5 * eased)
-            .opacity(0.9 * pow(1 - progress, 1.6))
+            .blur(radius: 6 + 8 * breath)
+            .scaleEffect(1.07 + 0.07 * breath)
+            .opacity(0.38 + 0.6 * breath)
             .allowsHitTesting(false)
     }
 }
 
 // MARK: - Światło sceny
 
-/// Poświata i echosonda pod talerzem — w rytmie serca, ale POZA daniem.
+/// Poświata i aureola pod talerzem — w rytmie oddechu, ale POZA daniem.
 ///
 /// Osobny widok z własnym odczytem zegara, bo talerz ma tożsamość dania
-/// i przy przełożeniu leci z tacy albo na tacę — a światło jest sceną
-/// i ma stać na środku, tylko zmieniając barwę pory. Harmonogram jest ten
-/// sam co w `CalendarPlate.plate`, oba widoki pauzują i ruszają tym samym
-/// `beats` w tym samym przebiegu, a `CalendarHeartbeat` liczy z czasu
-/// czystą funkcją — więc oddech talerza i uderzenie poświaty padają razem
-/// z dokładnością do klatki (zbocze uderzenia trwa 84 ms, więc tego nie
-/// widać). Dwie warstwy w kolejności od spodu: głębiej poświata, bliżej
-/// wierzchu echosonda.
+/// i przenika przy przełożeniu — a światło jest sceną i ma stać na środku,
+/// tylko zmieniając barwę pory. Zegar i funkcja (`CalendarBreath`) są te
+/// same co w `CalendarPlate.plate`, więc talerz i światło oddychają razem.
+/// Dwie warstwy od spodu: szeroka poświata, bliżej rantu aureola.
 private struct CalendarPlateLight: View {
     let tint: Color
     let diameter: CGFloat
     let ringWidth: CGFloat
-    /// Czy jest co robić — mocniejsza poświata i fale.
+    /// Czy jest co robić — mocniejsza poświata i aureola.
     let loud: Bool
-    /// Czy serce bije: jest co robić i ruch nie jest wyłączony w dostępności.
+    /// Czy talerz oddycha: jest co robić i ruch nie jest wyłączony w dostępności.
     let beats: Bool
     let reduceMotion: Bool
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beats)) { context in
-            let beat = beats ? CalendarHeartbeat.beat(at: context.date) : 0
-            let waves = beats ? CalendarHeartbeat.waves(at: context.date) : []
+            let breath = beats ? CalendarBreath.depth(at: context.date) : 0
 
             ZStack {
-                CalendarPlateGlow(tint: tint, diameter: diameter * 2.2, loud: loud, beat: beat)
+                CalendarPlateGlow(tint: tint, diameter: diameter * 2.2, loud: loud, breath: breath)
 
-                if loud, reduceMotion {
-                    // Bez ruchu zostaje sam mocny pierścień — w miejscu,
-                    // w którym fala spędza połowę swojego życia.
-                    Circle()
-                        .strokeBorder(tint.opacity(0.55), lineWidth: ringWidth * 1.5)
-                        .frame(width: diameter, height: diameter)
-                        .scaleEffect(1.24)
-                } else {
-                    ForEach(Array(waves.enumerated()), id: \.offset) { _, wave in
-                        CalendarPlateWave(tint: tint, diameter: diameter, lineWidth: ringWidth * 1.6, progress: wave)
-                    }
+                if loud {
+                    // Bez ruchu (Ogranicz ruch, niewybrana zakładka) aureola
+                    // stoi w połowie oddechu — dalej widać, że jest co robić.
+                    CalendarPlateHalo(
+                        tint: tint,
+                        diameter: diameter,
+                        lineWidth: ringWidth,
+                        breath: beats ? breath : 0.5
+                    )
                 }
             }
+            .animation(.smooth(duration: 0.3), value: tint)
         }
         .allowsHitTesting(false)
     }
