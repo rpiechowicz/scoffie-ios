@@ -408,8 +408,9 @@ struct RecipeDetailView: View {
                 title: "Składniki",
                 accent: SCPalette.indigo
             ) {
-                if canSendToShopping {
+                if showsShoppingPill {
                     shoppingPill
+                        .transition(.scale(scale: 0.85, anchor: .trailing).combined(with: .opacity))
                 }
             }
 
@@ -574,6 +575,17 @@ struct RecipeDetailView: View {
     private var canSendToShopping: Bool {
         if case .catalog = context { return true }
         return false
+    }
+
+    /// „Do zakupów” pojawia się dopiero, gdy użytkownik zaczął odhaczać, co
+    /// ma — bez tego wszystkie składniki są „brakujące” i przycisk nie ma
+    /// z czego wybierać. Zostaje w trakcie i po wysyłce, żeby było widać wynik.
+    private var showsShoppingPill: Bool {
+        guard canSendToShopping else { return false }
+        switch shoppingSend {
+        case .sending, .sent, .failed: return true
+        case .idle: return !haveIngredientIds.isEmpty && !missingIngredientIds.isEmpty
+        }
     }
 
     private var missingIngredientIds: [UUID] {
@@ -1406,12 +1418,9 @@ private struct DetailNutritionCard: View {
         ]
     }
 
-    /// „To 22 % Twojego dziennego celu kalorii." — jedna liczba, którą
-    /// z pierścieni trzeba by zgadywać.
-    private var shareLine: String {
-        let share = Int((nutrition.kcal / Double(max(targets.kcal, 1)) * 100).rounded())
-        let who = servings == 1 ? "Porcja to" : "\(PolishPlural.servings(servings)) to razem"
-        return "\(who) \(share)% Twojego dziennego celu kalorii."
+    /// Ile procent dziennego celu kalorii to te porcje.
+    private var sharePercent: Int {
+        Int((nutrition.kcal / Double(max(targets.kcal, 1)) * 100).rounded())
     }
 
     var body: some View {
@@ -1420,30 +1429,138 @@ private struct DetailNutritionCard: View {
         DetailCard {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 18) {
-                    PlanGoalRings(
-                        rings: rows.map { .init(progress: $0.progress ?? 0, color: $0.color) }
-                    )
-                    .accessibilityHidden(true)
+                    DetailGoalRings(progresses: rows.map { $0.progress ?? 0 }, colors: rows.map(\.color))
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(rows) { row in
-                            PlanGoalLegendRow(row: row)
+                            DetailGoalLegendRow(row: row)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                Text(shareLine)
-                    .scFont(12, weight: .regular, relativeTo: .caption)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .contentTransition(.numericText())
-                    .fixedSize(horizontal: false, vertical: true)
+                // „Porcja to 22% Twojego dziennego celu kalorii." — jedna
+                // liczba, którą z pierścieni trzeba by zgadywać. Procent liczy
+                // tym samym ruchem, co pierścienie.
+                HStack(spacing: 0) {
+                    Text(servings == 1 ? "Porcja to " : "\(PolishPlural.servings(servings)) to razem ")
+                    CountingNumber(
+                        target: sharePercent,
+                        loadAnimation: DetailNutritionMotion.reveal,
+                        changeAnimation: DetailNutritionMotion.change
+                    )
+                    Text("% Twojego dziennego celu kalorii.")
+                }
+                .scFont(12, weight: .regular, relativeTo: .caption)
+                .foregroundStyle(Color.scMuted(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
             }
             .padding(16)
-            // Ta sama sprężyna, co pigułka celu dnia: pierścienie, tory
-            // i cyfry jadą przy zmianie porcji jednym ruchem.
-            .animation(PlanDayGoalBar.animation, value: nutrition)
         }
+    }
+}
+
+/// Jedna krzywa dla pierścieni, torów i liczników sekcji — ruch ma się
+/// czytać jako jeden. Wolniejszy i łagodniej hamujący niż w „Celu dnia”:
+/// tu wykres jest główną treścią karty, a nie podsumowaniem nad listą.
+private enum DetailNutritionMotion {
+    /// Wjazd: 1,4 s z długim, miękkim wyhamowaniem (ease-out quint).
+    static let reveal: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 1.4)
+    /// Zmiana porcji: ta sama krzywa, krócej.
+    static let change: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 0.8)
+}
+
+/// Koncentryczne pierścienie jak `PlanGoalRings` (te same wymiary, ten sam
+/// `ActivityRing`), tylko z krzywą `DetailNutritionMotion` — i z płynnym
+/// przejściem przy zmianie porcji, którego arkusz „Cel dnia” nie potrzebuje.
+private struct DetailGoalRings: View {
+    let progresses: [Double]
+    let colors: [Color]
+
+    @State private var isRevealed = false
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(progresses.enumerated()), id: \.offset) { index, progress in
+                ActivityRing(
+                    progress: isRevealed ? CGFloat(progress) : 0,
+                    lineWidth: PlanGoalRings.lineWidth,
+                    startColor: colors[index],
+                    endColor: colors[index],
+                    trackOpacity: 0.16
+                )
+                .padding(CGFloat(index) * (PlanGoalRings.lineWidth + PlanGoalRings.spacing))
+            }
+        }
+        .frame(width: PlanGoalRings.size, height: PlanGoalRings.size)
+        // Zmiana porcji — wjazd prowadzi `withAnimation` niżej, bo w jego
+        // trakcie ta wartość się nie zmienia.
+        .animation(DetailNutritionMotion.change, value: progresses)
+        .onAppear {
+            guard !isRevealed else { return }
+            withAnimation(DetailNutritionMotion.reveal.delay(0.05)) { isRevealed = true }
+        }
+    }
+}
+
+/// Wiersz legendy jak `PlanGoalLegendRow`, z liczbą liczącą się
+/// `CountingNumber` i torem na tej samej krzywej co pierścienie.
+private struct DetailGoalLegendRow: View {
+    let row: PlanGoalLegendRow.Row
+
+    @Environment(\.colorScheme) private var scheme
+    @State private var isRevealed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(row.color)
+                    .frame(width: 7, height: 7)
+
+                Text(row.title)
+                    .scFont(12.5, weight: .semibold, relativeTo: .caption)
+                    .tracking(-0.1)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+
+                Spacer(minLength: 6)
+
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    CountingNumber(
+                        target: row.value,
+                        loadAnimation: DetailNutritionMotion.reveal,
+                        changeAnimation: DetailNutritionMotion.change
+                    )
+                    .scFont(12.5, weight: .bold, relativeTo: .caption)
+                    .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+
+                    Text(row.target.map { "/ \($0) \(row.unit)" } ?? row.unit)
+                        .scFont(10.5, weight: .semibold, relativeTo: .caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scMuted(scheme))
+                }
+                .lineLimit(1)
+                .fixedSize()
+            }
+
+            if let progress = row.progress {
+                MacroProgressTrack(
+                    progress: isRevealed ? max(progress, 0) : 0,
+                    color: row.color,
+                    height: 3,
+                    animation: isRevealed ? DetailNutritionMotion.change : DetailNutritionMotion.reveal
+                )
+            }
+        }
+        .onAppear { isRevealed = true }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            row.target.map { "\(row.title): \(row.value) z \($0) \(row.unit)" }
+                ?? "\(row.title): \(row.value) \(row.unit)"
+        )
     }
 }
 

@@ -27,9 +27,14 @@ struct CountingNumber: View {
     let target: Int
     var loadDuration: Double = 0.9
     var changeDuration: Double = 0.45
+    /// Własne krzywe zamiast `easeOut` z czasami wyżej — gdy licznik ma iść
+    /// w parze z innym ruchem (pierścień, tor) i nie może z nim rozjechać.
+    var loadAnimation: Animation? = nil
+    var changeAnimation: Animation? = nil
 
     @State private var displayed: Double = 0
     @State private var didLoad = false
+    @State private var latestTarget: Int?
 
     var body: some View {
         // Niewidoczny tekst DOCELOWEJ wartości rezerwuje szerokość od pierwszej
@@ -46,15 +51,20 @@ struct CountingNumber: View {
             .onAppear {
                 guard !didLoad else { return }
                 didLoad = true
+                latestTarget = target
                 // Tiny delay so the screen frame mounts before the count begins.
+                // Liczy do NAJŚWIEŻSZEGO celu, nie do przechwyconego: gdy cel
+                // zmieni się w tych 50 ms, stary `target` z domknięcia cofałby
+                // licznik po tym, jak `onChange` już pojechał do nowego.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation(.easeOut(duration: loadDuration)) {
-                        displayed = Double(target)
+                    withAnimation(loadAnimation ?? .easeOut(duration: loadDuration)) {
+                        displayed = Double(latestTarget ?? target)
                     }
                 }
             }
             .onChange(of: target) { _, newValue in
-                withAnimation(.easeOut(duration: changeDuration)) {
+                latestTarget = newValue
+                withAnimation(changeAnimation ?? .easeOut(duration: changeDuration)) {
                     displayed = Double(newValue)
                 }
             }
