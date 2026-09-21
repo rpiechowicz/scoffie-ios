@@ -251,49 +251,33 @@ struct AssistantVoice<Content: View>: View {
 /// Szkic odpowiedzi w trakcie tury — tekst „pisze się" pod wskaźnikiem.
 ///
 /// Serwer streamuje z modelu, ale telefon odpytuje co sekundę, więc bez
-/// tego widoku tekst wskakiwałby akapitami raz na sekundę. Tu odsłania się
-/// znak po znaku i DOGANIA serwer w ~0,9 s od każdej porcji. Liczone
-/// z zegara względem kotwicy ustawianej przy każdej zmianie tekstu.
-///
-/// Serwer oddaje CAŁY dotychczasowy tekst i potrafi go wyzerować, gdy
-/// runda skończyła się narzędziem. Gdy nowy tekst nie zaczyna się od
-/// pokazanego, odsłanianie rusza od zera.
+/// tego widoku tekst wskakiwałby akapitami raz na sekundę. Ile znaków
+/// widać, mówi zegar ze sklepu (`AgentStore.draftReveal`) — ten sam, od
+/// którego po domknięciu tury dopisuje się gotowa odpowiedź, więc nie ma
+/// skoku między szkicem a odpowiedzią. Widok tylko czyta go co klatkę.
 struct AssistantDraftAnswer: View {
     let text: String
+    let clock: AgentRevealClock
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var anchorDate = Date()
-    @State private var anchorCount = 0
-    @State private var rate: Double = 45
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { context in
-            let shown = reduceMotion ? text.count : revealedCount(at: context.date)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            let shown = reduceMotion ? text.count : clock.count(at: context.date, limit: text.count)
             AssistantVoice {
                 AssistantAnswer(text: String(text.prefix(shown)))
             }
         }
-        .onChange(of: text) { old, new in
-            let now = Date()
-            let current = min(revealedCount(at: now), new.count)
-            let continues = new.hasPrefix(String(old.prefix(current)))
-            anchorCount = continues ? current : 0
-            anchorDate = now
-            rate = max(45, Double(new.count - anchorCount) / 0.9)
-        }
-    }
-
-    private func revealedCount(at date: Date) -> Int {
-        let elapsed = max(0, date.timeIntervalSince(anchorDate))
-        return min(text.count, anchorCount + Int(elapsed * rate))
     }
 }
 
-/// Gotowa odpowiedź, która jeszcze się „dopisuje”: od znaku `from` (tam
-/// stanął szkic) do końca, w tempie człowieka piszącego szybko — całość
-/// najwyżej w ~2,2 s, nie wolniej niż 60 znaków/s. Gdy wszystko jest na
-/// ekranie, woła `onDone` (raz) — wtedy pod tekstem wchodzą karta, ślad
-/// i „Uwzględniłem”. Reduce Motion: od razu w całości.
+/// Gotowa odpowiedź, która jeszcze się „dopisuje”: od znaku `from` (tam,
+/// gdzie szkic stał NA EKRANIE) do końca. Tempo jak przy szkicu — między
+/// 90 a 320 znaków/s, a przy bardzo długiej odpowiedzi tyle, żeby całość
+/// zeszła w ~5 s. Wcześniej całość mieściła się w 2,2 s bez względu na
+/// długość, więc długa odpowiedź po prostu wskakiwała. Gdy wszystko jest
+/// na ekranie, woła `onDone` (raz) — wtedy pod tekstem wchodzą karta
+/// i ślad. Reduce Motion: od razu w całości.
 struct AssistantRevealedAnswer: View {
     let text: String
     var from: Int = 0
@@ -303,7 +287,8 @@ struct AssistantRevealedAnswer: View {
     @State private var startedAt = Date()
 
     private var rate: Double {
-        max(60, Double(max(0, text.count - from)) / 2.2)
+        let remaining = Double(max(0, text.count - from))
+        return max(90, remaining / 5, min(AgentRevealClock.maxRate, remaining / 2.5))
     }
 
     private var duration: TimeInterval {
@@ -311,7 +296,7 @@ struct AssistantRevealedAnswer: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             let shown = reduceMotion ? text.count : revealedCount(at: context.date)
             AssistantAnswer(text: String(text.prefix(shown)))
         }

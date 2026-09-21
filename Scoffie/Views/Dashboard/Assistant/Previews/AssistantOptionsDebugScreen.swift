@@ -7,7 +7,9 @@ import SwiftUI
 ///     SIMCTL_CHILD_SCOFFIE_DEBUG_OPTIONS=0 xcrun simctl launch booted <bundle id>
 ///
 /// Wartość to strona arkusza do otwarcia (`0…n` = dania, `n` = „Coś innego”)
-/// albo `card`, żeby zobaczyć samą kotwicę w rozmowie. Prawdziwe przepisy
+/// albo `card`, żeby zobaczyć samą kotwicę w rozmowie, albo `thought` —
+/// wiersz tury na żywo (ślad kroków nad bieżącym statusem), albo `plate` —
+/// talerz Kalendarza w oknie gotowania (oddech). Prawdziwe przepisy
 /// i zdjęcia z katalogu, żeby kadr i liczby były takie jak u użytkownika.
 struct AssistantOptionsDebugScreen: View {
     let page: Int?
@@ -27,6 +29,14 @@ struct AssistantOptionsDebugScreen: View {
       {"recipeId": "386586d2-b4f8-41f0-9641-cce2b7c20dd7", "title": "Skyr z granolą i malinami", "kcalPerServing": 336, "prepTimeMinutes": 5, "imageUrl": "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/386586d2-b4f8-41f0-9641-cce2b7c20dd7.png", "tag": null, "prompt": "Wybieram: Skyr z granolą i malinami"}
     ], "actions": [{"type": "ASK", "proposalId": null, "label": "Coś innego", "style": "SECONDARY", "prompt": "Żadne z tych mi nie pasuje. Zaproponuj coś innego."}]}
     """#
+
+    private static let thoughtSteps = [
+        AgentProgressStepDTO(tool: "read", label: "Już się tym zajmuję", at: "2026-09-21T10:00:00.000Z", writes: nil, phase: nil, transient: true),
+        AgentProgressStepDTO(tool: "get_household_context", label: "Sprawdzam, kto je i jakie ma cele", at: "2026-09-21T10:00:02.000Z", writes: false, phase: nil, transient: nil),
+        AgentProgressStepDTO(tool: "get_week_plan", label: "Sprawdzam, co już stoi w planie", at: "2026-09-21T10:00:05.000Z", writes: false, phase: nil, transient: nil),
+        AgentProgressStepDTO(tool: "get_week_balance", label: "Liczę bilans dnia", at: "2026-09-21T10:00:08.000Z", writes: false, phase: nil, transient: nil),
+        AgentProgressStepDTO(tool: "propose_week_plan", label: "Dobieram dania na cały tydzień", at: "2026-09-21T10:00:12.000Z", writes: false, phase: nil, transient: nil),
+    ]
 
     /// „Owsianka z bananem i borówką” z katalogu — ten sam przepis, który
     /// stoi na artboardach makiety „Szczegóły Posiłku v2”.
@@ -125,6 +135,42 @@ struct AssistantOptionsDebugScreen: View {
                 .sheet(isPresented: .constant(true)) {
                     LegalDocumentSheet(title: "Warunki korzystania") { TermsOfServiceContent() }
                 }
+        } else if mode == "plate" {
+            // Talerz w oknie gotowania — oddech talerza, poświaty i aureoli.
+            ZStack {
+                SCPageBackground(scheme: scheme).ignoresSafeArea()
+                CalendarPlate(
+                    item: CalendarPlateItem(
+                        id: "debug-plate", slot: .lunch, status: .next, time: "14:00",
+                        title: "Omlet ze szpinakiem i fetą",
+                        imageURL: URL(string: "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.png"),
+                        kcal: 450, prepMinutes: 60, cookFrom: "13:00",
+                        servingsNote: nil, minutesAway: 45, isMissed: false
+                    ),
+                    canToggle: true,
+                    onToggle: {},
+                    onOpenDetail: {}
+                )
+            }
+        } else if mode == "thought" {
+            // Wiersz tury na żywo: ślad trzech kroków nad bieżącym statusem,
+            // pod nim szkic odpowiedzi — do porównania kolumn na zrzucie.
+            ZStack(alignment: .topLeading) {
+                SCPageBackground(scheme: scheme).ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 14) {
+                    AssistantUserBubble(text: "Ułóż mi obiady na przyszły tydzień", editing: false, pending: false)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    AssistantThoughtLine(
+                        phase: .working(startedAt: Date().addingTimeInterval(-24), isStopping: false),
+                        steps: Self.thoughtSteps,
+                        isExpanded: .constant(false)
+                    )
+                    .padding(.vertical, 4)
+                    AssistantVoice { AssistantAnswer(text: "Mam dla Ciebie pięć obiadów — każdy do 30 minut,") }
+                }
+                .padding(16)
+                .padding(.top, 50)
+            }
         } else if showsButtons {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {

@@ -316,6 +316,16 @@ struct ScoffieApp: App {
 
     private var isStartupReady: Bool { sessionStore.startupPhase == .ready }
 
+    /// Loader startu: osobny ekran, zanim są store pulpitu, a potem plansza
+    /// nad budującym się pod nią pulpitem, dopóki start nie jest gotowy.
+    private var showsStartupLoader: Bool {
+        switch currentRootScreen {
+        case .loader: return true
+        case .dashboard: return !isStartupReady
+        case .auth, .welcome: return false
+        }
+    }
+
     @ViewBuilder
     private func rootScreen(_ screen: RootScreen) -> some View {
         switch screen {
@@ -343,7 +353,9 @@ struct ScoffieApp: App {
                     : 1
             )
         case .loader:
-            StartupLoaderView()
+            // Sam loader stoi nad korzeniem (`showsStartupLoader`) — tu tylko
+            // tło, żeby przejście korzenia nie miało czego pokazać.
+            StartupCanvas()
         case .dashboard:
             if let mealStore = sessionStore.mealCalendarStore,
                let recipeCatalogStore = sessionStore.recipeCatalogStore,
@@ -354,26 +366,23 @@ struct ScoffieApp: App {
                 // wcześniej w tych samych klatkach budował się cały pulpit,
                 // skalował korzeń i wyłaniała pierwsza zakładka, i to było
                 // widać jako zgubione klatki.
-                ZStack {
-                    dashboard(
-                        mealStore: mealStore,
-                        recipeCatalogStore: recipeCatalogStore,
-                        shoppingListStore: shoppingListStore
-                    )
-                    .allowsHitTesting(isStartupReady)
-                    .accessibilityHidden(!isStartupReady)
-
-                    if !isStartupReady {
-                        StartupLoaderView()
-                            .zIndex(1)
-                            .transition(.opacity)
-                    }
-                }
-                .animation(.easeOut(duration: 0.4), value: isStartupReady)
+                //
+                // Loader NIE mieszka w tej gałęzi (patrz `showsStartupLoader`):
+                // gałąź wjeżdża przejściem korzenia z `.opacity`, a krycie
+                // kontenera bez `compositingGroup` schodzi na każde dziecko
+                // osobno — przez pół sekundy przejścia „loader → pulpit”
+                // przez półprzezroczysty loader prześwitywała zakładka pod nim.
+                dashboard(
+                    mealStore: mealStore,
+                    recipeCatalogStore: recipeCatalogStore,
+                    shoppingListStore: shoppingListStore
+                )
+                .allowsHitTesting(isStartupReady)
+                .accessibilityHidden(!isStartupReady)
             } else {
-                // Stores nie powinny być nil w tej gałęzi, ale na wszelki
-                // wypadek pokażemy loader niż pusty ekran.
-                StartupLoaderView()
+                // Stores nie powinny być nil w tej gałęzi — loader i tak
+                // stoi nad korzeniem, więc wystarczy tło.
+                StartupCanvas()
             }
         }
     }
@@ -412,12 +421,23 @@ struct ScoffieApp: App {
                             removal: .opacity.combined(with: .scale(scale: 0.985))
                         )
                     )
+
+                // JEDEN loader na cały start, nad korzeniem i poza jego
+                // tożsamością: przejście „loader → pulpit pod loaderem” dzieje
+                // się pod nieprzezroczystą planszą, więc nie ma czego pokazać,
+                // a fala kafelków nie zaczyna się od nowa w połowie.
+                if showsStartupLoader {
+                    StartupLoaderView()
+                        .zIndex(1)
+                        .transition(.opacity)
+                }
                 #if DEBUG
                 // Porównanie karty wyboru z makietą — patrz `AssistantOptionsDebugScreen`.
                 if let debugScreen = AssistantOptionsDebugScreen.requested { debugScreen }
                 #endif
             }
             .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
+            .animation(.easeOut(duration: 0.4), value: showsStartupLoader)
             .environment(\.sessionStore, sessionStore)
             // Kolejność ma znaczenie: każdy z mostów poniżej musi stać POD
             // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`
@@ -516,5 +536,16 @@ struct ScoffieApp: App {
                 Text(prompt.message)
             }
         }
+    }
+}
+
+/// Tło loadera bez samego loadera — pod planszą startu, która stoi nad
+/// korzeniem (`ScoffieApp.showsStartupLoader`).
+private struct StartupCanvas: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Color.scCanvas(scheme)
+            .ignoresSafeArea()
     }
 }

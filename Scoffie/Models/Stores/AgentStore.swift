@@ -102,6 +102,10 @@ final class AgentStore {
     /// Szkic odpowiedzi w trakcie tury (streaming z modelu przez odpytywanie):
     /// cały dotychczasowy tekst z serwera. Pusty = model jeszcze nie pisze.
     private(set) var draftText = ""
+    /// Ile szkicu jest JUŻ na ekranie — jeden zegar dla szkicu i dla
+    /// dopisywania gotowej odpowiedzi. Zmienia się tylko przy nowej porcji
+    /// z serwera; widok liczy z niego liczbę znaków co klatkę.
+    private(set) var draftReveal = AgentRevealClock()
     /// Epoka bieżącej tury — od niej wskaźnik liczy oddech glifu, połysk
     /// i próg „Możesz wyjść". Ustawiana w `send()`/`editMessage()` razem
     /// z `isSending`, żeby istniała od pierwszej klatki wskaźnika, a nie od
@@ -792,7 +796,7 @@ final class AgentStore {
                     // cały ekran rozmowy.
                     if progress != turn.progress { progress = turn.progress }
                     let draft = turn.draftText ?? ""
-                    if draft != draftText { draftText = draft }
+                    if draft != draftText { receiveDraft(draft) }
                     try await Task.sleep(for: Self.pollInterval)
                     continue
                 }
@@ -842,6 +846,24 @@ final class AgentStore {
         noteUnfinishedTurnInBackground()
     }
 
+    /// Nowa porcja szkicu. Zegar zaczyna od tego, co już widać (i co nowy
+    /// tekst kontynuuje), a tempo dobiera tak, żeby zaległość zeszła
+    /// w ~1,2 s — dłużej niż odstęp odpytywania, więc tekst płynie bez
+    /// zatrzymań między porcjami — ale nie szybciej niż `maxRate`: porcja
+    /// tysiąca znaków ma się PISAĆ, a nie wskakiwać.
+    private func receiveDraft(_ draft: String) {
+        let now = Date()
+        let shown = draftReveal.count(at: now, limit: draftText.count)
+        let start = min(shown, AgentRevealClock.commonPrefixCount(draftText, draft))
+        let backlog = Double(max(0, draft.count - start))
+        draftReveal = AgentRevealClock(
+            anchorDate: now,
+            anchorCount: start,
+            rate: min(AgentRevealClock.maxRate, max(AgentRevealClock.minRate, backlog / 1.2))
+        )
+        draftText = draft
+    }
+
     /// Tura, która się nie udała, gdy nikt na nią nie patrzył.
     ///
     /// Mocniejszy przypadek niż udana odpowiedź, bo tu nie ma ŻADNEGO innego
@@ -889,10 +911,22 @@ final class AgentStore {
                 // go całą naraz — najczęściej z pustego, bo szkic dochodzi
                 // dopiero w ostatniej porcji. Ciąg dalszy od miejsca, w którym
                 // stanął szkic, jeśli odpowiedź go kontynuuje.
+                //
+                // Od znaku, który JEST na ekranie — nie od długości szkicu
+                // z serwera. Szkic dogania serwer z opóźnieniem, więc gdy
+                // ostatnia porcja przyszła tuż przed końcem tury, na ekranie
+                // były pierwsze litery, a odpowiedź „kontynuowała” od prawie
+                // całego tekstu i wskakiwała naraz. I od wspólnego początku,
+                // nie `hasPrefix`: drobna różnica na końcu szkicu (spacja,
+                // formatowanie) zerowała odsłanianie od pierwszej litery.
+                let shown = draftReveal.count(at: Date(), limit: draftText.count)
                 for index in answers.indices {
-                    let text = answers[index].text
-                    let continues = index == answers.count - 1 && !draftText.isEmpty && text.hasPrefix(draftText)
-                    answers[index].revealFrom = continues ? draftText.count : 0
+                    guard index == answers.count - 1, !draftText.isEmpty else {
+                        answers[index].revealFrom = 0
+                        continue
+                    }
+                    let common = AgentRevealClock.commonPrefixCount(draftText, answers[index].text)
+                    answers[index].revealFrom = min(shown, common)
                 }
             }
             if answers.isEmpty {
@@ -1188,5 +1222,34 @@ final class AgentStore {
             card: dto.card,
             usedContext: dto.usedContext ?? []
         )
+    }
+}
+
+/// Zegar „pisania” odpowiedzi: od znaku `anchorCount` w chwili `anchorDate`
+/// przybywa `rate` znaków na sekundę. Czysta funkcja czasu — widok liczy
+/// z niej co klatkę, a sklep wie w każdej chwili, ile jest na ekranie.
+struct AgentRevealClock: Equatable {
+    /// Najwolniej, jak tekst ma się dopisywać (znaki/s).
+    static let minRate: Double = 70
+    /// Najszybciej — powyżej tekst przestaje się pisać, a zaczyna wskakiwać.
+    static let maxRate: Double = 320
+
+    var anchorDate: Date = .distantPast
+    var anchorCount = 0
+    var rate: Double = AgentRevealClock.minRate
+
+    func count(at date: Date, limit: Int) -> Int {
+        let elapsed = max(0, date.timeIntervalSince(anchorDate))
+        return min(limit, anchorCount + Int(elapsed * rate))
+    }
+
+    /// Długość wspólnego początku dwóch tekstów, w znakach (`Character`).
+    static func commonPrefixCount(_ a: String, _ b: String) -> Int {
+        var count = 0
+        for (left, right) in zip(a, b) {
+            guard left == right else { break }
+            count += 1
+        }
+        return count
     }
 }

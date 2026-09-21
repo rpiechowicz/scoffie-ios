@@ -119,7 +119,7 @@ private struct PreviewCanvas<Content: View>: View {
     struct Demo: View {
         @State private var expanded = false
         private let steps = [
-            AgentProgressStepDTO(tool: "read", label: "Czytam pytanie", at: "2026-09-19T10:00:00.000Z", writes: nil, phase: nil, transient: true),
+            AgentProgressStepDTO(tool: "read", label: "Już się tym zajmuję", at: "2026-09-19T10:00:00.000Z", writes: nil, phase: nil, transient: true),
             AgentProgressStepDTO(tool: "get_week_plan", label: "Sprawdzam plan tygodnia", at: "2026-09-19T10:00:02.000Z", writes: false, phase: nil, transient: nil),
             AgentProgressStepDTO(tool: "search_recipes_by_ingredient", label: "Szukam pasujących przepisów", at: "2026-09-19T10:00:04.000Z", writes: false, phase: nil, transient: nil),
             AgentProgressStepDTO(tool: "start_planning", label: "Układam propozycję tygodnia", at: "2026-09-19T10:00:05.000Z", writes: nil, phase: "PLANNING", transient: nil),
