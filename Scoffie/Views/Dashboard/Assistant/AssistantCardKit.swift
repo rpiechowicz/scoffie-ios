@@ -8,8 +8,11 @@ import SwiftUI
 // lista 20 / wnętrze 16 / miniatura 11 / pigułka 99. Padding poziomy 18.
 // Separator: włoskowaty. Stopka 12/14/14 z przyciskami 48.
 //
-// Reguła akcji: główna = pełna pigułka, ZAWSZE terakota, biały tekst;
-// poboczna = obrys. Jedna akcja → pełna szerokość; dwie → poboczna po
+// Reguła akcji: główna = pigułka „soft” (tint terakoty, obwódka i tekst
+// w tym samym kolorze — `scSoftCapsule`, jak w reszcie aplikacji), ZAWSZE
+// terakota; poboczna = neutralna pigułka na tle kafla. Makieta ma tu pełne
+// wypełnienie — świadomie odchodzimy od niej na rzecz stylu aplikacji.
+// Jedna akcja → pełna szerokość; dwie → poboczna po
 // lewej (1), główna po prawej (1,4). Nawigacja informacyjna → wiersz
 // z chevronem. Cofnij po zapisie = poboczna w karcie, nigdy toast.
 // Stan → kolor: propozycja terakota, planowanie indygo, zapisane szałwia,
@@ -705,8 +708,8 @@ struct AssistantEqualColumns: Layout {
     }
 }
 
-/// Pasek akcji karty. Główna = pełna terakota z białym tekstem (ikona po
-/// prawej tylko, gdy podana); poboczna = obrys. Nawigacja = wiersz z chevronem.
+/// Pasek akcji karty. Główna = „soft” terakota (ikona po prawej tylko, gdy
+/// podana); poboczna = neutralna pigułka. Nawigacja = wiersz z chevronem.
 struct AssistantCardActions: View {
     enum Style: Equatable {
         case buttons
@@ -801,7 +804,8 @@ struct AssistantCardActions: View {
     }
 }
 
-/// Główna akcja: pigułka 48, terakota, biały tekst 15,5/600, ikona po prawej.
+/// Główna akcja: pigułka 48 w wariancie „soft” (`scSoftCapsule`) — tint
+/// i obwódka terakoty, tekst 15,5/600 w tym samym kolorze, ikona po prawej.
 struct AssistantPrimaryButton: View {
     let action: AssistantCardAction
     var isBusy: Bool = false
@@ -813,7 +817,7 @@ struct AssistantPrimaryButton: View {
         Button(action: action.action) {
             HStack(spacing: 7) {
                 if isBusy {
-                    ProgressView().controlSize(.small).tint(.white)
+                    ProgressView().controlSize(.small).tint(AssistantLook.terra(scheme))
                 }
                 Text(action.title)
                     .font(.system(size: 15.5, weight: .semibold))
@@ -825,19 +829,20 @@ struct AssistantPrimaryButton: View {
                         .font(.system(size: 14, weight: .bold))
                 }
             }
-            .foregroundStyle(Color.white)
+            .foregroundStyle(AssistantLook.terra(scheme))
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .background(Capsule(style: .continuous).fill(AssistantLook.terra(scheme)))
-            .shadow(color: AssistantLook.terra(scheme).opacity(scheme == .dark ? 0 : 0.35), radius: 10, y: 6)
+            .scSoftCapsule(AssistantLook.terra(scheme))
+            .contentShape(Capsule())
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
         .disabled(isBusy)
     }
 }
 
-/// Poboczna akcja: pigułka 48 z obrysem 1,5, ikona po lewej.
+/// Poboczna akcja: neutralny towarzysz „soft” (jak `SCSoftIconButton`) —
+/// tło i obwódka kafla, tekst w kolorze treści, ikona po lewej.
 struct AssistantGhostButton: View {
     let action: AssistantCardAction
     var isBusy: Bool = false
@@ -862,7 +867,8 @@ struct AssistantGhostButton: View {
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .overlay(Capsule(style: .continuous).stroke(AssistantLook.ink(scheme).opacity(0.14), lineWidth: 1.5))
+            .background(Capsule(style: .continuous).fill(Color.scTileBg(scheme)))
+            .overlay(Capsule(style: .continuous).strokeBorder(Color.scTileStroke(scheme), lineWidth: 1.2))
             .contentShape(Capsule())
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))

@@ -200,6 +200,12 @@ struct OptionsCardItemDTO: Decodable, Equatable, Identifiable {
     let prepTimeMinutes: Int
     /// Zdjęcie z katalogu; `nil`, gdy przepis go nie ma.
     let imageUrl: String?
+    /// Opcjonalne dane do pełnego podglądu dania. Starsze karty ich nie mają.
+    let description: String?
+    let proteinGrams: Int?
+    let carbsGrams: Int?
+    let fatGrams: Int?
+    let ingredientCount: Int?
     /// „Najszybsze" — jedno słowo, czym to danie się wyróżnia.
     let tag: String?
     /// Gotowe zdanie do wysłania po dotknięciu.
@@ -540,12 +546,14 @@ enum AgentCardDTO: Decodable, Equatable {
         return false
     }
 
-    /// Pytanie z gotowymi odpowiedziami — jedyna karta, której wygląd
-    /// zależy od NASTĘPNEJ wiadomości użytkownika (zaznaczona jest
-    /// stuknięta odpowiedź).
-    var isClarify: Bool {
-        if case .clarify = self { return true }
-        return false
+    /// Karty, których wygląd zależy od NASTĘPNEJ wiadomości użytkownika:
+    /// pytanie (zaznacza stukniętą odpowiedź) i dania do wyboru (zaznaczają
+    /// wybrane danie).
+    var marksReply: Bool {
+        switch self {
+        case .clarify, .options: return true
+        default: return false
+        }
     }
 
     var state: AgentCardStateDTO? {

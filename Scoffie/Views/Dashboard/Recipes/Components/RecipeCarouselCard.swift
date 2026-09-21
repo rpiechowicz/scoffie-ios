@@ -101,7 +101,7 @@ struct RecipeCarouselCard: View {
     private var thumbnail: some View {
         Group {
             if let imageURL = recipe.imageURL {
-                CachedAsyncImage(url: imageURL) { phase in
+                CachedAsyncImage(url: imageURL, variant: .large) { phase in
                     switch phase {
                     case .success(let image):
                         image

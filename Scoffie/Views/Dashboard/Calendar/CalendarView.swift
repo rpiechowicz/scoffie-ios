@@ -7,6 +7,7 @@ struct CalendarView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scTabIsActive) private var isActiveTab
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
     // czytamy go tymi samymi kluczami, co Plan tygodnia, bo tylko
@@ -744,7 +745,10 @@ struct CalendarView: View {
             // the scroll content underneath. There are no real toolbar
             // items, so nothing legitimate is lost.
             .background(NavBarHitTestPassthrough())
-            .onAppear {
+            // Powrót na zakładkę: dzień mógł zostać zmieniony na innej.
+            // Flaga zamiast `onAppear`, bo zakładki żyją wszystkie naraz.
+            .onChange(of: isActiveTab, initial: true) { _, active in
+                guard active else { return }
                 selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
             }
             .onChange(of: datesViewModel.weekStartISO) { _, _ in

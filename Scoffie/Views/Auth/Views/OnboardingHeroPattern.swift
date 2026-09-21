@@ -53,9 +53,12 @@ struct OnboardingHeroPattern: View {
     // Wymiary zgodne z designem (Scoffie - Onboarding.html, B2):
     // tile 72, gap 10, hero 280, paddingTop 60 (pod status barem),
     // brand chip przy top 66 / left 24 (absolutne pozycjonowanie).
+    //
+    // Wysokość daje RODZIC (`AuthView`: 150–280 pt). Ekran logowania nie
+    // przewija się, więc na niskim telefonie to hero oddaje miejsce treści —
+    // rzędy kafli zostają te same, tylko kadr i wygaszenie u dołu są krótsze.
     private let tileSize: CGFloat = 72
     private let gap: CGFloat = 10
-    private let heroHeight: CGFloat = 280
     private let topInset: CGFloat = 60
     private let brandChipTop: CGFloat = 66
     private let brandChipLeading: CGFloat = 24
@@ -85,10 +88,9 @@ struct OnboardingHeroPattern: View {
                     .padding(.leading, brandChipLeading)
                     .padding(.top, brandChipTop)
             }
-            .frame(width: proxy.size.width, height: heroHeight, alignment: .topLeading)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             .clipped()
         }
-        .frame(height: heroHeight)
         .ignoresSafeArea(edges: .top)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Scoffie")
@@ -172,12 +174,14 @@ struct OnboardingHeroPattern: View {
 
 #Preview("Dark") {
     OnboardingHeroPattern()
+        .frame(height: 280)
         .background(Color.scCanvas(.dark))
         .preferredColorScheme(.dark)
 }
 
 #Preview("Light") {
     OnboardingHeroPattern()
+        .frame(height: 280)
         .background(Color.scCanvas(.light))
         .preferredColorScheme(.light)
 }

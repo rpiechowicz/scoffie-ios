@@ -36,6 +36,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        #if DEBUG
+        // Ekran porównania z makietą: bez pytania o powiadomienia i bez
+        // toastu o sieci, które zasłaniałyby zrzut.
+        if AssistantOptionsDebugScreen.requested != nil { return true }
+        #endif
         // Nasłuch interfejsu startuje razem z aplikacją, żeby pierwsze
         // żądanie miało już z czym porównać swoje niepowodzenie.
         ConnectivityMonitor.shared.start()
@@ -297,8 +302,19 @@ struct ScoffieApp: App {
         if sessionStore.currentHouseholdId?.isEmpty ?? true {
             return .welcome
         }
-        return sessionStore.startupPhase == .ready ? .dashboard : .loader
+        // Pulpit wchodzi do drzewa, gdy tylko ma swoje store — JESZCZE pod
+        // loaderem (patrz gałąź `.dashboard`). Osobny ekran loadera zostaje
+        // na chwilę, w której nie ma czego budować.
+        return hasDashboardStores ? .dashboard : .loader
     }
+
+    private var hasDashboardStores: Bool {
+        sessionStore.mealCalendarStore != nil
+            && sessionStore.recipeCatalogStore != nil
+            && sessionStore.shoppingListStore != nil
+    }
+
+    private var isStartupReady: Bool { sessionStore.startupPhase == .ready }
 
     @ViewBuilder
     private func rootScreen(_ screen: RootScreen) -> some View {
@@ -332,25 +348,57 @@ struct ScoffieApp: App {
             if let mealStore = sessionStore.mealCalendarStore,
                let recipeCatalogStore = sessionStore.recipeCatalogStore,
                let shoppingListStore = sessionStore.shoppingListStore {
-                DashboardView()
-                    .environment(\.mealCalendarStore, mealStore)
-                    .environment(\.datesViewModel, sessionStore.datesViewModel)
-                    .environment(\.recipeCatalogStore, recipeCatalogStore)
-                    .environment(\.shoppingListStore, shoppingListStore)
-                    // Błędy trzech głównych store zamieniają się w toast tutaj,
-                    // a nie na ekranach, które je wywołały. Wcześniej każdy
-                    // z nich rysował własny czerwony wiersz — widoczny tylko
-                    // na swojej zakładce i rozpychający układ w chwili, gdy
-                    // treść pod spodem i tak się przestawiała.
-                    .scErrorToast(mealStore.errorMessage)
-                    .scErrorToast(recipeCatalogStore.errorMessage)
-                    .scErrorToast(shoppingListStore.errorMessage)
+                // Pulpit buduje się POD loaderem: zakładki, ich dane i zdjęcia
+                // są gotowe, zanim ktokolwiek je zobaczy. Wejście do aplikacji
+                // to potem samo zgaśnięcie loadera nad stojącym ekranem —
+                // wcześniej w tych samych klatkach budował się cały pulpit,
+                // skalował korzeń i wyłaniała pierwsza zakładka, i to było
+                // widać jako zgubione klatki.
+                ZStack {
+                    dashboard(
+                        mealStore: mealStore,
+                        recipeCatalogStore: recipeCatalogStore,
+                        shoppingListStore: shoppingListStore
+                    )
+                    .allowsHitTesting(isStartupReady)
+                    .accessibilityHidden(!isStartupReady)
+
+                    if !isStartupReady {
+                        StartupLoaderView()
+                            .zIndex(1)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.4), value: isStartupReady)
             } else {
-                // Stores nie powinny być nil gdy startupPhase == .ready,
-                // ale na wszelki wypadek pokażemy loader niż pusty ekran.
+                // Stores nie powinny być nil w tej gałęzi, ale na wszelki
+                // wypadek pokażemy loader niż pusty ekran.
                 StartupLoaderView()
             }
         }
+    }
+
+    private func dashboard(
+        mealStore: MealCalendarStore,
+        recipeCatalogStore: RecipeCatalogStore,
+        shoppingListStore: ShoppingListStore
+    ) -> some View {
+        DashboardView()
+            // Inne gospodarstwo = inny pulpit: stan ekranów (wybrany
+            // dzień, filtry, przewinięcie) nie przechodzi między domami.
+            .id(sessionStore.currentHouseholdId ?? "")
+            .environment(\.mealCalendarStore, mealStore)
+            .environment(\.datesViewModel, sessionStore.datesViewModel)
+            .environment(\.recipeCatalogStore, recipeCatalogStore)
+            .environment(\.shoppingListStore, shoppingListStore)
+            // Błędy trzech głównych store zamieniają się w toast tutaj,
+            // a nie na ekranach, które je wywołały. Wcześniej każdy
+            // z nich rysował własny czerwony wiersz — widoczny tylko
+            // na swojej zakładce i rozpychający układ w chwili, gdy
+            // treść pod spodem i tak się przestawiała.
+            .scErrorToast(mealStore.errorMessage)
+            .scErrorToast(recipeCatalogStore.errorMessage)
+            .scErrorToast(shoppingListStore.errorMessage)
     }
 
     var body: some Scene {
@@ -364,6 +412,10 @@ struct ScoffieApp: App {
                             removal: .opacity.combined(with: .scale(scale: 0.985))
                         )
                     )
+                #if DEBUG
+                // Porównanie karty wyboru z makietą — patrz `AssistantOptionsDebugScreen`.
+                if let debugScreen = AssistantOptionsDebugScreen.requested { debugScreen }
+                #endif
             }
             .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
             .environment(\.sessionStore, sessionStore)

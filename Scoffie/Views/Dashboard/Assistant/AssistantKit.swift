@@ -214,9 +214,11 @@ struct AssistantUserBubble: View {
                 .textSelection(.enabled)
                 .padding(.horizontal, 15)
                 .padding(.vertical, 10)
-                .frame(maxWidth: 290, alignment: .trailing)
                 .background(shape.fill(AssistantLook.terraTint2(scheme)))
                 .overlay(shape.stroke(editing ? AssistantLook.terra(scheme) : Color.clear, lineWidth: 1.5))
+                // Limit szerokości PO tle: dymek obejmuje tekst, a nie
+                // zawsze pełne 290 pt z tekstem dosuniętym do prawej.
+                .frame(maxWidth: 290, alignment: .trailing)
                 .opacity(pending ? 0.6 : 1)
                 .animation(.easeOut(duration: 0.2), value: pending)
                 .animation(.easeOut(duration: 0.2), value: editing)
@@ -325,30 +327,6 @@ struct AssistantRevealedAnswer: View {
     private func revealedCount(at date: Date) -> Int {
         let elapsed = max(0, date.timeIntervalSince(startedAt))
         return min(text.count, min(from, text.count) + Int(elapsed * rate))
-    }
-}
-
-// MARK: - „Uwzględniłem: …”
-
-/// Jedna linia pod odpowiedzią: z czym serwer ją policzył.
-struct AssistantUsedContextLine: View {
-    let items: [String]
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AssistantLook.faint(scheme))
-                .padding(.top, 2)
-            Text("Uwzględniłem: " + items.joined(separator: " · "))
-                .font(.system(size: 12))
-                .foregroundStyle(AssistantLook.faint(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

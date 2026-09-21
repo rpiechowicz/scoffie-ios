@@ -7,33 +7,92 @@ private enum CachedAsyncImageError: Error {
     case invalidImageData
 }
 
-private final class SharedImageMemoryCache {
+/// W jakiej wielkości ekran potrzebuje zdjęcia.
+///
+/// Zdjęcia przepisów to PNG 1024×1024: zdekodowane ważą po 4 MB, więc pamięć
+/// podręczna mieściła ich około trzydziestu — przy katalogu ponad stu
+/// przepisów lista wypychała własne okładki i dekodowała je od nowa przy
+/// każdym przewinięciu („przeskakujące" zdjęcia). Miniatura ma 512 px
+/// i około 1 MB, więc CAŁY katalog siedzi w pamięci naraz.
+enum CachedImageVariant: Sendable {
+    /// Wiersze list, kafelki, talerze kalendarza — wszystko do ~170 pt.
+    case thumbnail
+    /// Okładka szczegółów przepisu i duże karty.
+    case large
+
+    var maxPixelSize: CGFloat {
+        switch self {
+        case .thumbnail: 512
+        case .large: 1200
+        }
+    }
+
+    fileprivate var cacheSuffix: String {
+        switch self {
+        case .thumbnail: "#t512"
+        case .large: ""
+        }
+    }
+}
+
+private final class SharedImageMemoryCache: @unchecked Sendable {
     static let shared = SharedImageMemoryCache()
 
-    private let cache: NSCache<NSURL, UIImage> = {
-        let cache = NSCache<NSURL, UIImage>()
-        cache.countLimit = 512
-        cache.totalCostLimit = 128 * 1_024 * 1_024
+    private let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 768
+        cache.totalCostLimit = 256 * 1_024 * 1_024
         return cache
     }()
 
     private init() { }
 
-    func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url as NSURL)
+    private func key(_ url: URL, _ variant: CachedImageVariant) -> NSString {
+        (url.absoluteString + variant.cacheSuffix) as NSString
     }
 
-    func insert(_ image: UIImage, for url: URL) {
+    func image(for url: URL, variant: CachedImageVariant) -> UIImage? {
+        cache.object(forKey: key(url, variant))
+    }
+
+    func insert(_ image: UIImage, for url: URL, variant: CachedImageVariant) {
         let pixelCount = image.size.width * image.size.height * image.scale * image.scale
         let cost = max(1, Int(pixelCount * 4))
-        cache.setObject(image, forKey: url as NSURL, cost: cost)
+        cache.setObject(image, forKey: key(url, variant), cost: cost)
+    }
+}
+
+/// Ogranicza liczbę zdjęć dekodowanych naraz. Rozgrzewka startowa prosi
+/// o cały katalog jednocześnie, a każde PNG 1024² to 4 MB na czas dekodowania
+/// — bez bramki ponad sto takich naraz było skokiem pamięci o pół gigabajta.
+private actor ImageDecodeGate {
+    static let shared = ImageDecodeGate()
+
+    private let limit = 4
+    private var running = 0
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    func enter() async {
+        if running < limit {
+            running += 1
+            return
+        }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func leave() {
+        if waiting.isEmpty {
+            running -= 1
+        } else {
+            waiting.removeFirst().resume()
+        }
     }
 }
 
 // Trwały cache zakodowanych bajtów (JPEG/PNG z serwera) na dysku, niezależny od
 // nagłówków Cache-Control backendu — dzięki temu drugie uruchomienie aplikacji
 // serwuje okładki z dysku zamiast sieci, bez „wyskakiwania” obrazów.
-private final class SharedImageDiskCache {
+private final class SharedImageDiskCache: @unchecked Sendable {
     static let shared = SharedImageDiskCache()
 
     private let directory: URL
@@ -79,8 +138,8 @@ private final class SharedImageDiskCache {
         }
     }
 
-    func data(for url: URL) -> Data? {
-        let path = filePath(for: url)
+    func data(for url: URL, variant: CachedImageVariant = .large) -> Data? {
+        let path = filePath(for: url, variant: variant)
         guard let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return nil }
         ioQueue.async { [weak self] in
             try? self?.fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: path.path)
@@ -88,16 +147,16 @@ private final class SharedImageDiskCache {
         return data
     }
 
-    func insert(_ data: Data, for url: URL) {
-        let path = filePath(for: url)
+    func insert(_ data: Data, for url: URL, variant: CachedImageVariant = .large) {
+        let path = filePath(for: url, variant: variant)
         ioQueue.async { [weak self] in
             try? data.write(to: path, options: .atomic)
             self?.pruneIfNeeded()
         }
     }
 
-    private func filePath(for url: URL) -> URL {
-        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+    private func filePath(for url: URL, variant: CachedImageVariant) -> URL {
+        let digest = SHA256.hash(data: Data((url.absoluteString + variant.cacheSuffix).utf8))
         let name = digest.map { String(format: "%02x", $0) }.joined()
         return directory.appendingPathComponent(name)
     }
@@ -149,75 +208,94 @@ private actor SharedImagePipeline {
         return URLSession(configuration: config)
     }()
 
-    // Maks. krawędź thumbnailu (px). 1200 pokrywa zarówno kafelki w siatce, jak
-    // i pełnoekranowy header szczegółów na iPhone'ach — i pozwala uniknąć
-    // dekodowania 3–5 MP bitmap tylko po to, żeby SwiftUI je pomniejszył.
-    private static let maxThumbnailPixelSize: CGFloat = 1200
+    private struct Key: Hashable {
+        let url: URL
+        let variant: CachedImageVariant
+    }
 
-    private var inFlight: [URL: Task<UIImage, Error>] = [:]
+    private var inFlight: [Key: Task<UIImage, Error>] = [:]
 
-    func image(for url: URL) async throws -> UIImage {
-        if let cached = SharedImageMemoryCache.shared.image(for: url) {
+    func image(for url: URL, variant: CachedImageVariant) async throws -> UIImage {
+        if let cached = SharedImageMemoryCache.shared.image(for: url, variant: variant) {
             return cached
         }
 
-        if let task = inFlight[url] {
+        let key = Key(url: url, variant: variant)
+        if let task = inFlight[key] {
             return try await task.value
         }
 
-        let task = makeFetchTask(url: url)
-        inFlight[url] = task
-        defer { inFlight[url] = nil }
+        let task = makeFetchTask(url: url, variant: variant)
+        inFlight[key] = task
+        defer { inFlight[key] = nil }
         return try await task.value
     }
 
-    func prefetch(_ urls: [URL]) {
+    func prefetch(_ urls: [URL], variant: CachedImageVariant) {
         for url in urls {
-            guard SharedImageMemoryCache.shared.image(for: url) == nil,
-                  inFlight[url] == nil else { continue }
+            guard SharedImageMemoryCache.shared.image(for: url, variant: variant) == nil,
+                  inFlight[Key(url: url, variant: variant)] == nil else { continue }
             // Reuse ten sam tor co zwykły fetch — defer w image(for:) sprząta inFlight,
             // więc nie ma ryzyka wyścigu z równoległym zapotrzebowaniem na ten sam URL.
             Task { [weak self] in
-                _ = try? await self?.image(for: url)
+                _ = try? await self?.image(for: url, variant: variant)
             }
         }
     }
 
-    private func makeFetchTask(url: URL) -> Task<UIImage, Error> {
+    private func makeFetchTask(url: URL, variant: CachedImageVariant) -> Task<UIImage, Error> {
         let session = self.session
         return Task.detached(priority: .userInitiated) {
-            if let data = SharedImageDiskCache.shared.data(for: url),
-               let decoded = await Self.decode(data: data) {
-                SharedImageMemoryCache.shared.insert(decoded, for: url)
+            // 1. Gotowa miniatura z dysku: mały JPEG, dekoduje się w 2–3 ms,
+            //    więc rozgrzanie całego katalogu mieści się w czasie loadera.
+            if variant == .thumbnail,
+               let data = SharedImageDiskCache.shared.data(for: url, variant: .thumbnail),
+               let decoded = await Self.decode(data: data, variant: variant) {
+                SharedImageMemoryCache.shared.insert(decoded, for: url, variant: variant)
                 return decoded
             }
 
-            let (data, _) = try await session.data(from: url)
-            guard let decoded = await Self.decode(data: data) else {
+            // 2. Oryginał z dysku, 3. z sieci.
+            let original: Data
+            if let data = SharedImageDiskCache.shared.data(for: url) {
+                original = data
+            } else {
+                let (data, _) = try await session.data(from: url)
+                original = data
+                SharedImageDiskCache.shared.insert(data, for: url)
+            }
+
+            guard let decoded = await Self.decode(data: original, variant: variant) else {
                 throw CachedAsyncImageError.invalidImageData
             }
-            SharedImageMemoryCache.shared.insert(decoded, for: url)
-            SharedImageDiskCache.shared.insert(data, for: url)
+            SharedImageMemoryCache.shared.insert(decoded, for: url, variant: variant)
+            if variant == .thumbnail, let jpeg = decoded.jpegData(compressionQuality: 0.85) {
+                SharedImageDiskCache.shared.insert(jpeg, for: url, variant: .thumbnail)
+            }
             return decoded
         }
     }
 
-    private static func decode(data: Data) async -> UIImage? {
+    private static func decode(data: Data, variant: CachedImageVariant) async -> UIImage? {
+        await ImageDecodeGate.shared.enter()
         let image: UIImage? = {
             guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
                 return UIImage(data: data)
             }
+            // Dekodowanie od razu do docelowej wielkości — bez tego SwiftUI
+            // dostawał bitmapę 3–5 MP tylko po to, żeby ją pomniejszyć.
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceShouldCacheImmediately: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxThumbnailPixelSize
+                kCGImageSourceThumbnailMaxPixelSize: variant.maxPixelSize
             ]
             guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
                 return UIImage(data: data)
             }
             return UIImage(cgImage: cg)
         }()
+        await ImageDecodeGate.shared.leave()
 
         guard let image else { return nil }
         // byPreparingForDisplay dekoduje poza main threadem — bez tego pierwszy render
@@ -229,22 +307,22 @@ private actor SharedImagePipeline {
 /// Warmuje cache obrazów dla przyszłych widoków — wołaj gdy znasz URL-e wcześniej
 /// niż pojawią się na ekranie (np. po załadowaniu listy przepisów / stronicowaniu).
 enum ImagePrefetcher {
-    static func prefetch(_ urls: [URL]) {
+    static func prefetch(_ urls: [URL], variant: CachedImageVariant = .thumbnail) {
         guard !urls.isEmpty else { return }
         Task.detached(priority: .utility) {
-            await SharedImagePipeline.shared.prefetch(urls)
+            await SharedImagePipeline.shared.prefetch(urls, variant: variant)
         }
     }
 
     /// Jak `prefetch`, ale czeka aż pierwsza partia miniaturek zostanie zdekodowana
     /// i będzie w cache pamięciowym. Używane przez smart startup loader, żeby
     /// lista przepisów nie „wyskakiwała” okładkami zaraz po wejściu.
-    static func prefetchAwaiting(_ urls: [URL]) async {
+    static func prefetchAwaiting(_ urls: [URL], variant: CachedImageVariant = .thumbnail) async {
         guard !urls.isEmpty else { return }
         await withTaskGroup(of: Void.self) { group in
             for url in urls {
                 group.addTask(priority: .userInitiated) {
-                    _ = try? await SharedImagePipeline.shared.image(for: url)
+                    _ = try? await SharedImagePipeline.shared.image(for: url, variant: variant)
                 }
             }
         }
@@ -253,14 +331,20 @@ enum ImagePrefetcher {
 
 struct CachedAsyncImage<Content: View>: View {
     private let url: URL?
+    private let variant: CachedImageVariant
     private let content: (AsyncImagePhase) -> Content
 
     @State private var phase: AsyncImagePhase
 
-    init(url: URL?, @ViewBuilder content: @escaping (AsyncImagePhase) -> Content) {
+    init(
+        url: URL?,
+        variant: CachedImageVariant = .thumbnail,
+        @ViewBuilder content: @escaping (AsyncImagePhase) -> Content
+    ) {
         self.url = url
+        self.variant = variant
         self.content = content
-        _phase = State(initialValue: Self.initialPhase(for: url))
+        _phase = State(initialValue: Self.initialPhase(for: url, variant: variant))
     }
 
     var body: some View {
@@ -268,7 +352,7 @@ struct CachedAsyncImage<Content: View>: View {
             // Reset synchroniczny przy zmianie URL (LazyVGrid podmienia content w recyklowanej komórce):
             // bez tego widać na klatkę starą okładkę z poprzedniego recipe.
             .onChange(of: url, initial: false) { _, newURL in
-                phase = Self.initialPhase(for: newURL)
+                phase = Self.initialPhase(for: newURL, variant: variant)
             }
             .task(id: url) {
                 await loadImage()
@@ -281,12 +365,20 @@ struct CachedAsyncImage<Content: View>: View {
             return
         }
 
-        if case .success = phase {
+        if SharedImageMemoryCache.shared.image(for: url, variant: variant) != nil, case .success = phase {
             return
         }
 
+        // Był już obraz (miniatura w roli zastępczej) — duża wersja podmienia
+        // go bez animacji: to ten sam kadr, tylko ostrzejszy.
+        let hadPlaceholder: Bool = { if case .success = phase { true } else { false } }()
+
         do {
-            let image = try await SharedImagePipeline.shared.image(for: url)
+            let image = try await SharedImagePipeline.shared.image(for: url, variant: variant)
+            if hadPlaceholder {
+                phase = .success(Image(uiImage: image))
+                return
+            }
             // Zdjęcie, które przyszło PO pierwszej klatce, wchodzi kryciem
             // zamiast wskakiwać w miejsce zastępczego gradientu. Trafienie
             // w pamięć podręczną tu nie dociera (`initialPhase` oddaje sukces
@@ -298,15 +390,21 @@ struct CachedAsyncImage<Content: View>: View {
         } catch is CancellationError {
             return
         } catch {
-            phase = .failure(error)
+            if !hadPlaceholder { phase = .failure(error) }
         }
     }
 
-    private static func initialPhase(for url: URL?) -> AsyncImagePhase {
-        guard let url, let image = SharedImageMemoryCache.shared.image(for: url) else {
-            return .empty
+    private static func initialPhase(for url: URL?, variant: CachedImageVariant) -> AsyncImagePhase {
+        guard let url else { return .empty }
+        if let image = SharedImageMemoryCache.shared.image(for: url, variant: variant) {
+            return .success(Image(uiImage: image))
         }
-
-        return .success(Image(uiImage: image))
+        // Duże zdjęcie jeszcze niezdekodowane, ale miniatura już jest (lista,
+        // z której użytkownik właśnie przyszedł) — pokazujemy ją od pierwszej
+        // klatki zamiast pustego tła.
+        if variant == .large, let thumb = SharedImageMemoryCache.shared.image(for: url, variant: .thumbnail) {
+            return .success(Image(uiImage: thumb))
+        }
+        return .empty
     }
 }

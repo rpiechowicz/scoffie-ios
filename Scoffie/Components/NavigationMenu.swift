@@ -15,48 +15,52 @@ enum DashboardTab: Hashable {
     case settings
 }
 
+private struct SCTabIsActiveKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// Czy ekran stoi na WYBRANEJ zakładce. Wszystkie zakładki żyją naraz
+    /// (patrz `NavigationMenu`), więc `onAppear` nie mówi już „użytkownik
+    /// tu wszedł" — mówi to ta flaga. Poza menu (arkusze, podglądy) `true`.
+    var scTabIsActive: Bool {
+        get { self[SCTabIsActiveKey.self] }
+        set { self[SCTabIsActiveKey.self] = newValue }
+    }
+}
+
 struct NavigationMenu: View {
     @Environment(\.sessionStore) private var sessionStore
     /// Stan własnego paska (zwinięty / klawiatura). Żyje tu, bo menu jest
     /// jedynym miejscem, które przeżywa przełączanie zakładek.
     @State private var chrome = SCTabBarChrome()
+    /// Zakładki już zbudowane. Wybrana buduje się od razu, reszta po kolei
+    /// w tle — patrz `warmUpRemainingTabs`.
+    @State private var mounted: Set<DashboardTab> = []
+
+    private static let order: [DashboardTab] = [.recipes, .plan, .calendar, .assistant, .settings]
 
     var body: some View {
         @Bindable var session = sessionStore
 
-        // Systemowy pasek jest schowany na każdej zakładce, a w jego miejscu
-        // stoi `SCFloatingTabBar` w `overlay` nad całym `TabView`. `TabView`
-        // zostaje: trzyma wybór, leniwe budowanie zakładek i przełączanie
-        // z zewnątrz (asystent → Plan). Zmieniamy wyłącznie to, co widać.
-        return TabView(selection: $session.dashboardTab) {
-            Tab(MenuConstans.Recipes.name, systemImage: MenuConstans.Recipes.icon, value: DashboardTab.recipes) {
-                page { RecipesView() }
-            }
-
-            Tab(MenuConstans.Plan.name, systemImage: MenuConstans.Plan.icon, value: DashboardTab.plan) {
-                page { WeeklyPlanView() }
-            }
-
-            Tab(MenuConstans.Calendar.name, systemImage: MenuConstans.Calendar.icon, value: DashboardTab.calendar) {
-                page { CalendarView() }
-            }
-
-            // Asystent zajął miejsce „Produktów": to do niego wraca się
-            // wiele razy w tygodniu, a lista zakupów powstaje przy Planie
-            // i tam też ma swoje wejście.
-            Tab(MenuConstans.Assistant.name, systemImage: MenuConstans.Assistant.icon, value: DashboardTab.assistant) {
-                page {
-                    if let agentStore = sessionStore.agentStore {
-                        AssistantView(store: agentStore)
-                    } else {
-                        AssistantUnavailableView()
-                            .scReservesTabBarSpace()
-                    }
+        // Własny kontener zamiast `TabView`. `TabView` buduje zakładkę dopiero
+        // przy pierwszym wyborze, więc pierwsze wejście na każdą z nich po
+        // uruchomieniu kosztowało zgubione klatki (cały ekran + jego dane
+        // w jednej klatce), a od iOS 18 dokładał własne przenikanie treści.
+        // Tu wszystkie zakładki budują się POD loaderem startowym i potem
+        // tylko zmieniają widoczność: przełączenie jest cięciem w jednej
+        // klatce, bez budowania czegokolwiek.
+        return ZStack {
+            ForEach(Self.order, id: \.self) { tab in
+                if mounted.contains(tab) || tab == session.dashboardTab {
+                    let isActive = tab == session.dashboardTab
+                    page(tab)
+                        .environment(\.scTabIsActive, isActive)
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
+                        .accessibilityHidden(!isActive)
+                        .zIndex(isActive ? 1 : 0)
                 }
-            }
-
-            Tab(MenuConstans.Settings.name, systemImage: MenuConstans.Settings.icon, value: DashboardTab.settings) {
-                page { SettingsView() }
             }
         }
         .tint(SCPalette.terracotta)
@@ -70,14 +74,66 @@ struct NavigationMenu: View {
         .environment(\.scTabBarChrome, chrome)
         // Nowa zakładka zaczyna z pełnym paskiem: stan zwinięcia należy
         // do przewijania, które użytkownik właśnie opuścił.
-        .onChange(of: session.dashboardTab) { _, _ in
+        .onChange(of: session.dashboardTab, initial: true) { _, tab in
             chrome.isCompact = false
+            mounted.insert(tab)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            chrome.isKeyboardVisible = true
+        .task { await warmUpRemainingTabs() }
+        // Liczy się RAMKA klawiatury, nie samo „pokazała się": przy klawiaturze
+        // sprzętowej (Mac w symulatorze, iPad z etui) system też wysyła
+        // `keyboardWillShow`, ale na ekran nie wjeżdża nic albo sam wąski
+        // pasek. Rezerwa pod menu schodziła wtedy do zera i pole asystenta
+        // lądowało POD paskiem zakładek, którego nic nie zasłaniało.
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            chrome.isKeyboardVisible = Self.keyboardCoversTabBar(note)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             chrome.isKeyboardVisible = false
+        }
+    }
+
+    /// Czy klawiatura po zmianie ramki zasłoni dolne menu.
+    private static func keyboardCoversTabBar(_ note: Notification) -> Bool {
+        guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return false }
+        let screenHeight = UIScreen.main.bounds.height
+        let overlap = max(0, screenHeight - frame.minY)
+        // Pasek skrótów klawiatury sprzętowej ma ~55–70 pt; prawdziwa
+        // klawiatura ponad 250.
+        return overlap > 120
+    }
+
+    /// Buduje pozostałe zakładki po jednej, z oddechem między nimi: pięć
+    /// ekranów w jednej klatce przycięłoby animację loadera, pod którym to
+    /// się dzieje. Każda zbudowana zakładka od razu ciągnie swoje dane.
+    private func warmUpRemainingTabs() async {
+        for tab in Self.order where !mounted.contains(tab) {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard !Task.isCancelled else { return }
+            mounted.insert(tab)
+        }
+    }
+
+    @ViewBuilder
+    private func page(_ tab: DashboardTab) -> some View {
+        switch tab {
+        case .recipes:
+            RecipesView()
+        case .plan:
+            WeeklyPlanView()
+        case .calendar:
+            CalendarView()
+        case .assistant:
+            // Asystent zajął miejsce „Produktów": to do niego wraca się
+            // wiele razy w tygodniu, a lista zakupów powstaje przy Planie
+            // i tam też ma swoje wejście.
+            if let agentStore = sessionStore.agentStore {
+                AssistantView(store: agentStore)
+            } else {
+                AssistantUnavailableView()
+                    .scReservesTabBarSpace()
+            }
+        case .settings:
+            SettingsView()
         }
     }
 
@@ -96,20 +152,6 @@ struct NavigationMenu: View {
             ),
             SCTabBarItem(tab: .settings, title: MenuConstans.Settings.name, icon: MenuConstans.Settings.icon),
         ]
-    }
-
-    /// Treść zakładki bez paska systemowego.
-    ///
-    /// Rezerwy miejsca pod własny pasek NIE ma tutaj: wcięcie założone na
-    /// zewnątrz `NavigationStack` nie dochodzi do jego korzenia i pigułka
-    /// „Cel dnia" lądowała pod paskiem. Każdy ekran zakładki zakłada ją sam,
-    /// wewnątrz stosu — `scReservesTabBarSpace()`.
-    private func page<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .toolbarVisibility(.hidden, for: .tabBar)
-            // Pierwsze wejście na zakładkę wyłania się, zamiast skakać
-            // (szkielet → dane w jednej klatce). Raz na uruchomienie.
-            .scFirstAppearance()
     }
 }
 

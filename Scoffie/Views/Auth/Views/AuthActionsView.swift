@@ -46,6 +46,10 @@ struct AuthActionsView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Color(red: 0.85, green: 0.35, blue: 0.35))
                     .multilineTextAlignment(.center)
+                    // Ekran nie przewija się, więc układ jest ciasny — błąd ma
+                    // zabrać miejsce hero u góry, a nie uciąć się do „Spróbuj p…”.
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
             }
         }
     }

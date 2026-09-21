@@ -6,48 +6,46 @@ struct AuthView: View {
     let onSignInWithAppleTap: () -> Void
 
     var body: some View {
-        // Layout zgodny z designem (B2 Cozy Kitchen). Hero 280pt sięga pod
-        // status bar (ignoresSafeArea w hero). Content zajmuje resztę i spacerem
-        // wypycha Apple+footer na dół — tak jak `marginBottom: auto` w designie.
-        // ScrollView z `basedOnSize`: przy zwykłej czcionce nic się nie rusza,
-        // a przy dużej Dynamic Type albo w poziomie przycisk logowania nie
-        // ucieka poza ekran bez możliwości dotarcia.
-        ZStack(alignment: .top) {
-            AuthBackgroundView()
+        // Ekran NIE przewija się — wszystko ma się zmieścić na jednym widoku.
+        // Elastyczne są tylko dwie rzeczy: hero z kaflami (150–280 pt; dostaje
+        // miejsce pierwszy, stąd `layoutPriority`) i odstęp nad przyciskiem.
+        // Reszta ma stałą wysokość, więc na niskim ekranie kurczy się hero,
+        // a nie treść; poniżej 700 pt kafle funkcji tracą jeszcze podpisy.
+        GeometryReader { proxy in
+            let compact = proxy.size.height < 700
+            ZStack(alignment: .top) {
+                AuthBackgroundView()
 
-            ScrollView {
-            VStack(spacing: 0) {
-                OnboardingHeroPattern()
+                VStack(spacing: 0) {
+                    OnboardingHeroPattern()
+                        .frame(minHeight: 150, maxHeight: 280)
+                        .layoutPriority(1)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    AuthHeaderView()
+                    VStack(alignment: .leading, spacing: 0) {
+                        AuthHeaderView()
 
-                    AuthFeaturesView()
-                        .padding(.top, 24)
+                        AuthFeaturesView(compact: compact)
+                            .padding(.top, compact ? 18 : 22)
 
-                    Spacer(minLength: 20)
+                        Spacer(minLength: 14)
 
-                    AuthActionsView(
-                        isLoading: isLoading,
-                        errorMessage: errorMessage,
-                        onSignInWithAppleTap: onSignInWithAppleTap
-                    )
-                        .padding(.top, 20)
+                        AuthActionsView(
+                            isLoading: isLoading,
+                            errorMessage: errorMessage,
+                            onSignInWithAppleTap: onSignInWithAppleTap
+                        )
 
-                    AuthFooterView()
-                        .padding(.top, 14)
+                        AuthFooterView()
+                            .padding(.top, 14)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity, alignment: .top)
                 }
-                .padding(.horizontal, 28)
-                .padding(.top, 8)
-                .padding(.bottom, 36)
-                .frame(maxWidth: 560)
-                .frame(maxWidth: .infinity, alignment: .top)
+                .ignoresSafeArea(edges: .top)
             }
-            .frame(minHeight: UIScreen.main.bounds.height)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.hidden)
-            .ignoresSafeArea(edges: .top)
         }
     }
 }
