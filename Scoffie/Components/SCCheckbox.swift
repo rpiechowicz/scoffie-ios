@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Pole wyboru aplikacji: zaokrąglony kwadrat 24 pt (promień 8). Gdy
 /// zaznaczone — gradient akcentu wyskakuje ze środka, ptaszek za nim,
-/// a pod spodem pojawia się poświata w kolorze akcentu. Gdy nie — sama
+/// a pod spodem pojawia się delikatny cień w kolorze akcentu. Gdy nie — sama
 /// obwódka.
 ///
 /// Jedno na całą aplikację: „mam w domu” w szczegółach posiłku (indygo)
@@ -30,7 +30,7 @@ struct SCCheckbox: View {
             shape
                 .fill(
                     LinearGradient(
-                        colors: [accent.mix(white: 0.08), accent.mix(black: 0.10)],
+                        colors: [accent, accent.mix(black: 0.12)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -46,7 +46,9 @@ struct SCCheckbox: View {
                 .opacity(on ? 1 : 0)
         }
         .frame(width: size, height: size)
-        .shadow(color: on ? accent.opacity(0.4) : .clear, radius: 5, x: 0, y: 3)
+        // Cień, nie poświata: ma tylko odkleić pole od tła. Przy 0,4 i promieniu
+        // 5 na liście z kilkunastoma odhaczonymi całe kolumny świeciły.
+        .shadow(color: on ? accent.opacity(0.16) : .clear, radius: 2, x: 0, y: 1)
         .animation(.spring(response: 0.28, dampingFraction: 0.68), value: on)
     }
 }
