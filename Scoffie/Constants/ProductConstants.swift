@@ -64,25 +64,29 @@ struct ProductConstants {
     /// i podgląd listy z historii, a dwie kopie tego słownika rozjechałyby się
     /// przy pierwszym dołożonym dziale.
     static func grouped(_ items: [ShoppingItem]) -> [(department: String, items: [ShoppingItem])] {
+        Dictionary(grouping: items, by: \.department)
+            .sorted { isDepartment($0.key, orderedBefore: $1.key) }
+            .map { (department: $0.key, items: $0.value) }
+    }
+
+    /// Kolejność dwóch działów w obchodzie sklepu. Publiczna, bo tym samym
+    /// porządkiem idą składniki w szczególe przepisu — ich działy to te same
+    /// nazwy, a lista zakupów i przepis nie powinny ustawiać alejek inaczej.
+    static func isDepartment(_ lhs: String, orderedBefore rhs: String) -> Bool {
         let normalizedOther = Department.other
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+        let leftKey = lhs.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rightKey = rhs.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return Dictionary(grouping: items, by: \.department)
-            .sorted {
-                let leftKey = $0.key.trimmingCharacters(in: .whitespacesAndNewlines)
-                let rightKey = $1.key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let leftIsOther = leftKey.lowercased() == normalizedOther
+        let rightIsOther = rightKey.lowercased() == normalizedOther
+        if leftIsOther != rightIsOther { return !leftIsOther }
 
-                let leftIsOther = leftKey.lowercased() == normalizedOther
-                let rightIsOther = rightKey.lowercased() == normalizedOther
-                if leftIsOther != rightIsOther { return !leftIsOther }
-
-                let leftRank = departmentRank[leftKey] ?? 999
-                let rightRank = departmentRank[rightKey] ?? 999
-                if leftRank != rightRank { return leftRank < rightRank }
-                return leftKey < rightKey
-            }
-            .map { (department: $0.key, items: $0.value) }
+        let leftRank = departmentRank[leftKey] ?? 999
+        let rightRank = departmentRank[rightKey] ?? 999
+        if leftRank != rightRank { return leftRank < rightRank }
+        return leftKey < rightKey
     }
 
     // MARK: - Department Icon & Color

@@ -35,6 +35,9 @@ struct ShoppingAisleSection: View {
     var isTodayItem: (ShoppingItem) -> Bool = { _ in false }
     var onToggleSection: () -> Void = {}
     var onToggleItem: (ShoppingItem) -> Void = { _ in }
+    /// Zdjęcie z listy części DOPISANEJ z przepisu („brakuje mi”). `nil` =
+    /// widok bez takiej akcji (historia, „Na dziś”).
+    var onRemoveExtra: ((ShoppingItem) -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -260,11 +263,37 @@ struct ShoppingAisleSection: View {
                     isReadOnly: mode == .readOnly,
                     onToggle: { onToggleItem(item) }
                 )
+                // Tylko pozycja z dopisaną częścią ma co zdjąć — to, co
+                // wniósł plan, znika wyłącznie razem z daniem z planu. Menu
+                // nie wisi na pozostałych wierszach wcale: pusty `contextMenu`
+                // i tak podnosi wiersz pod przytrzymanym palcem.
+                .modifier(RemoveExtraMenu(
+                    isEnabled: mode == .list && item.hasAddedPart && onRemoveExtra != nil,
+                    onRemove: { onRemoveExtra?(item) }
+                ))
             }
         }
         // Przeniesienie kupionego na dół alejki czeka 0,2 s. Bez tej zwłoki
         // wiersz uciekał spod palca w tej samej klatce, w której zapalał się
         // ptaszek, i nie dawało się zobaczyć, CO się właściwie odhaczyło.
         .animation(.spring(response: 0.38, dampingFraction: 0.88).delay(0.2), value: orderSignature)
+    }
+}
+
+/// Menu „Usuń dopisane z przepisu” pod przytrzymanym wierszem.
+private struct RemoveExtraMenu: ViewModifier {
+    let isEnabled: Bool
+    let onRemove: () -> Void
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.contextMenu {
+                Button(role: .destructive, action: onRemove) {
+                    Label("Usuń dopisane z przepisu", systemImage: "minus.circle")
+                }
+            }
+        } else {
+            content
+        }
     }
 }

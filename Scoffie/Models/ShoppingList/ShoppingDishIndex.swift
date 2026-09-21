@@ -119,7 +119,11 @@ struct ShoppingDishIndex {
     /// `nil`, gdy produktu nie da się przypiąć do żadnego dania (ręczna
     /// pozycja albo przepis wycofany z planu po zbudowaniu listy).
     func dishSummary(for item: ShoppingItem) -> String? {
+        // Po daniach z planu idą przepisy, z których produkt DOPISANO ręcznie
+        // („brakuje mi”) — inaczej taka pozycja stałaby na liście bez słowa
+        // o tym, skąd się wzięła.
         let titles = dishes(for: item).map(\.shortTitle)
+            + (item.addedFrom ?? []).map { Self.shortTitle($0) }
         guard !titles.isEmpty else { return nil }
 
         // Kolejność bierze się z planu, więc duplikaty („Omlet” na dwa dni)

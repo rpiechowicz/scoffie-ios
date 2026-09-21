@@ -597,7 +597,12 @@ struct ProductsView: View {
                         dishSummary: { dishIndex.dishSummary(for: $0) },
                         isTodayItem: { dishIndex.isForToday($0) },
                         onToggleSection: { toggleAisle(group.department) },
-                        onToggleItem: { handleToggle($0) }
+                        onToggleItem: { handleToggle($0) },
+                        onRemoveExtra: { item in
+                            Task { @MainActor in
+                                await shoppingListStore.removeExtra(item)
+                            }
+                        }
                     )
                 }
             }

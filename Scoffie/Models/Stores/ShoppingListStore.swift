@@ -233,6 +233,45 @@ final class ShoppingListStore {
         }
     }
 
+    /// „Brakuje mi” ze szczegółu przepisu — dopisuje składniki do listy
+    /// tygodnia `weekStart` i zwraca, ile produktów na nią trafiło.
+    ///
+    /// Rzuca, zamiast pisać do `errorMessage`: błąd pokazuje ekran przepisu
+    /// przy przycisku, który trzeba nacisnąć jeszcze raz, a nie toast listy.
+    /// Własne echo zmiany serwer odbija do nas, ale store je ignoruje (patrz
+    /// `init`), więc tydzień przeładowujemy tu sami.
+    func addRecipeExtras(
+        weekStart: String,
+        recipeId: String,
+        servings: Int,
+        ingredientIds: [String]
+    ) async throws -> Int {
+        let added = try await repository.addRecipeExtras(
+            weekStart: weekStart,
+            recipeId: recipeId,
+            servings: servings,
+            ingredientIds: ingredientIds
+        )
+        invalidatedWeeks.insert(weekStart)
+        if self.weekStart == weekStart {
+            scheduleReload(weekStart: weekStart)
+        }
+        return added
+    }
+
+    /// Zdejmuje z listy DOPISANĄ część produktu. To, co wniósł plan, zostaje —
+    /// wiersz znika tylko wtedy, gdy nic poza dopisanym go nie trzymało.
+    func removeExtra(_ item: ShoppingItem) async {
+        guard let weekStart, item.hasAddedPart else { return }
+        do {
+            try await repository.removeExtra(weekStart: weekStart, productKey: item.productKey)
+            invalidatedWeeks.insert(weekStart)
+            scheduleReload(weekStart: weekStart)
+        } catch {
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+        }
+    }
+
     func archiveCurrentList(weekLabel: String) {
         guard let weekStart,
               !items.isEmpty,

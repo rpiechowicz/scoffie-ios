@@ -23,6 +23,19 @@ final class ApiShoppingListRepository: ShoppingListRepository {
         try await client.setChecked(weekStart: weekStart, productKey: productKey, isChecked: isChecked)
     }
 
+    func addRecipeExtras(weekStart: String, recipeId: String, servings: Int, ingredientIds: [String]) async throws -> Int {
+        try await client.addRecipeExtras(
+            weekStart: weekStart,
+            recipeId: recipeId,
+            servings: servings,
+            ingredientIds: ingredientIds
+        ).added
+    }
+
+    func removeExtra(weekStart: String, productKey: String) async throws {
+        try await client.removeExtra(weekStart: weekStart, productKey: productKey)
+    }
+
     func archiveShoppingList(weekStart: String, weekLabel: String) async throws {
         try await client.archiveShoppingList(weekStart: weekStart, weekLabel: weekLabel)
     }

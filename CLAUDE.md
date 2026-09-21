@@ -138,6 +138,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wiersz „Uwzględniłem: …” usunięty z rozmowy. `Kes size=n` z makiety to dysk 0,68·n
   (`SCMarkShape` wypełnia całą ramkę). Animację w liściu zawężać przez `animation(_:body:)`
   albo `geometryGroup()` — zwykłe `.animation(value:)` nadpisuje ruch nadany przez rodzica.
+- Szczegóły posiłku v2 (21.09.2026) — makieta Claude Design „Scoffie — Szczegóły Posiłku v2”
+  (projekt `43b605d0-…`, `components/detail-v2.jsx`, sekcja „final”). Stepper porcji siedzi
+  w nagłówku „Wartości odżywcze”; kolory makr jak w arkuszu wyboru (białko terakota, węgle masło,
+  tłuszcz indygo). „Mam w domu” to stan WIZYTY; „Do zakupów” wysyła brakujące przez
+  `weeklyPlans:addRecipeExtras` na tydzień z Planu (nie wcześniejszy niż bieżący) — tylko
+  z katalogu, bo posiłek z planu ma składniki na liście od początku. Dopisane pozycje listy
+  mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
+  Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
+  `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
   auth|auth-error|legal` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.

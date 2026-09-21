@@ -28,6 +28,33 @@ struct AssistantOptionsDebugScreen: View {
     ], "actions": [{"type": "ASK", "proposalId": null, "label": "Coś innego", "style": "SECONDARY", "prompt": "Żadne z tych mi nie pasuje. Zaproponuj coś innego."}]}
     """#
 
+    /// „Owsianka z bananem i borówką” z katalogu — ten sam przepis, który
+    /// stoi na artboardach makiety „Szczegóły Posiłku v2”.
+    static let detailRecipe = Recipe(
+        id: UUID(uuidString: "9e845247-f630-4dcc-9bab-3656828cac29")!,
+        name: "Owsianka z bananem i borówką",
+        description: "Kremowa owsianka na mleku z dodatkiem banana i borówki. Śniadanie jest szybkie, sycące i dobre na codzienny start.",
+        category: .breakfast,
+        baseSlot: .breakfast,
+        suitableSlots: [.breakfast, .secondBreakfast],
+        servings: 2,
+        prepTimeMinutes: 12,
+        imageURL: URL(string: "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/9e845247-f630-4dcc-9bab-3656828cac29.png"),
+        ingredients: [
+            Ingredient(name: "Płatki owsiane", amount: 100, unit: .gram, department: "Zboża i makarony"),
+            Ingredient(name: "Mleko", amount: 400, unit: .milliliter, department: "Nabiał"),
+            Ingredient(name: "Banan", amount: 2, unit: .piece, department: "Owoce"),
+            Ingredient(name: "Borówka", amount: 100, unit: .gram, department: "Owoce")
+        ],
+        preparationSteps: [
+            PreparationStep(stepNumber: 1, instruction: "Wlej mleko do garnka i podgrzej na średnim ogniu. Wsyp płatki owsiane i mieszaj, aby nic nie przywarło."),
+            PreparationStep(stepNumber: 2, instruction: "Gotuj 5–6 minut, aż owsianka zgęstnieje. W razie potrzeby dodaj odrobinę mleka."),
+            PreparationStep(stepNumber: 3, instruction: "Pokrój banany i dorzuć jednego do garnka. Delikatnie wymieszaj dla naturalnej słodyczy."),
+            PreparationStep(stepNumber: 4, instruction: "Przełóż owsiankę do misek i dodaj borówkę oraz drugiego banana. Podawaj od razu na ciepło.")
+        ],
+        nutrition: Nutrition(kcal: 894, protein: 30, fat: 21, carbs: 137, fiber: 19, salt: 0.6)
+    )
+
     private var card: OptionsCardDTO {
         guard case .options(let card) = AssistantPreviewFixtures.card(Self.json) else { fatalError("OPTIONS") }
         return card
@@ -42,7 +69,24 @@ struct AssistantOptionsDebugScreen: View {
     private var mode: String? { ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] }
 
     var body: some View {
-        if mode == "auth" || mode == "auth-error" {
+        if mode == "detail" || mode == "detail-planned" {
+            // Szczegóły posiłku v2 jako arkusz nad pustym tłem — tak, jak
+            // otwiera je katalog. `detail-planned` = wejście z planu.
+            SCPageBackground(scheme: scheme).ignoresSafeArea()
+                .sheet(isPresented: .constant(true)) {
+                    RecipeDetailView(
+                        recipe: Self.detailRecipe,
+                        onToggleFavorite: {},
+                        onClose: {},
+                        initialServings: 1,
+                        context: mode == "detail-planned" ? .planned(day: Date(), slot: .breakfast) : .catalog,
+                        onSaveServings: { _ in }
+                    )
+                    .presentationDetents([.large])
+                    .dashboardLiquidSheet()
+                    .interactiveDismissDisabled()
+                }
+        } else if mode == "auth" || mode == "auth-error" {
             // Ekran logowania: `auth`, z błędem: `auth-error`.
             AuthView(
                 isLoading: false,
