@@ -13,8 +13,8 @@ import SwiftUI
 //   której lista zakupów nigdy nie mówiła, a która decyduje przy półce:
 //   „to jest do dzisiejszego obiadu” albo „to do czwartkowej kolacji”.
 //   Powiązanie liczy się lokalnie z planu tygodnia (`ShoppingDishIndex`).
-// • Alejkę można zwinąć, a kupiona w całości zwija się sama. Kupione produkty
-//   spadają na dół swojej alejki.
+// • Alejkę można zwinąć, a kupiona w całości zwija się sama. Odhaczenie nie
+//   przestawia produktu — wiersz zostaje tam, gdzie był.
 // • Wiersz „Na dziś” otwiera arkusz z dzisiejszymi daniami, a z arkusza da się
 //   zawęzić listę do dzisiejszych produktów.
 // • „Kupione” i „Zamknij listę” zeszły z karty hero do menu „…” i do jednej
@@ -597,7 +597,12 @@ struct ProductsView: View {
                         dishSummary: { dishIndex.dishSummary(for: $0) },
                         isTodayItem: { dishIndex.isForToday($0) },
                         onToggleSection: { toggleAisle(group.department) },
-                        onToggleItem: { handleToggle($0) }
+                        onToggleItem: { handleToggle($0) },
+                        onRemoveExtra: { item in
+                            Task { @MainActor in
+                                await shoppingListStore.removeExtra(item)
+                            }
+                        }
                     )
                 }
             }

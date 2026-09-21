@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Wiersz produktu na Zakupach v2 — kółko · nazwa (z daniami pod spodem) ·
+// Wiersz produktu na Zakupach v2 — pole wyboru (`SCCheckbox`) · nazwa (z daniami pod spodem) ·
 // znacznik „Dziś” · ilość.
 //
 // Źródło: canvas claude.ai → „Weekly Meals - Zakupy v2.html”
@@ -11,51 +11,6 @@ import SwiftUI
 // ścieżkę do odhaczania, a nie jako lewą krawędź szesnastu osobnych kafli.
 // Ten sam zabieg co na osi dnia w Planie i w Kalendarzu.
 
-/// Kółko odhaczenia — szałwia z ptaszkiem, gdy kupione; sama obwódka, gdy nie.
-///
-/// Szałwia, a nie kolor działu: „kupione” to jeden stan na całej liście
-/// i musi wyglądać tak samo w warzywach, co w nabiale. Kolor działu niesie
-/// nagłówek sekcji, pasek postępu i pigułka z ilością.
-struct ShoppingCheckCircle: View {
-    let on: Bool
-    var size: CGFloat = 22
-    var accent: Color = SCPalette.sage
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.scFaint(scheme), lineWidth: 1.5)
-                .opacity(on ? 0 : 1)
-
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [accent, accent.mix(black: 0.14)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                // Skala zamiast samego krycia: kółko „zapada się” w środek,
-                // gdy odznaczasz produkt, i wyskakuje, gdy odhaczasz — ruch
-                // jest w tym samym miejscu, w którym stoi palec.
-                .scaleEffect(on ? 1 : 0.6)
-                .opacity(on ? 1 : 0)
-
-            Image(systemName: "checkmark")
-                .font(.system(size: size * 0.44, weight: .heavy))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.18), radius: 1, x: 0, y: 1)
-                .scaleEffect(on ? 1 : 0.4)
-                .opacity(on ? 1 : 0)
-        }
-        .frame(width: size, height: size)
-        .shadow(color: on ? accent.opacity(0.35) : .clear, radius: 4, x: 0, y: 3)
-        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: on)
-    }
-}
-
 struct ShoppingProductRow: View {
     let name: String
     let amount: String
@@ -63,7 +18,7 @@ struct ShoppingProductRow: View {
     /// z pomidorów”. `nil` chowa całą drugą linijkę, nie zostawia pustej.
     var dishes: String?
     let bought: Bool
-    /// Kolor działu — niesie go pigułka z ilością.
+    /// Kolor działu — niesie go pole wyboru i pigułka z ilością.
     var accent: Color = SCPalette.terracotta
     /// Znacznik „Dziś”. W trybie „Na dziś” gaśnie — tam wszystko jest na dziś,
     /// więc znacznik przy każdym wierszu przestawałby cokolwiek znaczyć.
@@ -79,7 +34,7 @@ struct ShoppingProductRow: View {
     var body: some View {
         Button(action: onToggle) {
             HStack(alignment: .center, spacing: 12) {
-                ShoppingCheckCircle(on: bought)
+                SCCheckbox(on: bought, accent: accent)
 
                 content
             }
@@ -151,7 +106,7 @@ struct ShoppingProductRow: View {
     /// barwa mówi „to z tej półki”. Kupione schodzi do neutralnej szarości:
     /// ilość już nie jest potrzebna, więc przestaje wołać.
     private var amountPill: some View {
-        Text(amount)
+        SCCountingText(amount)
             .font(.system(size: 13, weight: .bold))
             .tracking(0.1)
             .monospacedDigit()

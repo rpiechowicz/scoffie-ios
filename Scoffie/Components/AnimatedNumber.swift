@@ -27,9 +27,14 @@ struct CountingNumber: View {
     let target: Int
     var loadDuration: Double = 0.9
     var changeDuration: Double = 0.45
+    /// Własne krzywe zamiast `easeOut` z czasami wyżej — gdy licznik ma iść
+    /// w parze z innym ruchem (pierścień, tor) i nie może z nim rozjechać.
+    var loadAnimation: Animation? = nil
+    var changeAnimation: Animation? = nil
 
     @State private var displayed: Double = 0
     @State private var didLoad = false
+    @State private var latestTarget: Int?
 
     var body: some View {
         // Niewidoczny tekst DOCELOWEJ wartości rezerwuje szerokość od pierwszej
@@ -46,15 +51,20 @@ struct CountingNumber: View {
             .onAppear {
                 guard !didLoad else { return }
                 didLoad = true
+                latestTarget = target
                 // Tiny delay so the screen frame mounts before the count begins.
+                // Liczy do NAJŚWIEŻSZEGO celu, nie do przechwyconego: gdy cel
+                // zmieni się w tych 50 ms, stary `target` z domknięcia cofałby
+                // licznik po tym, jak `onChange` już pojechał do nowego.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation(.easeOut(duration: loadDuration)) {
-                        displayed = Double(target)
+                    withAnimation(loadAnimation ?? .easeOut(duration: loadDuration)) {
+                        displayed = Double(latestTarget ?? target)
                     }
                 }
             }
             .onChange(of: target) { _, newValue in
-                withAnimation(.easeOut(duration: changeDuration)) {
+                latestTarget = newValue
+                withAnimation(changeAnimation ?? .easeOut(duration: changeDuration)) {
                     displayed = Double(newValue)
                 }
             }
@@ -83,5 +93,78 @@ struct SCRollingNumber: View {
             .monospacedDigit()
             .contentTransition(.numericText(value: Double(value)))
             .animation(.easeOut(duration: duration), value: value)
+    }
+}
+
+// MARK: - Napis z liczącymi się liczbami
+
+/// Gotowy napis, w którym KAŻDA liczba liczy się `CountingNumber`, a reszta
+/// stoi — „12 dań · 49 produktów”, „8 z 11”, „1750 g”. Jeden klocek na
+/// wszystkie liczniki w zdaniach, żeby nie składać ich za każdym razem
+/// z trzech kawałków i żeby liczyły się tą samą animacją co duże liczniki.
+///
+/// Tylko do napisów JEDNOLINIJKOWYCH: kawałki stoją w `HStack`, więc całość
+/// nie łamie się jak zwykły tekst. Daty („21 wrz”) zostawiać w `Text` —
+/// liczący się dzień miesiąca nic nie mówi.
+struct SCCountingText: View {
+    let text: String
+    var loadAnimation: Animation? = nil
+    var changeAnimation: Animation? = nil
+
+    init(_ text: String, loadAnimation: Animation? = nil, changeAnimation: Animation? = nil) {
+        self.text = text
+        self.loadAnimation = loadAnimation
+        self.changeAnimation = changeAnimation
+    }
+
+    private enum Token {
+        case text(String)
+        case number(Int)
+    }
+
+    /// Ciągi cyfr → liczby, reszta → tekst. Cyfry dłuższe niż 9 znaków
+    /// zostają tekstem (to już nie jest licznik, tylko np. numer).
+    private var tokens: [Token] {
+        var result: [Token] = []
+        var buffer = ""
+        var bufferIsDigits = false
+
+        func flush() {
+            guard !buffer.isEmpty else { return }
+            if bufferIsDigits, buffer.count <= 9, let value = Int(buffer) {
+                result.append(.number(value))
+            } else {
+                result.append(.text(buffer))
+            }
+            buffer = ""
+        }
+
+        for character in text {
+            let isDigit = character.isASCII && character.isNumber
+            if isDigit != bufferIsDigits { flush() }
+            bufferIsDigits = isDigit
+            buffer.append(character)
+        }
+        flush()
+        return result
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            ForEach(Array(tokens.enumerated()), id: \.offset) { _, token in
+                switch token {
+                case .text(let part):
+                    Text(verbatim: part)
+                case .number(let value):
+                    CountingNumber(
+                        target: value,
+                        loadAnimation: loadAnimation,
+                        changeAnimation: changeAnimation
+                    )
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: text))
     }
 }

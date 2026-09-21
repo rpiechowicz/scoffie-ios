@@ -7,7 +7,9 @@ import SwiftUI
 ///     SIMCTL_CHILD_SCOFFIE_DEBUG_OPTIONS=0 xcrun simctl launch booted <bundle id>
 ///
 /// Wartość to strona arkusza do otwarcia (`0…n` = dania, `n` = „Coś innego”)
-/// albo `card`, żeby zobaczyć samą kotwicę w rozmowie. Prawdziwe przepisy
+/// albo `card`, żeby zobaczyć samą kotwicę w rozmowie, albo `thought` —
+/// wiersz tury na żywo (ślad kroków nad bieżącym statusem), albo `plate` —
+/// talerz Kalendarza w oknie gotowania (oddech). Prawdziwe przepisy
 /// i zdjęcia z katalogu, żeby kadr i liczby były takie jak u użytkownika.
 struct AssistantOptionsDebugScreen: View {
     let page: Int?
@@ -28,6 +30,41 @@ struct AssistantOptionsDebugScreen: View {
     ], "actions": [{"type": "ASK", "proposalId": null, "label": "Coś innego", "style": "SECONDARY", "prompt": "Żadne z tych mi nie pasuje. Zaproponuj coś innego."}]}
     """#
 
+    private static let thoughtSteps = [
+        AgentProgressStepDTO(tool: "read", label: "Już się tym zajmuję", at: "2026-09-21T10:00:00.000Z", writes: nil, phase: nil, transient: true),
+        AgentProgressStepDTO(tool: "get_household_context", label: "Sprawdzam, kto je i jakie ma cele", at: "2026-09-21T10:00:02.000Z", writes: false, phase: nil, transient: nil),
+        AgentProgressStepDTO(tool: "get_week_plan", label: "Sprawdzam, co już stoi w planie", at: "2026-09-21T10:00:05.000Z", writes: false, phase: nil, transient: nil),
+        AgentProgressStepDTO(tool: "get_week_balance", label: "Liczę bilans dnia", at: "2026-09-21T10:00:08.000Z", writes: false, phase: nil, transient: nil),
+        AgentProgressStepDTO(tool: "propose_week_plan", label: "Dobieram dania na cały tydzień", at: "2026-09-21T10:00:12.000Z", writes: false, phase: nil, transient: nil),
+    ]
+
+    /// „Owsianka z bananem i borówką” z katalogu — ten sam przepis, który
+    /// stoi na artboardach makiety „Szczegóły Posiłku v2”.
+    static let detailRecipe = Recipe(
+        id: UUID(uuidString: "9e845247-f630-4dcc-9bab-3656828cac29")!,
+        name: "Owsianka z bananem i borówką",
+        description: "Kremowa owsianka na mleku z dodatkiem banana i borówki. Śniadanie jest szybkie, sycące i dobre na codzienny start.",
+        category: .breakfast,
+        baseSlot: .breakfast,
+        suitableSlots: [.breakfast, .secondBreakfast],
+        servings: 2,
+        prepTimeMinutes: 12,
+        imageURL: URL(string: "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/9e845247-f630-4dcc-9bab-3656828cac29.png"),
+        ingredients: [
+            Ingredient(name: "Płatki owsiane", amount: 100, unit: .gram, department: "Zboża i makarony"),
+            Ingredient(name: "Mleko", amount: 400, unit: .milliliter, department: "Nabiał"),
+            Ingredient(name: "Banan", amount: 2, unit: .piece, department: "Owoce"),
+            Ingredient(name: "Borówka", amount: 100, unit: .gram, department: "Owoce")
+        ],
+        preparationSteps: [
+            PreparationStep(stepNumber: 1, instruction: "Wlej mleko do garnka i podgrzej na średnim ogniu. Wsyp płatki owsiane i mieszaj, aby nic nie przywarło."),
+            PreparationStep(stepNumber: 2, instruction: "Gotuj 5–6 minut, aż owsianka zgęstnieje. W razie potrzeby dodaj odrobinę mleka."),
+            PreparationStep(stepNumber: 3, instruction: "Pokrój banany i dorzuć jednego do garnka. Delikatnie wymieszaj dla naturalnej słodyczy."),
+            PreparationStep(stepNumber: 4, instruction: "Przełóż owsiankę do misek i dodaj borówkę oraz drugiego banana. Podawaj od razu na ciepło.")
+        ],
+        nutrition: Nutrition(kcal: 894, protein: 30, fat: 21, carbs: 137, fiber: 19, salt: 0.6)
+    )
+
     private var card: OptionsCardDTO {
         guard case .options(let card) = AssistantPreviewFixtures.card(Self.json) else { fatalError("OPTIONS") }
         return card
@@ -42,7 +79,50 @@ struct AssistantOptionsDebugScreen: View {
     private var mode: String? { ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] }
 
     var body: some View {
-        if mode == "auth" || mode == "auth-error" {
+        if mode == "shopping" {
+            // Liczniki Zakupów na przykładowych danych — do sprawdzenia
+            // `SCCountingText` bez sesji.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ShoppingEyebrowRow(eyebrow: "Ten tydzień · 21–27 wrz", meta: "12 dań · 49 produktów")
+                    ShoppingProgressHeader(
+                        bought: 15,
+                        total: 49,
+                        segments: [ShoppingProgressSegment(id: "w", bought: 8, total: 11, color: SCPalette.sage)]
+                    )
+                    ShoppingTodayRow(missing: 18, dishes: 4, isFiltered: false, action: {})
+                    ShoppingAisleSection(
+                        department: "Warzywa",
+                        items: [
+                            ShoppingItem(productKey: "pietruszka::g", name: "Pietruszka korzeń", totalAmount: 40, unit: "g", department: "Warzywa", isChecked: false),
+                            ShoppingItem(productKey: "cebula::szt", name: "Cebula (szt)", totalAmount: 0.5, unit: "szt", department: "Warzywa", isChecked: true),
+                            ShoppingItem(productKey: "ziemniak::g", name: "Ziemniak", totalAmount: 1750, unit: "g", department: "Warzywa", isChecked: false)
+                        ],
+                        dishSummary: { _ in "Krupnik z kaszą" }
+                    )
+                }
+                .padding(20)
+                .padding(.top, 50)
+            }
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
+        } else if mode == "detail" || mode == "detail-planned" {
+            // Szczegóły posiłku v2 jako arkusz nad pustym tłem — tak, jak
+            // otwiera je katalog. `detail-planned` = wejście z planu.
+            SCPageBackground(scheme: scheme).ignoresSafeArea()
+                .sheet(isPresented: .constant(true)) {
+                    RecipeDetailView(
+                        recipe: Self.detailRecipe,
+                        onToggleFavorite: {},
+                        onClose: {},
+                        initialServings: 1,
+                        context: mode == "detail-planned" ? .planned(day: Date(), slot: .breakfast) : .catalog,
+                        onSaveServings: { _ in }
+                    )
+                    .presentationDetents([.large])
+                    .dashboardLiquidSheet()
+                    .interactiveDismissDisabled()
+                }
+        } else if mode == "auth" || mode == "auth-error" {
             // Ekran logowania: `auth`, z błędem: `auth-error`.
             AuthView(
                 isLoading: false,
@@ -55,6 +135,42 @@ struct AssistantOptionsDebugScreen: View {
                 .sheet(isPresented: .constant(true)) {
                     LegalDocumentSheet(title: "Warunki korzystania") { TermsOfServiceContent() }
                 }
+        } else if mode == "plate" {
+            // Talerz w oknie gotowania — oddech talerza, poświaty i aureoli.
+            ZStack {
+                SCPageBackground(scheme: scheme).ignoresSafeArea()
+                CalendarPlate(
+                    item: CalendarPlateItem(
+                        id: "debug-plate", slot: .lunch, status: .next, time: "14:00",
+                        title: "Omlet ze szpinakiem i fetą",
+                        imageURL: URL(string: "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.png"),
+                        kcal: 450, prepMinutes: 60, cookFrom: "13:00",
+                        servingsNote: nil, minutesAway: 45, isMissed: false
+                    ),
+                    canToggle: true,
+                    onToggle: {},
+                    onOpenDetail: {}
+                )
+            }
+        } else if mode == "thought" {
+            // Wiersz tury na żywo: ślad trzech kroków nad bieżącym statusem,
+            // pod nim szkic odpowiedzi — do porównania kolumn na zrzucie.
+            ZStack(alignment: .topLeading) {
+                SCPageBackground(scheme: scheme).ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 14) {
+                    AssistantUserBubble(text: "Ułóż mi obiady na przyszły tydzień", editing: false, pending: false)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    AssistantThoughtLine(
+                        phase: .working(startedAt: Date().addingTimeInterval(-24), isStopping: false),
+                        steps: Self.thoughtSteps,
+                        isExpanded: .constant(false)
+                    )
+                    .padding(.vertical, 4)
+                    AssistantVoice { AssistantAnswer(text: "Mam dla Ciebie pięć obiadów — każdy do 30 minut,") }
+                }
+                .padding(16)
+                .padding(.top, 50)
+            }
         } else if showsButtons {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {

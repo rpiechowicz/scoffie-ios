@@ -1158,8 +1158,9 @@ private struct AssistantOptionsStorySheet: View {
     /// tuż nad stosem BIEŻĄCEGO dania.
     @State private var textHeights: [Int: CGFloat] = [:]
     /// Palec na ekranie — treść ugina się za nim, zanim strona się zmieni.
-    @GestureState(resetTransaction: Transaction(animation: .snappy(duration: 0.3)))
-    private var dragX: CGFloat = 0
+    /// Zwykły stan, nie `@GestureState`: gest przewracania stron jest
+    /// UIKit-owy (`OptionsPagePan`), więc powrót do zera robimy sami.
+    @State private var dragX: CGFloat = 0
 
     init(
         slotDetail: String?,
@@ -1223,7 +1224,17 @@ private struct AssistantOptionsStorySheet: View {
 
             chrome
         }
-        .simultaneousGesture(swipe)
+        // Gest UIKit-owy, nie `DragGesture`: SwiftUI-owy przeciąg na całym
+        // arkuszu zaczynał się przy KAŻDYM ruchu powyżej 12 pt i odbierał
+        // systemowi przeciągnięcie arkusza w dół — zamknięcie palcem raz
+        // działało, raz nie. Ten rusza wyłącznie przy ruchu wyraźnie
+        // poziomym; pionowy od pierwszej klatki należy do arkusza.
+        .gesture(
+            OptionsPagePan(
+                onChanged: { dragX = $0 },
+                onEnded: { dx, velocity in finishSwipe(dx: dx, velocity: velocity) }
+            )
+        )
         .sensoryFeedback(.selection, trigger: page)
         .task {
             // Klatka oddechu: arkusz zaczyna wjeżdżać, dopiero potem treść.
@@ -1386,21 +1397,25 @@ private struct AssistantOptionsStorySheet: View {
                     RoundedRectangle(cornerRadius: 2, style: .continuous).fill(on)
                 }
             }
-            segmentButton(endPage, label: "Coś innego") {
-                OptionsDashedBar()
-                    .fill(light ? Color.white.opacity(0.6) : AssistantLook.dash(scheme))
-                    .opacity(isEnd ? 0 : 1)
+            // „Coś innego” to nie kolejne danie, tylko wyjście — krótka pełna
+            // pigułka zamiast kolejnego pełnego segmentu (i zamiast dawnych
+            // kresek). Aktywny wskaźnik zwęża się do niej tym samym ruchem.
+            segmentButton(endPage, label: "Coś innego", width: Self.endSegmentWidth) {
+                Capsule(style: .continuous).fill(off)
             } active: {
-                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(AssistantLook.terra(scheme))
+                Capsule(style: .continuous).fill(AssistantLook.terra(scheme))
             }
         }
     }
 
     /// Segment jest też skokiem na stronę — pole dotyku wyższe niż sama kreska,
     /// ale bez wpływu na układ (ujemny margines zjada dodaną wysokość).
+    private static let endSegmentWidth: CGFloat = 18
+
     private func segmentButton<Track: View, Active: View>(
         _ target: Int,
         label: String,
+        width: CGFloat? = nil,
         @ViewBuilder track: () -> Track,
         @ViewBuilder active: () -> Active
     ) -> some View {
@@ -1411,7 +1426,8 @@ private struct AssistantOptionsStorySheet: View {
                     active().matchedGeometryEffect(id: "active", in: segmentSpace)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(width: width)
+            .frame(maxWidth: width == nil ? .infinity : nil)
             .frame(height: 3)
             .frame(height: 23)
             .contentShape(Rectangle())
@@ -1728,24 +1744,17 @@ private struct AssistantOptionsStorySheet: View {
 
     // MARK: Nawigacja
 
-    /// Tylko wyraźnie poziomy ruch należy do arkusza-story — pionowy to gest
-    /// zamknięcia. Krótki, ale szybki ruch też przewraca stronę.
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($dragX) { value, state, _ in
-                let dx = value.translation.width
-                state = abs(dx) > abs(value.translation.height) * 1.2 ? dx : 0
-            }
-            .onEnded { value in
-                let dx = value.translation.width
-                guard abs(dx) > abs(value.translation.height) * 1.2 else { return }
-                let flick = value.predictedEndTranslation.width
-                if dx < -50 || (dx < -16 && flick < -180) {
-                    go(to: page + 1)
-                } else if dx > 50 || (dx > 16 && flick > 180) {
-                    go(to: page - 1)
-                }
-            }
+    /// Koniec poziomego przeciągnięcia (`OptionsPagePan`). Krótki, ale
+    /// szybki ruch też przewraca stronę.
+    private func finishSwipe(dx: CGFloat, velocity: CGFloat) {
+        if dx < -50 || (dx < -16 && velocity < -450) {
+            go(to: page + 1)
+        } else if dx > 50 || (dx > 16 && velocity > 450) {
+            go(to: page - 1)
+        }
+        // Treść wraca spod palca sprężyną — także gdy strona się zmieniła,
+        // bo wtedy odjeżdża razem z przewróceniem.
+        withAnimation(motion(.snappy(duration: 0.3))) { dragX = 0 }
     }
 
     private func go(to target: Int) {
@@ -1874,12 +1883,16 @@ private struct OptionsMacroStats: View {
 
     /// `flex: v / tot; gap: 3`. Trzy TE SAME kapsuły dla każdego dania —
     /// zmieniają szerokość i pozycję, zamiast znikać i pojawiać się od nowa.
-    /// Przy wejściu każdy segment wyrasta ze SWOJEGO lewego końca, jeden po
-    /// drugim — pasek składa się na oczach, zamiast być odsłaniany zasłoną.
+    ///
+    /// Przy wejściu pasek rośnie od lewej JEDNYM ruchem: kapsuły stoją od razu
+    /// w docelowych proporcjach, a odsłania je jedna maska. Wcześniej każdy
+    /// segment wyrastał osobno, ze swoim opóźnieniem — pasek składał się
+    /// „per makro” zamiast rosnąć jako całość.
     private var bar: some View {
         let values = items.map { CGFloat(max(0, $0.grams)) }
         let total = max(1, values.reduce(0, +))
         let visible = values.filter { $0 > 0 }.count
+        let grown = armed || reduceMotion
         return GeometryReader { geo in
             let free = max(0, geo.size.width - 3 * CGFloat(max(0, visible - 1)))
             let widths = values.map { $0 > 0 ? max(6, free * $0 / total) : 0 }
@@ -1889,20 +1902,23 @@ private struct OptionsMacroStats: View {
                     let width = widths[index] * scale
                     let before = widths[..<index].reduce(0) { $0 + $1 * scale }
                     let gaps = CGFloat(values[..<index].filter { $0 > 0 }.count) * 3
-                    let grown = armed || reduceMotion
                     Capsule()
                         .fill(macro.color)
-                        .frame(width: grown ? width : 0)
-                        .opacity(grown ? 1 : 0)
-                        .animation(
-                            reduceMotion ? nil : .spring(duration: 0.7, bounce: 0.18).delay(0.32 + Double(index) * 0.11),
-                            value: armed
-                        )
+                        .frame(width: width)
                         .offset(x: before + gaps)
                 }
             }
             .frame(width: geo.size.width, alignment: .leading)
+            // Zmiana dania: proporcje przechodzą w miejscu.
             .animation(reduceMotion ? nil : .spring(duration: 0.6, bounce: 0.14), value: values)
+            .mask(alignment: .leading) {
+                Capsule()
+                    .frame(width: grown ? geo.size.width : 0)
+                    .animation(
+                        reduceMotion ? nil : .timingCurve(0.22, 1, 0.36, 1, duration: 0.9).delay(0.32),
+                        value: grown
+                    )
+            }
         }
         .frame(height: 8)
     }
@@ -2063,19 +2079,58 @@ private struct OptionsBrandBadge: View {
     }
 }
 
-/// Kreskowany segment „Coś innego” — jak `border-top: 3px dashed` w makiecie:
-/// pięć prostokątnych kresek, pierwsza i ostatnia dosunięte do krawędzi.
-private struct OptionsDashedBar: Shape {
-    var dashes = 5
+/// Poziome przewracanie stron arkusza wyboru — gest UIKit-owy.
+///
+/// Rusza WYŁĄCZNIE przy ruchu wyraźnie poziomym (decyzja zapada w pierwszej
+/// klatce, z prędkości). Przy pionowym nie zaczyna się wcale, więc
+/// systemowe przeciągnięcie arkusza w dół nie ma z kim konkurować —
+/// `DragGesture` ze SwiftUI tego nie potrafi: zaczyna się przy każdym ruchu
+/// i dopiero potem mógłby „oddać” palec, a wtedy arkusz już go nie dostaje.
+/// Równolegle z innymi gestami, żeby przyciski i segmenty dalej łapały dotyk.
+private struct OptionsPagePan: UIGestureRecognizerRepresentable {
+    /// Bieżące przesunięcie palca w poziomie.
+    let onChanged: (CGFloat) -> Void
+    /// Koniec: przesunięcie i prędkość pozioma (pt/s).
+    let onEnded: (_ dx: CGFloat, _ velocity: CGFloat) -> Void
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let slots = CGFloat(dashes * 2 - 1)
-        let unit = rect.width / slots
-        for index in 0..<dashes {
-            path.addRect(CGRect(x: rect.minX + CGFloat(index * 2) * unit, y: rect.minY, width: unit, height: rect.height))
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        pan.maximumNumberOfTouches = 1
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let dx = recognizer.translation(in: recognizer.view).x
+        switch recognizer.state {
+        case .began, .changed:
+            onChanged(dx)
+        case .ended:
+            onEnded(dx, recognizer.velocity(in: recognizer.view).x)
+        case .cancelled, .failed:
+            onEnded(0, 0)
+        default:
+            break
         }
-        return path
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y) * 1.2
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
     }
 }
 

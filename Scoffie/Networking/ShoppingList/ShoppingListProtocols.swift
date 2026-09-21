@@ -12,6 +12,8 @@ import Foundation
 protocol ShoppingListRepository {
     func fetchShoppingListState(weekStart: String) async throws -> ShoppingListState
     func setChecked(weekStart: String, productKey: String, isChecked: Bool) async throws
+    func addRecipeExtras(weekStart: String, recipeId: String, servings: Int, ingredientIds: [String]) async throws -> Int
+    func removeExtra(weekStart: String, productKey: String) async throws
     func archiveShoppingList(weekStart: String, weekLabel: String) async throws
     func deleteArchivedList(archiveId: String) async throws
     func deleteAllArchivedLists(weekStart: String) async throws
@@ -22,6 +24,8 @@ protocol ShoppingListRepository {
 protocol ShoppingListTransportClient {
     func fetchShoppingListState(weekStart: String) async throws -> BackendShoppingListStateDTO
     func setChecked(weekStart: String, productKey: String, isChecked: Bool) async throws
+    func addRecipeExtras(weekStart: String, recipeId: String, servings: Int, ingredientIds: [String]) async throws -> BackendAddRecipeExtrasResultDTO
+    func removeExtra(weekStart: String, productKey: String) async throws
     func archiveShoppingList(weekStart: String, weekLabel: String) async throws
     func deleteArchivedList(archiveId: String) async throws
     func deleteAllArchivedLists(weekStart: String) async throws

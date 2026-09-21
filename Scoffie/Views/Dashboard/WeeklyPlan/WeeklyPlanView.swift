@@ -123,6 +123,9 @@ struct WeeklyPlanView: View {
         let slot: MealSlot
         /// Ustawione, gdy arkusz edytuje istniejący wariant, a nie dokłada nowy.
         let editing: PlanMeal?
+        /// Audytorium zaznaczone na starcie. `nil` = domyślne arkusza
+        /// (soczewka profilu albo „Wspólne").
+        var defaultParticipantIds: [String]? = nil
 
         var id: String {
             let base = "\(MealCalendarStore.dateKey(for: date)).\(slot.rawValue)"
@@ -216,6 +219,24 @@ struct WeeklyPlanView: View {
         let all = mealStore.meals(for: date, slot: slot)
         guard let memberId = profile.memberId else { return all }
         return all.visibleTo(memberId: memberId)
+    }
+
+    /// Dla kogo startuje arkusz „Osobne danie dla kogoś”.
+    ///
+    /// Nigdy „Wspólne”: z tym domyślnym wybór przepisu bez dotykania chipów
+    /// dokładał do pory DRUGIE danie całego domu, więc oba dania dostawały
+    /// odznakę domku, a żadne nie należało do nikogo. Bierzemy pierwszą osobę
+    /// bez własnego dania w tej porze, z pominięciem planującego — to on
+    /// zostaje przy daniu domu, a osobne danie robi się dla kogoś innego.
+    private func variantAudience(date: Date, slot: MealSlot) -> [String] {
+        let claimed = Set(
+            mealStore.meals(for: date, slot: slot)
+                .filter { !$0.isShared }
+                .flatMap(\.participantIds)
+        )
+        let uncovered = members.map(\.id).filter { !claimed.contains($0) }
+        let others = uncovered.filter { $0 != sessionStore.currentUserId }
+        return (others.first ?? uncovered.first).map { [$0] } ?? []
     }
 
     /// Sloty do narysowania dla jednego dnia.
@@ -456,7 +477,8 @@ struct WeeklyPlanView: View {
                     editing: target.editing,
                     // Planowanie przez soczewkę jednej osoby znaczy, że posiłek
                     // jest dla niej, dopóki nie powiesz inaczej.
-                    defaultParticipantIds: profile.memberId.map { [$0] } ?? [],
+                    defaultParticipantIds: target.defaultParticipantIds
+                        ?? profile.memberId.map { [$0] } ?? [],
                     // Po acku serwera, nie po dismissie — arkusz zamyka się
                     // przed końcem zapisu, a lista zakupów liczona ze starego
                     // planu byłaby do wyrzucenia.
@@ -653,6 +675,14 @@ struct WeeklyPlanView: View {
             onTapMeal: { slot, meal in openDetail(date: date, slot: slot, meal: meal) },
             onAddMeal: { slot in
                 pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
+            },
+            onAddVariant: { slot in
+                pickerTarget = PickerTarget(
+                    date: date,
+                    slot: slot,
+                    editing: nil,
+                    defaultParticipantIds: variantAudience(date: date, slot: slot)
+                )
             },
             onEditMeal: { slot, meal in
                 pickerTarget = PickerTarget(date: date, slot: slot, editing: meal)

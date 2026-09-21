@@ -124,6 +124,62 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:setShoppingItemChecked.")
     }
 
+    /// „Brakuje mi” ze szczegółu przepisu. Wysyłamy WYŁĄCZNIE identyfikatory
+    /// składników — ilości liczy serwer z tego samego źródła co listę z planu,
+    /// żeby oba sumowały się pod jednym produktem.
+    func addRecipeExtras(
+        weekStart: String,
+        recipeId: String,
+        servings: Int,
+        ingredientIds: [String]
+    ) async throws -> BackendAddRecipeExtrasResultDTO {
+        let householdId = try await resolveHouseholdId()
+        let payload = try makePayload(
+            AddRecipeExtrasPayload(
+                userId: userId,
+                householdId: householdId,
+                weekStart: weekStart,
+                data: AddRecipeExtrasDataPayload(
+                    recipeId: recipeId,
+                    servings: servings,
+                    ingredientIds: ingredientIds
+                )
+            )
+        )
+        let envelope: WsEnvelope<BackendAddRecipeExtrasResultDTO> = try await socket.emitWithAck(
+            event: "weeklyPlans:addRecipeExtras",
+            payload: payload,
+            as: WsEnvelope<BackendAddRecipeExtrasResultDTO>.self
+        )
+
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:addRecipeExtras.")
+    }
+
+    func removeExtra(weekStart: String, productKey: String) async throws {
+        let householdId = try await resolveHouseholdId()
+        let payload = try makePayload(
+            RemoveExtraPayload(
+                userId: userId,
+                householdId: householdId,
+                weekStart: weekStart,
+                data: RemoveExtraDataPayload(productKey: productKey)
+            )
+        )
+        let envelope: WsEnvelope<BackendMutationResultDTO> = try await socket.emitWithAck(
+            event: "weeklyPlans:removeShoppingExtra",
+            payload: payload,
+            as: WsEnvelope<BackendMutationResultDTO>.self
+        )
+
+        if envelope.ok {
+            return
+        }
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:removeShoppingExtra.")
+    }
+
     func archiveShoppingList(weekStart: String, weekLabel: String) async throws {
         let householdId = try await resolveHouseholdId()
         let payload = try makePayload(
@@ -252,6 +308,30 @@ private struct ShoppingListPayload: Encodable {
 private struct SetCheckedDataPayload: Encodable {
     let productKey: String
     let isChecked: Bool
+}
+
+private struct AddRecipeExtrasDataPayload: Encodable {
+    let recipeId: String
+    let servings: Int
+    let ingredientIds: [String]
+}
+
+private struct AddRecipeExtrasPayload: Encodable {
+    let userId: String
+    let householdId: String
+    let weekStart: String
+    let data: AddRecipeExtrasDataPayload
+}
+
+private struct RemoveExtraDataPayload: Encodable {
+    let productKey: String
+}
+
+private struct RemoveExtraPayload: Encodable {
+    let userId: String
+    let householdId: String
+    let weekStart: String
+    let data: RemoveExtraDataPayload
 }
 
 private struct SetCheckedPayload: Encodable {

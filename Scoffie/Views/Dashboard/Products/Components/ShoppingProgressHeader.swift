@@ -86,7 +86,7 @@ struct ShoppingProgressHeader: View {
                         .tracking(-0.5)
                         .foregroundStyle(Color.scLabel(scheme))
 
-                    Text("z \(total) kupione")
+                    SCCountingText("z \(total) kupione")
                         .font(.system(size: 13, weight: .regular))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
@@ -96,25 +96,28 @@ struct ShoppingProgressHeader: View {
 
                 Spacer(minLength: 8)
 
-                Text(isComplete ? "Wszystko kupione" : "\(remaining) do kupienia")
-                    .font(.system(size: 12.5, weight: .regular))
-                    .monospacedDigit()
-                    .foregroundStyle(isComplete ? SCPalette.sage : Color.scMuted(scheme))
-                    .lineLimit(1)
-                    // Prawa etykieta nie skaluje się ani nie zwija — jest
-                    // krótsza od lewej i to lewa oddaje jej miejsce.
-                    .fixedSize()
-                    // Licznik schodzi w dół, więc i cyfra ma się przewijać
-                    // w dół; „Wszystko kupione” wchodzi zwykłym przenikaniem,
-                    // bo to już nie jest liczba.
-                    .contentTransition(.numericText(countsDown: true))
-                    .id(isComplete)
-                    .transition(.opacity)
-                    // Animacja siedzi na TEJ etykiecie, nie na całym wierszu:
-                    // duży licznik obok to `CountingNumber`, który prowadzi
-                    // własne odliczanie — objęty animacją z zewnątrz dostawał
-                    // dwie na raz i drgał w trakcie.
-                    .animation(.easeInOut(duration: 0.28), value: remaining)
+                Group {
+                    if isComplete {
+                        Text("Wszystko kupione")
+                    } else {
+                        // Liczy się tak samo jak duży licznik obok.
+                        SCCountingText("\(remaining) do kupienia")
+                    }
+                }
+                .font(.system(size: 12.5, weight: .regular))
+                .monospacedDigit()
+                .foregroundStyle(isComplete ? SCPalette.sage : Color.scMuted(scheme))
+                .lineLimit(1)
+                // Prawa etykieta nie skaluje się ani nie zwija — jest
+                // krótsza od lewej i to lewa oddaje jej miejsce.
+                .fixedSize()
+                // „Wszystko kupione” wchodzi przenikaniem, bo to już nie jest
+                // liczba. Animacja idzie po `isComplete`, nie po liczbie —
+                // liczby prowadzą własne odliczanie, a objęte animacją
+                // z zewnątrz dostawały dwie naraz i drgały.
+                .id(isComplete)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.28), value: isComplete)
             }
 
             ShoppingProgressBar(segments: segments)

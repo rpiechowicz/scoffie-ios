@@ -1,26 +1,28 @@
 import SwiftUI
 
-// Recipe detail v2 — "Szczegóły Posiłku" Cozy Kitchen variant F.
-// Source: design/Scoffie - Szczegoly Posilku.html (RecipeDetailF).
+// Szczegóły posiłku v2 — wariant „final” z makiety Claude Design
+// „Scoffie — Szczegóły Posiłku v2” (`components/detail-v2.jsx`: `TopEditorial`
+// z tagami, `NutriZDonutThick`, `StepsList`, `IngrCheckGrouped`, `MealDetail`
+// z `nutriStepper`).
 //
-// Zdjęcie 320pt wtapia się w płótno strony (bez widocznego szwu na granicy),
-// serce wisi w lewym górnym rogu, a xmark w prawym — ten sam wzorzec co
-// `EditorialSheetHeader`, żeby każdy arkusz v2 zamykało się tak samo. Pod
-// zdjęciem: wiersz eyebrow (pigułka kategorii + stempel czasu), tytuł z lede,
-// a dalej cztery sekcje `EditorialSectionTitle` z kolorowymi akcentami —
-// „Porcje" (butter), „Wartości odżywcze" (terracotta, asymetryczna siatka
-// 1.4 : 1 z kaflem kcal i trzema chipami makro), „Przygotowanie" (sage,
-// numerowane kroki) i „Składniki" (indigo, wiersze z gramaturą).
+// Od góry: zdjęcie 220 pt wtapiające się w tło arkusza, wiersz tagów
+// (kategoria · „pasuje też na” przerywaną obwódką · czas), duży tytuł z lede,
+// a pod nim trzy sekcje z akcentowym pręcikiem:
+//   • „Wartości odżywcze” (terakota) — stepper porcji siedzi W NAGŁÓWKU tej
+//     sekcji, a nie w osobnej karcie: porcje zmieniają wszystko niżej naraz
+//     (makra i gramatury), więc eyebrow każdej sekcji mówi, na ile porcji są
+//     jej liczby. Pod spodem porcja na tle celu dnia — pierścienie i legenda
+//     z arkusza „Cel dnia” (odejście od donuta z makiety, patrz
+//     `DetailNutritionCard`).
+//   • „Przygotowanie” (szałwia) — numerowane kroki w jednej karcie.
+//   • „Składniki” (indygo) — pogrupowane w działy w kolejności alejek sklepu
+//     i z polem „mam w domu”. Brakujące idą przyciskiem „Do zakupów” NA
+//     PRAWDZIWĄ listę zakupów tygodnia (`weeklyPlans:addRecipeExtras`) —
+//     serwer liczy ilości sam, z tych samych danych co listę z planu.
+// Na dole pasek z jednym przyciskiem, którego rola zależy od `context`.
 //
-// Sekcja porcji jest osią tego ekranu, a nie ozdobą: stepper przelicza
-// JEDNOCZEŚNIE makra i gramatury. Wcześniej kafle pokazywały wartości na
-// jedną porcję, a lista składników ilości na cały przepis — dwie różne
-// liczby porcji obok siebie, żadna podpisana.
-//
-// Na dole pasek z jednym przyciskiem, którego rola zależy od `context`:
-// z katalogu dodaje posiłek do planu, z planu zapisuje samą liczbę porcji.
-// ScrollView ignoruje górny bezpieczny obszar, żeby zdjęcie szło od krawędzi
-// do krawędzi; serce, xmark i dolny pasek siedzą na overlayach rodzica.
+// Makra w kolorach `SCMacroPalette`, a przyciski w wariancie „soft” — jak
+// wszędzie indziej w aplikacji, a nie jak w makiecie (decyzja Rafała 21.09).
 
 /// Skąd otwarto szczegóły posiłku.
 ///
@@ -37,6 +39,9 @@ struct RecipeDetailView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.toasts) private var toasts
     @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.shoppingListStore) private var shoppingListStore
+    @Environment(\.datesViewModel) private var datesViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let recipe: Recipe
     var onToggleFavorite: (() -> Void)?
@@ -47,7 +52,8 @@ struct RecipeDetailView: View {
     /// żeby ekran pokazywał to, co użytkownik już wcześniej ustawił.
     let initialServings: Int
 
-    /// Kontekst wywołania — decyduje o przycisku w dolnym pasku.
+    /// Kontekst wywołania — decyduje o przycisku w dolnym pasku i o tym, czy
+    /// składniki da się dopisać do listy zakupów.
     let context: RecipeDetailContext
 
     /// Wołane przyciskiem „Zapisz porcje" w kontekście `.planned`.
@@ -88,6 +94,24 @@ struct RecipeDetailView: View {
     @State private var showThermomixSuccess = false
     @State private var thermomixError: String?
 
+    /// Składniki odhaczone jako „mam w domu”.
+    ///
+    /// Stan WIZYTY, nie pamięć aplikacji: aplikacja nie ma spiżarni i nie wie,
+    /// co stoi w szafce, więc po ponownym otwarciu przepisu pytamy od nowa.
+    @State private var haveIngredientIds: Set<UUID> = []
+
+    /// Wysyłka brakujących na listę zakupów.
+    @State private var shoppingSend: ShoppingSendState = .idle
+
+    /// Wjazd treści — sekcje wchodzą kolejno, donut rysuje się od góry.
+    @State private var hasAppeared = false
+
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+
+    /// Zdjęcie zjechało z ekranu — treść przewija się teraz pod pływającymi
+    /// przyciskami i u góry arkusza potrzebne jest wygaszenie.
+    @State private var isPastPhoto = false
+
     /// Jawny `init` zamiast memberwise'owego, bo `@State` z porcjami trzeba
     /// zasiać `initialServings`. Kolejność i domyślne wartości są dobrane tak,
     /// żeby dotychczasowe wywołania `RecipeDetailView(recipe:onToggleFavorite:onClose:)`
@@ -121,102 +145,116 @@ struct RecipeDetailView: View {
     /// ułamkiem `porcje / recipe.servings`.
     private var portions: Double { Double(servings) }
 
+    private var look: DetailLook { DetailLook(scheme: scheme) }
+
     var body: some View {
         ZStack(alignment: .top) {
-            SCPageBackground(scheme: scheme)
+            DetailBackground()
                 .ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    heroPhoto
+                    DetailHeroPhoto(url: recipe.imageURL)
 
-                    EditorialEyebrowRow(
-                        category: recipe.category,
-                        prepTimeMinutes: recipe.prepTimeMinutes,
-                        showsThermomix: recipe.isThermomix
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-
-                    titleAndDescription
+                    header
                         .padding(.horizontal, 20)
-                        .padding(.top, 14)
-
-                    if !recipe.additionalSlots.isEmpty {
-                        alsoFitsRow
-                            .padding(.horizontal, 20)
-                            .padding(.top, 14)
-                    }
-
-                    servingsSection
-                        .padding(.horizontal, 20)
-                        .padding(.top, 22)
+                        .padding(.top, 6)
+                        .detailReveal(hasAppeared, order: 0)
 
                     nutritionSection
-                        .padding(.horizontal, 16)
-                        .padding(.top, 20)
+                        .padding(.top, 24)
+                        .detailReveal(hasAppeared, order: 1)
 
                     if !recipe.preparationSteps.isEmpty {
                         preparationSection
-                            .padding(.horizontal, 20)
-                            .padding(.top, 22)
+                            .padding(.top, 24)
+                            .detailReveal(hasAppeared, order: 2)
                     }
 
                     if !recipe.ingredients.isEmpty {
                         ingredientsSection
-                            .padding(.horizontal, 20)
-                            .padding(.top, 22)
+                            .padding(.top, 24)
+                            .detailReveal(hasAppeared, order: 3)
                     }
 
-                    // Zapas pod dolny pasek: sam pasek to 14 + przycisk 45 + 8,
-                    // do tego bezpieczny obszar na dole. Bez tej przerwy
-                    // ostatni składnik chowa się pod przyciskiem i wygląda
-                    // na ucięty koniec listy.
-                    Color.clear.frame(height: 112)
+                    // Zapas pod dolny pasek: 28 pt przejścia + przycisk 54 pt
+                    // + margines, do tego bezpieczny obszar. Bez tej przerwy
+                    // stopka składników chowa się pod przyciskiem.
+                    Color.clear.frame(height: 96)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
                 // Bez tego wystarczy, żeby jeden element policzył sobie
-                // szerokość większą niż ekran (kafle makr biorą ją
-                // z `GeometryReadera`, a ten w trakcie przejść arkusza potrafi
-                // oddać nieaktualną wartość), a obszar przewijania robi się
-                // szerszy niż widok. `ScrollView` pozwala go wtedy przesuwać
-                // na boki i cała karta jeździ w lewo-prawo pod palcem —
-                // mimo że na tym ekranie nie ma czego przewijać w poziomie.
+                // szerokość większą niż ekran (w trakcie przejść arkusza
+                // geometria potrafi przyjść nieaktualna), a obszar przewijania
+                // robi się szerszy niż widok — i cała karta jeździ na boki.
                 .containerRelativeFrame(.horizontal)
             }
+            .scrollPosition($scrollPosition)
             .scrollIndicators(.hidden)
             .ignoresSafeArea(.container, edges: .top)
+            // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
+            // progu, a nie w każdej klatce przewijania.
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > 150
+            } action: { _, isPast in
+                withAnimation(.easeInOut(duration: 0.22)) { isPastPhoto = isPast }
+            }
+        }
+        .overlay(alignment: .top) {
+            LinearGradient(
+                stops: [
+                    .init(color: look.background, location: 0),
+                    .init(color: look.background.opacity(0.85), location: 0.55),
+                    .init(color: look.background.opacity(0), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 84)
+            .opacity(isPastPhoto ? 1 : 0)
+            .allowsHitTesting(false)
         }
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .topLeading) {
-            heartButton
-                .padding(.leading, 16)
-                .padding(.top, 12)
+            DetailRoundButton(
+                systemName: recipe.favourite ? "heart.fill" : "heart",
+                tint: recipe.favourite ? SCPalette.terracotta : nil,
+                accessibilityLabel: recipe.favourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
+                action: { onToggleFavorite?() }
+            )
+            .opacity(onToggleFavorite == nil ? 0 : 1)
+            .disabled(onToggleFavorite == nil)
+            .padding(.leading, 16)
+            .padding(.top, 14)
         }
         .overlay(alignment: .topTrailing) {
-            closeButton
-                .padding(.trailing, 16)
-                .padding(.top, 12)
+            DetailRoundButton(
+                systemName: "xmark",
+                accessibilityLabel: "Zamknij",
+                action: { onClose?() }
+            )
+            .padding(.trailing, 16)
+            .padding(.top, 14)
         }
         .overlay(alignment: .bottom) {
             primaryActionBar
+        }
+        .onAppear {
+            applyDebugLaunchOptions()
+            guard !hasAppeared else { return }
+            hasAppeared = true
         }
         .sheet(isPresented: $isAddToPlanPresented) {
             // Liczba porcji ze steppera jedzie do arkusza jako punkt startowy:
             // użytkownik właśnie na nią patrzył, więc przestawienie jej przy
             // dodawaniu wyglądałoby na zgubienie jego wyboru.
-            // Bez `.presentationDetents` i `.dashboardLiquidSheet()` — arkusz
-            // nakłada je sobie sam, a drugi komplet tych samych modyfikatorów
-            // prezentacji tylko zaciemniałby, gdzie jest ich źródło.
             AddToPlanSheet(
                 recipe: recipe,
                 initialServings: servings,
                 // Stepper startuje od jedynki, więc każda inna wartość znaczy,
                 // że użytkownik świadomie go ruszył — i arkusz nie ma prawa
-                // nadpisać jej regułą auto z chipów. Przy jedynce oddajemy
-                // decyzję arkuszowi: „Wspólne" w domu dwuosobowym ma pokazać
-                // dwie porcje, zanim ktokolwiek cokolwiek stuknie.
+                // nadpisać jej regułą auto z chipów.
                 didOverrideServings: didTouchStepper,
                 onAdded: { day, slot in
                     onAddedToPlan?(day, slot)
@@ -225,340 +263,436 @@ struct RecipeDetailView: View {
         }
     }
 
-    // MARK: - Hero photo
+    // MARK: - Góra: tagi, tytuł, lede
 
-    private var heroPhoto: some View {
-        // 320pt design height, edge-to-edge, fades into the canvas at the
-        // bottom 60pt and into a darker scrim at the top 120pt so the heart
-        // and close chips read on any photo.
-        //
-        // Bez `.ignoresSafeArea` — o rozciągnięcie treści pod pasek stanu dba
-        // sam ScrollView. Ten modyfikator był tu kiedyś dodatkowo i rozjeżdżał
-        // ekran: w arkuszu `.large` górna wstawka bezpiecznego obszaru wynosi
-        // zero, więc w spoczynku nie robił nic, ale przy każdej zmianie
-        // geometrii arkusza (wjazd, przeciąganie do zamknięcia, wypchnięcie
-        // w tył przez „Dodaj do planu") wstawka na moment rosła. Zdjęcie
-        // dostawało wtedy nową wysokość, a stojące PRZED nim `.clipped()`
-        // przycinało je do poprzednich granic — stąd węższa fotografia
-        // i cała treść przesunięta w lewo.
-        Color.clear
-            .frame(height: 320)
-            .background(photoLayer)
-            .overlay(topScrim, alignment: .top)
-            .overlay(bottomFade, alignment: .bottom)
-            .clipped()
-    }
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            tagRow
 
-    private var photoLayer: some View {
-        Group {
-            if let url = recipe.imageURL {
-                CachedAsyncImage(url: url, variant: .large) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .empty, .failure:
-                        photoFallback
-                    @unknown default:
-                        photoFallback
-                    }
-                }
-            } else {
-                photoFallback
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-    }
-
-    private var photoFallback: some View {
-        // Editorial shimmer that matches the design's `Skel` primitive —
-        // warm canvas-tinted track with a left-to-right highlight pass.
-        // The pre-v2 placeholder was a category-gradient + glyph, which
-        // read like a different design language on this surface.
-        EditorialShimmerBlock(cornerRadius: 0)
-    }
-
-    private var topScrim: some View {
-        LinearGradient(
-            colors: [
-                Color.black.opacity(scheme == .dark ? 0.55 : 0.30),
-                Color.black.opacity(0)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: 120)
-        .allowsHitTesting(false)
-    }
-
-    private var bottomFade: some View {
-        // Matches the SCPageBackground base color at Y≈320 so the photo
-        // melts into the canvas — no visible boundary line.
-        let target = scheme == .dark
-            ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255)
-            : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255)
-        return LinearGradient(
-            colors: [target.opacity(0), target],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: 80)
-        .allowsHitTesting(false)
-    }
-
-    // MARK: - Top chrome (heart + close)
-
-    private var heartButton: some View {
-        let liked = recipe.favourite
-        let glassFill: Color = scheme == .dark
-            ? Color(red: 15 / 255, green: 10 / 255, blue: 8 / 255).opacity(0.55)
-            : Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.85)
-        let glassStroke: Color = scheme == .dark
-            ? Color.white.opacity(0.18)
-            : Color.black.opacity(0.16)
-
-        return Button(action: { onToggleFavorite?() }) {
-            Image(systemName: liked ? "heart.fill" : "heart")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(liked ? SCPalette.terracotta : Color.scLabel(scheme))
-                .frame(width: 44, height: 44)
-                .background {
-                    if liked {
-                        Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.30 : 0.22))
-                    } else {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(glassFill))
-                    }
-                }
-                .overlay(
-                    Circle().stroke(
-                        liked ? SCPalette.terracotta.opacity(0.55) : glassStroke,
-                        lineWidth: 1
-                    )
-                )
-                .shadow(color: .black.opacity(scheme == .dark ? 0.4 : 0.18), radius: 6, x: 0, y: 2)
-        }
-        .buttonStyle(.plain)
-        .opacity(onToggleFavorite == nil ? 0 : 1)
-        .disabled(onToggleFavorite == nil)
-        .accessibilityLabel(liked ? "Usuń z ulubionych" : "Dodaj do ulubionych")
-    }
-
-    private var closeButton: some View {
-        Button(action: { onClose?() }) {
-            Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Color.scLabel(scheme))
-                .frame(width: 36, height: 36)
-                .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Circle().fill(
-                            scheme == .dark
-                                ? Color(red: 15 / 255, green: 10 / 255, blue: 8 / 255).opacity(0.55)
-                                : Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.85)
-                        ))
-                }
-                .overlay(
-                    Circle().stroke(
-                        scheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.14),
-                        lineWidth: 1
-                    )
-                )
-                .shadow(color: .black.opacity(scheme == .dark ? 0.4 : 0.16), radius: 6, x: 0, y: 2)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Zamknij")
-    }
-
-    // MARK: - Title + description
-
-    private var titleAndDescription: some View {
-        VStack(alignment: .leading, spacing: 12) {
             Text(recipe.name)
-                .font(.system(size: 30, weight: .heavy))
-                .tracking(-0.8)
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineLimit(nil)
-                .multilineTextAlignment(.leading)
+                .font(.system(size: 32, weight: .heavy))
+                .tracking(-0.96)
+                .foregroundStyle(look.fg)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
+                .accessibilityAddTraits(.isHeader)
 
             if !recipe.description.isEmpty {
                 Text(recipe.description)
                     .font(.system(size: 14.5))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineSpacing(3)
+                    .foregroundStyle(look.muted)
+                    // 21 pt wiersza z makiety przy 14,5 pt pisma.
+                    .lineSpacing(3.7)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Sections
-
-    /// Blok porcji. Butter jest jedynym akcentem z palety, który nie jest
-    /// jeszcze zajęty na tym ekranie (terracotta trzyma kalorie, sage
-    /// przygotowanie, indigo składniki), więc sekcja czyta się jako osobna
-    /// rzecz, a nie jako przedłużenie sąsiedniej.
-    private var servingsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            EditorialSectionTitle(
-                title: "Porcje",
-                eyebrow: "Ile gotujesz",
-                accent: SCPalette.butter
-            )
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .center, spacing: 12) {
-                    Text(PolishPlural.servings(servings))
-                        .font(.system(size: 22, weight: .heavy))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .monospacedDigit()
-                        .contentTransition(.numericText(value: Double(servings)))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                    Spacer(minLength: 8)
-
-                    SCStepper(
-                        value: $servings,
-                        range: Self.servingsRange,
-                        accessibilityTitle: "Liczba porcji",
-                        accessibilityValue: PolishPlural.servings(servings),
-                        onChange: { _ in didTouchStepper = true }
-                    )
-                }
-
-                // Bez tej linijki nie widać, że przepis jest napisany na dwie
-                // porcje — a to ona tłumaczy, czemu przy jednej porcji
-                // gramatury składników są o połowę mniejsze niż w przepisie.
-                Text("Przepis bazowy: \(PolishPlural.servings(recipe.servings))")
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .monospacedDigit()
+    /// Kategoria · „pasuje też na” · czas.
+    ///
+    /// Dodatkowe pory dnia idą przerywaną obwódką: to nie jest druga
+    /// kategoria przepisu, tylko podpowiedź, gdzie jeszcze go postawić. Gdy
+    /// wszystkie się nie mieszczą, zostaje pierwsza i „+N” — a przy bardzo
+    /// wąskim ekranie sama kategoria. Czas nigdy się nie łamie.
+    private var tagRow: some View {
+        let extras = recipe.additionalSlots
+        return ViewThatFits(in: .horizontal) {
+            tagRowContent(slots: extras, overflow: 0)
+            if extras.count > 1 {
+                tagRowContent(slots: Array(extras.prefix(1)), overflow: extras.count - 1)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.scTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .animation(.smooth(duration: 0.18), value: servings)
+            if !extras.isEmpty {
+                tagRowContent(slots: [], overflow: extras.count)
+            }
+            tagRowContent(slots: [], overflow: 0, showsThermomix: false)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private func tagRowContent(slots: [MealSlot], overflow: Int, showsThermomix: Bool = true) -> some View {
+        HStack(spacing: 6) {
+            DetailTagPill(
+                icon: RecipesConstants.icon(for: recipe.category),
+                text: RecipesConstants.shortDisplayName(for: recipe.category),
+                accent: RecipeAccent.accent(for: recipe.category)
+            )
+
+            // Chip „THERMOMIX” — właściwość przepisu (ma odpowiednik
+            // w Cookidoo), więc widoczny niezależnie od stanu integracji.
+            if showsThermomix && recipe.isThermomix {
+                DetailTagPill(icon: "cooktop.fill", text: "Thermomix", accent: SCPalette.sage)
+            }
+
+            ForEach(slots) { slot in
+                DetailDashedTag(text: slot.title)
+            }
+            if overflow > 0 {
+                DetailDashedTag(text: "+\(overflow)")
+                    .accessibilityLabel("Pasuje też na \(PolishPlural.form(overflow, one: "jedną porę", few: "\(overflow) pory", many: "\(overflow) pór"))")
+            }
+
+            Spacer(minLength: 10)
+
+            Text(verbatim: "\(recipe.prepTimeMinutes) MIN")
+                .font(.system(size: 12, weight: .bold))
+                .tracking(1.1)
+                .monospacedDigit()
+                .foregroundStyle(look.muted)
+                .fixedSize()
+                .accessibilityLabel("\(recipe.prepTimeMinutes) minut")
+        }
+    }
+
+    // MARK: - Wartości odżywcze
 
     private var nutritionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            EditorialSectionTitle(
+            DetailSectionHeader(
+                eyebrow: PolishPlural.servings(servings),
                 title: "Wartości odżywcze",
-                eyebrow: nil,
                 accent: SCPalette.terracotta
-            )
+            ) {
+                DetailServingsStepper(
+                    value: $servings,
+                    range: Self.servingsRange,
+                    onChange: { didTouchStepper = true }
+                )
+            }
 
-            EditorialNutritionGrid(
+            DetailNutritionCard(
                 nutrition: recipe.nutrition(forServings: portions),
-                // Przy jednej porcji przelicznik powtarzałby dużą liczbę,
-                // więc pokazujemy go dopiero wtedy, gdy jest czym dzielić.
-                perServingKcal: servings > 1 ? recipe.nutritionPerServing.kcal : nil
+                servings: servings
             )
+            .padding(.horizontal, 20)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    // MARK: - Przygotowanie
 
     private var preparationSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            EditorialSectionTitle(
-                title: "Przygotowanie",
-                eyebrow: "Krok po kroku",
-                accent: SCPalette.sage
-            )
-
-            VStack(spacing: 0) {
-                let sortedSteps = recipe.preparationSteps.sorted(by: { $0.stepNumber < $1.stepNumber })
-                ForEach(Array(sortedSteps.enumerated()), id: \.element.id) { idx, step in
-                    EditorialStepRow(
-                        index: idx + 1,
-                        text: step.instruction,
-                        isLast: idx == sortedSteps.count - 1
-                    )
-                }
-            }
-            .background(Color.scTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var ingredientsSection: some View {
-        // Gramatury są przeliczone tym samym współczynnikiem co makra wyżej,
-        // a eyebrow mówi wprost, na ile porcji — wcześniej brzmiał „Lista
-        // zakupów" i nie dało się z niego wyczytać, czego dotyczą liczby.
-        let scaled = recipe.ingredients(forServings: portions)
+        let steps = recipe.preparationSteps.sorted { $0.stepNumber < $1.stepNumber }
 
         return VStack(alignment: .leading, spacing: 12) {
-            EditorialSectionTitle(
-                title: "Składniki",
-                // Biernik, bo po „Na" mianownik daje „Na 1 porcja". Kafel
-                // porcji i CTA zostają na mianowniku — tam liczba stoi sama,
-                // bez przyimka.
-                eyebrow: "Na \(PolishPlural.servingsAccusative(servings))",
-                accent: SCPalette.indigo
-            )
+            DetailSectionHeader(
+                eyebrow: "Krok po kroku",
+                title: "Przygotowanie",
+                accent: SCPalette.sage
+            ) { EmptyView() }
 
-            VStack(spacing: 0) {
-                ForEach(Array(scaled.enumerated()), id: \.element.id) { idx, ingredient in
-                    EditorialIngredientRow(
-                        ingredient: ingredient,
-                        isLast: idx == scaled.count - 1
-                    )
+            DetailCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                        DetailStepRow(index: index + 1, text: step.instruction)
+                            .overlay(alignment: .top) {
+                                if index > 0 { DetailHairline() }
+                            }
+                    }
                 }
             }
-            .background(Color.scTileBg(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
+            .padding(.horizontal, 20)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    // MARK: - Składniki
+
+    private var ingredientsSection: some View {
+        // Gramatury są przeliczone tym samym współczynnikiem co makra wyżej —
+        // i eyebrow mówi wprost, na ile porcji.
+        let scaled = recipe.ingredients(forServings: portions)
+        let groups = DetailIngredientGroup.make(from: scaled)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            DetailSectionHeader(
+                eyebrow: PolishPlural.servings(servings),
+                title: "Składniki",
+                accent: SCPalette.indigo
+            ) {
+                if showsShoppingPill {
+                    shoppingPill
+                        .transition(.scale(scale: 0.85, anchor: .trailing).combined(with: .opacity))
+                }
+            }
+
+            DetailCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(groups.enumerated()), id: \.element.department) { groupIndex, group in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(group.department.uppercased())
+                                .font(.system(size: 10.5, weight: .heavy))
+                                .tracking(0.8)
+                                .foregroundStyle(SCPalette.indigo)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                                .padding(.bottom, 2)
+                                .accessibilityAddTraits(.isHeader)
+
+                            ForEach(group.ingredients) { ingredient in
+                                ingredientRow(ingredient)
+                            }
+
+                            Color.clear.frame(height: 6)
+                        }
+                        .overlay(alignment: .top) {
+                            if groupIndex > 0 { DetailHairline() }
+                        }
+                    }
+
+                    ingredientsFooter
+                        .overlay(alignment: .top) { DetailHairline() }
+                }
+            }
+            .padding(.horizontal, 20)
+            .sensoryFeedback(.selection, trigger: haveIngredientIds)
+        }
+    }
+
+    @ViewBuilder
+    private func ingredientRow(_ ingredient: Ingredient) -> some View {
+        let amount = RecipeDetailFormat.ingredientAmount(ingredient)
+        let name = RecipeDetailFormat.ingredientName(ingredient.name)
+
+        if canSendToShopping {
+            let have = haveIngredientIds.contains(ingredient.id)
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    if have {
+                        haveIngredientIds.remove(ingredient.id)
+                    } else {
+                        haveIngredientIds.insert(ingredient.id)
+                    }
+                }
+            } label: {
+                DetailIngredientRow(name: name, amount: amount, have: have, showsCheckbox: true)
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.985))
+            .accessibilityLabel("\(name), \(amount)")
+            .accessibilityValue(have ? "mam w domu" : "brakuje")
+            .accessibilityHint("Zaznacz, jeśli masz w domu")
+            .accessibilityAddTraits(have ? [.isButton, .isSelected] : .isButton)
+        } else {
+            DetailIngredientRow(name: name, amount: amount, have: false, showsCheckbox: false)
+                .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Jedna linijka pod składnikami — co się stanie z brakującymi.
+    private var ingredientsFooter: some View {
+        Group {
+            if !canSendToShopping {
+                // Posiłek z planu ma swoje składniki na liście od chwili, gdy
+                // trafił do planu — dopisywanie ich drugi raz podwoiłoby zakupy.
+                Text("Ten posiłek jest w planie — jego składniki są już na liście zakupów.")
+                    .foregroundStyle(look.dim)
+            } else if case .failed(let message) = shoppingSend {
+                Text(message)
+                    .foregroundStyle(SCPalette.terracotta)
+            } else if isShoppingSentForCurrentState, case .sent(_, let count, let weekStart) = shoppingSend {
+                let products = Text(PolishPlural.products(count))
+                    .foregroundStyle(look.muted)
+                    .fontWeight(.semibold)
+                let verb = PolishPlural.form(count, one: "czeka", few: "czekają", many: "czeka")
+                Text("Dopisane — \(products) \(verb) na liście zakupów \(Self.weekPhrase(weekStart)).")
+                    .foregroundStyle(look.dim)
+            } else if missingIngredientIds.isEmpty {
+                Text("Masz wszystko — możesz gotować.")
+                    .foregroundStyle(look.dim)
+            } else {
+                let count = missingIngredientIds.count
+                let missing = Text("\(count) \(PolishPlural.form(count, one: "brakujący", few: "brakujące", many: "brakujących"))")
+                    .foregroundStyle(look.muted)
+                    .fontWeight(.semibold)
+                let verb = PolishPlural.form(count, one: "trafi", few: "trafią", many: "trafi")
+                Text("Zaznacz, co masz — \(missing) \(verb) na listę zakupów.")
+                    .foregroundStyle(look.dim)
+            }
+        }
+        .font(.system(size: 12.5))
+        .lineSpacing(2)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .contentTransition(.opacity)
+        .animation(.easeInOut(duration: 0.2), value: footerKey)
+    }
+
+    /// Klucz do animacji stopki — zmienia się razem z jej treścią.
+    private var footerKey: String {
+        "\(missingIngredientIds.count).\(shoppingSend.key).\(isShoppingSentForCurrentState)"
+    }
+
+    /// „Do zakupów ›” w nagłówku sekcji składników.
+    private var shoppingPill: some View {
+        let isSent = isShoppingSentForCurrentState
+        let isSending = shoppingSend == .sending
+        let isEnabled = !missingIngredientIds.isEmpty && !isSending && !isSent
+        let accent = isSent ? SCPalette.sage : SCPalette.indigo
+
+        return Button(action: sendMissingToShopping) {
+            HStack(spacing: 5) {
+                if isSending {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(accent)
+                        .transition(.scale.combined(with: .opacity))
+                } else if isSent {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .heavy))
+                        .transition(.scale.combined(with: .opacity))
+                }
+
+                Text(isSent ? "Na liście" : "Do zakupów")
+                    .contentTransition(.interpolate)
+
+                if !isSent && !isSending {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .transition(.opacity)
+                }
+            }
+            .font(.system(size: 12.5, weight: .bold))
+            .foregroundStyle(accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .scSoftCapsule(accent)
+            .fixedSize()
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .disabled(!isEnabled)
+        .opacity(isEnabled || isSent || isSending ? 1 : 0.4)
+        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: shoppingSend.key)
+        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isSent)
+        .sensoryFeedback(.success, trigger: shoppingSend.key) { _, new in new.hasPrefix("sent") }
+        .accessibilityLabel(isSent ? "Brakujące są na liście zakupów" : "Dopisz brakujące do listy zakupów")
+    }
+
+    // MARK: - Lista zakupów: brakujące
+
+    /// Dopisywać da się tylko z katalogu. Posiłek z planu ma już składniki
+    /// na liście tygodnia — drugi raz podwoiłby zakupy.
+    private var canSendToShopping: Bool {
+        if case .catalog = context { return true }
+        return false
+    }
+
+    /// „Do zakupów” pojawia się dopiero, gdy użytkownik zaczął odhaczać, co
+    /// ma — bez tego wszystkie składniki są „brakujące” i przycisk nie ma
+    /// z czego wybierać. Zostaje w trakcie i po wysyłce, żeby było widać wynik.
+    private var showsShoppingPill: Bool {
+        guard canSendToShopping else { return false }
+        switch shoppingSend {
+        case .sending, .sent, .failed: return true
+        case .idle: return !haveIngredientIds.isEmpty && !missingIngredientIds.isEmpty
+        }
+    }
+
+    private var missingIngredientIds: [UUID] {
+        recipe.ingredients.map(\.id).filter { !haveIngredientIds.contains($0) }
+    }
+
+    private var currentShoppingSignature: ShoppingSendState.Signature {
+        .init(missing: Set(missingIngredientIds), servings: servings)
+    }
+
+    /// Wysłane i od tamtej pory nic się nie zmieniło — ani odhaczenia, ani
+    /// porcje. Każda zmiana przywraca „Do zakupów”, a ponowna wysyłka
+    /// podmienia ilości po stronie serwera, zamiast je dublować.
+    private var isShoppingSentForCurrentState: Bool {
+        if case .sent(let signature, _, _) = shoppingSend {
+            return signature == currentShoppingSignature
+        }
+        return false
+    }
+
+    /// Tydzień, na którego listę trafią brakujące: ten, który użytkownik
+    /// ogląda w Planie — ale nigdy wcześniejszy niż bieżący, bo zakupy do
+    /// minionego tygodnia nie mają sensu.
+    private var targetWeekStart: String {
+        let current = PlanWeek.dateKey(PlanWeek.monday(of: Date()))
+        return max(datesViewModel.weekStartISO, current)
+    }
+
+    private func sendMissingToShopping() {
+        let missing = missingIngredientIds
+        guard !missing.isEmpty, shoppingSend != .sending else { return }
+
+        let signature = currentShoppingSignature
+        let weekStart = targetWeekStart
+        let requestedServings = servings
+        withAnimation { shoppingSend = .sending }
+
+        Task { @MainActor in
+            do {
+                let added = try await shoppingListStore.addRecipeExtras(
+                    weekStart: weekStart,
+                    recipeId: recipe.id.uuidString.lowercased(),
+                    servings: requestedServings,
+                    ingredientIds: missing.map { $0.uuidString.lowercased() }
+                )
+                shoppingSend = .sent(signature: signature, count: added, weekStart: weekStart)
+                toasts.success(
+                    "Dopisano do listy zakupów",
+                    "\(PolishPlural.products(added)) \(Self.weekPhrase(weekStart))."
+                )
+            } catch {
+                // Błąd łączności ma w aplikacji jedno miejsce (trwały pasek
+                // toastu) — `inlineMessage` oddaje wtedy `nil` i przycisk po
+                // prostu wraca do stanu, w którym można go nacisnąć ponownie.
+                if let message = UserFacingErrorMapper.inlineMessage(from: error) {
+                    shoppingSend = .failed(message)
+                } else {
+                    shoppingSend = .idle
+                }
+            }
+        }
+    }
+
+    /// „na ten tydzień” / „na przyszły tydzień” / „na tydzień od 5 października”.
+    private static func weekPhrase(_ weekStart: String) -> String {
+        let monday = PlanWeek.monday(of: Date())
+        if weekStart == PlanWeek.dateKey(monday) { return "na ten tydzień" }
+        if let next = PlanWeek.calendar.date(byAdding: .weekOfYear, value: 1, to: monday),
+           weekStart == PlanWeek.dateKey(next) {
+            return "na przyszły tydzień"
+        }
+        guard let date = PlanWeek.date(fromKey: weekStart) else { return "na tydzień \(weekStart)" }
+        return "na tydzień od \(weekDayFormatter.string(from: date))"
+    }
+
+    private static let weekDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "d MMMM"
+        return formatter
+    }()
 
     // MARK: - Dolny pasek akcji
 
-    /// Dolny pasek akcji na w pełni kryjącym tle (przy półprzezroczystym
-    /// treść scrolla prześwitywała pod przyciskami).
-    ///
-    /// Dwa tryby:
-    /// - przepis thermomixowy + połączona integracja → podział pół na pół:
-    ///   „Dodaj" (plan) i „Gotuj w TM", oba jako subtle — żaden nie krzyczy,
-    ///   bo to dwie równorzędne drogi „co dalej z tym przepisem";
-    /// - w każdym innym przypadku → klasyczny pojedynczy pełny CTA.
+    /// Dolny pasek: przejście z przezroczystości w tło arkusza, na nim jeden
+    /// przycisk (albo dwa przy przepisie thermomixowym z połączonym Cookidoo).
     private var primaryActionBar: some View {
         VStack(spacing: 10) {
             thermomixFeedback
 
             if showsThermomixSplit {
                 HStack(spacing: 10) {
-                    planSubtleButton
-                    thermomixSubtleButton
+                    planActionButton(title: splitPlanTitle)
+                    thermomixButton
                 }
             } else {
-                primaryActionButton
+                planActionButton(title: primaryActionTitle)
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
         .padding(.bottom, 8)
         .background(
+            // Kryjące tło z linią u góry — jak na każdym innym arkuszu;
+            // przy półprzezroczystym treść prześwitywała pod przyciskami.
             Rectangle()
-                .fill(Color.scCanvas(scheme))
+                .fill(look.background)
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color.scRule(scheme))
@@ -568,45 +702,7 @@ struct RecipeDetailView: View {
         )
     }
 
-    // MARK: - Podzielony pasek (plan | Thermomix)
-
-    /// Split tylko przy potwierdzonym połączeniu — `.unknown` i brak
-    /// integracji rysują zwykły pojedynczy przycisk.
-    private var showsThermomixSplit: Bool {
-        recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
-    }
-
-    /// Błąd wysyłki — jedna linijka nad przyciskami.
-    ///
-    /// Sukces poszedł stąd do toastu i to nie jest przeprowadzka dla zasady:
-    /// stał tu drugi `SCToast`, napisany ręcznie i gorzej — z własnym
-    /// odliczaniem trzech sekund, bez dotyku, bez ogłoszenia dla VoiceOver
-    /// i bez czasu wyliczonego z długości zdania — a przy okazji podnosił
-    /// pasek akcji o wiersz.
-    ///
-    /// Błąd ZOSTAJE tutaj. Toast nie ma przycisku, a to jest konkretna
-    /// diagnoza (wygasłe hasło Cookidoo, przepis bez wersji na Thermomix)
-    /// stojąca dokładnie przy przycisku, który trzeba nacisnąć jeszcze raz.
-    @ViewBuilder
-    private var thermomixFeedback: some View {
-        if let thermomixError {
-            Text(thermomixError)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.red.opacity(0.9))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// Akcja planu w wariancie subtle — terakota na tincie zamiast pełnego
-    /// gradientu. Jeden budowniczy dla obu trybów paska: split podaje krótką
-    /// etykietę („Dodaj"/„Zapisz"), tryb pojedynczy pełną — styl identyczny,
-    /// więc ekran nie zmienia charakteru zależnie od tego, czy przepis jest
-    /// thermomixowy.
-    private var planSubtleButton: some View {
-        planActionButton(title: splitPlanTitle)
-    }
-
+    /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
     private func planActionButton(title: String) -> some View {
         Button(action: performPrimaryAction) {
             HStack(spacing: 7) {
@@ -631,6 +727,31 @@ struct RecipeDetailView: View {
         .accessibilityLabel(primaryActionTitle)
     }
 
+    // MARK: - Thermomix
+
+    /// Split tylko przy potwierdzonym połączeniu — `.unknown` i brak
+    /// integracji rysują zwykły pojedynczy przycisk.
+    private var showsThermomixSplit: Bool {
+        recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
+    }
+
+    /// Błąd wysyłki — jedna linijka nad przyciskami.
+    ///
+    /// Sukces idzie do toastu, ale błąd ZOSTAJE tutaj: toast nie ma przycisku,
+    /// a to konkretna diagnoza (wygasłe hasło Cookidoo, przepis bez wersji na
+    /// Thermomix) stojąca przy przycisku, który trzeba nacisnąć jeszcze raz.
+    @ViewBuilder
+    private var thermomixFeedback: some View {
+        if let thermomixError {
+            Text(thermomixError)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(SCPalette.terracotta)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+        }
+    }
+
     /// Na połowie szerokości pełne „Dodaj do planu" nie mieści się bez
     /// ściskania — krótsze etykiety niosą to samo obok ikony.
     private var splitPlanTitle: String {
@@ -640,10 +761,9 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// Prawa połowa: start gotowania. Glif wymienia się na spinner/checkmark
-    /// w stałej ramce, więc obie połówki trzymają rozmiar we wszystkich
-    /// stanach.
-    private var thermomixSubtleButton: some View {
+    /// Prawa połowa: start gotowania. Glif wymienia się na spinner/ptaszek
+    /// w stałej ramce, więc obie połówki trzymają rozmiar we wszystkich stanach.
+    private var thermomixButton: some View {
         Button(action: sendToThermomix) {
             HStack(spacing: 7) {
                 Group {
@@ -651,11 +771,8 @@ struct RecipeDetailView: View {
                         ProgressView()
                             .controlSize(.small)
                             .tint(SCPalette.sage)
-                    } else if showThermomixSuccess {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 13, weight: .heavy))
                     } else {
-                        Image(systemName: "play.fill")
+                        Image(systemName: showThermomixSuccess ? "checkmark" : "play.fill")
                             .font(.system(size: 13, weight: .heavy))
                     }
                 }
@@ -679,8 +796,7 @@ struct RecipeDetailView: View {
 
     /// Zawsze dzisiejsza data w lokalnej strefie telefonu — przycisk znaczy
     /// „gotuję TERAZ", więc nawet posiłek zaplanowany na środę ląduje
-    /// w Cookidoo na dziś: na ekranie TM6 kolumna dzisiejsza jest pierwsza,
-    /// bez przewijania kalendarza na urządzeniu.
+    /// w Cookidoo na dziś: na ekranie TM6 kolumna dzisiejsza jest pierwsza.
     private static func todayDateString() -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar.current
@@ -693,9 +809,8 @@ struct RecipeDetailView: View {
         guard let store = sessionStore.cookidooIntegrationStore, !isSendingToThermomix else { return }
         isSendingToThermomix = true
         thermomixError = nil
-        // Ptaszek gaśnie na czas ponowienia. Bez tego nieudana druga próba
-        // zostawiała zielony ptaszek na przycisku i czerwony błąd tuż obok —
-        // dwa sprzeczne komunikaty o tej samej wysyłce.
+        // Ptaszek gaśnie na czas ponowienia — inaczej nieudana druga próba
+        // zostawiała zielony ptaszek obok czerwonego błędu.
         showThermomixSuccess = false
         Task { @MainActor in
             let outcome = await store.sendToWeek(
@@ -705,32 +820,20 @@ struct RecipeDetailView: View {
             isSendingToThermomix = false
             switch outcome {
             case .sent, .alreadySent:
-                // `alreadySent` to backendowe okno idempotencji — dla
-                // użytkownika oba przypadki znaczą „jest w Mój tydzień".
-                //
-                // Wynik jest na INNYM URZĄDZENIU, więc ten ekran nie ma jak go
-                // pokazać. Ptaszek na samym przycisku zostaje: kapsuła wyjeżdża
-                // u góry, a palec jest tutaj.
-                //
-                // Ptaszek zostaje do końca oglądania przepisu, a nie na trzy
-                // sekundy jak wcześniej: kapsuła znika, a on jest jedynym
-                // śladem, że ten przepis już poszedł. To ślad na czas WIZYTY —
-                // stan widoku, nie pamięć aplikacji — więc po ponownym
-                // otwarciu przepisu go nie będzie.
+                // Ptaszek zostaje do końca oglądania przepisu: kapsuła toastu
+                // znika, a on jest jedynym śladem, że ten przepis już poszedł.
                 withAnimation(.smooth(duration: 0.2)) { showThermomixSuccess = true }
                 toasts.success(
                     "Wysłano do Thermomixa",
                     "Czeka w kalendarzu \u{201E}Mój tydzień\u{201D} na dziś."
                 )
             case .failed(let message):
-                thermomixError = message
+                withAnimation(.smooth(duration: 0.2)) { thermomixError = message }
             }
         }
     }
 
-    private var primaryActionButton: some View {
-        planActionButton(title: primaryActionTitle)
-    }
+    // MARK: - Akcja główna
 
     private var primaryActionTitle: String {
         switch context {
@@ -768,508 +871,820 @@ struct RecipeDetailView: View {
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Debug
 
-    /// „Pasuje też na: II śniadanie · Przekąska".
-    ///
-    /// Przepis należy do jednej kategorii, ale bywa dobry o kilku porach dnia
-    /// — i bez tego wiersza użytkownik nie ma skąd wiedzieć, czemu owsianka
-    /// pojawia mu się przy dodawaniu drugiego śniadania. To jedyne miejsce,
-    /// w którym `suitableSlots` widać wprost.
-    private var alsoFitsRow: some View {
-        // Etykieta stoi poza scrollem, a chipy jadą w poziomym przewijaniu.
-        // Wcześniej wszystko siedziało w jednym HStacku: przy trzech slotach
-        // brakowało szerokości, SwiftUI ściskał teksty i „II śniadanie"
-        // łamało się w chipie na trzy linijki. `fixedSize` + `lineLimit(1)`
-        // zakazują łamania w ogóle, a ScrollView oddaje nadmiar szerokości
-        // przewinięciu zamiast kompresji.
-        HStack(alignment: .center, spacing: 8) {
-            Text("Pasuje też na")
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(Color.scFaint(scheme))
-                .fixedSize()
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(recipe.additionalSlots) { slot in
-                        HStack(spacing: 5) {
-                            Image(systemName: slot.icon)
-                                .font(.system(size: 10, weight: .semibold))
-                            Text(slot.title)
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                        .foregroundStyle(slot.cozyAccent)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.10))
-                        )
-                    }
-                }
+    /// `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>` przewija ekran od razu po wejściu,
+    /// `SCOFFIE_DEBUG_DETAIL_SERVINGS=<n>` ustawia porcje, a
+    /// `SCOFFIE_DEBUG_DETAIL_HAVE=<n>` odhacza pierwsze n składników — do
+    /// porównania z artboardami makiety na zrzucie z symulatora.
+    private func applyDebugLaunchOptions() {
+        #if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if let raw = environment["SCOFFIE_DEBUG_DETAIL_SERVINGS"], let count = Int(raw) {
+            servings = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, count))
+        }
+        if let raw = environment["SCOFFIE_DEBUG_DETAIL_HAVE"], let count = Int(raw) {
+            let ordered = DetailIngredientGroup.make(from: recipe.ingredients).flatMap(\.ingredients)
+            haveIngredientIds = Set(ordered.prefix(count).map(\.id))
+        }
+        if let raw = environment["SCOFFIE_DEBUG_DETAIL_SCROLL"], let offset = Double(raw) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                scrollPosition.scrollTo(y: CGFloat(offset))
             }
-            .scrollIndicators(.hidden)
+        }
+        #endif
+    }
+}
+
+// MARK: - Stan wysyłki na listę zakupów
+
+private enum ShoppingSendState: Equatable {
+    /// Co było brakujące i na ile porcji — po tym poznajemy, czy od wysyłki
+    /// coś się zmieniło.
+    struct Signature: Equatable {
+        let missing: Set<UUID>
+        let servings: Int
+    }
+
+    case idle
+    case sending
+    case sent(signature: Signature, count: Int, weekStart: String)
+    case failed(String)
+
+    var key: String {
+        switch self {
+        case .idle: return "idle"
+        case .sending: return "sending"
+        case .sent(_, let count, let week): return "sent.\(count).\(week)"
+        case .failed: return "failed"
         }
     }
 }
 
-// MARK: - Eyebrow row (category pill + divider + prep-time stamp)
+// MARK: - Tokeny ekranu
 
-private struct EditorialEyebrowRow: View {
-    let category: RecipesCategory
-    let prepTimeMinutes: Int
-    /// Chip „THERMOMIX" obok kategorii — właściwość przepisu (ma odpowiednik
-    /// w Cookidoo), więc widoczny niezależnie od stanu integracji.
-    var showsThermomix: Bool = false
+/// Liczby z makiety (`D` w `detail-v2.jsx`) dla ciemnego motywu i ich
+/// odpowiedniki na kremie. Makieta jest ciemna; jasny motyw bierze akcenty
+/// z palety aplikacji i karty na ciepłej bieli z cieniem, jak reszta v2.
+private struct DetailLook {
+    let scheme: ColorScheme
+
+    private var isDark: Bool { scheme == .dark }
+    private var cream: Color { SCPalette.labelDark }
+    private var ink: Color { SCPalette.labelLight }
+
+    /// `#14100d` — tło arkusza z makiety, o ton cieplejsze od płótna.
+    var background: Color {
+        isDark
+            ? Color(red: 20 / 255, green: 16 / 255, blue: 13 / 255)
+            : SCPalette.canvasLight
+    }
+
+    var fg: Color { isDark ? cream : ink }
+    var muted: Color { isDark ? cream.opacity(0.62) : ink.opacity(0.66) }
+    var dim: Color { isDark ? cream.opacity(0.42) : ink.opacity(0.50) }
+    var faint: Color { isDark ? cream.opacity(0.26) : ink.opacity(0.30) }
+
+    var card: Color {
+        isDark ? cream.opacity(0.045) : Color(red: 255 / 255, green: 252 / 255, blue: 246 / 255)
+    }
+    var border: Color { isDark ? cream.opacity(0.08) : ink.opacity(0.08) }
+    var rule: Color { isDark ? cream.opacity(0.07) : ink.opacity(0.08) }
+    var chip: Color { isDark ? cream.opacity(0.06) : ink.opacity(0.045) }
+    var checkboxStroke: Color { isDark ? cream.opacity(0.22) : ink.opacity(0.24) }
+
+    /// Cień pod kartą — w ciemnym motywie głęboki i miękki (karta ma się
+    /// unieść nad prawie czarnym tłem), w jasnym ledwie zaznaczony, bo
+    /// oddzielenie robi tam już biel karty na kremie.
+    var cardShadow: Color { isDark ? .black.opacity(0.30) : ink.opacity(0.07) }
+    var cardShadowRadius: CGFloat { isDark ? 16 : 14 }
+    var cardShadowY: CGFloat { isDark ? 8 : 5 }
+}
+
+// MARK: - Tło
+
+private struct DetailBackground: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let look = DetailLook(scheme: scheme)
+        look.background
+            .overlay(alignment: .top) {
+                // `radial-gradient(80% 30% at 50% 0%, rgba(70,45,32,0.45), transparent 60%)`
+                // — ciepła poświata pod zdjęciem, widoczna, dopóki się ładuje
+                // i przy przeciągnięciu arkusza w dół.
+                GeometryReader { geo in
+                    EllipticalGradient(
+                        colors: [
+                            Color(red: 70 / 255, green: 45 / 255, blue: 32 / 255)
+                                .opacity(scheme == .dark ? 0.45 : 0.10),
+                            .clear
+                        ],
+                        center: .top,
+                        startRadiusFraction: 0,
+                        endRadiusFraction: 0.6
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height * 0.6)
+                }
+                .allowsHitTesting(false)
+            }
+    }
+}
+
+// MARK: - Zdjęcie
+
+/// Zdjęcie 220 pt od krawędzi do krawędzi, wtapiające się w tło.
+///
+/// Przy przeciągnięciu w dół rośnie od dolnej krawędzi (zamiast odsłaniać
+/// pustkę nad sobą), a przy przewijaniu w górę jedzie wolniej od treści —
+/// oba efekty to `visualEffect`, więc nie przeliczają układu co klatkę.
+private struct DetailHeroPhoto: View {
+    let url: URL?
+
+    private static let height: CGFloat = 220
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let look = DetailLook(scheme: scheme)
+        // Zamknięcia `visualEffect` biegną poza głównym aktorem — biorą kopie.
+        let height = Self.height
+        let parallax: CGFloat = reduceMotion ? 0 : 0.3
+
+        Color.clear
+            .frame(height: height)
+            .background {
+                photo
+                    .visualEffect { content, proxy in
+                        // Paralaksa: przy przewijaniu w górę zdjęcie zostaje
+                        // w tyle o 30 % drogi.
+                        let minY = proxy.frame(in: .scrollView).minY
+                        return content.offset(y: minY > 0 ? 0 : -minY * parallax)
+                    }
+            }
+            .overlay(alignment: .top) {
+                // Przyciski serca i zamknięcia stoją na zdjęciu — delikatny
+                // cień u góry trzyma je czytelnymi na jasnym kadrze.
+                LinearGradient(
+                    colors: [.black.opacity(scheme == .dark ? 0.35 : 0.18), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 96)
+                .allowsHitTesting(false)
+            }
+            .overlay(alignment: .bottom) {
+                LinearGradient(
+                    colors: [look.background.opacity(0), look.background],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 80)
+                .allowsHitTesting(false)
+            }
+            .clipped()
+            .visualEffect { content, proxy in
+                // Rozciągnięcie przy przeciągnięciu w dół, od dolnej krawędzi.
+                let minY = proxy.frame(in: .scrollView).minY
+                let stretch = minY > 0 ? (height + minY) / height : 1
+                return content.scaleEffect(stretch, anchor: .bottom)
+            }
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var photo: some View {
+        Group {
+            if let url {
+                CachedAsyncImage(url: url, variant: .large) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .transition(.opacity.animation(.easeOut(duration: 0.35)))
+                    case .empty, .failure:
+                        EditorialShimmerBlock()
+                    @unknown default:
+                        EditorialShimmerBlock()
+                    }
+                }
+            } else {
+                EditorialShimmerBlock()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+}
+
+// MARK: - Przyciski na zdjęciu
+
+/// Okrągły przycisk 44 pt na zdjęciu — szkło z ciemnym (albo kremowym)
+/// podbiciem, obwódka i miękki cień, żeby czytał się na każdym kadrze.
+private struct DetailRoundButton: View {
+    let systemName: String
+    var tint: Color?
+    let accessibilityLabel: String
+    let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            // Chipy nie oddają szerokości (`fixedSize`) — nadmiar zjada
-            // kreska; na wąskim ekranie z dwoma chipami po prostu robi się
-            // krótsza albo znika.
-            HStack(spacing: 6) {
-                categoryPill
+        let isDark = scheme == .dark
+        let glass: Color = isDark
+            ? Color(red: 20 / 255, green: 14 / 255, blue: 10 / 255).opacity(0.60)
+            : Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.82)
 
-                if showsThermomix {
-                    thermomixPill
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint ?? Color.scLabel(scheme))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Circle().fill(tint.map { $0.opacity(isDark ? 0.28 : 0.20) } ?? glass))
                 }
-            }
-
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
-                .frame(maxWidth: .infinity)
-
-            HStack(spacing: 5) {
-                Image(systemName: "clock")
-                    .font(.system(size: 11, weight: .bold))
-                Text(verbatim: "\(prepTimeMinutes) MIN")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.8)
-                    .monospacedDigit()
-            }
-            .foregroundStyle(Color.scMuted(scheme))
-            // Bez tego HStack łamał „40 MIN" na dwie linie, gdy dwa chipy
-            // zjadły szerokość — tekst jest ściśliwy, a kreska nie ma
-            // minimalnej szerokości, więc to ona ma się kurczyć, nie czas.
-            .fixedSize()
+                .overlay(
+                    Circle().strokeBorder(
+                        tint.map { $0.opacity(0.55) }
+                            ?? (isDark ? SCPalette.labelDark.opacity(0.16) : SCPalette.labelLight.opacity(0.12)),
+                        lineWidth: 1
+                    )
+                )
+                .shadow(color: .black.opacity(isDark ? 0.35 : 0.14), radius: 8, x: 0, y: 3)
         }
+        .buttonStyle(PlanPressStyle(scale: 0.9))
+        .sensoryFeedback(.impact(weight: .light), trigger: systemName)
+        .accessibilityLabel(accessibilityLabel)
     }
+}
 
-    private var categoryPill: some View {
-        pill(
-            icon: RecipesConstants.icon(for: category),
-            text: RecipesConstants.shortDisplayName(for: category).uppercased(),
-            accent: RecipeAccent.accent(for: category)
-        )
-    }
+// MARK: - Tagi
 
-    private var thermomixPill: some View {
-        pill(icon: "cooktop.fill", text: "THERMOMIX", accent: SCPalette.sage)
-    }
+/// `DPill` z makiety: ikona + wersaliki na tincie akcentu z obwódką.
+private struct DetailTagPill: View {
+    let icon: String
+    let text: String
+    let accent: Color
 
-    private func pill(icon: String, text: String, accent: Color) -> some View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .bold))
-            Text(text)
+            Text(text.uppercased())
                 .font(.system(size: 11, weight: .heavy))
-                .tracking(0.7)
+                .tracking(0.8)
                 .lineLimit(1)
         }
         .foregroundStyle(accent)
-        .padding(.leading, 8)
-        .padding(.trailing, 10)
-        .padding(.vertical, 5)
-        .background(Capsule().fill(accent.opacity(scheme == .dark ? 0.22 : 0.16)))
-        .overlay(Capsule().stroke(accent.opacity(scheme == .dark ? 0.45 : 0.30), lineWidth: 1))
+        .padding(.leading, 9)
+        .padding(.trailing, 12)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(accent.opacity(scheme == .dark ? 0.20 : 0.14)))
+        .overlay(Capsule().strokeBorder(accent.opacity(scheme == .dark ? 0.42 : 0.34), lineWidth: 1))
         .fixedSize()
     }
 }
 
-// MARK: - Section title (accent bar + optional eyebrow + title)
+/// Pora, na którą przepis też pasuje — przerywana obwódka, bez tła: to
+/// podpowiedź, nie druga kategoria.
+private struct DetailDashedTag: View {
+    let text: String
 
-private struct EditorialSectionTitle: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let look = DetailLook(scheme: scheme)
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .heavy))
+            .tracking(0.8)
+            .lineLimit(1)
+            .foregroundStyle(look.dim)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .overlay(
+                Capsule().strokeBorder(
+                    // 8 % kremu z makiety ginie przy przerywanej linii —
+                    // obwódka dostaje dwa razy tyle, żeby kreski było widać.
+                    scheme == .dark ? SCPalette.labelDark.opacity(0.18) : SCPalette.labelLight.opacity(0.22),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 2.5])
+                )
+            )
+            .fixedSize()
+    }
+}
+
+// MARK: - Nagłówek sekcji
+
+/// `DSection`: pręcik akcentu z poświatą · eyebrow · tytuł · element z prawej.
+private struct DetailSectionHeader<Trailing: View>: View {
+    let eyebrow: String
     let title: String
-    let eyebrow: String?
     let accent: Color
+    @ViewBuilder let trailing: () -> Trailing
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            // No `.shadow()` here — the accent bar sits 16pt above the
-            // nutrition grid's terracotta-tinted hero tile, and any glow
-            // from this bar bleeds straight onto that tile's top-left
-            // corner. A flat fill reads cleanly without the smudge.
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(accent)
-                .frame(width: 5, height: 36)
+                .frame(width: 4, height: 42)
+                // `boxShadow: 0 0 16px accent/60%` — pręcik świeci, a nie
+                // tylko stoi. Promień 8 = rozmycie 16 px z CSS.
+                .shadow(color: accent.opacity(scheme == .dark ? 0.6 : 0.35), radius: 8)
 
-            VStack(alignment: .leading, spacing: 2) {
-                if let eyebrow {
-                    Text(eyebrow.uppercased())
-                        .font(.system(size: 10.5, weight: .bold))
-                        .tracking(1.4)
-                        .foregroundStyle(accent)
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(eyebrow.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.4)
+                    .foregroundStyle(accent)
+                    .contentTransition(.numericText())
                 Text(title)
                     .font(.system(size: 22, weight: .heavy))
-                    .tracking(-0.3)
-                    .foregroundStyle(Color.scLabel(scheme))
+                    .tracking(-0.4)
+                    .foregroundStyle(DetailLook(scheme: scheme).fg)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-// MARK: - Asymmetric nutrition grid (1 big kcal tile + 3 stacked macros)
-
-private struct EditorialNutritionGrid: View {
-    let nutrition: Nutrition
-    /// Kalorie jednej porcji, gdy duża liczba dotyczy kilku. `nil` znaczy
-    /// „nie ma czego rozbijać".
-    var perServingKcal: Double?
-
-    var body: some View {
-        // Design: `gridTemplateColumns: '1.4fr 1fr'`. SwiftUI doesn't have
-        // a fractional grid template, so we split available width with a
-        // GeometryReader and lay the two columns out manually.
-        GeometryReader { geo in
-            let gap: CGFloat = 10
-            let usable = max(0, geo.size.width - gap)
-            let bigW = (usable * 1.4) / 2.4
-            // Odjęcie zamiast drugiego mnożenia: `bigW + gap + smallW` musi
-            // wyjść co do piksela `geo.size.width`, bo każda nadwyżka rozpycha
-            // obszar przewijania i pozwala przesuwać kartę na boki.
-            let smallW = usable - bigW
-
-            HStack(alignment: .top, spacing: gap) {
-                EditorialKcalTile(value: nutrition.kcal, perServing: perServingKcal)
-                    .frame(width: bigW, height: 168)
-
-                VStack(spacing: gap) {
-                    EditorialMacroTile(
-                        label: "Białko",
-                        value: nutrition.protein,
-                        unit: "g",
-                        icon: "sparkles",
-                        accent: SCPalette.indigo
-                    )
-                    EditorialMacroTile(
-                        label: "Węglowodany",
-                        value: nutrition.carbs,
-                        unit: "g",
-                        icon: "leaf.fill",
-                        accent: SCPalette.sage
-                    )
-                    EditorialMacroTile(
-                        label: "Tłuszcze",
-                        value: nutrition.fat,
-                        unit: "g",
-                        icon: "drop.fill",
-                        accent: SCPalette.terracottaDeep
-                    )
-                }
-                .frame(width: smallW, height: 168)
-            }
-            // Klamra na wypadek, gdyby któryś kafel zażądał więcej, niż mu
-            // przydzielono — nadmiar ma zostać przycięty, a nie rozepchnąć
-            // siatkę poza szerokość ekranu.
-            .frame(width: geo.size.width, alignment: .leading)
-            .clipped()
-        }
-        .frame(height: 168)
-    }
-}
-
-private struct EditorialKcalTile: View {
-    let value: Double
-    /// Kalorie pojedynczej porcji — mała linijka pod dużą liczbą. Bez niej
-    /// przy sześciu porcjach kafel pokazuje cztery cyfry i nic nie mówi
-    /// o tym, ile z tego zjada jedna osoba.
-    var perServing: Double?
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let accent = SCPalette.terracotta
-        let formatted = RecipeDetailFormat.integer(value)
-
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                ZStack {
-                    // Icon chip uses `tint(accent, 0.65)` for fill and
-                    // `tintBorder(accent, 0.40)` for stroke — mapped to
-                    // 0.35/0.60 dark and 0.53/0.80 light per the design's
-                    // tint helpers.
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(accent.opacity(scheme == .dark ? 0.35 : 0.53))
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(accent.opacity(scheme == .dark ? 0.60 : 0.80), lineWidth: 1)
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(accent)
-                }
-                .frame(width: 32, height: 32)
-
-                Text("KALORIE")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(0.7)
-                    .foregroundStyle(accent)
-            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             Spacer(minLength: 8)
 
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(formatted)
-                    .font(.system(size: 44, weight: .heavy))
-                    .tracking(-1.4)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .monospacedDigit()
-                    // Zapas skalowania zszedł z 0.7 do 0.5, bo stepper porcji
-                    // dowozi tu teraz pięć cyfr z separatorem tysięcy
-                    // („10 800" przy dwunastu porcjach tłustego dania),
-                    // a przy 0.7 taka liczba nie mieści się w 168pt kaflu.
-                    .minimumScaleFactor(0.5)
-                    .allowsTightening(true)
-                    .lineLimit(1)
-                    .contentTransition(.numericText(value: value))
-
-                Text("kcal")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    // Jednostka nie negocjuje o miejsce: bez `fixedSize` HStack
-                    // rozkłada deficyt szerokości na oba teksty i przy pięciu
-                    // cyfrach urywa „kcal" do „kc…", zamiast oddać całe zwężenie
-                    // liczbie, którą chroni `minimumScaleFactor`.
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-
-            if let perServing {
-                Text("\(RecipeDetailFormat.integer(perServing)) kcal / porcja")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.top, 3)
-            }
+            trailing()
         }
-        .animation(.smooth(duration: 0.18), value: value)
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(
-            // Top-left radial highlight — direct port of the design's
-            // `radial-gradient(120% 80% at 0% 0%, tint(accent, 0.70) 0%, transparent 60%)`.
-            // SwiftUI's `EllipticalGradient` already inherits the tile's
-            // aspect ratio, so the falloff matches the design's 1.5:1
-            // ellipse closely without a manual scaleEffect.
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    EllipticalGradient(
-                        stops: [
-                            .init(color: accent.opacity(scheme == .dark ? 0.30 : 0.52), location: 0.0),
-                            .init(color: accent.opacity(0),                              location: 0.60),
-                            .init(color: accent.opacity(0),                              location: 1.0)
-                        ],
-                        center: UnitPoint(x: -0.05, y: -0.05),
-                        startRadiusFraction: 0,
-                        endRadiusFraction: 1.0
-                    )
-                )
-        )
-        .background(
-            // Card base — dark gets a subtle vertical brighten from
-            // `cardStrong` (6% cream) to `card` (4% cream) so the tile
-            // lifts off the near-black canvas. Light mode lets the page
-            // canvas show through (`.clear`) per user spec: the tile
-            // should differ from the sheet only via the terracotta
-            // gradient + border, not via a second cream tone.
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: scheme == .dark
-                            ? [
-                                Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.06),
-                                Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.04)
-                            ]
-                            : [
-                                Color.clear,
-                                Color.clear
-                            ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-        )
-        .overlay(
-            // Border opacities ported from the design's `tintBorder(accent, 0.55)`:
-            // dark → 1 − 0.55 = 0.45; light → 1 − 0.35 = 0.65.
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(accent.opacity(scheme == .dark ? 0.45 : 0.65), lineWidth: 1)
-        )
+        .padding(.horizontal, 20)
     }
 }
 
-private struct EditorialMacroTile: View {
-    let label: String
-    let value: Double
-    let unit: String
-    let icon: String
-    let accent: Color
+// MARK: - Karta
+
+/// `DCard`: promień 18, tint kremu, obwódka i światło na górnej krawędzi —
+/// plus cień, który unosi kartę nad tłem arkusza.
+private struct DetailCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                // Icon chip per design: `tint(accent, 0.78)` fill +
-                // `tintBorder(accent, 0.60)` stroke → 0.22/0.40 dark and
-                // 0.40/0.60 light.
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(accent.opacity(scheme == .dark ? 0.22 : 0.40))
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(accent.opacity(scheme == .dark ? 0.40 : 0.60), lineWidth: 1)
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(accent)
+        let look = DetailLook(scheme: scheme)
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(shape.fill(look.card))
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(look.border, lineWidth: 1))
+            .overlay(
+                // `inset 0 1px 0 rgba(255,255,255,0.03)` — światło na
+                // górnej krawędzi, gasnące w dół.
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(scheme == .dark ? 0.07 : 0.6), .clear],
+                        startPoint: .top,
+                        endPoint: UnitPoint(x: 0.5, y: 0.08)
+                    ),
+                    lineWidth: 1
+                )
+            )
+            .background(
+                // Cień rzuca NIEPRZEZROCZYSTA podkładka w kolorze tła arkusza:
+                // cień półprzezroczystego tintu (4,5 % kremu) byłby równie
+                // półprzezroczysty, czyli żaden.
+                shape
+                    .fill(look.background)
+                    .shadow(color: look.cardShadow, radius: look.cardShadowRadius, x: 0, y: look.cardShadowY)
+            )
+    }
+}
+
+/// Linia między wierszami karty — od krawędzi do krawędzi, jak w makiecie.
+private struct DetailHairline: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Rectangle()
+            .fill(DetailLook(scheme: scheme).rule)
+            .frame(height: 1)
+            .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Stepper porcji
+
+/// `DStepper` z wartością: „−  1  +” na pigułce. Minus gaśnie na dolnej
+/// granicy, plus świeci terakotą. Cyfra przewija się w miejscu, a każde
+/// stuknięcie daje krótki takt.
+private struct DetailServingsStepper: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var onChange: () -> Void = {}
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let look = DetailLook(scheme: scheme)
+
+        HStack(spacing: 0) {
+            stepButton(systemName: "minus", enabled: value > range.lowerBound, look: look) {
+                adjust(by: -1)
             }
-            .frame(width: 28, height: 28)
 
-            VStack(alignment: .leading, spacing: 1) {
-                // The longest Polish label is `WĘGLOWODANY` (11 chars with
-                // an `Ę` ogonek that runs wider than a plain `E` at heavy
-                // weight). On compact iPhones the small-tile content area
-                // can dip under 80pt, so the heavy/wide glyphs truncate
-                // before `minimumScaleFactor` engages. Drop a half-point
-                // and let the system tighten + scale aggressively before
-                // falling back to ellipsis.
-                Text(label.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(0.5)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .allowsTightening(true)
-                    .minimumScaleFactor(0.7)
+            Text("\(value)")
+                .font(.system(size: 16, weight: .heavy))
+                .monospacedDigit()
+                .foregroundStyle(look.fg)
+                .frame(minWidth: 28)
+                .contentTransition(.numericText(value: Double(value)))
 
-                HStack(alignment: .lastTextBaseline, spacing: 2) {
-                    Text(RecipeDetailFormat.macro(value))
-                        .font(.system(size: 16, weight: .heavy))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .monospacedDigit()
-                        // Kafel makra jest o połowę węższy od kalorycznego,
-                        // a stepper porcji potrafi zrobić z „30" cztery cyfry
-                        // z przecinkiem — bez skalowania końcówka by uciekła.
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .contentTransition(.numericText(value: value))
-                    Text(unit)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        // Ten sam powód, co przy „kcal": kafel makra jest
-                        // węższy, więc urwane „g" pokazałoby się tu jeszcze
-                        // wcześniej. Całe zwężenie ma iść w liczbę obok.
-                        .lineLimit(1)
-                        .fixedSize()
-                }
+            stepButton(systemName: "plus", enabled: value < range.upperBound, look: look) {
+                adjust(by: 1)
             }
-
-            Spacer(minLength: 0)
         }
-        .animation(.smooth(duration: 0.18), value: value)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scTileBg(scheme))
+        .background(Capsule().fill(look.chip))
+        .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
+        .sensoryFeedback(.selection, trigger: value)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Liczba porcji")
+        .accessibilityValue(PolishPlural.servings(value))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: adjust(by: 1)
+            case .decrement: adjust(by: -1)
+            @unknown default: break
+            }
+        }
+    }
+
+    private func adjust(by delta: Int) {
+        let next = min(range.upperBound, max(range.lowerBound, value + delta))
+        guard next != value else { return }
+        withAnimation(.snappy(duration: 0.25)) { value = next }
+        onChange()
+    }
+
+    private func stepButton(
+        systemName: String,
+        enabled: Bool,
+        look: DetailLook,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(enabled ? SCPalette.terracotta : look.faint)
+                .frame(width: 40, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.86))
+        .disabled(!enabled)
+        .animation(.easeInOut(duration: 0.18), value: enabled)
+    }
+}
+
+// MARK: - Wartości odżywcze: pierścienie celu dnia
+
+/// Wartości porcji na tle dziennego celu — w tym samym języku co arkusz
+/// „Cel dnia" w Planie i Kalendarzu: cztery koncentryczne pierścienie
+/// (`PlanGoalRings`, kalorie na zewnątrz), obok legenda z torami
+/// (`PlanGoalLegendRow`) w kolorach `SCMacroPalette`.
+///
+/// Makieta stawiała tu donut udziału makr z kcal w środku, ale w aplikacji
+/// makra mają już swój rysunek i swoje kolory — ten sam posiłek nie może
+/// w przepisie wyglądać inaczej niż w „Celu dnia". Kalorie stoją w legendzie
+/// („1341 / 2000 kcal"), więc czterocyfrowa liczba nie musi mieścić się
+/// w środku koła.
+private struct DetailNutritionCard: View {
+    let nutrition: Nutrition
+    let servings: Int
+
+    @Environment(\.colorScheme) private var scheme
+
+    // Cel dnia — te same klucze i ta sama reguła, co Plan i Kalendarz.
+    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
+    @AppStorage(RecipePersonalization.Keys.goal)
+    private var goalRaw: String = UserGoal.healthy.rawValue
+    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @AppStorage(BodyMetrics.Keys.activityLevel)
+    private var profileActivityRaw: Int = ActivityLevel.light.rawValue
+    @AppStorage(DailyNutritionTargets.Keys.proteinG)
+    private var proteinOverride: Int = DailyNutritionTargets.Keys.noOverride
+    @AppStorage(DailyNutritionTargets.Keys.fatG)
+    private var fatOverride: Int = DailyNutritionTargets.Keys.noOverride
+    @AppStorage(DailyNutritionTargets.Keys.carbsG)
+    private var carbsOverride: Int = DailyNutritionTargets.Keys.noOverride
+
+    private var targets: DailyNutritionTargets {
+        DailyNutritionTargets.resolve(
+            calorieGoal: calorieGoal,
+            goal: UserGoal(rawValue: goalRaw) ?? .healthy,
+            metrics: BodyMetrics(
+                heightCm: profileHeightCm,
+                weightKg: profileWeightKg,
+                yearOfBirth: profileYearOfBirth,
+                activityRaw: profileActivityRaw,
+                sexRaw: profileSexRaw
+            ),
+            proteinOverride: proteinOverride,
+            fatOverride: fatOverride,
+            carbsOverride: carbsOverride
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+    }
+
+    /// Kolejność wierszy = kolejność pierścieni: kalorie na zewnątrz.
+    private var rows: [PlanGoalLegendRow.Row] {
+        let macros = targets.macros
+        return [
+            .init(id: "kcal", title: "Kalorie", color: SCMacroPalette.calories,
+                  value: Int(nutrition.kcal.rounded()), target: targets.kcal, unit: "kcal"),
+            .init(id: "protein", title: "Białko", color: SCMacroPalette.protein,
+                  value: Int(nutrition.protein.rounded()), target: macros?.proteinG, unit: "g"),
+            .init(id: "fat", title: "Tłuszcze", color: SCMacroPalette.fat,
+                  value: Int(nutrition.fat.rounded()), target: macros?.fatG, unit: "g"),
+            .init(id: "carbs", title: "Węgle", color: SCMacroPalette.carbs,
+                  value: Int(nutrition.carbs.rounded()), target: macros?.carbsG, unit: "g")
+        ]
+    }
+
+    /// Ile procent dziennego celu kalorii to te porcje.
+    private var sharePercent: Int {
+        Int((nutrition.kcal / Double(max(targets.kcal, 1)) * 100).rounded())
+    }
+
+    var body: some View {
+        let rows = rows
+
+        DetailCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 18) {
+                    DetailGoalRings(progresses: rows.map { $0.progress ?? 0 }, colors: rows.map(\.color))
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(rows) { row in
+                            DetailGoalLegendRow(row: row)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // „Porcja to 22% Twojego dziennego celu kalorii." — jedna
+                // liczba, którą z pierścieni trzeba by zgadywać. Procent liczy
+                // tym samym ruchem, co pierścienie.
+                HStack(spacing: 0) {
+                    Text(servings == 1 ? "Porcja to " : "\(PolishPlural.servings(servings)) to razem ")
+                    CountingNumber(
+                        target: sharePercent,
+                        loadAnimation: DetailNutritionMotion.reveal,
+                        changeAnimation: DetailNutritionMotion.change
+                    )
+                    Text("% Twojego dziennego celu kalorii.")
+                }
+                .scFont(12, weight: .regular, relativeTo: .caption)
+                .foregroundStyle(Color.scMuted(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            }
+            .padding(16)
+        }
+    }
+}
+
+/// Jedna krzywa dla pierścieni, torów i liczników sekcji — ruch ma się
+/// czytać jako jeden. Wolniejszy i łagodniej hamujący niż w „Celu dnia”:
+/// tu wykres jest główną treścią karty, a nie podsumowaniem nad listą.
+private enum DetailNutritionMotion {
+    /// Wjazd: 1,4 s z długim, miękkim wyhamowaniem (ease-out quint).
+    static let reveal: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 1.4)
+    /// Zmiana porcji: ta sama krzywa, krócej.
+    static let change: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 0.8)
+}
+
+/// Koncentryczne pierścienie jak `PlanGoalRings` (te same wymiary, ten sam
+/// `ActivityRing`), tylko z krzywą `DetailNutritionMotion` — i z płynnym
+/// przejściem przy zmianie porcji, którego arkusz „Cel dnia” nie potrzebuje.
+private struct DetailGoalRings: View {
+    let progresses: [Double]
+    let colors: [Color]
+
+    @State private var isRevealed = false
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(progresses.enumerated()), id: \.offset) { index, progress in
+                ActivityRing(
+                    progress: isRevealed ? CGFloat(progress) : 0,
+                    lineWidth: PlanGoalRings.lineWidth,
+                    startColor: colors[index],
+                    endColor: colors[index],
+                    trackOpacity: 0.16
+                )
+                .padding(CGFloat(index) * (PlanGoalRings.lineWidth + PlanGoalRings.spacing))
+            }
+        }
+        .frame(width: PlanGoalRings.size, height: PlanGoalRings.size)
+        // Zmiana porcji — wjazd prowadzi `withAnimation` niżej, bo w jego
+        // trakcie ta wartość się nie zmienia.
+        .animation(DetailNutritionMotion.change, value: progresses)
+        .onAppear {
+            guard !isRevealed else { return }
+            withAnimation(DetailNutritionMotion.reveal.delay(0.05)) { isRevealed = true }
+        }
+    }
+}
+
+/// Wiersz legendy jak `PlanGoalLegendRow`, z liczbą liczącą się
+/// `CountingNumber` i torem na tej samej krzywej co pierścienie.
+private struct DetailGoalLegendRow: View {
+    let row: PlanGoalLegendRow.Row
+
+    @Environment(\.colorScheme) private var scheme
+    @State private var isRevealed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(row.color)
+                    .frame(width: 7, height: 7)
+
+                Text(row.title)
+                    .scFont(12.5, weight: .semibold, relativeTo: .caption)
+                    .tracking(-0.1)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+
+                Spacer(minLength: 6)
+
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    CountingNumber(
+                        target: row.value,
+                        loadAnimation: DetailNutritionMotion.reveal,
+                        changeAnimation: DetailNutritionMotion.change
+                    )
+                    .scFont(12.5, weight: .bold, relativeTo: .caption)
+                    .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+
+                    Text(row.target.map { "/ \($0) \(row.unit)" } ?? row.unit)
+                        .scFont(10.5, weight: .semibold, relativeTo: .caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scMuted(scheme))
+                }
+                .lineLimit(1)
+                .fixedSize()
+            }
+
+            if let progress = row.progress {
+                MacroProgressTrack(
+                    progress: isRevealed ? max(progress, 0) : 0,
+                    color: row.color,
+                    height: 3,
+                    animation: isRevealed ? DetailNutritionMotion.change : DetailNutritionMotion.reveal
+                )
+            }
+        }
+        .onAppear { isRevealed = true }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            row.target.map { "\(row.title): \(row.value) z \($0) \(row.unit)" }
+                ?? "\(row.title): \(row.value) \(row.unit)"
         )
     }
 }
 
-// MARK: - Steps & ingredients rows
+// MARK: - Kroki
 
-private struct EditorialStepRow: View {
+/// `StepsList`: numer w kółku szałwii, tekst 14,5 pt z wysokim wierszem.
+private struct DetailStepRow: View {
     let index: Int
     let text: String
-    let isLast: Bool
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        let look = DetailLook(scheme: scheme)
+
         HStack(alignment: .top, spacing: 14) {
             Text("\(index)")
-                .font(.system(size: 13, weight: .heavy))
-                .foregroundStyle(SCPalette.sage)
+                .font(.system(size: 13, weight: .bold))
                 .monospacedDigit()
+                .foregroundStyle(SCPalette.sage)
                 .frame(width: 30, height: 30)
                 .overlay(
-                    Circle()
-                        .stroke(SCPalette.sage.opacity(scheme == .dark ? 0.55 : 0.40), lineWidth: 1.5)
+                    Circle().strokeBorder(SCPalette.sage.opacity(scheme == .dark ? 0.6 : 0.5), lineWidth: 1.5)
                 )
 
             Text(text)
                 .font(.system(size: 14.5))
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineSpacing(3)
+                .tracking(-0.1)
+                // `lineHeight: 1.55` z makiety.
+                .lineSpacing(5)
+                .foregroundStyle(look.fg)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 5)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.scRule(scheme).opacity(0.6))
-                    .frame(height: 1)
-                    .padding(.horizontal, 16)
-            }
-        }
+        .padding(.vertical, 13)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Krok \(index). \(text)")
     }
 }
 
-private struct EditorialIngredientRow: View {
-    let ingredient: Ingredient
-    let isLast: Bool
+// MARK: - Składniki
+
+/// Składniki jednego działu, w kolejności obchodzenia sklepu.
+private struct DetailIngredientGroup {
+    let department: String
+    let ingredients: [Ingredient]
+
+    static func make(from ingredients: [Ingredient]) -> [DetailIngredientGroup] {
+        let other = ProductConstants.Department.other
+        let grouped = Dictionary(grouping: ingredients) { ingredient -> String in
+            let department = ingredient.department?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return department.isEmpty ? other : department
+        }
+        // `Dictionary(grouping:)` trzyma kolejność z przepisu wewnątrz działu.
+        return grouped
+            .sorted { ProductConstants.isDepartment($0.key, orderedBefore: $1.key) }
+            .map { DetailIngredientGroup(department: $0.key, ingredients: $0.value) }
+    }
+}
+
+/// Wiersz składnika: pole „mam w domu” · nazwa · ilość.
+private struct DetailIngredientRow: View {
+    let name: String
+    let amount: String
+    let have: Bool
+    let showsCheckbox: Bool
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        let look = DetailLook(scheme: scheme)
+
         HStack(alignment: .center, spacing: 12) {
-            Text(RecipeDetailFormat.ingredientName(ingredient.name))
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.scLabel(scheme))
+            if showsCheckbox {
+                SCCheckbox(on: have, accent: SCPalette.indigo)
+            }
+
+            Text(name)
+                .font(.system(size: 15))
+                .tracking(-0.2)
+                .foregroundStyle(have ? look.muted : look.fg)
                 .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 8)
-
-            Text(RecipeDetailFormat.ingredientAmount(ingredient))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.scMuted(scheme))
+            Text(amount)
+                .font(.system(size: 13))
                 .monospacedDigit()
+                .foregroundStyle(look.muted)
+                .lineLimit(1)
+                .fixedSize()
+                .contentTransition(.numericText())
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.scRule(scheme).opacity(0.6))
-                    .frame(height: 1)
-                    .padding(.horizontal, 16)
-            }
-        }
+        .padding(.vertical, 9)
+        .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.2), value: have)
+    }
+}
+
+// MARK: - Wjazd sekcji
+
+private struct DetailReveal: ViewModifier {
+    let isVisible: Bool
+    let order: Int
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible || reduceMotion ? 0 : 16)
+            .animation(
+                .spring(response: 0.55, dampingFraction: 0.88).delay(0.06 + Double(order) * 0.06),
+                value: isVisible
+            )
+    }
+}
+
+private extension View {
+    /// Sekcje wchodzą po kolei — góra pierwsza, składniki ostatnie.
+    func detailReveal(_ isVisible: Bool, order: Int) -> some View {
+        modifier(DetailReveal(isVisible: isVisible, order: order))
     }
 }
 
@@ -1314,26 +1729,34 @@ private struct EditorialShimmerBlock: View {
     }
 }
 
-// MARK: - Palette + formatters
+// MARK: - Formatery
 
 private enum RecipeDetailFormat {
-    static func integer(_ value: Double) -> String {
+    private static let integerFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.locale = Locale(identifier: "pl_PL")
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
         formatter.roundingMode = .halfUp
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value.rounded()))"
-    }
+        return formatter
+    }()
 
-    static func macro(_ value: Double) -> String {
+    private static let macroFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.locale = Locale(identifier: "pl_PL")
         formatter.numberStyle = .decimal
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 1
         formatter.roundingMode = .halfUp
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+        return formatter
+    }()
+
+    static func integer(_ value: Double) -> String {
+        integerFormatter.string(from: NSNumber(value: value)) ?? "\(Int(value.rounded()))"
+    }
+
+    static func macro(_ value: Double) -> String {
+        macroFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
     static func ingredientName(_ name: String) -> String {
@@ -1356,20 +1779,20 @@ private enum RecipeDetailFormat {
 // w Release — bez tej bramki archiwum nie kompiluje się.
 #if DEBUG
 
-#Preview("Recipe Detail v2 — Dark") {
+#Preview("Szczegóły v2 — Dark") {
     RecipeDetailView(recipe: RecipesMock.chickenBowl, onToggleFavorite: {})
         .preferredColorScheme(.dark)
 }
 
-#Preview("Recipe Detail v2 — Light") {
+#Preview("Szczegóły v2 — Light") {
     RecipeDetailView(recipe: RecipesMock.chickenBowl, onToggleFavorite: {})
         .preferredColorScheme(.light)
 }
 
-/// Wejście z planu wygląda inaczej od katalogowego w dwóch miejscach naraz —
-/// stepper startuje od zapisanych porcji, a dolny przycisk zapisuje zamiast
-/// dodawać — więc drugi podgląd pokazuje właśnie ten wariant.
-#Preview("Recipe Detail v2 — z planu, dark") {
+/// Wejście z planu wygląda inaczej od katalogowego w trzech miejscach naraz —
+/// stepper startuje od zapisanych porcji, dolny przycisk zapisuje zamiast
+/// dodawać, a składniki nie mają „mam w domu”.
+#Preview("Szczegóły v2 — z planu, dark") {
     RecipeDetailView(
         recipe: RecipesMock.chickenBowl,
         onToggleFavorite: {},
@@ -1378,17 +1801,6 @@ private enum RecipeDetailFormat {
         onSaveServings: { _ in }
     )
     .preferredColorScheme(.dark)
-}
-
-#Preview("Recipe Detail v2 — z planu, light") {
-    RecipeDetailView(
-        recipe: RecipesMock.chickenBowl,
-        onToggleFavorite: {},
-        initialServings: 2,
-        context: .planned(day: Date(), slot: .lunch),
-        onSaveServings: { _ in }
-    )
-    .preferredColorScheme(.light)
 }
 
 #endif

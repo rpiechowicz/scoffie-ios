@@ -1400,8 +1400,9 @@ struct AssistantView: View {
                         steps: store.progress,
                         isExpanded: expansion(of: Self.liveThoughtKey, in: $expandedThoughts)
                     )
+                    // Bez poziomego wcięcia: kolumna ikon wiersza stoi w linii
+                    // znaku marki przy odpowiedziach.
                     .padding(.vertical, 4)
-                    .padding(.horizontal, 2)
                     .transition(.opacity)
                 }
 
@@ -1413,7 +1414,7 @@ struct AssistantView: View {
                         // niżej podmienia identyczne piksele.
                         Group {
                             if !store.draftText.isEmpty {
-                                AssistantDraftAnswer(text: store.draftText)
+                                AssistantDraftAnswer(text: store.draftText, clock: store.draftReveal)
                                     .transition(.opacity)
                             }
                         }

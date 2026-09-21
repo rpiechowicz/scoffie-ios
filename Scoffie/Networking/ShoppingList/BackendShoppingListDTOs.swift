@@ -9,6 +9,9 @@ struct BackendShoppingItemDTO: Codable {
     let department: String
     let totalAmount: Double
     let isChecked: Bool
+    /// Tytuły przepisów, z których coś do pozycji DOPISANO („brakuje mi”
+    /// ze szczegółu przepisu). Opcjonalne — starszy backend pola nie zna.
+    let addedFrom: [String]?
 }
 
 struct BackendShoppingListArchiveItemDTO: Codable {
@@ -65,6 +68,12 @@ struct BackendShoppingListChangedDTO: Codable {
     let changeVersion: Int64?
 }
 
+/// Ack `weeklyPlans:addRecipeExtras` — ile produktów trafiło na listę.
+struct BackendAddRecipeExtrasResultDTO: Codable {
+    let added: Int
+    let productKeys: [String]
+}
+
 /// Generic mutation ack returned by archive/select/delete shopping-list events.
 struct BackendMutationResultDTO: Codable {
     let success: Bool?
@@ -82,7 +91,8 @@ extension BackendShoppingItemDTO {
             totalAmount: totalAmount,
             unit: unit,
             department: department,
-            isChecked: isChecked
+            isChecked: isChecked,
+            addedFrom: addedFrom?.isEmpty == false ? addedFrom : nil
         )
     }
 }
