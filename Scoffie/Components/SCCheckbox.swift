@@ -6,8 +6,8 @@ import SwiftUI
 /// obwódka.
 ///
 /// Jedno na całą aplikację: „mam w domu” w szczegółach posiłku (indygo)
-/// i „kupione” na liście zakupów (szałwia) mają wyglądać i ruszać się tak
-/// samo. Poświata wychodzi poza ramkę, więc kontener nie może przycinać
+/// i „kupione” na liście zakupów (kolor działu) mają wyglądać i ruszać się
+/// tak samo. Poświata wychodzi poza ramkę, więc kontener nie może przycinać
 /// wiersza na boki (patrz roleta w `ShoppingAisleSection`).
 struct SCCheckbox: View {
     let on: Bool

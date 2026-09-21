@@ -18,7 +18,7 @@ struct ShoppingProductRow: View {
     /// z pomidorów”. `nil` chowa całą drugą linijkę, nie zostawia pustej.
     var dishes: String?
     let bought: Bool
-    /// Kolor działu — niesie go pigułka z ilością.
+    /// Kolor działu — niesie go pole wyboru i pigułka z ilością.
     var accent: Color = SCPalette.terracotta
     /// Znacznik „Dziś”. W trybie „Na dziś” gaśnie — tam wszystko jest na dziś,
     /// więc znacznik przy każdym wierszu przestawałby cokolwiek znaczyć.
@@ -34,7 +34,7 @@ struct ShoppingProductRow: View {
     var body: some View {
         Button(action: onToggle) {
             HStack(alignment: .center, spacing: 12) {
-                SCCheckbox(on: bought, accent: SCPalette.sage)
+                SCCheckbox(on: bought, accent: accent)
 
                 content
             }
