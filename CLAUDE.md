@@ -75,14 +75,24 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zakładką — lista zakupów wchodzi przyciskiem z nagłówka Planu tygodnia (`ProductsView` jako
   arkusz z `topPadding: 24`, bo domyślne 78 pt odsuwa tytuł od Dynamic Island, a nie od uchwytu
   arkusza). Piąte miejsce w menu jest zajęte — nowa zakładka wymaga wyjęcia innej, inaczej iOS
-  schowa obie pod „Więcej". Pasek jest WŁASNY (`SCFloatingTabBar` w `overlay` nad `TabView`,
-  systemowy schowany przez `toolbarVisibility(.hidden, for: .tabBar)`): przy przewijaniu w dół
-  zwija się do samych ikon jak w Revolucie, a nie do jednej ikony jak `tabBarMinimizeBehavior`.
-  Główny `ScrollView` każdej zakładki melduje kierunek przez `scTracksTabBarCompaction()`;
-  rezerwa miejsca pod treścią (`reservedHeight`) jest stała i schodzi do zera przy klawiaturze.
-  Przełączenie zakładki ma być CIĘCIEM jak w systemie: `selection` zmienia się w transakcji
-  z `disablesAnimations` (inaczej `TabView` od iOS 18 przenika treść), a pigułka na pasku jedzie
-  po własnej kopii `highlighted` — nie dokładać `.animation(value: selection)` ani haptyki.
+  schowa obie pod „Więcej". Pasek jest WŁASNY (`SCFloatingTabBar` w `overlay`), a kontener
+  zakładek też: `NavigationMenu` to `ZStack`, NIE `TabView`. Wszystkie zakładki budują się po kolei
+  POD loaderem startowym (pulpit wchodzi do drzewa pod `StartupLoaderView`, loader gaśnie nad
+  gotowym ekranem) i potem zmieniają tylko widoczność — przełączenie jest cięciem w jednej klatce.
+  Skutek: `onAppear` ekranu zakładki odpala się RAZ, pod loaderem. „Użytkownik wszedł na zakładkę"
+  to `@Environment(\.scTabIsActive)` + `onChange(of:initial:)`; ciągłe animacje (`TimelineView`)
+  mają na niewybranej zakładce stać. Pasek ma JEDEN gest na całość: pigułka idzie za palcem
+  (stuknięcie i przeciąganie w bok jak w iOS 26), zakładka zmienia się po puszczeniu, w transakcji
+  z `disablesAnimations`. Nie dokładać przycisków, `matchedGeometryEffect`, haptyki ani fade'ów
+  przy wejściu na zakładkę. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
+  główny `ScrollView` zakładki melduje kierunek przez `scTracksTabBarCompaction()`; rezerwa
+  miejsca pod treścią (`scReservesTabBarSpace()`, WEWNĄTRZ `NavigationStack`) jest stała i schodzi
+  do zera przy klawiaturze.
+- Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
+  na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
+  (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po
+  zdekodowaniu — w `.large` cały katalog NIE mieści się w pamięci i listy zaczynają migać.
+  Start (`SessionStore.prepareStartupData`) czeka na miniatury CAŁEGO katalogu i bieżącego tygodnia.
 - Asystent AI (Faza 1) jedzie po REST, NIE po sockecie: `POST /agent/conversations/:id/messages`
   oddaje `202` z `turnId`, a odpowiedź zbiera się odpytywaniem `GET /agent/turns/:id` co sekundę
   (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–240 s (sufit `AI_TURN_TIMEOUT_MS`,
@@ -102,8 +112,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wartości, ciemny na palecie aplikacji. Arkusze stoją na `AssistantSheetKit.swift`
   (`AssistantSheetScaffold` = eyebrow · tytuł · X, `AssistantGroup`, `AssistantRow`). Stan pracy
   (`AssistantThoughtLine`, faza `working`) to „Oddech łuku” (artefakt `claude.ai/artifact/7vwJmr2mCR8xTYnjAJ9F3s`):
-  znak stoi w terakocie, wokół krąży łuk w kolorze fazy (obrót 2,4 s, oddech 5 → 55 % obwodu 1,8 s,
-  nigdy zamknięty) + JEDEN status z przebłyskiem, bez paska i bez listy kroków; „Myślałem 42 s” stoi POD tekstem odpowiedzi (`AssistantVoice`), nie nad nim.
+  znak, łuk i status w TERAKOCIE (nie indygo z makiety — decyzja Rafała 21.09.2026), obrót 2,4 s,
+  oddech 5 → 55 % obwodu 1,8 s, nigdy zamknięty; JEDEN status z przebłyskiem, pod nim ślad trzech
+  ostatnich zrobionych kroków (ptaszek + zdanie, zapis w szałwii), bez paska; „Myślałem 42 s” stoi POD tekstem odpowiedzi (`AssistantVoice`), nie nad nim.
 - UI asystenta (redesign 19.09.2026): wszystkie karty stoją na atomach z `AssistantCardKit.swift`
   (`AssistantCard` z tonem neutral/sage/indigo/muted, `AssistantCardHead` z pigułką stanu
   `AssistantStatusChip`, `AssistantCardActions` — jedna akcja = pełna szerokość, dwie = wtórna
@@ -114,6 +125,26 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wiersz „myślę” pokazuje JEDEN bieżący status + `AssistantArcSpinner` (łuk krąży i oddycha, sygnał, nie procent)
   + kontekst słowami z aplikacji — nazwy narzędzi nie wychodzą na ekran. Podglądy kart biorą
   wzorce z `Previews/AssistantPreviewFixtures.swift` (kopia JSON-ów z `Scripts/CardContract`).
+- Wybór posiłku (karta OPTIONS, 21.09.2026) — makieta Claude Design „Asystent — Wybór posiłku”
+  (`claude.ai/design/p/43b605d0-57b7-4ad4-9744-6c4996fcf103`, „L jako arkusz”). `AssistantOptionsCard`
+  to kotwica w rozmowie (świeża odpowiedź otwiera arkusz sama, RAZ na wiadomość), a
+  `AssistantOptionsStorySheet` to JEDEN trwały układ na wszystkie dania: sloty o wysokości
+  najdłuższego dania, tekst przypięty do dołu (eyebrow dojeżdża nad krótszą nazwę), zdjęcia
+  przenikają nad sobą, cyfry rolują, pasek makro zmienia proporcje w miejscu — NIE podmieniać
+  strony w całości, bo wraca skakanie układu. Opis, makro i liczbę składników, których stara
+  karta z historii nie ma, dociąga katalog (`OptionsDishFacts`). Odejścia od makiety (decyzje
+  Rafała): przyciski asystenta są „soft” (`scSoftCapsule` w `AssistantPrimaryButton`, neutralny
+  `AssistantGhostButton`), liczba składników stoi w rzędzie z kcal i min zamiast szarej linijki,
+  wiersz „Uwzględniłem: …” usunięty z rozmowy. `Kes size=n` z makiety to dysk 0,68·n
+  (`SCMarkShape` wypełnia całą ramkę). Animację w liściu zawężać przez `animation(_:body:)`
+  albo `geometryGroup()` — zwykłe `.animation(value:)` nadpisuje ruch nadany przez rodzica.
+- Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
+  auth|auth-error|legal` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
+  Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
+- Ekran logowania nie przewija się: elastyczne jest hero z kaflami (150–280 pt) i odstęp nad
+  przyciskiem; poniżej 700 pt kafle funkcji tracą podpisy. Arkusze dokumentów
+  (`LegalDocumentSheet`) stoją na `EditorialSheetHeader`, nagłówek NAD przewijaną treścią.
 - REST-owy błąd nazywa się `BackendAPIError` (dawniej `IntegrationsAPIError`) — od asystenta klientów
   uwierzytelnionych jest dwóch (`IntegrationsAPIClient`, `AgentAPIClient`) i oba rzucają ten sam typ.
 - `recipes:changed` (`{householdId, recipeId, action, changedByUserId}`) — przepis gospodarstwa
