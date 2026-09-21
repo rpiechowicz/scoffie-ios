@@ -60,9 +60,17 @@ enum LegalDocMeta {
     static let contactEmail = "support@scoffie.app"
 }
 
-// MARK: - Reużywalny kontener sheeta (styl Cozy Kitchen jak w Ustawieniach)
+// MARK: - Reużywalny kontener sheeta
 
+/// Arkusz dokumentu — ten sam szkielet, co każdy arkusz w aplikacji:
+/// `EditorialSheetHeader` (eyebrow w terakocie, ciężki tytuł, krążek
+/// z krzyżykiem), tło strony, uchwyt u góry. Bez systemowego paska nawigacji
+/// i tekstowego „Zamknij", które były tu jedynym wyjątkiem.
+///
+/// Nagłówek stoi NAD przewijaną treścią, a nie w niej: dokument ma kilkanaście
+/// ekranów i krzyżyk nie może odjechać z pierwszym akapitem.
 struct LegalDocumentSheet<Content: View>: View {
+    var eyebrow: String = "Informacje"
     let title: String
     @ViewBuilder let content: () -> Content
 
@@ -70,31 +78,24 @@ struct LegalDocumentSheet<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            EditorialSheetHeader(eyebrow: eyebrow, title: title) { dismiss() }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     content()
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 18)
+                .padding(.top, 4)
                 .padding(.bottom, 28)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
-            .scrollContentBackground(.hidden)
-            .background(Color.scCanvas(colorScheme))
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.scCanvas(colorScheme), for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Zamknij") { dismiss() }
-                        .fontWeight(.semibold)
-                        .tint(SCPalette.terracotta)
-                }
-            }
         }
+        .background(SCPageBackground(scheme: colorScheme).ignoresSafeArea())
         .presentationDragIndicator(.visible)
     }
 }
