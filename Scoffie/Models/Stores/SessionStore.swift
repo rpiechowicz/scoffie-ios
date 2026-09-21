@@ -166,7 +166,6 @@ final class SessionStore {
     /// listy jest wysoki: to od niej zależy liczba porcji i podział posiłków.
     private let householdMembersFreshness: TimeInterval = 60
     private let startupTimeoutSeconds: Double = 6
-    private let startupImagePrefetchCount: Int = 12
     /// Loader nie znika szybciej niż po tym czasie — nawet przy cieplutkim starcie
     /// (wszystko z cache). Wartość bierze się wprost z choreografii
     /// `StartupLoaderView` (`LoaderMotion.waveEnd`): moment, w którym niedziela
@@ -2075,13 +2074,32 @@ final class SessionStore {
         // ustawia errorMessage w storze zamiast rzucać).
         async let recipesReady: Void = prepareRecipesAndThumbnails()
         async let householdReady: Void = prepareHouseholdMembersSnapshot()
-        _ = await (recipesReady, householdReady)
+        async let weekReady: Void = prepareCurrentWeek()
+        _ = await (recipesReady, householdReady, weekReady)
     }
 
+    /// Katalog i miniatury WSZYSTKICH przepisów, nie pierwszych dwunastu.
+    /// Miniatura to ~1 MB w pamięci i mały JPEG na dysku, więc ciepły start
+    /// dekoduje cały katalog w ułamku sekundy — a lista przepisów, plan
+    /// i kalendarz dostają zdjęcia w tej samej klatce, w której się rysują.
+    /// Zimny start (pierwsze pobranie z sieci) ucina `startupTimeoutSeconds`;
+    /// pobieranie biegnie wtedy dalej w tle.
     private func prepareRecipesAndThumbnails() async {
         guard let catalog = recipeCatalogStore else { return }
         await catalog.loadIfNeeded()
-        let urls = Array(catalog.recipes.prefix(startupImagePrefetchCount).compactMap(\.imageURL))
+        await ImagePrefetcher.prefetchAwaiting(catalog.recipes.compactMap(\.imageURL))
+    }
+
+    /// Bieżący tydzień planu — Kalendarz i Plan stoją na nim od pierwszej
+    /// klatki. Przepisy gospodarstwa (spoza katalogu) mają własne zdjęcia,
+    /// więc ich miniatury też czekają tutaj.
+    private func prepareCurrentWeek() async {
+        guard let mealStore = mealCalendarStore else { return }
+        let dates = datesViewModel.dates
+        await mealStore.loadWeekPlanFromBackend(weekStart: datesViewModel.weekStartISO, dates: dates)
+        let urls = dates
+            .flatMap { date in MealSlot.allCases.flatMap { mealStore.meals(for: date, slot: $0) } }
+            .compactMap(\.recipe.imageURL)
         await ImagePrefetcher.prefetchAwaiting(urls)
     }
 

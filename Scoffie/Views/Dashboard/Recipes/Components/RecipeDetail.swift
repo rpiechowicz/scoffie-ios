@@ -252,7 +252,7 @@ struct RecipeDetailView: View {
     private var photoLayer: some View {
         Group {
             if let url = recipe.imageURL {
-                CachedAsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url, variant: .large) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()

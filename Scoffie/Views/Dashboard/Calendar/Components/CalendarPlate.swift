@@ -429,6 +429,7 @@ struct CalendarPlate: View {
     /// w bok — bez furtki machnięcie kończące się na talerzu otwierałoby
     /// posiłek przy okazji przestawiania dnia.
     @Environment(\.dayPagerGate) private var pagerGate
+    @Environment(\.scTabIsActive) private var isActiveTab
 
     /// Średnica z makiety — od niej liczą się wszystkie proporcje.
     static let defaultSize: CGFloat = 168
@@ -470,7 +471,9 @@ struct CalendarPlate: View {
 
     private var isUrgent: Bool { item?.isUrgent == true }
     /// Czy serce bije: jest co robić i ruch nie jest wyłączony w dostępności.
-    private var beats: Bool { isUrgent && !reduceMotion }
+    /// Na niewybranej zakładce stoi — zegar 60 kl./s liczyłby się na darmo
+    /// pod ekranem, na który nikt nie patrzy.
+    private var beats: Bool { isUrgent && !reduceMotion && isActiveTab }
 
     var body: some View {
         ZStack {

@@ -78,7 +78,7 @@ struct EditorialRecipeStoryCard: View {
         if let url = recipe.imageURL {
             Color.clear
                 .overlay {
-                    CachedAsyncImage(url: url) { phase in
+                    CachedAsyncImage(url: url, variant: .large) { phase in
                         switch phase {
                         case .success(let image):
                             image

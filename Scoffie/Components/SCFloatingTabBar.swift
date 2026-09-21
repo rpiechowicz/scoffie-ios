@@ -54,6 +54,12 @@ struct SCTabBarItem: Identifiable {
 /// o jedną czwartą i węższy o ~60 pt — czyta się jako TEN SAM pasek, który
 /// zszedł z drogi treści, a nie jako inny element.
 ///
+/// Dotyk jest JEDEN na cały pasek, jak w systemowym pasku z iOS 26: pigułka
+/// idzie za palcem (stuknięcie, przeciągnięcie w lewo i w prawo), a zakładka
+/// zmienia się po puszczeniu. Pozycje nie są przyciskami — nie ma stylu
+/// wciśnięcia, `matchedGeometryEffect` ani osobnych animacji na ikonach,
+/// które wcześniej nakładały się na siebie przy szybkim przełączaniu.
+///
 /// Rezerwa pod treścią (`reservedHeight`) jest STAŁA, liczona od pełnego
 /// paska: pasek pływa nad treścią, a treść nie skacze przy każdym zwinięciu.
 struct SCFloatingTabBar: View {
@@ -64,6 +70,8 @@ struct SCFloatingTabBar: View {
     static let compactSideMargin: CGFloat = 50
     /// Ile treść trzyma pod paskiem, żeby ostatni wiersz kończył się nad szkłem.
     static let reservedHeight: CGFloat = expandedHeight + 8
+    /// Wcięcie pozycji od krawędzi szkła.
+    private static let innerPadding: CGFloat = 6
 
     let items: [SCTabBarItem]
     @Binding var selection: DashboardTab
@@ -71,32 +79,48 @@ struct SCFloatingTabBar: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var pill
-    /// Zakładka podświetlona NA PASKU — kopia `selection` z własną
-    /// transakcją. `selection` musi zmieniać się BEZ animacji (inaczej
-    /// `TabView` przenika treść), a pigułka ma się przesunąć — jedna
-    /// wartość nie może jechać w dwóch transakcjach naraz, więc są dwie.
-    @State private var highlighted: DashboardTab?
+    /// Palec na pasku: środek pigułki w układzie paska. `nil` = pigułka
+    /// stoi na wybranej zakładce.
+    @State private var dragX: CGFloat?
 
-    private var motion: Animation {
+    private var compaction: Animation {
         reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.38)
     }
 
-    /// Ruch pigułki między zakładkami — jak systemowa pigułka z iOS 26:
-    /// krótka sprężyna, bez odbicia.
-    private var pillMotion: Animation {
-        reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.3, extraBounce: 0)
+    /// Pigułka za palcem: krótka sprężyna bez odbicia — nadąża za ruchem,
+    /// a pierwszy dotyk daleko od pigułki nie jest teleportacją.
+    private var follow: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .interactiveSpring(response: 0.2, dampingFraction: 0.9)
     }
 
-    private var current: DashboardTab { highlighted ?? selection }
+    /// Dojazd pigułki na środek zakładki po puszczeniu palca.
+    private var settle: Animation {
+        reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.26, extraBounce: 0)
+    }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(items) { item in
-                tabButton(item)
+        GeometryReader { proxy in
+            let slot = slotWidth(in: proxy.size.width)
+            let highlighted = highlightedIndex(slot: slot)
+
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.2 : 0.13))
+                    .frame(width: slot, height: proxy.size.height - 8)
+                    .scaleEffect(dragX == nil ? 1 : 1.06)
+                    .offset(x: pillCenter(slot: slot, width: proxy.size.width) - slot / 2)
+
+                HStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        tabLabel(item, selected: index == highlighted)
+                    }
+                }
+                .padding(.horizontal, Self.innerPadding)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .contentShape(Capsule(style: .continuous))
+            .gesture(touch(slot: slot))
         }
-        .padding(.horizontal, 6)
         .frame(height: isCompact ? Self.compactHeight : Self.expandedHeight)
         // To samo szkło co pigułka „Cel dnia" i pole asystenta: warstwa tła
         // pod szkłem przygasza przelatującą treść do rozmytej plamy, odblaski
@@ -107,73 +131,100 @@ struct SCFloatingTabBar: View {
         )
         .background(Color.scPageBase(scheme).opacity(0.72), in: .capsule)
         .padding(.horizontal, isCompact ? Self.compactSideMargin : Self.sideMargin)
-        .animation(motion, value: isCompact)
-        // Zmiana spoza paska (asystent → Plan, wylogowanie): pigułka
-        // dojeżdża tą samą sprężyną, co po stuknięciu.
-        .onChange(of: selection) { _, tab in
-            guard highlighted != tab else { return }
-            withAnimation(pillMotion) { highlighted = tab }
-        }
-        // Bez `sensoryFeedback` i bez `.animation(value: selection)` na całym
-        // pasku: systemowy pasek nie wibruje przy zmianie zakładki, a
-        // animacja na całym `HStack` łapała też wypełnienie symbolu i podpis
-        // — każde stuknięcie było trzema ruchami zamiast jednego.
+        .animation(compaction, value: isCompact)
+        // Zmiana spoza paska (asystent → Plan, powiadomienie): pigułka
+        // dojeżdża tą samą sprężyną, co po puszczeniu palca.
+        .animation(settle, value: selection)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Zakładki")
     }
 
-    private func tabButton(_ item: SCTabBarItem) -> some View {
-        let selected = item.tab == current
-        return Button {
-            guard item.tab != selection else { return }
-            // Zmiana wyboru spoza systemowego paska jest dla `TabView` zmianą
-            // „programową", a taką od iOS 18 pokazuje przenikaniem treści —
-            // stąd animacja, której z systemowym paskiem nie było. Transakcja
-            // bez animacji przywraca cięcie jak w systemie. Pigułka jedzie
-            // w OSOBNEJ transakcji po `highlighted` — gdyby animować
-            // `selection`, `TabView` znów przenikałby treść.
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { selection = item.tab }
-            withAnimation(pillMotion) { highlighted = item.tab }
-        } label: {
-            VStack(spacing: isCompact ? 0 : 3) {
-                Image(systemName: item.icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .symbolVariant(selected ? .fill : .none)
-                    // Skalowanie zamiast mniejszego kroju: rozmiar czcionki
-                    // nie animuje się płynnie, `scaleEffect` tak.
-                    .scaleEffect(isCompact ? 0.86 : 1)
-                    .frame(width: 28, height: 26)
-                    .scCountBadge(item.badge, offset: CGSize(width: 8, height: -4))
+    // MARK: Geometria
 
-                Text(item.title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(-0.1)
-                    .lineLimit(1)
-                    .fixedSize()
-                    // Podpis zwija się do zera wysokości i gaśnie — nie
-                    // znika skokiem, tylko chowa się pod ikonę.
-                    .frame(height: isCompact ? 0 : 12)
-                    .opacity(isCompact ? 0 : 1)
-                    .clipped()
+    private func slotWidth(in width: CGFloat) -> CGFloat {
+        max(1, (width - 2 * Self.innerPadding) / CGFloat(max(items.count, 1)))
+    }
+
+    private func center(of index: Int, slot: CGFloat) -> CGFloat {
+        Self.innerPadding + slot * (CGFloat(index) + 0.5)
+    }
+
+    private func index(at x: CGFloat, slot: CGFloat) -> Int {
+        let raw = Int(((x - Self.innerPadding) / slot).rounded(.down))
+        return min(max(raw, 0), items.count - 1)
+    }
+
+    private func pillCenter(slot: CGFloat, width: CGFloat) -> CGFloat {
+        let selected = items.firstIndex { $0.tab == selection } ?? 0
+        guard let dragX else { return center(of: selected, slot: slot) }
+        // Pigułka nie wyjeżdża poza szkło, nawet gdy palec zjedzie z paska.
+        return min(max(dragX, center(of: 0, slot: slot)), center(of: items.count - 1, slot: slot))
+    }
+
+    private func highlightedIndex(slot: CGFloat) -> Int {
+        if let dragX { return index(at: dragX, slot: slot) }
+        return items.firstIndex { $0.tab == selection } ?? 0
+    }
+
+    // MARK: Dotyk
+
+    private func touch(slot: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                withAnimation(follow) { dragX = value.location.x }
             }
-            .foregroundStyle(selected ? SCPalette.terracotta : Color.scMuted(scheme))
-            .frame(maxWidth: .infinity)
-            .frame(height: isCompact ? Self.compactHeight - 8 : Self.expandedHeight - 8)
-            .background {
-                if selected {
-                    Capsule(style: .continuous)
-                        .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.2 : 0.13))
-                        .matchedGeometryEffect(id: "pill", in: pill)
+            .onEnded { value in
+                let tab = items[index(at: value.location.x, slot: slot)].tab
+                // Treść zmienia się CIĘCIEM, jak w systemie — animuje się
+                // wyłącznie pigułka. Dwie osobne transakcje, żeby sprężyna
+                // pigułki nie przeszła na budowanie treści zakładki.
+                if tab != selection {
+                    var cut = Transaction()
+                    cut.disablesAnimations = true
+                    withTransaction(cut) { selection = tab }
                 }
+                withAnimation(settle) { dragX = nil }
             }
-            .contentShape(Capsule(style: .continuous))
+    }
+
+    // MARK: Pozycja
+
+    private func tabLabel(_ item: SCTabBarItem, selected: Bool) -> some View {
+        VStack(spacing: isCompact ? 0 : 3) {
+            Image(systemName: item.icon)
+                .font(.system(size: 22, weight: .medium))
+                .symbolVariant(selected ? .fill : .none)
+                // Skalowanie zamiast mniejszego kroju: rozmiar czcionki
+                // nie animuje się płynnie, `scaleEffect` tak.
+                .scaleEffect(isCompact ? 0.86 : 1)
+                .frame(width: 28, height: 26)
+                .scCountBadge(item.badge, offset: CGSize(width: 8, height: -4))
+
+            Text(item.title)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(-0.1)
+                .lineLimit(1)
+                .fixedSize()
+                // Podpis zwija się do zera wysokości i gaśnie — nie
+                // znika skokiem, tylko chowa się pod ikonę.
+                .frame(height: isCompact ? 0 : 12)
+                .opacity(isCompact ? 0 : 1)
+                .clipped()
         }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .foregroundStyle(selected ? SCPalette.terracotta : Color.scMuted(scheme))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Kolor i wypełnienie symbolu przeskakują razem z pigułką — bez
+        // własnej animacji, która ciągnęłaby się za palcem.
+        .animation(nil, value: selected)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(item.title)
         .accessibilityValue(item.badge > 0 ? "\(item.badge) nowe" : "")
-        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : [.isButton])
+        .accessibilityAddTraits(item.tab == selection ? [.isSelected, .isButton] : [.isButton])
+        .accessibilityAction {
+            var cut = Transaction()
+            cut.disablesAnimations = true
+            withTransaction(cut) { selection = item.tab }
+        }
     }
 }
 

@@ -25,6 +25,7 @@ import SwiftUI
 // stoi (`visibleSlots(on:)`). Reszta czeka pod „Dodaj posiłek”.
 struct WeeklyPlanView: View {
     @Environment(\.toasts) private var toasts
+    @Environment(\.scTabIsActive) private var isActiveTab
     @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
@@ -374,7 +375,10 @@ struct WeeklyPlanView: View {
                 // gospodarstwa, więc musi być wczytany.
                 await sessionStore.refreshHouseholdMembers(force: false)
             }
-            .onAppear {
+            // Powrót na zakładkę: dzień mógł zostać zmieniony na innej.
+            // Flaga zamiast `onAppear`, bo zakładki żyją wszystkie naraz.
+            .onChange(of: isActiveTab, initial: true) { _, active in
+                guard active else { return }
                 selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
             }
             .onChange(of: datesViewModel.weekStartISO) { _, _ in
