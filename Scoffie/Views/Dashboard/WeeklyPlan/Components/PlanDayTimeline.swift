@@ -36,6 +36,9 @@ struct PlanDayTimeline: View {
     var weekIsEmpty: Bool = false
     let onTapMeal: (MealSlot, PlanMeal) -> Void
     let onAddMeal: (MealSlot) -> Void
+    /// „Osobne danie dla kogoś” — osobno od `onAddMeal`, bo arkusz ma wtedy
+    /// startować z konkretną osobą, a nie z „Wspólne”.
+    let onAddVariant: (MealSlot) -> Void
     let onEditMeal: (MealSlot, PlanMeal) -> Void
     let onRemoveMeal: (MealSlot, PlanMeal) -> Void
     let onAssistant: () -> Void
@@ -300,7 +303,7 @@ struct PlanDayTimeline: View {
                 isEditable: isEditable,
                 onTapMeal: { onTapMeal(row.slot, $0) },
                 onEditMeal: { onEditMeal(row.slot, $0) },
-                onAddVariant: { onAddMeal(row.slot) },
+                onAddVariant: { onAddVariant(row.slot) },
                 onRemoveMeal: { onRemoveMeal(row.slot, $0) }
             )
         }
