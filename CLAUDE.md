@@ -140,8 +140,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   albo `geometryGroup()` — zwykłe `.animation(value:)` nadpisuje ruch nadany przez rodzica.
 - Szczegóły posiłku v2 (21.09.2026) — makieta Claude Design „Scoffie — Szczegóły Posiłku v2”
   (projekt `43b605d0-…`, `components/detail-v2.jsx`, sekcja „final”). Stepper porcji siedzi
-  w nagłówku „Wartości odżywcze”; kolory makr jak w arkuszu wyboru (białko terakota, węgle masło,
-  tłuszcz indygo). „Mam w domu” to stan WIZYTY; „Do zakupów” wysyła brakujące przez
+  w nagłówku „Wartości odżywcze”; pod nim porcja na tle celu dnia (`PlanGoalRings` +
+  `PlanGoalLegendRow`, kolory `SCMacroPalette`) zamiast donuta z makiety, a przycisk na dole
+  w zwykłym wariancie „soft” — decyzje Rafała 21.09. „Mam w domu” to stan WIZYTY; „Do zakupów” wysyła brakujące przez
   `weeklyPlans:addRecipeExtras` na tydzień z Planu (nie wcześniejszy niż bieżący) — tylko
   z katalogu, bo posiłek z planu ma składniki na liście od początku. Dopisane pozycje listy
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
