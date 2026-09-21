@@ -151,7 +151,7 @@ struct ShoppingProductRow: View {
     /// barwa mówi „to z tej półki”. Kupione schodzi do neutralnej szarości:
     /// ilość już nie jest potrzebna, więc przestaje wołać.
     private var amountPill: some View {
-        Text(amount)
+        SCCountingText(amount)
             .font(.system(size: 13, weight: .bold))
             .tracking(0.1)
             .monospacedDigit()

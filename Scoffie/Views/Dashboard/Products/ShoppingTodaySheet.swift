@@ -182,7 +182,7 @@ struct ShoppingTodaySheet: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("\(PolishPlural.ingredients(dishItems.count)) · \(isComplete ? "wszystko kupione" : PolishPlural.bought(bought))")
+                SCCountingText("\(PolishPlural.ingredients(dishItems.count)) · \(isComplete ? "wszystko kupione" : PolishPlural.bought(bought))")
                     .font(.system(size: 12.5, weight: .regular))
                     .monospacedDigit()
                     .foregroundStyle(isComplete ? SCPalette.sage : Color.scMuted(scheme))

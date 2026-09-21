@@ -69,7 +69,33 @@ struct AssistantOptionsDebugScreen: View {
     private var mode: String? { ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] }
 
     var body: some View {
-        if mode == "detail" || mode == "detail-planned" {
+        if mode == "shopping" {
+            // Liczniki Zakupów na przykładowych danych — do sprawdzenia
+            // `SCCountingText` bez sesji.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ShoppingEyebrowRow(eyebrow: "Ten tydzień · 21–27 wrz", meta: "12 dań · 49 produktów")
+                    ShoppingProgressHeader(
+                        bought: 15,
+                        total: 49,
+                        segments: [ShoppingProgressSegment(id: "w", bought: 8, total: 11, color: SCPalette.sage)]
+                    )
+                    ShoppingTodayRow(missing: 18, dishes: 4, isFiltered: false, action: {})
+                    ShoppingAisleSection(
+                        department: "Warzywa",
+                        items: [
+                            ShoppingItem(productKey: "pietruszka::g", name: "Pietruszka korzeń", totalAmount: 40, unit: "g", department: "Warzywa", isChecked: false),
+                            ShoppingItem(productKey: "ziemniak::g", name: "Ziemniak", totalAmount: 1750, unit: "g", department: "Warzywa", isChecked: false),
+                            ShoppingItem(productKey: "cebula::szt", name: "Cebula (szt)", totalAmount: 0.5, unit: "szt", department: "Warzywa", isChecked: true)
+                        ],
+                        dishSummary: { _ in "Krupnik z kaszą" }
+                    )
+                }
+                .padding(20)
+                .padding(.top, 50)
+            }
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
+        } else if mode == "detail" || mode == "detail-planned" {
             // Szczegóły posiłku v2 jako arkusz nad pustym tłem — tak, jak
             // otwiera je katalog. `detail-planned` = wejście z planu.
             SCPageBackground(scheme: scheme).ignoresSafeArea()

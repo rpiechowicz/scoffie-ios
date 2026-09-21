@@ -200,7 +200,7 @@ struct ShoppingAisleSection: View {
     private var counter: some View {
         switch mode {
         case .today:
-            Text("\(items.count) na dziś")
+            SCCountingText("\(items.count) na dziś")
                 .font(.system(size: 12.5, weight: .regular))
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
@@ -220,16 +220,12 @@ struct ShoppingAisleSection: View {
                 .fixedSize()
                 .transition(.opacity.combined(with: .scale(scale: 0.92)))
             } else {
-                Text("\(boughtCount) z \(items.count)")
+                SCCountingText("\(boughtCount) z \(items.count)")
                     .font(.system(size: 12.5, weight: .regular))
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .fixedSize()
-                    // Cyfra przewija się w miejscu, zamiast podmieniać się
-                    // skokiem — przy szybkim odhaczaniu widać, że licznik
-                    // faktycznie liczy, a nie miga.
-                    .contentTransition(.numericText())
                     .transition(.opacity)
             }
         }

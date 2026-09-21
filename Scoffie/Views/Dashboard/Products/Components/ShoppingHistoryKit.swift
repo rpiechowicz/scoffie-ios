@@ -52,7 +52,7 @@ struct ShoppingEyebrowRow: View {
             Spacer(minLength: 8)
 
             if let meta, !meta.isEmpty {
-                Text(meta)
+                SCCountingText(meta)
                     .font(.system(size: 12.5, weight: .regular))
                     .monospacedDigit()
                     .foregroundStyle(Color.scFaint(scheme))
@@ -204,7 +204,7 @@ struct ShoppingHistoryListRow: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text("\(entry.bought) z \(entry.total)")
+                    SCCountingText("\(entry.bought) z \(entry.total)")
                         .font(.system(size: 13, weight: .medium))
                         .monospacedDigit()
                         .tracking(-0.1)

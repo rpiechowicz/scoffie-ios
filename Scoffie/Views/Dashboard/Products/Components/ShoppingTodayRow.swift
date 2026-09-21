@@ -35,7 +35,7 @@ struct ShoppingTodayRow: View {
                     .foregroundStyle(accent)
                     .contentTransition(.symbolEffect(.replace))
 
-                Text(title)
+                SCCountingText(title)
                     .font(.system(size: 15, weight: .semibold))
                     .tracking(-0.3)
                     .foregroundStyle(Color.scLabel(scheme))
@@ -45,9 +45,8 @@ struct ShoppingTodayRow: View {
                     // na dwie linijki rozpychało wiersz i odklejało go od
                     // paska postępu nad nim.
                     .minimumScaleFactor(0.8)
-                    // „brakuje 8 produktów” → „brakuje 7 produktów”: przewija
-                    // się sama cyfra, reszta zdania stoi.
-                    .contentTransition(.numericText(countsDown: true))
+                    // „brakuje 8 produktów” → „brakuje 7 produktów”: liczy się
+                    // sama liczba, reszta zdania stoi.
 
                 Spacer(minLength: 8)
 
@@ -57,7 +56,7 @@ struct ShoppingTodayRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
-        .animation(.easeInOut(duration: 0.26), value: missing)
+        .animation(.easeInOut(duration: 0.26), value: hasEverything)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(isFiltered ? "Stuknij, aby wrócić do całej listy" : "Stuknij, aby zobaczyć dzisiejsze dania")
     }
@@ -79,7 +78,7 @@ struct ShoppingTodayRow: View {
         } else {
             HStack(spacing: 8) {
                 if dishes > 0 && !hasEverything {
-                    Text(PolishPlural.dishes(dishes))
+                    SCCountingText(PolishPlural.dishes(dishes))
                         .font(.system(size: 13, weight: .regular))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
