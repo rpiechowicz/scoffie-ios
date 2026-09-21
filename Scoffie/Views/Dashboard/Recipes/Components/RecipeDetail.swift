@@ -1637,7 +1637,7 @@ private struct DetailIngredientRow: View {
 
         HStack(alignment: .center, spacing: 12) {
             if showsCheckbox {
-                DetailCheckbox(on: have)
+                SCCheckbox(on: have, accent: SCPalette.indigo)
             }
 
             Text(name)
@@ -1659,48 +1659,6 @@ private struct DetailIngredientRow: View {
         .padding(.vertical, 9)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.2), value: have)
-    }
-}
-
-/// Pole 24 pt, promień 8 — indygo z ptaszkiem, gdy „mam”, sama obwódka,
-/// gdy brakuje. Wypełnienie wyskakuje ze środka, a pod nim pojawia się
-/// poświata w kolorze akcentu.
-private struct DetailCheckbox: View {
-    let on: Bool
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let look = DetailLook(scheme: scheme)
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-        let accent = SCPalette.indigo
-
-        ZStack {
-            shape
-                .strokeBorder(look.checkboxStroke, lineWidth: 1.5)
-                .opacity(on ? 0 : 1)
-
-            shape
-                .fill(
-                    LinearGradient(
-                        colors: [accent.mix(white: 0.08), accent.mix(black: 0.10)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .scaleEffect(on ? 1 : 0.55)
-                .opacity(on ? 1 : 0)
-
-            Image(systemName: "checkmark")
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(SCPalette.labelDark)
-                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
-                .scaleEffect(on ? 1 : 0.4)
-                .opacity(on ? 1 : 0)
-        }
-        .frame(width: 24, height: 24)
-        .shadow(color: on ? accent.opacity(0.4) : .clear, radius: 5, x: 0, y: 3)
-        .animation(.spring(response: 0.28, dampingFraction: 0.68), value: on)
     }
 }
 

@@ -121,16 +121,9 @@ struct ShoppingTodaySheet: View {
     }
 
     private func dishSection(_ dish: ShoppingDish) -> some View {
-        // Kupione spadają na dół grupy — tak samo jak w alejce na liście.
+        // Kolejność z listy — odhaczenie nie przestawia wierszy, tak samo
+        // jak w alejce.
         let dishItems = index.items(items, for: dish)
-            .enumerated()
-            .sorted { lhs, rhs in
-                if lhs.element.isChecked != rhs.element.isChecked {
-                    return !lhs.element.isChecked
-                }
-                return lhs.offset < rhs.offset
-            }
-            .map(\.element)
 
         return VStack(alignment: .leading, spacing: 0) {
             dishHeader(dish, items: dishItems)

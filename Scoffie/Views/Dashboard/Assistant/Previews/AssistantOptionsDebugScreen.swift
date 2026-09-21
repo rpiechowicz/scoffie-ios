@@ -85,8 +85,8 @@ struct AssistantOptionsDebugScreen: View {
                         department: "Warzywa",
                         items: [
                             ShoppingItem(productKey: "pietruszka::g", name: "Pietruszka korzeń", totalAmount: 40, unit: "g", department: "Warzywa", isChecked: false),
-                            ShoppingItem(productKey: "ziemniak::g", name: "Ziemniak", totalAmount: 1750, unit: "g", department: "Warzywa", isChecked: false),
-                            ShoppingItem(productKey: "cebula::szt", name: "Cebula (szt)", totalAmount: 0.5, unit: "szt", department: "Warzywa", isChecked: true)
+                            ShoppingItem(productKey: "cebula::szt", name: "Cebula (szt)", totalAmount: 0.5, unit: "szt", department: "Warzywa", isChecked: true),
+                            ShoppingItem(productKey: "ziemniak::g", name: "Ziemniak", totalAmount: 1750, unit: "g", department: "Warzywa", isChecked: false)
                         ],
                         dishSummary: { _ in "Krupnik z kaszą" }
                     )

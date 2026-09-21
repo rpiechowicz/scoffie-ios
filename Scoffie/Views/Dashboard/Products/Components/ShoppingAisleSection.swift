@@ -16,7 +16,7 @@ import SwiftUI
 struct ShoppingAisleSection: View {
     /// Czym jest ta sekcja w danym momencie ekranu.
     enum Mode {
-        /// Pełna lista: zwijana, kupione spadają na dół, znaczniki „Dziś”.
+        /// Pełna lista: zwijana, ze znacznikami „Dziś”.
         case list
         /// Filtr „Na dziś”: bez zwijania i bez znaczników, licznik mówi,
         /// ile produktów z tej alejki wchodzi w dzisiejsze dania.
@@ -51,28 +51,10 @@ struct ShoppingAisleSection: View {
     private var isComplete: Bool { !items.isEmpty && boughtCount == items.count }
     private var isCollapsible: Bool { mode == .list }
 
-    /// Kupione spadają na dół alejki — to, co zostało do wzięcia, stoi zawsze
-    /// pod nagłówkiem. `enumerated` na wejściu trzyma kolejność stabilną:
-    /// bez niej dwa produkty odhaczone w tej samej klatce potrafiły się
-    /// zamienić miejscami przy każdym przerysowaniu.
-    private var orderedItems: [ShoppingItem] {
-        guard mode == .list else { return items }
-        return items
-            .enumerated()
-            .sorted { lhs, rhs in
-                if lhs.element.isChecked != rhs.element.isChecked {
-                    return !lhs.element.isChecked
-                }
-                return lhs.offset < rhs.offset
-            }
-            .map(\.element)
-    }
-
-    /// Zmienia się dokładnie wtedy, gdy wiersze mają się przestawić — i tylko
-    /// na tę zmianę wieszamy animację przenoszenia.
-    private var orderSignature: String {
-        orderedItems.map(\.productKey).joined(separator: "|")
-    }
+    /// Wiersze stoją w kolejności z serwera — odhaczenie NIE przestawia
+    /// produktu na dół alejki. Uciekający spod palca wiersz utrudniał
+    /// odznaczenie pomyłki i przestawiał listę w trakcie zakupów.
+    private var orderedItems: [ShoppingItem] { items }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -137,7 +119,10 @@ struct ShoppingAisleSection: View {
                 }
             }
             .frame(height: blindHeight, alignment: .top)
-            .clipped()
+            // Przycinamy TYLKO w pionie. `.clipped()` obcinał też boki,
+            // a poświata pola wyboru wychodzi kilka punktów poza wiersz —
+            // pola przy lewej krawędzi były ucięte.
+            .mask(Rectangle().padding(.horizontal, -24))
             // Przycięcie nie obcina dotknięć — bez tego zwinięta alejka
             // dalej łapała stuknięcia w niewidoczne wiersze.
             .allowsHitTesting(!isCollapsed)
@@ -269,10 +254,6 @@ struct ShoppingAisleSection: View {
                 ))
             }
         }
-        // Przeniesienie kupionego na dół alejki czeka 0,2 s. Bez tej zwłoki
-        // wiersz uciekał spod palca w tej samej klatce, w której zapalał się
-        // ptaszek, i nie dawało się zobaczyć, CO się właściwie odhaczyło.
-        .animation(.spring(response: 0.38, dampingFraction: 0.88).delay(0.2), value: orderSignature)
     }
 }
 
