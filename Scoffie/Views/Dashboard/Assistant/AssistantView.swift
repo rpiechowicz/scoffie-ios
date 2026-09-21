@@ -115,6 +115,7 @@ struct AssistantView: View {
     @State private var autoScrollGeneration = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scTabIsActive) private var isActiveTab
     @FocusState private var isComposerFocused: Bool
 
     var body: some View {
@@ -170,11 +171,14 @@ struct AssistantView: View {
             // po pierwszym 429. Bez zgody to żądanie po prostu nic nie zwraca.
             _ = await store.loadUsage()
         }
-        .onAppear {
-            store.setVisible(true)
+        // Zakładki żyją wszystkie naraz, więc „widać rozmowę" znaczy
+        // „wybrana zakładka", nie `onAppear` — ten odpala się raz, pod
+        // loaderem startowym.
+        .onChange(of: isActiveTab, initial: true) { _, active in
+            store.setVisible(active)
             // Powrót na zakładkę po przerwie: czysta kartka zamiast
             // dopisywania do rozmowy sprzed pół dnia.
-            store.rotateIfStale()
+            if active { store.rotateIfStale() }
         }
         .onDisappear { store.setVisible(false) }
         .onChange(of: scenePhase) { _, phase in
@@ -752,123 +756,7 @@ struct AssistantView: View {
     private var messageList: some View {
         ScrollViewReader { proxy in
             ZStack(alignment: .bottom) {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        if store.isLoadingHistory && store.messages.isEmpty {
-                            ChatSkeleton()
-                        }
-
-                        // Wszystko PRZED ostatnim pytaniem — bez żadnej animacji.
-                        ForEach(Array(store.messages.prefix(slotStart).enumerated()), id: \.element.id) { index, message in
-                            bubble(at: index, message)
-                        }
-
-                        turnSlot
-
-                        // Koniec TREŚCI — tu ląduje strzałka „na dół". Osobno
-                        // od rozpórki niżej, bo przewinięcie do jej dołu
-                        // wypychało ostatnią wiadomość o całą jej wysokość
-                        // w górę i zostawiało pod nią pusty ekran.
-                        Color.clear
-                            .frame(height: 1)
-                            .id(Self.tailAnchor)
-
-                        // Rozpórka: bez niej ScrollView nie ma dokąd przewinąć
-                        // i początku długiej odpowiedzi nie da się wypchnąć pod
-                        // górną krawędź. Tyle, ile trzeba na kartę i akcje —
-                        // każdy piksel ponad to jest pustką, przez którą
-                        // użytkownik musi przewijać z powrotem.
-                        Color.clear
-                            .frame(height: 120)
-                            .id(Self.bottomAnchor)
-                    }
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.bottom, 12)
-                    // BEZ `.animation(value: store.isSending)` na liście:
-                    // `isSending` przełącza się ZAWSZE w jednej transakcji
-                    // z dopisaniem pytania, pustego stanu, separatora „Dziś"
-                    // albo całej odpowiedzi — i wszystko to dostawało animację
-                    // układu. Jedyne animowane przejście siedzi w `turnSlot`.
-                }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                // Rozmowa też zwija dolne menu przy przewijaniu w dół.
-                .scTracksTabBarCompaction()
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    // „Na końcu" liczy się od KOŃCA TREŚCI (`tailAnchor`), nie
-                    // od końca rozpórki: próg 80 pt był mniejszy niż sama
-                    // rozpórka (120 + 12), więc po stuknięciu strzałki
-                    // rozmowa stawała na końcu treści, a strzałka wciąż
-                    // wisiała, bo do dna zostawało 132 pt.
-                    return geometry.contentOffset.y + geometry.containerSize.height
-                        >= geometry.contentSize.height - Self.bottomSlack
-                } action: { _, atBottom in
-                    isPinnedToBottom = atBottom
-                }
-                .onChange(of: slotKey) { _, _ in
-                    // Własne pytanie i wiersz „myślę" pod nim jadą na dół
-                    // rozmowy. Wzorzec ChatGPT (pytanie pod górną krawędzią,
-                    // pod nim pusty ekran na odpowiedź) wyglądał tu jak błąd:
-                    // po jednym zdaniu z arkusza „Co potrafi” zostawała
-                    // strona pustki, a krótka odpowiedź wisiała nad nią.
-                    // Zawieszone na TOŻSAMOŚCI pytania, nie na liczbie
-                    // wiadomości: „Popraw pytanie" zdejmuje jedno i dopisuje
-                    // jedno, więc liczba stoi w miejscu.
-                    guard store.isSending, store.hasLiveTurnSlot,
-                          store.messages.last?.author == .user else { return }
-                    scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
-                }
-                .onChange(of: store.messages.count) { old, _ in
-                    // Własne pytanie ma swoje przewinięcie wyżej (`slotKey`)
-                    // — tu nie wolno go dublować ani przebijać „dołem"
-                    // historii, gdy pierwsze pytanie w rozmowie robi 0 → 1.
-                    // Odpowiedź tury NIE przewija nic: to jest ta sekunda, na
-                    // którą się czekało, i ekran ma wtedy stać. Historia
-                    // (0 → N) otwiera się na dole, jak dotąd.
-                    if store.isSending, store.hasLiveTurnSlot, store.messages.last?.author == .user {
-                        return
-                    }
-                    if old == 0 {
-                        scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
-                    } else if old < store.messages.count,
-                              let last = store.messages.last, last.author == .assistant {
-                        // Nowa odpowiedź rośnie od dolnej krawędzi w dół
-                        // (dopisuje się znak po znaku), więc jej początek
-                        // idzie pod górną krawędź — `scrollTo` i tak zatrzyma
-                        // się na końcu treści, gdy odpowiedź jest krótka.
-                        scroll(proxy, to: last.id, anchor: .top)
-                    }
-                }
-                .onChange(of: store.isSending) { _, sending in
-                    // Tura podjęta z serwera (powrót na zakładkę, relaunch):
-                    // wskaźnik wchodzi pod ostatnią wiadomość historii, która
-                    // stoi przy dolnej krawędzi — bez tego siedziałby tuż pod
-                    // nią, poza ekranem. Własne pytanie ma swoje przewinięcie
-                    // wyżej i slot z minimalną wysokością, więc tu go nie ma.
-                    guard sending, !store.hasLiveTurnSlot else { return }
-                    scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
-                }
-                .onChange(of: store.errorMessage) { _, newValue in
-                    // Notka stoi w slocie pod pytaniem, więc zwykle jest
-                    // widoczna — przewijamy tylko, gdy ktoś odjechał w górę.
-                    guard newValue != nil, !isPinnedToBottom else { return }
-                    scroll(proxy, to: Self.errorAnchor, anchor: .bottom)
-                }
-                .onChange(of: isComposerFocused) { _, focused in
-                    guard focused, let last = store.messages.last else { return }
-                    scroll(proxy, to: last.id, anchor: .bottom)
-                }
-                // Wibracja tylko przy NOWEJ odpowiedzi i przy NOWYM błędzie.
-                // Wyzwalacz po samej zmianie wartości odzywał się też, gdy
-                // liczba odpowiedzi SPADAŁA (nowa rozmowa, wybór z historii,
-                // poprawka pytania) i gdy błąd ZNIKAŁ — „sukces" i „błąd"
-                // pod palcem w chwili, w której nic takiego się nie stało.
-                .sensoryFeedback(trigger: answerCount) { old, new in
-                    new > old ? .success : nil
-                }
-                .sensoryFeedback(trigger: store.errorMessage) { old, new in
-                    old == nil && new != nil ? .error : nil
-                }
+                messageScroll(proxy)
 
                 // Jak w ChatGPT: pojawia się i znika płynnie, a nie skokiem,
                 // i tylko wtedy, gdy naprawdę jest dokąd zjechać.
@@ -880,6 +768,141 @@ struct AssistantView: View {
             .animation(.smooth(duration: 0.22), value: isPinnedToBottom)
             .animation(.smooth(duration: 0.22), value: isAutoScrolling)
         }
+    }
+
+    // Rozbite na osobne funkcje: jako jedno wyrażenie (reader → ZStack →
+    // ScrollView → kilkanaście modyfikatorów) kompilator nie dawał rady
+    // go otypować w rozsądnym czasie.
+    private func messageScroll(_ proxy: ScrollViewProxy) -> some View {
+        let scroll = ScrollView {
+            messageStack
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        // Rozmowa NIE zwija dolnego menu: zwinięty pasek jest węższy od
+        // pola wiadomości nad nim i dwa elementy przestawały się zgadzać.
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            // „Na końcu" liczy się od KOŃCA TREŚCI (`tailAnchor`), nie
+            // od końca rozpórki: próg 80 pt był mniejszy niż sama
+            // rozpórka (120 + 12), więc po stuknięciu strzałki
+            // rozmowa stawała na końcu treści, a strzałka wciąż
+            // wisiała, bo do dna zostawało 132 pt.
+            let visibleBottom: CGFloat = geometry.contentOffset.y + geometry.containerSize.height
+            return visibleBottom >= geometry.contentSize.height - Self.bottomSlack
+        } action: { _, atBottom in
+            isPinnedToBottom = atBottom
+        }
+
+        return withScrollTriggers(scroll, proxy: proxy)
+        // Wibracja tylko przy NOWEJ odpowiedzi i przy NOWYM błędzie.
+        // Wyzwalacz po samej zmianie wartości odzywał się też, gdy
+        // liczba odpowiedzi SPADAŁA (nowa rozmowa, wybór z historii,
+        // poprawka pytania) i gdy błąd ZNIKAŁ — „sukces" i „błąd"
+        // pod palcem w chwili, w której nic takiego się nie stało.
+        .sensoryFeedback(trigger: answerCount) { old, new in
+            new > old ? .success : nil
+        }
+        .sensoryFeedback(trigger: store.errorMessage) { old, new in
+            old == nil && new != nil ? .error : nil
+        }
+    }
+
+    private var messageStack: some View {
+        LazyVStack(alignment: .leading, spacing: 14) {
+            if store.isLoadingHistory && store.messages.isEmpty {
+                ChatSkeleton()
+            }
+
+            // Wszystko PRZED ostatnim pytaniem — bez żadnej animacji.
+            ForEach(Array(store.messages.prefix(slotStart).enumerated()), id: \.element.id) { index, message in
+                bubble(at: index, message)
+            }
+
+            turnSlot
+
+            // Koniec TREŚCI — tu ląduje strzałka „na dół". Osobno
+            // od rozpórki niżej, bo przewinięcie do jej dołu
+            // wypychało ostatnią wiadomość o całą jej wysokość
+            // w górę i zostawiało pod nią pusty ekran.
+            Color.clear
+                .frame(height: 1)
+                .id(Self.tailAnchor)
+
+            // Rozpórka: bez niej ScrollView nie ma dokąd przewinąć
+            // i początku długiej odpowiedzi nie da się wypchnąć pod
+            // górną krawędź. Tyle, ile trzeba na kartę i akcje —
+            // każdy piksel ponad to jest pustką, przez którą
+            // użytkownik musi przewijać z powrotem.
+            Color.clear
+                .frame(height: 120)
+                .id(Self.bottomAnchor)
+        }
+        .padding(.horizontal, SCPageMetrics.horizontal)
+        .padding(.bottom, 12)
+        // BEZ `.animation(value: store.isSending)` na liście:
+        // `isSending` przełącza się ZAWSZE w jednej transakcji
+        // z dopisaniem pytania, pustego stanu, separatora „Dziś"
+        // albo całej odpowiedzi — i wszystko to dostawało animację
+        // układu. Jedyne animowane przejście siedzi w `turnSlot`.
+    }
+
+    /// Przewinięcia reagujące na zmiany w rozmowie — osobno, żeby odciążyć
+    /// typowanie `messageScroll`.
+    private func withScrollTriggers<Content: View>(_ content: Content, proxy: ScrollViewProxy) -> some View {
+        content
+            .onChange(of: slotKey) { _, _ in
+                // Własne pytanie i wiersz „myślę" pod nim jadą na dół
+                // rozmowy. Wzorzec ChatGPT (pytanie pod górną krawędzią,
+                // pod nim pusty ekran na odpowiedź) wyglądał tu jak błąd:
+                // po jednym zdaniu z arkusza „Co potrafi” zostawała
+                // strona pustki, a krótka odpowiedź wisiała nad nią.
+                // Zawieszone na TOŻSAMOŚCI pytania, nie na liczbie
+                // wiadomości: „Popraw pytanie" zdejmuje jedno i dopisuje
+                // jedno, więc liczba stoi w miejscu.
+                guard store.isSending, store.hasLiveTurnSlot,
+                      store.messages.last?.author == .user else { return }
+                scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
+            }
+            .onChange(of: store.messages.count) { old, _ in
+                // Własne pytanie ma swoje przewinięcie wyżej (`slotKey`)
+                // — tu nie wolno go dublować ani przebijać „dołem"
+                // historii, gdy pierwsze pytanie w rozmowie robi 0 → 1.
+                // Odpowiedź tury NIE przewija nic: to jest ta sekunda, na
+                // którą się czekało, i ekran ma wtedy stać. Historia
+                // (0 → N) otwiera się na dole, jak dotąd.
+                if store.isSending, store.hasLiveTurnSlot, store.messages.last?.author == .user {
+                    return
+                }
+                if old == 0 {
+                    scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
+                } else if old < store.messages.count,
+                          let last = store.messages.last, last.author == .assistant {
+                    // Nowa odpowiedź rośnie od dolnej krawędzi w dół
+                    // (dopisuje się znak po znaku), więc jej początek
+                    // idzie pod górną krawędź — `scrollTo` i tak zatrzyma
+                    // się na końcu treści, gdy odpowiedź jest krótka.
+                    scroll(proxy, to: last.id, anchor: .top)
+                }
+            }
+            .onChange(of: store.isSending) { _, sending in
+                // Tura podjęta z serwera (powrót na zakładkę, relaunch):
+                // wskaźnik wchodzi pod ostatnią wiadomość historii, która
+                // stoi przy dolnej krawędzi — bez tego siedziałby tuż pod
+                // nią, poza ekranem. Własne pytanie ma swoje przewinięcie
+                // wyżej i slot z minimalną wysokością, więc tu go nie ma.
+                guard sending, !store.hasLiveTurnSlot else { return }
+                scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
+            }
+            .onChange(of: store.errorMessage) { _, newValue in
+                // Notka stoi w slocie pod pytaniem, więc zwykle jest
+                // widoczna — przewijamy tylko, gdy ktoś odjechał w górę.
+                guard newValue != nil, !isPinnedToBottom else { return }
+                scroll(proxy, to: Self.errorAnchor, anchor: .bottom)
+            }
+            .onChange(of: isComposerFocused) { _, focused in
+                guard focused, let last = store.messages.last else { return }
+                scroll(proxy, to: last.id, anchor: .bottom)
+            }
     }
 
     private func scrollToBottomPill(_ proxy: ScrollViewProxy) -> some View {
@@ -923,6 +946,24 @@ struct AssistantView: View {
             } else {
                 composerField
             }
+        }
+        // Zasłona pod polem i dolnym menu: rozmowa przewijała się pod nimi
+        // w pełnej ostrości i jej litery mieszały się z polem i ikonami.
+        // Treść gaśnie w tło strony na 28 pt nad polem, a niżej — aż do
+        // krawędzi ekranu, także pod menu — tła już nie widać.
+        .background(alignment: .top) {
+            LinearGradient(
+                stops: [
+                    .init(color: Color.scPageBase(scheme).opacity(0), location: 0),
+                    .init(color: Color.scPageBase(scheme).opacity(0.94), location: 0.22),
+                    .init(color: Color.scPageBase(scheme), location: 0.45),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .padding(.top, -28)
+            .ignoresSafeArea(.container, edges: .bottom)
+            .allowsHitTesting(false)
         }
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
@@ -994,7 +1035,8 @@ struct AssistantView: View {
             .animation(.easeOut(duration: 0.2), value: store.isStopping)
             .animation(.easeOut(duration: 0.2), value: store.isSending)
         }
-        .padding(.horizontal, 16)
+        // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
+        .padding(.horizontal, SCFloatingTabBar.sideMargin)
         .padding(.top, 8)
         .padding(.bottom, 8)
     }
@@ -1030,7 +1072,8 @@ struct AssistantView: View {
             .padding(.vertical, 16)
         }
         .background(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).fill(AssistantLook.input(scheme)))
-        .padding(.horizontal, 16)
+        // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
+        .padding(.horizontal, SCFloatingTabBar.sideMargin)
         .padding(.top, 8)
         .padding(.bottom, 8)
         .accessibilityElement(children: .contain)
@@ -1250,6 +1293,12 @@ struct AssistantView: View {
     /// i odpowiedź na kartę pytania patrzą na sąsiadów).
     @ViewBuilder
     private func bubble(at index: Int, _ message: AgentChatMessage, showsThinking: Bool = true) -> some View {
+        // Indeks z domknięcia wiersza bywa NIEAKTUALNY: leniwa lista potrafi
+        // przeliczyć stary wiersz już po tym, jak rozmowa się skróciła
+        // (poprawione pytanie, nowa rozmowa, wycofana wiadomość) — a sąsiadów
+        // czytamy wprost z `store.messages`. Stąd pozycja liczona na żywo.
+        let index = liveIndex(of: message, hint: index)
+
         if let separator = daySeparator(at: index) {
             DaySeparator(text: separator)
         }
@@ -1284,7 +1333,8 @@ struct AssistantView: View {
             onAsk: { prompt in ask(prompt) },
             onEdit: { beginEditing(message) },
             onReport: { reporting = message },
-            onRevealed: { store.markRevealed(id: message.id) }
+            onRevealed: { store.markRevealed(id: message.id) },
+            onCompose: { isComposerFocused = true }
         )
         .id(message.id)
     }
@@ -1409,11 +1459,18 @@ struct AssistantView: View {
         .id(Self.turnAnchor)
     }
 
+    /// Bieżąca pozycja wiadomości w rozmowie; `nil`, gdy już jej tam nie ma
+    /// (wiersz dogorywa po skróceniu rozmowy i nie ma sąsiadów do czytania).
+    private func liveIndex(of message: AgentChatMessage, hint: Int) -> Int? {
+        if store.messages.indices.contains(hint), store.messages[hint].id == message.id { return hint }
+        return store.messages.firstIndex { $0.id == message.id }
+    }
+
     /// Pierwsza wiadomość użytkownika PO danej pozycji — to nią odpowiedział
     /// na pytanie asystenta. Zatrzymujemy się na kolejnej odpowiedzi
     /// asystenta: pytanie bez odpowiedzi przed nią zostało pominięte.
-    private func reply(after index: Int) -> String? {
-        guard store.messages[index].card?.isClarify == true else { return nil }
+    private func reply(after index: Int?) -> String? {
+        guard let index, store.messages[index].card?.marksReply == true else { return nil }
         for next in store.messages[(index + 1)...] {
             if next.author == .user { return next.text }
             return nil
@@ -1422,8 +1479,8 @@ struct AssistantView: View {
     }
 
     /// Napis separatora, gdy wiadomość zaczyna nowy dzień.
-    private func daySeparator(at index: Int) -> String? {
-        guard let date = store.messages[index].createdAt else { return nil }
+    private func daySeparator(at index: Int?) -> String? {
+        guard let index, let date = store.messages[index].createdAt else { return nil }
         if index == 0 { return Self.dayLabel(date) }
         guard let previous = store.messages[index - 1].createdAt else {
             return Self.dayLabel(date)
@@ -1539,9 +1596,15 @@ private struct MessageBubble: View {
     let onReport: () -> Void
     /// Odpowiedź dopisała się do końca — sklep zdejmuje `revealFrom`.
     let onRevealed: () -> Void
+    /// Fokus na polu rozmowy (arkusz wyboru: „Napisz, na co masz ochotę”).
+    var onCompose: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Wiadomość przyszła w tej sesji (a nie z historii) — karta wyboru
+    /// otwiera wtedy arkusz sama. `revealFrom` znika po dopisaniu tekstu,
+    /// czyli zanim karta się pokaże, więc zapamiętujemy go przy wejściu.
+    @State private var arrivedLive = false
 
     /// Czy tekst jeszcze się dopisuje — reszta (karta, ślad, „Uwzględniłem”)
     /// czeka pod nim i wchodzi dopiero po ostatnim znaku.
@@ -1565,6 +1628,9 @@ private struct MessageBubble: View {
             assistantCard
                 .contextMenu { menuItems }
                 .accessibilityLabel("Asystent: \(message.text)")
+                .onAppear {
+                    if message.revealFrom != nil { arrivedLive = true }
+                }
         }
     }
 
@@ -1644,12 +1710,6 @@ private struct MessageBubble: View {
                     }
 
                     card
-
-                    // Po fakcie: z czym asystent to policzył. Pod kartą, żeby nie
-                    // rozdzielać zdania od tego, co ono opisuje.
-                    if !message.usedContext.isEmpty {
-                        AssistantUsedContextLine(items: message.usedContext)
-                    }
                 }
                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
             }
@@ -1688,7 +1748,13 @@ private struct MessageBubble: View {
                 onOpenPlan: onOpenPlan
             )
         case .options(let options):
-            AssistantOptionsCard(card: options, onAsk: onAsk)
+            AssistantOptionsCard(
+                card: options,
+                reply: reply,
+                autoPresentID: arrivedLive ? message.id : nil,
+                onAsk: onAsk,
+                onCompose: onCompose
+            )
         case .swap(let swap):
             AssistantSwapCard(
                 card: swap,

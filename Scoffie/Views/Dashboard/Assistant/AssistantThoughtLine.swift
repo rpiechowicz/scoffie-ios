@@ -3,15 +3,17 @@ import SwiftUI
 /// Wiersz tury — 1:1 z makietą „Stan pracy · finał: Oddech łuku”
 /// (`MWorking`) i „14 · Thought summary” (`LThought`).
 ///
-/// W TRAKCIE tury: znak marki stoi NIERUCHOMO w terakocie w środku
-/// pierścienia 44 pt, a wokół niego krąży łuk w kolorze fazy (indygo dla
-/// analizy i planowania, szałwia dla zapisu) — obrót 2,4 s liniowo, a łuk
-/// jednocześnie „oddycha” 1,8 s: rośnie od kropki (5 % obwodu) do ok. 55 %
-/// i kurczy się z powrotem. Obwód nigdy się nie zamyka — to aktywność, nie
-/// postęp. Obok JEDEN bieżący status (16/600, przebłysk w kolorze fazy
-/// 2,6 s), po prawej realny licznik sekund, pod statusem kontekst słowami
-/// z aplikacji, a po 18 s „Możesz wyjść — wrócę z odpowiedzią.”. Bez paska,
-/// bez procentu, bez listy kroków i bez nazw narzędzi.
+/// W TRAKCIE tury: znak marki stoi NIERUCHOMO w środku pierścienia 44 pt,
+/// a wokół niego krąży łuk — obrót 2,4 s liniowo, a łuk jednocześnie
+/// „oddycha” 1,8 s: rośnie od kropki (5 % obwodu) do ok. 55 % i kurczy się
+/// z powrotem. Obwód nigdy się nie zamyka — to aktywność, nie postęp.
+/// Łuk, status i znak są w TERAKOCIE (odejście od makiety, decyzja Rafała
+/// 21.09.2026: indygo wyglądało obco). Obok JEDEN bieżący status (16/600,
+/// przebłysk 2,6 s; przy zmianie stary odpływa w górę, nowy wpływa od dołu),
+/// po prawej realny licznik sekund, POD statusem ślad zrobionych kroków
+/// (ptaszek + zdanie, trzy ostatnie; zapis ma ptaszek w szałwii), a po 18 s
+/// „Możesz wyjść — wrócę z odpowiedzią.”. Bez paska, bez procentu i bez
+/// nazw narzędzi.
 ///
 /// PO turze (`LThought`): „Myślałem 42 s” z chevronem, wcięte pod tekst
 /// odpowiedzi (28 pt); licznik z wiersza pracy STAJE SIĘ tą liczbą.
@@ -66,10 +68,11 @@ struct AssistantThoughtLine: View {
     /// Zapis to fakt, który się nie cofa.
     private var hasWritten: Bool { steps.contains { $0.writes == true } }
 
-    /// Kolor fazy: analiza i planowanie w indygo, zapis w szałwii.
-    private var phaseColor: Color {
-        hasWritten ? AssistantLook.sage(scheme) : AssistantLook.indigo(scheme)
-    }
+    /// Kolor pracy: terakota marki — ten sam co znak w środku pierścienia,
+    /// więc łuk, status i znak czytają się jako jedna rzecz. (Indygo/szałwia
+    /// z makiety wyglądały w aplikacji jak obcy element.) Zapis wyróżnia
+    /// szałwiowy ptaszek w śladzie kroków, nie zmiana koloru całości.
+    private var phaseColor: Color { AssistantLook.terra(scheme) }
 
     /// Jeden bieżący status — ostatni krok z serwera, gotowe zdanie po polsku.
     private var status: String {
@@ -77,33 +80,26 @@ struct AssistantThoughtLine: View {
         return steps.last?.label ?? "Czytam pytanie"
     }
 
-    /// Kontekst pod statusem: z czego asystent właśnie korzysta, słowami
-    /// z aplikacji („Przepisy · cele domowników · plan”), nigdy nazwami
-    /// narzędzi. Liczone z KROKÓW, więc rośnie w miarę tury.
-    private var contextDescriptor: String? {
-        if isStopping { return "Nic nie zmieniłem w planie." }
-        var parts: [String] = []
-        for step in steps {
-            let tool = step.tool.lowercased()
-            let word: String?
-            if tool.contains("recipe") || tool.contains("ingredient") {
-                word = "przepisy"
-            } else if tool.contains("household") || tool.contains("split") {
-                word = "cele domowników"
-            } else if tool.contains("shopping") {
-                word = "zakupy"
-            } else if tool.contains("memory") || tool.contains("note") {
-                word = "pamięć domu"
-            } else if tool.contains("plan") || tool.contains("balance") || tool.contains("conflict") || tool.contains("meal") || tool.contains("macro") {
-                word = "plan"
-            } else {
-                word = nil
-            }
-            if let word, !parts.contains(word) { parts.append(word) }
+    /// Ślad pod statusem: co asystent JUŻ zrobił w tej turze. Wszystko przed
+    /// bieżącym krokiem, bez powtórzeń pod rząd; na ekranie trzy ostatnie,
+    /// żeby wiersz nie wypychał rozmowy przy długiej turze.
+    private struct DoneStep: Identifiable, Equatable {
+        let id: Int
+        let label: String
+        let wrote: Bool
+    }
+
+    private static let trailLimit = 3
+
+    private var doneSteps: [DoneStep] {
+        guard !isStopping, steps.count > 1 else { return [] }
+        var result: [DoneStep] = []
+        for (index, step) in steps.dropLast().enumerated() {
+            if result.last?.label == step.label { continue }
+            if step.label == steps.last?.label { continue }
+            result.append(DoneStep(id: index, label: step.label, wrote: step.writes == true))
         }
-        guard !parts.isEmpty else { return nil }
-        let joined = parts.joined(separator: " · ")
-        return joined.prefix(1).uppercased() + joined.dropFirst()
+        return Array(result.suffix(Self.trailLimit))
     }
 
     private var settledLabel: String {
@@ -149,14 +145,20 @@ struct AssistantThoughtLine: View {
     private var working: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || isStopping)) { context in
             let t = startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? 0
-            // Wyśrodkowane w pionie: bez kontekstu pod statusem sam status
-            // wisiał przy górnej krawędzi 44-punktowego pierścienia.
-            HStack(alignment: .center, spacing: 14) {
+            // Do góry: ślad kroków rośnie POD statusem, a pierścień ma stać
+            // w miejscu. Wiersz statusu ma wysokość pierścienia, więc sam
+            // status dalej jest wyśrodkowany względem niego.
+            HStack(alignment: .top, spacing: 14) {
                 glyph(t: t)
 
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        // Zmiana stanu: stary status odpływa w górę, nowy
+                        // wpływa od dołu — widać, że COŚ się stało, a nie
+                        // że podmienił się napis.
                         statusText(t: t)
+                            .id(status)
+                            .transition(statusTransition)
                         Spacer(minLength: 0)
                         if !isStopping {
                             // Sekundy rolują się jak czas w szczegółach posiłku.
@@ -167,14 +169,24 @@ struct AssistantThoughtLine: View {
                                 .accessibilityHidden(true)
                         }
                     }
+                    .frame(minHeight: 44)
+                    .clipped()
 
-                    if let contextDescriptor {
-                        Text(contextDescriptor)
+                    if isStopping {
+                        Text("Nic nie zmieniłem w planie.")
                             .font(.system(size: 13.5))
                             .foregroundStyle(AssistantLook.muted(scheme))
-                            .lineLimit(1)
-                            .padding(.top, 3)
                             .transition(.opacity)
+                    }
+
+                    if !doneSteps.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(doneSteps) { step in
+                                doneRow(step, isOldest: step.id == doneSteps.first?.id && doneSteps.count == Self.trailLimit)
+                                    .transition(doneTransition)
+                            }
+                        }
+                        .padding(.top, 2)
                     }
 
                     if showsPatience, !isStopping {
@@ -185,13 +197,45 @@ struct AssistantThoughtLine: View {
                             .transition(.opacity)
                     }
                 }
-                .animation(.easeInOut(duration: 0.25), value: contextDescriptor)
-                .animation(.easeInOut(duration: 0.25), value: status)
+                .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: status)
+                .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: doneSteps)
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(status)
         .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    private var statusTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 10)),
+            removal: .opacity.combined(with: .offset(y: -10))
+        )
+    }
+
+    private var doneTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: -8)),
+            removal: .opacity
+        )
+    }
+
+    /// Zrobiony krok: ptaszek + zdanie. Zapis ma ptaszek w szałwii — to
+    /// jedyny krok, który coś zmienił. Najstarszy z trzech przygasa, żeby
+    /// było widać, że lista się przesuwa, a nie urywa.
+    private func doneRow(_ step: DoneStep, isOldest: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundStyle(step.wrote ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme).opacity(0.75))
+            Text(step.label)
+                .font(.system(size: 13.5))
+                .foregroundStyle(AssistantLook.muted(scheme))
+                .lineLimit(1)
+        }
+        .opacity(isOldest ? 0.55 : 1)
     }
 
     /// `SpinDash` 44: pierścień-tor w tincie fazy (12 %), łuk w kolorze fazy
@@ -205,7 +249,6 @@ struct AssistantThoughtLine: View {
             stopped: isStopping,
             still: reduceMotion
         )
-        .animation(.smooth(duration: 0.5), value: hasWritten)
     }
 
     /// Status 16/600 z połyskiem w kolorze fazy (`lShimmer` 2,6 s).
@@ -243,7 +286,6 @@ struct AssistantThoughtLine: View {
                         endPoint: UnitPoint(x: p + 1.2, y: 0.5)
                     )
                 )
-                .animation(.smooth(duration: 0.5), value: hasWritten)
         }
     }
 

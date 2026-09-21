@@ -484,45 +484,42 @@ struct AssistantAnswerChips: View {
 
 // MARK: - Dania do wyboru
 
-/// `LOptions`: 2×2 zdjęć, tap w kafelek = wybór. Tagi tylko z danych,
-/// które system zna.
-struct AssistantOptionsCard: View {
+/// Starszy wariant karuzelowy zostaje lokalnie jako punkt odniesienia podczas
+/// iteracji, ale karta używana w rozmowie jest poniżej wariantem kotwicy + arkusza.
+private struct AssistantOptionsCarouselCard: View {
     let card: OptionsCardDTO
     let onAsk: (String) -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var activeIndex = 0
+    @State private var dragOffset: CGFloat = 0
 
-    /// Dwa kafelki w rzędzie; nieparzysty rząd dostaje pustą połowę.
-    /// Własny `Layout` o RÓWNYCH kolumnach zamiast `HStack`/`LazyVGrid`:
-    /// `HStack` dawał kafelkom szerokość z długości nazwy (rząd z „Curry
-    /// z kurczaka na mleku kokosowym…” był krzywy — lewa kolumna szersza od
-    /// prawej), a siatka w karcie w `LazyVStack` proponowała szerokość spoza
-    /// kolumny i nazwy nachodziły na sąsiada.
-    private var rows: [[OptionsCardItemDTO]] {
-        stride(from: 0, to: card.options.count, by: 2).map { start in
-            Array(card.options[start..<min(start + 2, card.options.count)])
-        }
-    }
+    private let slideGap: CGFloat = 10
 
     var body: some View {
         AssistantCard {
             AssistantCardHead(eyebrow: card.eyebrow, title: card.title, subtitle: "Wybierz jedno.")
 
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    AssistantEqualColumns(spacing: 10) {
-                        ForEach(row) { option in
-                            OptionTile(option: option) { onAsk(option.prompt) }
-                        }
-                        if row.count == 1 {
-                            Color.clear.frame(height: 0)
-                        }
-                    }
-                }
+            if let activeOption {
+                carousel
+                    .padding(.top, 14)
+
+                optionSummary(activeOption)
+                    .padding(.horizontal, AssistantCardMetrics.inset)
+                    .padding(.top, 12)
+
+                carouselControls
+                    .padding(.horizontal, AssistantCardMetrics.inset)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+            } else {
+                Text("Nie mam teraz dań do pokazania.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AssistantLook.muted(scheme))
+                    .padding(.horizontal, AssistantCardMetrics.inset)
+                    .padding(.vertical, 18)
             }
-            .padding(.horizontal, AssistantCardMetrics.inset)
-            .padding(.top, 14)
-            .padding(.bottom, 16)
 
             if let other = card.actions.first {
                 AssistantCardActions(
@@ -532,40 +529,219 @@ struct AssistantOptionsCard: View {
                 )
             }
         }
+        .onChange(of: card.options) { _, options in
+            activeIndex = min(activeIndex, max(options.count - 1, 0))
+            dragOffset = 0
+        }
     }
 
-    private struct OptionTile: View {
+    private var activeOption: OptionsCardItemDTO? {
+        guard card.options.indices.contains(activeIndex) else { return nil }
+        return card.options[activeIndex]
+    }
+
+    private var carousel: some View {
+        GeometryReader { proxy in
+            let pageWidth = max(230, proxy.size.width - 54)
+            let step = pageWidth + slideGap
+
+            HStack(spacing: slideGap) {
+                ForEach(Array(card.options.enumerated()), id: \.element.id) { index, option in
+                    OptionSlide(
+                        option: option,
+                        isActive: index == activeIndex,
+                        width: pageWidth
+                    ) {
+                        choose(option, at: index)
+                    }
+                }
+            }
+            .padding(.horizontal, AssistantCardMetrics.inset)
+            .offset(x: -CGFloat(activeIndex) * step + dragOffset)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.34), value: activeIndex)
+            .contentShape(Rectangle())
+            .gesture(swipeGesture(pageWidth: pageWidth))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Propozycje posiłków")
+            .accessibilityValue("\(activeIndex + 1) z \(card.options.count)")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: move(by: 1)
+                case .decrement: move(by: -1)
+                @unknown default: break
+                }
+            }
+        }
+        .frame(height: 260)
+        .clipped()
+    }
+
+    private var carouselControls: some View {
+        HStack(spacing: 10) {
+            carouselButton(systemName: "chevron.left", label: "Poprzednia propozycja", enabled: activeIndex > 0) {
+                move(by: -1)
+            }
+
+            HStack(spacing: 6) {
+                ForEach(card.options.indices, id: \.self) { index in
+                    Capsule()
+                        .fill(index == activeIndex ? AssistantLook.terraFill(scheme) : AssistantLook.hair(scheme))
+                        .frame(width: index == activeIndex ? 18 : 6, height: 5)
+                        .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: activeIndex)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            carouselButton(systemName: "chevron.right", label: "Następna propozycja", enabled: activeIndex < card.options.count - 1) {
+                move(by: 1)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Nawigacja propozycji")
+    }
+
+    private func carouselButton(
+        systemName: String,
+        label: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(enabled ? AssistantLook.terra(scheme) : AssistantLook.faint(scheme))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(AssistantLook.wash(scheme)))
+                .overlay(Circle().stroke(AssistantLook.hair(scheme), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
+    }
+
+    private func optionSummary(_ option: OptionsCardItemDTO) -> some View {
+        HStack(spacing: 0) {
+            summaryMetric {
+                SCRollingNumber(value: option.kcalPerServing)
+                    .font(.system(size: 17, weight: .bold))
+            } label: {
+                Text("kcal / porcja")
+            }
+
+            Rectangle()
+                .fill(AssistantLook.hair(scheme))
+                .frame(width: 1, height: 27)
+
+            summaryMetric {
+                SCRollingNumber(value: option.prepTimeMinutes, unit: "min")
+                    .font(.system(size: 17, weight: .bold))
+            } label: {
+                Text("przygotowanie")
+            }
+        }
+        .foregroundStyle(AssistantLook.ink(scheme))
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AssistantLook.wash(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AssistantLook.hair(scheme), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(option.kcalPerServing) kilokalorii na porcję, \(option.prepTimeMinutes) minut przygotowania")
+    }
+
+    private func summaryMetric<Value: View, Label: View>(
+        @ViewBuilder value: () -> Value,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        VStack(spacing: 2) {
+            value()
+                .monospacedDigit()
+            label()
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(AssistantLook.faint(scheme))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func swipeGesture(pageWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard !reduceMotion else { return }
+                // Opór na krawędziach daje sygnał, że to już pierwszy/ostatni
+                // slajd, bez przesuwania karty poza bezpieczny obszar.
+                let atEdge = (activeIndex == 0 && value.translation.width > 0)
+                    || (activeIndex == card.options.count - 1 && value.translation.width < 0)
+                dragOffset = atEdge ? value.translation.width * 0.22 : value.translation.width
+            }
+            .onEnded { value in
+                let threshold = max(36, pageWidth * 0.18)
+                let direction = value.translation.width < -threshold ? 1 : value.translation.width > threshold ? -1 : 0
+                move(by: direction)
+            }
+    }
+
+    private func move(by delta: Int) {
+        guard !card.options.isEmpty else { return }
+        let next = min(max(activeIndex + delta, 0), card.options.count - 1)
+        let animation: Animation? = reduceMotion ? nil : .snappy(duration: 0.34)
+        withAnimation(animation) {
+            activeIndex = next
+            dragOffset = 0
+        }
+    }
+
+    private func choose(_ option: OptionsCardItemDTO, at index: Int) {
+        let animation: Animation? = reduceMotion ? nil : .smooth(duration: 0.2)
+        withAnimation(animation) {
+            activeIndex = index
+            dragOffset = 0
+        }
+        onAsk(option.prompt)
+    }
+
+    private struct OptionSlide: View {
         let option: OptionsCardItemDTO
+        let isActive: Bool
+        let width: CGFloat
         let onTap: () -> Void
 
         @Environment(\.colorScheme) private var scheme
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
             Button(action: onTap) {
                 VStack(alignment: .leading, spacing: 0) {
                     ZStack(alignment: .topLeading) {
-                        CachedAsyncImage(url: option.imageUrl.flatMap(URL.init(string:))) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            default:
-                                ZStack {
-                                    AssistantLook.wash(scheme)
-                                    Image(systemName: "fork.knife")
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(AssistantLook.faint(scheme))
+                        // Zdjęcie dostaje ramkę o znanej wielkości, więc
+                        // obraz nie zgłasza własnej szerokości do karuzeli.
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 156)
+                            .overlay {
+                                CachedAsyncImage(url: option.imageUrl.flatMap(URL.init(string:))) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    default:
+                                        ZStack {
+                                            AssistantLook.wash(scheme)
+                                            Image(systemName: "fork.knife")
+                                                .font(.system(size: 24))
+                                                .foregroundStyle(AssistantLook.faint(scheme))
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 126)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .shadow(color: Color.black.opacity(0.12), radius: 1, y: 1)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.12), radius: 1, y: 1)
 
                         if let tag = option.tag, !tag.isEmpty {
-                            // Pigułka jest biała w obu motywach, więc tusz też
-                            // musi być stały — w ciemnym motywie jasny tusz
-                            // znikał na białym.
                             Text(tag)
                                 .font(.system(size: 11, weight: .bold))
                                 .tracking(0.2)
@@ -577,27 +753,56 @@ struct AssistantOptionsCard: View {
                         }
                     }
 
-                    Text(option.title)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .tracking(-0.3)
-                        .lineSpacing(1)
-                        .foregroundStyle(AssistantLook.ink(scheme))
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 9)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(option.title)
+                            .font(.system(size: 15.5, weight: .semibold))
+                            .tracking(-0.3)
+                            .lineSpacing(1)
+                            .foregroundStyle(AssistantLook.ink(scheme))
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    Text(option.prepTimeMinutes > 0 ? "\(option.kcalPerServing) kcal · \(option.prepTimeMinutes) min" : "\(option.kcalPerServing) kcal")
-                        .font(.system(size: 12.5))
-                        .monospacedDigit()
-                        .foregroundStyle(AssistantLook.faint(scheme))
-                        .padding(.top, 3)
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AssistantLook.terra(scheme))
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.top, 10)
+
+                    HStack(spacing: 6) {
+                        if option.prepTimeMinutes > 0 {
+                            Text("\(option.prepTimeMinutes) min")
+                        }
+                        Text("·")
+                        Text("\(option.kcalPerServing) kcal")
+                    }
+                    .font(.system(size: 12.5, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                    .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(PlanPressStyle(scale: 0.97))
+            .padding(10)
+            .frame(width: width, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: AssistantCardMetrics.innerRadius, style: .continuous)
+                    .fill(AssistantLook.field(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AssistantCardMetrics.innerRadius, style: .continuous)
+                    .stroke(
+                        isActive ? AssistantLook.terra(scheme).opacity(0.42) : AssistantLook.cardStroke(scheme),
+                        lineWidth: isActive ? 1.4 : 1
+                    )
+            )
+            .scaleEffect(isActive ? 1 : 0.975)
+            .opacity(isActive ? 1 : 0.68)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: isActive)
             .accessibilityLabel(accessibilityText)
             .accessibilityHint("Wybiera to danie")
         }
@@ -608,6 +813,1269 @@ struct AssistantOptionsCard: View {
             if let tag = option.tag, !tag.isEmpty { parts.append(tag) }
             return parts.joined(separator: ", ")
         }
+    }
+}
+
+/// Karta rozmowy wg makiety „Asystent — Wybór posiłku” (`OptAnchorCard`):
+/// kompaktowa kotwica zostaje w historii, a zdjęcia, opis i makro otwierają
+/// się w arkuszu nad rozmową. Świeża odpowiedź otwiera arkusz sama; dotknięcie
+/// kotwicy otwiera go ponownie — dziś i za tydzień.
+struct AssistantOptionsCard: View {
+    let card: OptionsCardDTO
+    /// Następna wiadomość użytkownika — kotwica zaznacza nią wybrane danie.
+    var reply: String? = nil
+    /// Id wiadomości, która właśnie przyszła; `nil` dla historii.
+    var autoPresentID: String? = nil
+    /// Strona, na której arkusz otwiera się sam — w rozmowie zawsze pierwsza.
+    var autoPresentPage: Int = 0
+    let onAsk: (String) -> Void
+    /// „Napisz, na co masz ochotę” — fokus na polu rozmowy.
+    var onCompose: () -> Void = {}
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.recipeCatalogStore) private var recipeCatalog
+    @State private var presented: OptionsSheetPage?
+
+    /// Arkusz otwiera się sam RAZ na wiadomość — nie przy każdym powrocie
+    /// wiersza na ekran (leniwa lista odtwarza stan widoku).
+    @MainActor private static var autoPresented = Set<String>()
+
+    private var slotDetail: String? { OptionsCopy.slotDetail(card.eyebrow) }
+
+    private var morePrompt: String? {
+        card.actions.first(where: { $0.prompt != nil })?.prompt
+    }
+
+    private var chosenID: String? {
+        guard let reply else { return nil }
+        return card.options.first { OptionsCopy.matches($0.prompt, reply: reply) }?.id
+    }
+
+    var body: some View {
+        AssistantCard {
+            AssistantCardHead(
+                eyebrow: "Do wyboru",
+                eyebrowDetail: slotDetail,
+                title: card.title,
+                subtitle: OptionsCopy.subtitle(for: card.options)
+            )
+
+            if card.options.isEmpty {
+                Text("Nie mam teraz dań do pokazania.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AssistantLook.muted(scheme))
+                    .padding(.horizontal, AssistantCardMetrics.inset)
+                    .padding(.vertical, 18)
+            } else {
+                // `padding: 12px 18px 14px; gap: 12` — bez kresek między daniami.
+                VStack(spacing: 12) {
+                    ForEach(Array(card.options.enumerated()), id: \.element.id) { index, option in
+                        anchorRow(option, at: index)
+                    }
+                }
+                .padding(.horizontal, AssistantCardMetrics.inset)
+                .padding(.top, 12)
+                .padding(.bottom, 14)
+
+                browseRow
+            }
+        }
+        .sheet(item: $presented) { page in
+            AssistantOptionsStorySheet(
+                slotDetail: slotDetail,
+                options: card.options,
+                initialPage: page.id,
+                insertTitle: OptionsCopy.insertTitle(card.eyebrow),
+                morePrompt: morePrompt,
+                // Jawnie, nie przez środowisko: arkusz ma czytać TEN katalog,
+                // który ma ekran, a nie pusty domyślny.
+                catalog: recipeCatalog,
+                onChoose: { option in
+                    presented = nil
+                    onAsk(option.prompt)
+                },
+                onMore: { prompt in
+                    presented = nil
+                    onAsk(prompt)
+                },
+                onCompose: {
+                    presented = nil
+                    // Fokus dopiero po zjeździe arkusza — w trakcie przejścia
+                    // klawiatura nie ma gdzie się pokazać.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
+                }
+            )
+        }
+        .task(id: autoPresentID) { await autoPresentIfFresh() }
+    }
+
+    /// `LMealRow` 40 px. Po wyborze: znacznik szałwii przy wybranym, reszta
+    /// wyciszona — tak jak karta pytania zaznacza udzieloną odpowiedź.
+    private func anchorRow(_ option: OptionsCardItemDTO, at index: Int) -> some View {
+        let chosen = chosenID == option.id
+        let dimmed = chosenID != nil && !chosen
+        return Button {
+            presented = OptionsSheetPage(id: index)
+        } label: {
+            HStack(spacing: 8) {
+                AssistantMealRow(
+                    slot: nil,
+                    title: option.title,
+                    imageUrl: option.imageUrl,
+                    kcal: option.kcalPerServing,
+                    size: 40,
+                    muted: dimmed,
+                    titleWeight: chosen ? .semibold : .medium
+                )
+                if chosen {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AssistantLook.sage(scheme))
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .accessibilityHint("Otwiera zdjęcie, opis i wartości odżywcze")
+        .accessibilityAddTraits(chosen ? [.isSelected] : [])
+    }
+
+    /// `LRow` na tle `wash`: kafelek 36 ze znakiem, tytuł w terakocie, chevron.
+    private var browseRow: some View {
+        Button {
+            presented = OptionsSheetPage(id: 0)
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(AssistantLook.terraTint(scheme))
+                    OptionsKesMark(size: 17, color: AssistantLook.terraFill(scheme))
+                }
+                .frame(width: 36, height: 36)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Przeglądaj propozycje")
+                        .font(.system(size: 15, weight: .semibold))
+                        .tracking(-0.3)
+                        .foregroundStyle(AssistantLook.terra(scheme))
+                        .lineHeight(.exact(points: 20))
+                    Text("Zdjęcia, opis i wartości odżywcze")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AssistantLook.muted(scheme))
+                        .lineHeight(.exact(points: 17))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AssistantLook.ink(scheme).opacity(0.35))
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, AssistantCardMetrics.inset)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AssistantLook.wash(scheme))
+            .overlay(alignment: .top) { AssistantCardRule() }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func autoPresentIfFresh() async {
+        guard let id = autoPresentID, reply == nil, !card.options.isEmpty,
+              !Self.autoPresented.contains(id) else { return }
+        Self.autoPresented.insert(id)
+        // Najpierw karta wjeżdża pod tekstem, potem arkusz — nie oba naraz.
+        try? await Task.sleep(for: .milliseconds(450))
+        guard !Task.isCancelled else { return }
+        presented = OptionsSheetPage(id: autoPresentPage)
+    }
+}
+
+/// Strona arkusza do otwarcia: indeks dania albo `options.count` = „Coś innego”.
+private struct OptionsSheetPage: Identifiable {
+    let id: Int
+}
+
+/// Teksty karty i arkusza — liczone z danych karty, nie z pamięci modelu.
+private enum OptionsCopy {
+    /// „Kolacja · wtorek” → „Kolacja, wtorek”; sam „Do wyboru” nic nie dodaje.
+    static func slotDetail(_ eyebrow: String) -> String? {
+        let trimmed = eyebrow.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.caseInsensitiveCompare("Do wyboru") != .orderedSame else { return nil }
+        let parts = trimmed
+            .split(separator: "·")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    /// Rdzeń słowa → biernik po „na”. Rdzeń, bo model pisze raz „środa”,
+    /// raz „środę”, raz „śr.”.
+    private static let days: [(stem: String, target: String)] = [
+        ("pon", "poniedziałek"), ("wt", "wtorek"), ("śr", "środę"), ("czw", "czwartek"),
+        ("pt", "piątek"), ("piąt", "piątek"), ("sob", "sobotę"), ("nd", "niedzielę"),
+        ("niedz", "niedzielę"), ("dziś", "dziś"), ("dzisiaj", "dziś"), ("jutr", "jutro"),
+    ]
+
+    /// „Wstaw na środę”, gdy z nagłówka da się wyczytać dzień; inaczej
+    /// „Wstaw do planu”.
+    static func insertTitle(_ eyebrow: String) -> String {
+        let words = eyebrow.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init)
+        for word in words {
+            if let day = days.first(where: { word.hasPrefix($0.stem) }) {
+                return "Wstaw na \(day.target)"
+            }
+        }
+        return "Wstaw do planu"
+    }
+
+    static func subtitle(for options: [OptionsCardItemDTO]) -> String {
+        let count = options.count
+        guard count > 1 else { return "Wybierz jedno." }
+        let (lead, all): (String, String)
+        switch count {
+        case 2: (lead, all) = ("Dwa z Twoich przepisów", "oba")
+        case 3: (lead, all) = ("Trzy z Twoich przepisów", "wszystkie")
+        case 4: (lead, all) = ("Cztery z Twoich przepisów", "wszystkie")
+        default: (lead, all) = ("\(count) z Twoich przepisów", "wszystkie")
+        }
+        let maxMinutes = options.map(\.prepTimeMinutes).max() ?? 0
+        guard maxMinutes > 0 else { return "\(lead). Wybierz jedno." }
+        return "\(lead), \(all) do \(maxMinutes) minut."
+    }
+
+    /// Samo słowo do liczby składników: 1 składnik, 2–4 składniki, 5+ składników.
+    static func ingredientsWord(_ count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+        if count == 1 { return "składnik" }
+        if (2...4).contains(mod10), !(12...14).contains(mod100) { return "składniki" }
+        return "składników"
+    }
+
+    /// „Pokaż 3 kolejne” — liczba po polsku: 2–4 „kolejne”, 5+ „kolejnych”.
+    static func moreTitle(_ count: Int) -> String {
+        (2...4).contains(count) ? "Pokaż \(count) kolejne" : "Pokaż \(count) kolejnych"
+    }
+
+    static func matches(_ prompt: String, reply: String) -> Bool {
+        prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare(reply.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
+    }
+}
+
+/// To, co arkusz pokazuje o daniu poza nazwą, kcal i czasem.
+///
+/// Najpierw dane z karty (serwer policzył je z bazy w chwili propozycji).
+/// Karty zapisane w historii PRZED tymi polami ich nie mają — wtedy bierzemy
+/// przepis z katalogu aplikacji: ten sam rekord, te same liczby, tylko
+/// policzone tutaj (makro całego przepisu ÷ porcje, jak na serwerze).
+private struct OptionsDishFacts: Equatable {
+    var description: String?
+    var protein: Int?
+    var carbs: Int?
+    var fat: Int?
+    var ingredientCount: Int?
+
+    init(option: OptionsCardItemDTO, recipe: Recipe?) {
+        let servings = Double(max(1, recipe?.servings ?? 1))
+        func perServing(_ value: Double?) -> Int? {
+            guard let value, value.isFinite, value > 0 else { return nil }
+            return Int((value / servings).rounded())
+        }
+        func text(_ value: String?) -> String? {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        description = text(option.description) ?? text(recipe?.description)
+
+        // Makro zawsze z JEDNEGO źródła — białko z karty i węgle z katalogu
+        // dałyby pasek, który nie sumuje się do żadnego przepisu.
+        if let protein = option.proteinGrams, let carbs = option.carbsGrams, let fat = option.fatGrams {
+            (self.protein, self.carbs, self.fat) = (protein, carbs, fat)
+        } else if let nutrition = recipe?.nutrition {
+            protein = perServing(nutrition.protein)
+            carbs = perServing(nutrition.carbs)
+            fat = perServing(nutrition.fat)
+        }
+
+        if let count = option.ingredientCount, count > 0 {
+            ingredientCount = count
+        } else if let count = recipe?.ingredients.count, count > 0 {
+            ingredientCount = count
+        }
+    }
+
+    var macros: (protein: Int, carbs: Int, fat: Int)? {
+        guard let protein, let carbs, let fat, protein + carbs + fat > 0 else { return nil }
+        return (protein, carbs, fat)
+    }
+}
+
+/// Arkusz-story (największy detent) z makiety `OptStorySheet`: zdjęcie
+/// wypełnia górę, pod nim eyebrow z tagiem, nazwa, opis, kcal · min z paskiem
+/// makro i jedna decyzja. Segmenty u góry: dania + kreskowany = „Coś innego”.
+/// Przesunięcie w bok zmienia stronę; uchwyt, X i gest w dół zamykają.
+///
+/// JEDEN trwały układ na wszystkie dania, a nie strona podmieniana w całości:
+/// każdy element ma stały slot o wysokości największego z dań, więc zdjęcie,
+/// nazwa, liczby i przycisk stoją w tym samym miejscu na każdej stronie.
+/// Zmiana dania to przenikanie w miejscu — zdjęcia przez siebie, nazwa i opis
+/// z lekkim przesunięciem w stronę gestu, cyfry rolują się, a pasek makro
+/// przechodzi z proporcji jednego dania w proporcje drugiego.
+private struct AssistantOptionsStorySheet: View {
+    let slotDetail: String?
+    let options: [OptionsCardItemDTO]
+    let insertTitle: String
+    let morePrompt: String?
+    let catalog: RecipeCatalogStore
+    let onChoose: (OptionsCardItemDTO) -> Void
+    let onMore: (String) -> Void
+    let onCompose: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var segmentSpace
+
+    @State private var page: Int
+    /// Danie pokazywane w warstwie dań. Na stronie końcowej zostaje ostatnie
+    /// oglądane — warstwa gaśnie z treścią, a nie z zerami.
+    @State private var dish: Int
+    /// Danie sprzed zmiany: zostaje nieprzezroczyste POD nowym zdjęciem, żeby
+    /// w połowie przenikania nie prześwitywało tło arkusza.
+    @State private var previousDish: Int
+    /// Wejście arkusza: treść wjeżdża kaskadą, liczby liczą od zera, pasek
+    /// makro wypełnia się od lewej.
+    @State private var appeared = false
+    /// Zmierzona wysokość stosu „nazwa + opis” każdego dania — eyebrow stoi
+    /// tuż nad stosem BIEŻĄCEGO dania.
+    @State private var textHeights: [Int: CGFloat] = [:]
+    /// Palec na ekranie — treść ugina się za nim, zanim strona się zmieni.
+    @GestureState(resetTransaction: Transaction(animation: .snappy(duration: 0.3)))
+    private var dragX: CGFloat = 0
+
+    init(
+        slotDetail: String?,
+        options: [OptionsCardItemDTO],
+        initialPage: Int,
+        insertTitle: String,
+        morePrompt: String?,
+        catalog: RecipeCatalogStore,
+        onChoose: @escaping (OptionsCardItemDTO) -> Void,
+        onMore: @escaping (String) -> Void,
+        onCompose: @escaping () -> Void
+    ) {
+        self.slotDetail = slotDetail
+        self.options = options
+        self.insertTitle = insertTitle
+        self.morePrompt = morePrompt
+        self.catalog = catalog
+        self.onChoose = onChoose
+        self.onMore = onMore
+        self.onCompose = onCompose
+        let start = min(max(initialPage, 0), options.count)
+        let startDish = min(start, max(options.count - 1, 0))
+        _page = State(initialValue: start)
+        _dish = State(initialValue: startDish)
+        _previousDish = State(initialValue: startDish)
+    }
+
+    private var endPage: Int { options.count }
+    private var isEnd: Bool { page == endPage }
+
+    /// Chrom (uchwyt, nagłówek, segmenty) jest biały tylko na zdjęciu.
+    private var chromeOnPhoto: Bool {
+        !isEnd && options.indices.contains(dish) && options[dish].imageUrl != nil
+    }
+
+    /// `rgba(20,12,8,…)` — przyciemnienie góry zdjęcia pod białym chromem.
+    private static let photoShade = Color(red: 20 / 255, green: 12 / 255, blue: 8 / 255)
+
+    var body: some View {
+        let allFacts = options.map { facts(for: $0) }
+        return ZStack(alignment: .top) {
+            Color.scPageBase(scheme)
+                .ignoresSafeArea()
+
+            if !options.isEmpty {
+                dishLayer(allFacts)
+                    // Gaśnie jako JEDEN obraz. Bez spłaszczenia każda warstwa
+                    // (zdjęcia, gradient) blaknie osobno i zdjęcie prześwituje
+                    // przez dół gradientu twardą krawędzią.
+                    .compositingGroup()
+                    .opacity(isEnd ? 0 : 1)
+                    .allowsHitTesting(!isEnd)
+                    .accessibilityHidden(isEnd)
+                    // Opis i makro dociągnięte po otwarciu wchodzą miękko.
+                    .animation(motion(.smooth(duration: 0.35)), value: allFacts)
+            }
+
+            endLayer
+                .allowsHitTesting(isEnd)
+                .accessibilityHidden(!isEnd)
+
+            chrome
+        }
+        .simultaneousGesture(swipe)
+        .sensoryFeedback(.selection, trigger: page)
+        .task {
+            // Klatka oddechu: arkusz zaczyna wjeżdżać, dopiero potem treść.
+            try? await Task.sleep(for: .milliseconds(80))
+            appeared = true
+        }
+        .task { await loadMissingFacts() }
+        #if DEBUG
+        .task { await debugAutoplay() }
+        #endif
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
+        .presentationCornerRadius(40)
+        .presentationBackground(Color.scPageBase(scheme))
+    }
+
+    // MARK: Ruch
+
+    /// Przy „Ogranicz ruch” zostają same krótkie przenikania.
+    private func motion(_ animation: Animation) -> Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : animation
+    }
+
+    /// Kaskada wejścia: `order` to kolejność od góry treści.
+    ///
+    /// `geometryGroup()`: blok podjeżdża jako JEDNA całość. Bez tego elementy
+    /// z własną animacją w środku (segmenty paska, liczące cyfry) podjeżdżałyby
+    /// każdy swoim tempem i przez chwilę stały na różnych wysokościach.
+    private func entrance<Content: View>(_ order: Int, _ content: Content) -> some View {
+        content
+            .geometryGroup()
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared || reduceMotion ? 0 : 14)
+            .animation(motion(.smooth(duration: 0.55).delay(0.10 + Double(order) * 0.05)), value: appeared)
+    }
+
+    /// −1 / 0 / +1: po której stronie bieżącego dania stoi `index`.
+    private func side(_ index: Int) -> CGFloat {
+        CGFloat((index - dish).signum())
+    }
+
+    /// Nazwa, opis, tag, stopka: nieaktywne czekają 26 pt z boku i wjeżdżają
+    /// w stronę gestu. Znikające gaśnie SZYBCIEJ niż wchodzi nowe — dwa teksty
+    /// naraz w pół krycia to kasza.
+    private func swapping<Content: View>(_ index: Int, shift: CGFloat = 26, _ content: Content) -> some View {
+        let current = index == dish
+        let sideShift = reduceMotion ? 0 : side(index) * shift
+        // Animacja ZAWĘŻONA do krycia i bocznego przesunięcia. Zwykłe
+        // `.animation(value:)` nadpisałoby transakcję całemu poddrzewu, więc
+        // tag jechałby w pionie własnym tempem, osobno od eyebrow obok.
+        return content
+            .animation(
+                current ? motion(.smooth(duration: 0.38).delay(0.11)) : motion(.easeOut(duration: 0.12))
+            ) {
+                $0.opacity(current ? 1 : 0).offset(x: sideShift)
+            }
+            .accessibilityHidden(!current)
+    }
+
+    // MARK: Dane dania
+
+    private func recipe(for option: OptionsCardItemDTO) -> Recipe? {
+        guard let id = UUID(uuidString: option.recipeId) else { return nil }
+        return catalog.recipes.first { $0.id == id }
+    }
+
+    private func facts(for option: OptionsCardItemDTO) -> OptionsDishFacts {
+        OptionsDishFacts(option: option, recipe: recipe(for: option))
+    }
+
+    /// Karta sprzed pól szczegółu (albo przepis bez opisu w karcie): bierzemy
+    /// je z katalogu. Najpierw CAŁY katalog — tak jak robią to inne arkusze —
+    /// bo pojedyncze `loadRecipeDetail` na pustym katalogu zapisałoby do
+    /// cache'u trzy przepisy jako „cały katalog”. Dopiero czego dalej brakuje,
+    /// dociągamy po id, od otwartej strony.
+    private func loadMissingFacts() async {
+        func isComplete(_ option: OptionsCardItemDTO) -> Bool {
+            option.description != nil && option.proteinGrams != nil && option.carbsGrams != nil
+                && option.fatGrams != nil && option.ingredientCount != nil
+        }
+        guard options.contains(where: { !isComplete($0) }) else { return }
+        await catalog.loadIfNeeded()
+
+        let order = options.indices.sorted { abs($0 - page) < abs($1 - page) }
+        for index in order {
+            let option = options[index]
+            guard !isComplete(option), let id = UUID(uuidString: option.recipeId) else { continue }
+            if let known = recipe(for: option), !known.ingredients.isEmpty { continue }
+            if Task.isCancelled { return }
+            _ = await catalog.loadRecipeDetail(recipeId: id)
+        }
+    }
+
+    // MARK: Chrom
+
+    /// Uchwyt `top: 8`, nagłówek `top: 20; height: 40`, segmenty `top: 70`.
+    private var chrome: some View {
+        let light = chromeOnPhoto
+        return VStack(spacing: 0) {
+            Capsule(style: .continuous)
+                .fill(light ? Color.white.opacity(0.8) : AssistantLook.ink(scheme).opacity(0.18))
+                .frame(width: 36, height: 5)
+                .padding(.top, 8)
+                .accessibilityHidden(true)
+
+            ZStack {
+                HStack(spacing: 7) {
+                    OptionsKesMark(size: 15, color: light ? Color.white : AssistantLook.terraFill(scheme))
+                        .accessibilityHidden(true)
+                    Text("Asystent")
+                        .font(.system(size: 17, weight: .semibold))
+                        .tracking(-0.4)
+                        .foregroundStyle(light ? Color.white : AssistantLook.ink(scheme))
+                }
+                .shadow(color: .black.opacity(light ? 0.35 : 0), radius: 1, y: 1)
+                .accessibilityAddTraits(.isHeader)
+
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme))
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle().fill(light ? Color.white.opacity(0.92) : AssistantLook.field(scheme))
+                            )
+                            .overlay(Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: light ? 0 : 1))
+                            .contentShape(Circle().inset(by: -5))
+                    }
+                    .buttonStyle(PlanPressStyle(scale: 0.94))
+                    .accessibilityLabel("Zamknij")
+                }
+            }
+            .frame(height: 40)
+            .padding(.top, 7)
+            .padding(.horizontal, 16)
+
+            segments
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+        }
+        .opacity(appeared ? 1 : 0)
+        .animation(motion(.easeOut(duration: 0.35)), value: appeared)
+        .animation(motion(.easeInOut(duration: 0.3)), value: light)
+    }
+
+    /// `gap: 5; height: 3; radius: 2`. Na zdjęciu biel (aktywny 1, reszta
+    /// 0,45, kreski 0,6); na stronie końcowej szarość 0,16 i pełna terakota.
+    /// Aktywny segment to JEDEN kształt, który przesuwa się między slotami.
+    private var segments: some View {
+        let light = chromeOnPhoto
+        let on = light ? Color.white : AssistantLook.terra(scheme)
+        let off = light ? Color.white.opacity(0.45) : AssistantLook.ink(scheme).opacity(0.16)
+        return HStack(spacing: 5) {
+            ForEach(options.indices, id: \.self) { index in
+                segmentButton(index, label: "Danie \(index + 1) z \(options.count)") {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous).fill(off)
+                } active: {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous).fill(on)
+                }
+            }
+            segmentButton(endPage, label: "Coś innego") {
+                OptionsDashedBar()
+                    .fill(light ? Color.white.opacity(0.6) : AssistantLook.dash(scheme))
+                    .opacity(isEnd ? 0 : 1)
+            } active: {
+                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(AssistantLook.terra(scheme))
+            }
+        }
+    }
+
+    /// Segment jest też skokiem na stronę — pole dotyku wyższe niż sama kreska,
+    /// ale bez wpływu na układ (ujemny margines zjada dodaną wysokość).
+    private func segmentButton<Track: View, Active: View>(
+        _ target: Int,
+        label: String,
+        @ViewBuilder track: () -> Track,
+        @ViewBuilder active: () -> Active
+    ) -> some View {
+        Button { go(to: target) } label: {
+            ZStack {
+                track()
+                if target == page {
+                    active().matchedGeometryEffect(id: "active", in: segmentSpace)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 3)
+            .frame(height: 23)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, -10)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(target == page ? [.isSelected] : [])
+    }
+
+    // MARK: Warstwa dań
+
+    /// Treść przypięta do dołu (`CTA bottom: 40`, blok informacji 24 nad nim),
+    /// zdjęcie od góry do początku treści + 13 pt zakładki — dokładnie tyle,
+    /// ile w makiecie (zdjęcie 440, eyebrow od 427). Wysokość treści jest ta
+    /// sama dla każdego dania, więc i zdjęcie ma jeden rozmiar.
+    private func dishLayer(_ allFacts: [OptionsDishFacts]) -> some View {
+        OptionsStoryLayout {
+            photos
+
+            VStack(spacing: 0) {
+                info(allFacts)
+                entrance(
+                    5,
+                    AssistantPrimaryButton(
+                        action: AssistantCardAction(title: insertTitle, icon: "arrow.right") {
+                            if options.indices.contains(dish) { onChoose(options[dish]) }
+                        }
+                    )
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 24)
+                .padding(.bottom, 6)
+            }
+        }
+        .ignoresSafeArea(.container, edges: .top)
+    }
+
+    /// Wszystkie zdjęcia leżą w jednym miejscu od otwarcia arkusza (więc są
+    /// już pobrane, gdy przychodzi ich kolej). Nowe przenika NAD poprzednim,
+    /// schodząc z lekkiego powiększenia; oba mają zapas kadru na ugięcie za
+    /// palcem, żeby przy krawędzi nie wyszło tło.
+    private var photos: some View {
+        let base = Color.scPageBase(scheme)
+        let drag = reduceMotion ? 0 : max(-8, min(8, dragX * 0.06))
+        return ZStack {
+            ForEach(options.indices, id: \.self) { index in
+                let current = index == dish
+                photo(options[index])
+                    .scaleEffect(reduceMotion ? 1 : (current ? (appeared ? 1.04 : 1.12) : 1.10))
+                    .offset(x: reduceMotion ? 0 : (current ? drag : side(index) * 8))
+                    .opacity(current || index == previousDish ? 1 : 0)
+                    .zIndex(current ? 2 : (index == previousDish ? 1 : 0))
+                    .animation(motion(.smooth(duration: 0.55)), value: dish)
+                    .animation(motion(.easeOut(duration: 1.1)), value: appeared)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        // `linear-gradient(180deg, rgba(20,12,8,.5) 0%, rgba(20,12,8,0) 30%,
+        // tło 0 → 58%, tło 100%)` — dół zdjęcia rozpływa się w arkusz.
+        .overlay {
+            LinearGradient(
+                stops: [
+                    .init(color: Self.photoShade.opacity(chromeOnPhoto ? 0.5 : 0), location: 0),
+                    .init(color: Self.photoShade.opacity(0), location: 0.30),
+                    .init(color: base.opacity(0), location: 0.58),
+                    .init(color: base, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func photo(_ option: OptionsCardItemDTO) -> some View {
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay {
+                CachedAsyncImage(url: option.imageUrl.flatMap(URL.init(string:)), variant: .large) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .transition(.opacity.animation(.easeOut(duration: 0.35)))
+                    default:
+                        ZStack {
+                            AssistantLook.terraTint(scheme)
+                            Image(systemName: "fork.knife")
+                                .font(.system(size: 38, weight: .medium))
+                                .foregroundStyle(AssistantLook.terra(scheme).opacity(0.5))
+                        }
+                    }
+                }
+            }
+            .clipped()
+    }
+
+    /// `OptSheetInfo`: eyebrow z tagiem · nazwa 30/34 · opis 15/21 · liczby.
+    ///
+    /// Tekst jest przypięty do DOŁU slotu, tuż nad liczbami: opis zawsze klei
+    /// się do nazwy, a nazwa do eyebrow — bez pustej linijki przy krótkiej
+    /// nazwie. Slot ma wysokość najdłuższego dania, więc zdjęcie, liczby
+    /// i przycisk stoją w miejscu; przy krótszym daniu luz zostaje NAD
+    /// eyebrow, gdzie zdjęcie i tak rozpływa się już w tło. Eyebrow dojeżdża
+    /// do nowej wysokości płynnie, razem ze zmianą dania.
+    private func info(_ allFacts: [OptionsDishFacts]) -> some View {
+        let drag = reduceMotion ? 0 : dragX * 0.16
+        let currentFacts = allFacts.indices.contains(dish) ? allFacts[dish] : nil
+        let currentHeight = textHeights[dish] ?? textHeights.values.max() ?? 0
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Miejsce na eyebrow (21) i odstęp (10) nad NAJWYŻSZYM stosem.
+                Color.clear.frame(height: 31)
+
+                ZStack(alignment: .bottomLeading) {
+                    ForEach(options.indices, id: \.self) { index in
+                        VStack(alignment: .leading, spacing: 8) {
+                            entrance(1, swapping(index, titleText(options[index])))
+                            if let description = allFacts[index].description {
+                                entrance(2, swapping(index, shift: 18, descriptionText(description)))
+                            }
+                        }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                            textHeights[index] = height
+                        }
+                    }
+                }
+                .offset(x: drag)
+            }
+            .overlay(alignment: .bottomLeading) {
+                entrance(0, eyebrowRow)
+                    .offset(y: -(currentHeight + 10))
+                    .animation(motion(.smooth(duration: 0.42)), value: dish)
+                    .animation(motion(.smooth(duration: 0.35)), value: textHeights)
+            }
+
+            entrance(
+                3,
+                OptionsMacroStats(
+                    kcal: options.indices.contains(dish) ? options[dish].kcalPerServing : 0,
+                    minutes: options.indices.contains(dish) ? options[dish].prepTimeMinutes : 0,
+                    ingredients: currentFacts?.ingredientCount,
+                    macros: currentFacts?.macros,
+                    reservesMacros: allFacts.contains { $0.macros != nil },
+                    armed: appeared
+                )
+            )
+            .padding(.top, 14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+
+    /// Eyebrow stoi w miejscu; zmienia się tylko tag obok niego.
+    private var eyebrowRow: some View {
+        HStack(spacing: 8) {
+            Text(eyebrowText)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(0.9)
+                .textCase(.uppercase)
+                .foregroundStyle(AssistantLook.terra(scheme))
+                .lineHeight(.exact(points: 14))
+                .lineLimit(1)
+                .layoutPriority(1)
+
+            ZStack(alignment: .leading) {
+                ForEach(options.indices, id: \.self) { index in
+                    if let tag = options[index].tag, !tag.isEmpty {
+                        swapping(
+                            index,
+                            shift: 10,
+                            Text(tag)
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.3)
+                                .foregroundStyle(AssistantLook.terra(scheme))
+                                .lineHeight(.exact(points: 13))
+                                .lineLimit(1)
+                                .fixedSize()
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(AssistantLook.terraTint(scheme)))
+                        )
+                    }
+                }
+            }
+        }
+        .frame(minHeight: 21, alignment: .leading)
+    }
+
+    private func titleText(_ option: OptionsCardItemDTO) -> some View {
+        Text(option.title)
+            .font(.system(size: 30, weight: .bold))
+            .tracking(-0.8)
+            .foregroundStyle(AssistantLook.ink(scheme))
+            .lineHeight(.exact(points: 34))
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func descriptionText(_ description: String) -> some View {
+        Text(description)
+            .font(.system(size: 15))
+            .tracking(-0.2)
+            .foregroundStyle(AssistantLook.muted(scheme))
+            .lineHeight(.exact(points: 21))
+            .lineLimit(4)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var eyebrowText: String {
+        guard let slotDetail else { return "Do wyboru" }
+        return "Do wyboru · \(slotDetail)"
+    }
+
+    // MARK: Strona końcowa
+
+    /// `OptStorySheet end`: kreskowany segment staje się pełny — znak marki
+    /// (`EBrand` × 1,7, środek na 248/798), jedno pytanie (od 366/798), dwa
+    /// wyjścia przypięte do dołu. Wchodzi kaskadą: znak, pytanie, przyciski.
+    private var endLayer: some View {
+        GeometryReader { geo in
+            let full = geo.size.height + geo.safeAreaInsets.bottom
+            let text = reduceMotion ? 0 : dragX * 0.16
+            ZStack(alignment: .top) {
+                endStep(0, scale: 0.8) {
+                    OptionsBrandBadge()
+                }
+                .position(x: geo.size.width / 2, y: full * 248 / 798)
+
+                endStep(1, rise: 14) {
+                    VStack(spacing: 0) {
+                        Text("Coś innego")
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(0.9)
+                            .textCase(.uppercase)
+                            .foregroundStyle(AssistantLook.terra(scheme))
+                            .lineHeight(.exact(points: 14))
+                        Text("Żadne nie pasuje?")
+                            .font(.system(size: 32, weight: .bold))
+                            .tracking(-0.9)
+                            .foregroundStyle(AssistantLook.ink(scheme))
+                            .lineHeight(.exact(points: 36))
+                            .padding(.top, 10)
+                        Text(morePrompt == nil
+                             ? "Napisz, na co masz ochotę — poszukam w Twoich przepisach."
+                             : "Pokażę \(options.count) kolejne z Twoich przepisów — albo napisz, na co masz ochotę.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(AssistantLook.muted(scheme))
+                            .lineHeight(.exact(points: 21))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 10)
+                    }
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 24)
+                    .offset(x: text)
+                }
+                .padding(.top, full * 366 / 798)
+
+                endStep(2, rise: 20) {
+                    VStack(spacing: 10) {
+                        if let morePrompt {
+                            AssistantPrimaryButton(
+                                action: AssistantCardAction(
+                                    title: OptionsCopy.moreTitle(options.count),
+                                    icon: "arrow.clockwise"
+                                ) { onMore(morePrompt) }
+                            )
+                        }
+                        AssistantGhostButton(
+                            action: AssistantCardAction(title: "Napisz, na co masz ochotę", icon: "square.and.pencil") {
+                                onCompose()
+                            }
+                        )
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+                }
+                .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+        }
+        .background(
+            SCPageBackground(scheme: scheme)
+                .ignoresSafeArea()
+                .opacity(isEnd ? 1 : 0)
+                .animation(motion(.easeInOut(duration: 0.35)), value: isEnd)
+        )
+    }
+
+    /// Element strony końcowej: wchodzi z opóźnieniem wg `order`, wychodzi od
+    /// razu — opóźnione ZNIKANIE wyglądałoby jak zacięcie.
+    private func endStep<Content: View>(
+        _ order: Int,
+        scale: CGFloat = 1,
+        rise: CGFloat = 0,
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        content()
+            .scaleEffect(isEnd || reduceMotion ? 1 : scale)
+            .offset(y: isEnd || reduceMotion ? 0 : rise)
+            .opacity(isEnd ? 1 : 0)
+            .animation(
+                isEnd
+                    ? motion(.spring(duration: 0.6, bounce: scale < 1 ? 0.28 : 0).delay(0.08 + Double(order) * 0.07))
+                    : motion(.easeOut(duration: 0.16)),
+                value: isEnd
+            )
+    }
+
+    // MARK: Nawigacja
+
+    /// Tylko wyraźnie poziomy ruch należy do arkusza-story — pionowy to gest
+    /// zamknięcia. Krótki, ale szybki ruch też przewraca stronę.
+    private var swipe: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($dragX) { value, state, _ in
+                let dx = value.translation.width
+                state = abs(dx) > abs(value.translation.height) * 1.2 ? dx : 0
+            }
+            .onEnded { value in
+                let dx = value.translation.width
+                guard abs(dx) > abs(value.translation.height) * 1.2 else { return }
+                let flick = value.predictedEndTranslation.width
+                if dx < -50 || (dx < -16 && flick < -180) {
+                    go(to: page + 1)
+                } else if dx > 50 || (dx > 16 && flick > 180) {
+                    go(to: page - 1)
+                }
+            }
+    }
+
+    private func go(to target: Int) {
+        let next = min(max(target, 0), endPage)
+        guard next != page else { return }
+        withAnimation(motion(.smooth(duration: 0.42))) {
+            if next < endPage, next != dish {
+                previousDish = dish
+                dish = next
+            }
+            page = next
+        }
+    }
+
+    #if DEBUG
+    /// `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` — arkusz sam przechodzi po stronach,
+    /// żeby animacje dało się nagrać na symulatorze bez dotyku.
+    private func debugAutoplay() async {
+        guard ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS_AUTOPLAY"] != nil,
+              endPage >= 1 else { return }
+        try? await Task.sleep(for: .seconds(3))
+        for target in Array(1...endPage) + Array((0..<endPage).reversed()) {
+            if Task.isCancelled { return }
+            go(to: target)
+            try? await Task.sleep(for: .milliseconds(1500))
+        }
+    }
+    #endif
+}
+
+/// `OptStats variant="macro"`: kcal · min 22/700, pod nimi pasek białko /
+/// węgle / tłuszcz (8 pt, odstęp 3) i legenda 12,5. Bez makro — same liczby.
+///
+/// Liczba składników stoi w TYM SAMYM rzędzie co kcal i min (w makiecie była
+/// szarą linijką pod legendą — czytała się jak przypis, a jest jedną z trzech
+/// rzeczy, po których wybiera się danie). „na porcję” domyka rząd po prawej
+/// i znika, gdy się nie mieści.
+///
+/// Widok jest TRWAŁY między daniami: dostaje nowe wartości, a nie nowe życie,
+/// więc cyfry rolują się, a segmenty paska płynnie zmieniają szerokość.
+private struct OptionsMacroStats: View {
+    let kcal: Int
+    let minutes: Int
+    let ingredients: Int?
+    let macros: (protein: Int, carbs: Int, fat: Int)?
+    /// Któreś danie ma makro — trzymamy miejsce na pasek, nawet gdy to nie ma.
+    let reservesMacros: Bool
+    /// Arkusz wjechał: liczby ruszają od zera, pasek wypełnia się od lewej.
+    let armed: Bool
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct Macro: Identifiable {
+        let label: String
+        let spoken: String
+        let grams: Int
+        let color: Color
+        var id: String { label }
+    }
+
+    private var items: [Macro] {
+        [
+            Macro(label: "białko", spoken: "białka", grams: macros?.protein ?? 0,
+                  color: AssistantLook.terraFill(scheme)),
+            Macro(label: "węgle", spoken: "węglowodanów", grams: macros?.carbs ?? 0,
+                  color: Color(red: 214 / 255, green: 170 / 255, blue: 60 / 255)),      // #D6AA3C
+            Macro(label: "tłuszcz", spoken: "tłuszczu", grams: macros?.fat ?? 0,
+                  color: Color(red: 123 / 255, green: 132 / 255, blue: 214 / 255)),     // #7B84D6
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    metric(kcal, unit: "kcal")
+                    metric(minutes, unit: "min")
+                        .opacity(minutes > 0 ? 1 : 0)
+                    metric(ingredients ?? 0, unit: OptionsCopy.ingredientsWord(ingredients ?? 0))
+                        .opacity(ingredients == nil ? 0 : 1)
+                }
+                .fixedSize()
+                .layoutPriority(1)
+
+                Spacer(minLength: 0)
+
+                ViewThatFits(in: .horizontal) {
+                    Text("na porcję")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(AssistantLook.faint(scheme))
+                        .lineLimit(1)
+                        .fixedSize()
+                    Color.clear.frame(width: 0, height: 0)
+                }
+            }
+
+            if reservesMacros || macros != nil {
+                Group {
+                    bar
+                        .padding(.top, 10)
+                    legend
+                        .padding(.top, 8)
+                }
+                .opacity(macros == nil ? 0 : 1)
+                .transition(.opacity)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private func metric(_ value: Int, unit: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            OptionsStatNumber(value: value, armed: armed)
+                .font(.system(size: 22, weight: .bold))
+                .tracking(-0.6)
+                .foregroundStyle(AssistantLook.ink(scheme))
+            Text(unit)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AssistantLook.faint(scheme))
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.2), value: unit)
+        }
+    }
+
+    /// `flex: v / tot; gap: 3`. Trzy TE SAME kapsuły dla każdego dania —
+    /// zmieniają szerokość i pozycję, zamiast znikać i pojawiać się od nowa.
+    /// Przy wejściu każdy segment wyrasta ze SWOJEGO lewego końca, jeden po
+    /// drugim — pasek składa się na oczach, zamiast być odsłaniany zasłoną.
+    private var bar: some View {
+        let values = items.map { CGFloat(max(0, $0.grams)) }
+        let total = max(1, values.reduce(0, +))
+        let visible = values.filter { $0 > 0 }.count
+        return GeometryReader { geo in
+            let free = max(0, geo.size.width - 3 * CGFloat(max(0, visible - 1)))
+            let widths = values.map { $0 > 0 ? max(6, free * $0 / total) : 0 }
+            let scale = widths.reduce(0, +) > 0 ? free / widths.reduce(0, +) : 0
+            ZStack(alignment: .leading) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, macro in
+                    let width = widths[index] * scale
+                    let before = widths[..<index].reduce(0) { $0 + $1 * scale }
+                    let gaps = CGFloat(values[..<index].filter { $0 > 0 }.count) * 3
+                    let grown = armed || reduceMotion
+                    Capsule()
+                        .fill(macro.color)
+                        .frame(width: grown ? width : 0)
+                        .opacity(grown ? 1 : 0)
+                        .animation(
+                            reduceMotion ? nil : .spring(duration: 0.7, bounce: 0.18).delay(0.32 + Double(index) * 0.11),
+                            value: armed
+                        )
+                        .offset(x: before + gaps)
+                }
+            }
+            .frame(width: geo.size.width, alignment: .leading)
+            .animation(reduceMotion ? nil : .spring(duration: 0.6, bounce: 0.14), value: values)
+        }
+        .frame(height: 8)
+    }
+
+    private var legend: some View {
+        HStack(spacing: 14) {
+            ForEach(items) { macro in
+                HStack(spacing: 6) {
+                    Circle().fill(macro.color).frame(width: 8, height: 8)
+                    HStack(spacing: 3) {
+                        HStack(spacing: 3) {
+                            OptionsStatNumber(value: macro.grams, armed: armed)
+                            Text("g")
+                        }
+                        .fontWeight(.bold)
+                        .foregroundStyle(AssistantLook.ink(scheme))
+                        Text(macro.label)
+                            .foregroundStyle(AssistantLook.muted(scheme))
+                    }
+                }
+            }
+        }
+        .font(.system(size: 12.5))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
+    }
+
+    private var accessibilityText: String {
+        var parts = ["\(kcal) kilokalorii na porcję"]
+        if minutes > 0 { parts.append("\(minutes) minut") }
+        if let ingredients { parts.append("\(ingredients) \(OptionsCopy.ingredientsWord(ingredients))") }
+        if macros != nil { parts += items.map { "\($0.grams) gramów \($0.spoken)" } }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// Liczba w arkuszu: przy wejściu liczy od zera (jak `CountingNumber`), a przy
+/// zmianie dania roluje cyfry w miejscu (jak `SCRollingNumber`).
+private struct OptionsStatNumber: View {
+    let value: Int
+    let armed: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var counted = false
+
+    var body: some View {
+        Group {
+            if counted || reduceMotion {
+                SCRollingNumber(value: value, duration: 0.4)
+            } else {
+                // Niewidoczna wartość docelowa trzyma szerokość od pierwszej
+                // klatki, żeby jednostka obok („kcal”) nie jeździła w trakcie
+                // liczenia.
+                Text(verbatim: String(value))
+                    .monospacedDigit()
+                    .hidden()
+                    .overlay(alignment: .leading) {
+                        OptionsTickingNumber(value: armed ? Double(value) : 0)
+                            .fixedSize()
+                            .animation(.easeOut(duration: 0.9).delay(0.25), value: armed)
+                            .animation(.easeOut(duration: 0.3), value: value)
+                    }
+            }
+        }
+        .task(id: armed) {
+            guard armed, !counted else { return }
+            try? await Task.sleep(for: .milliseconds(1250))
+            counted = true
+        }
+    }
+}
+
+/// Cyfry tykające w miejscu — SwiftUI interpoluje `value`, tekst pokazuje
+/// zaokrągloną wartość z każdej klatki.
+private struct OptionsTickingNumber: View, Animatable {
+    var value: Double
+
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+
+    var body: some View {
+        Text(verbatim: String(Int(value.rounded())))
+            .monospacedDigit()
+    }
+}
+
+/// Strona dania: pierwsze dziecko (zdjęcie) od góry do początku drugiego
+/// (treść przypięta do dołu) + `overlap`. W makiecie to 440 pt zdjęcia przy
+/// treści zaczynającej się na 427. Zdjęcie nie schodzi poniżej 45 % i nie
+/// rośnie ponad 72 % wysokości — przy bardzo krótkiej treści zostaje oddech
+/// zamiast rozciągniętego kadru.
+private struct OptionsStoryLayout: Layout {
+    var overlap: CGFloat = 13
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let content = subviews[1]
+        let contentHeight = content.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+        content.place(
+            at: CGPoint(x: bounds.minX, y: bounds.maxY - contentHeight),
+            proposal: ProposedViewSize(width: bounds.width, height: contentHeight)
+        )
+        let photoHeight = min(
+            bounds.height * 0.72,
+            max(bounds.height * 0.45, bounds.height - contentHeight + overlap)
+        )
+        subviews[0].place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY),
+            proposal: ProposedViewSize(width: bounds.width, height: photoHeight)
+        )
+    }
+}
+
+/// `Kes size={n}` z makiety: ramka `n`, ale sam dysk to 68 % ramki (promień
+/// 34 w polu 100). `SCMarkShape` wypełnia ramkę w całości, więc bez tej
+/// poprawki znak wychodzi o połowę większy niż w projekcie.
+private struct OptionsKesMark: View {
+    let size: CGFloat
+    let color: Color
+
+    var body: some View {
+        SCMarkShape()
+            .fill(color)
+            .frame(width: size * 0.68, height: size * 0.68)
+            .frame(width: size, height: size)
+    }
+}
+
+/// `EBrand` × 1,7 ze strony końcowej: dysk 95 w tincie terakoty, wokół —
+/// z odstępem — kreskowany pierścień 143 (obrys 2,55), w środku znak 28 × 1,7.
+private struct OptionsBrandBadge: View {
+    @Environment(\.colorScheme) private var scheme
+
+    private static let scale: CGFloat = 1.7
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(
+                    AssistantLook.terraFill(scheme).opacity(0.28),
+                    style: StrokeStyle(lineWidth: 1.5 * Self.scale, dash: [3 * Self.scale, 3 * Self.scale])
+                )
+                .frame(width: 84 * Self.scale, height: 84 * Self.scale)
+            Circle()
+                .fill(AssistantLook.terraTint(scheme))
+                .frame(width: 56 * Self.scale, height: 56 * Self.scale)
+            OptionsKesMark(size: 28 * Self.scale, color: AssistantLook.terraFill(scheme))
+        }
+        .frame(width: 84 * Self.scale, height: 84 * Self.scale)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Kreskowany segment „Coś innego” — jak `border-top: 3px dashed` w makiecie:
+/// pięć prostokątnych kresek, pierwsza i ostatnia dosunięte do krawędzi.
+private struct OptionsDashedBar: Shape {
+    var dashes = 5
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let slots = CGFloat(dashes * 2 - 1)
+        let unit = rect.width / slots
+        for index in 0..<dashes {
+            path.addRect(CGRect(x: rect.minX + CGFloat(index * 2) * unit, y: rect.minY, width: unit, height: rect.height))
+        }
+        return path
     }
 }
 
