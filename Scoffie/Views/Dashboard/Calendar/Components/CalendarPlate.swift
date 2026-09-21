@@ -1095,23 +1095,6 @@ struct CalendarPlateCaption: View {
             out.append(Chip(id: "missed", text: "nie odhaczone", icon: "xmark"))
         }
 
-        // „Gotuj od” tylko dopóki gotowanie jest jeszcze przed nami — przy
-        // zjedzonym daniu, przy minionej porze (także dzisiejszej) ta godzina
-        // już o niczym nie mówi. Terakota, gdy to danie jest następne; kolor
-        // pory, gdy okno gotowania właśnie się otworzyło.
-        if !item.isEaten, !item.isMissed, item.isAhead, item.showsCookHint, let cookFrom = item.cookFrom {
-            var tint: Color?
-            if item.isCooking {
-                tint = item.slot.cozyAccent
-            } else if item.status == .next {
-                tint = SCPalette.terracotta
-            }
-            // Słowa w tożsamości, godzina poza nią: zmiana wariantu wymienia
-            // pigułkę, zmiana godziny (inne danie) roluje cyfry.
-            let lead = voice(["gotuj od", "start o", "do kuchni o"], "cook-chip")
-            out.append(Chip(id: "cook|\(lead)", text: "\(lead) \(cookFrom)", icon: "flame", tint: tint))
-        }
-
         var meta = "\(item.kcal) kcal"
         if item.prepMinutes > 0 { meta = "\(item.prepMinutes) min · \(meta)" }
         out.append(Chip(id: "meta", text: meta, icon: "clock"))
