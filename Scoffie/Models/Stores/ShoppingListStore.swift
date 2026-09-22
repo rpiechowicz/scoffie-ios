@@ -45,6 +45,11 @@ final class ShoppingListStore {
     /// optymistyczny ptaszek stanem z serwera, który o tapnięciu jeszcze
     /// nie wie — checkbox „mrugał".
     private var inFlightToggleKeys: Set<String> = []
+    /// Tydzień, który właśnie pobiera `load`.
+    private var loadingWeekStart: String?
+    /// Tydzień, którego przeładowanie zamówiono, gdy `load` już trwało —
+    /// wykona się po nim, zamiast przepaść (patrz `load`).
+    private var reloadRequestedDuringLoad: String?
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -71,21 +76,22 @@ final class ShoppingListStore {
         self.repository.observeShoppingListChanges { [weak self] event in
             guard let self else { return }
             Task { @MainActor in
-                guard let currentWeekStart = self.weekStart else { return }
-                guard !self.isMutatingState else { return }
-                guard event.weekStart == currentWeekStart else {
-                    return
-                }
                 // Serwer rozsyła zmianę do WSZYSTKICH klientów, także do autora.
-                // Własne echo nie wnosi nic nowego (stan lokalny jest już
-                // optymistycznie zaktualizowany i potwierdzony ACK-iem), a każde
-                // powodowało pełny refetch i podmianę tablicy `items` ~0,5 s po
-                // tapnięciu — z zewnątrz wyglądało to jak „skacząca" lista.
-                if let changedBy = event.changedByUserId,
-                   !self.currentUserId.isEmpty,
-                   changedBy == self.currentUserId {
+                // Echo odhaczenia, które ten ekran już pokazuje, nie wnosi nic
+                // nowego, a pełny refetch ~0,5 s po tapnięciu wyglądał jak
+                // „skacząca" lista — tylko ono jest pomijane (patrz niżej).
+                if self.isEchoOfLocalChange(event) {
                     return
                 }
+                // Cache tygodnia, którego akurat nie widać, też jest już
+                // nieaktualny — bez tego wejście na niego podawało listę
+                // sprzed zmiany (asystent planował przyszły tydzień, a ekran
+                // stał na bieżącym).
+                self.invalidatedWeeks.insert(event.weekStart)
+                guard let currentWeekStart = self.weekStart,
+                      event.weekStart == currentWeekStart
+                else { return }
+                guard !self.isMutatingState else { return }
                 if let changeVersion = event.changeVersion {
                     let previous = self.lastChangeVersionByWeek[currentWeekStart] ?? 0
                     guard changeVersion > previous else { return }
@@ -119,6 +125,39 @@ final class ShoppingListStore {
         isBatchUpdating || isReconcilingPendingChecks
     }
 
+    /// Czy zdarzenie z serwera to odbicie odhaczenia, które ten ekran już ma.
+    ///
+    /// Dotąd store odrzucał KAŻDE zdarzenie, którego autorem był zalogowany
+    /// użytkownik. Ale tym samym użytkownikiem piszą też inne ekrany i
+    /// asystent: zapis tygodnia z propozycji (`APPLY_WEEK`), dodanie dania
+    /// w kalendarzu, odhaczanie zakupów z rozmowy. Po zaplanowaniu tygodnia
+    /// z asystentem lista stała więc pusta, dopóki ktoś nie zamknął i nie
+    /// otworzył arkusza (zgłoszenie z 22.09.2026).
+    ///
+    /// Echem jest wyłącznie `SET_ITEM_CHECKED` na widocznym tygodniu, które
+    /// albo właśnie wysyłamy (debounce / request w locie), albo już mamy na
+    /// ekranie w tym samym stanie. Odhaczenie asystenta ma na ekranie stan
+    /// odwrotny — więc przeładowuje listę. Każda inna akcja przeładowuje ją
+    /// zawsze: te, które robi sam store (archiwum, dopisane), i tak kończą
+    /// się przeładowaniem, a debounce `scheduleReload` skleja je w jedno.
+    private func isEchoOfLocalChange(_ event: BackendShoppingListChangedDTO) -> Bool {
+        guard event.action == "SET_ITEM_CHECKED",
+              let changedBy = event.changedByUserId,
+              !currentUserId.isEmpty,
+              changedBy == currentUserId,
+              event.weekStart == weekStart,
+              let productKey = event.productKey
+        else { return false }
+
+        if pendingToggleTasks[productKey] != nil || inFlightToggleKeys.contains(productKey) {
+            return true
+        }
+        guard let isChecked = event.isChecked,
+              let local = items.first(where: { $0.productKey == productKey })
+        else { return false }
+        return local.isChecked == isChecked
+    }
+
     func load(weekStart: String, force: Bool = false) async {
         errorMessage = nil
         self.weekStart = weekStart
@@ -135,18 +174,58 @@ final class ShoppingListStore {
             return
         }
 
-        guard !isLoading else { return }
+        guard !isLoading else {
+            // Dotąd to żądanie odbijało się tu bez śladu: wymuszone
+            // przeładowanie (po zmianie planu, po archiwizacji) przepadało,
+            // gdy trwało pobranie, które mogło wyjść z serwera PRZED zmianą —
+            // a inny tydzień nie ładował się wcale.
+            if force || loadingWeekStart != weekStart {
+                reloadRequestedDuringLoad = weekStart
+            }
+            return
+        }
 
         isLoading = true
-        defer { isLoading = false }
+        loadingWeekStart = weekStart
+        reloadRequestedDuringLoad = nil
+        // Ten tydzień pobieramy właśnie teraz. Jeśli coś unieważni go jeszcze
+        // raz w trakcie (zdarzenie z serwera, zapis asystenta), po powrocie
+        // będzie z powrotem w `invalidatedWeeks` — i pobierzemy go ponownie,
+        // zamiast zdjąć flagę pobraniem sprzed zmiany.
+        invalidatedWeeks.remove(weekStart)
+        var fetched = false
         do {
             let state = try await repository.fetchShoppingListState(weekStart: weekStart)
-            await apply(state: state, for: weekStart)
-            invalidatedWeeks.remove(weekStart)
+            fetched = true
+            if self.weekStart == weekStart {
+                await apply(state: state, for: weekStart)
+            } else {
+                // Ekran przeszedł w tym czasie na inny tydzień — ten stan
+                // idzie tylko do cache, nie na ekran cudzego tygodnia.
+                cachedStateByWeek[weekStart] = state
+                persistCache()
+            }
         } catch {
+            // Nadal nieaktualny: następne wejście ma pytać serwer, nie cache.
+            // Bez automatycznego ponowienia — bez sieci kręciłoby się w kółko.
+            invalidatedWeeks.insert(weekStart)
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
-            if let cachedState = cachedStateByWeek[weekStart] {
+            if self.weekStart == weekStart, let cachedState = cachedStateByWeek[weekStart] {
                 await apply(state: cachedState, for: weekStart)
+            }
+        }
+        isLoading = false
+        loadingWeekStart = nil
+
+        var weekToReload = reloadRequestedDuringLoad
+        reloadRequestedDuringLoad = nil
+        if weekToReload == nil, fetched, invalidatedWeeks.contains(weekStart) {
+            weekToReload = weekStart
+        }
+        if let weekToReload {
+            invalidatedWeeks.insert(weekToReload)
+            if self.weekStart == weekToReload {
+                scheduleReload(weekStart: weekToReload)
             }
         }
     }
@@ -155,6 +234,14 @@ final class ShoppingListStore {
         guard let weekStart else { return }
         invalidatedWeeks.insert(weekStart)
         scheduleReload(weekStart: weekStart)
+    }
+
+    /// Plan zmienił się poza tym store'em i nie wiadomo, którego tygodnia to
+    /// dotyczy (asystent planuje też przyszły tydzień): widoczny tydzień
+    /// przeładowuje się od razu, a każdy z cache — przy pierwszym wejściu.
+    func invalidateAllWeeks() {
+        invalidatedWeeks.formUnion(cachedStateByWeek.keys)
+        refreshCurrentWeek()
     }
 
     var isArchivePendingAfterBatch: Bool {

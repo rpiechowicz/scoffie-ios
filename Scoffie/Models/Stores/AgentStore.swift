@@ -169,6 +169,15 @@ final class AgentStore {
     /// pytanie, na które nie ma dobrej odpowiedzi.
     private(set) var busyProposalId: String?
 
+    /// Asystent zmienił dane domu: zapisał tydzień („Dodaj do planu”,
+    /// „Cofnij” albo tura z zapisem) albo odhaczył coś z rozmowy.
+    /// `SessionStore` podpina tu odświeżenie listy zakupów i planu.
+    ///
+    /// Serwer rozgłasza to samo socketem, ale asystent jedzie po REST, a tura
+    /// trwa minutę — gdy socket akurat się łączył (telefon bywał w tle),
+    /// zdarzenie przepadało i lista zakupów zostawała sprzed planu.
+    @ObservationIgnored var onHouseholdDataChanged: (() -> Void)?
+
     /// Co asystent pamięta o tym domu (pamięć wspólna dla gospodarstwa).
     private(set) var memory: [AgentMemoryNoteDTO] = []
     private(set) var isLoadingMemory = false
@@ -891,6 +900,11 @@ final class AgentStore {
         // liczyła ją z JEDNEGO odczytu przy otwarciu zakładki — po trzech
         // pytaniach dalej pokazywała stan sprzed rozmowy.
         Task { [weak self] in _ = await self?.loadUsage() }
+        // Także tura nieudana, która zdążyła coś zapisać — lista zakupów
+        // ma pokazać to, co naprawdę jest w planie.
+        if turn.progress.contains(where: { $0.writes == true }) {
+            onHouseholdDataChanged?()
+        }
         switch turn.status {
         case "DONE":
             // `apply_week_plan` biegnie w każdej turze najpierw jako próba,
@@ -1099,8 +1113,10 @@ final class AgentStore {
             }
             refreshCardState(proposalId: result.proposalId, from: result.message.card?.state)
             // Plan tygodnia właśnie się zmienił — lista rozmów pokaże to
-            // przy następnym otwarciu, a zakładka Plan dostaje broadcast
-            // z serwera (`weeklyPlans:weekChanged`).
+            // przy następnym otwarciu, a plan i zakupy dostają broadcast
+            // z serwera (`weeklyPlans:weekChanged`) i, na wypadek gdyby
+            // socket go zgubił, odświeżenie wprost.
+            onHouseholdDataChanged?()
             Task { [weak self] in await self?.refreshConversationsQuietly() }
         } catch {
             handle(error)
