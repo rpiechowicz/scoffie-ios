@@ -801,6 +801,12 @@ final class SessionStore {
             ),
             householdId: householdId
         )
+        // Zapis asystenta (REST) odświeża zakupy i plan wprost — nie tylko
+        // przez rozgłoszenie socketem, które przepada, gdy socket się łączy.
+        self.agentStore?.onHouseholdDataChanged = { [weak self] in
+            self?.shoppingListStore?.invalidateAllWeeks()
+            self?.mealCalendarStore?.refreshObservedState()
+        }
         let restCore = BackendRESTCore(
             baseURL: baseURL,
             tokenProvider: { [weak self] in self?.currentAccessToken },
