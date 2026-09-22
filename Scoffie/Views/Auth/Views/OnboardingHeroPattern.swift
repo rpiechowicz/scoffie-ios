@@ -8,35 +8,50 @@ struct OnboardingHeroPattern: View {
         let color: Color
     }
 
-    // Bogata paleta ikon „kuchenno-planujących" — większa różnorodność =
-    // mniejsze wrażenie powtórzenia podczas scrollowania.
-    private static let tiles: [Tile] = [
-        Tile(symbol: "frying.pan.fill",            color: SCPalette.terracotta),
-        Tile(symbol: "leaf.fill",                  color: SCPalette.sage),
-        Tile(symbol: "flame.fill",                 color: SCPalette.butter),
-        Tile(symbol: "cart.fill",                  color: SCPalette.indigo),
-        Tile(symbol: "heart.fill",                 color: SCPalette.terracottaDeep),
-        Tile(symbol: "fork.knife",                 color: SCPalette.sage),
-        Tile(symbol: "calendar",                   color: SCPalette.terracotta),
-        Tile(symbol: "sparkles",                   color: SCPalette.butter),
-        Tile(symbol: "clock.fill",                 color: SCPalette.indigo),
-        Tile(symbol: "bell.fill",                  color: SCPalette.terracottaDeep),
-        Tile(symbol: "carrot.fill",                color: SCPalette.terracotta),
-        Tile(symbol: "cup.and.saucer.fill",        color: SCPalette.sage),
-        Tile(symbol: "basket.fill",                color: SCPalette.butter),
-        Tile(symbol: "birthday.cake.fill",         color: SCPalette.indigo),
-        Tile(symbol: "fish.fill",                  color: SCPalette.terracottaDeep),
-        Tile(symbol: "book.closed.fill",           color: SCPalette.terracotta),
-        Tile(symbol: "list.bullet.clipboard.fill", color: SCPalette.sage),
-        Tile(symbol: "timer",                      color: SCPalette.butter),
-        Tile(symbol: "star.fill",                  color: SCPalette.indigo),
-        Tile(symbol: "bookmark.fill",              color: SCPalette.terracottaDeep)
+    // Kuchnia, jedzenie i planowanie — 41 symboli. Liczba pierwsza celowo:
+    // każdy `stride` w `rowConfigs` jest z nią względnie pierwszy, więc każdy
+    // rząd dostaje pełną, INNĄ permutację (patrz `animatedRow`).
+    private static let symbols: [String] = [
+        "frying.pan.fill", "leaf.fill", "flame.fill", "cart.fill", "heart.fill",
+        "fork.knife", "calendar", "sparkles", "clock.fill", "bell.fill",
+        "carrot.fill", "cup.and.saucer.fill", "basket.fill", "birthday.cake.fill", "fish.fill",
+        "book.closed.fill", "list.bullet.clipboard.fill", "timer", "star.fill", "bookmark.fill",
+        "takeoutbag.and.cup.and.straw.fill", "mug.fill", "wineglass.fill", "waterbottle.fill", "refrigerator.fill",
+        "oven.fill", "stove.fill", "microwave.fill", "cooktop.fill", "popcorn.fill",
+        "drop.fill", "sun.max.fill", "moon.stars.fill", "person.2.fill", "house.fill",
+        "chart.pie.fill", "bag.fill", "gift.fill", "scalemass.fill", "cup.and.heat.waves.fill",
+        "target"
     ]
 
-    // Per-row: inny `stride` (coprime z liczbą kafli = 20) powoduje, że każdy
-    // rząd dostaje INNĄ permutację kafli — żaden rząd nie układa się w
-    // identyczną sekwencję obok sąsiada. `rotation` przesuwa start.
-    // Sąsiednie rzędy idą w przeciwnych kierunkach z różnymi prędkościami.
+    // Wszystkie osiem akcentów palety, nie pięć: róż, morska i lawenda
+    // (barwy pór „pomiędzy”) rozbijają rytm terakota–szałwia–masło–indygo.
+    private static let colors: [Color] = [
+        SCPalette.terracotta, SCPalette.sage, SCPalette.butter, SCPalette.indigo,
+        SCPalette.rose, SCPalette.teal, SCPalette.lavender, SCPalette.terracottaDeep
+    ]
+
+    /// Barwa kafla — pseudolosowa, ale STAŁA między klatkami (liczona z pozycji
+    /// kafla i numeru rzędu, bez generatora), żeby kolory nie migały przy każdym
+    /// odświeżeniu `TimelineView`. Ta sama ikona w innym rzędzie wychodzi
+    /// zwykle w innym kolorze, a sąsiednie kafle nigdy nie dzielą barwy.
+    private static func tiles(forRow row: Int, order: [Int]) -> [Tile] {
+        var previous = -1
+        return order.enumerated().map { position, symbolIndex in
+            var hash = UInt64(symbolIndex &* 2_654_435_761) ^ UInt64(row &* 40_503 &+ position &* 97)
+            hash ^= hash >> 13
+            hash = hash &* 0x5bd1_e995
+            hash ^= hash >> 15
+            var colorIndex = Int(hash % UInt64(colors.count))
+            if colorIndex == previous { colorIndex = (colorIndex + 3) % colors.count }
+            previous = colorIndex
+            return Tile(symbol: symbols[symbolIndex], color: colors[colorIndex])
+        }
+    }
+
+    // Per-row: inny `stride` (względnie pierwszy z liczbą symboli = 41) daje
+    // każdemu rzędowi INNĄ permutację — żaden rząd nie układa się w identyczną
+    // sekwencję obok sąsiada. `rotation` przesuwa start. Sąsiednie rzędy idą
+    // w przeciwnych kierunkach z różnymi prędkościami.
     private struct RowConfig {
         let stride: Int
         let rotation: Int
@@ -44,11 +59,22 @@ struct OnboardingHeroPattern: View {
         let speed: CGFloat
     }
 
-    private let rowConfigs: [RowConfig] = [
-        RowConfig(stride: 1,  rotation: 0, direction: -1, speed: 12),
-        RowConfig(stride: 7,  rotation: 3, direction:  1, speed:  9),
-        RowConfig(stride: 13, rotation: 9, direction: -1, speed: 14)
+    private static let rowConfigs: [RowConfig] = [
+        RowConfig(stride: 1,  rotation: 0,  direction: -1, speed: 12),
+        RowConfig(stride: 7,  rotation: 11, direction:  1, speed:  9),
+        RowConfig(stride: 17, rotation: 23, direction: -1, speed: 14)
     ]
+
+    /// Kafle rzędów liczone RAZ, a nie w każdej klatce animacji.
+    private let rows: [[Tile]]
+
+    init() {
+        let n = Self.symbols.count
+        rows = Self.rowConfigs.enumerated().map { row, config in
+            let order = (0..<n).map { (config.rotation + $0 * config.stride) % n }
+            return Self.tiles(forRow: row, order: order)
+        }
+    }
 
     // Wymiary zgodne z designem (Scoffie - Onboarding.html, B2):
     // tile 72, gap 10, hero 280, paddingTop 60 (pod status barem),
@@ -75,8 +101,8 @@ struct OnboardingHeroPattern: View {
                 TimelineView(.animation) { context in
                     let t = CGFloat(context.date.timeIntervalSinceReferenceDate)
                     VStack(alignment: .leading, spacing: gap) {
-                        ForEach(0..<rowConfigs.count, id: \.self) { idx in
-                            animatedRow(config: rowConfigs[idx], time: t)
+                        ForEach(0..<Self.rowConfigs.count, id: \.self) { idx in
+                            animatedRow(rows[idx], config: Self.rowConfigs[idx], time: t)
                         }
                     }
                     .padding(.top, topInset)
@@ -97,14 +123,7 @@ struct OnboardingHeroPattern: View {
     }
 
     @ViewBuilder
-    private func animatedRow(config: RowConfig, time: CGFloat) -> some View {
-        let n = Self.tiles.count
-        // Liniowa permutacja: stride coprime z n daje każdemu rzędowi inną
-        // kolejność kafli, a rotation przesuwa pierwszy widoczny kafel.
-        let rotated: [Tile] = (0..<n).map { i in
-            Self.tiles[(config.rotation + i * config.stride) % n]
-        }
-
+    private func animatedRow(_ rotated: [Tile], config: RowConfig, time: CGFloat) -> some View {
         let cycle = CGFloat(rotated.count) * itemWidth
         let scrolled = time * config.speed
         let wrapped = scrolled.truncatingRemainder(dividingBy: cycle)
