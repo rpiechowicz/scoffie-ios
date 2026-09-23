@@ -52,21 +52,15 @@ The current app build uses Sign in with Apple and posts the resulting token to `
 
 ## CI and TestFlight
 
-GitHub Actions workflows:
+Builds, signing and TestFlight uploads run in **Xcode Cloud** (included with the Apple Developer Program). Since 23.09.2026 GitHub Actions no longer runs macOS jobs: a macOS minute counts ten times against the Actions quota, and those jobs used it up.
 
-- [`ios-ci.yml`](./.github/workflows/ios-ci.yml) validates the simulator build for pull requests
-- [`ios-testflight.yml`](./.github/workflows/ios-testflight.yml) archives a signed `Release` build and uploads it to TestFlight after every merge to `main`
-
-Release pipeline policy:
-
-- pull requests run only CI, so feedback stays fast and there is no duplicate release work
-- merges to `main` run only the TestFlight release pipeline
-- the release pipeline exports an `.ipa`, uploads it as a workflow artifact, and then uploads the same package to TestFlight
+- [`ios-ci.yml`](./.github/workflows/ios-ci.yml): secret scanning (gitleaks) on Linux only
+- [`ci_scripts/ci_post_xcodebuild.sh`](./ci_scripts/ci_post_xcodebuild.sh): after an Xcode Cloud archive, uploads dSYMs to Sentry. It needs a `SENTRY_AUTH_TOKEN` secret in the Xcode Cloud workflow, and never fails the build.
 
 Release versioning policy:
 
 - `MARKETING_VERSION` is manual and should be bumped only when starting a new release line, for example `1.0` -> `1.1`
-- `CURRENT_PROJECT_VERSION` is injected by CI from `github.run_number`, so every TestFlight upload gets a newer build number automatically
+- `CURRENT_PROJECT_VERSION` is set by Xcode Cloud (its build number)
 
 ## Related backend docs
 
