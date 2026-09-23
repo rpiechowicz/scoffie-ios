@@ -57,7 +57,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `SessionStore.currentUserId`. Środowiska: `development` (DEBUG) / `testflight` / `production`. Bez zrzutów
   ekranu, hierarchii widoków i session replay (alergeny, kroki na ekranie); nagłówki śladu tylko do
   `api.scoffie.app`; 5xx zgłasza backend, nie telefon. dSYM wysyła faza „Upload dSYM to Sentry” przy
-  archiwum (Release) — na Macu raz: `brew install getsentry/tools/sentry-cli && sentry-cli login`;
+  archiwum (Release) — w CI (`ios-testflight.yml`) z sekretem `SENTRY_AUTH_TOKEN` (token organizacji
+  `scoffie`, `sentry-cli` 3.8.0 przypięty), na Macu raz: `brew install getsentry/tools/sentry-cli && sentry-cli login`;
   bez tego build przechodzi z ostrzeżeniem, ale crashe są bez nazw funkcji.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)

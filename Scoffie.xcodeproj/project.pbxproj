@@ -150,6 +150,7 @@
 		};
 		5E1A0C102F9B4E0100A1B2C3 /* Upload dSYM to Sentry */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -165,7 +166,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -u\n\n# Symbole (dSYM) do Sentry: bez nich crash z TestFlightu to same adresy.\n# Tylko Release (archiwum); Debug nie ma dSYM. Brak sentry-cli albo tokenu\n# to OSTRZEZENIE, nie blad: archiwum ma powstac zawsze.\n# Jednorazowo na Macu: brew install getsentry/tools/sentry-cli && sentry-cli login\nif [ \"$CONFIGURATION\" != \"Release\" ]; then\n  exit 0\nfi\nexport PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif ! command -v sentry-cli >/dev/null 2>&1; then\n  echo \"warning: brak sentry-cli - crashe z tego buildu beda bez nazw funkcji (brew install getsentry/tools/sentry-cli)\"\n  exit 0\nfi\nexport SENTRY_ORG=scoffie\nexport SENTRY_PROJECT=scoffie-ios\nif ! sentry-cli debug-files upload --include-sources --force-foreground \"$DWARF_DSYM_FOLDER_PATH\"; then\n  echo \"warning: wysylka dSYM do Sentry nie wyszla - sprawdz 'sentry-cli login' (token z dostepem do org scoffie)\"\nfi\n";
+			shellScript = "set -u\n\n# Symbole (dSYM) do Sentry: bez nich crash z TestFlightu to same adresy.\n# Tylko Release (archiwum); Debug nie ma dSYM. Brak sentry-cli albo tokenu\n# to OSTRZEZENIE, nie blad: archiwum ma powstac zawsze.\n# Jednorazowo na Macu: brew install getsentry/tools/sentry-cli && sentry-cli login\nif [ \"$CONFIGURATION\" != \"Release\" ]; then\n  exit 0\nfi\nexport PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif ! command -v sentry-cli >/dev/null 2>&1; then\n  echo \"warning: brak sentry-cli - crashe z tego buildu beda bez nazw funkcji (brew install getsentry/tools/sentry-cli)\"\n  exit 0\nfi\nexport SENTRY_ORG=scoffie\nexport SENTRY_PROJECT=scoffie-ios\nif ! sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\"; then\n  echo \"warning: wysylka dSYM do Sentry nie wyszla - sprawdz 'sentry-cli login' (token z dostepem do org scoffie)\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
