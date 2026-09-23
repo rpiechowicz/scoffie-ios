@@ -13,10 +13,10 @@ struct TourStep: Identifiable {
     let placeIcon: String
     let accent: Color
     let title: String
-    let summary: String
-    /// Trzy konkrety pod opisem. Trzy, nie dwa jak w designie — przy dwóch
-    /// pod tekstem zostawała pusta strefa, a czwarty punkt spycha stepper
-    /// pod krawędź na mniejszych ekranach.
+    /// Trzy konkrety pod tytułem — zamiast akapitu opisu (od 23.09.2026:
+    /// „tylko najważniejsze”; opis mówił to samo co punkty, dłużej). Trzy,
+    /// nie dwa jak w designie — przy dwóch zostawała pusta strefa, a czwarty
+    /// punkt spycha stopkę pod krawędź na mniejszych ekranach.
     let points: [String]
     let imageName: String
 }
@@ -32,11 +32,10 @@ extension TourStep {
             placeIcon: MenuConstans.Plan.icon,
             accent: SCPalette.terracotta,
             title: "Zaplanuj tydzień w pięć minut",
-            summary: "Wybierz przepis, wskaż dzień i porę. Zmiana pojawia się u wszystkich domowników od razu.",
             points: [
                 "Śniadanie, obiad, kolacja i przekąski",
                 "Kalorie i makro liczone na każdy dzień",
-                "Każdy domownik może jeść po swojemu",
+                "Zmiany widzi od razu cały dom",
             ],
             imageName: "TourPlan"
         ),
@@ -46,7 +45,6 @@ extension TourStep {
             placeIcon: MenuConstans.Recipes.icon,
             accent: SCPalette.sage,
             title: "Przepisy dopasowane do Was",
-            summary: "Filtruj po czasie, diecie i kaloriach. Ulubione zostają pod ręką w osobnej kolekcji.",
             points: [
                 "Filtry: czas, dieta, kalorie, trudność",
                 "Składniki i kroki na jednym ekranie",
@@ -60,7 +58,6 @@ extension TourStep {
             placeIcon: MenuConstans.Products.icon,
             accent: SCPalette.indigo,
             title: "Lista zakupów robi się sama",
-            summary: "Z planu tygodnia składamy jedną listę, pogrupowaną po działach sklepu. Odhaczacie ją razem, na żywo.",
             points: [
                 "Warzywa, nabiał, pieczywo — po działach",
                 "Odhaczanie widoczne u drugiej osoby od razu",
@@ -74,11 +71,10 @@ extension TourStep {
             placeIcon: MenuConstans.Assistant.icon,
             accent: SCPalette.butter,
             title: "Zapytaj, gdy brakuje pomysłu",
-            summary: "Napisz, na kiedy i ile masz czasu. Asystent zaproponuje plan albo podmianę jako kartę — dodajesz ją Ty, nic nie zapisuje się samo.",
             points: [
-                "Plan tygodnia albo jednego dnia z Waszych przepisów",
+                "Plan tygodnia albo dnia z Waszych przepisów",
                 "Podmiana dania z powodem i różnicą kalorii",
-                "Pamięta ustalenia — „w środy jemy u teściów”",
+                "Propozycję dodajesz Ty — nic nie zapisuje się samo",
             ],
             imageName: "TourAssistant"
         ),
@@ -88,7 +84,6 @@ extension TourStep {
             placeIcon: MenuConstans.Settings.icon,
             accent: SCPalette.terracottaDeep,
             title: "Ustaw wszystko pod siebie",
-            summary: "Cel kaloryczny, dieta, alergeny i pory posiłków — plan i przepisy dopasowują się do tych ustawień.",
             points: [
                 "Cel, makroskładniki, dieta i alergeny",
                 "Posiłki w planie i godziny, o których jecie",

@@ -282,41 +282,92 @@ struct RecipeFilterCoverThumb: View {
     }
 }
 
-/// Kafelki po dwa w wierszu, równej szerokości i równej wysokości.
+/// Kafelki po dwa w wierszu — WSZYSTKIE tej samej szerokości i wysokości.
 ///
-/// `LazyVGrid` ustawia komórki na środku wiersza, a kafelek z nazwą w dwóch
-/// liniach („Bogate w błonnik”) jest wyższy od sąsiada („Mało soli”) — obok
-/// siebie stały dwa różne kafelki. Tu wiersz to `HStack` o wysokości
-/// wyższego kafelka (`fixedSize` w pionie), a niższy się do niej rozciąga
-/// (`maxHeight: .infinity` w `SCChoiceTile`). Leniwość nie jest potrzebna:
+/// `LazyVGrid` ustawiał komórki na środku wiersza, a potem wiersze `HStack`
+/// z `fixedSize` wyrównywały wysokość tylko w obrębie wiersza: rząd
+/// z „Bogate w błonnik” w dwóch liniach stał wyższy od rzędu z „Keto”.
+/// Teraz siatka (`RecipeFilterTileGridLayout`) mierzy każdy kafelek przy
+/// szerokości kolumny i daje wszystkim wysokość najwyższego — przy większej
+/// czcionce albo węższym ekranie rośnie cała siatka naraz. Nieparzysty
+/// ostatni kafelek zostaje w lewej kolumnie. Leniwość nie jest potrzebna:
 /// sekcja ma najwyżej kilka kafelków.
 struct RecipeFilterTileGrid<Item: Identifiable, Tile: View>: View {
     let items: [Item]
     @ViewBuilder var tile: (Item) -> Tile
 
-    private var rows: [[Item]] {
-        stride(from: 0, to: items.count, by: 2).map { start in
-            Array(items[start..<min(start + 2, items.count)])
+    var body: some View {
+        RecipeFilterTileGridLayout(columns: 2, spacing: 8) {
+            ForEach(items) { item in
+                tile(item)
+            }
         }
     }
+}
 
-    var body: some View {
-        VStack(spacing: 8) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(alignment: .top, spacing: 8) {
-                    ForEach(row) { item in
-                        tile(item)
-                    }
-                    // Nieparzysta liczba: ostatni kafelek zostaje w lewej
-                    // połowie, a nie rozciąga się na cały wiersz.
-                    if row.count == 1 {
-                        Color.clear
-                            .frame(maxWidth: .infinity)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            }
+/// Siatka o równych komórkach: szerokość = `(szerokość − odstępy) / kolumny`,
+/// wysokość = najwyższy kafelek zmierzony przy TEJ szerokości (nie przy
+/// nieskończonej — nazwa w dwóch liniach musi się zmieścić). Kafelek
+/// (`SCChoiceTile`) jest elastyczny w obu osiach i wypełnia komórkę.
+private struct RecipeFilterTileGridLayout: Layout {
+    var columns: Int = 2
+    var spacing: CGFloat = 8
+
+    private func columnWidth(_ total: CGFloat) -> CGFloat {
+        guard columns > 0 else { return 0 }
+        return max(0, (total - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+    }
+
+    private func rowCount(_ subviews: Subviews) -> Int {
+        guard columns > 0 else { return 0 }
+        return (subviews.count + columns - 1) / columns
+    }
+
+    private func cellHeight(column: CGFloat, subviews: Subviews) -> CGFloat {
+        subviews
+            .map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
+            .max() ?? 0
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = rowCount(subviews)
+        guard rows > 0 else { return .zero }
+
+        let column: CGFloat
+        let width: CGFloat
+        if let proposed = proposal.width, proposed.isFinite {
+            width = proposed
+            column = columnWidth(proposed)
+        } else {
+            // Sonda bez szerokości — kolumna szeroka jak najszerszy kafelek,
+            // nigdy nieskończoność.
+            column = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+            width = column * CGFloat(columns) + spacing * CGFloat(columns - 1)
+        }
+
+        let height = cellHeight(column: column, subviews: subviews)
+        return CGSize(
+            width: width,
+            height: height * CGFloat(rows) + spacing * CGFloat(rows - 1)
+        )
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard columns > 0 else { return }
+        let column = columnWidth(bounds.width)
+        let height = cellHeight(column: column, subviews: subviews)
+
+        for (index, subview) in subviews.enumerated() {
+            let row = index / columns
+            let col = index % columns
+            subview.place(
+                at: CGPoint(
+                    x: bounds.minX + CGFloat(col) * (column + spacing),
+                    y: bounds.minY + CGFloat(row) * (height + spacing)
+                ),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: column, height: height)
+            )
         }
     }
 }

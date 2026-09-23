@@ -1558,31 +1558,8 @@ private struct DetailIngredientRow: View {
 
 // MARK: - Wjazd sekcji
 
-/// Sekcja wjeżdża z dołu i rozjaśnia się — kaskadą, w tych samych liczbach
-/// co treść arkusza wyboru posiłku u Asystenta (`AssistantOptionsStorySheet`).
-///
-/// `geometryGroup()`: blok podjeżdża jako JEDNA całość. Bez tego elementy
-/// z własną animacją w środku (pierścienie makro, liczące cyfry) jechałyby
-/// każdy swoim tempem i przez chwilę stały na różnych wysokościach.
-private struct DetailReveal: ViewModifier {
-    let isVisible: Bool
-    let order: Int
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .geometryGroup()
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible || reduceMotion ? 0 : 14)
-            .animation(
-                reduceMotion
-                    ? .easeInOut(duration: 0.2)
-                    : .smooth(duration: 0.55).delay(0.10 + Double(order) * 0.05),
-                value: isVisible
-            )
-    }
-}
+// Kaskada sekcji to `scReveal(_:order:)` (`Components/SCReveal.swift`) —
+// wyniesiona w rundzie 14, bo „Dodaj do planu” wjeżdża tak samo.
 
 /// Przyciski na zdjęciu (serce, krzyżyk) pojawiają się razem z treścią,
 /// a nie wiszą nad pustym kadrem, zanim zdjęcie osiądzie.
@@ -1602,7 +1579,7 @@ private struct DetailChrome: ViewModifier {
 private extension View {
     /// Sekcje wchodzą po kolei — góra pierwsza, składniki ostatnie.
     func detailReveal(_ isVisible: Bool, order: Int) -> some View {
-        modifier(DetailReveal(isVisible: isVisible, order: order))
+        scReveal(isVisible, order: order)
     }
 
     func detailChrome(_ isVisible: Bool) -> some View {

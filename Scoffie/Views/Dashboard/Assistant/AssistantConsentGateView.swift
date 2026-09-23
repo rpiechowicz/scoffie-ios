@@ -126,23 +126,19 @@ struct AssistantConsentGateView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if !isGranted {
-                                AssistantSectionLabel(text: "Asystent", color: SCPalette.terracotta)
-                            }
-                            Text("Zanim zaczniemy")
-                                .font(.system(size: 27, weight: .bold))
-                                .tracking(-0.4)
-                                .lineSpacing(2)
-                                .foregroundStyle(Color.scLabel(scheme))
-                            if !isGranted, currentDraft.errorMessage == nil {
-                                Text("Asystent układa plan tygodnia, podmienia dania i pilnuje alergenów całego domu. Zanim wyśle cokolwiek do modelu, potrzebuje Twojej zgody.")
-                                    .font(.system(size: 15))
-                                    .lineSpacing(3)
-                                    .foregroundStyle(Color.scMuted(scheme))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
+                        // Nagłówek kroku jak w kreatorze „Poznajmy się”
+                        // i na kartach „Poznaj” (`SCStepHeader`). Zdanie pod
+                        // tytułem gaśnie przy błędzie zapisu — błąd stoi wtedy
+                        // w stopce, nad przyciskiem, i nie spycha potwierdzeń.
+                        SCStepHeader(
+                            icon: "lock.shield.fill",
+                            eyebrow: isGranted ? "Prywatność" : "Asystent",
+                            title: "Zanim zaczniemy",
+                            subtitle: isGranted || currentDraft.errorMessage != nil
+                                ? nil
+                                : "Zanim asystent wyśle cokolwiek do modelu, potrzebuje Twojej zgody."
+                        )
+                        .padding(.top, 4)
                         .padding(.bottom, 6)
 
                         sections
@@ -153,6 +149,7 @@ struct AssistantConsentGateView: View {
                     .padding(.bottom, SCEdgeShade.bottomHeight)
                 }
                 .scrollIndicators(.hidden)
+                .scScrollEdgeFade()
             }
         }
     }

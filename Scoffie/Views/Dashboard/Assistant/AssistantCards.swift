@@ -204,6 +204,7 @@ private struct ExpandRow: View {
             .foregroundStyle(AssistantLook.terra(scheme))
             .padding(.horizontal, AssistantCardMetrics.inset)
             .padding(.vertical, 12)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
             .overlay(alignment: .top) { AssistantCardRule() }
         }
@@ -828,8 +829,9 @@ private struct AssistantOptionsCarouselCard: View {
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(AssistantLook.wash(scheme)))
                 .overlay(Circle().stroke(AssistantLook.hair(scheme), lineWidth: 1))
+                .scTapTarget(44, drawn: 30)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.94))
         .disabled(!enabled)
         .accessibilityLabel(label)
     }
@@ -2053,7 +2055,21 @@ private struct AssistantOptionsStorySheet: View {
             .scScrollEdgeFade()
 
             endStep(3, rise: 20) {
-                VStack(spacing: 10) {
+                // Jak w całym asystencie: poboczna pierwsza, główna NA
+                // KOŃCU (`AssistantActionPair`) — zgoda stoi tam, gdzie na
+                // stronach dań „Zamień to danie”.
+                AssistantActionPair(spacing: 10) {
+                    if !isBusy {
+                        AssistantGhostButton(
+                            action: AssistantCardAction(
+                                title: copy.composeTitle,
+                                icon: "square.and.pencil"
+                            ) {
+                                onCompose()
+                            }
+                        )
+                        .transition(.opacity)
+                    }
                     if let applyTitle, let onApply {
                         ProposalAcceptButton(
                             title: isBusy ? "Zapisuję…" : applyTitle,
@@ -2065,17 +2081,6 @@ private struct AssistantOptionsStorySheet: View {
                     } else if status == .applied, let onOpenPlan {
                         ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
                             .transition(.opacity)
-                    }
-                    if !isBusy {
-                        AssistantGhostButton(
-                            action: AssistantCardAction(
-                                title: copy.composeTitle,
-                                icon: "square.and.pencil"
-                            ) {
-                                onCompose()
-                            }
-                        )
-                        .transition(.opacity)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -2134,15 +2139,13 @@ private struct AssistantOptionsStorySheet: View {
                 .padding(.top, full * 366 / 798)
 
                 endStep(2, rise: 20) {
-                    VStack(spacing: 10) {
-                        if let morePrompt {
-                            AssistantPrimaryButton(
-                                action: AssistantCardAction(
-                                    title: OptionsCopy.moreTitle(options.count),
-                                    icon: "arrow.clockwise"
-                                ) { onMore(morePrompt) }
-                            )
-                        }
+                    // Ten sam układ pary co w stopce karty: poboczna pierwsza,
+                    // główna na końcu. „Napisz, na co masz ochotę” nie mieści
+                    // się w połówce, więc para staje w stos i główna ląduje
+                    // NA DOLE — dokładnie tam, gdzie na stronach dań stoi
+                    // „Wstaw na środę”; przy przewracaniu na stronę końcową
+                    // główna akcja nie skacze.
+                    AssistantActionPair(spacing: 10) {
                         AssistantGhostButton(
                             action: AssistantCardAction(
                                 title: "Napisz, na co masz ochotę",
@@ -2151,6 +2154,14 @@ private struct AssistantOptionsStorySheet: View {
                                 onCompose()
                             }
                         )
+                        if let morePrompt {
+                            AssistantPrimaryButton(
+                                action: AssistantCardAction(
+                                    title: OptionsCopy.moreTitle(options.count),
+                                    icon: "arrow.clockwise"
+                                ) { onMore(morePrompt) }
+                            )
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
@@ -2551,7 +2562,7 @@ private struct ProposalRecap: View {
 }
 
 /// Zgoda na całość: pigułka „soft” w szałwii — ten sam przycisk co
-/// `AssistantPrimaryButton`, tylko w kolorze zapisu.
+/// `AssistantPrimaryButton` (rozmiar `.regular`), tylko w kolorze zapisu.
 private struct ProposalAcceptButton: View {
     let title: String
     var icon: String = "checkmark"
@@ -2559,6 +2570,8 @@ private struct ProposalAcceptButton: View {
     let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
+
+    private let size = AssistantButtonSize.regular
 
     var body: some View {
         let sage = AssistantLook.sage(scheme)
@@ -2568,20 +2581,20 @@ private struct ProposalAcceptButton: View {
                     ProgressView().controlSize(.small).tint(sage)
                 }
                 Text(title)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.system(size: size.fontSize, weight: .semibold))
                     .tracking(-0.3)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .contentTransition(.numericText())
                 if !isBusy {
                     Image(systemName: icon)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: size.iconSize, weight: .bold))
                 }
             }
             .foregroundStyle(sage)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, size.horizontalPadding)
             .frame(maxWidth: .infinity)
-            .frame(height: 48)
+            .frame(height: size.height)
             .scSoftCapsule(sage)
             .contentShape(Capsule())
         }
@@ -3289,6 +3302,7 @@ struct AssistantMacroGapCard: View {
                     }
                     .padding(.horizontal, AssistantCardMetrics.inset)
                     .padding(.vertical, 10)
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PlanPressStyle(scale: 0.985))

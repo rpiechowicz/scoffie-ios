@@ -317,6 +317,8 @@ struct AssistantSavedPlanCard: View {
                     .background(
                         Capsule().fill(Color.scAccentTint(scheme))
                     )
+                    // Pigułka ma ~28 pt; cel dotyku 44 bez podnoszenia wiersza.
+                    .scTapHeight(drawn: 28)
             }
             .buttonStyle(.plain)
         }

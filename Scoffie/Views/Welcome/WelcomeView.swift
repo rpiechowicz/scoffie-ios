@@ -1,8 +1,9 @@
 import SwiftUI
 
 // First-login welcome flow. Five sequential pages — profile → goal →
-// preferences → meals → household — gated by a sticky footer with a pill stepper
-// and primary action. Each step persists optimistically (AppStorage) and
+// preferences → meals → household — gated by the shared step footer
+// (`SCStepFooter`: pasek kroków, „Wstecz”, akcja główna na płycie
+// `SCSheetFooter` z cieniem krawędzi). Each step persists optimistically (AppStorage) and
 // pushes to the backend; the household creation in step 5 also marks
 // onboarding complete server-side, which routes the app into the
 // dashboard via the standard `RootScreen` evaluator.
@@ -157,7 +158,10 @@ struct WelcomeView: View {
         // a real title — `Wyloguj` lives as the only toolbar item.
         NavigationStack {
             ZStack {
-                Color.scCanvas(colorScheme)
+                // To samo tło, co przewodnik przed kreatorem i każdy ekran
+                // aplikacji — przejście przewodnik → kreator nie zmienia koloru,
+                // a płyta stopki (`scPageBase`) zlewa się z dołem strony.
+                SCPageBackground(scheme: colorScheme)
                     .ignoresSafeArea()
 
                 ZStack {
@@ -167,19 +171,27 @@ struct WelcomeView: View {
                 }
                 .animation(.easeInOut(duration: 0.34), value: step)
 
+                // Stopka jako nakładka, nie ostatnie dziecko `VStack`: stoi pod
+                // klawiaturą (`ignoresSafeArea(.keyboard)`), a kroki z polami
+                // dalej przewijają się nad klawiaturą. Zapas pod treścią to
+                // `WelcomeLayout.bottomInset` (stopka + jej cień).
                 VStack {
                     Spacer()
-                    WelcomeFooter(
-                        step: step,
-                        total: totalSteps,
-                        nextLabel: nextLabel,
-                        isNextEnabled: isNextEnabled,
-                        isLoading: isCreatingHousehold && step == totalSteps,
-                        showsStepper: initialStep == 1,
+                    SCStepFooter(
+                        // Pasek kroków tylko na pełnej ścieżce — „5 z 5” nie
+                        // ma sensu dla kogoś, kto wrócił tu wyłącznie po nowe
+                        // gospodarstwo i innych kroków nie widział.
+                        slot: initialStep == 1
+                            ? .progress(step: step, total: totalSteps)
+                            : .empty,
+                        notice: saveWarning,
                         showsBack: step > initialStep,
-                        warning: saveWarning,
-                        onBack: handleBack,
-                        onNext: handleNext
+                        onBack: { handleBack() },
+                        primaryTitle: nextLabel,
+                        primaryIcon: step == totalSteps ? "checkmark" : "arrow.right",
+                        isPrimaryEnabled: isNextEnabled,
+                        isPrimaryLoading: isCreatingHousehold && step == totalSteps,
+                        onPrimary: { handleNext() }
                     )
                 }
                 .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -188,7 +200,7 @@ struct WelcomeView: View {
             .ignoresSafeArea(.container, edges: .top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // „Wstecz" siedzi w stopce obok „Dalej" (`WelcomeFooter`),
+                // „Wstecz" siedzi w stopce obok paska kroków (`SCStepFooter`),
                 // tak jak w przewodniku — w pasku został tylko „Wyloguj".
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Wyloguj") {
@@ -436,7 +448,7 @@ struct WelcomeView: View {
     private func refreshSaveWarning() {
         withAnimation(.easeInOut(duration: 0.2)) {
             saveWarning = (pendingProfileRetry || pendingPreferencesRetry)
-                ? "Nie udało się zapisać na serwerze — dane zostały w telefonie, spróbujemy przy następnym kroku."
+                ? "Nie zapisaliśmy tego na serwerze — dane są w telefonie, ponowimy przy następnym kroku."
                 : nil
         }
     }
