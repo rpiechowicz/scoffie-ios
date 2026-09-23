@@ -29,7 +29,8 @@ struct AssistantHeader<MenuContent: View>: View {
 
     let mode: Mode
     var onNewConversation: () -> Void
-    /// Kapsuła limitu po lewej od ⋯ — tylko na próbie, tylko w dużym nagłówku.
+    /// Kapsuła limitu po lewej od ⋯ — tylko na próbie, w obu nagłówkach
+    /// (w kompaktowym krótsza, bez słowa „wiadomości”).
     var accessory: AnyView?
     /// Pozycje menu ⋯ — systemowe `Menu` z ikonami, nie arkusz z dołu.
     @ViewBuilder var menu: () -> MenuContent
@@ -65,8 +66,10 @@ struct AssistantHeader<MenuContent: View>: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isHeader)
 
-                HStack {
+                HStack(spacing: 8) {
                     Spacer(minLength: 0)
+                    accessory
+                        .fixedSize(horizontal: true, vertical: false)
                     menuButton(size: Self.actionSize)
                 }
             }
@@ -105,6 +108,9 @@ struct AssistantHeader<MenuContent: View>: View {
 struct AssistantQuotaPill: View {
     let remaining: Int
     let limit: Int
+    /// Kompaktowy pasek rozmowy: samo „3 z 5” — pełna etykieta weszłaby
+    /// na wyśrodkowany tytuł „Asystent”.
+    var compact: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
@@ -118,7 +124,7 @@ struct AssistantQuotaPill: View {
             HStack(spacing: 3) {
                 CountingNumber(target: max(0, remaining))
                 // Po „z” dopełniacz — „z 5 wiadomości”, „z 1 wiadomości”.
-                Text("z \(max(limit, remaining)) wiadomości")
+                Text(compact ? "z \(max(limit, remaining))" : "z \(max(limit, remaining)) wiadomości")
             }
             .font(.system(size: 12, weight: .semibold))
             .tracking(-0.1)

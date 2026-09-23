@@ -62,17 +62,29 @@ private struct AssistantGreeting: View {
     @State private var revealed = false
 
     /// Tempo pisania: otwarcie spokojnie, zdanie pomocy szybciej.
-    private static let headlineRate: Double = 65
-    private static let supportRate: Double = 170
+    private static let baseHeadlineRate: Double = 65
+    private static let baseSupportRate: Double = 170
+    /// Oba zdania razem piszą się najwyżej tyle — przy dłuższym tekście
+    /// tempo rośnie w tej samej proporcji, krótki pisze się jak dotąd.
+    private static let typingBudget: Double = 0.75
+
+    private var rateScale: Double {
+        let natural = Double(briefing.headline.count) / Self.baseHeadlineRate
+            + Double(briefing.supporting.count) / Self.baseSupportRate
+        return max(1, natural / Self.typingBudget)
+    }
+
+    private var headlineRate: Double { Self.baseHeadlineRate * rateScale }
+    private var supportRate: Double { Self.baseSupportRate * rateScale }
     private static let lead: Double = 0.08
 
     private var supportDelay: Double {
-        Self.lead + SCTypedText.duration(briefing.headline, rate: Self.headlineRate) + 0.05
+        Self.lead + SCTypedText.duration(briefing.headline, rate: headlineRate) + 0.05
     }
 
     /// Kontekst i akcje wchodzą, gdy zdanie pomocy jest w dwóch trzecich.
     private var restDelay: Double {
-        supportDelay + SCTypedText.duration(briefing.supporting, rate: Self.supportRate) * 0.66
+        supportDelay + SCTypedText.duration(briefing.supporting, rate: supportRate) * 0.66
     }
 
     private var hasVisual: Bool { briefing.visual != .plain }
@@ -89,7 +101,7 @@ private struct AssistantGreeting: View {
                 .animation(revealed ? motion(.spring(duration: 0.5, bounce: 0.35)) : nil, value: revealed)
                 .accessibilityHidden(true)
 
-            SCTypedText(briefing.headline, playKey: playKey, rate: Self.headlineRate, delay: Self.lead)
+            SCTypedText(briefing.headline, playKey: playKey, rate: headlineRate, delay: Self.lead)
                 .font(.system(size: 28, weight: .semibold))
                 .tracking(-0.5)
                 .lineSpacing(2)
@@ -99,7 +111,7 @@ private struct AssistantGreeting: View {
                 .padding(.top, 14)
                 .accessibilityAddTraits(.isHeader)
 
-            SCTypedText(briefing.supporting, playKey: playKey, rate: Self.supportRate, delay: supportDelay)
+            SCTypedText(briefing.supporting, playKey: playKey, rate: supportRate, delay: supportDelay)
                 .font(.system(size: 17))
                 .tracking(-0.3)
                 .lineSpacing(3)
