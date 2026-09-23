@@ -278,7 +278,11 @@ private struct AssistantListCard: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scInsetSurface(scheme))
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 }
@@ -320,7 +324,11 @@ struct AssistantSavedPlanCard: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scInsetSurface(scheme))
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 }

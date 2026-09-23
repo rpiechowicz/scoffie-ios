@@ -118,7 +118,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   język systemu) i „Dynamic Empty States” (`claude.ai/artifact/43pdC2GemR7abQDdGepU65`: 12 wariantów
   briefingu, kółka zamiast kafelków, reguły priorytetu). Rozpakowanie: manifest base64+gzip w HTML.
   Liczby z `kit.jsx` (`L`) siedzą w `AssistantLook` (`AssistantCardKit.swift`) — jasny motyw co do
-  wartości, ciemny na palecie aplikacji. Arkusze stoją na `AssistantSheetKit.swift`
+  wartości, ciemny na palecie aplikacji. WYJĄTEK od 23.09.2026: powierzchnie (`card`, `cardStroke`,
+  `field`) to żetony aplikacji (`scTileBg` / `scTileStroke` / `scChipBg`) w obu motywach, bez cienia —
+  białe karty z makiety odstawały od reszty („wszystkie karty w tym samym kolorze”, decyzja Rafała).
+  Nowa karta gdziekolwiek = `scTileBg` + `scTileStroke`; `scCardSurface`/`scInsetSurface` zostały tylko
+  pod pływające kontrolki. Arkusze stoją na `AssistantSheetKit.swift`
   (`AssistantSheetScaffold` = eyebrow · tytuł · X, `AssistantGroup`, `AssistantRow`). Stan pracy
   (`AssistantThoughtLine`, faza `working`) to „Oddech łuku” (artefakt `claude.ai/artifact/7vwJmr2mCR8xTYnjAJ9F3s`):
   znak, łuk i status w TERAKOCIE (nie indygo z makiety — decyzja Rafała 21.09.2026), obrót 2,4 s,
@@ -174,7 +178,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (dział → `RecipeExcludeCategorySheet`); czas i trudność to dwa kafelki z menu w jednym rzędzie;
   kalorie to histogram przepisów (`RecipeFilterIndex.kcalHistogram`, przy pozostałych filtrach,
   bez samego limitu) z uchwytem; aktywny przycisk filtrów na Przepisach = wariant „podświetlony”
-  jak różdżka obok, nie pełna terakota.
+  (`SCCircleIconLabel(highlighted:)`), nie pełna terakota. Przełącznik „Dopasowane do Ciebie” jest
+  TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
+  i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
+  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`) jest wspólny dla
+  Diety/Cech w filtrach i alergenów (`AllergenPicker`: Ustawienia + kreator).
   Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
   tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
   per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie
@@ -185,6 +193,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Do pudełka / Budżetowe / Na zimno” zastąpione policzalnymi (katalog ich nie niesie),
   „Mięso i ryby / Zioła” to prawdziwe działy sklepu, kategoria składników ma krzyżyk zamiast
   „wstecz”, przyciski „soft”, szukanie kończy „Gotowe” zamiast „Anuluj”.
+- Ustawienia → Gospodarstwo (23.09.2026): karta domu (nazwa — zmienia właściciel przez
+  `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
+  `households:findById`), domownicy z rolą i tym, czego nie jedzą (`households:memberPreferences`
+  — serwer celowo NIE wysyła tam wzrostu ani wagi; cel kcal nie jest pokazywany), zaproszenie jako
+  wiersz listy (link 7 dni), „Wspólne dla domowników”, „Opuść” na dole. „Czego nie jem” (wykluczone
+  składniki + limit czasu na danie) USUNIĘTE: walidator planu i prompt dalej czytają te kolumny,
+  więc każdy zapis diety wysyła `excludedIngredientIds: []` + `maxPrepTimeMinutes: null`,
+  a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
+  nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
   auth|auth-error|legal|thought|plate` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.

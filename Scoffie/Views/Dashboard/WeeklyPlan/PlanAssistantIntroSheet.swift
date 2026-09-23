@@ -254,11 +254,11 @@ struct PlanAssistantIntroSheet: View {
         .padding(.vertical, 13)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.scCardSurface(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.scCardStroke(scheme), lineWidth: 1)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
     }
 

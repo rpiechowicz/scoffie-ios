@@ -140,94 +140,39 @@ struct RecipeFilterMenuTile<Value: Hashable>: View {
 /// Kafelek 2 × 3: pole wyboru, nazwa, pod nią ile przepisów zostanie po
 /// zaznaczeniu. Kafelek z profilu stoi z kłódką i nie da się go odznaczyć —
 /// to robi przełącznik „Dopasowane do Ciebie” albo Ustawienia.
+///
+/// Rysunek jest wspólny z alergenami (`SCChoiceTile`); tu dochodzi tylko
+/// liczba przepisów i gaśnięcie kafelka, po którym nic by nie zostało.
 struct RecipeFilterOptionTile: View {
-    enum Mark { case off, on, locked }
-
     let title: String
     /// Ile zostanie po zaznaczeniu; `nil` = nie pokazuj (kafelek z profilu).
     let count: Int?
-    let mark: Mark
+    let mark: SCChoiceMark
     var accent: Color = SCPalette.terracotta
     var accessibilityDetail: String?
     let action: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
-
-    private var isActive: Bool { mark != .off }
-    private var tint: Color { mark == .locked ? SCPalette.sage : accent }
     /// Nic by nie zostało — kafelek gaśnie, ale zostaje na miejscu, żeby
     /// siatka nie przeskakiwała przy każdym stuknięciu obok.
     private var isDead: Bool { mark == .off && count == 0 }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                markView
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 14, weight: isActive ? .semibold : .medium))
-                        .tracking(-0.25)
-                        .foregroundStyle(isActive ? tint : Color.scLabel(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-
-                    Group {
-                        if let count {
-                            Text(verbatim: PolishPlural.recipes(count))
-                                .contentTransition(.numericText(value: Double(count)))
-                        } else {
-                            Text("Z Twojego profilu")
-                        }
-                    }
-                    .font(.system(size: 12, weight: .regular))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        SCChoiceTile(
+            title: title,
+            mark: mark,
+            accent: accent,
+            isDimmed: isDead,
+            accessibilityValue: accessibilityValue,
+            action: action
+        ) {
+            if let count {
+                Text(verbatim: PolishPlural.recipes(count))
+                    .contentTransition(.numericText(value: Double(count)))
+            } else {
+                Text("Z Twojego profilu")
             }
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isActive ? tint.opacity(scheme == .dark ? 0.12 : 0.09) : Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(
-                        mark == .on ? tint.opacity(0.4) : (mark == .locked ? .clear : Color.scTileStroke(scheme)),
-                        lineWidth: 1
-                    )
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .buttonStyle(PlanPressStyle(scale: 0.97))
-        .disabled(mark == .locked || isDead)
-        .opacity(isDead ? 0.4 : 1)
-        .animation(.smooth(duration: 0.18), value: mark)
-        .animation(.smooth(duration: 0.18), value: isDead)
         .animation(.easeOut(duration: 0.3), value: count)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(title))
-        .accessibilityValue(Text(accessibilityValue))
-        .accessibilityAddTraits(mark == .off ? .isButton : [.isButton, .isSelected])
-    }
-
-    @ViewBuilder
-    private var markView: some View {
-        if mark == .locked {
-            RoundedRectangle(cornerRadius: 20 / 3, style: .continuous)
-                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.22 : 0.16))
-                .frame(width: 20, height: 20)
-                .overlay(
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(SCPalette.sage)
-                )
-        } else {
-            SCCheckbox(on: mark == .on, accent: accent, size: 20)
-        }
     }
 
     private var accessibilityValue: String {

@@ -104,7 +104,7 @@ struct TourChip: View {
         .padding(.trailing, 13)
         .padding(.vertical, 6)
         .background(Capsule(style: .continuous).fill(Color.scTileBg(scheme)))
-        .overlay(Capsule(style: .continuous).stroke(Color.scCardStroke(scheme), lineWidth: 1))
+        .overlay(Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 }

@@ -32,7 +32,6 @@ struct RecipesView: View {
     @State private var featuredSelectionId: UUID?
     @State private var filters = RecipeFilterOptions()
     @State private var isFilterSheetPresented = false
-    @State private var isPersonalizationSheetPresented = false
 
     /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
     /// Trzymany w stanie, a nie liczony w locie z `Date()`, żeby przewijanie
@@ -117,20 +116,6 @@ struct RecipesView: View {
     /// Ile przepisów zabrała sama dieta / alergeny — do podpisu w banerze.
     private var hiddenByPersonalizationCount: Int {
         personalization.hiddenCount(in: searchedRecipes)
-    }
-
-    /// Ile przepisów zabiera dieta / alergeny w CAŁYM katalogu. Arkusz
-    /// „Dopasowanie” mówi o ustawieniu globalnym, więc jego liczby nie mogą
-    /// się zmieniać, gdy ktoś wpisze coś w wyszukiwarkę.
-    private var hiddenInCatalogCount: Int {
-        personalization.hiddenCount(in: recipeCatalogStore.recipes)
-    }
-
-    /// Czy katalog w ogóle niesie dane do oceny diety: składniki dla
-    /// heurystyki albo tagi z serwera. Bez nich arkusz musi to powiedzieć
-    /// wprost, zamiast twierdzić, że wszystko pasuje.
-    private var hasIngredientCoverage: Bool {
-        recipeCatalogStore.recipes.contains { !$0.ingredients.isEmpty || $0.dietTags != nil }
     }
 
     /// Czy lista jest w ogóle zawężona — steruje tekstem pustego stanu i
@@ -306,21 +291,6 @@ struct RecipesView: View {
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
             }
-            .sheet(isPresented: $isPersonalizationSheetPresented) {
-                RecipePersonalizationSheet(
-                    personalization: personalization,
-                    catalog: recipeCatalogStore.recipes,
-                    canEvaluateDiet: hasIngredientCoverage,
-                    isEnabled: $isPersonalizationEnabled,
-                    onClose: { isPersonalizationSheetPresented = false }
-                )
-                // Jedyny arkusz na tym ekranie, który nie jest listą — treści
-                // jest na pół ekranu, więc `.large` zostawiałby pustą dolną
-                // połowę. `.medium` otwiera go w rozmiarze treści, `.large`
-                // zostaje na duży krój systemowy.
-                .presentationDetents([.medium, .large])
-                .dashboardLiquidSheet()
-            }
         }
     }
 
@@ -332,12 +302,8 @@ struct RecipesView: View {
                 EditorialRecipesHeader(
                     searchText: $searchText,
                     activeFilterCount: filters.activeCount,
-                    isPersonalizationEnabled: isPersonalizationEnabled,
-                    isPersonalizationActive: personalization.isActive,
-                    hiddenRecipeCount: hiddenInCatalogCount,
                     onSubmit: { debouncedSearchText = searchText },
-                    onOpenFilters: { isFilterSheetPresented = true },
-                    onOpenPersonalization: { isPersonalizationSheetPresented = true }
+                    onOpenFilters: { isFilterSheetPresented = true }
                 )
                 .padding(.horizontal, pageHorizontalPadding)
                 .padding(.top, pageTopPadding)
@@ -551,6 +517,23 @@ struct RecipesView: View {
                     .multilineTextAlignment(.center)
             }
 
+            if isEmptyBecauseOfPersonalization {
+                // Przełącznik „Dopasowane do Ciebie” mieszka w Filtrach, ale
+                // pusty ekran przez dietę to jedyna sytuacja, w której trzeba
+                // go szukać — więc wyłącza się go stąd jednym stuknięciem.
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { isPersonalizationEnabled = false }
+                } label: {
+                    Text("Pokaż wszystkie przepisy")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SCPalette.sage)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .scSoftCapsule(SCPalette.sage)
+                }
+                .buttonStyle(.plain)
+            }
+
             if filters.isActive {
                 Button {
                     withAnimation(.smooth(duration: 0.2)) { filters.reset() }
@@ -579,6 +562,16 @@ struct RecipesView: View {
         )
     }
 
+    /// Pusto wyłącznie przez dietę i alergeny z profilu — bez wyszukiwania
+    /// i bez filtrów, które same mogłyby wszystko odsiać.
+    private var isEmptyBecauseOfPersonalization: Bool {
+        !filters.isActive
+            && debouncedSearchText.isEmpty
+            && personalization.isEnabled
+            && personalization.restrictsCatalog
+            && hiddenByPersonalizationCount > 0
+    }
+
     private var emptyStateMessage: String {
         if filters.isActive && !debouncedSearchText.isEmpty {
             return "Żaden przepis nie pasuje do frazy i wybranych filtrów."
@@ -591,8 +584,8 @@ struct RecipesView: View {
         }
         // Pusto po samej personalizacji to inny problem niż pusta baza —
         // podpowiadamy przełącznik zamiast kazać czekać na przepisy.
-        if personalization.isEnabled, personalization.restrictsCatalog, hiddenByPersonalizationCount > 0 {
-            return "Żaden przepis w katalogu nie mieści się w Twojej diecie i alergenach. Stuknij ikonę dopasowania obok tytułu, żeby je wyłączyć."
+        if isEmptyBecauseOfPersonalization {
+            return "Żaden przepis w katalogu nie mieści się w Twojej diecie i alergenach. Dopasowanie wyłączysz tu albo w Filtrach."
         }
         return "Ta baza jest jeszcze pusta — wróć za chwilę."
     }

@@ -22,6 +22,14 @@ import SwiftUI
 
 /// Tokeny z `kit.jsx` (`L`). Jasny motyw = liczby z makiety co do wartości;
 /// ciemny = te same role na palecie aplikacji, bo makieta ciemnego nie ma.
+///
+/// WYJĄTEK: powierzchnie. Karta, jej obrys i pola na karcie biorą żetony
+/// aplikacji (`scTileBg`, `scTileStroke`, `scChipBg`) w OBU motywach.
+/// Makieta miała w jasnym motywie białe karty z cieniem — obok kafli
+/// Ustawień, Planu i Przepisów wyglądały jak wklejka z innej aplikacji
+/// (arkusz „Asystent i plan” w Ustawieniach był jedynym białym ekranem
+/// wśród beżowych). Decyzja Rafała z 23.09.2026: wszystkie karty w tym
+/// samym kolorze.
 enum AssistantLook {
     private static let inkLight = Color(red: 30 / 255, green: 22 / 255, blue: 18 / 255)        // #1E1612
     private static let warmLight = Color(red: 58 / 255, green: 42 / 255, blue: 34 / 255)       // rgba(58,42,34,…)
@@ -35,10 +43,11 @@ enum AssistantLook {
     /// Kreskowany obrys pustego kafelka / kółka.
     static func dash(_ scheme: ColorScheme) -> Color { scheme == .dark ? inkDark.opacity(0.28) : warmLight.opacity(0.22) }
 
-    static func card(_ scheme: ColorScheme) -> Color { scheme == .dark ? inkDark.opacity(0.05) : Color.white.opacity(0.80) }
-    static func cardStroke(_ scheme: ColorScheme) -> Color { scheme == .dark ? inkDark.opacity(0.08) : warmLight.opacity(0.08) }
-    /// Białe pola na karcie (kafelek ikony, składnik wiersza).
-    static func field(_ scheme: ColorScheme) -> Color { scheme == .dark ? inkDark.opacity(0.06) : Color.white.opacity(0.85) }
+    static func card(_ scheme: ColorScheme) -> Color { Color.scTileBg(scheme) }
+    static func cardStroke(_ scheme: ColorScheme) -> Color { Color.scTileStroke(scheme) }
+    /// Pola na karcie (kafelek ikony, składnik wiersza) — ciemniejsze od
+    /// karty o jeden stopień, jak pola tekstowe w arkuszach Ustawień.
+    static func field(_ scheme: ColorScheme) -> Color { Color.scChipBg(scheme) }
     /// Pole nad przewijaną treścią (composer, pasek edycji, szukanie):
     /// NIEPRZEZROCZYSTE, bo rozmowa przelatuje pod nim — w ciemnym motywie
     /// półprzezroczysty tint pokazywał litery przez pole.
@@ -80,19 +89,15 @@ enum AssistantLook {
     static func quietTint(_ scheme: ColorScheme) -> Color { scheme == .dark ? inkDark.opacity(0.09) : warmLight.opacity(0.07) }
 }
 
-/// Cień karty z makiety: `0 1px 2px .04, 0 10px 30px -14px rgba(90,50,30,.18)`.
+/// Cień karty z makiety (`0 1px 2px .04, 0 10px 30px -14px rgba(90,50,30,.18)`)
+/// był potrzebny białej karcie na kremowym tle, żeby się od niego odkleiła.
+/// Karta stoi teraz na żetonach kafla — jak w Ustawieniach, bez cienia —
+/// więc modyfikator zostaje pusty, a miejsce użycia nie musi się zmieniać.
 private struct AssistantCardShadow: ViewModifier {
     let enabled: Bool
-    @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
-        if enabled, scheme == .light {
-            content
-                .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
-                .shadow(color: Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(0.10), radius: 12, y: 8)
-        } else {
-            content
-        }
+        content
     }
 }
 
@@ -133,9 +138,10 @@ enum AssistantTone: Equatable {
 
     func fill(_ scheme: ColorScheme) -> Color {
         switch self {
-        case .neutral, .indigo: return AssistantLook.card(scheme)
-        case .sage: return scheme == .dark ? AssistantLook.card(scheme) : Color.white.opacity(0.86)
-        case .muted: return scheme == .dark ? SCPalette.labelDark.opacity(0.03) : Color.white.opacity(0.45)
+        case .neutral, .indigo, .sage: return AssistantLook.card(scheme)
+        // Przygaszona: ta sama karta, tylko cieńsza — nieaktualne ma się
+        // cofnąć, a nie zmienić materiał.
+        case .muted: return AssistantLook.card(scheme).opacity(0.6)
         }
     }
 

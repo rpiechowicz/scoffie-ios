@@ -249,7 +249,7 @@ struct ProfileDetailsSheet: View {
                     YearWheelPicker(
                         year: $yearOfBirth,
                         range: yearRange,
-                        surface: Color.scInsetSurface(scheme)
+                        surface: Color.scChipBg(scheme)
                     )
                 }
 
@@ -350,7 +350,7 @@ struct ProfileDetailsSheet: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scInsetSurface(scheme))
+                .fill(Color.scChipBg(scheme))
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("BMI \(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? ""), \(category.title). Na utrzymanie wagi \(metrics.maintenanceCalories) kilokalorii dziennie.")
@@ -874,7 +874,7 @@ struct ProfileDetailsSheet: View {
 
     private var insetField: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.scInsetSurface(scheme))
+            .fill(Color.scChipBg(scheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.scTileStroke(scheme), lineWidth: 1)

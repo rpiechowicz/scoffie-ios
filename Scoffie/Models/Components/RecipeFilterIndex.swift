@@ -24,6 +24,10 @@ struct RecipeFilterIndex {
 
     var total: Int { entries.count }
 
+    /// Ile przepisów puli odpada przez dietę i alergeny z profilu — liczba
+    /// pod przełącznikiem „Dopasowane do Ciebie”.
+    var profileHiddenCount: Int { entries.reduce(into: 0) { if $1.hiddenByProfile { $0 += 1 } } }
+
     @MainActor
     init(recipes: [Recipe], personalization: RecipePersonalization) {
         var profile = personalization

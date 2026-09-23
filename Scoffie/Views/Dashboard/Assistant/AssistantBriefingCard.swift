@@ -462,7 +462,7 @@ struct AssistantBriefingCard: View {
                             image.resizable().aspectRatio(contentMode: .fill)
                         default:
                             ZStack {
-                                Color.white.opacity(0.5)
+                                AssistantLook.field(scheme)
                                 Image(systemName: "fork.knife")
                                     .font(.system(size: 18))
                                     .foregroundStyle(.secondary)
