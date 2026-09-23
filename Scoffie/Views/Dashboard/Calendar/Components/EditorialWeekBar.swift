@@ -5,7 +5,7 @@ import SwiftUI
 // planned = sage dot. Tap to select.
 //
 // Nad paskiem stoi wiersz podpisu: który to tydzień („TEN TYDZIEŃ · 8–14 WRZ"),
-// strzałki i „DZIŚ". Bez niego przesunięcie o kilka tygodni w przód zostawiało
+// strzałki i „Wróć do dziś". Bez niego przesunięcie o kilka tygodni w przód zostawiało
 // użytkownika z siedmioma liczbami bez informacji, o jaki tydzień chodzi.
 //
 // Animations:
@@ -155,18 +155,20 @@ struct EditorialWeekBar: View {
                 Button {
                     changeWeek { datesViewModel.goToCurrentWeek() }
                 } label: {
-                    Text("DZIŚ")
-                        .scFont(9.5, weight: .bold, relativeTo: .caption2)
-                        .tracking(1)
+                    // Akcja, nie etykieta: samo „DZIŚ” w wersalikach stało
+                    // przy CUDZYM tygodniu i czytało się jak znacznik dnia
+                    // („dziś jest tutaj”), a nie jak powrót (runda 11).
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 9.5, weight: .bold))
+                        Text("Wróć do dziś")
+                            .scFont(11, weight: .semibold, relativeTo: .caption2)
+                            .tracking(-0.1)
+                    }
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12))
-                        )
-                        .overlay(
-                            Capsule().stroke(SCPalette.terracotta.opacity(0.34), lineWidth: 1)
-                        )
+                        .padding(.vertical, 4)
+                        .scSoftCapsule()
                         // Pigułka ma ~22 pt wysokości; cel dotyku dostaje 44
                         // bez podnoszenia wiersza podpisu.
                         .frame(minWidth: 44)
