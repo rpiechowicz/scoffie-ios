@@ -16,8 +16,8 @@ import SwiftUI
 /// (arkusze asystenta), szklana kapsuła filtrów przepisów i własne stopki
 /// „Dodaj do planu”, „Wybierz posiłek”, „Na dziś” z kreską nad przyciskiem.
 /// Każda miała inne odstępy i inny gradient. Teraz wszystkie idą przez ten
-/// widok. Kreator (`WelcomeFooter`) zostaje przy swoim układzie, bo niesie
-/// kropki kroków i stoi na kanwie, ale działa na tej samej zasadzie.
+/// widok — od rundy 14 także kreator, przewodnik i wprowadzenie Asystenta
+/// (`SCStepFooter` w `SCStepFlow.swift`, z paskiem kroków nad przyciskiem).
 ///
 /// Dwa sposoby użycia:
 /// - `.scSheetFooter { … }` na przewijanej treści — przez `safeAreaInset`

@@ -204,6 +204,7 @@ private struct ExpandRow: View {
             .foregroundStyle(AssistantLook.terra(scheme))
             .padding(.horizontal, AssistantCardMetrics.inset)
             .padding(.vertical, 12)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
             .overlay(alignment: .top) { AssistantCardRule() }
         }
@@ -754,8 +755,9 @@ private struct AssistantOptionsCarouselCard: View {
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(AssistantLook.wash(scheme)))
                 .overlay(Circle().stroke(AssistantLook.hair(scheme), lineWidth: 1))
+                .scTapTarget(44, drawn: 30)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.94))
         .disabled(!enabled)
         .accessibilityLabel(label)
     }
@@ -1887,7 +1889,21 @@ private struct AssistantOptionsStorySheet: View {
                 .padding(.top, full * 366 / 798)
 
                 endStep(2, rise: 20) {
-                    VStack(spacing: 10) {
+                    // Ten sam układ pary co w stopce karty: poboczna pierwsza,
+                    // główna na końcu. „Napisz, na co masz ochotę” nie mieści
+                    // się w połówce, więc para staje w stos i główna ląduje
+                    // NA DOLE — dokładnie tam, gdzie na stronach dań stoi
+                    // „Wstaw na środę”; przy przewracaniu na stronę końcową
+                    // główna akcja nie skacze.
+                    AssistantActionPair(spacing: 10) {
+                        AssistantGhostButton(
+                            action: AssistantCardAction(
+                                title: isReview ? "Napisz, co zmienić" : "Napisz, na co masz ochotę",
+                                icon: "square.and.pencil"
+                            ) {
+                                onCompose()
+                            }
+                        )
                         if let morePrompt {
                             AssistantPrimaryButton(
                                 action: AssistantCardAction(
@@ -1901,14 +1917,6 @@ private struct AssistantOptionsStorySheet: View {
                                 action: AssistantCardAction(title: applyTitle, icon: "checkmark") { onApply() }
                             )
                         }
-                        AssistantGhostButton(
-                            action: AssistantCardAction(
-                                title: isReview ? "Napisz, co zmienić" : "Napisz, na co masz ochotę",
-                                icon: "square.and.pencil"
-                            ) {
-                                onCompose()
-                            }
-                        )
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
@@ -2707,6 +2715,7 @@ struct AssistantMacroGapCard: View {
                     }
                     .padding(.horizontal, AssistantCardMetrics.inset)
                     .padding(.vertical, 10)
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PlanPressStyle(scale: 0.985))

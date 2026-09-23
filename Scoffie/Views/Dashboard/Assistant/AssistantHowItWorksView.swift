@@ -5,13 +5,14 @@ import SwiftUI
 /// Podział po tym, co user ROBI: planuje → poprawia → dzieli na dom →
 /// kupuje i zapisuje przepisy.
 ///
-/// Karta ma układ kroku przewodnika „Poznaj aplikację": ikona, tytuł,
-/// opis, a pod nimi „zdjęcie" — tu podgląd prawdziwej wymiany z asystentem
+/// Karta ma układ kroku przewodnika „Poznaj aplikację": nagłówek kroku
+/// (`SCStepHeader` — kafelek, tytuł, jedno zdanie), a pod nim „zdjęcie" — tu
+/// podgląd prawdziwej wymiany z asystentem
 /// (dymek, odpowiedź, karta). Bez pudełka wokół całości: ramka w ramce
 /// (karta w karcie w kafelku) zjadała 44 pt szerokości i sprawiała, że
 /// wszystko wyglądało na ściśnięte.
 ///
-/// W zakładce stepper i przyciski są w `AssistantIntroFooter`, którą składa
+/// W zakładce pasek kroków i przyciski są w `AssistantIntroFooter`, którą składa
 /// `AssistantView` poza animowaną treścią; numer karty trzyma rodzic
 /// (`step`), bo to on obsługuje „Dalej" i „Wstecz". Arkusz z menu ma
 /// własną stopkę i własny licznik.
@@ -61,7 +62,7 @@ struct AssistantHowItWorksView: View {
                 // „Zamknij” wyglądał jak z innej aplikacji.
                 AssistantSheetHeader(
                     title: "Jak działa asystent",
-                    subtitle: "Cztery karty: co potrafi, jak wygląda odpowiedź i co zostaje w Twoich rękach.",
+                    subtitle: "Co potrafi i co zostaje w Twoich rękach.",
                     onClose: { finish() }
                 )
                 .padding(.bottom, 10)
@@ -86,6 +87,9 @@ struct AssistantHowItWorksView: View {
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .scrollIndicators(.hidden)
+                    // Przewinięta karta gaśnie pod wierszem „Pomiń” / nagłówkiem
+                    // arkusza, zamiast ucinać się na twardej krawędzi.
+                    .scScrollEdgeFade()
                     .tag(index)
                 }
             }
@@ -94,7 +98,7 @@ struct AssistantHowItWorksView: View {
             if presentation == .sheet {
                 AssistantIntroFooter(
                     slot: .stepper(step: currentStep + 1, total: cards.count),
-                    // Jak w przewodniku: okrągła strzałka po lewej od „Dalej";
+                    // Jak w przewodniku: krążek „Wstecz” obok paska kroków;
                     // w arkuszu tylko między kartami.
                     showsBack: currentStep > 0,
                     onBack: { withAnimation(.easeInOut(duration: 0.3)) { stepBinding.wrappedValue -= 1 } },
@@ -124,23 +128,15 @@ struct AssistantHowItWorksView: View {
 
     private func onboardingCard(_ card: AssistantCapabilities.OnboardingCard) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            AssistantIconTile(icon: card.icon, accent: card.accent, size: 48, radius: 14)
-                .padding(.bottom, 16)
-
-            Text(card.title)
-                .font(.system(size: 27, weight: .bold))
-                .tracking(-0.4)
-                .lineSpacing(2)
-                .foregroundStyle(Color.scLabel(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 8)
-
-            Text(card.body)
-                .font(.system(size: 15))
-                .lineSpacing(3)
-                .foregroundStyle(Color.scMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 20)
+            // Ten sam nagłówek kroku, co w kreatorze „Poznajmy się” i na
+            // zgodzie: kafelek w tincie akcentu karty, tytuł, jedno zdanie.
+            SCStepHeader(
+                icon: card.icon,
+                accent: card.accent.color,
+                title: card.title,
+                subtitle: card.body
+            )
+            .padding(.bottom, 20)
 
             // „Zdjęcie" kroku: podgląd rozmowy wprost na stronie, tak jak
             // wygląda prawdziwa rozmowa. Dodatkowa powierzchnia pod spodem
@@ -158,19 +154,19 @@ struct AssistantHowItWorksView: View {
             }
 
             if card.showsPrivacy {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(SCPalette.sage)
-                        .padding(.top, 1)
-                    Text("Nic nie zapisuje się samo — każda zmiana to karta z „Dodaj do planu”, a zapis cofniesz w ciągu doby. Wzrost, waga, kroki i e-mail nie są wysyłane do modelu AI.")
+                // Zasada, nie umiejętność — jeden wiersz w tincie szałwii.
+                // Pełna lista tego, co idzie do modelu, stoi w kroku „Zgoda”.
+                HStack(alignment: .top, spacing: 12) {
+                    SCHeaderIconWell(icon: "checkmark.shield.fill", accent: SCPalette.sage, size: 34)
+                    Text("Nic nie zapisuje się samo — zmianę dodajesz Ty, a zapis cofniesz w ciągu doby. Wzrost, waga, kroki i e-mail nie idą do modelu.")
                         .font(.system(size: 14))
-                        .lineSpacing(3)
+                        .lineSpacing(2)
                         .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.scSageTint(scheme)))
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scSageTint(scheme)))
                 .padding(.top, 16)
             }
 
@@ -180,8 +176,9 @@ struct AssistantHowItWorksView: View {
                         Text("Zobacz wszystko, co potrafi")
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
                     }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(SCPalette.terracotta)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 16)

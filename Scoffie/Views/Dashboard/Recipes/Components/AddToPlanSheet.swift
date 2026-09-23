@@ -9,21 +9,29 @@ import SwiftUI
 /// „Wspólne" są wspólne (`PlanAudienceChips`), więc oba wejścia wysyłają
 /// identyczny payload.
 ///
-/// Układ (runda 13, 23.09.2026 — „napisz od zera lepiej, podejdź inaczej”):
-/// trzy pytania, każde w jednym miejscu, bez przewijania.
+/// Wygląd (runda 14, 23.09.2026 — „paskudny, zrób od nowa, porządnie,
+/// czytelnie, naszymi standardami i animacjami”). Arkusz składa się
+/// wyłącznie z klocków, które użytkownik zna z innych ekranów:
 ///
-/// - **Kiedy** — przewijany pasek dni od dziś na cztery tygodnie naprzód.
-///   Minionych dni w nim nie ma (nie było czego przekreślać), strzałek
-///   tygodnia też nie — tydzień oddziela cienka kreska przed poniedziałkiem.
-/// - **Posiłek** — lista pór jak w Ustawieniach: kafelek pory, nazwa, a po
-///   prawej to, co już w niej stoi tego dnia, i kółko wyboru. Zajętość widać
-///   PRZED stuknięciem w przycisk, a przycisk zmienia wtedy znaczenie na
-///   „Zamień w planie”.
-/// - **Dla kogo i ile** — audytorium i porcje w jednej karcie, bo jedno
-///   wynika z drugiego (porcje nadążają za osobami).
+/// - **Nagłówek** — zdjęcie dania (`EditorialRecipeCover`), „DODAJ DO PLANU”,
+///   nazwa i dwa fakty z ikonami (czas, kalorie). Zdjęcie mówi, CO się dodaje,
+///   szybciej niż kafelek z kalendarzem.
+/// - **Kiedy** — tydzień dokładnie jak `EditorialWeekBar` w Planie: podpis
+///   „TEN TYDZIEŃ · 22–28 WRZ”, strzałki, „Wróć do dziś”, podkreślenie, które
+///   przejeżdża między dniami, przeciąganie w bok zmienia tydzień, miniony
+///   dzień przekreślony. Wszystko w jednej karcie.
+/// - **Posiłek** — lista pór w karcie, jak wiersze Ustawień: kafelek pory,
+///   nazwa, pod nią miniatura i nazwa dania, które już tam stoi, a po prawej
+///   `SCRadioMark` w kolorze pory. Zajętość widać PRZED przyciskiem.
+/// - **Dla kogo** — `PlanAudienceChips` (tylko w domu wieloosobowym).
+/// - **Porcje** — karta z rolującą liczbą i `SCStepper`.
+/// - **Stopka** (`scSheetFooter`, cień `SCEdgeShade`) — rolujące zdanie
+///   „Środa, 24 września · Obiad” i przycisk, którego tytuł też roluje.
 ///
-/// Nad przyciskiem jedno rolujące zdanie „Środa, 24 września · Obiad”.
-/// Na małym ekranie formularz jedzie w `ScrollView` (`ViewThatFits`).
+/// Sekcje wjeżdżają kaskadą jak w szczegółach posiłku (`scReveal`). Na
+/// ekranie, na którym wszystko się mieści, lista nie odbija
+/// (`scrollBounceBehavior(.basedOnSize)`), więc czyta się jak widok bez
+/// przewijania; na małym przewija się pod przypiętym nagłówkiem.
 ///
 /// Cztery decyzje, które łatwo cofnąć przez nieuwagę:
 ///
@@ -84,10 +92,14 @@ struct AddToPlanSheet: View {
     /// serwer (patrz `save()`); potem są jego decyzją i chipy ich nie ruszają.
     @State private var didOverrideServings = false
     @State private var isSaving = false
+    /// Kaskada sekcji (`scReveal`) — przestawiana w `.task` po klatce oddechu.
+    @State private var hasAppeared = false
 
-    /// Ile dni naprzód pokazuje pasek. Cztery tygodnie to więcej, niż ktokolwiek
-    /// planuje z poziomu przepisu, a pasek bez strzałek zostaje krótki.
-    private static let horizonDays = 28
+    // Gest tygodnia — te same liczby i ta sama logika, co w `EditorialWeekBar`.
+    @State private var dragOffset: CGFloat = 0
+    @State private var isHorizontalDrag: Bool?
+    @State private var dragBaseline: CGFloat = 0
+    @Namespace private var dayIndicatorNS
 
     private var calendar: Calendar { PlanWeek.calendar }
 
@@ -102,40 +114,32 @@ struct AddToPlanSheet: View {
         sessionStore.didLoadHouseholdMembers ? members.count : nil
     }
 
-    /// Dni paska: od dziś, tylko te, które plan jeszcze przyjmie.
-    private var stripDays: [Date] {
-        let today = calendar.startOfDay(for: Date())
-        return (0..<Self.horizonDays)
-            .compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
-            .filter { isEditable($0) }
-    }
-
-    /// Dni paska, w których coś już stoi — kropka pod liczbą.
-    private func plannedDays(in days: [Date]) -> Set<Date> {
-        var result: Set<Date> = []
-        for day in days {
-            // Dzień pobrany raz, nie 6× — body przelicza się przy każdym stuknięciu.
-            let plan = mealStore.plan(for: day)
-            if MealSlot.allCases.contains(where: { !plan.meals(for: $0).isEmpty }) {
-                result.insert(calendar.startOfDay(for: day))
-            }
-        }
-        return result
-    }
-
-    /// Pory wyłączone w ustawieniach gospodarstwa, w których w tygodniu
-    /// wybranego dnia mimo to coś stoi — `visibleSlots(planned:)` pokazuje je,
-    /// żeby jedzenie nie znikało z widoku.
-    private var plannedSlotsInSelectedWeek: [MealSlot] {
+    /// Poniedziałek–niedziela tygodnia, w którym leży `selectedDate`.
+    private var weekDates: [Date] {
         let monday = PlanWeek.monday(of: selectedDate)
-        var planned: Set<MealSlot> = []
-        for offset in 0..<7 {
-            guard let day = calendar.date(byAdding: .day, value: offset, to: monday) else { continue }
-            for slot in MealSlot.allCases where !mealStore.meals(for: day, slot: slot).isEmpty {
-                planned.insert(slot)
+        return (0..<7).compactMap {
+            calendar.date(byAdding: .day, value: $0, to: monday)
+        }
+    }
+
+    /// Jedno przejście po tygodniu: kreski „tu już coś stoi” pod dniami
+    /// i pory wyłączone w ustawieniach, w których mimo to coś stoi
+    /// (`visibleSlots(planned:)` pokazuje je, żeby jedzenie nie znikało).
+    private func weekOverview(for days: [Date]) -> (plannedDays: Set<Date>, plannedSlots: [MealSlot]) {
+        var plannedDays: Set<Date> = []
+        var plannedSlots: Set<MealSlot> = []
+
+        for day in days {
+            // Dzień pobrany raz, nie sześć razy — body przelicza się przy
+            // każdym stuknięciu.
+            let plan = mealStore.plan(for: day)
+            for slot in MealSlot.allCases where !plan.meals(for: slot).isEmpty {
+                plannedDays.insert(calendar.startOfDay(for: day))
+                plannedSlots.insert(slot)
             }
         }
-        return Array(planned).sortedByDay
+
+        return (plannedDays, Array(plannedSlots).sortedByDay)
     }
 
     /// Slot zaznaczany przy otwarciu: slot bazowy przepisu, o ile
@@ -156,59 +160,94 @@ struct AddToPlanSheet: View {
         datesViewModel.isEditable(date)
     }
 
-    /// Czas i kalorie porcji pod nazwą przepisu. Brakujących liczb nie udajemy
-    /// zerem.
-    private var recipeFacts: String? {
-        var parts: [String] = []
-        if recipe.prepTimeMinutes > 0 { parts.append("\(recipe.prepTimeMinutes) min") }
+    /// Bieżący tydzień jest ostatnim, w którym cokolwiek da się zaplanować —
+    /// wcześniejsze pokazywałyby siedem nieklikalnych komórek.
+    private var canGoToPreviousWeek: Bool {
+        PlanWeek.monday(of: selectedDate) > PlanWeek.monday(of: Date())
+    }
+
+    /// O ile tygodni oglądany tydzień jest od bieżącego.
+    private var weekOffset: Int {
+        let current = PlanWeek.monday(of: Date())
+        let shown = PlanWeek.monday(of: selectedDate)
+        let days = calendar.dateComponents([.day], from: current, to: shown).day ?? 0
+        return Int((Double(days) / 7).rounded())
+    }
+
+    /// Czas i kalorie porcji pod nazwą — z ikonami, jak na kartach przepisów.
+    /// Brakujących liczb nie udajemy zerem.
+    private var facts: [HeaderFact] {
+        var result: [HeaderFact] = []
+        if recipe.prepTimeMinutes > 0 {
+            result.append(HeaderFact(icon: "clock", text: "\(recipe.prepTimeMinutes) min"))
+        }
         let kcal = Int(recipe.nutritionPerServing.kcal.rounded())
-        if kcal > 0 { parts.append("\(kcal) kcal na porcję") }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        if kcal > 0 {
+            result.append(HeaderFact(icon: "flame", text: "\(kcal) kcal"))
+        }
+        return result
+    }
+
+    private struct HeaderFact: Identifiable {
+        let icon: String
+        let text: String
+        var id: String { icon }
     }
 
     // MARK: - Body
 
     var body: some View {
-        let days = stripDays
-        let planned = plannedDays(in: days)
-        let visibleSlots = sessionStore.mealSlots.visibleSlots(planned: plannedSlotsInSelectedWeek)
+        let overview = weekOverview(for: weekDates)
+        let visibleSlots = sessionStore.mealSlots.visibleSlots(planned: overview.plannedSlots)
 
         return ZStack {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                EditorialSheetHeader(
-                    eyebrow: "Dodaj do planu",
-                    title: recipe.name,
-                    icon: "calendar.badge.plus",
-                    accent: SCPalette.terracotta,
-                    subtitle: recipeFacts,
-                    onClose: { dismiss() }
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 12)
+                // Nagłówek przypięty nad treścią — nie przewija się i nie zwija.
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 14)
 
-                // Formularz mieści się pod nagłówkiem na każdym współczesnym
-                // iPhonie; dopiero gdy nie wejdzie (SE, duża czcionka), ta sama
-                // treść jedzie w `ScrollView`.
-                ViewThatFits(in: .vertical) {
-                    form(days: days, plannedDays: planned, slots: visibleSlots)
-                        .padding(.bottom, 20)
-                        .frame(maxHeight: .infinity, alignment: .top)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        weekSection(plannedDays: overview.plannedDays)
+                            .scReveal(hasAppeared, order: 0)
 
-                    ScrollView {
-                        form(days: days, plannedDays: planned, slots: visibleSlots)
-                            // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
-                            .padding(.bottom, SCEdgeShade.bottomHeight)
+                        slotSection(visibleSlots)
+                            .scReveal(hasAppeared, order: 1)
+
+                        // Jednoosobowe gospodarstwo nie ma o czym decydować —
+                        // każdy posiłek i tak jest „Wspólne".
+                        if members.count > 1 {
+                            PlanAudienceChips(
+                                members: members,
+                                selection: $selectedParticipants,
+                                onChange: audienceChanged
+                            )
+                            .scReveal(hasAppeared, order: 2)
+                            .transition(.opacity)
+                        }
+
+                        servingsSection
+                            .scReveal(hasAppeared, order: 3)
                     }
-                    .scrollIndicators(.hidden)
-                    .scScrollEdgeFade()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 16)
+                    // Lista domowników dojeżdża asynchronicznie — chipy mają
+                    // wjechać, a nie wskoczyć i zepchnąć porcje.
+                    .animation(.smooth(duration: 0.25), value: members.count > 1)
                 }
+                .scrollIndicators(.hidden)
+                // Gdy wszystko się mieści, lista stoi jak zwykły widok — bez
+                // gumowego odbicia, które zdradzałoby przewijanie.
+                .scrollBounceBehavior(.basedOnSize)
+                .scScrollEdgeFade()
                 .disabled(isSaving)
-
-                footer
+                .scSheetFooter { footerContent }
             }
         }
         .onAppear {
@@ -220,6 +259,14 @@ struct AddToPlanSheet: View {
             // chipów nigdy się dla niego nie odpala. W `init` nie ma jeszcze
             // środowiska, czyli domowników. Bez animacji — nie ma czego animować.
             applyAutoServings(for: selectedParticipants, animated: false)
+        }
+        // Klatka oddechu jak w szczegółach posiłku: arkusz zaczyna wjeżdżać,
+        // dopiero potem treść. W `onAppear` kaskada padałaby w klatce
+        // wstawienia i nie grała.
+        .task {
+            guard !hasAppeared else { return }
+            try? await Task.sleep(for: .milliseconds(80))
+            hasAppeared = true
         }
         // Zmiana dnia albo pory potrafi trafić na ten sam przepis stojący już
         // dla kogoś innego — porcje liczą się wtedy z połączonego audytorium.
@@ -248,97 +295,340 @@ struct AddToPlanSheet: View {
         .dashboardLiquidSheet()
     }
 
-    /// Cały formularz — jedna kopia dla obu gałęzi `ViewThatFits`.
-    private func form(days: [Date], plannedDays: Set<Date>, slots: [MealSlot]) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            daySection(days: days, plannedDays: plannedDays)
-            slotSection(slots)
-            audienceCard
+    // MARK: - Nagłówek
+
+    /// Krój i układ `EditorialSheetHeader`, tylko w miejscu kafelka z ikoną
+    /// stoi zdjęcie dania — to jego dotyczy cały arkusz.
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            HStack(spacing: 12) {
+                EditorialRecipeCover(recipe: recipe, size: 58, cornerRadius: 15)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("DODAJ DO PLANU")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(SCPalette.terracotta)
+                        .lineLimit(1)
+
+                    Text(recipe.name)
+                        .font(.system(size: 20, weight: .heavy))
+                        .tracking(-0.4)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if !facts.isEmpty {
+                        HStack(spacing: 10) {
+                            ForEach(facts) { fact in
+                                HStack(spacing: 4) {
+                                    Image(systemName: fact.icon)
+                                        .font(.system(size: 10.5, weight: .semibold))
+                                    Text(fact.text)
+                                        .font(.system(size: 12.5, weight: .semibold))
+                                        .monospacedDigit()
+                                }
+                                .foregroundStyle(Color.scMuted(scheme))
+                            }
+                        }
+                        .padding(.top, 1)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+
+            SCSheetCloseButton(action: { dismiss() })
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
     }
 
     // MARK: - Kiedy
 
-    private func daySection(days: [Date], plannedDays: Set<Date>) -> some View {
+    private func weekSection(plannedDays: Set<Date>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             EditorialSheetSectionLabel(title: "Kiedy")
 
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
-                    ForEach(days, id: \.self) { date in
-                        HStack(spacing: 6) {
-                            // Kreska przed poniedziałkiem — granica tygodnia
-                            // bez podpisów i strzałek.
-                            if date != days.first, calendar.component(.weekday, from: date) == 2 {
-                                Capsule()
-                                    .fill(Color.scTileStroke(scheme))
-                                    .frame(width: 1.5, height: 34)
-                                    .padding(.horizontal, 4)
-                            }
+            VStack(spacing: 14) {
+                weekCaptionRow
 
-                            dayCell(date, isPlanned: plannedDays.contains(date))
-                        }
+                HStack(spacing: 0) {
+                    // Po pozycji w tygodniu, nie po dacie: przy zmianie tygodnia
+                    // komórka zostaje ta sama i jej liczba roluje się na nową,
+                    // zamiast gasnąć i zapalać się od nowa.
+                    ForEach(Array(weekDates.enumerated()), id: \.offset) { _, date in
+                        dayCell(
+                            date,
+                            isPlanned: plannedDays.contains(calendar.startOfDay(for: date))
+                        )
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 2)
+                // Przeciąganie łapie się w całym prostokącie planszy dni.
+                .contentShape(Rectangle())
+                .offset(x: dragOffset)
+                // `simultaneousGesture`: plansza siedzi w pionowym `ScrollView`,
+                // zwykły `DragGesture` zabrałby mu przewijanie.
+                .simultaneousGesture(weekSwipe)
             }
-            .scrollIndicators(.hidden)
-            // Pasek sięga krawędzi arkusza — widać, że jedzie dalej.
-            // Start zawsze od dziś, czyli od pierwszej komórki — bez przewijania
-            // do wyboru.
-            .padding(.horizontal, -20)
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            .background(cardShape.fill(Color.scTileBg(scheme)))
+            .overlay(cardShape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+            // Plansza przesuwana palcem nie wyjeżdża poza kartę.
+            .clipShape(cardShape)
         }
     }
 
+    /// Podpis jak nad Planem: „TEN TYDZIEŃ · 22–28 WRZ”, „Wróć do dziś”
+    /// poza bieżącym tygodniem i strzałki 26 pt.
+    private var weekCaptionRow: some View {
+        HStack(spacing: 6) {
+            Text(weekCaption)
+                .scFont(9.5, weight: .bold, relativeTo: .caption2)
+                .tracking(1.1)
+                .foregroundStyle(Color.scMuted(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .contentTransition(.numericText())
+                .padding(.leading, 4)
+
+            Spacer(minLength: 6)
+
+            if weekOffset != 0 {
+                Button {
+                    changeWeek { selectedDate = Date() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 9.5, weight: .bold))
+                        Text("Wróć do dziś")
+                            .scFont(11, weight: .semibold, relativeTo: .caption2)
+                            .tracking(-0.1)
+                    }
+                    .foregroundStyle(SCPalette.terracotta)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .scSoftCapsule()
+                    .frame(minWidth: 44)
+                    .scTapHeight(drawn: 22)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                .accessibilityLabel("Wróć do bieżącego tygodnia")
+            }
+
+            weekArrow(
+                systemName: "chevron.left",
+                label: "Poprzedni tydzień",
+                delta: -7,
+                isEnabled: canGoToPreviousWeek
+            )
+
+            weekArrow(
+                systemName: "chevron.right",
+                label: "Następny tydzień",
+                delta: 7,
+                isEnabled: true
+            )
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: weekOffset == 0)
+    }
+
+    private func weekArrow(
+        systemName: String,
+        label: String,
+        delta: Int,
+        isEnabled: Bool
+    ) -> some View {
+        Button {
+            shiftWeek(by: delta)
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Color.scLabel(scheme))
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(Color.scChipBg(scheme)))
+                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                .scTapTarget(drawn: 26)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.35)
+        .accessibilityLabel(label)
+    }
+
+    /// Komórka dnia — wygląd `EditorialWeekBar.DayCell`: skrót dnia, liczba,
+    /// pod spodem terakotowe podkreślenie, które PRZEJEŻDŻA między dniami
+    /// (`matchedGeometryEffect`), i szałwiowa kreska przy dniu z posiłkami.
     private func dayCell(_ date: Date, isPlanned: Bool) -> some View {
         let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
-        let isToday = calendar.isDateInToday(date)
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let isPast = !isEditable(date)
+        let label = Color.scLabel(scheme)
+        let muted = Color.scMuted(scheme)
 
         return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+            withAnimation(DayNavigationMotion.spring) {
                 selectedDate = date
             }
         } label: {
-            VStack(spacing: 2) {
-                Text(isToday ? "DZIŚ" : Self.shortDayFormatter.string(from: date).uppercased())
-                    .font(.system(size: 9.5, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scMuted(scheme))
+            VStack(spacing: 4) {
+                Text(Self.shortDayFormatter.string(from: date).uppercased())
+                    .scFont(9, weight: .bold, relativeTo: .caption2)
+                    .tracking(1)
+                    .foregroundStyle(isSelected ? label : muted)
+                    .contentTransition(.interpolate)
 
                 Text(Self.dayNumberFormatter.string(from: date))
-                    .font(.system(size: 18, weight: isSelected ? .heavy : .semibold))
+                    .scFont(18, weight: isSelected ? .heavy : .semibold, relativeTo: .body)
                     .tracking(-0.3)
                     .monospacedDigit()
-                    .foregroundStyle(Color.scLabel(scheme))
+                    .foregroundStyle(isPast ? muted : label)
+                    .strikethrough(isPast, color: Color.scStrike(scheme))
+                    // Przy zmianie tygodnia liczba roluje się na nową — komórka
+                    // zostaje ta sama (`ForEach` po pozycji w tygodniu).
+                    .contentTransition(.numericText())
 
-                // Miejsce na kropkę zarezerwowane zawsze — komórki równej wysokości.
-                Circle()
-                    .fill(SCPalette.sage)
-                    .frame(width: 4, height: 4)
-                    .opacity(isPlanned ? 1 : 0)
+                ZStack {
+                    // Wysokość zarezerwowana, żeby układ nie skakał, gdy
+                    // wskaźniki pojawiają się i znikają.
+                    Color.clear.frame(height: 2)
+
+                    if isPlanned && !isSelected {
+                        Capsule()
+                            .fill(SCPalette.sage)
+                            .frame(width: 10, height: 2)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+
+                    if isSelected {
+                        Capsule()
+                            .fill(SCPalette.terracotta)
+                            .frame(width: 18, height: 2)
+                            .matchedGeometryEffect(id: "addToPlan.dayIndicator", in: dayIndicatorNS)
+                    }
+                }
+                .frame(height: 4)
+                .padding(.top, 4)
             }
-            .frame(width: 44, height: 56)
-            .scChoiceSurface(
-                shape,
-                isOn: isSelected,
-                accent: SCPalette.terracotta,
-                offFill: Color.scTileBg(scheme),
-                style: .tile
-            )
-            .contentShape(shape)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity)
+            // Miniony dzień przygaszony w całości — mówi to samo, co brak
+            // reakcji na stuknięcie.
+            .opacity(isPast ? 0.5 : 1)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
-        .accessibilityLabel(dayAccessibilityLabel(date, isPlanned: isPlanned))
+        .buttonStyle(.plain)
+        // Wpisu wstecz nie dałoby się już usunąć — Plan i Kalendarz pokazują
+        // minione dni tylko do odczytu.
+        .disabled(isPast)
+        .accessibilityLabel(dayAccessibilityLabel(date, isPast: isPast, isPlanned: isPlanned))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private func dayAccessibilityLabel(_ date: Date, isPlanned: Bool) -> String {
+    private func dayAccessibilityLabel(_ date: Date, isPast: Bool, isPlanned: Bool) -> String {
         let day = Self.fullDateFormatter.string(from: date)
-        return isPlanned ? day + ", coś już zaplanowane" : day
+        if isPast { return day + ", minął" }
+        let today = calendar.isDateInToday(date) ? day + ", dziś" : day
+        return isPlanned ? today + ", coś już zaplanowane" : today
+    }
+
+    /// Przesunięcie o tydzień, z barierą na przeszłość: cofnięcie z przyszłego
+    /// tygodnia potrafi wylądować na dniu, który już minął — wtedy wybór
+    /// podciągamy do dziś, zamiast zostawić go na nieklikalnej komórce.
+    private func shiftWeek(by delta: Int) {
+        guard delta > 0 || canGoToPreviousWeek else { return }
+        guard let shifted = calendar.date(byAdding: .day, value: delta, to: selectedDate) else { return }
+        let target = isEditable(shifted) ? shifted : Date()
+        changeWeek { selectedDate = target }
+    }
+
+    /// Zmiana tygodnia w jednej animacji z powrotem planszy na miejsce —
+    /// ta sama sprężyna, którą przestawia się dzień w Planie.
+    private func changeWeek(_ step: () -> Void) {
+        withAnimation(DayNavigationMotion.spring) {
+            step()
+            dragOffset = 0
+        }
+        // Haptyka zmiany tygodnia to haptyka zmiany dnia — dzień zmienia się
+        // razem z tygodniem, więc drugie stuknięcie w tej samej klatce byłoby
+        // podwójne.
+    }
+
+    /// Przeciąganie planszy dni — kopia zachowania `EditorialWeekBar`: oś
+    /// rozstrzygana raz, opór na krawędzi, próg z rozpędem palca.
+    private var weekSwipe: some Gesture {
+        DragGesture(minimumDistance: 14)
+            .onChanged { value in
+                if isHorizontalDrag == nil {
+                    let horizontal = abs(value.translation.width)
+                    let vertical = abs(value.translation.height)
+                    guard max(horizontal, vertical) >= Self.axisLockDistance else { return }
+                    isHorizontalDrag = horizontal > vertical
+                    dragBaseline = value.translation.width
+                }
+
+                // Pion należy do przewijania arkusza.
+                guard isHorizontalDrag == true else { return }
+                dragOffset = Self.resisted(value.translation.width - dragBaseline)
+            }
+            .onEnded { value in
+                let wasHorizontal = isHorizontalDrag == true
+                let baseline = dragBaseline
+                isHorizontalDrag = nil
+                dragBaseline = 0
+
+                let travel = value.predictedEndTranslation.width - baseline
+                // Wstecz tylko wtedy, gdy jest dokąd — bieżący tydzień to
+                // najwcześniejszy, w którym da się coś zaplanować.
+                let canCommit = wasHorizontal
+                    && abs(travel) >= Self.commitThreshold
+                    && (travel < 0 || canGoToPreviousWeek)
+
+                guard canCommit else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                        dragOffset = 0
+                    }
+                    return
+                }
+
+                shiftWeek(by: travel < 0 ? 7 : -7)
+            }
+    }
+
+    private static let commitThreshold: CGFloat = 56
+    private static let dragLimit: CGFloat = 56
+    private static let axisLockDistance: CGFloat = 14
+
+    /// Opór na krawędzi: pierwsze punkty idą prawie 1:1, dalej ruch się
+    /// wypłaszcza i nigdy nie przekracza `dragLimit`.
+    private static func resisted(_ translation: CGFloat) -> CGFloat {
+        let ratio = translation / dragLimit
+        return dragLimit * ratio / (1 + abs(ratio))
+    }
+
+    /// „TEN TYDZIEŃ · 22–28 WRZ” — te same słowa, co nad Planem.
+    private var weekCaption: String {
+        let range = weekRangeText
+        switch weekOffset {
+        case 0:  return "TEN TYDZIEŃ · \(range)"
+        case 1:  return "PRZYSZŁY TYDZIEŃ · \(range)"
+        default: return "TYDZIEŃ · \(range)"
+        }
+    }
+
+    /// „22–28 WRZ”, a przez granicę miesiąca „29 WRZ–5 PAŹ”.
+    private var weekRangeText: String {
+        let days = weekDates
+        guard let first = days.first, let last = days.last else { return "" }
+        let sameMonth = calendar.component(.month, from: first)
+            == calendar.component(.month, from: last)
+        let from = sameMonth
+            ? Self.dayNumberFormatter.string(from: first)
+            : Self.dayMonthFormatter.string(from: first)
+        return "\(from)–\(Self.dayMonthFormatter.string(from: last))".uppercased()
     }
 
     // MARK: - Posiłek
@@ -353,71 +643,74 @@ struct AddToPlanSheet: View {
                         Rectangle()
                             .fill(Color.scTileStroke(scheme))
                             .frame(height: 1)
-                            .padding(.leading, 50)
+                            // Kreska zaczyna się pod tekstem, nie pod kafelkiem.
+                            .padding(.leading, 58)
                     }
                     slotRow(slot)
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(cardShape.fill(Color.scTileBg(scheme)))
+            .overlay(cardShape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+            .clipShape(cardShape)
         }
     }
 
-    /// Wiersz pory: kafelek w kolorze pory, nazwa, co już tu stoi, kółko.
-    /// Pora, pod którą przepis nie jest oznaczony, jest przygaszona, ale da
-    /// się ją wybrać — wczorajszy obiad na podwieczorek to normalna rzecz.
+    /// Wiersz pory: kafelek w kolorze pory, nazwa, pod nią danie, które już
+    /// tu stoi (miniatura + nazwa), i kółko wyboru w kolorze pory. Wybrany
+    /// wiersz dostaje tło w tincie pory. Pora, pod którą przepis nie jest
+    /// oznaczony, jest przygaszona, ale da się ją wybrać — wczorajszy obiad
+    /// na podwieczorek to normalna rzecz.
     private func slotRow(_ slot: MealSlot) -> some View {
         let isSelected = slot == selectedSlot
         let fits = recipe.fits(slot)
-        let takenBy = occupiedBy(slot)
+        let taken = occupant(of: slot)
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
                 selectedSlot = slot
             }
         } label: {
-            HStack(spacing: 12) {
-                SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 26)
+            HStack(spacing: 14) {
+                SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 32)
 
-                Text(slot.title)
-                    .font(.system(size: 14.5, weight: isSelected ? .bold : .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-                    .layoutPriority(1)
-
-                Spacer(minLength: 8)
-
-                if let takenBy {
-                    Text(takenBy)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.scFaint(scheme))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(slot.title)
+                        .font(.system(size: 15, weight: isSelected ? .bold : .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
-                        .truncationMode(.tail)
-                        .contentTransition(.opacity)
-                }
 
-                SCRadioMark(isOn: isSelected, accent: slot.cozyAccent, size: 20)
+                    if let taken {
+                        HStack(spacing: 6) {
+                            EditorialRecipeCover(recipe: taken.recipe, size: 20, cornerRadius: 5)
+                            Text(taken.recipe.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.scMuted(scheme))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(fits ? 1 : 0.5)
+
+                SCRadioMark(isOn: isSelected, accent: slot.cozyAccent)
             }
-            .opacity(fits ? 1 : 0.5)
             .padding(.horizontal, 12)
-            .frame(height: 40)
+            .padding(.vertical, 10)
+            .frame(minHeight: 56)
             .background(
                 slot.cozyAccent
                     .opacity(isSelected ? (scheme == .dark ? 0.16 : 0.10) : 0)
             )
             .contentShape(Rectangle())
-            .animation(.smooth(duration: 0.2), value: takenBy)
+            // Zmiana dnia podmienia dania pod nazwami pór płynnie, a nie
+            // skokiem wysokości wiersza.
+            .animation(.smooth(duration: 0.25), value: taken?.id)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(slotAccessibilityLabel(slot, fits: fits, takenBy: takenBy))
+        .accessibilityLabel(slotAccessibilityLabel(slot, fits: fits, takenBy: taken?.recipe.name))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -428,34 +721,23 @@ struct AddToPlanSheet: View {
         return parts.joined(separator: ", ")
     }
 
-    // MARK: - Dla kogo i ile
+    // MARK: - Porcje
 
-    /// Audytorium i porcje w jednej karcie — porcje nadążają za osobami,
-    /// dopóki nie ruszy się steppera. W domu jednoosobowym zostają same porcje.
-    private var audienceCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if members.count > 1 {
-                PlanAudienceChips(
-                    members: members,
-                    selection: $selectedParticipants,
-                    onChange: audienceChanged
-                )
+    private var servingsSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            EditorialSheetSectionLabel(title: "Porcje")
 
-                Rectangle()
-                    .fill(Color.scTileStroke(scheme))
-                    .frame(height: 1)
-            }
+            HStack(spacing: 14) {
+                SCHeaderIconWell(icon: "fork.knife", accent: SCPalette.sage, size: 32)
 
-            HStack(spacing: 12) {
-                // Bez etykiety „Porcje” — „2 porcje” mówi to samo.
-                // Liczba roluje — przy stepperze i przy regule auto.
+                // Liczba roluje — przy stepperze i przy regule auto, gdy chipy
+                // „Dla kogo” przestawiają porcje.
                 Text(PolishPlural.servings(servings))
                     .font(.system(size: 17, weight: .heavy))
                     .tracking(-0.3)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
                     .contentTransition(.numericText(value: Double(servings)))
-                    .padding(.leading, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 SCStepper(
@@ -465,17 +747,15 @@ struct AddToPlanSheet: View {
                     onChange: { _ in didOverrideServings = true }
                 )
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(cardShape.fill(Color.scTileBg(scheme)))
+            .overlay(cardShape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
     }
 
     // MARK: - Stopka
@@ -483,29 +763,30 @@ struct AddToPlanSheet: View {
     // Bez czerwonego wiersza z `mealStore.errorMessage`: `save()` zamyka arkusz
     // synchronicznie, więc taki wiersz nigdy nie pokazałby błędu WŁASNEGO
     // zapisu. Błędy store jadą mostem z korzenia aplikacji.
-    private var footer: some View {
-        SCSheetFooter {
-            Text(summaryText)
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(-0.2)
-                .monospacedDigit()
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .truncationMode(.tail)
-                .contentTransition(.numericText())
-                .frame(maxWidth: .infinity)
-                .animation(.smooth(duration: 0.25), value: summaryText)
+    @ViewBuilder
+    private var footerContent: some View {
+        // Jedno zdanie o tym, co się stanie. Słowa i cyfry rolują przy każdej
+        // zmianie wyboru nad nim.
+        Text(summaryText)
+            .font(.system(size: 13, weight: .semibold))
+            .tracking(-0.2)
+            .monospacedDigit()
+            .foregroundStyle(Color.scMuted(scheme))
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .truncationMode(.tail)
+            .contentTransition(.numericText())
+            .frame(maxWidth: .infinity)
+            .animation(.smooth(duration: 0.25), value: summaryText)
 
-            EditorialPrimaryActionButton(
-                title: ctaTitle,
-                icon: ctaIcon,
-                isEnabled: canSave,
-                isLoading: isSaving,
-                action: { save() }
-            )
-            .animation(.smooth(duration: 0.25), value: ctaTitle)
-        }
+        EditorialPrimaryActionButton(
+            title: ctaTitle,
+            icon: ctaIcon,
+            isEnabled: canSave,
+            isLoading: isSaving,
+            action: { save() }
+        )
+        .animation(.smooth(duration: 0.25), value: ctaTitle)
     }
 
     /// „Środa, 24 września · Obiad”. Dopiski: danie, które zapis wyprze
@@ -596,13 +877,12 @@ struct AddToPlanSheet: View {
         return !audience.isEmpty && audience.isSubset(of: Set(existing.participantIds))
     }
 
-    /// Nazwa dania, które zajmuje daną porę wybranego dnia — najpierw to dla
-    /// wybranych osób, potem cokolwiek.
-    private func occupiedBy(_ slot: MealSlot) -> String? {
+    /// Danie, które zajmuje daną porę wybranego dnia — najpierw to dla
+    /// wybranych osób, potem jakiekolwiek.
+    private func occupant(of slot: MealSlot) -> PlanMeal? {
         let audience = Set(participantsToSave)
         let meals = mealStore.meals(for: selectedDate, slot: slot)
-        let mine = meals.first { Set($0.participantIds) == audience }
-        return (mine ?? meals.first)?.recipe.name
+        return meals.first { Set($0.participantIds) == audience } ?? meals.first
     }
 
     private var ctaTitle: String {
@@ -685,7 +965,7 @@ struct AddToPlanSheet: View {
 
     // MARK: - Formatowanie
 
-    /// Dzień z datą — pasek sięga czterech tygodni, więc „czwartek” bywa
+    /// Dzień z datą — arkusz przewija tygodnie, więc „czwartek” bywa
     /// dwuznaczny. Formatter oddaje małą literę, a to początek zdania.
     private static func dayName(for date: Date) -> String {
         let raw = dayFormatter.string(from: date)
@@ -710,6 +990,14 @@ struct AddToPlanSheet: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "pl_PL")
         formatter.dateFormat = "d"
+        return formatter
+    }()
+
+    /// „27 wrz” — z miesiącem na końcu zakresu i na granicy miesięcy.
+    private static let dayMonthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "d MMM"
         return formatter
     }()
 

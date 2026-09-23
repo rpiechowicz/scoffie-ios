@@ -1,67 +1,47 @@
 import SwiftUI
 
-/// Krok 0 przepływu startowego — „Poznaj asystenta". Hero, nie lista:
-/// duża ikona AI, tytuł na dwie linie, cztery haczyki. Zaproszenie, nie
+/// Krok 0 przepływu startowego — „Poznaj asystenta". Zaproszenie, nie
 /// instrukcja — RODO, dostawca modelu i limity pojawiają się dopiero
 /// w kroku „Zgoda", gdzie użytkownik faktycznie decyduje.
 ///
+/// Układ powitania przewodnika „Poznaj aplikację” (`TourIntroView`): znak,
+/// nagłówek kroku (`SCStepHeader`) i karta funkcji (`SCStepFeatureCard`).
+/// Wiersze karty to tytuły czterech kart „Poznaj”, które przyjdą po zgodzie,
+/// z ich ikonami i kolorami — powitanie zapowiada dokładnie to, co za chwilę
+/// pokaże, zamiast osobnej listy ptaszków o tym samym.
+///
 /// Sama treść: „Zaczynamy" i „Zobacz wszystko, co potrafi" są w stopce
 /// przepływu (`AssistantIntroFooter`), którą składa `AssistantView` poza
-/// animowanym obszarem — jak w przewodniku „Poznaj aplikację".
+/// animowanym obszarem — jak w przewodniku.
 struct AssistantWelcomeView: View {
-    @Environment(\.colorScheme) private var scheme
-
-    private let ticks = [
-        "Plan tygodnia albo jednego dnia",
-        "Podmiany i domykanie makro",
-        "Cały dom albo tylko Ty",
-        "Zakupy i własne przepisy",
-    ]
+    private var features: [SCStepFeature] {
+        AssistantCapabilities.onboarding.map { card in
+            SCStepFeature(icon: card.icon, accent: card.accent.color, title: card.title)
+        }
+    }
 
     var body: some View {
         // `basedOnSize`: przy zwykłej czcionce kontener stoi (nie pływa
         // pod palcem), a przy dużej Dynamic Type treść daje się dosunąć.
-        // Pion jest policzony pod iPhone'a z ekranem 852 pt: nagłówek (128)
-        // + ta treść (~490) + stopka (118) + tab bar (83) — czwarty haczyk
-        // ma stać NAD gradientem stopki, nie pod nim. Każde powiększenie
-        // czegoś tutaj trzeba odjąć gdzie indziej.
+        // Pion liczony pod iPhone'a z ekranem 852 pt: nagłówek zakładki,
+        // ta treść (~420), stopka (~120) i tab bar — ostatni wiersz karty
+        // ma stać NAD cieniem stopki, nie pod nim.
         ScrollView {
-            VStack(spacing: 0) {
-                // Poświata sięga ~50 pt poza ikonę, a ScrollView tnie po
-                // swojej krawędzi — bez tego zapasu górna część cienia
-                // ginęła pod nagłówkiem.
-                AssistantAIMark(size: 100)
-                    .padding(.top, 36)
+            VStack(alignment: .leading, spacing: 0) {
+                AssistantAIMark(size: 56)
+                    .padding(.bottom, 18)
 
-                AssistantSectionLabel(text: "Asystent AI", color: SCPalette.terracotta)
-                    .padding(.top, 22)
+                SCStepHeader(
+                    eyebrow: "Asystent AI",
+                    title: "Poznaj asystenta",
+                    subtitle: "Układa plan, podmienia dania i pilnuje alergenów całego domu. Zatwierdzasz Ty."
+                )
+                .padding(.bottom, 22)
 
-                Text("Poznaj\nasystenta")
-                    .font(.system(size: 34, weight: .bold))
-                    .tracking(-0.9)
-                    .lineSpacing(0)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .padding(.top, 6)
-
-                Text("Układa plan tygodnia, podmienia dania i pilnuje alergenów całego domu. Każdą propozycję pokazuje jako kartę, którą zatwierdzasz Ty.")
-                    .font(.system(size: 15))
-                    .tracking(-0.2)
-                    .lineSpacing(3)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(maxWidth: 320)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-
-                // Wyrównane do lewej, ale blok jako całość centrowany.
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(ticks, id: \.self) { AssistantTickRow(text: $0) }
-                }
-                .padding(.top, 22)
+                SCStepFeatureCard(features: features)
             }
-            .frame(maxWidth: .infinity)
             .padding(.horizontal, SCPageMetrics.horizontal)
+            .padding(.top, 12)
             // Zapas na cień stopki (`SCEdgeShade`), gdy jednak trzeba przewinąć.
             .padding(.bottom, SCEdgeShade.bottomHeight + 4)
         }

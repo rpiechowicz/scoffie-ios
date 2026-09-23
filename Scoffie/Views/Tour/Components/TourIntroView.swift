@@ -4,12 +4,20 @@ import SwiftUI
 /// pytanie. Typograficzny, bez zdjęcia: zdjęcia zaczynają się od kroku 1
 /// i gdyby jedno stało już tutaj, cała reszta straciłaby efekt wejścia.
 ///
-/// Przyciski i „Pomiń" są w `TourFooter` — stopkę składa `FeatureTourView`
-/// poza animowaną treścią.
+/// Ten sam układ ma powitanie asystenta (`AssistantWelcomeView`): znak,
+/// nagłówek kroku (`SCStepHeader`), karta funkcji (`SCStepFeatureCard`).
+/// Przyciski i „Pomiń" są w stopce (`SCStepFooter`), którą składa
+/// `FeatureTourView` poza animowaną treścią.
 struct TourIntroView: View {
-    @Environment(\.colorScheme) private var scheme
-
     private static let logoSize: CGFloat = 56
+
+    private let features: [SCStepFeature] = [
+        SCStepFeature(icon: MenuConstans.Plan.icon, accent: SCPalette.terracotta, title: "Plan na cały tydzień", subtitle: "Ułóżcie menu raz — widzi je cały dom"),
+        SCStepFeature(icon: MenuConstans.Products.icon, accent: SCPalette.sage, title: "Lista zakupów z planu", subtitle: "Składa się sama, po działach sklepu"),
+        SCStepFeature(icon: MenuConstans.Recipes.icon, accent: SCPalette.indigo, title: "Przepisy krok po kroku", subtitle: "Z czasem gotowania i składnikami"),
+        SCStepFeature(icon: MenuConstans.Assistant.icon, accent: SCPalette.terracottaDeep, title: "Asystent od pomysłów", subtitle: "Ułoży posiłek i doda go do planu"),
+        SCStepFeature(icon: "leaf.fill", accent: SCPalette.sage, title: "Pod Waszą dietę i alergeny", subtitle: "Bez składników, których nie jecie"),
+    ]
 
     var body: some View {
         TourPage {
@@ -17,6 +25,7 @@ struct TourIntroView: View {
                 // Promień 22% boku to ten sam narożnik, który logo rysuje
                 // sobie samo (`SCScoffieMark.drawBackground`) — przy
                 // innej wartości maska podcinałaby własne tło znaku.
+                // Bez poświaty pod spodem: przepływ stoi na kartach bez cienia.
                 SCScoffieMark(size: Self.logoSize)
                     .clipShape(
                         RoundedRectangle(
@@ -24,64 +33,16 @@ struct TourIntroView: View {
                             style: .continuous
                         )
                     )
-                    .shadow(color: SCPalette.terracotta.opacity(0.28), radius: 18, x: 0, y: 10)
                     .padding(.bottom, 18)
 
-                Text("Plan posiłków dla całego domu")
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .tracking(0.7)
-                    .textCase(.uppercase)
-                    .foregroundStyle(SCPalette.terracotta)
-                    .padding(.bottom, 10)
+                SCStepHeader(
+                    eyebrow: "Plan posiłków dla całego domu",
+                    title: "Witaj w Scoffie",
+                    subtitle: "Układacie tydzień raz — resztą zajmuje się aplikacja."
+                )
+                .padding(.bottom, 22)
 
-                Text("Witaj w\nScoffie")
-                    .font(.system(size: 32, weight: .bold))
-                    .tracking(-0.6)
-                    .lineSpacing(3)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 12)
-
-                Text("Układacie tydzień raz — resztą zajmuje się aplikacja. Lista zakupów powstaje sama z planu, a przepisy omijają to, czego nie jecie.")
-                    .font(.system(size: 15.5))
-                    .lineSpacing(3.5)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 22)
-
-                VStack(spacing: 0) {
-                    TourFeatureRow(
-                        icon: MenuConstans.Plan.icon,
-                        tint: SCPalette.terracotta,
-                        title: "Plan na cały tydzień",
-                        subtitle: "Ułóżcie menu raz — widzi je cały dom"
-                    )
-                    TourFeatureRow(
-                        icon: MenuConstans.Products.icon,
-                        tint: SCPalette.sage,
-                        title: "Lista zakupów z planu",
-                        subtitle: "Składa się sama, po działach sklepu"
-                    )
-                    TourFeatureRow(
-                        icon: MenuConstans.Recipes.icon,
-                        tint: SCPalette.indigo,
-                        title: "Przepisy krok po kroku",
-                        subtitle: "Z czasem gotowania i listą składników"
-                    )
-                    TourFeatureRow(
-                        icon: MenuConstans.Assistant.icon,
-                        tint: SCPalette.terracottaDeep,
-                        title: "Asystent od pomysłów",
-                        subtitle: "Zapytaj, a ułoży posiłek i doda do planu"
-                    )
-                    TourFeatureRow(
-                        icon: "leaf",
-                        tint: SCPalette.sage,
-                        title: "Pod Waszą dietę i alergeny",
-                        subtitle: "Bez składników, których nie jecie",
-                        isLast: true
-                    )
-                }
+                SCStepFeatureCard(features: features)
             }
             .padding(.horizontal, TourLayout.horizontal)
         }
@@ -90,10 +51,10 @@ struct TourIntroView: View {
 
 #Preview("Dark") {
     ZStack {
-        TourBackground(scheme: .dark)
+        SCPageBackground(scheme: .dark).ignoresSafeArea()
         VStack(spacing: 0) {
             TourIntroView()
-            TourFooter(kind: .intro, onBack: {}, onPrimary: {}, onSkip: {})
+            SCStepFooter(slot: .link("Pomiń i przejdź do konfiguracji"), onSlotTap: {}, primaryTitle: "Poznaj aplikację", onPrimary: {})
         }
     }
     .preferredColorScheme(.dark)
@@ -101,10 +62,10 @@ struct TourIntroView: View {
 
 #Preview("Light") {
     ZStack {
-        TourBackground(scheme: .light)
+        SCPageBackground(scheme: .light).ignoresSafeArea()
         VStack(spacing: 0) {
             TourIntroView()
-            TourFooter(kind: .intro, onBack: {}, onPrimary: {}, onSkip: {})
+            SCStepFooter(slot: .link("Pomiń i przejdź do konfiguracji"), onSlotTap: {}, primaryTitle: "Poznaj aplikację", onPrimary: {})
         }
     }
     .preferredColorScheme(.light)

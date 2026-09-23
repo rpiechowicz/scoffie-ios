@@ -173,6 +173,26 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wiersz „Uwzględniłem: …” usunięty z rozmowy. `Kes size=n` z makiety to dysk 0,68·n
   (`SCMarkShape` wypełnia całą ramkę). Animację w liściu zawężać przez `animation(_:body:)`
   albo `geometryGroup()` — zwykłe `.animation(value:)` nadpisuje ruch nadany przez rodzica.
+- Pusty stan Asystenta (runda 14): tryb „piszę” (akcje gasną) przełącza powiadomienie KLAWIATURY z jej
+  krzywą (`AssistantView.greetingComposing`, `keyboardMoved`), nie fokus — fokus przychodził klatkę przed
+  klawiaturą i powitanie skakało w dół i w górę. Nie przywracać `.animation(value: composing)`
+  w `AssistantGreeting`. Puste pole ma JEDNĄ linię (`lineLimit(draft.isEmpty ? 1...1 : 1...8)`), bo
+  dwuwierszowy przykład zwijał się przy pierwszej literze i ciągnął powitanie.
+- Żywy znak = `SCLivingMark` (`Components/`): nastroje idle (oddech 4,2 s + co 8 s rozejrzenie / mrugnięcie
+  / pauza / obrót) · attentive · thinking (2,4 s obrót / 1,8 s oddech — liczby „Oddechu łuku”) · sleeping ·
+  still, reakcje `cheer`/`nudge` (`keyframeAnimator`); staje przy nieaktywnej zakładce i przy Reduce Motion.
+  Powitanie, kompaktowy nagłówek, jednorazowe podskoczenie przy świeżej odpowiedzi, karta puli. Drugiego
+  kręcącego się znaku w linii myślenia NIE dokładać.
+- Wykorzystana pula = `AssistantQuotaKit.swift`: `AssistantQuotaFacts` (liczby z `AgentUsageDTO`, plan
+  tylko jako „Polecamy”), `AssistantQuotaPanel` w powitaniu `trialExhausted` (paski wiadomości/zapisów,
+  alternatywy Plan tygodnia · Lista zakupów · Historia rozmów) i `AssistantQuotaSpentCard` zamiast pola
+  (próbna → plany; miesięczna → „Wraca 1 października · za 8 dni” + arkusz limitów).
+- Przyciski Asystenta (runda 14): stopka karty = `AssistantButtonSize.compact` (42 pt rysowane, 44 dotyk,
+  14 semibold), przycisk samodzielny (arkusz, stopka, plany) = `.regular` (46 pt, 15). Para =
+  `AssistantActionPair`: równe połowy, gdy oba tytuły się mieszczą, inaczej stos z główną NA DOLE — główna
+  zawsze ostatnia. Ikony: strzałki/szewrony za tytułem, reszta przed. Praca = kółko na STUKNIĘTYM przycisku
+  w miejscu ikony, szerokość bez zmian, drugi przygaszony. Chipy `AssistantChip` 38 pt / 44 dotyk.
+  Wysokości nie ustawiać ręcznie — `size:`.
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
   `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
   (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
@@ -213,8 +233,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   miniatura BEZ przybliżenia (zdjęcia katalogu to 1344×768 z talerzem na środku — `scaledToFill`
   w kwadracie już wycina środek, a dawne ×1,45 ucinało rant każdego talerza, runda 9);
   bez zdjęcia glif — i najpierw dania, których profil NIE ukrywa (kafelek nie pokaże dania z alergenem
-  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii; siatka to `RecipeFilterTileGrid` (wiersze
-  `HStack` z `fixedSize` w pionie), bo `LazyVGrid` stawiał obok siebie kafelki różnej wysokości.
+  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii. Runda 14: kafelek jest PIONOWY (miniatura 38 u góry,
+  nazwa 14,5 semibold na całej szerokości, liczba przypięta do dołu) — obok miniatury zostawało 96 pt przy
+  375, a „Niskotłuszczowe” (~118 pt) malało (Rafał: „nie są wszystkie takiej samej wielkości”). Siatka
+  `RecipeFilterTileGrid` stoi na `RecipeFilterTileGridLayout`: każdy kafelek ma wysokość najwyższego
+  w CAŁEJ siatce, nie w wierszu; nazwy bez `minimumScaleFactor` (poza bezpiecznikiem 0,9 dla jednego słowa
+  przy 320 pt). Nowa nazwa kafelka = sprawdź szerokość w SF Pro Text Semibold 14,5 wobec 143 pt (375).
   Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
   tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
   per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie
@@ -241,7 +265,16 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   dziecko — wtedy cień leży na liście i lista MUSI mieć na dole `.padding(.bottom,
   SCEdgeShade.bottomHeight)`. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
-  tylko nakładki na nią; kreator (`WelcomeFooter`) zostaje przy swoim układzie (kropki kroków).
+  tylko nakładki na nią; kreator, przewodnik i wprowadzenie Asystenta też (`SCStepFooter`, runda 14).
+- Przepływy krok po kroku (kreator „Poznajmy się”, przewodnik „Poznaj aplikację”, wprowadzenie Asystenta,
+  runda 14) stoją na `Components/SCStepFlow.swift`: `SCStepHeader` (kafel `SCHeaderIconWell` 48, eyebrow
+  10,5/1,4, tytuł 28 heavy, najwyżej jedno zdanie), `SCStepFeatureCard` i `SCStepFooter` = płyta
+  `SCSheetFooter` z cieniem, nad przyciskiem wiersz 36 pt: krążek „Wstecz” · pasek `SCStepProgress`
+  (odcinki na całą szerokość, bieżący nalewa się od lewej) albo odnośnik „Pomiń…” · licznik „2/5”; pod
+  spodem `EditorialPrimaryActionButton`. JEDNA instancja na cały przepływ, żeby pasek się animował.
+  `WelcomeFooter`, `WelcomeStepper`, `WelcomeStepHeader`, `TourFooter`, `TourBackground`, `AssistantTickRow`
+  usunięte; kreator i przewodnik na `SCPageBackground`, margines 20, sekcje `WelcomeSection`, wiersze celu
+  i diety jak w Ustawieniach, bez akapitów objaśnień.
 - Przypięty nagłówek nad przewijaną treścią arkusza = BEZ kreski: `.scScrollEdgeFade()` na
   `ScrollView` (`Components/SCScrollEdgeFade.swift`) — górny brzeg treści gaśnie (maska, więc działa
   na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Wzór:
@@ -318,15 +351,19 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`fits(slot)`) — „Wszystkie pory” usunięte w rundzie 10 („nie chcę jeść obiadu na śniadanie”).
   „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad przyciskiem —
   tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
-- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, napisany od zera w rundzie 13): trzy pytania bez
-  przewijania — KIEDY: przewijany pasek 28 dni od dziś (bez minionych dni i bez strzałek tygodnia,
-  kreska przed poniedziałkiem, „DZIŚ”, kropka szałwii = coś stoi); POSIŁEK: lista pór w jednej karcie
-  (kafelek pory, nazwa, po prawej danie, które już tam stoi, `SCRadioMark` w kolorze pory, pora spoza
-  przepisu przygaszona); DLA KOGO + porcje w jednej karcie (`PlanAudienceChips`, pod kreską „2 porcje”
-  + `SCStepper`). W stopce rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” / „dla całego
-  domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. `ViewThatFits(in:
-  .vertical)` przełącza na `ScrollView` tylko, gdy nie wejdzie (SE, duża czcionka).
-  `EditorialPrimaryActionButton` roluje tytuł (`numericText`) — działa tylko w animowanej transakcji.
+- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, od nowa w rundzie 14 — „paskudny, zrób porządnie”):
+  TYLKO znane klocki. Nagłówek = zdjęcie dania (`EditorialRecipeCover` 58 pt) + „DODAJ DO PLANU” + nazwa
+  + fakty z ikonami (czas, kcal) + krzyżyk. „Kiedy” = tydzień w karcie dokładnie jak `EditorialWeekBar`
+  (podpis „TEN TYDZIEŃ · …”, „Wróć do dziś”, strzałki 26 pt, przejeżdżające podkreślenie, przeciąganie
+  w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = lista pór w karcie:
+  kafelek pory, nazwa, pod nią miniatura + nazwa dania, które już tam stoi, `SCRadioMark` w kolorze pory,
+  tło wybranego w tincie pory. „Dla kogo” = `PlanAudienceChips`. „Porcje” = karta z rolującą liczbą
+  i `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” /
+  „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
+  wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
+  `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,
+  nie `stroke` (clip zjadał pół obwódki). `EditorialPrimaryActionButton` roluje tytuł (`numericText`) —
+  działa tylko w animowanej transakcji.
 - Ten sam przepis w tej samej porze dla drugiej osoby = SUMA audytoriów, a nie nadpisanie
   (`PlanAudienceChips.merged(_:with:members:)`, runda 10): pozycja planu to para (pora, przepis), więc
   zapis „posiłek1 dla user2” przepisywał „posiłek1 dla user1” i user1 zostawał bez jedzenia. Suma
@@ -373,8 +410,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   posiłku = `scTileBg` + `scTileStroke` bez cienia; etykiety sekcji WSZĘDZIE 10,5 pt bold, tracking 1,4,
   `scFaint` (lista Ustawień, arkusze, grupy Asystenta, „Kroki”, „Dla kogo”). Asystent: nagłówki arkuszy
   (`AssistantSheetHeader`) rysuje `EditorialSheetHeader` (krzyżyk `SCSheetCloseButton`), tytuł zakładki
-  to `EditorialPageHeader`, przycisk wysyłania „soft”. Świadomie zostały: nagłówek kreatora
-  (`WelcomeStepHeader`), kreski w historii i archiwum Zakupów (ten sam układ co ekran Zakupów),
+  to `EditorialPageHeader`, przycisk wysyłania „soft”. Świadomie zostały: kreski w historii i archiwum Zakupów (ten sam układ co ekran Zakupów),
   `ShoppingSheetHeader`.
 - Ustawienia → Gospodarstwo (23.09.2026, trzy rundy tego samego dnia — „za dużo tekstu”, potem
   „znów pusto i smutno”): nagłówek z ikoną domu, nazwą, ołówkiem i jedną linijką „3 osoby · wspólny
