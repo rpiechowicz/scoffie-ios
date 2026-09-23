@@ -105,11 +105,28 @@ jobs:
           </plist>
           EOF
 
+      # Symbole (dSYM) do Sentry wysyła faza „Upload dSYM to Sentry" w samym
+      # archiwum — potrzebuje `sentry-cli` na PATH i tokenu. Wersja przypięta:
+      # 3.x zdjęło flagi, na których stał skrypt 2.x. Bez sekretu
+      # SENTRY_AUTH_TOKEN krok nic nie robi, a archiwum powstaje jak dotąd
+      # (crashe z takiego buildu są wtedy bez nazw funkcji).
+      - name: Install sentry-cli
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::warning::Brak sekretu SENTRY_AUTH_TOKEN — dSYM nie trafią do Sentry."
+            exit 0
+          fi
+          npm install --global --no-fund --no-audit @sentry/cli@3.8.0
+          sentry-cli --version
+
       - name: Archive release build
         env:
           ASC_KEY_PATH: ${{ steps.appstore-key.outputs.path }}
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           set -o pipefail
           xcodebuild \
