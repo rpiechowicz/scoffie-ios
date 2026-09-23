@@ -53,9 +53,6 @@ struct CalendarView: View {
     /// wysokość na sufit arkusza „Cel dnia".
     @State private var pageWidth: CGFloat = 0
     @State private var pageHeight: CGFloat = 0
-    /// Cele dnia domowników (`households:memberPreferences`) — do
-    /// przełącznika osób w „Cel dnia”.
-    @State private var memberPreferences: [String: HouseholdMemberPreferences] = [:]
 
     /// Dzień oglądany w Kalendarzu. Własny stan zakładki — Plan ma swój,
     /// wspólny zostaje tylko tydzień.
@@ -215,55 +212,20 @@ struct CalendarView: View {
         )
     }
 
-    /// Zjedzone przez domownika — jego dania (osobiste albo wspólne) i jego
-    /// odhaczenia. Do przełącznika osób w „Cel dnia”.
-    private func eatenDayNutrition(on date: Date, memberId: String) -> PlanDayNutrition {
-        PlanDayNutrition.make(
-            slots: visibleSlots(on: date),
-            meals: { mealStore.meals(for: date, slot: $0).visibleTo(memberId: memberId) },
-            knownHouseholdMemberCount: knownHouseholdMemberCount,
-            isEaten: { $0.isEaten(by: memberId) }
-        )
-    }
-
-    /// Cele domowników z serwera — pusta odpowiedź (błąd, anulowanie) nie
-    /// nadpisuje tego, co już jest. Patrz ta sama funkcja w Planie.
-    private func refreshMemberPreferences() async {
-        guard sessionStore.householdMembers.count > 1 else { return }
-        let loaded = await sessionStore.loadHouseholdMemberPreferences()
-        guard !Task.isCancelled, !loaded.isEmpty else { return }
-        memberPreferences = loaded
-    }
-
-    /// Osoby w „Cel dnia” — ja pierwszy, potem domownicy; każdy ze swoimi
-    /// daniami, odhaczeniami i celem. Ten sam przełącznik, co w Planie.
+    /// „Cel dnia” w Kalendarzu jest osobisty: to, co odhaczył ten, kto trzyma
+    /// telefon — bez przełącznika osób (Rafał, runda 11: „z defaultu ma być
+    /// tylko ja”). Przełącznik osób zostaje w Planie.
     private var dayGoalPeople: [PlanDayPerson] {
-        let me = sessionStore.currentUserId
-        let members = sessionStore.householdMembers
-        guard members.count > 1 else {
-            return [
-                PlanDayPerson(
-                    id: me ?? "me",
-                    name: "Ty",
-                    member: nil,
-                    nutrition: eatenNutrition,
-                    targets: dailyTargets,
-                    isMe: true
-                )
-            ]
-        }
-        let ordered = members.filter { $0.id == me } + members.filter { $0.id != me }
-        return ordered.map { member in
-            let isMe = member.id == me
-            return PlanDayPerson(
-                id: member.id,
-                name: HouseholdMemberStyle.shortName(member.displayName),
-                member: member,
-                nutrition: isMe ? eatenNutrition : eatenDayNutrition(on: selectedDate, memberId: member.id),
-                targets: isMe ? dailyTargets : memberPreferences[member.id]?.targets,
-                isMe: isMe
+        [
+            PlanDayPerson(
+                id: sessionStore.currentUserId ?? "me",
+                name: "Ty",
+                member: nil,
+                nutrition: eatenNutrition,
+                targets: dailyTargets,
+                isMe: true
             )
-        }
+        ]
     }
 
     /// Suma CAŁEGO planu dnia, bez pytania o odhaczenie — „ile ten dzień miał
@@ -787,11 +749,6 @@ struct CalendarView: View {
             }
             .onChange(of: selectedDate) { _, newValue in
                 datesViewModel.selectDate(newValue)
-            }
-            // Cele domowników do przełącznika osób w „Cel dnia” — przy każdej
-            // zmianie składu. Dom jednoosobowy nie ma kogo przełączać.
-            .task(id: sessionStore.householdMembers.map(\.id)) {
-                await refreshMemberPreferences()
             }
             .task(id: datesViewModel.weekStartISO) {
                 await mealStore.loadWeekPlanFromBackend(

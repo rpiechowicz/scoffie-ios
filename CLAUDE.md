@@ -314,8 +314,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`PlanPersonSwitcher`: awatary, wybrana osoba z imieniem na tincie swojego koloru): dania, suma
   i CEL tej osoby. Cele domowników przychodzą z serwera w `households:memberPreferences`
   (`targets: {calorieGoal, macros}` — policzone w `toMemberContext`, BEZ sylwetki) →
-  `HouseholdMemberPreferences.targets`. Kalendarz ma ten sam przełącznik (odhaczone przez tę osobę).
+  `HouseholdMemberPreferences.targets`. Przełącznik to pełnoszerokościowe zakładki POD nagłówkiem
+  (awatar + imię każdej osoby, runda 11). Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
   Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
+- `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
+  (między zjazdem a wjazdem), a przewijanie ma `.id` dnia — pełny ↔ pusty dzień szarpał wjazdem.
+  Powrót do bieżącego tygodnia w pasku dni = „↩ Wróć do dziś” (samo „DZIŚ” czytało się jak znacznik dnia).
 - Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
   podświetlone kółko z iskierkami; karta pustego tygodnia w `PlanDayTimeline` = kafelek, „ASYSTENT”,
   tytuł, jedno zdanie i `EditorialPrimaryActionButton` (runda 9, „przerób na aktualne standardy”).
