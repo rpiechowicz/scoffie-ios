@@ -31,8 +31,7 @@ struct RecipeFilterSheet: View {
     @State private var fitDraft: Bool
     @State private var indexBox: IndexBox
     @State private var isHeaderCompact = false
-    @State private var openDepartment: IngredientDepartment?
-    @State private var isSearchPresented = false
+    @State private var isExcludePresented = false
 
     /// Przepisy po wyszukiwarce Przepisów, ale PRZED dopasowaniem i filtrami.
     private let recipes: [Recipe]
@@ -128,11 +127,10 @@ struct RecipeFilterSheet: View {
                         .padding(.top, 20)
                     fitRow
                         .padding(.top, 14)
-                    timeSection
+                    timeAndDifficultySection
                     caloriesSection
                     dietSection
                     traitsSection
-                    difficultySection
                     excludeSection
                 }
                 .padding(.horizontal, 20)
@@ -158,18 +156,8 @@ struct RecipeFilterSheet: View {
         .sensoryFeedback(.selection, trigger: draft.diets)
         .sensoryFeedback(.selection, trigger: draft.traits)
         .sensoryFeedback(.impact(weight: .light), trigger: fitDraft)
-        .sheet(item: $openDepartment) { department in
-            RecipeExcludeCategorySheet(
-                department: department,
-                index: index,
-                filters: $draft,
-                fit: fitDraft
-            )
-            .presentationDetents([.large])
-            .dashboardLiquidSheet()
-        }
-        .sheet(isPresented: $isSearchPresented) {
-            RecipeExcludeSearchSheet(
+        .sheet(isPresented: $isExcludePresented) {
+            RecipeExcludeSheet(
                 index: index,
                 filters: $draft,
                 fit: fitDraft,
@@ -318,32 +306,39 @@ struct RecipeFilterSheet: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    // MARK: - Czas, kalorie, trudność
+    // MARK: - Czas, trudność, kalorie
 
-    private static let timeItems: [RecipeFilterSegmented<Int?>.Item] =
+    private static let timeItems: [RecipeFilterMenuTile<Int?>.Item] =
         [.init(value: nil, title: "Dowolny")]
         + RecipeFilterOptions.prepTimeChoices.map { minutes in
-            RecipeFilterSegmented<Int?>.Item(value: minutes, title: "\(minutes) min")
+            RecipeFilterMenuTile<Int?>.Item(value: minutes, title: "do \(minutes) min")
         }
 
-    private static let difficultyItems: [RecipeFilterSegmented<Difficulty?>.Item] = [
+    private static let difficultyItems: [RecipeFilterMenuTile<Difficulty?>.Item] = [
         .init(value: nil, title: "Dowolna"),
         .init(value: .easy, title: "Łatwa"),
         .init(value: .medium, title: "Średnia"),
         .init(value: .hard, title: "Trudna")
     ]
 
-    private var timeSection: some View {
-        RecipeFilterSection(title: "Czas przygotowania") {
-            if let minutes = draft.maxPrepTimeMinutes {
-                accentValue("do \(minutes) min", number: minutes)
+    /// Czas i trudność w jednym rzędzie — dwie krótkie decyzje, które
+    /// osobno zajmowały dwie pełne sekcje arkusza.
+    private var timeAndDifficultySection: some View {
+        RecipeFilterSection(title: "Czas i trudność") {
+            HStack(spacing: 8) {
+                RecipeFilterMenuTile(
+                    title: "Czas",
+                    icon: "clock",
+                    items: Self.timeItems,
+                    selection: $draft.maxPrepTimeMinutes
+                )
+                RecipeFilterMenuTile(
+                    title: "Trudność",
+                    icon: "chart.bar",
+                    items: Self.difficultyItems,
+                    selection: $draft.difficulty
+                )
             }
-        } content: {
-            RecipeFilterSegmented(
-                items: Self.timeItems,
-                selection: $draft.maxPrepTimeMinutes,
-                accessibilityLabel: "Czas przygotowania"
-            )
         }
     }
 
@@ -355,17 +350,10 @@ struct RecipeFilterSheet: View {
                 Text("bez limitu")
             }
         } content: {
-            RecipeFilterKcalRuler(value: $draft.maxCaloriesPerServing, goalZone: goalZone)
-                .padding(.top, 2)
-        }
-    }
-
-    private var difficultySection: some View {
-        RecipeFilterSection(title: "Trudność") {
-            RecipeFilterSegmented(
-                items: Self.difficultyItems,
-                selection: $draft.difficulty,
-                accessibilityLabel: "Trudność"
+            RecipeFilterKcalSlider(
+                value: $draft.maxCaloriesPerServing,
+                histogram: index.kcalHistogram(draft, fit: fitDraft),
+                goalZone: goalZone
             )
         }
     }
@@ -437,30 +425,85 @@ struct RecipeFilterSheet: View {
 
     // MARK: - Wykluczanie
 
+    /// Jeden kafelek zamiast pola szukania i całej listy działów — ta lista
+    /// rozciągała arkusz na kilka ekranów przewijania. Szukanie, działy
+    /// i „Cofnij” żyją w osobnym arkuszu (`RecipeExcludeSheet`).
     private var excludeSection: some View {
         let hidden = index.hiddenCount(by: draft.excludedIngredients, fit: fitDraft)
+        let own = draft.excludedIngredients
+            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+        let chips = profileChips + own.map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.chipTitle) }
+
         return RecipeFilterSection(title: "Wyklucz składniki") {
             if hidden > 0 {
                 hiddenLabel(hidden)
                     .transition(.opacity)
             }
         } content: {
-            VStack(alignment: .leading, spacing: 0) {
-                RecipeFilterSearchField(prompt: "Szukaj składnika, np. papryka") {
-                    isSearchPresented = true
+            Button {
+                isExcludePresented = true
+            } label: {
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12))
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Image(systemName: "nosign")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(SCPalette.terracotta)
+                        )
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(excludeTitle(own: own.count, profile: profileChips.count))
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(-0.3)
+                            .foregroundStyle(Color.scLabel(scheme))
+                            .contentTransition(.interpolate)
+
+                        if chips.isEmpty {
+                            Text("Np. papryka, grzyby, kolendra")
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Color.scMuted(scheme))
+                                .padding(.top, 2)
+                        } else {
+                            RecipeFilterChipLine(chips: chips)
+                                .padding(.top, 7)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if !own.isEmpty {
+                        RecipeFilterCountBadge(count: own.count)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.scFaint(scheme))
                 }
-
-                Text("Przeglądaj kategorie")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .padding(.horizontal, 6)
-                    .padding(.top, 18)
-                    .padding(.bottom, 8)
-
-                departmentsCard
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.scTileBg(scheme))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
+            .buttonStyle(PlanPressStyle(scale: 0.985))
+            .accessibilityLabel("Wyklucz składniki")
+            .accessibilityValue(chips.isEmpty ? "nic" : chips.map(\.title).joined(separator: ", "))
         }
+        .animation(.smooth(duration: 0.22), value: own)
         .animation(.smooth(duration: 0.2), value: hidden)
+    }
+
+    private func excludeTitle(own: Int, profile: Int) -> String {
+        // Liczba stoi w plakietce obok — tytuł jej nie powtarza.
+        if own > 0 { return "Wykluczone składniki" }
+        return profile > 0 ? "Z Twojego profilu" : "Nic nie wykluczasz"
     }
 
     private func hiddenLabel(_ count: Int) -> some View {
@@ -468,120 +511,6 @@ struct RecipeFilterSheet: View {
             + Text(verbatim: "\(count)").fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme))
             + Text(verbatim: " \(PolishPlural.recipesNoun(count))"))
             .monospacedDigit()
-    }
-
-    private var departmentsCard: some View {
-        let chips = profileChips
-        let departments = index.departments
-
-        return VStack(spacing: 0) {
-            if !chips.isEmpty {
-                profileRow(chips)
-            }
-
-            ForEach(Array(departments.enumerated()), id: \.element.id) { offset, department in
-                departmentRow(department, showsRule: offset > 0 || !chips.isEmpty)
-            }
-
-            if departments.isEmpty {
-                Text("Przepisy nie mają jeszcze listy składników.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    /// Alergeny i dieta z profilu, które nie mają kafelka w Diecie. Nie da
-    /// się ich tu zdjąć — robi to przełącznik „Dopasowane do Ciebie”.
-    private func profileRow(_ chips: [RecipeFilterChipLine.Chip]) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Z Twojego profilu")
-                    .font(.system(size: 15, weight: .medium))
-                    .tracking(-0.25)
-                    .foregroundStyle(Color.scLabel(scheme))
-                RecipeFilterChipLine(chips: chips)
-                    .padding(.top, 7)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            RecipeFilterCountBadge(count: chips.count, locked: true)
-        }
-        .padding(.vertical, 12)
-        .padding(.leading, 14)
-        .padding(.trailing, 14)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Z Twojego profilu: " + chips.map(\.title).joined(separator: ", "))
-    }
-
-    private func departmentRow(_ department: IngredientDepartment, showsRule: Bool) -> some View {
-        let excluded = department.excluded(in: draft.excludedIngredients)
-        let chips = excluded.map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.chipTitle) }
-
-        return Button {
-            openDepartment = department
-        } label: {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(department.name)
-                        .font(.system(size: 15, weight: .medium))
-                        .tracking(-0.25)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(1)
-
-                    if chips.isEmpty {
-                        Text(PolishPlural.ingredients(department.ingredientCount))
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.scFaint(scheme))
-                            .padding(.top, 3)
-                            .transition(.opacity)
-                    } else {
-                        RecipeFilterChipLine(chips: chips)
-                            .padding(.top, 7)
-                            .transition(.opacity)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if !chips.isEmpty {
-                    RecipeFilterCountBadge(count: chips.count)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.scFaint(scheme))
-            }
-            .padding(.vertical, 12)
-            .padding(.leading, 14)
-            .padding(.trailing, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
-        .overlay(alignment: .top) {
-            if showsRule {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 14)
-            }
-        }
-        .animation(.smooth(duration: 0.22), value: chips.map(\.id))
-        .accessibilityLabel(department.name)
-        .accessibilityValue(chips.isEmpty
-            ? PolishPlural.ingredients(department.ingredientCount)
-            : "wykluczone: " + chips.map(\.title).joined(separator: ", "))
     }
 
     // MARK: - Stopka

@@ -72,6 +72,28 @@ struct RecipeFilterIndex {
         return count(next, fit: fit)
     }
 
+    /// Rozkład kalorii na porcję pod suwak: przedziały po 50 kcal od zera do
+    /// `calorieScaleMax` i jeden ostatni na wszystko powyżej („1000+”).
+    ///
+    /// Liczony przy WSZYSTKICH pozostałych filtrach, ale bez samego limitu
+    /// kalorii — słupki mówią, co zostanie po przesunięciu uchwytu, więc nie
+    /// mogą znikać za nim. Przepisy bez policzonych makr nie mają słupka
+    /// (i tak przechodzą przez limit, patrz `RecipeFilterOptions.matches`).
+    func kcalHistogram(_ options: RecipeFilterOptions, fit: Bool) -> [Int] {
+        var withoutLimit = options
+        withoutLimit.maxCaloriesPerServing = nil
+        let step = RecipeFilterOptions.calorieStep
+        let overflow = RecipeFilterOptions.calorieScaleMax / step
+        var buckets = Array(repeating: 0, count: overflow + 1)
+        for entry in entries where entry.facts.kcalPerServing > 0 && passes(entry, withoutLimit, fit: fit) {
+            // Przedział i obejmuje (i·50, (i+1)·50] — przepis za dokładnie
+            // 500 kcal mieści się w limicie „do 500”, więc jest w słupku pod nim.
+            let bucket = min((entry.facts.kcalPerServing - 1) / step, overflow)
+            buckets[bucket] += 1
+        }
+        return buckets
+    }
+
     /// Ile przepisów ukrywają same wykluczenia — niezależnie od reszty
     /// filtrów, żeby liczba przy „Wyklucz składniki” nie skakała, gdy ktoś
     /// przesuwa igłę kalorii.

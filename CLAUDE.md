@@ -169,7 +169,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
 - Filtry przepisów v3 (23.09.2026) — makieta Claude Design „Scoffie - Przepisy v3 - Filtry”
   (projekt `43b605d0-…`, `components/filtry-final.jsx`). `RecipeFilterSheet` + klocki w
-  `RecipeFilterKit.swift` + arkusze-dzieci `RecipeExcludeSheets.swift` (dział składników, szukanie).
+  `RecipeFilterKit.swift` + arkusze-dzieci `RecipeExcludeSheets.swift`. Po uwagach Rafała (23.09):
+  wykluczanie to JEDEN kafelek w Filtrach, a szukanie + działy mieszkają w `RecipeExcludeSheet`
+  (dział → `RecipeExcludeCategorySheet`); czas i trudność to dwa kafelki z menu w jednym rzędzie;
+  kalorie to histogram przepisów (`RecipeFilterIndex.kcalHistogram`, przy pozostałych filtrach,
+  bez samego limitu) z uchwytem; aktywny przycisk filtrów na Przepisach = wariant „podświetlony”
+  jak różdżka obok, nie pełna terakota.
   Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
   tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
   per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie

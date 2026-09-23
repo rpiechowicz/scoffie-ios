@@ -55,72 +55,83 @@ extension RecipeFilterSection where Trailing == EmptyView {
     }
 }
 
-// MARK: - Segment
+// MARK: - Kafelek z menu (czas, trudność)
 
-/// Wybór jednej wartości z kilku — „Dowolny · 15 min · 30 min · 45 min”.
-/// Zaznaczenie to pigułka, która PRZESUWA się pod nową wartość, a nie gaśnie
-/// w jednym miejscu i zapala w drugim.
-struct RecipeFilterSegmented<Value: Hashable>: View {
+/// Kafelek z bieżącą wartością, który po stuknięciu otwiera systemowe menu
+/// z opcjami. Czas i trudność stoją obok siebie w jednym rzędzie — cztery
+/// opcje segmentu w pół szerokości arkusza zmieściłyby się tylko ścięte.
+struct RecipeFilterMenuTile<Value: Hashable>: View {
     struct Item {
         let value: Value
         let title: String
     }
 
+    let title: String
+    let icon: String
     let items: [Item]
     @Binding var selection: Value
-    var accent: Color = SCPalette.terracotta
-    var accessibilityLabel: String
 
     @Environment(\.colorScheme) private var scheme
-    @Namespace private var pill
+
+    /// Pierwsza opcja to „dowolny” — wtedy kafelek stoi neutralnie.
+    private var isActive: Bool { selection != items.first?.value }
+    private var currentTitle: String { items.first { $0.value == selection }?.title ?? "" }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                let isOn = item.value == selection
-                Button {
-                    guard !isOn else { return }
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                        selection = item.value
-                    }
-                } label: {
-                    Text(item.title)
-                        .font(.system(size: 14, weight: isOn ? .bold : .medium))
-                        .tracking(-0.2)
-                        .foregroundStyle(isOn ? accent : Color.scMuted(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background {
-                            if isOn {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(accent.opacity(scheme == .dark ? 0.2 : 0.14))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .strokeBorder(accent.opacity(0.45), lineWidth: 1)
-                                    )
-                                    .matchedGeometryEffect(id: "pill", in: pill)
-                            }
-                        }
-                        .contentShape(Rectangle())
+        Menu {
+            Picker(title, selection: $selection) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    Text(item.title).tag(item.value)
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
             }
+        } label: {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(isActive ? SCPalette.terracotta.opacity(scheme == .dark ? 0.2 : 0.14) : Color.scChipBg(scheme))
+                    .frame(width: 30, height: 30)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(isActive ? SCPalette.terracotta : Color.scMuted(scheme))
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title.uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(1)
+                        .foregroundStyle(Color.scFaint(scheme))
+                    Text(currentTitle)
+                        .font(.system(size: 15, weight: .semibold))
+                        .tracking(-0.3)
+                        .foregroundStyle(isActive ? SCPalette.terracotta : Color.scLabel(scheme))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .contentTransition(.interpolate)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundStyle(Color.scFaint(scheme))
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 60)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isActive ? SCPalette.terracotta.opacity(scheme == .dark ? 0.12 : 0.09) : Color.scTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(isActive ? SCPalette.terracotta.opacity(0.4) : Color.scTileStroke(scheme), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .padding(3)
-        .frame(height: 42)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(Color.scChipBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
-        )
+        .menuStyle(.button)
+        .buttonStyle(PlanPressStyle(scale: 0.97))
+        .animation(.smooth(duration: 0.22), value: selection)
         .sensoryFeedback(.selection, trigger: selection)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(title)
+        .accessibilityValue(currentTitle)
     }
 }
 
@@ -228,94 +239,61 @@ struct RecipeFilterOptionTile: View {
     }
 }
 
-// MARK: - Linijka kalorii
+// MARK: - Kalorie: histogram z uchwytem
 
-/// Linijka co 50 kcal (setki wyższe), igła jako uchwyt, cel z profilu jako
-/// miękkie pole pod kreskami. Igła na końcu skali = bez limitu.
+/// Limit kalorii na porcję jako suwak nad rozkładem przepisów.
 ///
-/// Gest idzie OBOK przewijania (`simultaneousGesture`), nie zamiast niego:
-/// pionowy ruch palca na linijce przewija arkusz, poziomy przesuwa igłę.
-/// Kierunek rozstrzyga się raz, po pierwszych kilku punktach ruchu —
-/// stuknięcie stawia igłę w miejscu palca.
-struct RecipeFilterKcalRuler: View {
+/// Słupki to przedziały po 50 kcal: wysokość = ile przepisów ma taką
+/// kaloryczność przy WSZYSTKICH pozostałych filtrach, kolor = czy zmieści
+/// się pod limitem. Widać, co kosztuje przesunięcie uchwytu o krok —
+/// „do 500” odcina górę rozkładu, a nie abstrakcyjną liczbę. Ostatni słupek
+/// to „1000+”; uchwyt na samym końcu = bez limitu.
+///
+/// Gest idzie OBOK przewijania (`simultaneousGesture`): pionowy ruch palca
+/// przewija arkusz, poziomy prowadzi uchwyt. Kierunek rozstrzyga się raz,
+/// po pierwszych punktach ruchu; stuknięcie stawia uchwyt w miejscu palca.
+struct RecipeFilterKcalSlider: View {
     @Binding var value: Int?
-    /// Pole celu z profilu (np. 500–800). `nil` = bez pola.
+    /// Liczba przepisów w każdym przedziale (`RecipeFilterIndex.kcalHistogram`).
+    let histogram: [Int]
+    /// Cel z profilu (np. 500–800). `nil` = bez pola celu.
     let goalZone: ClosedRange<Int>?
 
     @Environment(\.colorScheme) private var scheme
     @State private var axis: Axis? = nil
+    @State private var isDragging = false
 
-    private let scaleMax = RecipeFilterOptions.calorieScaleMax
     private let step = RecipeFilterOptions.calorieStep
-    private static let height: CGFloat = 40
-    private static let needleWidth: CGFloat = 6
+    private let limitMax = RecipeFilterOptions.calorieScaleMax
+    /// Skala sięga o jeden przedział dalej niż największy limit — tam stoi
+    /// słupek „1000+” i tam parkuje uchwyt „bez limitu”.
+    private var scaleEnd: Int { limitMax + step }
 
-    private var tickCount: Int { scaleMax / step + 1 }
-    /// Igła stoi na liczbie albo — bez limitu — na końcu skali.
-    private var needleValue: Int { value ?? scaleMax }
+    private static let barsHeight: CGFloat = 52
+    private static let thumb: CGFloat = 26
+    private static let barSpacing: CGFloat = 3
+
+    private var thumbValue: Int { value ?? scaleEnd }
+    private var inset: CGFloat { Self.thumb / 2 }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 2) {
             GeometryReader { proxy in
                 let width = proxy.size.width
-                ZStack(alignment: .topLeading) {
-                    if let zone = clampedZone {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(SCPalette.sage.opacity(scheme == .dark ? 0.12 : 0.10))
-                            .frame(width: x(zone.upperBound, in: width) - x(zone.lowerBound, in: width) + 14, height: Self.height - 4)
-                            .offset(x: x(zone.lowerBound, in: width) - 7, y: 4)
-                    }
-
-                    ForEach(0..<tickCount, id: \.self) { index in
-                        let kcal = index * step
-                        let isMajor = kcal % 100 == 0
-                        let tickHeight: CGFloat = isMajor ? 16 : 8
-                        Capsule(style: .continuous)
-                            .fill(tickColor(kcal: kcal, major: isMajor))
-                            .frame(width: 2, height: tickHeight)
-                            .position(x: x(kcal, in: width), y: Self.height - 7 - tickHeight / 2)
-                    }
-
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.scLabel(scheme))
-                        .frame(width: Self.needleWidth, height: Self.height)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.scPageBase(scheme))
-                                .padding(-3)
-                        )
-                        .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.18), radius: 6, x: 0, y: 3)
-                        .position(x: x(needleValue, in: width), y: Self.height / 2)
+                VStack(spacing: 0) {
+                    bars(width: width)
+                        .frame(height: Self.barsHeight)
+                    track(width: width)
+                        .frame(height: Self.thumb + 8)
                 }
-                .frame(width: width, height: Self.height)
                 .contentShape(Rectangle())
                 .simultaneousGesture(drag(width: width))
             }
-            .frame(height: Self.height)
+            .frame(height: Self.barsHeight + Self.thumb + 8)
 
-            GeometryReader { proxy in
-                let width = proxy.size.width
-                ZStack(alignment: .topLeading) {
-                    Text(verbatim: "0")
-                        .position(x: 6, y: 8)
-                    if let zone = goalZone {
-                        Text(verbatim: "Twój cel \(zone.lowerBound)–\(zone.upperBound)")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(SCPalette.sage)
-                            .fixedSize()
-                            .position(x: goalLabelX(zone: zone, width: width), y: 8)
-                    }
-                    Text(verbatim: "\(scaleMax)+")
-                        .fixedSize()
-                        .position(x: width - 16, y: 8)
-                }
-            }
-            .frame(height: 16)
-            .font(.system(size: 12, weight: .regular))
-            .monospacedDigit()
-            .foregroundStyle(Color.scFaint(scheme))
+            labels
+                .frame(height: 16)
         }
-        .padding(.horizontal, 4)
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Kalorie na porcję")
@@ -323,49 +301,142 @@ struct RecipeFilterKcalRuler: View {
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment:
-                let next = needleValue + step
-                value = next >= scaleMax ? nil : next
+                let next = thumbValue + step
+                value = next > limitMax ? nil : next
             case .decrement:
-                value = max(RecipeFilterOptions.calorieMinimum, needleValue - step)
+                value = max(RecipeFilterOptions.calorieMinimum, min(thumbValue, scaleEnd) - step)
             @unknown default:
                 break
             }
         }
     }
 
-    // MARK: Geometria
+    // MARK: Rysunek
 
-    private func x(_ kcal: Int, in width: CGFloat) -> CGFloat {
-        let usable = max(1, width - 2)
-        return 1 + usable * CGFloat(min(max(kcal, 0), scaleMax)) / CGFloat(scaleMax)
+    private func x(_ kcal: Int, width: CGFloat) -> CGFloat {
+        let usable = max(1, width - 2 * inset)
+        return inset + usable * CGFloat(min(max(kcal, 0), scaleEnd)) / CGFloat(scaleEnd)
     }
 
-    private var clampedZone: ClosedRange<Int>? {
-        guard let goalZone, goalZone.lowerBound < scaleMax else { return nil }
-        return max(0, goalZone.lowerBound)...min(scaleMax, goalZone.upperBound)
+    /// Czy przedział `index` (od index·50 do (index+1)·50 kcal) mieści się
+    /// pod limitem.
+    private func isIncluded(bucket index: Int) -> Bool {
+        guard let value else { return true }
+        return (index + 1) * step <= value
+    }
+
+    private func barColor(included: Bool, empty: Bool) -> Color {
+        if included {
+            return SCPalette.terracotta.opacity(empty ? 0.25 : (scheme == .dark ? 0.62 : 0.55))
+        }
+        return Color.scLabel(scheme).opacity(empty ? 0.06 : 0.11)
+    }
+
+    private func bars(width: CGFloat) -> some View {
+        let peak = max(histogram.max() ?? 0, 1)
+        let usable = max(1, width - 2 * inset)
+        let count = max(histogram.count, 1)
+        let barWidth = max(2, (usable - Self.barSpacing * CGFloat(count - 1)) / CGFloat(count))
+
+        return HStack(alignment: .bottom, spacing: Self.barSpacing) {
+            ForEach(Array(histogram.enumerated()), id: \.offset) { index, recipes in
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(barColor(included: isIncluded(bucket: index), empty: recipes == 0))
+                    .frame(
+                        width: barWidth,
+                        height: recipes == 0 ? 2 : max(4, Self.barsHeight * CGFloat(recipes) / CGFloat(peak))
+                    )
+            }
+        }
+        .frame(width: usable, height: Self.barsHeight, alignment: .bottomLeading)
+        .padding(.horizontal, inset)
+        .animation(.smooth(duration: 0.35), value: histogram)
+        .animation(isDragging ? nil : .smooth(duration: 0.2), value: value)
+    }
+
+    private func track(width: CGFloat) -> some View {
+        let thumbX = x(thumbValue, width: width)
+        let zoneStart = goalZone.map { x($0.lowerBound, width: width) } ?? 0
+        let zoneEnd = goalZone.map { x(min($0.upperBound, scaleEnd), width: width) } ?? 0
+
+        return ZStack(alignment: .leading) {
+            Capsule(style: .continuous)
+                .fill(Color.scBarTrack(scheme))
+                .frame(width: max(0, width - 2 * inset), height: 4)
+                .offset(x: inset)
+
+            if goalZone != nil {
+                Capsule(style: .continuous)
+                    .fill(SCPalette.sage.opacity(0.75))
+                    .frame(width: max(0, zoneEnd - zoneStart), height: 4)
+                    .offset(x: zoneStart)
+            }
+
+            Capsule(style: .continuous)
+                .fill(SCPalette.terracotta)
+                .frame(width: max(0, thumbX - inset), height: 4)
+                .offset(x: inset)
+
+            Circle()
+                .fill(.white)
+                .frame(width: Self.thumb, height: Self.thumb)
+                .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.2), radius: 5, x: 0, y: 2)
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
+                .scaleEffect(isDragging ? 1.14 : 1)
+                .offset(x: thumbX - Self.thumb / 2)
+                .animation(.spring(response: 0.26, dampingFraction: 0.7), value: isDragging)
+        }
+        .frame(width: width, height: Self.thumb + 8)
+    }
+
+    private var labels: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            ZStack(alignment: .topLeading) {
+                Text(verbatim: "0")
+                    .fixedSize()
+                    .position(x: inset, y: 8)
+                Text(verbatim: "500")
+                    .fixedSize()
+                    .position(x: x(500, width: width), y: 8)
+                    .opacity(goalLabelCovers500(width: width) ? 0 : 1)
+                if let zone = goalZone {
+                    Text(verbatim: "Twój cel \(zone.lowerBound)–\(zone.upperBound)")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(SCPalette.sage)
+                        .fixedSize()
+                        .position(x: goalLabelX(zone: zone, width: width), y: 8)
+                }
+                Text(verbatim: "\(limitMax)+")
+                    .fixedSize()
+                    .position(x: width - inset - 4, y: 8)
+            }
+        }
+        .font(.system(size: 11.5))
+        .monospacedDigit()
+        .foregroundStyle(Color.scFaint(scheme))
     }
 
     /// Podpis celu pod środkiem pola, ale nie na „0” ani na „1000+”.
     private func goalLabelX(zone: ClosedRange<Int>, width: CGFloat) -> CGFloat {
-        let mid = x((min(zone.lowerBound, scaleMax) + min(zone.upperBound, scaleMax)) / 2, in: width)
-        return min(max(mid, 70), width - 80)
+        let mid = x((zone.lowerBound + min(zone.upperBound, scaleEnd)) / 2, width: width)
+        return min(max(mid, 70), width - 84)
     }
 
-    private func tickColor(kcal: Int, major: Bool) -> Color {
-        if let value, kcal <= value { return SCPalette.terracotta }
-        if let zone = goalZone, zone.contains(kcal) { return SCPalette.sage.opacity(0.6) }
-        return Color.scLabel(scheme).opacity(major ? 0.28 : 0.16)
-    }
-
-    private func snappedValue(at locationX: CGFloat, width: CGFloat) -> Int? {
-        let usable = max(1, width - 2)
-        let raw = Double((locationX - 1) / usable) * Double(scaleMax)
-        let snapped = Int((raw / Double(step)).rounded()) * step
-        if snapped >= scaleMax { return nil }
-        return max(RecipeFilterOptions.calorieMinimum, snapped)
+    private func goalLabelCovers500(width: CGFloat) -> Bool {
+        guard let zone = goalZone else { return false }
+        return abs(goalLabelX(zone: zone, width: width) - x(500, width: width)) < 70
     }
 
     // MARK: Gest
+
+    private func snappedValue(at locationX: CGFloat, width: CGFloat) -> Int? {
+        let usable = max(1, width - 2 * inset)
+        let raw = Double((locationX - inset) / usable) * Double(scaleEnd)
+        let snapped = Int((raw / Double(step)).rounded()) * step
+        if snapped > limitMax { return nil }
+        return max(RecipeFilterOptions.calorieMinimum, snapped)
+    }
 
     private func drag(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
@@ -374,6 +445,7 @@ struct RecipeFilterKcalRuler: View {
                     let moved = hypot(gesture.translation.width, gesture.translation.height)
                     guard moved > 6 else { return }
                     axis = abs(gesture.translation.width) > abs(gesture.translation.height) ? .horizontal : .vertical
+                    if axis == .horizontal { isDragging = true }
                 }
                 guard axis == .horizontal else { return }
                 let next = snappedValue(at: gesture.location.x, width: width)
@@ -385,8 +457,11 @@ struct RecipeFilterKcalRuler: View {
                 }
             }
             .onEnded { gesture in
-                defer { axis = nil }
-                // Stuknięcie: igła dojeżdża do palca.
+                defer {
+                    axis = nil
+                    isDragging = false
+                }
+                // Stuknięcie: uchwyt dojeżdża do palca.
                 guard axis == nil else { return }
                 let next = snappedValue(at: gesture.location.x, width: width)
                 guard next != value else { return }
