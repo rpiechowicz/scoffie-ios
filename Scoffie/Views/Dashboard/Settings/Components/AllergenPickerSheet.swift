@@ -139,6 +139,11 @@ struct AllergenPickerSheet: View {
     /// Ile przepisów znika przez zaznaczone alergeny (`nil` = nie wiadomo).
     let hiddenRecipes: Int?
     let onToggle: (Allergen) -> Void
+    /// „Wyczyść” obok krzyżyka — zdejmuje wszystkie zaznaczone alergeny.
+    let onClear: () -> Void
+
+    /// Pytanie przed wyczyszczeniem wszystkich alergenów.
+    @State private var confirmsClear = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -149,9 +154,25 @@ struct AllergenPickerSheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                EditorialSheetHeader(eyebrow: "Dieta", title: "Alergeny") {
-                    dismiss()
+                // „Wyczyść” jak w filtrach i w wykluczaniu składników —
+                // tylko wtedy, gdy coś jest zaznaczone.
+                EditorialSheetHeader(
+                    eyebrow: "Dieta",
+                    title: "Alergeny",
+                    onClose: { dismiss() }
+                ) {
+                    if !selected.isEmpty {
+                        // Z pytaniem, w odróżnieniu od „Wyczyść” w filtrach:
+                        // alergeny to bezpieczeństwo, a jedno stuknięcie
+                        // przywracało na listy wszystko, co ukrywały — tak
+                        // samo jak „Wyczyść preferencje”, które pyta.
+                        RecipeFilterClearButton(accessibilityLabel: "Wyczyść alergeny") {
+                            confirmsClear = true
+                        }
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
                 }
+                .animation(.smooth(duration: 0.22), value: selected.isEmpty)
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
                 .padding(.bottom, 12)
@@ -181,6 +202,14 @@ struct AllergenPickerSheet: View {
             }
         }
         .sensoryFeedback(.selection, trigger: selected)
+        .alert("Wyczyścić alergeny?", isPresented: $confirmsClear) {
+            Button("Anuluj", role: .cancel) {}
+            Button("Wyczyść", role: .destructive) {
+                withAnimation(.smooth(duration: 0.22)) { onClear() }
+            }
+        } message: {
+            Text("Przepisy z tymi alergenami znów pokażą się na listach i w podpowiedziach.")
+        }
     }
 
     private func groupCard(_ group: AllergenPickerGroup) -> some View {

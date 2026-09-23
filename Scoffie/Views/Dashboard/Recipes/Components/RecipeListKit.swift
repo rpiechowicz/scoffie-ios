@@ -175,57 +175,136 @@ extension RecipeFacetPillBar where Leading == EmptyView {
     }
 }
 
-// MARK: - Notka nad listą
+// MARK: - Karta kontekstu nad listą
 
-/// Jedna linijka nad listą, gdy coś ją zawęża poza tym arkuszem — dieta
-/// i alergeny (szałwia) albo filtry wszystkich przepisów (terakota,
-/// z krzyżykiem, który je zdejmuje). Bez niej krótsza lista wygląda na brak
-/// przepisów, a nie na skutek ustawienia z innego ekranu.
-struct RecipeListNote: View {
-    let icon: String
-    let text: String
-    var tint: Color = SCPalette.sage
-    var onClear: (() -> Void)? = nil
-    var clearLabel: String = "Wyczyść filtry"
+/// Co zawęża listę spoza tego arkusza — dieta i alergeny z Ustawień, filtry
+/// wszystkich przepisów — jako karta aplikacji (`scTileBg`): jeden wiersz na
+/// przyczynę, kafelek w jej kolorze, nazwa i jedno zdanie szczegółu; filtry
+/// zdejmuje „Wyczyść”.
+///
+/// Zastąpiła kolorowe pudełko z jednym zdaniem („Lista zawężona Twoją
+/// dietą”) — Rafał (23.09.2026): „zrób to inaczej, ładniej, czytelniej”.
+/// Pudełko mówiło tylko, ŻE coś zawęża, na tincie terakoty jak ostrzeżenie.
+/// Karta mówi CO (dieta wegetariańska, bez glutenu) i ile przez to znika.
+struct RecipeListContextCard: View {
+    struct Row: Identifiable {
+        let id: String
+        let icon: String
+        let accent: Color
+        let title: String
+        let detail: String
+        var onClear: (() -> Void)? = nil
+    }
+
+    let rows: [Row]
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
-                .accessibilityHidden(true)
-
-            Text(text)
-                .font(.system(size: 12, weight: .semibold))
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 8)
-
-            if let onClear {
-                Button(action: onClear) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .heavy))
-                        .frame(width: 22, height: 22)
-                        .background(Circle().fill(tint.opacity(scheme == .dark ? 0.22 : 0.14)))
-                        .contentShape(Circle())
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Color.scRule(scheme))
+                        .frame(height: 1)
+                        .padding(.leading, 14 + 32 + 12)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(clearLabel)
+                rowView(row)
             }
         }
-        .foregroundStyle(tint)
-        .padding(.leading, 12)
-        .padding(.trailing, onClear == nil ? 12 : 8)
-        .padding(.vertical, onClear == nil ? 9 : 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(tint.opacity(scheme == .dark ? 0.16 : 0.10))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(tint.opacity(0.28), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+        )
+    }
+
+    private func rowView(_ row: Row) -> some View {
+        HStack(spacing: 12) {
+            SCHeaderIconWell(icon: row.icon, accent: row.accent, size: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+
+                Text(row.detail)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+
+            if let onClear = row.onClear {
+                // Ten sam „Wyczyść”, co obok krzyżyka w arkuszach filtrów.
+                RecipeFilterClearButton(accessibilityLabel: "Wyczyść filtry", action: onClear)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+}
+
+extension RecipeListContextCard.Row {
+    /// Dieta i alergeny z Ustawień: nazwa diety w jej kolorze, czego nie ma
+    /// i ile przez to znika. `nil`, gdy dopasowanie nic nie ukrywa.
+    ///
+    /// Alergeny idą po „bez:” w mianowniku — „omijamy laktoza” kaleczyłoby
+    /// biernik, a lista po dwukropku to zwykły spis.
+    static func personalization(_ personalization: RecipePersonalization, hidden: Int) -> Self? {
+        guard personalization.isEnabled, personalization.restrictsCatalog, hidden > 0 else { return nil }
+
+        let allergens = Allergen.allCases
+            .filter { personalization.avoidedAllergens.contains($0) }
+            .map { $0.pickerTitle.lowercased() }
+        // Dwa pierwsze z nazwy, reszta liczbą — pięć alergenów zjadało obie
+        // linijki szczegółu i ucinało „ukrywa N przepisów”.
+        let shown = allergens.prefix(2).joined(separator: ", ")
+            + (allergens.count > 2 ? " +\(allergens.count - 2)" : "")
+        let hiddenText = "ukrywa \(PolishPlural.recipes(hidden))"
+        let diet = personalization.diet
+
+        if diet != .none {
+            var parts: [String] = []
+            if !allergens.isEmpty { parts.append("bez: " + shown) }
+            parts.append(hiddenText)
+            return Self(
+                id: "personalization",
+                icon: diet.icon,
+                accent: diet.accent,
+                title: "Dieta \(diet.title.lowercased())",
+                detail: parts.joined(separator: " · ")
+            )
+        }
+
+        let count = allergens.count
+        let noun = PolishPlural.form(count, one: "alergen", few: "alergeny", many: "alergenów")
+        return Self(
+            id: "personalization",
+            icon: "exclamationmark.shield.fill",
+            accent: SCPalette.terracotta,
+            title: "Omijamy \(count) \(noun)",
+            detail: shown + " · " + hiddenText
+        )
+    }
+
+    /// Filtry wszystkich przepisów (arkusz „Filtry”): co działa i „Wyczyść”.
+    static func filters(_ labels: [String], onClear: @escaping () -> Void) -> Self? {
+        guard !labels.isEmpty else { return nil }
+        return Self(
+            id: "filters",
+            icon: "line.3.horizontal.decrease",
+            accent: SCPalette.terracotta,
+            title: "Filtry z Przepisów",
+            detail: labels.joined(separator: " · "),
+            onClear: onClear
         )
     }
 }

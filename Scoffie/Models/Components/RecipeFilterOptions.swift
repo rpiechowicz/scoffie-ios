@@ -332,6 +332,34 @@ struct RecipeFilterOptions: Equatable {
 
     var hasCategoryFilters: Bool { categoryFilters.values.contains { $0.isActive } }
 
+    /// Co zawęża listę, krótko — „do 30 min”, „do 600 kcal”, „Wege” — do
+    /// karty nad listą kategorii (`RecipeListContextCard`). Kolejność jak
+    /// sekcje arkusza „Filtry”; filtrów kategorii tu nie ma — te widać na
+    /// pigułkach w samej liście.
+    var summaryLabels: [String] {
+        var labels: [String] = []
+        if let maxPrepTimeMinutes { labels.append("do \(maxPrepTimeMinutes) min") }
+        if let maxCaloriesPerServing { labels.append("do \(maxCaloriesPerServing) kcal") }
+        if let difficulty {
+            switch difficulty {
+            case .easy:   labels.append("łatwe")
+            case .medium: labels.append("średnie")
+            case .hard:   labels.append("trudne")
+            }
+        }
+        // Małą literą, jak reszta zdania („do 30 min · wege · bez glutenu”);
+        // Thermomix to nazwa własna.
+        labels += RecipeDietFilter.allCases.filter { diets.contains($0) }.map { $0.title.lowercased() }
+        labels += RecipeTraitFilter.allCases.filter { traits.contains($0) }.map {
+            $0 == .thermomix ? $0.title : $0.title.lowercased()
+        }
+        if !excludedIngredients.isEmpty {
+            let count = excludedIngredients.count
+            labels.append(count == 1 ? "bez 1 składnika" : "bez \(count) składników")
+        }
+        return labels
+    }
+
     /// Te same filtry bez zawężenia jednej kategorii — pula, na której arkusz
     /// tej kategorii liczy swoje kafelki.
     func withoutCategoryFilter(for category: RecipesCategory) -> RecipeFilterOptions {

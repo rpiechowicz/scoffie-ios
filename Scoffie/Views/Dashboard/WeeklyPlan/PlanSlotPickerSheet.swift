@@ -299,25 +299,24 @@ struct PlanSlotPickerSheet: View {
         ScrollView {
             VStack(spacing: 0) {
                 if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
-                    RecipeListNote(
-                        icon: "exclamationmark.circle",
-                        text: errorMessage,
-                        tint: SCPalette.terracotta
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                    SCInlineErrorText(errorMessage)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 26)
+                        .padding(.bottom, 8)
                 }
 
-                // Notka nad listą. Bez niej krótka lista wygląda na brak
-                // przepisów, a nie na skutek ustawień z zupełnie innego ekranu.
-                // Nad pustym stanem jej nie ma — ten mówi o diecie sam.
-                if hiddenByPersonalizationCount > 0, !rows.isEmpty {
-                    RecipeListNote(
-                        icon: "wand.and.stars",
-                        text: "Dopasowane do Ciebie · ukrywa \(PolishPlural.recipes(hiddenByPersonalizationCount))"
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                // Karta nad listą — ta sama, co w liście kategorii. Bez niej
+                // krótka lista wygląda na brak przepisów, a nie na skutek
+                // ustawień z zupełnie innego ekranu. Nad pustym stanem jej
+                // nie ma — ten mówi o diecie sam.
+                if !rows.isEmpty,
+                   let diet = RecipeListContextCard.Row.personalization(
+                       personalization,
+                       hidden: hiddenByPersonalizationCount
+                   ) {
+                    RecipeListContextCard(rows: [diet])
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
                 }
 
                 if rows.isEmpty, !recipeCatalogStore.didLoad {

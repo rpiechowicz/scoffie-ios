@@ -316,7 +316,8 @@ struct RecipesView: View {
                     // żeby kafelki liczyły „ile zostanie po zaznaczeniu”.
                     pool: filters.withoutCategoryFilter(for: category).apply(to: inCategory),
                     categoryFilter: categoryFilterBinding(for: category),
-                    hasActiveFilters: filters.activeCount > 0,
+                    filterLabels: filters.summaryLabels,
+                    personalization: personalization,
                     hiddenByPersonalization: personalization.hiddenCount(in: categoryRecipes),
                     onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.resetGlobal() } }
                 )
@@ -783,10 +784,13 @@ private struct RecipeCategorySheetView: View {
     /// i do „24 z 132” w nagłówku.
     let pool: [Recipe]
     @Binding var categoryFilter: RecipeCategoryFilter
-    /// Czy działają filtry WSZYSTKICH przepisów (z arkusza „Filtry”).
-    let hasActiveFilters: Bool
+    /// Co działa z arkusza „Filtry” (filtry WSZYSTKICH przepisów) — pusto,
+    /// gdy nic. Opis do karty nad listą (`RecipeFilterOptions.summaryLabels`).
+    let filterLabels: [String]
+    /// Dieta i alergeny z Ustawień — do karty nad listą.
+    let personalization: RecipePersonalization
     /// Ile przepisów kategorii ukrywa dieta i alergeny (0 = nic albo
-    /// dopasowanie wyłączone). Zmienia tylko notkę — dopasowanie zdejmuje się
+    /// dopasowanie wyłączone). Zmienia tylko kartę — dopasowanie zdejmuje się
     /// w Filtrach, nie tutaj.
     let hiddenByPersonalization: Int
     let onClearFilters: () -> Void
@@ -801,6 +805,7 @@ private struct RecipeCategorySheetView: View {
 
     private var accent: Color { RecipeAccent.accent(for: category) }
     private var facets: [RecipeFacet] { RecipeCategoryFacets.facets(for: category) }
+    private var hasActiveFilters: Bool { !filterLabels.isEmpty }
 
     private var trimmedSearch: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -855,8 +860,9 @@ private struct RecipeCategorySheetView: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
-                        if hasNote {
-                            note
+                        let context = contextRows
+                        if !context.isEmpty {
+                            RecipeListContextCard(rows: context)
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 8)
                         }
@@ -917,29 +923,17 @@ private struct RecipeCategorySheetView: View {
         return "\(shown) z \(total) \(total == 1 ? "przepisu" : "przepisów")"
     }
 
-    // MARK: - Notka
+    // MARK: - Karta kontekstu
 
-    private var hasNote: Bool { hasActiveFilters || hiddenByPersonalization > 0 }
-
-    /// Bez tej notki znikające przepisy wyglądałyby na brakujące dane, a nie
-    /// na skutek filtra ustawionego ekran wyżej albo diety z Ustawień.
-    @ViewBuilder
-    private var note: some View {
-        if hasActiveFilters {
-            RecipeListNote(
-                icon: "line.3.horizontal.decrease",
-                text: hiddenByPersonalization > 0
-                    ? "Lista zawężona filtrami i Twoją dietą"
-                    : "Lista zawężona filtrami",
-                tint: SCPalette.terracotta,
-                onClear: onClearFilters
-            )
-        } else {
-            RecipeListNote(
-                icon: "wand.and.stars",
-                text: "Dopasowane do Ciebie · ukrywa \(PolishPlural.recipes(hiddenByPersonalization))"
-            )
-        }
+    /// Co zawęża tę listę spoza arkusza: dieta z Ustawień i filtry
+    /// z Przepisów. Bez tego znikające przepisy wyglądałyby na brakujące
+    /// dane, a nie na skutek ustawienia z innego ekranu.
+    private var contextRows: [RecipeListContextCard.Row] {
+        let rows: [RecipeListContextCard.Row?] = [
+            .personalization(personalization, hidden: hiddenByPersonalization),
+            .filters(filterLabels, onClear: onClearFilters)
+        ]
+        return rows.compactMap { $0 }
     }
 
     // MARK: - Pusty stan

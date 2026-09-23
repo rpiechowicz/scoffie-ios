@@ -460,6 +460,13 @@ struct SettingsView: View {
             .joined(separator: ",")
     }
 
+    /// „Wyczyść” w arkuszu alergenów — zdejmuje wszystkie ZNANE alergeny.
+    /// Nieznane (dopisane przez nowszą wersję aplikacji) zostają, tak jak
+    /// przy każdym stuknięciu w pojedynczy alergen.
+    private func clearAllergens() {
+        allergensRaw = unknownAllergens.joined(separator: ",")
+    }
+
     private var appVersionLabel: String {
         let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
@@ -1386,7 +1393,8 @@ struct SettingsView: View {
             AllergenPickerSheet(
                 selected: selectedAllergens,
                 hiddenRecipes: allergenHiddenRecipes,
-                onToggle: { toggleAllergen($0) }
+                onToggle: { toggleAllergen($0) },
+                onClear: { clearAllergens() }
             )
             .presentationDetents([.large])
             .dashboardLiquidSheet()

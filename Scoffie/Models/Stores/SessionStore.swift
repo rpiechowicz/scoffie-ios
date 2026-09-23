@@ -1459,13 +1459,29 @@ final class SessionStore {
                 let tokens = Set((row.allergens ?? []).map { $0.lowercased() })
                 result[row.userId] = HouseholdMemberPreferences(
                     diet: row.dietPreference.flatMap { DietPreference(backendValue: $0) } ?? DietPreference.none,
-                    allergens: Allergen.allCases.filter { tokens.contains($0.rawValue) }
+                    allergens: Allergen.allCases.filter { tokens.contains($0.rawValue) },
+                    targets: Self.nutritionTargets(from: row.targets)
                 )
             }
             return result
         } catch {
             return [:]
         }
+    }
+
+    /// Cele dnia domownika z odpowiedzi serwera. Kalorie bez wartości (albo
+    /// zero) to brak celu, a nie cel „0 kcal”, przy którym każdy posiłek
+    /// świeciłby przekroczeniem.
+    private static func nutritionTargets(from dto: BackendMemberContextDTO.Targets?) -> DailyNutritionTargets? {
+        guard let dto, let kcal = dto.calorieGoal, kcal > 0 else { return nil }
+        let macros = dto.macros.map {
+            MacroTargets(
+                proteinG: Int($0.proteinG.rounded()),
+                fatG: Int($0.fatG.rounded()),
+                carbsG: Int($0.carbsG.rounded())
+            )
+        }
+        return DailyNutritionTargets(kcal: Int(kcal.rounded()), macros: macros)
     }
 
     func createInvitationLink() async throws -> URL {

@@ -16,10 +16,20 @@ import SwiftUI
 /// Sufit (`maxHeight`, liczony przez ekran Planu z jego własnej wysokości)
 /// pilnuje, żeby najdłuższy dzień nie urósł do pełnego ekranu — wtedy lista
 /// posiłków zaczyna się przewijać w środku.
+///
+/// **Każdy liczy swój talerz.** W domu wieloosobowym obok krzyżyka stoi
+/// przełącznik osób (`PlanPersonSwitcher`): domyślnie ja, stuknięcie w awatar
+/// pokazuje dania, sumę i cel domownika. Dawniej arkusz sumował wszystkie
+/// dania pory — dwa różne obiady szły do jednego celu i wychodziło ~3000 kcal
+/// na osobę, która zje jeden (Rafał, 23.09.2026).
 struct PlanDayGoalSheet: View {
     let date: Date
-    let nutrition: PlanDayNutrition
-    let targets: DailyNutritionTargets
+    /// Czyje dni da się tu obejrzeć — w kolejności przełącznika, ja pierwszy.
+    /// Jedna osoba (dom jednoosobowy) = bez przełącznika. Plan liczy
+    /// zaplanowane, Kalendarz — odhaczone przez tę osobę.
+    let people: [PlanDayPerson]
+    /// Skład domu — kolory awatarów w przełączniku.
+    let members: [HouseholdMemberSnapshot]
     /// Sufit wysokości arkusza — patrz komentarz typu.
     let maxHeight: CGFloat
 
@@ -35,24 +45,39 @@ struct PlanDayGoalSheet: View {
     /// ekranu, więc pasek gestu trzeba doliczyć, inaczej ostatni wiersz
     /// wchodzi pod niego.
     @State private var bottomInset: CGFloat = 0
+    /// Czyj dzień jest na ekranie.
+    @State private var selectedId: String
 
     init(
         date: Date,
-        nutrition: PlanDayNutrition,
-        targets: DailyNutritionTargets,
+        people: [PlanDayPerson],
+        initialPersonId: String? = nil,
+        members: [HouseholdMemberSnapshot] = [],
         maxHeight: CGFloat
     ) {
         self.date = date
-        self.nutrition = nutrition
-        self.targets = targets
+        self.people = people
+        self.members = members
         self.maxHeight = maxHeight
+        let first = people.first(where: { $0.id == initialPersonId }) ?? people.first
+        _selectedId = State(initialValue: first?.id ?? "")
         _contentHeight = State(
             initialValue: Self.estimatedHeight(
-                rows: nutrition.entries.count,
-                hasMacroTargets: targets.macros != nil
+                rows: first?.nutrition.entries.count ?? 0,
+                // Cel, który jeszcze nie przyszedł, nie dokłada podpowiedzi
+                // o makrach (`macroHint` jest wtedy `nil`).
+                hasMacroTargets: first?.targets.map { $0.macros != nil } ?? true
             )
         )
     }
+
+    /// Osoba na ekranie. Pusta lista nie powinna się zdarzyć, ale arkusz
+    /// ma się wtedy narysować jako pusty dzień, a nie wywrócić.
+    private var person: PlanDayPerson {
+        people.first(where: { $0.id == selectedId }) ?? people.first ?? .empty
+    }
+
+    private var nutrition: PlanDayNutrition { person.nutrition }
 
     private static let minHeight: CGFloat = 320
 
@@ -130,8 +155,12 @@ struct PlanDayGoalSheet: View {
             mealsList
                 .padding(.top, 8)
 
-            if targets.macros == nil {
-                macroHint
+            if let hint = macroHint {
+                Text(hint)
+                    .scFont(12, weight: .regular, relativeTo: .caption)
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 14)
             }
         }
@@ -151,11 +180,16 @@ struct PlanDayGoalSheet: View {
             title: "Cel dnia",
             subtitle: subtitle,
             onClose: { dismiss() }
-        )
+        ) {
+            if people.count > 1 {
+                PlanPersonSwitcher(people: people, members: members, selection: $selectedId)
+            }
+        }
     }
 
-    /// „3 z 3 posiłków” — ta sama para liczb, co w nagłówku dnia na osi, żeby
-    /// arkusz nie opisywał innego dnia niż ekran pod nim.
+    /// „3 z 3 posiłków” — pory, w których wybrana osoba ma danie. Kropki na
+    /// osi dnia liczą cały dom, więc przy domownikach z osobnymi daniami ta
+    /// para może się od nich różnić — arkusz mówi o talerzu jednej osoby.
     ///
     /// W Kalendarzu ta sama para liczy co innego: nie ile pór jest
     /// zaplanowanych, tylko ile już zjedzonych — bo to jest liczba, z której
@@ -200,7 +234,8 @@ struct PlanDayGoalSheet: View {
     /// Kolory idą z `SCMacroPalette`, wspólnej z licznikiem Kalendarza
     /// i z paskiem pigułki.
     private var legendRows: [PlanGoalLegendRow.Row] {
-        let macros = targets.macros
+        let targets = person.targets
+        let macros = targets?.macros
 
         return [
             PlanGoalLegendRow.Row(
@@ -208,7 +243,7 @@ struct PlanDayGoalSheet: View {
                 title: "Kalorie",
                 color: SCMacroPalette.calories,
                 value: nutrition.kcal,
-                target: targets.kcal,
+                target: targets?.kcal,
                 unit: "kcal"
             ),
             PlanGoalLegendRow.Row(
@@ -240,12 +275,13 @@ struct PlanDayGoalSheet: View {
 
     /// Cel makr da się policzyć dopiero z sylwetki — mówimy to wprost, zamiast
     /// zostawiać trzy wiersze bez prawej strony i pierścienie bez postępu.
-    private var macroHint: some View {
-        Text("Cele makro policzymy, gdy uzupełnisz sylwetkę w Ustawieniach → Twoje dane.")
-            .scFont(12, weight: .regular, relativeTo: .caption)
-            .foregroundStyle(Color.scMuted(scheme))
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    /// Domownik uzupełnia sylwetkę u siebie; cel, który jeszcze nie
+    /// przyszedł z serwera, nie jest powodem do podpowiedzi.
+    private var macroHint: String? {
+        guard let targets = person.targets, targets.macros == nil else { return nil }
+        return person.isMe
+            ? "Cele makro policzymy, gdy uzupełnisz sylwetkę w Ustawieniach → Twoje dane."
+            : "Cele makro pojawią się, gdy \(person.name) uzupełni sylwetkę."
     }
 
     // MARK: - Posiłki
@@ -264,6 +300,122 @@ struct PlanDayGoalSheet: View {
         f.dateFormat = "EEEE"
         return f
     }()
+}
+
+// MARK: - Osoba i przełącznik
+
+/// Jedna osoba w arkuszu „Cel dnia”: jej posiłki, jej suma i jej cel.
+struct PlanDayPerson: Identifiable {
+    let id: String
+    /// Imię do przełącznika — pierwszy wyraz, jak na chipach „Dla kogo”.
+    let name: String
+    /// `nil` w domu jednoosobowym.
+    let member: HouseholdMemberSnapshot?
+    let nutrition: PlanDayNutrition
+    /// `nil`, dopóki cel domownika nie przyjdzie z serwera.
+    let targets: DailyNutritionTargets?
+    let isMe: Bool
+
+    /// Pusty dzień bez celu — zastępstwo, gdyby lista osób była pusta.
+    static let empty = PlanDayPerson(
+        id: "",
+        name: "",
+        member: nil,
+        nutrition: PlanDayNutrition(
+            entries: [],
+            total: .zero,
+            filledSlots: 0,
+            slotCount: 0,
+            countsOnlyEaten: false
+        ),
+        targets: nil,
+        isMe: true
+    )
+}
+
+/// Przełącznik osób obok krzyżyka: awatary w kapsule, wybrana osoba
+/// z imieniem na tincie swojego koloru (kolor z chipów „Dla kogo”).
+///
+/// Tylko awatar dla pozostałych — dwa imiona obok tytułu „Cel dnia”
+/// i krzyżyka nie zmieściłyby się w jednym wierszu przy trzech domownikach.
+struct PlanPersonSwitcher: View {
+    let people: [PlanDayPerson]
+    let members: [HouseholdMemberSnapshot]
+    @Binding var selection: String
+
+    @Environment(\.colorScheme) private var scheme
+    @Namespace private var selectionNS
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(people) { person in
+                segment(person)
+            }
+        }
+        .padding(2)
+        .frame(height: 36)
+        .background(Capsule(style: .continuous).fill(Color.scChipBg(scheme)))
+        .overlay(Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private func segment(_ person: PlanDayPerson) -> some View {
+        let isOn = person.id == selection
+        let tint = person.member.map { HouseholdMemberStyle.color(for: $0.id, in: members) }
+            ?? SCPalette.terracotta
+
+        return Button {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                selection = person.id
+            }
+        } label: {
+            HStack(spacing: 6) {
+                avatar(person)
+
+                if isOn {
+                    Text(person.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
+                }
+            }
+            .padding(.leading, 3)
+            .padding(.trailing, isOn ? 11 : 3)
+            .frame(height: 30)
+            .background {
+                if isOn {
+                    Capsule(style: .continuous)
+                        .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(tint.opacity(scheme == .dark ? 0.55 : 0.45), lineWidth: 1.2)
+                        )
+                        // Zaznaczenie przejeżdża między awatarami, zamiast
+                        // gasnąć w jednym i zapalać się w drugim.
+                        .matchedGeometryEffect(id: "selection", in: selectionNS)
+                }
+            }
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(person.name)
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+
+    @ViewBuilder
+    private func avatar(_ person: PlanDayPerson) -> some View {
+        if let member = person.member {
+            MemberAvatar(member: member, members: members, size: 24)
+        } else {
+            Image(systemName: "person.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color.scMuted(scheme))
+                .frame(width: 24, height: 24)
+        }
+    }
 }
 
 // MARK: - Pierścienie
@@ -390,15 +542,19 @@ struct PlanGoalLegendRow: View {
                     // celu 130 g to nie jest błąd, tylko fakt, o którym warto
                     // wiedzieć; kolor makra mówi „to ta pozycja wyszła poza",
                     // a nie „zrobiłeś coś źle".
+                    // Liczby rolują przy przełączeniu osoby i przy zmianie
+                    // dnia — jak cyfry w pigułce nad menu.
                     Text(verbatim: String(row.value))
                         .scFont(12.5, weight: .bold, relativeTo: .caption)
                         .monospacedDigit()
                         .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+                        .contentTransition(.numericText(value: Double(row.value)))
 
                     Text(trailingText)
                         .scFont(10.5, weight: .semibold, relativeTo: .caption2)
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
+                        .contentTransition(.numericText())
                 }
                 .lineLimit(1)
                 .fixedSize()
