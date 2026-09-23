@@ -190,6 +190,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   DANIA z tą cechą + nazwa + liczba przepisów; zaznaczenie = tint, obwódka wokół miniatury i znaczek
   z ptaszkiem (nie samo pole wyboru — „smutne”, Rafał 23.09). Zdjęcia dobiera `RecipeFilterCovers`
   / `RecipeFacetCovers` raz na otwarcie, z puli przed filtrami, każdy przepis na jednym kafelku;
+  miniatura BEZ przybliżenia (zdjęcia katalogu to 1344×768 z talerzem na środku — `scaledToFill`
+  w kwadracie już wycina środek, a dawne ×1,45 ucinało rant każdego talerza, runda 9);
   bez zdjęcia glif — i najpierw dania, których profil NIE ukrywa (kafelek nie pokaże dania z alergenem
   z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii; siatka to `RecipeFilterTileGrid` (wiersze
   `HStack` z `fixedSize` w pionie), bo `LazyVGrid` stawiał obok siebie kafelki różnej wysokości.
@@ -265,15 +267,19 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   kaskadą (`smooth 0,55`, opóźnienie 0,10 + 0,05·n), serce i krzyżyk wchodzą z treścią; arkusz ma
   rogi 40 pt (`dashboardLiquidSheet(cornerRadius: 40)`) we wszystkich czterech miejscach otwarcia.
 - Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: `EditorialSheetHeader` z kafelkiem,
-  zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka + „Aktywne: czas, kalorie” (gdy coś
-  włączone). Osobny wiersz zasięgu pod nagłówkiem zniknął.
+  zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka. Linijka „Aktywne: …” pod spodem
+  zniknęła w rundzie 9 („niepotrzebne”) — co działa, widać na kafelkach. „Wyczyść” obok krzyżyka
+  mają też oba arkusze wykluczania (dział czyści swój dział, główny — wszystko) i wybór alergenów
+  w Ustawieniach (zostają id alergenów nieznanych tej wersji — unia z `SettingsView`).
 - „Wybierz przepis” w Planie (`PlanSlotPickerSheet`) i lista kategorii na Przepisach
   (`RecipeCategorySheetView`) to JEDEN układ z `RecipeListKit.swift` (runda 8, 23.09.2026 — Rafał:
   „żeby wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”): `RecipeListSheetTop`
   (nagłówek + `SCSearchField` + pasek pigułek, przypięte), `RecipeFacetPillBar` (opcje
   `RecipeCategoryFacets` jako `RecipeFilterPill` — ten sam stan, co kafelki `RecipeCategoryFilterSheet`
-  pod przyciskiem filtrów w nagłówku), `RecipeListNote` (szałwia = dieta ukrywa N, terakota = filtry
-  z krzyżykiem), `RecipeRowStack` z `EditorialRecipeRow` (`.chevron` otwiera przepis,
+  pod przyciskiem filtrów w nagłówku), `RecipeListContextCard` (karta `scTileBg`: wiersz diety
+  „Dieta wegetariańska · bez: gluten · ukrywa 12 przepisów” w kolorze diety i wiersz „Filtry
+  z Przepisów” z „Wyczyść” — runda 9 zamiast kolorowego pudełka „Lista zawężona…”; opis filtrów
+  z `RecipeFilterOptions.summaryLabels`), `RecipeRowStack` z `EditorialRecipeRow` (`.chevron` otwiera przepis,
   `.selection(isOn:)` zaznacza — kółko `SCRadioMark` w terakocie jak w Ustawieniach, tło wiersza
   w tincie akcentu; wybrany przepis schowany przez filtry pokazuje stopka) i `RecipeListEmptyState`
   (co opróżniło listę + przyciski, które to zdejmują). W wyborze do planu: akcent i ikona PORY
@@ -284,6 +290,25 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   pory” = wszystkie ulubione) i „Wszystkie pory” zamiast przełącznika Pasujące/Wszystkie/Ulubione,
   a „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad
   przyciskiem — tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
+- Kalorie na Planie liczy się NA OSOBĘ (runda 9, 23.09.2026): pigułka nad menu sumuje dzień osoby
+  z soczewki „…”, a przy „Cały dom” — tego, kto trzyma telefon (`nutritionPersonId`,
+  `visibleTo(memberId:)` w każdej porze). Suma całego domu dodawała dwa różne obiady do jednego
+  osobistego celu (~3000 kcal na osobę, która zje jeden). Arkusz „Cel dnia” (`PlanDayGoalSheet`
+  z `people: [PlanDayPerson]`) ma przy wielu domownikach przełącznik osób obok krzyżyka
+  (`PlanPersonSwitcher`: awatary, wybrana osoba z imieniem na tincie swojego koloru): dania, suma
+  i CEL tej osoby. Cele domowników przychodzą z serwera w `households:memberPreferences`
+  (`targets: {calorieGoal, macros}` — policzone w `toMemberContext`, BEZ sylwetki) →
+  `HouseholdMemberPreferences.targets`. Kalendarz ma ten sam przełącznik (odhaczone przez tę osobę).
+  Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
+- Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
+  podświetlone kółko z iskierkami; karta pustego tygodnia w `PlanDayTimeline` = kafelek, „ASYSTENT”,
+  tytuł, jedno zdanie i `EditorialPrimaryActionButton` (runda 9, „przerób na aktualne standardy”).
+- Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
+  „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
+  Przełożenie dania (stuknięcie talerzyka) ROLUJE cyfry i tekst (`.numericText()`): wielki wiersz
+  ma tożsamość po RODZAJU zdania (cyfry/słowa), nie po daniu — przenika się tylko cyfry ↔ słowa;
+  nazwa dania i nadpis („OBIAD · 14:00”) też rolują (nadpis przenika się tylko pora z godziną ↔ bez).
+  Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,

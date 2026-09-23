@@ -227,30 +227,41 @@ struct CalendarPlateKicker: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Text(item?.kicker ?? " ")
-            .font(.system(size: 10.5, weight: .bold))
-            .tracking(1.1)
-            .foregroundStyle(item?.kickerColor(in: scheme) ?? Color.scMuted(scheme))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity)
-            // Pusty dzień nie ma pory, ale ma mieć tę samą wysokość: bez
-            // spacji w miejscu nadpisu talerz podskakiwałby o trzynaście
-            // punktów przy każdym wejściu w dzień bez planu. Krycie zostawia
-            // element w drzewie dostępności, więc VoiceOver trzeba odesłać
-            // osobno — inaczej zatrzymywałby się na pustym polu nad talerzem.
-            .opacity(item == nil ? 0 : 1)
-            .accessibilityHidden(item == nil)
-            .contentTransition(.opacity)
-            // Ta sama krzywa, którą przenika zdjęcie na talerzu: nadpis,
-            // talerz i podpis są jednym przełożeniem i mają skończyć się
-            // w tej samej klatce. Sprężyna `lift` zostaje dla talerzyków
-            // w sekwencji — tam coś naprawdę zmienia rozmiar.
-            .animation(DayNavigationMotion.plateFade, value: item?.id)
-            // Odhaczenie zmienia barwę nadpisu w miejscu (kolor pory →
-            // neutralny); bez własnego odcisku przeskakiwałaby w jednej
-            // klatce, podczas gdy pierścień wokół zdjęcia dojeżdża sprężyną.
-            .animation(DayNavigationMotion.spring, value: item?.status)
+        // `ZStack` jako kontener przejścia dla tożsamości niżej.
+        ZStack {
+            Text(item?.kicker ?? " ")
+                .font(.system(size: 10.5, weight: .bold))
+                .tracking(1.1)
+                .foregroundStyle(item?.kickerColor(in: scheme) ?? Color.scMuted(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                // Przy przełożeniu dania godzina roluje cyframi, a nazwa pory
+                // przechodzi w nową literami — ten sam ruch, co liczby
+                // w pigułkach pod talerzem („OBIAD · 14:00” w „KOLACJA ·
+                // 20:00”). Tożsamość po rodzaju nadpisu, jak wielki wiersz:
+                // pora z godziną ↔ pora bez godziny („PRZEKĄSKA”) przenika się,
+                // bo rolowanie cyfr w litery wyglądało jak usterka.
+                .contentTransition(.numericText())
+                .id(item?.time == nil ? "words" : "digits")
+                .transition(.opacity)
+        }
+        .frame(maxWidth: .infinity)
+        // Pusty dzień nie ma pory, ale ma mieć tę samą wysokość: bez
+        // spacji w miejscu nadpisu talerz podskakiwałby o trzynaście
+        // punktów przy każdym wejściu w dzień bez planu. Krycie zostawia
+        // element w drzewie dostępności, więc VoiceOver trzeba odesłać
+        // osobno — inaczej zatrzymywałby się na pustym polu nad talerzem.
+        .opacity(item == nil ? 0 : 1)
+        .accessibilityHidden(item == nil)
+        // Ta sama krzywa, którą przenika zdjęcie na talerzu: nadpis,
+        // talerz i podpis są jednym przełożeniem i mają skończyć się
+        // w tej samej klatce. Sprężyna `lift` zostaje dla talerzyków
+        // w sekwencji — tam coś naprawdę zmienia rozmiar.
+        .animation(DayNavigationMotion.plateFade, value: item?.id)
+        // Odhaczenie zmienia barwę nadpisu w miejscu (kolor pory →
+        // neutralny); bez własnego odcisku przeskakiwałaby w jednej
+        // klatce, podczas gdy pierścień wokół zdjęcia dojeżdża sprężyną.
+        .animation(DayNavigationMotion.spring, value: item?.status)
     }
 }
 
@@ -836,11 +847,13 @@ struct CalendarPlateCaption: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Wielki wiersz ma tożsamość po daniu I po rodzaju zdania: między
-            // daniami oraz między „za 4 h 19 min” a „Pora gotować” przechodzi
-            // kryciem, a w obrębie tego samego odliczania (tyknięcie zegara)
-            // roluje cyfry. Rolowanie „za 4 h 19 min” w „Pusty dzień” literka
-            // po literce wyglądało jak usterka renderowania.
+            // Wielki wiersz ma tożsamość po RODZAJU zdania (liczby albo
+            // słowa), nie po daniu: przy przełożeniu na inne danie cyfry
+            // rolują („za 4 h 19 min” w „za 10 h 5 min”), a słowa przechodzą
+            // w słowa tym samym ruchem („Zjedzone” w „Pora jeść”). Kryciem
+            // idzie wyłącznie przejście między liczbą a słowami — rolowanie
+            // „za 4 h 19 min” w „Pusty dzień” literka po literce wyglądało
+            // jak usterka renderowania.
             ZStack {
                 Text(headline)
                     .font(.system(size: 34, weight: .bold))
@@ -884,8 +897,10 @@ struct CalendarPlateCaption: View {
         }
         .frame(maxWidth: .infinity)
         // JEDNA krzywa na przełożenie dania — ta sama, którą przenika zdjęcie
-        // na talerzu (`plateFade`): wielki wiersz, nazwa i pigułki gasną
-        // i wzbierają razem ze zdjęciem, w tej samej klatce. Dotąd podpis
+        // na talerzu (`plateFade`): wielki wiersz, nazwa i pigułki zmieniają
+        // się razem ze zdjęciem, w tej samej klatce — cyfry i litery rolują
+        // (`numericText`), a kryciem wchodzi tylko to, co się pojawia albo
+        // znika (pigułka porcji, nazwa na pustej porze). Dotąd podpis
         // jechał sprężyną 0,44 s, a wiersz miał do tego trzeci odcisk
         // 0,25 s na treść — trzy zegary na jeden ruch, i ten najdłuższy
         // wygrywał (najbliższy treści), więc stare zdanie wisiało pod
@@ -919,8 +934,12 @@ struct CalendarPlateCaption: View {
                 Button {
                     pagerGate.ifNotSwiping { onOpenDetail?() }
                 } label: {
+                    // Nazwa przechodzi w nową literami, tym samym ruchem co
+                    // cyfry nad nią i w pigułkach — nie gaśnie i nie zapala
+                    // się od nowa. Pudełko ma stałą wysokość (próbka wyżej),
+                    // więc zmiana liczby linijek nie rusza sekwencji.
                     titleText(title, eaten: item?.isEaten == true)
-                        .contentTransition(.opacity)
+                        .contentTransition(.numericText())
                 }
                 .buttonStyle(.plain)
                 .disabled(onOpenDetail == nil)
@@ -1006,14 +1025,13 @@ struct CalendarPlateCaption: View {
     private static let dueVariants = ["Pora jeść", "Smacznego!", "Na stół!", "Czas jeść"]
     private static let lateVariants = ["Pora minęła", "Już po porze", "Po czasie"]
 
-    /// Tożsamość wielkiego wiersza: danie plus RODZAJ zdania. Zdania
-    /// z liczbami (odliczanie, godzina) dzielą jeden klucz, żeby cyfry
-    /// rolowały; zdania ze słów mają klucz po treści, żeby zmiana rodzaju
-    /// przechodziła kryciem.
+    /// Tożsamość wielkiego wiersza: sam RODZAJ zdania, bez dania. Zdania
+    /// z liczbami (odliczanie, godzina) dzielą jeden klucz, zdania ze słów —
+    /// drugi; w obrębie klucza treść roluje (`numericText`), także przy
+    /// przełożeniu na inne danie. Zmiana klucza (liczba ↔ słowa) przechodzi
+    /// kryciem.
     private var headlineKey: String {
-        let base = item?.id ?? "empty"
-        let kind = headline.contains(where: { $0.isNumber }) ? "digits" : headline
-        return "\(base)|\(kind)"
+        headline.contains(where: { $0.isNumber }) ? "digits" : "words"
     }
 
     private var headlineColor: Color {

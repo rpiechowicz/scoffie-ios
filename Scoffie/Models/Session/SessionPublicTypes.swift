@@ -77,15 +77,18 @@ enum StartupPhase: Equatable {
     case ready
 }
 
-/// Czego domownik nie je — dieta i alergeny z `households:memberPreferences`.
+/// Czego domownik nie je i ile ma zjeść — dieta, alergeny i cele dnia
+/// z `households:memberPreferences`.
 ///
-/// Tylko to, co pokazuje arkusz gospodarstwa. Serwer oddaje więcej (cel,
-/// makro, poziom aktywności), ale wzrostu i wagi celowo nie wysyła nikomu
-/// poza samym właścicielem konta — patrz `MemberContext` w backendzie.
+/// Wzrostu i wagi serwer celowo nie wysyła nikomu poza samym właścicielem
+/// konta — patrz `MemberContext` w backendzie; cele przychodzą już policzone.
 struct HouseholdMemberPreferences: Equatable {
     let diet: DietPreference
     /// Tylko alergeny znane tej wersji aplikacji, w kolejności `Allergen.allCases`.
     let allergens: [Allergen]
+    /// Cel dnia domownika — do arkusza „Cel dnia” po przełączeniu na tę osobę.
+    /// `nil`, gdy serwer go nie podał (starszy backend).
+    var targets: DailyNutritionTargets? = nil
 }
 
 /// Snapshot domownika trzymany w SessionStore (preload pod Settings / Household).

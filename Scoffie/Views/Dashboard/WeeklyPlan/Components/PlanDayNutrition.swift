@@ -58,7 +58,8 @@ struct PlanDayNutrition {
     ///   - slots: pory do pokazania, w kolejności dnia — ta sama lista, którą
     ///     rysuje oś (`visibleSlots(on:)`), żeby „3 z 3" znaczyło to samo
     ///     w nagłówku dnia i w arkuszu.
-    ///   - meals: warianty posiłku w porze, już zawężone do bieżącej soczewki.
+    ///   - meals: warianty posiłku w porze, już zawężone do JEDNEJ osoby
+    ///     (`visibleTo(memberId:)`) — suma dnia jest udziałem jednego talerza.
     ///   - knownHouseholdMemberCount: `nil`, dopóki `SessionStore` nie dowiezie
     ///     składu gospodarstwa — wtedy udziałem jednej osoby jest pełna porcja
     ///     przepisu, czyli ta sama liczba, którą reguła auto pokaże po

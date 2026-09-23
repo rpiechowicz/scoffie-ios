@@ -120,7 +120,6 @@ struct RecipeCategoryFilterSheet: View {
             eyebrow: slot == nil ? "Filtry kategorii" : "Filtry",
             title: slot?.title ?? RecipesConstants.displayName(for: category),
             scope: scopeLine,
-            activeSummary: activeSummary,
             accent: accent,
             canClear: draft.isActive,
             onClear: { clearAll() },
@@ -133,14 +132,6 @@ struct RecipeCategoryFilterSheet: View {
     private var scopeLine: String {
         guard let slot else { return "Tylko w tej kategorii — razem z filtrami wszystkich przepisów" }
         return "Zawężają listę przepisów na \(slot.accusativeName)"
-    }
-
-    /// Które aspekty zawężają teraz kategorię — „Aktywne: smak, rodzaj dania”.
-    private var activeSummary: String? {
-        let names = facets
-            .filter { !(draft.picks[$0.kind]?.isEmpty ?? true) }
-            .map { $0.title.lowercased() }
-        return names.isEmpty ? nil : "Aktywne: " + names.joined(separator: ", ")
     }
 
     // MARK: - Sekcje

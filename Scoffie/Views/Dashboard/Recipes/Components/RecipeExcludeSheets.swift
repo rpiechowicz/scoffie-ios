@@ -41,6 +41,9 @@ struct RecipeExcludeCategorySheet: View {
         department.excluded(in: filters.excludedIngredients)
     }
 
+    /// Wszystkie klucze wykluczeń tego działu — składniki, grupy i rodzaje
+    /// w grupach. „Wyczyść” zdejmuje je razem, także rodzaj wykluczony
+    /// z osobna obok wykluczonej całej grupy.
     private var foldedQuery: String {
         IngredientSearch.fold(query).trimmingCharacters(in: .whitespaces)
     }
@@ -90,7 +93,9 @@ struct RecipeExcludeCategorySheet: View {
     // MARK: Nagłówek
 
     /// Wspólny nagłówek arkusza z kafelkiem działu — ta sama ikona i barwa,
-    /// co przy alejce na Zakupach.
+    /// co przy alejce na Zakupach. „Wyczyść” obok krzyżyka zdejmuje naraz
+    /// wszystko, co wykluczono w TYM dziale (Rafał, 23.09.2026) — ten sam
+    /// przycisk, co w arkuszach filtrów, i tylko wtedy, gdy jest co czyścić.
     private var header: some View {
         EditorialSheetHeader(
             eyebrow: "Wyklucz składniki",
@@ -98,7 +103,22 @@ struct RecipeExcludeCategorySheet: View {
             icon: ProductConstants.departmentIcon(for: department.name),
             accent: ProductConstants.departmentColor(for: department.name),
             onClose: { dismiss() }
-        )
+        ) {
+            if !excludedHere.isEmpty {
+                RecipeFilterClearButton(accessibilityLabel: "Wyczyść wykluczenia w tym dziale") {
+                    clearDepartment()
+                }
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+            }
+        }
+        .animation(.smooth(duration: 0.22), value: excludedHere.isEmpty)
+    }
+
+    private func clearDepartment() {
+        let keys = department.exclusions
+        withAnimation(.smooth(duration: 0.25)) {
+            filters.excludedIngredients.subtract(keys)
+        }
     }
 
     private func sectionLabel(_ title: String) -> some View {
@@ -309,9 +329,22 @@ struct RecipeExcludeSheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                EditorialSheetHeader(eyebrow: "Filtry", title: "Wyklucz składniki") {
-                    dismiss()
+                // „Wyczyść” jak w arkuszu działu — tutaj zdejmuje wszystkie
+                // wykluczenia naraz (profil z kłódką zostaje, bo nie jest
+                // wykluczeniem z tego arkusza).
+                EditorialSheetHeader(
+                    eyebrow: "Filtry",
+                    title: "Wyklucz składniki",
+                    onClose: { dismiss() }
+                ) {
+                    if !filters.excludedIngredients.isEmpty {
+                        RecipeFilterClearButton(accessibilityLabel: "Wyczyść wykluczenia") {
+                            clearAll()
+                        }
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
                 }
+                .animation(.smooth(duration: 0.22), value: filters.excludedIngredients.isEmpty)
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
                 .padding(.bottom, 12)
@@ -647,6 +680,18 @@ struct RecipeExcludeSheet: View {
             try? await Task.sleep(for: .seconds(2.4))
             guard !Task.isCancelled else { return }
             withAnimation(.smooth(duration: 0.25)) { undo = nil }
+        }
+    }
+
+    /// Wszystko naraz — razem z „Cofnij” i podświetleniem, które mówiłyby
+    /// o wykluczeniu, którego już nie ma.
+    private func clearAll() {
+        undoTask?.cancel()
+        withAnimation(.smooth(duration: 0.25)) {
+            filters.excludedIngredients = []
+            freshChip = nil
+            undo = nil
+            showsAllChips = false
         }
     }
 

@@ -1,12 +1,12 @@
 import SwiftUI
 
-// Kalendarz v11 · Talerz — sekwencja dnia i jedno zdanie pod nią.
+// Kalendarz v11 · Talerz — sekwencja dnia pod wielkim talerzem.
 //
 // Źródło: canvas claude.ai → „Weekly Meals - Kalendarz v11 Talerz.html”,
-// `components/cal-v11-plate-2.jsx` (dolna część `V11Plate2` oraz
-// `V11PDayLine`). Pod wielkim talerzem stoi cały dzień w miniaturze: małe
-// talerze z godziną i porą, wybrany rośnie. Stuknięcie przekłada danie na
-// środek — to jedyna nawigacja tego ekranu.
+// `components/cal-v11-plate-2.jsx` (dolna część `V11Plate2`). Pod wielkim
+// talerzem stoi cały dzień w miniaturze: małe talerze z godziną i porą,
+// wybrany rośnie. Stuknięcie przekłada danie na środek — to jedyna
+// nawigacja tego ekranu.
 //
 // Trzy rzeczy różnią sekwencję od makiety:
 //
@@ -23,10 +23,12 @@ import SwiftUI
 //     telefonie. Poziomego przewijania NIE MA i mieć nie może: strona dnia
 //     jeździ palcem w bok, więc druga oś pozioma w środku niej zabrałaby
 //     połowę machnięć zmieniających dzień.
-//  3. **Linia dnia nie podsumowuje, tylko prowadzi.** Makieta pisała w niej
-//     „2 z 4 zjedzone · 1665 kcal” — a to samo mówią kropki w nagłówku dnia
-//     i pigułka kcal nad dolnym menu. Zostało wyłącznie to, czego nie ma
-//     nigdzie indziej: co jest dalej w sekwencji (`CalendarDayNote`).
+//  3. **Pod sekwencją nie ma zdania.** Makieta pisała tam „2 z 4 zjedzone ·
+//     1665 kcal” (`V11PDayLine`), a potem stała tu linia dnia z tym, co
+//     dalej („Potem: kolacja · 20:00”, „Tym kończysz dzień”). Rafał
+//     (23.09.2026): „tego nie potrzebujemy”. Kropki w nagłówku dnia, pigułka
+//     kcal nad dolnym menu i obwódka następnego talerzyka w samej sekwencji
+//     mówią to samo bez zdania, a miejsce po linii bierze talerz.
 //
 // Sekwencja nie bierze udziału w przekładaniu dania na talerz i o niczym
 // przy tym nie melduje. Trzy wydania z rzędu brała: talerzyk gasł na czas
@@ -235,245 +237,7 @@ struct CalendarPlateStrip: View {
     }
 }
 
-// MARK: - Co dalej w sekwencji
-
-/// Jedno zdanie pod sekwencją: co jest DALEJ względem tego, co stoi na
-/// talerzu.
-///
-/// Liczy to ekran (`CalendarView.dayNote`), bo odpowiedź zależy od całego
-/// dnia i od zegara. Tutaj zostaje wyłącznie to, JAK się o tym mówi.
-///
-/// Celowo NIE ma tu podsumowania dnia: „2 z 4 zjedzone” niosą kropki
-/// w nagłówku dnia, „1665 kcal” — pigułka celu nad dolnym menu. Zdanie,
-/// które powtarza to, co stoi dwa centymetry wyżej i niżej, nie jest
-/// zdaniem, tylko szumem. Zostało to, czego nie ma nigdzie indziej.
-enum CalendarDayNote: Equatable {
-    /// Na talerzu stoi co innego niż następny posiłek dnia — jedno zdanie
-    /// o nim, stuknięcie wraca. Bez tego przekładanie talerzy gubiło
-    /// „teraz”, jedyną rzecz, dla której ten ekran w ogóle się otwiera.
-    case next(CalendarPlateItem)
-    /// Po daniu na talerzu jest jeszcze coś — stuknięcie przekłada.
-    case after(CalendarPlateItem)
-    /// Na talerzu stoi ostatnia pora dnia, a dzień nie jest domknięty.
-    case last(CalendarPlateItem)
-    /// Wszystko zjedzone i na talerzu stoi ostatnie danie.
-    case closed
-    /// Dzień bez ani jednego zaplanowanego posiłku — ile pór czeka.
-    case empty(slots: Int)
-}
-
-// MARK: - Linia dnia
-
-/// Jedno zdanie, jedna barwa, jedno stuknięcie — i STAŁA wysokość.
-///
-/// Linia stoi zawsze, także gdy nie ma nic do powiedzenia: to ostatnie
-/// piętro układu dnia i gdyby znikała, talerz nad nią miałby na różnych
-/// dniach różne miejsce. Widok jest JEDEN o zmiennej treści, a nie kilka
-/// w gałęziach `if / else`: gałęzie mają w SwiftUI różne tożsamości, więc
-/// przejście z „Następny: obiad…” w „Potem: kolacja…” wymieniałoby widok
-/// zamiast przerolować tekst.
-struct CalendarDayLine: View {
-    let note: CalendarDayNote
-    /// Klucz dnia — ziarno doboru wariantów zdań (`CalendarVoice`).
-    let dayKey: String
-    /// Wraca do następnego posiłku (dla `.next`).
-    let onReturnToNext: () -> Void
-    /// Przekłada na talerz podane danie (dla `.after`).
-    let onSelect: (CalendarPlateItem) -> Void
-
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.dayPagerGate) private var pagerGate
-
-    /// Wysokość linii — jedna linijka 13 pt z zapasem na kropkę.
-    static let height: CGFloat = 18
-
-    /// Zdanie, barwa i kropka policzone naraz, żeby zmieniały się w jednej
-    /// transakcji. `key` to tożsamość zdania: to samo danie i ten sam rodzaj
-    /// zdania rolują cyfry (tyknięcie zegara), inny rodzaj albo inne danie
-    /// przechodzi kryciem — rolowanie „Potem: kolacja · 20:00” w „Następny:
-    /// obiad za 3 min” literka po literce wyglądało jak usterka.
-    private struct Line: Equatable {
-        let key: String
-        let text: String
-        let color: Color
-        let dot: Bool
-        let tappable: Bool
-    }
-
-    /// Wariant zdania dla tego dnia — ten sam fakt, inny ton
-    /// (`CalendarVoice`). Ziarno bierze klucz dnia, danie i rodzaj zdania.
-    private func voice(_ variants: [String], _ kind: String, item: CalendarPlateItem? = nil) -> String {
-        CalendarVoice.pick(variants, seed: "\(dayKey)|\(item?.id ?? "-")|line-\(kind)")
-    }
-
-    private var line: Line {
-        switch note {
-        case .next(let item):
-            let phase = item.isCooking ? "cooking" : item.isDue ? "due" : item.isLate ? "late" : "countdown"
-            return Line(
-                key: "next-\(item.id)-\(phase)",
-                text: nextText(item),
-                color: SCPalette.terracotta,
-                dot: true,
-                tappable: true
-            )
-        case .after(let item):
-            // Stan w kluczu: „· zjedzone” dochodzi, gdy domownik odhaczy to
-            // danie z drugiego telefonu — bez tego dopisek rolowałby się
-            // literka po literce pod niezmienionym kluczem.
-            return Line(
-                key: "after-\(item.id)-\(item.isEaten)",
-                text: afterText(item),
-                color: Color.scMuted(scheme),
-                dot: false,
-                tappable: true
-            )
-        case .last(let item):
-            // Bez „dziś”: ta linia stoi też pod wczorajszym i czwartkowym
-            // dniem, a wariant, który dokłada fakt, nie jest wariantem.
-            let text = item.isEmptySlot
-                ? voice(["Koniec dnia", "Dalej już nic", "Nic więcej tego dnia"], "last-empty", item: item)
-                : voice(["Ostatni posiłek dnia", "To już wszystko", "Tym kończysz dzień", "Koniec menu na ten dzień"], "last", item: item)
-            return Line(
-                key: "last-\(item.isEmptySlot)",
-                text: text,
-                color: Color.scFaint(scheme),
-                dot: false,
-                tappable: false
-            )
-        case .closed:
-            return Line(
-                key: "closed",
-                text: voice(["Dzień domknięty", "Wszystko zjedzone", "Komplet zjedzony", "Dzień zaliczony"], "closed"),
-                color: SCPalette.sage,
-                dot: true,
-                tappable: false
-            )
-        case .empty(let slots):
-            // Ile pór czeka na zaplanowanie — jedyna rzecz, której pusty
-            // dzień nie mówi nigdzie indziej (pigułka pod talerzem mówi,
-            // GDZIE się planuje). Warianty bez czasownika, bo liczebnik
-            // zmieniałby jego formę („3 pory czekają”, „5 pór czeka”).
-            let count = PolishPlural.form(slots, one: "pora", few: "pory", many: "pór")
-            let text = voice(
-                ["\(slots) \(count) do zaplanowania", "Do ułożenia: \(slots) \(count)", "Wolne: \(slots) \(count)"],
-                "empty"
-            )
-            return Line(
-                key: "empty",
-                text: text,
-                color: Color.scFaint(scheme),
-                dot: false,
-                tappable: false
-            )
-        }
-    }
-
-    var body: some View {
-        let line = line
-
-        HStack(spacing: 8) {
-            if line.dot {
-                Circle()
-                    .fill(line.color)
-                    .frame(width: 7, height: 7)
-                    .overlay(Circle().strokeBorder(line.color.opacity(0.2), lineWidth: 3).padding(-3))
-                    .transition(.scale.combined(with: .opacity))
-            }
-
-            // `ZStack` jako kontener przejścia — bez niego wymiana tożsamości
-            // byłaby twardym cięciem (patrz `CalendarPlate.body`).
-            ZStack {
-                Text(line.text)
-                    .font(.system(size: 13, weight: .bold))
-                    .tracking(-0.2)
-                    .monospacedDigit()
-                    .foregroundStyle(line.color)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .contentTransition(.numericText())
-                    // Dzień w tożsamości: zdania różnią się wariantem między
-                    // dniami (`CalendarVoice`), więc zmiana dnia ma przejść
-                    // kryciem, nie rolowaniem liter pod tym samym kluczem.
-                    // W obrębie dnia klucz stoi i cyfry odliczania rolują.
-                    .id("\(dayKey)|\(line.key)")
-                    .transition(.opacity)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: Self.height)
-        .contentShape(Rectangle())
-        .onTapGesture { tap() }
-        .animation(DayNavigationMotion.spring, value: line)
-        .accessibilityAddTraits(line.tappable ? .isButton : [])
-        .accessibilityHint(hint)
-    }
-
-    private func tap() {
-        switch note {
-        case .next:
-            pagerGate.ifNotSwiping(onReturnToNext)
-        case .after(let item):
-            pagerGate.ifNotSwiping { onSelect(item) }
-        case .last, .closed, .empty:
-            return
-        }
-    }
-
-    private var hint: String {
-        switch note {
-        case .next:  return "Wraca do następnego posiłku"
-        case .after: return "Przekłada na talerz następne danie"
-        default:     return ""
-        }
-    }
-
-    /// „Następny: obiad za 4 h 19 min · gotuj od 13:00”.
-    ///
-    /// Odkąd robi się pilnie, zdanie zaczyna się od czynności, a nie od pory:
-    /// „Pora gotować obiad · na 14:00” odpowiada na pytanie, które właśnie
-    /// zastąpiło poprzednie.
-    private func nextText(_ item: CalendarPlateItem) -> String {
-        // Mianownik po dwukropku („Na stół: kolacja”), biernik po czasowniku
-        // („Pora jeść kolację”) — `title.lowercased()` dawał „kolacja”
-        // w obu i psuł „II śniadanie” w „ii śniadanie”.
-        let name = item.slot.lowercaseName
-        let object = item.slot.accusativeName
-
-        if item.isCooking {
-            let lead = voice(["Pora gotować \(object)", "Do kuchni: \(name)", "Czas gotować \(object)"], "next-cooking", item: item)
-            guard let time = item.time else { return lead }
-            return "\(lead) · na \(time)"
-        }
-        if item.isDue { return voice(["Pora jeść \(object)", "Na stół: \(name)", "Czas jeść \(object)"], "next-due", item: item) }
-        if item.isLate { return "Następny: \(name) · pora minęła" }
-
-        let lead = voice(["Następny:", "Przed tobą:", "Na horyzoncie:"], "next-lead", item: item)
-        var head = "\(lead) \(name)"
-        if let away = item.minutesAway {
-            head += " \(CalendarRelativeTime.text(inMinutes: away))"
-        } else if let time = item.time {
-            head += " o \(time)"
-        }
-
-        guard item.showsCookHint, let cookFrom = item.cookFrom else { return head }
-        return "\(head) · gotuj od \(cookFrom)"
-    }
-
-    /// „Potem: kolacja · 20:00”, „Potem: przekąska · dowolna pora · bez planu”.
-    private func afterText(_ item: CalendarPlateItem) -> String {
-        let lead = voice(["Potem:", "Dalej:", "Później:", "A potem:"], "after-lead", item: item)
-        var parts = ["\(lead) \(item.slot.lowercaseName)", item.time ?? "dowolna pora"]
-        if item.isEmptySlot {
-            parts.append("bez planu")
-        } else if item.isEaten {
-            parts.append("zjedzone")
-        }
-        return parts.joined(separator: " · ")
-    }
-}
-
-#Preview("Sekwencja i linia dnia") {
+#Preview("Sekwencja dnia") {
     let items = [
         CalendarPlateItem(
             id: "sn", slot: .breakfast, status: .eaten, time: "08:00",
@@ -500,16 +264,8 @@ struct CalendarDayLine: View {
     ZStack {
         SCPageBackground(scheme: .dark).ignoresSafeArea()
 
-        VStack(spacing: 28) {
-            CalendarPlateStrip(items: items, selectedId: "ob", width: 353, onSelect: { _ in })
-
-            CalendarDayLine(note: .after(items[2]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .next(items[1]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .last(items[3]), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .closed, dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
-            CalendarDayLine(note: .empty(slots: 3), dayKey: "2026-09-11", onReturnToNext: {}, onSelect: { _ in })
-        }
-        .padding(.horizontal, SCPageMetrics.horizontal)
+        CalendarPlateStrip(items: items, selectedId: "ob", width: 353, onSelect: { _ in })
+            .padding(.horizontal, SCPageMetrics.horizontal)
     }
     .preferredColorScheme(.dark)
 }

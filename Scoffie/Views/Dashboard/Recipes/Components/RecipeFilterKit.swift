@@ -59,57 +59,40 @@ extension RecipeFilterSection where Trailing == EmptyView {
 // MARK: - Nagłówek arkusza filtrów
 
 /// Nagłówek „Filtrów” i filtrów kategorii: wspólny nagłówek arkusza
-/// (`EditorialSheetHeader` z kafelkiem w tincie akcentu i zdaniem o zasięgu),
-/// „Wyczyść” obok krzyżyka, a pod spodem — gdy coś jest włączone — co zawęża
-/// listę.
+/// (`EditorialSheetHeader` z kafelkiem w tincie akcentu i zdaniem o zasięgu)
+/// i „Wyczyść” obok krzyżyka.
 ///
 /// Zasięg stał dotąd osobnym wierszem pod nagłówkiem („Wszystkie przepisy ·
 /// Działają w każdej kategorii”), a nagłówek był samym słowem „Filtry” —
 /// Rafał (23.09.2026): „dodaj ciut więcej tekstu i ulepsz to wizualnie, ale
-/// nie przesadzaj”. Od rundy 8 układ z kafelkiem mieszka w samym
-/// `EditorialSheetHeader`, bo tak samo stoi lista kategorii, wybór przepisu
-/// do planu i gospodarstwo — tu zostaje tylko linijka „Aktywne: …”.
+/// nie przesadzaj”. Linijka „Aktywne: dieta, cechy” pod zasięgiem zniknęła
+/// w rundzie 9 („niepotrzebne to jest”) — co jest włączone, widać po samych
+/// kafelkach, a „Wyczyść” mówi, że jest co czyścić.
 struct RecipeFilterHeader: View {
     let icon: String
     let eyebrow: String
     let title: String
     /// Gdzie filtry działają — jedno zdanie.
     let scope: String
-    /// „Aktywne: czas, kalorie” — `nil`, gdy nic nie jest włączone.
-    let activeSummary: String?
     var accent: Color = SCPalette.terracotta
     let canClear: Bool
     let onClear: () -> Void
     let onClose: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetHeader(
-                eyebrow: eyebrow,
-                title: title,
-                icon: icon,
-                accent: accent,
-                subtitle: scope,
-                onClose: onClose
-            ) {
-                if canClear {
-                    RecipeFilterClearButton(action: onClear)
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                }
-            }
-
-            if let activeSummary {
-                Text(activeSummary)
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .contentTransition(.opacity)
-                    .padding(.top, 2)
-                    .transition(.opacity)
+        EditorialSheetHeader(
+            eyebrow: eyebrow,
+            title: title,
+            icon: icon,
+            accent: accent,
+            subtitle: scope,
+            onClose: onClose
+        ) {
+            if canClear {
+                RecipeFilterClearButton(action: onClear)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
         }
-        .animation(.smooth(duration: 0.22), value: activeSummary)
         .animation(.smooth(duration: 0.22), value: canClear)
     }
 }
@@ -255,8 +238,8 @@ struct RecipeFilterOptionTile: View {
     }
 }
 
-/// Miniatura kafelka: zdjęcie przepisu przybliżone do samego dania, a bez
-/// zdjęcia glif w tincie akcentu.
+/// Miniatura kafelka: zdjęcie przepisu z CAŁYM talerzem, a bez zdjęcia glif
+/// w tincie akcentu.
 struct RecipeFilterCoverThumb: View {
     let recipe: Recipe?
     let icon: String
@@ -269,13 +252,17 @@ struct RecipeFilterCoverThumb: View {
             CachedAsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
+                    // Bez przybliżenia. Zdjęcia katalogu są poziome
+                    // (1344 × 768) z talerzem na środku, zajmującym ~85 %
+                    // wysokości, więc samo wypełnienie kwadratu wycina środek
+                    // o boku wysokości zdjęcia — a w nim cały talerz z wąskim
+                    // marginesem blatu. Dawne przybliżenie 1,45 zostawiało
+                    // okno 530 px i ucinało rant każdego talerza, także miski
+                    // z zupą i deski (sprawdzone na 15 zdjęciach katalogu;
+                    // Rafał, 23.09.2026: „trochę się ucinają”).
                     image
                         .resizable()
                         .scaledToFill()
-                        // Zdjęcia katalogu mają talerz na środku i blat
-                        // dookoła. W 38 pt blat zjadał pół miniatury, a danie
-                        // robiło się kropką — przybliżenie zostawia samo danie.
-                        .scaleEffect(1.45)
                 default:
                     placeholder
                 }
@@ -839,7 +826,10 @@ struct RecipeFilterFooterButton: View {
 }
 
 /// „Wyczyść” obok krzyżyka — pojawia się dopiero, gdy jest co czyścić.
+/// Ten sam w filtrach, w wykluczaniu składników i w alergenach.
 struct RecipeFilterClearButton: View {
+    /// Co czyta VoiceOver — „Wyczyść filtry”, „Wyczyść wykluczenia”…
+    var accessibilityLabel: String = "Wyczyść filtry"
     let action: () -> Void
 
     var body: some View {
@@ -858,7 +848,7 @@ struct RecipeFilterClearButton: View {
             .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
-        .accessibilityLabel("Wyczyść filtry")
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 

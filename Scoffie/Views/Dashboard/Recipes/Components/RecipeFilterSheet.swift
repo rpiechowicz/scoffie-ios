@@ -188,23 +188,10 @@ struct RecipeFilterSheet: View {
             eyebrow: "Przepisy",
             title: "Filtry",
             scope: "Działają we wszystkich kategoriach",
-            activeSummary: activeSummary,
             canClear: draft.activeCount > 0,
             onClear: { clearAll() },
             onClose: { dismiss() }
         )
-    }
-
-    /// Co z tego arkusza zawęża teraz listę — „Aktywne: czas, kalorie, dieta”.
-    private var activeSummary: String? {
-        var parts: [String] = []
-        if draft.maxPrepTimeMinutes != nil { parts.append("czas") }
-        if draft.difficulty != nil { parts.append("trudność") }
-        if draft.maxCaloriesPerServing != nil { parts.append("kalorie") }
-        if !draft.diets.isEmpty { parts.append("dieta") }
-        if !draft.traits.isEmpty { parts.append("cechy") }
-        if !draft.excludedIngredients.isEmpty { parts.append("wykluczenia") }
-        return parts.isEmpty ? nil : "Aktywne: " + parts.joined(separator: ", ")
     }
 
     // MARK: - Dopasowanie
