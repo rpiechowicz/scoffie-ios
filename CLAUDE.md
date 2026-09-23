@@ -59,7 +59,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w trybie `.review` (`OptionsStoryMode`): tag = pora (· dzień), pod daniem „Zamień to danie” (wysyła
   „Zamień w tej propozycji …: X. Pokaż 3 inne dania na tę porę do wyboru.” → serwer oddaje OPTIONS →
   „Wybieram: …” → ta sama propozycja z nowym daniem), strona końcowa „Wszystko pasuje?” z zapisem.
-  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian.
+  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian. Od 24.09.2026 nad nazwą dania
+  stoją pigułki KIEDY (`ProposalWhenPills`: pora z ikoną w `cozyAccent` + „Dziś, 24 września”, po zapisie „W planie”),
+  a strona końcowa idzie za STANEM propozycji (`OptionsStoryMode.review(…, status:)`, `ProposalEndCopy`): „Wszystko
+  pasuje?” z listą zestawu i zgodą w SZAŁWII (`ProposalAcceptButton`), zapis NIE zamyka arkusza — „Wstawiam do planu…”
+  przechodzi w „Jest w planie” + „Otwórz plan”; cofnięta / nieaktualna / wygasła mają własne słowa.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
@@ -147,7 +151,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`AssistantThoughtLine`, faza `working`) to „Oddech łuku” (artefakt `claude.ai/artifact/7vwJmr2mCR8xTYnjAJ9F3s`):
   znak, łuk i status w TERAKOCIE (nie indygo z makiety — decyzja Rafała 21.09.2026), obrót 2,4 s,
   oddech 5 → 55 % obwodu 1,8 s, nigdy zamknięty. Od 21.09.2026 to DZIENNIK w jednej kolumnie
-  (18 pt ikona + 10 pt, czyli linia znaku marki przy odpowiedzi): u góry ślad trzech ostatnich
+  (18 pt ikona + 10 pt, czyli linia znaku marki przy odpowiedzi): u góry ślad do ośmiu ostatnich
   zrobionych kroków (ptaszek + zdanie, zapis w szałwii), POD nim bieżący krok (łuk 18 pt bez znaku,
   status z przebłyskiem, sekundy po prawej), „Możesz wyjść” wcięte do tekstu; bez paska; „Myślałem 42 s” stoi POD tekstem odpowiedzi (`AssistantVoice`), nie nad nim.
 - UI asystenta (redesign 19.09.2026): wszystkie karty stoją na atomach z `AssistantCardKit.swift`

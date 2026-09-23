@@ -4,8 +4,8 @@ import SwiftUI
 /// (`MWorking`) i „14 · Thought summary” (`LThought`).
 ///
 /// W TRAKCIE tury (poprawka 21.09.2026): dziennik w JEDNEJ kolumnie,
-/// od góry — najpierw ślad zrobionych kroków (ptaszek + zdanie, trzy
-/// ostatnie; zapis ma ptaszek w szałwii), POD nim bieżący krok: łuk 18 pt
+/// od góry — najpierw ślad zrobionych kroków (ptaszek + zdanie, do ośmiu
+/// ostatnich; zapis ma ptaszek w szałwii), POD nim bieżący krok: łuk 18 pt
 /// (obrót 2,4 s, oddech 5 → 55 % obwodu 1,8 s, nigdy zamknięty), status
 /// 15/600 z przebłyskiem i realny licznik sekund po prawej. Kolumna ikon ma
 /// szerokość znaku marki przy odpowiedzi (18 + 10 pt), więc ptaszki, łuk
@@ -79,15 +79,17 @@ struct AssistantThoughtLine: View {
     }
 
     /// Ślad pod statusem: co asystent JUŻ zrobił w tej turze. Wszystko przed
-    /// bieżącym krokiem, bez powtórzeń pod rząd; na ekranie trzy ostatnie,
-    /// żeby wiersz nie wypychał rozmowy przy długiej turze.
+    /// bieżącym krokiem, bez powtórzeń pod rząd. Do 23.09.2026 na ekranie
+    /// stały trzy ostatnie (z bieżącym — cztery pozycje) i dłuższa tura
+    /// gubiła, co już sprawdzono. Osiem mieści całe planowanie tygodnia;
+    /// dopiero dłuższy ślad przesuwa się, a najstarszy widoczny przygasa.
     private struct DoneStep: Identifiable, Equatable {
         let id: Int
         let label: String
         let wrote: Bool
     }
 
-    private static let trailLimit = 3
+    private static let trailLimit = 8
 
     private var doneSteps: [DoneStep] {
         guard !isStopping, steps.count > 1 else { return [] }
@@ -234,8 +236,8 @@ struct AssistantThoughtLine: View {
     }
 
     /// Zrobiony krok: ptaszek + zdanie. Zapis ma ptaszek w szałwii — to
-    /// jedyny krok, który coś zmienił. Najstarszy z trzech przygasa, żeby
-    /// było widać, że lista się przesuwa, a nie urywa.
+    /// jedyny krok, który coś zmienił. Gdy ślad jest pełny, najstarszy
+    /// przygasa, żeby było widać, że lista się przesuwa, a nie urywa.
     private func doneRow(_ step: DoneStep, isOldest: Bool) -> some View {
         HStack(alignment: .center, spacing: Self.iconGap) {
             Image(systemName: "checkmark")

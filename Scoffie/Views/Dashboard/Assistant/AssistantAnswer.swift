@@ -200,7 +200,7 @@ struct AssistantAnswer: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                 switch block {
                 case let .heading(title):
@@ -210,13 +210,13 @@ struct AssistantAnswer: View {
                         .foregroundStyle(Color.scMuted(scheme))
                         // Nagłówek rozdziela sekcje, więc potrzebuje powietrza
                         // NAD sobą — ale nie wtedy, gdy stoi na samej górze.
-                        .padding(.top, index == 0 ? 0 : 8)
+                        .padding(.top, index == 0 ? 0 : 10)
 
                 case let .paragraph(paragraph):
                     Text(AssistantAnswerParser.inline(paragraph))
                         .font(.system(size: 16))
                         .tracking(-0.3)
-                        .lineSpacing(4)
+                        .lineSpacing(5)
                         .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -273,7 +273,7 @@ private struct AssistantListCard: View {
                 }
                 .padding(.leading, 12 + CGFloat(item.depth) * 14)
                 .padding(.trailing, 12)
-                .padding(.vertical, 9)
+                .padding(.vertical, 11)
             }
         }
         .background(

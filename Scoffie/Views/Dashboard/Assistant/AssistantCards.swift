@@ -119,15 +119,15 @@ private struct DayBlock: View {
             .padding(.top, 2)
             .opacity(muted ? 0.6 : 1)
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 ForEach(day.slots) { slot in
                     ProposalMealButton(slot: slot, muted: muted, onOpen: onOpen)
                 }
             }
         }
         .padding(.horizontal, AssistantCardMetrics.inset)
-        .padding(.top, 16)
-        .padding(.bottom, 18)
+        .padding(.top, 18)
+        .padding(.bottom, 20)
         .overlay(alignment: .top) { AssistantCardRule() }
     }
 
@@ -149,7 +149,7 @@ private struct RemovalsSection: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             AssistantCardLabel(text: "Zniknie z planu · \(removals.count)")
 
             ForEach(removals) { item in
@@ -171,7 +171,7 @@ private struct RemovalsSection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, AssistantCardMetrics.inset)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         .overlay(alignment: .top) { AssistantCardRule() }
     }
 
@@ -349,9 +349,14 @@ struct AssistantPlanWeekCard: View {
                     presented = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
                 },
-                onApply: {
+                // Arkusz zostaje otwarty: strona końcowa przechodzi
+                // w „Zapisuję…”, a potem w „Jest w planie”.
+                onApply: { onApply(false) },
+                contexts: storyEntries.map { ProposalStory.context($0.slot, date: $0.day.date) },
+                isBusy: isBusy,
+                onOpenPlan: onOpenPlan == nil ? nil : {
                     presented = nil
-                    onApply(false)
+                    onOpenPlan?()
                 }
             )
         }
@@ -413,7 +418,7 @@ struct AssistantPlanDayCard: View {
                 status: status
             )
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 16) {
                 ForEach(Array(card.slots.enumerated()), id: \.element.id) { index, slot in
                     ProposalMealButton(slot: slot, muted: muted) { _ in
                         presented = OptionsSheetPage(id: index)
@@ -421,8 +426,8 @@ struct AssistantPlanDayCard: View {
                 }
             }
             .padding(.horizontal, AssistantCardMetrics.inset)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
+            .padding(.top, 16)
+            .padding(.bottom, 18)
 
             if !card.slots.isEmpty {
                 OptionsBrowseRow(
@@ -466,9 +471,14 @@ struct AssistantPlanDayCard: View {
                     presented = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
                 },
-                onApply: {
+                // Arkusz zostaje otwarty: strona końcowa przechodzi
+                // w „Zapisuję…”, a potem w „Jest w planie”.
+                onApply: { onApply(false) },
+                contexts: card.slots.map { ProposalStory.context($0, date: card.date) },
+                isBusy: isBusy,
+                onOpenPlan: onOpenPlan == nil ? nil : {
                     presented = nil
-                    onApply(false)
+                    onOpenPlan?()
                 }
             )
         }
@@ -528,13 +538,77 @@ private enum ProposalStory {
         )
     }
 
-    /// Zamiana i zapis tylko, dopóki propozycja czeka; potem sam podgląd.
+    /// Zamiana tylko, dopóki propozycja czeka; zapis — dopóki serwer mówi,
+    /// że się da (także po cofnięciu). Stan jedzie razem z trybem, więc
+    /// otwarty arkusz przechodzi w „Zapisane” w chwili, gdy zapis się uda.
     static func mode(state: AgentCardStateDTO, applyLabel: String, canSwap: Bool) -> OptionsStoryMode {
-        guard state.isPending else { return .review(swapTitle: nil, applyTitle: nil) }
+        let status = AssistantCardStatus(state)
         return .review(
-            swapTitle: canSwap ? "Zamień to danie" : nil,
-            applyTitle: state.canApply ? applyLabel : nil
+            swapTitle: state.isPending && canSwap ? "Zamień to danie" : nil,
+            applyTitle: state.canApply && status != .applied ? applyLabel : nil,
+            status: status
         )
+    }
+
+    /// Kiedy i na jaką porę — nad nazwą dania w arkuszu przeglądu.
+    static func context(_ slot: PlanWeekCardSlotDTO, date: String) -> ProposalStoryContext {
+        ProposalStoryContext(
+            slot: MealSlot(backendMealType: slot.mealType),
+            mealLabel: slot.mealLabel,
+            day: ProposalStoryContext.dayLabel(date)
+        )
+    }
+}
+
+/// Pora i dzień jednego dania propozycji: „Śniadanie” + „Dziś, 23 września”.
+/// Wcześniej arkusz mówił to małym drukiem w eyebrow („PROPOZYCJA ·
+/// WTOREK, 1 WRZEŚNIA”) — nie było widać, że to dzisiejsze śniadanie.
+struct ProposalStoryContext: Equatable {
+    let slot: MealSlot?
+    let mealLabel: String
+    /// „Dziś, 23 września”, „Jutro, 24 września”, „Piątek, 26 września”;
+    /// `nil`, gdy daty nie dało się odczytać.
+    let day: String?
+
+    private static let isoDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static let dayMonth: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "d MMMM"
+        return formatter
+    }()
+
+    private static let weekday: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pl_PL")
+        formatter.dateFormat = "EEEE"
+        return formatter
+    }()
+
+    /// Dzień względem DZISIAJ na telefonie — serwer stoi w UTC i „dziś”
+    /// wie tylko telefon.
+    static func dayLabel(_ iso: String, now: Date = Date(), calendar: Calendar = .current) -> String? {
+        guard let date = isoDay.date(from: String(iso.prefix(10))) else { return nil }
+        let lead: String
+        if calendar.isDate(date, inSameDayAs: now) {
+            lead = "Dziś"
+        } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) {
+            lead = "Jutro"
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
+            lead = "Wczoraj"
+        } else {
+            let name = weekday.string(from: date)
+            lead = name.prefix(1).uppercased() + name.dropFirst()
+        }
+        return "\(lead), \(dayMonth.string(from: date))"
     }
 }
 
@@ -1104,8 +1178,9 @@ private enum OptionsStoryMode {
     /// na końcu „Pokaż 3 kolejne”.
     case choose(insertTitle: String, morePrompt: String?)
     /// Przegląd dań propozycji dnia albo tygodnia: „Zamień to danie”,
-    /// na końcu „Zapisz w planie”. `nil` = sam podgląd.
-    case review(swapTitle: String?, applyTitle: String?)
+    /// na końcu „Zapisz w planie”. `nil` = tej akcji nie ma. `status` =
+    /// stan propozycji z serwera — mówi, co pokazuje strona końcowa.
+    case review(swapTitle: String?, applyTitle: String?, status: AssistantCardStatus)
 }
 
 /// `LRow` na tle `wash`: kafelek 36 ze znakiem, tytuł w terakocie, chevron —
@@ -1297,6 +1372,12 @@ private struct AssistantOptionsStorySheet: View {
     let onCompose: () -> Void
     /// „Zapisz w planie” ze strony końcowej przeglądu propozycji.
     var onApply: (() -> Void)? = nil
+    /// Pora i dzień każdego dania — tylko w przeglądzie propozycji.
+    var contexts: [ProposalStoryContext] = []
+    /// Zapis w toku — arkusz zostaje otwarty i sam przechodzi w „Zapisane”.
+    var isBusy: Bool = false
+    /// „Otwórz plan” po zapisie.
+    var onOpenPlan: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -1330,7 +1411,10 @@ private struct AssistantOptionsStorySheet: View {
         onChoose: @escaping (OptionsCardItemDTO) -> Void,
         onMore: @escaping (String) -> Void = { _ in },
         onCompose: @escaping () -> Void,
-        onApply: (() -> Void)? = nil
+        onApply: (() -> Void)? = nil,
+        contexts: [ProposalStoryContext] = [],
+        isBusy: Bool = false,
+        onOpenPlan: (() -> Void)? = nil
     ) {
         self.slotDetail = slotDetail
         self.options = options
@@ -1340,6 +1424,9 @@ private struct AssistantOptionsStorySheet: View {
         self.onMore = onMore
         self.onCompose = onCompose
         self.onApply = onApply
+        self.contexts = contexts
+        self.isBusy = isBusy
+        self.onOpenPlan = onOpenPlan
         let start = min(max(initialPage, 0), options.count)
         let startDish = min(start, max(options.count - 1, 0))
         _page = State(initialValue: start)
@@ -1356,7 +1443,7 @@ private struct AssistantOptionsStorySheet: View {
     private var dishActionTitle: String? {
         switch mode {
         case let .choose(insertTitle, _): return insertTitle
-        case let .review(swapTitle, _): return swapTitle
+        case let .review(swapTitle, _, _): return swapTitle
         }
     }
 
@@ -1378,8 +1465,18 @@ private struct AssistantOptionsStorySheet: View {
     }
 
     private var applyTitle: String? {
-        if case let .review(_, applyTitle) = mode { return applyTitle }
+        if case let .review(_, applyTitle, _) = mode { return applyTitle }
         return nil
+    }
+
+    /// Stan propozycji w przeglądzie; `nil` przy wyborze z kilku dań.
+    private var reviewStatus: AssistantCardStatus? {
+        if case let .review(_, _, status) = mode { return status }
+        return nil
+    }
+
+    private func context(_ index: Int) -> ProposalStoryContext? {
+        contexts.indices.contains(index) ? contexts[index] : nil
     }
 
     /// Chrom (uchwyt, nagłówek, segmenty) jest biały tylko na zdjęciu.
@@ -1591,10 +1688,11 @@ private struct AssistantOptionsStorySheet: View {
             // „Coś innego” to nie kolejne danie, tylko wyjście — krótka pełna
             // pigułka zamiast kolejnego pełnego segmentu (i zamiast dawnych
             // kresek). Aktywny wskaźnik zwęża się do niej tym samym ruchem.
+            // W przeglądzie koniec to zgoda na całość — szałwia, kolor zapisu.
             segmentButton(endPage, label: isReview ? "Cały zestaw" : "Coś innego", width: Self.endSegmentWidth) {
                 Capsule(style: .continuous).fill(off)
             } active: {
-                Capsule(style: .continuous).fill(AssistantLook.terra(scheme))
+                Capsule(style: .continuous).fill(isReview ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme))
             }
         }
     }
@@ -1737,8 +1835,8 @@ private struct AssistantOptionsStorySheet: View {
         let currentHeight = textHeights[dish] ?? textHeights.values.max() ?? 0
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                // Miejsce na eyebrow (21) i odstęp (10) nad NAJWYŻSZYM stosem.
-                Color.clear.frame(height: 31)
+                // Miejsce na eyebrow i odstęp (10) nad NAJWYŻSZYM stosem.
+                Color.clear.frame(height: eyebrowHeight + 10)
 
                 ZStack(alignment: .bottomLeading) {
                     ForEach(options.indices, id: \.self) { index in
@@ -1779,8 +1877,41 @@ private struct AssistantOptionsStorySheet: View {
         .padding(.horizontal, 20)
     }
 
-    /// Eyebrow stoi w miejscu; zmienia się tylko tag obok niego.
+    /// Wysokość rzędu nad nazwą: pigułki pory i dnia w przeglądzie są
+    /// wyższe niż sam eyebrow przy wyborze.
+    private var eyebrowHeight: CGFloat { usesWhenRow ? 28 : 21 }
+
+    private var usesWhenRow: Bool { isReview && !contexts.isEmpty }
+
+    @ViewBuilder
     private var eyebrowRow: some View {
+        if usesWhenRow {
+            whenRow
+        } else {
+            choiceEyebrowRow
+        }
+    }
+
+    /// Przegląd propozycji: KIEDY i NA CO, zanim przeczyta się nazwę —
+    /// „Śniadanie” w kolorze pory i „Dziś, 23 września”. Zmienia się razem
+    /// z daniem, tym samym ruchem co tag przy wyborze.
+    private var whenRow: some View {
+        ZStack(alignment: .leading) {
+            ForEach(options.indices, id: \.self) { index in
+                if let when = context(index) {
+                    swapping(
+                        index,
+                        shift: 10,
+                        ProposalWhenPills(context: when, saved: reviewStatus == .applied)
+                    )
+                }
+            }
+        }
+        .frame(minHeight: eyebrowHeight, alignment: .leading)
+    }
+
+    /// Eyebrow stoi w miejscu; zmienia się tylko tag obok niego.
+    private var choiceEyebrowRow: some View {
         HStack(spacing: 8) {
             Text(eyebrowText)
                 .font(.system(size: 11, weight: .bold))
@@ -1845,10 +1976,126 @@ private struct AssistantOptionsStorySheet: View {
 
     // MARK: Strona końcowa
 
+    @ViewBuilder
+    private var endLayer: some View {
+        if let reviewStatus {
+            reviewEndLayer(reviewStatus)
+        } else {
+            choiceEndLayer
+        }
+    }
+
+    /// Strona końcowa PRZEGLĄDU propozycji — mówi, w jakim stanie JEST
+    /// propozycja, a nie zawsze „Wszystko pasuje?”. Stan przychodzi
+    /// z serwera przy każdym odświeżeniu karty, więc otwarty arkusz sam
+    /// przechodzi z „Wszystko pasuje?” przez „Zapisuję…” w „Jest w planie”.
+    /// Zgoda na całość jest w szałwii — to kolor zapisu w całej aplikacji.
+    private func reviewEndLayer(_ status: AssistantCardStatus) -> some View {
+        let copy = ProposalEndCopy(status: status, isBusy: isBusy)
+        let text = reduceMotion ? 0 : dragX * 0.16
+        return VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    endStep(0, scale: 0.8) {
+                        ProposalStatusBadge(status: status, isBusy: isBusy)
+                    }
+
+                    endStep(1, rise: 14) {
+                        VStack(spacing: 0) {
+                            Text(copy.eyebrow)
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.9)
+                                .textCase(.uppercase)
+                                .foregroundStyle(copy.accent(scheme))
+                                .lineHeight(.exact(points: 14))
+                            Text(copy.title)
+                                .font(.system(size: 30, weight: .bold))
+                                .tracking(-0.9)
+                                .foregroundStyle(AssistantLook.ink(scheme))
+                                .lineHeight(.exact(points: 34))
+                                .padding(.top, 10)
+                            Text(copy.body)
+                                .font(.system(size: 15))
+                                .foregroundStyle(AssistantLook.muted(scheme))
+                                .lineHeight(.exact(points: 21))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 10)
+                        }
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 24)
+                        .offset(x: text)
+                    }
+                    .padding(.top, 22)
+
+                    endStep(2, rise: 16) {
+                        ProposalRecap(
+                            options: options,
+                            contexts: contexts,
+                            status: status
+                        )
+                        .padding(.horizontal, 16)
+                    }
+                    .padding(.top, 24)
+                }
+                // 118 = uchwyt, nagłówek i segmenty nad treścią.
+                .padding(.top, 118)
+                .padding(.bottom, 16)
+                .animation(motion(.smooth(duration: 0.4)), value: status)
+                .animation(motion(.smooth(duration: 0.3)), value: isBusy)
+            }
+            // Krótka treść stoi na środku wolnego miejsca; dłuższa
+            // (tydzień, mały telefon) zaczyna od góry i się przewija.
+            .defaultScrollAnchor(.center, for: .alignment)
+            .defaultScrollAnchor(.top, for: .initialOffset)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
+            .scScrollEdgeFade()
+
+            endStep(3, rise: 20) {
+                VStack(spacing: 10) {
+                    if let applyTitle, let onApply {
+                        ProposalAcceptButton(
+                            title: isBusy ? "Zapisuję…" : applyTitle,
+                            icon: "checkmark",
+                            isBusy: isBusy,
+                            action: onApply
+                        )
+                        .transition(.opacity)
+                    } else if status == .applied, let onOpenPlan {
+                        ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
+                            .transition(.opacity)
+                    }
+                    if !isBusy {
+                        AssistantGhostButton(
+                            action: AssistantCardAction(
+                                title: copy.composeTitle,
+                                icon: "square.and.pencil"
+                            ) {
+                                onCompose()
+                            }
+                        )
+                        .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+                .animation(motion(.smooth(duration: 0.35)), value: status)
+                .animation(motion(.smooth(duration: 0.3)), value: isBusy)
+            }
+        }
+        .background(
+            SCPageBackground(scheme: scheme)
+                .ignoresSafeArea()
+                .opacity(isEnd ? 1 : 0)
+                .animation(motion(.easeInOut(duration: 0.35)), value: isEnd)
+        )
+    }
+
     /// `OptStorySheet end`: kreskowany segment staje się pełny — znak marki
     /// (`EBrand` × 1,7, środek na 248/798), jedno pytanie (od 366/798), dwa
     /// wyjścia przypięte do dołu. Wchodzi kaskadą: znak, pytanie, przyciski.
-    private var endLayer: some View {
+    private var choiceEndLayer: some View {
         GeometryReader { geo in
             let full = geo.size.height + geo.safeAreaInsets.bottom
             let text = reduceMotion ? 0 : dragX * 0.16
@@ -1860,13 +2107,13 @@ private struct AssistantOptionsStorySheet: View {
 
                 endStep(1, rise: 14) {
                     VStack(spacing: 0) {
-                        Text(isReview ? "Cały zestaw" : "Coś innego")
+                        Text("Coś innego")
                             .font(.system(size: 11, weight: .bold))
                             .tracking(0.9)
                             .textCase(.uppercase)
                             .foregroundStyle(AssistantLook.terra(scheme))
                             .lineHeight(.exact(points: 14))
-                        Text(isReview ? "Wszystko pasuje?" : "Żadne nie pasuje?")
+                        Text("Żadne nie pasuje?")
                             .font(.system(size: 32, weight: .bold))
                             .tracking(-0.9)
                             .foregroundStyle(AssistantLook.ink(scheme))
@@ -1896,14 +2143,9 @@ private struct AssistantOptionsStorySheet: View {
                                 ) { onMore(morePrompt) }
                             )
                         }
-                        if let applyTitle, let onApply {
-                            AssistantPrimaryButton(
-                                action: AssistantCardAction(title: applyTitle, icon: "checkmark") { onApply() }
-                            )
-                        }
                         AssistantGhostButton(
                             action: AssistantCardAction(
-                                title: isReview ? "Napisz, co zmienić" : "Napisz, na co masz ochotę",
+                                title: "Napisz, na co masz ochotę",
                                 icon: "square.and.pencil"
                             ) {
                                 onCompose()
@@ -1925,12 +2167,7 @@ private struct AssistantOptionsStorySheet: View {
     }
 
     private var endBody: String {
-        if isReview {
-            return applyTitle == nil
-                ? "Napisz, jeśli chcesz coś w nim zmienić."
-                : "Zapiszę propozycję w planie — albo napisz, co zmienić."
-        }
-        return morePrompt == nil
+        morePrompt == nil
             ? "Napisz, na co masz ochotę — poszukam w Twoich przepisach."
             : "Pokażę \(options.count) kolejne z Twoich przepisów — albo napisz, na co masz ochotę."
     }
@@ -2008,6 +2245,351 @@ private struct AssistantOptionsStorySheet: View {
 ///
 /// Widok jest TRWAŁY między daniami: dostaje nowe wartości, a nie nowe życie,
 /// więc cyfry rolują się, a segmenty paska płynnie zmieniają szerokość.
+// MARK: - Przegląd propozycji: kiedy, stan, zgoda
+
+/// „☀ Śniadanie” w kolorze pory + „Dziś, 23 września” (+ „W planie” po
+/// zapisie, gdy się mieści) — nad nazwą dania w arkuszu przeglądu.
+private struct ProposalWhenPills: View {
+    let context: ProposalStoryContext
+    let saved: Bool
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            pills(showsSaved: saved)
+            pills(showsSaved: false)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func pills(showsSaved: Bool) -> some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 5) {
+                if let slot = context.slot {
+                    Image(systemName: slot.icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(slot.cozyAccent)
+                }
+                Text(context.slot?.title ?? context.mealLabel)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(AssistantLook.ink(scheme))
+            }
+            .modifier(ProposalPill(fill: (context.slot?.cozyAccent ?? AssistantLook.terraFill(scheme)).opacity(scheme == .dark ? 0.22 : 0.16)))
+
+            if let day = context.day {
+                Text(day)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .tracking(-0.2)
+                    .foregroundStyle(AssistantLook.ink(scheme))
+                    .modifier(ProposalPill(fill: AssistantLook.field(scheme)))
+            }
+
+            if showsSaved {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("W planie")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(AssistantLook.sage(scheme))
+                .modifier(ProposalPill(fill: AssistantLook.sageTint(scheme)))
+            }
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+private struct ProposalPill: ViewModifier {
+    let fill: Color
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(Capsule(style: .continuous).fill(fill))
+    }
+}
+
+/// Słowa strony końcowej przeglądu dla każdego stanu propozycji.
+private struct ProposalEndCopy {
+    let status: AssistantCardStatus
+    let isBusy: Bool
+
+    var eyebrow: String {
+        if isBusy { return "Zapisuję" }
+        switch status {
+        case .pending: return "Cały zestaw"
+        case .applied: return "Zapisane"
+        case .undone: return "Cofnięte"
+        case .stale: return "Nieaktualna"
+        case .expired: return "Wygasła"
+        case .failed: return "Nie zapisano"
+        }
+    }
+
+    var title: String {
+        if isBusy { return "Wstawiam do planu…" }
+        switch status {
+        case .pending: return "Wszystko pasuje?"
+        case .applied: return "Jest w planie"
+        case .undone: return "Plan wrócił"
+        case .stale: return "Plan się zmienił"
+        case .expired: return "Propozycja wygasła"
+        case .failed: return "Nie udało się zapisać"
+        }
+    }
+
+    var body: String {
+        if isBusy { return "Chwila — zaraz wszystko będzie w planie." }
+        switch status {
+        case .pending: return "Zapiszę cały zestaw jednym dotknięciem — albo napisz, co zmienić."
+        case .applied: return "Wszystkie dania z tej propozycji czekają w Twoim planie."
+        case .undone: return "Cofnąłem ten zapis. Możesz zastosować go jeszcze raz."
+        case .stale: return "Od tej propozycji plan się zmienił. Poproś o nową — policzę od nowa."
+        case .expired: return "Poproś o nową — policzę ją od nowa."
+        case .failed: return "Plan jest bez zmian. Spróbuj jeszcze raz."
+        }
+    }
+
+    var composeTitle: String { "Napisz, co zmienić" }
+
+    func accent(_ scheme: ColorScheme) -> Color {
+        switch status {
+        case .pending, .applied: return AssistantLook.sage(scheme)
+        case .failed: return AssistantLook.terra(scheme)
+        case .undone, .stale, .expired: return AssistantLook.faint(scheme)
+        }
+    }
+}
+
+/// Odznaka nad pytaniem: propozycja = szałwiowy krążek z ptaszkiem
+/// w obwódce (zgoda czeka), zapis = pełna szałwia, zapis w toku = kółko
+/// postępu. Pozostałe stany w cichej szarości.
+private struct ProposalStatusBadge: View {
+    let status: AssistantCardStatus
+    let isBusy: Bool
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var solid: Bool { status == .applied && !isBusy }
+
+    private var symbol: String {
+        switch status {
+        case .pending, .applied: return "checkmark"
+        case .undone: return "arrow.uturn.backward"
+        case .stale: return "arrow.triangle.2.circlepath"
+        case .expired: return "hourglass"
+        case .failed: return "exclamationmark"
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case .pending, .applied: return AssistantLook.sage(scheme)
+        case .failed: return AssistantLook.terra(scheme)
+        case .undone, .stale, .expired: return AssistantLook.faint(scheme)
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(solid ? color : color.opacity(scheme == .dark ? 0.18 : 0.13))
+            Circle()
+                .strokeBorder(color.opacity(solid ? 0 : 0.45), lineWidth: 1.5)
+            if isBusy {
+                ProgressView()
+                    .controlSize(.regular)
+                    .tint(color)
+                    .transition(.opacity)
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(solid ? Color.white : color)
+                    .contentTransition(.symbolEffect(.replace))
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: 84, height: 84)
+        .scaleEffect(solid ? 1.04 : 1)
+        .animation(.spring(duration: 0.5, bounce: 0.35), value: solid)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Cały zestaw jeszcze raz, w jednej karcie: pora, danie, ptaszek.
+/// Do pięciu dań — wiersz na danie; tydzień — wiersz na dzień z liczbą
+/// dań i sumą kalorii.
+private struct ProposalRecap: View {
+    let options: [OptionsCardItemDTO]
+    let contexts: [ProposalStoryContext]
+    let status: AssistantCardStatus
+
+    @Environment(\.colorScheme) private var scheme
+
+    private struct Row: Identifiable {
+        let id: Int
+        let icon: String?
+        let accent: Color?
+        let label: String
+        let title: String
+    }
+
+    private var days: [String] {
+        var seen: [String] = []
+        for day in contexts.compactMap(\.day) where !seen.contains(day) { seen.append(day) }
+        return seen
+    }
+
+    /// Jeden dzień → jego nazwa nad listą; kilka → każdy wiersz ma swój.
+    private var header: String? { days.count == 1 ? days[0] : nil }
+
+    private var rows: [Row] {
+        if options.count <= 5 {
+            return options.indices.map { index in
+                let context = contexts.indices.contains(index) ? contexts[index] : nil
+                return Row(
+                    id: index,
+                    icon: context?.slot?.icon,
+                    accent: context?.slot?.cozyAccent,
+                    label: context?.slot?.title ?? context?.mealLabel ?? "",
+                    title: options[index].title
+                )
+            }
+        }
+        return days.enumerated().map { offset, day in
+            let indices = contexts.indices.filter { contexts[$0].day == day && options.indices.contains($0) }
+            let kcal = indices.reduce(0) { $0 + options[$1].kcalPerServing }
+            let count = indices.count
+            let word = count == 1 ? "danie" : ((2...4).contains(count % 10) && !(12...14).contains(count % 100) ? "dania" : "dań")
+            return Row(
+                id: offset,
+                icon: "calendar",
+                accent: nil,
+                label: day,
+                title: kcal > 0 ? "\(count) \(word) · \(kcal) kcal" : "\(count) \(word)"
+            )
+        }
+    }
+
+    private var checkColor: Color? {
+        switch status {
+        case .pending, .applied: return AssistantLook.sage(scheme)
+        default: return nil
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let header {
+                Text(header)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 4)
+            }
+
+            ForEach(Array(rows.enumerated()), id: \.element.id) { offset, row in
+                if offset > 0 {
+                    Rectangle()
+                        .fill(AssistantLook.hair(scheme))
+                        .frame(height: 0.5)
+                        .padding(.leading, 60)
+                }
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill((row.accent ?? AssistantLook.ink(scheme)).opacity(scheme == .dark ? 0.2 : 0.12))
+                        Image(systemName: row.icon ?? "fork.knife")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(row.accent ?? AssistantLook.muted(scheme))
+                    }
+                    .frame(width: 32, height: 32)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.label)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AssistantLook.faint(scheme))
+                            .lineLimit(1)
+                        Text(row.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(-0.3)
+                            .foregroundStyle(AssistantLook.ink(scheme))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if let checkColor {
+                        Image(systemName: status == .applied ? "checkmark.circle.fill" : "checkmark.circle")
+                            .font(.system(size: 19, weight: .medium))
+                            .foregroundStyle(checkColor)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .opacity(status.tone == .muted ? 0.6 : 1)
+            }
+        }
+        .padding(.bottom, 4)
+        .background(
+            RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
+                .fill(AssistantLook.card(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
+                .stroke(AssistantLook.cardStroke(scheme), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Zgoda na całość: pigułka „soft” w szałwii — ten sam przycisk co
+/// `AssistantPrimaryButton`, tylko w kolorze zapisu.
+private struct ProposalAcceptButton: View {
+    let title: String
+    var icon: String = "checkmark"
+    var isBusy: Bool = false
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let sage = AssistantLook.sage(scheme)
+        Button(action: action) {
+            HStack(spacing: 7) {
+                if isBusy {
+                    ProgressView().controlSize(.small).tint(sage)
+                }
+                Text(title)
+                    .font(.system(size: 15.5, weight: .semibold))
+                    .tracking(-0.3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .contentTransition(.numericText())
+                if !isBusy {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .bold))
+                }
+            }
+            .foregroundStyle(sage)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .scSoftCapsule(sage)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .disabled(isBusy)
+    }
+}
+
 private struct OptionsMacroStats: View {
     let kcal: Int
     let minutes: Int
