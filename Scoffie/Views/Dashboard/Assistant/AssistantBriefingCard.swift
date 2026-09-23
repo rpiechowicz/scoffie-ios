@@ -452,6 +452,7 @@ struct AssistantBriefingCard: View {
     /// `ETeaser`: trzy miniatury 76 pt, promień 14 — bez nazw i bez wyboru.
     private struct Teaser: View {
         let urls: [URL?]
+        @Environment(\.colorScheme) private var scheme
 
         var body: some View {
             HStack(spacing: 8) {
