@@ -49,7 +49,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (wolne miejsce nad nim; gdy wyższy niż ekran, startuje od otwarcia). Ostatnia alternatywa to zawsze
   „Mam inny pomysł” = sam fokus pola (akcje i kontekst gasną, otwarcie zostaje), a przykład w polu
   (`briefing.placeholder`) zmienia się z sytuacją. Bez liczenia braków („0 z 4”) i dat w tekście.
-  Ruch: otwarcie (65 zn/s) i zdanie (170 zn/s) PISZĄ SIĘ (`Components/SCTypedText.swift` — nienapisana końcówka jest
+  Ruch: otwarcie (65 zn/s) i zdanie (170 zn/s) PISZĄ SIĘ — razem najwyżej 0,75 s, dłuższy tekst przyspiesza oba w tej samej proporcji (`typingBudget`) (`Components/SCTypedText.swift` — nienapisana końcówka jest
   przezroczysta, więc układ nie skacze), potem kaskada kontekstu i akcji, liczby przez `SCCountingText`;
   gra od nowa przy wejściu na zakładkę i nowej sytuacji, a ta sama sytuacja z inną liczbą tylko roluje
   (`numericText`). Akcje o JEDNEJ porze proszą o dania „do wyboru”, więc kończą się arkuszem wyboru
@@ -379,9 +379,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Ustawienia → Gospodarstwo (23.09.2026, trzy rundy tego samego dnia — „za dużo tekstu”, potem
   „znów pusto i smutno”): nagłówek z ikoną domu, nazwą, ołówkiem i jedną linijką „3 osoby · wspólny
   plan i lista zakupów”; domownicy: sama tożsamość — awatar, imię, plakietki „TY” / „WŁAŚCICIEL”
-  (dieta i alergeny usunięte w rundzie 10: „to tu nie ma sensu”); zaproszenie jako osobna karta
-  z jednym przyciskiem (link jednorazowy, 7 dni); „Opuść gospodarstwo” PRZYPIĘTE w stopce arkusza
-  (`scSheetFooter`, runda 10). Wcześniej: nazwa w nagłówku
+  (dieta i alergeny usunięte w rundzie 10: „to tu nie ma sensu”); zaproszenie (link jednorazowy, 7 dni)
+  i „Opuść gospodarstwo” PRZYPIĘTE w stopce arkusza (`scSheetFooter`, runda 10) — od 23.09 zaproszenie
+  to dwuwierszowy przycisk „Zaproś domownika · Link dla jednej osoby · ważny 7 dni” NAD „Opuść”. Wcześniej: nazwa w nagłówku
   z ołówkiem obok krzyżyka (`EditorialSheetHeader` ma opcjonalne `accessory`; zmienia właściciel
   przez `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
   `households:findById`), zaproszenie jako wiersz listy (link 7 dni), „Opuść” na dole. NIC więcej — Rafał:

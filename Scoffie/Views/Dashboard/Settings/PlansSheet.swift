@@ -34,6 +34,8 @@ struct PlansSheet: View {
     @State private var showTerms = false
     @State private var showPrivacy = false
     @State private var isRestoring = false
+    /// Tylko raz, żeby nie przestawiać wyboru komuś, kto już stuknął inny kafel.
+    @State private var didPickInitial = false
 
     private var subscriptions: SubscriptionStore {
         sessionStore.subscriptionStore ?? fallbackSubscriptions
@@ -93,11 +95,21 @@ struct PlansSheet: View {
         .sheet(isPresented: $showPrivacy) {
             LegalDocumentSheet(title: "Polityka prywatności") { PrivacyPolicyContent() }
         }
-        .task {
+        .onAppear {
             // Na wejściu: plan polecany dla domu, a gdy go nie ma — obecny.
-            // Tylko raz, żeby nie przestawiać wyboru komuś, kto już stuknął
-            // inną kartę. To jest ZAZNACZENIE kafla, nie stan zakupu.
-            if let initial = suggestedPlan ?? currentPlan { selected = initial }
+            // To jest ZAZNACZENIE kafla, nie stan zakupu. W `onAppear` i bez
+            // animacji: ustawione w `.task` trafiało w wjazd arkusza, a karta
+            // szczegółów ma sprężynę na `plan.id` — pasek wiadomości rozlewał
+            // się wtedy w prawo, zanim arkusz dojechał.
+            guard !didPickInitial else { return }
+            didPickInitial = true
+            if let initial = suggestedPlan ?? currentPlan {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { selected = initial }
+            }
+        }
+        .task {
             // Najpierw pytamy serwer, czy zakupy są w ogóle włączone —
             // przycisk ma być nieaktywny, dopóki nie umiemy potwierdzić
             // płatności, a nie dopiero po jej pobraniu.
@@ -568,15 +580,16 @@ struct PlanDetailCard: View {
                     .contentTransition(.numericText())
                     .frame(minWidth: 28, alignment: .trailing)
             }
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.scBarTrack(scheme))
-                    Capsule()
+            // Kształt z animowanym UŁAMKIEM zamiast `GeometryReader`
+            // z ramką: szerokość z pierwszego przebiegu układu (zero, zanim
+            // arkusz dojedzie) nie jest animowana, rusza się tylko pula.
+            Capsule()
+                .fill(Color.scBarTrack(scheme))
+                .overlay {
+                    PlanQuotaBar(fraction: CGFloat(value) / CGFloat(Swift.max(1, max)))
                         .fill(SCPalette.terracotta)
-                        .frame(width: geometry.size.width * CGFloat(value) / CGFloat(Swift.max(1, max)))
                 }
-            }
-            .frame(height: 6)
+                .frame(height: 6)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value) miesięcznie")
@@ -613,6 +626,22 @@ struct PlanDetailCard: View {
         let tens = count % 100
         let isFew = (2...4).contains(unit) && !(12...14).contains(tens)
         return isFew ? "zapisy" : "zapisów"
+    }
+}
+
+/// Wypełnienie paska puli — kapsuła od lewej na `fraction` szerokości.
+private struct PlanQuotaBar: Shape {
+    var fraction: CGFloat
+
+    var animatableData: CGFloat {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width * Swift.min(Swift.max(fraction, 0), 1)
+        return Capsule(style: .circular)
+            .path(in: CGRect(x: rect.minX, y: rect.minY, width: width, height: rect.height))
     }
 }
 

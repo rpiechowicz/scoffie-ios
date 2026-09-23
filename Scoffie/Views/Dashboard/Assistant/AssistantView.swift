@@ -539,7 +539,11 @@ struct AssistantView: View {
         guard let usage = store.usage, usage.isTrial, usage.messages.remaining > 0 else { return nil }
         return AnyView(
             Button { showUsage = true } label: {
-                AssistantQuotaPill(remaining: usage.messages.remaining, limit: usage.messages.limit)
+                AssistantQuotaPill(
+                    remaining: usage.messages.remaining,
+                    limit: usage.messages.limit,
+                    compact: headerMode != .large
+                )
             }
             .buttonStyle(.plain)
             .accessibilityHint("Otwiera limity asystenta")

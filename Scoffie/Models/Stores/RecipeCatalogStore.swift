@@ -32,8 +32,13 @@ final class RecipeCatalogStore {
 
     /// Kasuje plik cache — wołane przy wylogowaniu (`SessionStore`), bo plik
     /// nie zna konta, a żyje 12 h.
+    /// Przez tę samą kolejkę co zapis — inaczej zapis czekający w kolejce
+    /// odtworzyłby plik już po wylogowaniu.
     static func clearCache() {
-        try? FileManager.default.removeItem(at: cacheFileURL)
+        let url = cacheFileURL
+        cacheWriteQueue.async {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     private static var cacheFileURL: URL {
@@ -261,13 +266,24 @@ final class RecipeCatalogStore {
         }
     }
 
+    /// Jedna kolejka seryjna na wszystkie zapisy — ostatni snapshot wygrywa
+    /// (ten sam wzór co `ShoppingListStore.persistCache`).
+    private static let cacheWriteQueue = DispatchQueue(
+        label: "recipe-catalog-cache-write",
+        qos: .utility
+    )
+
+    /// Encode + zapis pliku poza main threadem. Pełny katalog to setki
+    /// przepisów, a `loadRecipeDetail` zapisuje go tuż przed otwarciem
+    /// szczegółów posiłku — synchronicznie na MainActorze ta klatka zjadała
+    /// wjazd arkusza przy pierwszym otwarciu każdego przepisu.
     private func saveCache() {
-        do {
-            let payload = RecipeCatalogCachePayload(recipes: recipes, savedAt: Date())
-            let data = try JSONEncoder().encode(payload)
-            try data.write(to: cacheURL, options: .atomic)
-        } catch {
-            // intentionally ignore cache write failures
+        let payload = RecipeCatalogCachePayload(recipes: recipes, savedAt: Date())
+        let url = cacheURL
+        Self.cacheWriteQueue.async {
+            // Błąd zapisu cache świadomie pomijany.
+            guard let data = try? JSONEncoder().encode(payload) else { return }
+            try? data.write(to: url, options: .atomic)
         }
     }
 

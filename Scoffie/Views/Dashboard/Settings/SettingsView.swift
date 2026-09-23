@@ -890,7 +890,7 @@ struct SettingsView: View {
                 } content: {
                     householdSheetContent
                 } footer: {
-                    leaveHouseholdButton
+                    householdFooter
                 }
             } else {
                 pinnedEditorialSheet {
@@ -2161,8 +2161,8 @@ struct SettingsView: View {
         )
     }
 
-    /// Treść arkusza gospodarstwa — domownicy i zaproszenie, a bez domu
-    /// karta zakładania. Wyjście nie stoi tu, tylko w stopce arkusza.
+    /// Treść arkusza gospodarstwa — domownicy, a bez domu karta zakładania.
+    /// Zaproszenie i wyjście nie stoją tu, tylko w stopce arkusza.
     private var householdSheetContent: some View {
         let hasInvitations = !sessionStore.pendingInvitations.isEmpty
 
@@ -2179,10 +2179,6 @@ struct SettingsView: View {
             if hasHousehold {
                 householdMembersSection
                     .padding(.top, hasInvitations ? 20 : 0)
-                if canCreateInvitations {
-                    householdInviteCard
-                        .padding(.top, 14)
-                }
             } else {
                 householdEmptyCard
                     .padding(.top, hasInvitations ? 18 : 0)
@@ -2424,72 +2420,72 @@ struct SettingsView: View {
         return "\(count) \(membersLabel(for: count)) · wspólny plan i lista zakupów"
     }
 
-    /// Zaproszenie jako osobna karta pod domownikami: co robi link i jeden
-    /// przycisk, który go wysyła. Link jest jednorazowy — dołącza jedną osobę
-    /// (`acceptInvitation` odrzuca wykorzystany) — i ważny 7 dni, bo tyle
-    /// daje mu serwer, gdy klient nie poda własnego terminu.
-    private var householdInviteCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12))
-                    .frame(width: 34, height: 34)
-                    .overlay(
-                        Image(systemName: "envelope.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(SCPalette.terracotta)
-                    )
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Zaproś do domu")
-                        .font(.system(size: 15.5, weight: .semibold))
-                        .tracking(-0.25)
-                        .foregroundStyle(Color.scLabel(scheme))
-                    Text("Link dołącza jedną osobę do wspólnego planu i listy zakupów. Działa 7 dni.")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    /// Stopka arkusza: zaproszenie nad wyjściem (Rafał, 23.09.2026: „button
+    /// do zapraszania daj na dole nad opuść”). Zaprasza tylko właściciel —
+    /// reszta widzi pod domownikami, kogo o to poprosić.
+    private var householdFooter: some View {
+        VStack(spacing: 10) {
+            if canCreateInvitations {
+                inviteButton
             }
-
-            inviteButton
+            leaveHouseholdButton
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.08 : 0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(SCPalette.terracotta.opacity(0.22), lineWidth: 1)
-        )
     }
 
     /// Link tworzy się sam przy otwarciu arkusza (`preloadHouseholdContextIfNeeded`),
     /// więc zwykle od razu jest czym się podzielić; przycisk „Przygotuj” zostaje
     /// na wypadek, gdyby serwer za pierwszym razem odmówił.
+    ///
+    /// Dwie linijki zamiast samej kapsuły: nad czerwonym „Opuść” dwie
+    /// kapsuły w podobnych barwach czytały się jak para równorzędnych akcji.
+    /// Ikona, co robi, i warunki linku w jednym miejscu; glif po prawej mówi,
+    /// że stuknięcie otwiera udostępnianie.
     @ViewBuilder
     private var inviteButton: some View {
-        let label = HStack(spacing: 8) {
-            if isCreatingInvitation {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(SCPalette.terracotta)
-            } else {
-                Image(systemName: invitationLink == nil ? "arrow.clockwise" : "square.and.arrow.up")
-                    .font(.system(size: 13, weight: .heavy))
+        let isReady = invitationLink != nil
+        let label = HStack(spacing: 12) {
+            Circle()
+                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.22 : 0.16))
+                .frame(width: 36, height: 36)
+                .overlay(
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SCPalette.terracotta)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isReady ? "Zaproś domownika" : "Przygotuj zaproszenie")
+                    .font(.system(size: 15, weight: .bold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scLabel(scheme))
+                Text("Link dla jednej osoby · ważny 7 dni")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.scMuted(scheme))
             }
-            Text(invitationLink == nil ? "Przygotuj zaproszenie" : "Wyślij zaproszenie")
-                .font(.system(size: 14, weight: .bold))
-                .tracking(-0.1)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Group {
+                if isCreatingInvitation {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(SCPalette.terracotta)
+                } else {
+                    Image(systemName: isReady ? "square.and.arrow.up" : "arrow.clockwise")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SCPalette.terracotta)
+                }
+            }
+            .frame(width: 24)
+            .accessibilityHidden(true)
         }
-        .foregroundStyle(SCPalette.terracotta)
-        .frame(maxWidth: .infinity)
-        .frame(height: 44)
-        .scSoftCapsule()
-        .contentShape(Capsule(style: .continuous))
+        .padding(.leading, 10)
+        .padding(.trailing, 16)
+        .padding(.vertical, 10)
+        .scSoftSurface(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
         if let invitationLink {
             ShareLink(
