@@ -7,7 +7,8 @@
 	Stan na 3.09.2026, zgodny z polityką prywatności v2 i rejestrem
 	czynności w repo backendu (docs/rejestr-czynnosci-i-dpia.md).
 	Brak śledzenia i brak domen śledzących: aplikacja nie ma reklam ani SDK
-	analitycznych. Zebrane dane są powiązane z kontem (logowanie), nie służą
+	analitycznych. Diagnostyka (Sentry, region UE) jest powiązana z id konta,
+	nie służy do śledzenia. Zebrane dane są powiązane z kontem (logowanie), nie służą
 	do śledzenia.
 	-->
 	<key>NSPrivacyTracking</key>
@@ -95,6 +96,45 @@
 			<!-- Token urządzenia do powiadomień push. -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Sentry: crashe, zawieszenia UI (od 23.09.2026, patrz CrashReporting.swift). -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCrashData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Sentry: czasy startu, ekranów i zapytań do API, profile CPU. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePerformanceData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Sentry: model urządzenia, wersja systemu i aplikacji przy zgłoszeniu. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
