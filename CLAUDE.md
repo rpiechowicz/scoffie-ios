@@ -167,6 +167,19 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
   Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
+- Filtry przepisów v3 (23.09.2026) — makieta Claude Design „Scoffie - Przepisy v3 - Filtry”
+  (projekt `43b605d0-…`, `components/filtry-final.jsx`). `RecipeFilterSheet` + klocki w
+  `RecipeFilterKit.swift` + arkusze-dzieci `RecipeExcludeSheets.swift` (dział składników, szukanie).
+  Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
+  tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
+  per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie
+  raz na otwarcie). Wykluczanie składników jest po stronie telefonu, po nazwie i dziale
+  z listy przepisów (`RecipeIngredient.department` = dział sklepu, te same alejki co Zakupy);
+  grupa („Papryka · wszystkie”) = wspólny pierwszy wyraz w JEDNYM dziale, bez przyimka jako
+  drugiego wyrazu (`IngredientExclusion.groupStem`). Odejścia od makiety: cechy „Jedno naczynie /
+  Do pudełka / Budżetowe / Na zimno” zastąpione policzalnymi (katalog ich nie niesie),
+  „Mięso i ryby / Zioła” to prawdziwe działy sklepu, kategoria składników ma krzyżyk zamiast
+  „wstecz”, przyciski „soft”, szukanie kończy „Gotowe” zamiast „Anuluj”.
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
   auth|auth-error|legal|thought|plate` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
