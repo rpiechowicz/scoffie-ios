@@ -203,6 +203,15 @@ struct BackendHouseholdMemberDTO: Decodable {
     let user: UserDTO
 }
 
+/// Jeden wiersz `households:memberPreferences` — tylko pola, których używa
+/// arkusz gospodarstwa. Reszta kontekstu (cele, ograniczenia) jest dla
+/// asystenta i tu się jej nie dekoduje.
+struct BackendMemberContextDTO: Decodable {
+    let userId: String
+    let dietPreference: String?
+    let allergens: [String]?
+}
+
 struct HouseholdMembersCachePayload: Codable {
     let householdId: String
     let members: [HouseholdMemberSnapshot]

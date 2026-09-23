@@ -18,15 +18,8 @@ struct EditorialRecipesHeader: View {
     /// Liczba aktywnych grup filtrów — steruje plakietką na przycisku filtra.
     var activeFilterCount: Int = 0
 
-    /// Stan dopasowania do preferencji — różdżka obok tytułu. Wszystkie
-    /// domyślne, więc podglądy i inne wywołania zostają bez zmian.
-    var isPersonalizationEnabled: Bool = true
-    var isPersonalizationActive: Bool = false
-    var hiddenRecipeCount: Int = 0
-
     var onSubmit: (() -> Void)? = nil
     var onOpenFilters: (() -> Void)? = nil
-    var onOpenPersonalization: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
     @FocusState private var isSearchFocused: Bool
@@ -35,9 +28,10 @@ struct EditorialRecipesHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            EditorialPageHeader(title: "Przepisy") {
-                personalizationButton
-            }
+            // Bez różdżki dopasowania obok tytułu: przełącznik „Dopasowane
+            // do Ciebie” stoi w Filtrach, a dwa wejścia do tej samej rzeczy
+            // w odległości kciuka mówiły co innego (23.09.2026).
+            EditorialPageHeader("Przepisy")
 
             HStack(spacing: 10) {
                 searchPill
@@ -45,53 +39,6 @@ struct EditorialRecipesHeader: View {
                 filterButton
             }
         }
-    }
-
-    // Różdżka dopasowania — jedyna akcja w wierszu tytułu. Renderowana ZAWSZE,
-    // również gdy nie ma żadnych preferencji: baner, który tu wcześniej był,
-    // pojawiał się dopiero po ustawieniu czegoś w Ustawieniach, więc kto nic
-    // nie ustawił, nigdy nie dowiadywał się, że funkcja istnieje — a kto
-    // ustawił, dostawał kartę znikąd. Nagłówek nie może podskakiwać.
-    private var personalizationButton: some View {
-        EditorialIconButton(
-            icon: "wand.and.stars",
-            accent: SCPalette.sage,
-            highlighted: isPersonalizationActive,
-            // 43 pt, nie domyślne 38 — tyle mierzy pigułka filtra w rzędzie
-            // niżej (19 pt treści + 2 × 12 pt paddingu). Przy 38 pt oba
-            // przyciski wyglądały na dwa różne rozmiary tej samej rzeczy.
-            size: 43,
-            accessibilityTitle: isPersonalizationActive
-                ? "Personalizacja przepisów, włączona"
-                : "Personalizacja przepisów"
-        ) {
-            onOpenPersonalization?()
-        }
-        .overlay(alignment: .topTrailing) {
-            if hiddenRecipeCount > 0 {
-                Circle()
-                    .fill(SCPalette.terracotta)
-                    .frame(width: 8, height: 8)
-                    .overlay(Circle().stroke(Color.scCanvas(scheme), lineWidth: 1.5))
-                    .offset(x: 1, y: -1)
-                    .allowsHitTesting(false)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .animation(.smooth(duration: 0.22), value: isPersonalizationActive)
-        .animation(.smooth(duration: 0.22), value: hiddenRecipeCount > 0)
-        // `EditorialIconButton` zaszywa `.accessibilityLabel(Text(icon))`,
-        // czyli czyta „wand.and.stars”. Etykieta z zewnątrz wygrywa.
-        .accessibilityLabel("Dopasowanie przepisów")
-        .accessibilityValue(personalizationAccessibilityValue)
-        .accessibilityHint("Otwiera wyjaśnienie i przełącznik")
-    }
-
-    private var personalizationAccessibilityValue: String {
-        guard isPersonalizationEnabled else { return "Wyłączone" }
-        guard isPersonalizationActive else { return "Włączone, brak preferencji" }
-        guard hiddenRecipeCount > 0 else { return "Włączone" }
-        return "Włączone, ukryto \(hiddenRecipeCount) \(RecipeCountNoun.label(for: hiddenRecipeCount))"
     }
 
     // Przycisk filtra dzieli z pigułką te same `padding(.vertical, 12)` i

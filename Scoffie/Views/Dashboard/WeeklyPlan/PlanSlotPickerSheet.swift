@@ -377,7 +377,7 @@ struct PlanSlotPickerSheet: View {
         .padding(3)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.scInsetSurface(scheme).opacity(scheme == .dark ? 1 : 0.7))
+                .fill(Color.scChipBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -547,7 +547,7 @@ struct PlanSlotPickerSheet: View {
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 11, weight: .bold))
 
-            Text("Ukryto \(hiddenByPersonalizationCount) \(RecipeCountNoun.label(for: hiddenByPersonalizationCount)) spoza Twojej diety i alergenów.")
+            Text("Ukryto \(hiddenByPersonalizationCount) \(PolishPlural.recipesNoun(hiddenByPersonalizationCount)) spoza Twojej diety i alergenów.")
                 .scFont(12, weight: .semibold, relativeTo: .caption)
                 .fixedSize(horizontal: false, vertical: true)
 

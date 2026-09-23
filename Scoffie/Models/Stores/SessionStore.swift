@@ -990,6 +990,12 @@ final class SessionStore {
                     )
                 }
 
+                // Zmiana nazwy domu przychodzi tym samym zdarzeniem, ale bez
+                // samej nazwy w ładunku — dociągamy ją odczytem gospodarstwa.
+                if event.action == "UPDATE_NAME" {
+                    await self.loadMealSlotConfiguration()
+                }
+
                 // Nowy skład jedzie w ładunku, więc nie wracamy po niego na
                 // serwer — dokładnie tak jak przy `mealTypesChanged`. Ten
                 // dodatkowy round-trip był ostatnim miejscem, w którym
@@ -1192,6 +1198,9 @@ final class SessionStore {
             if let times = MealSlotSchedule(backendMealSlotTimes: household.mealSlotTimes) {
                 applyMealSlotSchedule(times)
             }
+            // Ten sam odczyt niesie nazwę — właściciel mógł ją zmienić na
+            // innym telefonie, a lokalne lustro trzyma tę z logowania.
+            applyHouseholdName(household.name, householdId: household.id)
         } catch {
             // Cisza — konfiguracja posiłków nie jest krytyczna dla startu,
             // a lokalne lustro jest wystarczająco dobre do następnego wejścia.
@@ -1374,6 +1383,88 @@ final class SessionStore {
         } catch {
             authError = UserFacingErrorMapper.inlineMessage(from: error)
             return false
+        }
+    }
+
+    /// Zmiana nazwy gospodarstwa. Serwer wpuszcza tylko właściciela
+    /// (`ensureOwner`) i rozgłasza `membersChanged` z akcją `UPDATE_NAME`,
+    /// po której pozostali domownicy dociągają nową nazwę.
+    @MainActor
+    @discardableResult
+    func renameHousehold(to rawName: String) async -> Bool {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else { return false }
+        guard Self.isValidHouseholdName(name) else {
+            authError = "Nazwa gospodarstwa musi mieć od 2 do 64 znaków."
+            return false
+        }
+        guard name != currentHouseholdName else { return true }
+
+        authError = nil
+        do {
+            let socketClient = sessionSocket()
+            let envelope: WsEnvelope<BackendHouseholdDTO> = try await socketClient.emitWithAck(
+                event: "households:updateName",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId,
+                    "data": ["name": name]
+                ],
+                as: WsEnvelope<BackendHouseholdDTO>.self
+            )
+            guard envelope.ok, let household = envelope.data else {
+                throw envelope.failure(fallback: "Nie udało się zmienić nazwy gospodarstwa.")
+            }
+            applyHouseholdName(household.name, householdId: household.id)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            authError = UserFacingErrorMapper.inlineMessage(from: error)
+            return false
+        }
+    }
+
+    /// Nazwa do stanu i do lustra (`settings.household.name`, które czyta
+    /// `@AppStorage` w Ustawieniach) — tylko dla bieżącego gospodarstwa.
+    private func applyHouseholdName(_ name: String, householdId: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard householdId == currentHouseholdId, !trimmed.isEmpty, trimmed != currentHouseholdName else { return }
+        currentHouseholdName = trimmed
+        persistHousehold(id: householdId, name: trimmed)
+    }
+
+    /// Dieta i alergeny domowników — do arkusza gospodarstwa. Ciche na
+    /// błędach: bez tych danych wiersze pokazują samą rolę.
+    @MainActor
+    func loadHouseholdMemberPreferences() async -> [String: HouseholdMemberPreferences] {
+        guard let userId = currentUserId, !userId.isEmpty,
+              let householdId = currentHouseholdId, !householdId.isEmpty else { return [:] }
+
+        do {
+            let socketClient = sessionSocket()
+            let envelope: WsEnvelope<[BackendMemberContextDTO]> = try await socketClient.emitWithAck(
+                event: "households:memberPreferences",
+                payload: [
+                    "userId": userId,
+                    "householdId": householdId
+                ],
+                as: WsEnvelope<[BackendMemberContextDTO]>.self
+            )
+            guard envelope.ok, let rows = envelope.data else { return [:] }
+
+            var result: [String: HouseholdMemberPreferences] = [:]
+            for row in rows {
+                let tokens = Set((row.allergens ?? []).map { $0.lowercased() })
+                result[row.userId] = HouseholdMemberPreferences(
+                    diet: row.dietPreference.flatMap { DietPreference(backendValue: $0) } ?? DietPreference.none,
+                    allergens: Allergen.allCases.filter { tokens.contains($0.rawValue) }
+                )
+            }
+            return result
+        } catch {
+            return [:]
         }
     }
 
@@ -2314,20 +2405,17 @@ final class SessionStore {
             defaults.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
             defaults.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
 
-            // Ograniczenia bywają ustawione też z rozmowy z asystentem, więc
-            // serwer jest tu źródłem prawdy. `nil` znaczy „backend sprzed tej
-            // zmiany" — wtedy nie ruszamy tego, co użytkownik ma lokalnie.
-            if let excluded = prefs.excludedIngredientIds {
-                defaults.set(
-                    excluded.sorted().joined(separator: ","),
-                    forKey: PreferencesKeys.excludedIngredients
-                )
-            }
-            // 0 = brak ograniczenia; AppStorage nie ma `nil` dla `Int`.
-            defaults.set(
-                prefs.maxPrepTimeMinutes ?? 0,
-                forKey: PreferencesKeys.maxPrepTimeMinutes
-            )
+            // „Czego nie jem” (wykluczone składniki i limit czasu na danie)
+            // zniknęło z aplikacji 23.09.2026 — wykluczanie składników żyje
+            // teraz w filtrach przepisów. Kolumny na serwerze zostały, a
+            // walidator planu dalej odrzuca przez nie dania; bez ekranu nikt
+            // by takiej blokady nie zobaczył ani nie zdjął. Sprzątamy więc
+            // wartości zapisane wcześniej: lokalnie od razu, na serwerze
+            // jednym zapisem na końcu odczytu.
+            defaults.removeObject(forKey: PreferencesKeys.excludedIngredients)
+            defaults.removeObject(forKey: PreferencesKeys.maxPrepTimeMinutes)
+            let hasLegacyRestrictions = !(prefs.excludedIngredientIds ?? []).isEmpty
+                || prefs.maxPrepTimeMinutes != nil
 
             // Przełączniki powiadomień są teraz danymi konta, nie ustawieniem
             // urządzenia: to serwer decyduje, czy wysłać pusha, więc to on
@@ -2344,6 +2432,10 @@ final class SessionStore {
             // główny przełącznik), a cisza nocna jest zachowaniem aplikacji,
             // nie preferencją. Kolumny w bazie zostają — `syncNotification-
             // Preferences` trzyma je w ryzach przy każdym starcie sesji.
+
+            if hasLegacyRestrictions {
+                await saveUserPreferences(excludedIngredientIds: [], clearMaxPrepTime: true)
+            }
         } catch {
             // Swallow — preferences are non-critical, AppStorage default
             // applies. Will retry on the next session bootstrap.

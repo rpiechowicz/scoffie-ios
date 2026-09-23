@@ -257,9 +257,31 @@ struct RecipeFilterSheet: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Co dopasowanie bierze pod uwagę — „Wegetariańska · bez: gluten,
+    /// orzechy · cel: schudnąć”. Przejęte z arkusza, który otwierała różdżka
+    /// na Przepisach: przełącznik jest teraz tylko tutaj, więc tu musi też
+    /// powiedzieć, co przełącza.
+    private var profileSummary: String {
+        var parts: [String] = []
+        if personalization.diet != .none {
+            parts.append(personalization.diet.title)
+        }
+        let allergens = Allergen.allCases.filter { personalization.avoidedAllergens.contains($0) }
+        if !allergens.isEmpty {
+            let names = allergens.map { $0.pickerTitle.lowercased() }
+            let shown = names.prefix(2).joined(separator: ", ")
+            parts.append(names.count > 2 ? "bez: \(shown) +\(names.count - 2)" : "bez: \(shown)")
+        }
+        if personalization.ranksCatalog {
+            parts.append("cel: \(personalization.goal.shortTitle.lowercased())")
+        }
+        return parts.isEmpty ? "Na podstawie Twojego profilu" : parts.joined(separator: " · ")
+    }
+
     private var fitRow: some View {
         let canFit = personalization.hasAnyPreference
         let isOn = fitDraft && canFit
+        let hidden = index.profileHiddenCount
 
         return Button {
             withAnimation(.smooth(duration: 0.22)) { fitDraft.toggle() }
@@ -275,10 +297,21 @@ struct RecipeFilterSheet: View {
                         .font(.system(size: 15, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
-                    Text(canFit ? "Na podstawie Twojego profilu" : "Ustaw dietę i cel w Ustawieniach")
+                    Text(canFit ? profileSummary : "Ustaw dietę i cel w Ustawieniach")
                         .font(.system(size: 12.5))
                         .foregroundStyle(Color.scMuted(scheme))
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if isOn, hidden > 0 {
+                        (Text("ukrywa ")
+                            + Text(verbatim: "\(hidden)").fontWeight(.semibold)
+                            + Text(verbatim: " \(PolishPlural.recipesNoun(hidden))"))
+                            .font(.system(size: 12))
+                            .monospacedDigit()
+                            .foregroundStyle(SCPalette.sage)
+                            .transition(.opacity)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -302,7 +335,7 @@ struct RecipeFilterSheet: View {
         .opacity(canFit ? 1 : 0.6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Dopasowane do Ciebie")
-        .accessibilityValue(isOn ? "włączone" : "wyłączone")
+        .accessibilityValue(isOn ? "włączone, \(profileSummary)" : "wyłączone")
         .accessibilityAddTraits(.isButton)
     }
 

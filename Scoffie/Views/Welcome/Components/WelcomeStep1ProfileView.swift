@@ -206,7 +206,7 @@ struct YearWheelPicker: View {
     /// Tło pigułki. Domyślnie `scTileBg`, czyli to, czego używa kreator na
     /// tle kanwy. W arkuszu Ustawień picker siedzi WEWNĄTRZ karty `scTileBg`
     /// i przy domyślnym tle zlałby się z nią w jedną plamę — tam wchodzi
-    /// `scInsetSurface`.
+    /// `scChipBg`.
     var surface: Color? = nil
 
     @Environment(\.colorScheme) private var colorScheme

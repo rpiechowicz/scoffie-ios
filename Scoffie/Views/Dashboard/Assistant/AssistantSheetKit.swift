@@ -198,8 +198,6 @@ struct AssistantGroup<Content: View, Aside: View>: View {
                 .background(shape.fill(AssistantLook.card(scheme)))
                 .clipShape(shape)
                 .overlay(shape.stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
-                .shadow(color: Color.black.opacity(scheme == .dark ? 0 : 0.04), radius: 1, y: 1)
-                .shadow(color: Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(scheme == .dark ? 0 : 0.10), radius: 12, y: 8)
         }
         .padding(.top, 14)
     }

@@ -365,7 +365,7 @@ struct AssistantThumb: View {
     private func mini<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scInsetSurface(scheme)))
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
             .accessibilityElement(children: .combine)
     }

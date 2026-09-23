@@ -22,7 +22,7 @@ struct AssistantRoundLabel: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(tint ?? (scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.7)))
+            Circle().fill(tint ?? AssistantLook.card(scheme))
             Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1)
             Image(systemName: icon)
                 .font(.system(size: iconSize, weight: .semibold))
@@ -171,7 +171,7 @@ struct AssistantQuotaPill: View {
         .padding(.leading, 8)
         .padding(.trailing, 10)
         .frame(height: 26)
-        .background(Capsule().fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.55)))
+        .background(Capsule().fill(AssistantLook.card(scheme)))
         .overlay(Capsule().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
         .fixedSize()
         .accessibilityElement(children: .ignore)
