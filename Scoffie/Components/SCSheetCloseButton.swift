@@ -13,10 +13,13 @@ import SwiftUI
 /// Nawet gdy arkusze stoją jeden na drugim, krzyżyk zdejmuje wierzchni —
 /// tak samo, jak zdejmuje go przeciągnięcie w dół.
 struct SCSheetCloseButton: View {
+    /// Krzyżyk stoi na zdjęciu, a nie na tle arkusza — patrz
+    /// `SCSheetIconButton.onImage`.
+    var onImage: Bool = false
     var action: () -> Void
 
     var body: some View {
-        SCSheetIconButton(systemName: "xmark", accessibilityLabel: "Zamknij", action: action)
+        SCSheetIconButton(systemName: "xmark", accessibilityLabel: "Zamknij", onImage: onImage, action: action)
     }
 }
 
@@ -30,6 +33,11 @@ struct SCSheetIconButton: View {
     let systemName: String
     var tint: Color? = nil
     let accessibilityLabel: String
+    /// Przycisk stoi na zdjęciu (szczegóły posiłku). Zwykłe tło krążka to
+    /// kilka procent krycia — na tle arkusza wystarcza, ale na jasnym kadrze
+    /// krążek znikał. Tu dostaje kryjące tło arkusza pod szkłem i miękki
+    /// cień; rozmiar, glif i obwódka zostają te same.
+    var onImage: Bool = false
     let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -38,11 +46,19 @@ struct SCSheetIconButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(tint ?? Color.scMuted(scheme))
+                .foregroundStyle(tint ?? (onImage ? Color.scLabel(scheme) : Color.scMuted(scheme)))
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.scChipBg(scheme)))
+                .background {
+                    if onImage {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(Color.scCanvas(scheme).opacity(0.78)))
+                    }
+                    Circle().fill(Color.scChipBg(scheme))
+                }
                 .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                .shadow(color: .black.opacity(onImage ? (scheme == .dark ? 0.35 : 0.16) : 0), radius: 6, x: 0, y: 2)
                 .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.9))
@@ -56,6 +72,7 @@ struct SCSheetIconButton: View {
         HStack(spacing: 10) {
             SCSheetIconButton(systemName: "heart.fill", tint: SCPalette.terracotta, accessibilityLabel: "Ulubione") {}
             SCSheetCloseButton {}
+            SCSheetCloseButton(onImage: true) {}
         }
     }
     .preferredColorScheme(.dark)
