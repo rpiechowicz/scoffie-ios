@@ -22,20 +22,29 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
         ZStack(alignment: .bottom) {
             SCPageBackground(scheme: scheme).ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    AssistantSheetHeader(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: action)
-                    content()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 4)
-                }
-                .padding(.bottom, 140)
+            // Stopka przez `safeAreaInset` (`scSheetFooter`), nie nad listą
+            // w `ZStack` — treść kończy się nad nią sama, bez 140 pt zapasu.
+            // Arkusz bez stopki nie dostaje nawet pustej płyty na dole.
+            if Footer.self == EmptyView.self {
+                list
+            } else {
+                list.scSheetFooter(horizontalPadding: 16) { footer() }
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-
-            AssistantSheetFooter { footer() }
         }
+    }
+
+    private var list: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                AssistantSheetHeader(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: action)
+                content()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+            }
+            .padding(.bottom, 24)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 
@@ -129,30 +138,13 @@ extension AssistantSheetHeader where Action == EmptyView {
     }
 }
 
-/// Stopka przypięta do dołu: treść ginie pod gradientem tła (od 0 do 34 %).
+/// Stopka arkusza asystenta — wspólna stopka aplikacji (`SCSheetFooter`)
+/// z wcięciem list asystenta (16 pt).
 struct AssistantSheetFooter<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        VStack(spacing: 0) { content() }
-            .padding(.horizontal, 16)
-            .padding(.top, 28)
-            .padding(.bottom, 12)
-            .frame(maxWidth: .infinity)
-            .background {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.scPageBase(scheme).opacity(0), location: 0),
-                        .init(color: Color.scPageBase(scheme), location: 0.34),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea(edges: .bottom)
-                .allowsHitTesting(false)
-            }
+        SCSheetFooter(horizontalPadding: 16, content: content)
     }
 }
 

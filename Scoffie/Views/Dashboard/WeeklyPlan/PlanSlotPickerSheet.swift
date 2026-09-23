@@ -625,7 +625,7 @@ struct PlanSlotPickerSheet: View {
     /// co dziesiątego („Marek” → „Marka”, ale „Paweł” → „Pawła”). Osobny wiersz
     /// z awatarami mówi to samo w mianowniku i przy okazji pokazuje twarze.
     private var footer: some View {
-        VStack(spacing: 10) {
+        SCSheetFooter {
             if roster.count > 1 {
                 audienceSummary
             }
@@ -645,14 +645,6 @@ struct PlanSlotPickerSheet: View {
                 // typu z błędem wskazującym zupełnie inną linię.
                 action: { confirm() }
             )
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        .background(alignment: .top) {
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
         }
     }
 

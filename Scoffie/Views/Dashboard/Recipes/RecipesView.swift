@@ -272,6 +272,9 @@ struct RecipesView: View {
                 .dashboardLiquidSheet()
             }
             .sheet(item: $categorySheetSelection) { category in
+                let inCategory = personalization.apply(
+                    to: recipeCatalogStore.recipes.filter { $0.category == category }
+                )
                 RecipeCategorySheetView(
                     category: category,
                     // Filtry z arkusza „Filtry” obowiązują też tutaj — inaczej
@@ -279,14 +282,14 @@ struct RecipesView: View {
                     // przepisy, które użytkownik przed chwilą odsiał.
                     // Wyszukiwarka zostaje poza tym celowo: ten arkusz ma
                     // własną, do przeszukiwania kategorii.
-                    recipes: filters.apply(
-                        to: personalization.apply(
-                            to: recipeCatalogStore.recipes.filter { $0.category == category }
-                        )
-                    ),
-                    hasActiveFilters: filters.isActive,
+                    recipes: filters.apply(to: inCategory),
+                    // Pula dla filtrów kategorii: wszystko poza nimi samymi,
+                    // żeby kafelki liczyły „ile zostanie po zaznaczeniu”.
+                    pool: filters.withoutCategoryFilter(for: category).apply(to: inCategory),
+                    categoryFilter: categoryFilterBinding(for: category),
+                    hasActiveFilters: filters.activeCount > 0,
                     isPersonalized: personalization.isEnabled && personalization.restrictsCatalog,
-                    onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.reset() } }
+                    onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.resetGlobal() } }
                 )
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
@@ -616,7 +619,7 @@ struct RecipesView: View {
                     RoundedRectangle(cornerRadius: 26, style: .continuous)
                         .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                 )
-                .frame(height: 420)
+                .frame(height: EditorialRecipeStoryCard.cardHeight)
                 .padding(.horizontal, pageHorizontalPadding)
                 .redacted(reason: .placeholder)
 
@@ -657,10 +660,15 @@ struct RecipesView: View {
     private func makeSection(category: RecipesCategory) -> RecipeSection {
         let categoryRecipes = visibleRecipes.filter { $0.category == category }
         let preview = Array(categoryRecipes.prefix(Self.sectionPreviewLimit))
+        let categoryFilterCount = filters.categoryFilters[category]?.activeCount ?? 0
         return RecipeSection(
             category: category,
             title: RecipesConstants.displayName(for: category),
-            eyebrow: RecipeAccent.eyebrow(for: category),
+            // Zawężona sekcja mówi o tym zamiast hasła — inaczej krótsza
+            // lista wyglądałaby na brak przepisów.
+            eyebrow: categoryFilterCount > 0
+                ? "\(categoryFilterCount) \(PolishPlural.form(categoryFilterCount, one: "filtr", few: "filtry", many: "filtrów")) w tej kategorii"
+                : RecipeAccent.eyebrow(for: category),
             accent: RecipeAccent.accent(for: category),
             recipes: preview,
             totalCount: categoryRecipes.count
@@ -671,6 +679,19 @@ struct RecipesView: View {
         Task { @MainActor in
             selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
         }
+    }
+
+    /// Filtry jednej kategorii jako wiązanie do słownika w `filters` — pusty
+    /// wybór znika ze słownika, żeby `isActive` nie widziało pustych wpisów.
+    private func categoryFilterBinding(for category: RecipesCategory) -> Binding<RecipeCategoryFilter> {
+        Binding(
+            get: { filters.categoryFilters[category] ?? RecipeCategoryFilter() },
+            set: { newValue in
+                withAnimation(.smooth(duration: 0.25)) {
+                    filters.categoryFilters[category] = newValue.isActive ? newValue : nil
+                }
+            }
+        )
     }
 
     /// Stable ordering for the featured carousel.
@@ -730,6 +751,10 @@ struct EditorialRecipesPageDots: View {
 private struct RecipeCategorySheetView: View {
     let category: RecipesCategory
     let recipes: [Recipe]
+    /// Przepisy kategorii przed jej własnymi filtrami — do arkusza filtrów.
+    let pool: [Recipe]
+    @Binding var categoryFilter: RecipeCategoryFilter
+    /// Czy działają filtry WSZYSTKICH przepisów (z arkusza „Filtry”).
     let hasActiveFilters: Bool
     /// Czy pula przyszła już zawężona dietą / alergenami. Zmienia tylko
     /// treść notki — dopasowanie zdejmuje się na ekranie listy, nie tutaj.
@@ -742,6 +767,7 @@ private struct RecipeCategorySheetView: View {
 
     @State private var searchText = ""
     @State private var selectedRecipe: Recipe?
+    @State private var isFilterSheetPresented = false
 
     private var accent: Color { RecipeAccent.accent(for: category) }
 
@@ -834,6 +860,11 @@ private struct RecipeCategorySheetView: View {
             .presentationDetents([.large])
             .dashboardLiquidSheet()
         }
+        .sheet(isPresented: $isFilterSheetPresented) {
+            RecipeCategoryFilterSheet(category: category, recipes: pool, filter: $categoryFilter)
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+        }
     }
 
     private func openDetail(for recipe: Recipe) {
@@ -861,6 +892,20 @@ private struct RecipeCategorySheetView: View {
                     .foregroundStyle(Color.scLabel(scheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Filtry tej kategorii — ten sam krążek co krzyżyk, glif jak na
+            // przycisku filtrów na Przepisach; zawężona kategoria świeci
+            // akcentem i nosi liczbę zaznaczonych opcji.
+            SCSheetIconButton(
+                systemName: "line.3.horizontal.decrease",
+                tint: categoryFilter.isActive ? accent : nil,
+                accessibilityLabel: categoryFilter.isActive
+                    ? "Filtry kategorii, zaznaczone: \(categoryFilter.activeCount)"
+                    : "Filtry kategorii"
+            ) {
+                isFilterSheetPresented = true
+            }
+            .scCountBadge(categoryFilter.activeCount, color: accent)
 
             SCSheetCloseButton { dismiss() }
         }
@@ -949,12 +994,28 @@ private struct RecipeCategorySheetView: View {
                 .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
 
-            Text((hasActiveFilters || isPersonalized) && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            Text((hasActiveFilters || isPersonalized || categoryFilter.isActive)
+                 && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                  ? "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoje preferencje."
                  : "Spróbuj innej frazy wyszukiwania.")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
+
+            if categoryFilter.isActive {
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { categoryFilter = RecipeCategoryFilter() }
+                } label: {
+                    Text("Wyczyść filtry kategorii")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .scSoftCapsule(accent)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 36)

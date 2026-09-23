@@ -527,48 +527,17 @@ struct AddToPlanSheet: View {
     // wyrenderować, to nieświeży komunikat zostawiony w store przez coś
     // wcześniejszego. Błędy store jadą mostem z korzenia aplikacji.
     private var footer: some View {
-        VStack(spacing: 10) {
-            Button {
-                save()
-            } label: {
-                HStack(spacing: 8) {
-                    if isSaving {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(SCPalette.terracotta)
-                    }
-
-                    Text(ctaTitle)
-                        .font(.system(size: 14, weight: .bold))
-                        .tracking(-0.1)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .foregroundStyle(SCPalette.terracotta)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .scSoftCapsule()
-            }
-            .buttonStyle(.plain)
-            .disabled(isSaving || !canSave)
-            // Wygaszony za brak danych; w trakcie zapisu spinner zostaje
-            // w pełnej mocy (jak w `SCSoftButton`).
-            .opacity(canSave ? 1 : 0.45)
+        // Wspólna stopka arkuszy — płyta w kolorze tła i miękkie przejście
+        // nad nią zamiast półprzezroczystego pasa z kreską.
+        SCSheetFooter {
+            EditorialPrimaryActionButton(
+                title: ctaTitle,
+                icon: "calendar.badge.plus",
+                isEnabled: canSave,
+                isLoading: isSaving,
+                action: { save() }
+            )
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(
-            Rectangle()
-                .fill(Color.scCanvas(scheme).opacity(0.94))
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     // MARK: - Akcje

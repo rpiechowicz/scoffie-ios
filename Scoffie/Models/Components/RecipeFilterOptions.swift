@@ -290,6 +290,12 @@ struct RecipeFilterOptions: Equatable {
     var traits: Set<RecipeTraitFilter> = []
     var excludedIngredients: Set<IngredientExclusion> = []
 
+    /// Filtry „tylko w tej kategorii” — z arkusza otwieranego w liście
+    /// kategorii. Mieszkają TU, a nie obok, żeby jedna reguła (`matches`)
+    /// liczyła i listę, i stopkę Filtrów: „Pokaż 132” zawsze znaczy 132 na
+    /// liście, także gdy śniadania są zawężone do słodkich.
+    var categoryFilters: [RecipesCategory: RecipeCategoryFilter] = [:]
+
     // MARK: - Dostępne opcje
 
     /// Progi segmentu „Czas przygotowania” (obok „Dowolny”).
@@ -319,7 +325,20 @@ struct RecipeFilterOptions: Equatable {
         return count
     }
 
-    var isActive: Bool { activeCount > 0 }
+    /// Czy cokolwiek zawęża listę — filtry wszystkich przepisów albo którejś
+    /// kategorii. `activeCount` (plakietka w nagłówku Przepisów) liczy tylko
+    /// te pierwsze; filtry kategorii mają plakietkę na swoim przycisku.
+    var isActive: Bool { activeCount > 0 || hasCategoryFilters }
+
+    var hasCategoryFilters: Bool { categoryFilters.values.contains { $0.isActive } }
+
+    /// Te same filtry bez zawężenia jednej kategorii — pula, na której arkusz
+    /// tej kategorii liczy swoje kafelki.
+    func withoutCategoryFilter(for category: RecipesCategory) -> RecipeFilterOptions {
+        var next = self
+        next.categoryFilters[category] = nil
+        return next
+    }
 
     // MARK: - Filtrowanie
 
@@ -342,6 +361,8 @@ struct RecipeFilterOptions: Equatable {
         if !diets.isSubset(of: facts.diets) { return false }
         if !traits.isSubset(of: facts.traits) { return false }
         if !excludedIngredients.isDisjoint(with: facts.exclusionKeys) { return false }
+        if let categoryFilter = categoryFilters[facts.category], categoryFilter.isActive,
+           !categoryFilter.matches(facts.facetValues) { return false }
         return true
     }
 
@@ -353,6 +374,14 @@ struct RecipeFilterOptions: Equatable {
 
     mutating func reset() {
         self = RecipeFilterOptions()
+    }
+
+    /// „Wyczyść” w arkuszu Filtrów czyści tylko swoje piętro — filtry
+    /// kategorii zostają, czyści je „Wyczyść” w arkuszu danej kategorii.
+    mutating func resetGlobal() {
+        let kept = categoryFilters
+        self = RecipeFilterOptions()
+        categoryFilters = kept
     }
 
     // MARK: - Mutacje
@@ -404,6 +433,8 @@ struct RecipeFilterFacts {
     let diets: Set<RecipeDietFilter>
     let traits: Set<RecipeTraitFilter>
     let exclusionKeys: Set<IngredientExclusion>
+    /// Wartości w aspektach kategorii (smak, rodzaj dania, mięso, pora).
+    let facetValues: [RecipeFacetKind: Set<String>]
 
     @MainActor
     init(_ recipe: Recipe) {
@@ -416,6 +447,7 @@ struct RecipeFilterFacts {
         exclusionKeys = Set(recipe.ingredients.flatMap {
             IngredientExclusion.keys(forIngredientNamed: $0.name, department: $0.department)
         })
+        facetValues = RecipeCategoryFacets.values(for: recipe)
     }
 }
 
@@ -428,6 +460,10 @@ enum RecipeFilterFactsCache {
         // uboższa niż szczegóły — każde z pól, z których liczą się fakty,
         // musi unieważniać wpis.
         var hasher = Hasher()
+        // Nazwa i sloty wchodzą, bo z nich liczą się aspekty kategorii.
+        hasher.combine(recipe.name)
+        hasher.combine(recipe.baseSlot)
+        hasher.combine(recipe.suitableSlots)
         hasher.combine(recipe.favourite)
         hasher.combine(recipe.prepTimeMinutes)
         hasher.combine(recipe.difficulty)

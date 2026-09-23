@@ -193,6 +193,23 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Do pudełka / Budżetowe / Na zimno” zastąpione policzalnymi (katalog ich nie niesie),
   „Mięso i ryby / Zioła” to prawdziwe działy sklepu, kategoria składników ma krzyżyk zamiast
   „wstecz”, przyciski „soft”, szukanie kończy „Gotowe” zamiast „Anuluj”.
+- Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
+  (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): kryjąca płyta w kolorze tła
+  (`scPageBase`, czyli dół `SCPageBackground`) + 36 pt przejścia NAD nią, bez kreski i bez szkła.
+  Na przewijanej treści przez `safeAreaInset` (zero ręcznych „zapasów” pod treścią), pod listą
+  w `VStack` jako ostatnie dziecko. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
+  obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
+  tylko nakładki na nią; kreator (`WelcomeFooter`) zostaje przy swoim układzie (kropki kroków).
+- Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
+  (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
+  liczone z NAZWY dania i składników (katalog nie ma tagów), sprawdzone na 495 przepisach
+  z `prisma/catalog`; nowe słowo kluczowe = sprawdź pokrycie na katalogu, nie na oko. W obrębie
+  aspektu LUB, między aspektami I. Wybór żyje w `RecipeFilterOptions.categoryFilters`, więc lista,
+  stopka „Filtrów” i liczniki liczą się jedną regułą; `activeCount` (plakietka w nagłówku) liczy
+  TYLKO filtry globalne, „Wyczyść” w każdym arkuszu czyści tylko swoje piętro (`resetGlobal`)
+  i działa od razu, bez „Pokaż”.
+- Karuzela na Przepisach: karta 330 pt (nie 420 z makiety) — zdjęcia są kwadratowe i przy 420
+  `scaledToFill` skalował je do wysokości, przybliżając talerz.
 - Ustawienia → Gospodarstwo (23.09.2026): karta domu (nazwa — zmienia właściciel przez
   `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
   `households:findById`), domownicy z rolą i tym, czego nie jedzą (`households:memberPreferences`

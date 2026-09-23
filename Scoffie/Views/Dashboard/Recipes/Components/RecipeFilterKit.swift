@@ -7,8 +7,9 @@ import SwiftUI
 //
 // Makieta jest wzorem układu, a nie stylu kontrolek: pola wyboru to
 // `SCCheckbox`, akcja główna to wariant „soft” (`scSoftCapsule`), krzyżyk to
-// `SCSheetCloseButton`, szkło stopki to samo co pigułka „Cel dnia”. Gdzie
-// makieta rysuje inaczej niż komponent aplikacji, wygrywa komponent.
+// `SCSheetCloseButton`, stopka to wspólna stopka arkuszy (`scSheetFooter`),
+// a kafelek wyboru — `SCChoiceTile`. Gdzie makieta rysuje inaczej niż
+// komponent aplikacji, wygrywa komponent.
 
 // MARK: - Sekcja
 
@@ -194,14 +195,22 @@ struct RecipeFilterOptionTile: View {
 /// „do 500” odcina górę rozkładu, a nie abstrakcyjną liczbę. Ostatni słupek
 /// to „1000+”; uchwyt na samym końcu = bez limitu.
 ///
+/// Cel z profilu stoi NA wykresie: szałwiowe pasmo za słupkami z podpisem
+/// „cel” i ten sam odcinek na torze, a pod osią legenda z liczbami
+/// i skrótem „Do celu”, który stawia uchwyt na górnej granicy celu.
+///
 /// Gest idzie OBOK przewijania (`simultaneousGesture`): pionowy ruch palca
 /// przewija arkusz, poziomy prowadzi uchwyt. Kierunek rozstrzyga się raz,
 /// po pierwszych punktach ruchu; stuknięcie stawia uchwyt w miejscu palca.
+///
+/// W trakcie przeciągania uchwyt idzie za palcem bez animacji, ale sama
+/// zmiana wartości NIE wyłącza animacji w transakcji — dzięki temu liczby
+/// przepisów w stopce i na kafelkach rolują się razem z ruchem palca.
 struct RecipeFilterKcalSlider: View {
     @Binding var value: Int?
     /// Liczba przepisów w każdym przedziale (`RecipeFilterIndex.kcalHistogram`).
     let histogram: [Int]
-    /// Cel z profilu (np. 500–800). `nil` = bez pola celu.
+    /// Cel z profilu na jeden posiłek (np. 500–800). `nil` = bez celu.
     let goalZone: ClosedRange<Int>?
 
     @Environment(\.colorScheme) private var scheme
@@ -214,15 +223,23 @@ struct RecipeFilterKcalSlider: View {
     /// słupek „1000+” i tam parkuje uchwyt „bez limitu”.
     private var scaleEnd: Int { limitMax + step }
 
-    private static let barsHeight: CGFloat = 52
+    /// Pas słupków z miejscem na podpis „cel” nad najwyższym słupkiem.
+    private static let barsHeight: CGFloat = 62
+    private static let barsMax: CGFloat = 46
     private static let thumb: CGFloat = 26
     private static let barSpacing: CGFloat = 3
 
     private var thumbValue: Int { value ?? scaleEnd }
     private var inset: CGFloat { Self.thumb / 2 }
 
+    /// Pole celu przycięte do skali — cel „do 1200” kończy się na „1000+”.
+    private var visibleZone: ClosedRange<Int>? {
+        guard let goalZone, goalZone.lowerBound < scaleEnd else { return nil }
+        return max(0, goalZone.lowerBound)...min(scaleEnd, goalZone.upperBound)
+    }
+
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(alignment: .leading, spacing: 0) {
             GeometryReader { proxy in
                 let width = proxy.size.width
                 VStack(spacing: 0) {
@@ -235,25 +252,32 @@ struct RecipeFilterKcalSlider: View {
                 .simultaneousGesture(drag(width: width))
             }
             .frame(height: Self.barsHeight + Self.thumb + 8)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Kalorie na porcję")
+            .accessibilityValue(value.map { "do \($0) kilokalorii" } ?? "bez limitu")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    let next = thumbValue + step
+                    value = next > limitMax ? nil : next
+                case .decrement:
+                    value = max(RecipeFilterOptions.calorieMinimum, min(thumbValue, scaleEnd) - step)
+                @unknown default:
+                    break
+                }
+            }
 
-            labels
+            axisLabels
                 .frame(height: 16)
-        }
-        .sensoryFeedback(.selection, trigger: value)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Kalorie na porcję")
-        .accessibilityValue(value.map { "do \($0) kilokalorii" } ?? "bez limitu")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment:
-                let next = thumbValue + step
-                value = next > limitMax ? nil : next
-            case .decrement:
-                value = max(RecipeFilterOptions.calorieMinimum, min(thumbValue, scaleEnd) - step)
-            @unknown default:
-                break
+                .padding(.top, 2)
+
+            if let goalZone {
+                goalLegend(goalZone)
+                    .padding(.top, 12)
+                    .transition(.opacity)
             }
         }
+        .sensoryFeedback(.selection, trigger: value)
     }
 
     // MARK: Rysunek
@@ -283,26 +307,61 @@ struct RecipeFilterKcalSlider: View {
         let count = max(histogram.count, 1)
         let barWidth = max(2, (usable - Self.barSpacing * CGFloat(count - 1)) / CGFloat(count))
 
-        return HStack(alignment: .bottom, spacing: Self.barSpacing) {
-            ForEach(Array(histogram.enumerated()), id: \.offset) { index, recipes in
-                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(barColor(included: isIncluded(bucket: index), empty: recipes == 0))
-                    .frame(
-                        width: barWidth,
-                        height: recipes == 0 ? 2 : max(4, Self.barsHeight * CGFloat(recipes) / CGFloat(peak))
-                    )
+        return ZStack(alignment: .bottomLeading) {
+            if let zone = visibleZone {
+                goalBand(zone: zone, width: width)
             }
+
+            HStack(alignment: .bottom, spacing: Self.barSpacing) {
+                ForEach(Array(histogram.enumerated()), id: \.offset) { index, recipes in
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(barColor(included: isIncluded(bucket: index), empty: recipes == 0))
+                        .frame(
+                            width: barWidth,
+                            height: recipes == 0 ? 2 : max(4, Self.barsMax * CGFloat(recipes) / CGFloat(peak))
+                        )
+                }
+            }
+            .frame(width: usable, height: Self.barsHeight, alignment: .bottomLeading)
+            .padding(.horizontal, inset)
+            .animation(.smooth(duration: 0.35), value: histogram)
+            .animation(isDragging ? nil : .smooth(duration: 0.2), value: value)
         }
-        .frame(width: usable, height: Self.barsHeight, alignment: .bottomLeading)
-        .padding(.horizontal, inset)
-        .animation(.smooth(duration: 0.35), value: histogram)
-        .animation(isDragging ? nil : .smooth(duration: 0.2), value: value)
+        .frame(width: width, height: Self.barsHeight, alignment: .bottomLeading)
+    }
+
+    /// Pasmo celu za słupkami, z podpisem u góry — cel widać tam, gdzie
+    /// patrzy się na rozkład, a nie w osobnej linijce pod osią.
+    private func goalBand(zone: ClosedRange<Int>, width: CGFloat) -> some View {
+        let start = x(zone.lowerBound, width: width)
+        let end = x(zone.upperBound, width: width)
+        let bandWidth = max(0, end - start)
+
+        return RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(SCPalette.sage.opacity(scheme == .dark ? 0.16 : 0.12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(SCPalette.sage.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            )
+            .overlay(alignment: .top) {
+                if bandWidth >= 40 {
+                    Text("cel")
+                        .font(.system(size: 9.5, weight: .heavy))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                        .foregroundStyle(SCPalette.sage)
+                        .padding(.top, 3)
+                }
+            }
+            .frame(width: bandWidth, height: Self.barsHeight)
+            .offset(x: start)
+            .accessibilityHidden(true)
     }
 
     private func track(width: CGFloat) -> some View {
         let thumbX = x(thumbValue, width: width)
-        let zoneStart = goalZone.map { x($0.lowerBound, width: width) } ?? 0
-        let zoneEnd = goalZone.map { x(min($0.upperBound, scaleEnd), width: width) } ?? 0
+        let zoneStart = visibleZone.map { x($0.lowerBound, width: width) } ?? 0
+        let zoneEnd = visibleZone.map { x($0.upperBound, width: width) } ?? 0
 
         return ZStack(alignment: .leading) {
             Capsule(style: .continuous)
@@ -310,7 +369,7 @@ struct RecipeFilterKcalSlider: View {
                 .frame(width: max(0, width - 2 * inset), height: 4)
                 .offset(x: inset)
 
-            if goalZone != nil {
+            if visibleZone != nil {
                 Capsule(style: .continuous)
                     .fill(SCPalette.sage.opacity(0.75))
                     .frame(width: max(0, zoneEnd - zoneStart), height: 4)
@@ -332,9 +391,13 @@ struct RecipeFilterKcalSlider: View {
                 .animation(.spring(response: 0.26, dampingFraction: 0.7), value: isDragging)
         }
         .frame(width: width, height: Self.thumb + 8)
+        // Za palcem bez sprężyny — animacja by się za nim wlokła. Wyłączona
+        // tylko TU (uchwyt i wypełnienie toru), a nie dla całej zmiany, żeby
+        // liczby przepisów wokół dalej rolowały się w trakcie ruchu.
+        .animation(isDragging ? nil : .spring(response: 0.34, dampingFraction: 0.82), value: thumbValue)
     }
 
-    private var labels: some View {
+    private var axisLabels: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             ZStack(alignment: .topLeading) {
@@ -344,14 +407,6 @@ struct RecipeFilterKcalSlider: View {
                 Text(verbatim: "500")
                     .fixedSize()
                     .position(x: x(500, width: width), y: 8)
-                    .opacity(goalLabelCovers500(width: width) ? 0 : 1)
-                if let zone = goalZone {
-                    Text(verbatim: "Twój cel \(zone.lowerBound)–\(zone.upperBound)")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.sage)
-                        .fixedSize()
-                        .position(x: goalLabelX(zone: zone, width: width), y: 8)
-                }
                 Text(verbatim: "\(limitMax)+")
                     .fixedSize()
                     .position(x: width - inset - 4, y: 8)
@@ -360,17 +415,54 @@ struct RecipeFilterKcalSlider: View {
         .font(.system(size: 11.5))
         .monospacedDigit()
         .foregroundStyle(Color.scFaint(scheme))
+        .accessibilityHidden(true)
     }
 
-    /// Podpis celu pod środkiem pola, ale nie na „0” ani na „1000+”.
-    private func goalLabelX(zone: ClosedRange<Int>, width: CGFloat) -> CGFloat {
-        let mid = x((zone.lowerBound + min(zone.upperBound, scaleEnd)) / 2, width: width)
-        return min(max(mid, 70), width - 84)
-    }
+    /// Legenda celu pod osią: ile kcal na posiłek i skrót, który stawia
+    /// uchwyt na górnej granicy celu. Znika, gdy uchwyt już tam stoi.
+    private func goalLegend(_ zone: ClosedRange<Int>) -> some View {
+        let target = min(zone.upperBound, limitMax)
+        let isAtTarget = value == target
 
-    private func goalLabelCovers500(width: CGFloat) -> Bool {
-        guard let zone = goalZone else { return false }
-        return abs(goalLabelX(zone: zone, width: width) - x(500, width: width)) < 70
+        return HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.32 : 0.24))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .strokeBorder(SCPalette.sage.opacity(0.5), lineWidth: 1)
+                )
+                .frame(width: 14, height: 10)
+
+            (Text("Twój cel na posiłek ")
+                + Text(verbatim: "\(zone.lowerBound)–\(zone.upperBound) kcal")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(SCPalette.sage))
+                .font(.system(size: 12.5))
+                .monospacedDigit()
+                .foregroundStyle(Color.scMuted(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+            Spacer(minLength: 6)
+
+            Button {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { value = target }
+            } label: {
+                Text("Do celu")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(SCPalette.sage)
+                    .padding(.horizontal, 11)
+                    .frame(height: 28)
+                    .scSoftCapsule(SCPalette.sage)
+                    .contentShape(Capsule(style: .continuous))
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.94))
+            .opacity(isAtTarget ? 0 : 1)
+            .disabled(isAtTarget)
+            .animation(.smooth(duration: 0.2), value: isAtTarget)
+            .accessibilityLabel("Ustaw limit na \(target) kilokalorii")
+        }
+        .padding(.horizontal, 2)
     }
 
     // MARK: Gest
@@ -395,10 +487,7 @@ struct RecipeFilterKcalSlider: View {
                 guard axis == .horizontal else { return }
                 let next = snappedValue(at: gesture.location.x, width: width)
                 if next != value {
-                    // Za palcem bez sprężyny — animacja by się za nim wlokła.
-                    var transaction = Transaction()
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) { value = next }
+                    value = next
                 }
             }
             .onEnded { gesture in
@@ -415,55 +504,10 @@ struct RecipeFilterKcalSlider: View {
     }
 }
 
-// MARK: - Pływająca stopka
+// MARK: - Akcje stopki i nagłówka
 
-/// Szklana kapsuła nad dołem arkusza — ile zostaje i akcja. To samo szkło co
-/// pigułka „Cel dnia” i dolne menu: treść przewija się pod nią i jest przez
-/// nią widać, a warstwa tła pod szkłem przygasza ją do rozmytej plamy.
-struct RecipeFilterFloatingBar<Leading: View, Trailing: View>: View {
-    @ViewBuilder var leading: () -> Leading
-    @ViewBuilder var trailing: () -> Trailing
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(spacing: 10) {
-            leading()
-                .padding(.leading, 12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            trailing()
-        }
-        .padding(7)
-        .frame(minHeight: 66)
-        .glassEffect(
-            .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
-            in: .capsule
-        )
-        .background(Color.scPageBase(scheme).opacity(0.72), in: .capsule)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
-        // Wygaszenie nad kapsułą: ostatnie wiersze listy nie urywają się na
-        // krawędzi szkła, tylko w nim giną.
-        .background(alignment: .bottom) {
-            LinearGradient(
-                stops: [
-                    .init(color: Color.scPageBase(scheme).opacity(0), location: 0),
-                    .init(color: Color.scPageBase(scheme).opacity(0.75), location: 0.55),
-                    .init(color: Color.scPageBase(scheme).opacity(0.96), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 150)
-            .ignoresSafeArea(edges: .bottom)
-            .allowsHitTesting(false)
-        }
-    }
-}
-
-/// Akcja w stopce — wariant „soft”, niższy niż `SCSoftButton`, bo stoi
-/// w kapsule obok liczników, a nie sam na dole ekranu.
+/// Akcja w stopce obok liczników — wariant „soft” zwężony do treści.
+/// Pełną szerokość w stopce bierze `EditorialPrimaryActionButton`.
 struct RecipeFilterFooterButton: View {
     let title: String
     var trailingIcon: String? = "chevron.right"
@@ -484,7 +528,7 @@ struct RecipeFilterFooterButton: View {
             }
             .foregroundStyle(SCPalette.terracotta)
             .padding(.horizontal, 22)
-            .frame(height: 52)
+            .frame(height: 50)
             .scSoftCapsule()
             .contentShape(Capsule(style: .continuous))
         }
