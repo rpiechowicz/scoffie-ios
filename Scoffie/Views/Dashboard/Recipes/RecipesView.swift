@@ -918,8 +918,24 @@ private struct RecipeCategorySheetView: View {
     /// przepisów” (po „z” dopełniacz).
     private func countLine(shown: Int) -> String {
         let total = pool.count
-        guard shown != total else { return PolishPlural.recipes(total) }
-        return "\(shown) z \(total) \(total == 1 ? "przepisu" : "przepisów")"
+        let count = shown == total
+            ? PolishPlural.recipes(total)
+            : "\(shown) z \(total) \(total == 1 ? "przepisu" : "przepisów")"
+        guard let diet = dietNote else { return count }
+        return count + " · " + diet
+    }
+
+    /// Dieta z Ustawień jako dopisek w podtytule nagłówka („dieta
+    /// wegetariańska”), a nie osobna karta nad listą — runda 12, Rafał:
+    /// „usuń info o dieta, wrzuć to jakoś inaczej”. `nil`, gdy dopasowanie
+    /// niczego w tej kategorii nie ukrywa.
+    private var dietNote: String? {
+        guard personalization.isEnabled, personalization.restrictsCatalog,
+              hiddenByPersonalization > 0 else { return nil }
+        if personalization.diet != .none {
+            return "dieta " + personalization.diet.title.lowercased()
+        }
+        return "bez Twoich alergenów"
     }
 
     // MARK: - Karta kontekstu
@@ -928,8 +944,9 @@ private struct RecipeCategorySheetView: View {
     /// z Przepisów. Bez tego znikające przepisy wyglądałyby na brakujące
     /// dane, a nie na skutek ustawienia z innego ekranu.
     private var contextRows: [RecipeListContextCard.Row] {
+        // Dieta mieszka w podtytule nagłówka (`dietNote`); karta mówi już
+        // tylko o filtrach z Przepisów, które da się stąd zdjąć.
         let rows: [RecipeListContextCard.Row?] = [
-            .personalization(personalization, hidden: hiddenByPersonalization),
             .filters(filterLabels, onClear: onClearFilters)
         ]
         return rows.compactMap { $0 }

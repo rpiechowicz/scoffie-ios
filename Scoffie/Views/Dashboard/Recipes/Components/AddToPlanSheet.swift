@@ -16,6 +16,12 @@ import SwiftUI
 /// i jedno zdanie nad przyciskiem, które mówi, co się stanie. Cyfry i słowa
 /// rolują (`numericText`) — przy zmianie tygodnia, porcji, pory i dnia.
 ///
+/// Runda 12 („żeby ten widok był bez scrollowania”): wszystko na jednym
+/// ekranie — pory w trzech kolumnach jako pionowe kafelki (zajęta pora =
+/// kropka, nazwa wypieranego dania stoi w zdaniu nad przyciskiem), porcje
+/// w jednym wierszu ze stepperem, bez objaśnień pod spodem. Przewijanie
+/// zostaje tylko jako zapas na małym ekranie (`ViewThatFits`).
+///
 /// Cztery decyzje, które łatwo cofnąć przez nieuwagę:
 ///
 /// 1. **Arkusz trzyma własną datę.** Wybór dnia jest tutaj częścią formularza,
@@ -201,30 +207,22 @@ struct AddToPlanSheet: View {
                 .padding(.top, 18)
                 .padding(.bottom, 12)
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        daySection(plannedDays: overview.plannedDays)
-                        slotSection(visibleSlots)
+                // Bez przewijania: formularz mieści się pod nagłówkiem na
+                // każdym współczesnym iPhonie. Dopiero gdy nie wejdzie (SE,
+                // duża czcionka), ta sama treść jedzie w `ScrollView`.
+                ViewThatFits(in: .vertical) {
+                    form(plannedDays: overview.plannedDays, slots: visibleSlots)
+                        .padding(.bottom, 20)
+                        .frame(maxHeight: .infinity, alignment: .top)
 
-                        // Jednoosobowe gospodarstwo nie ma o czym decydować —
-                        // każdy posiłek i tak jest „Wspólne".
-                        if members.count > 1 {
-                            PlanAudienceChips(
-                                members: members,
-                                selection: $selectedParticipants,
-                                onChange: audienceChanged
-                            )
-                        }
-
-                        servingsSection
+                    ScrollView {
+                        form(plannedDays: overview.plannedDays, slots: visibleSlots)
+                            // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
+                            .padding(.bottom, SCEdgeShade.bottomHeight)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
-                    .padding(.bottom, SCEdgeShade.bottomHeight)
+                    .scrollIndicators(.hidden)
+                    .scScrollEdgeFade()
                 }
-                .scrollIndicators(.hidden)
-                .scScrollEdgeFade()
                 .disabled(isSaving)
 
                 footer
@@ -274,6 +272,28 @@ struct AddToPlanSheet: View {
         }
         .presentationDetents([.large])
         .dashboardLiquidSheet()
+    }
+
+    /// Cały formularz — jedna kopia dla obu gałęzi `ViewThatFits`.
+    private func form(plannedDays: Set<Date>, slots: [MealSlot]) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            daySection(plannedDays: plannedDays)
+            slotSection(slots)
+
+            // Jednoosobowe gospodarstwo nie ma o czym decydować —
+            // każdy posiłek i tak jest „Wspólne".
+            if members.count > 1 {
+                PlanAudienceChips(
+                    members: members,
+                    selection: $selectedParticipants,
+                    onChange: audienceChanged
+                )
+            }
+
+            servingsRow
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
     }
 
     // MARK: - Dzień
@@ -440,31 +460,27 @@ struct AddToPlanSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             EditorialSheetSectionLabel(title: "Posiłek")
 
+            // Trzy kolumny: sześć pór to dwa rzędy zamiast trzech.
             LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 10),
-                    GridItem(.flexible(), spacing: 10)
-                ],
-                spacing: 10
+                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                spacing: 8
             ) {
                 ForEach(slots) { slot in
                     slotTile(slot)
                 }
-            }
-
-            if slots.contains(where: { !recipe.fits($0) }) {
-                offSlotNote
             }
         }
     }
 
     /// Kafelek pory — język kafelków wyboru (`scChoiceSurface`, liczby
     /// `SCChoiceTile`) w kolorze SAMEJ pory, ten sam, którym świeci ona
-    /// w Planie i Kalendarzu. Wcześniej pełny kafel ikony z gradientem
-    /// i terakotowe zaznaczenie niezależne od pory.
+    /// w Planie i Kalendarzu. Pionowy (ikona nad nazwą), żeby trzy weszły
+    /// w rząd. Zajęta pora ma kropkę w rogu — jak dzień z posiłkami w pasku
+    /// dni; co zniknie, mówi zdanie nad przyciskiem.
     private func slotTile(_ slot: MealSlot) -> some View {
         let isSelected = slot == selectedSlot
         let fits = recipe.fits(slot)
+        let takenBy = occupiedBy(slot)
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
 
         return Button {
@@ -472,34 +488,28 @@ struct AddToPlanSheet: View {
                 selectedSlot = slot
             }
         } label: {
-            HStack(spacing: 10) {
-                SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 32)
+            VStack(spacing: 6) {
+                SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 30)
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(slot.title)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-
-                    // Co już stoi w tym slocie. Bez tego wybór zajętego slotu
-                    // wyglądał jak wybór pustego, a przycisk na dole po cichu
-                    // zmieniał znaczenie z „dodaj" na „zmień".
-                    if let taken = occupiedBy(slot) {
-                        Text(taken)
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundStyle(Color.scFaint(scheme))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .transition(.opacity)
-                    }
-                }
-
-                Spacer(minLength: 0)
+                Text(slot.title)
+                    .font(.system(size: 12.5, weight: isSelected ? .bold : .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
-            .padding(10)
-            .frame(minHeight: 56)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 6)
+            .overlay(alignment: .topTrailing) {
+                if takenBy != nil {
+                    Circle()
+                        .fill(SCPalette.sage)
+                        .frame(width: 6, height: 6)
+                        .padding(8)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
             .scChoiceSurface(
                 shape,
                 isOn: isSelected,
@@ -507,87 +517,66 @@ struct AddToPlanSheet: View {
                 offFill: Color.scTileBg(scheme),
                 style: .tile
             )
-            // Przygaszenie zamiast blokady: przepis spoza slotu wolno wstawić,
-            // tylko nie jest pierwszym wyborem.
-            .opacity(fits ? 1 : 0.55)
+            // Przygaszenie zamiast blokady: przepis spoza pory wolno wstawić
+            // (wczorajszy obiad na podwieczorek), tylko nie jest pierwszym
+            // wyborem.
+            .opacity(fits ? 1 : 0.5)
             .contentShape(shape)
+            .animation(.smooth(duration: 0.2), value: takenBy)
         }
-        .buttonStyle(PlanPressStyle(scale: 0.97))
-        .accessibilityLabel(fits ? slot.title : "\(slot.title), przepis nie jest pod to oznaczony")
+        .buttonStyle(PlanPressStyle(scale: 0.96))
+        .accessibilityLabel(slotAccessibilityLabel(slot, fits: fits, takenBy: takenBy))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// Wyjaśnia przygaszone kafle. Bez tego wyglądają na zepsute albo
-    /// zablokowane — a wolno w nie stuknąć: czasem na podwieczorek je się
-    /// wczorajszy obiad i aplikacja nie ma prawa tego zabronić.
-    private var offSlotNote: some View {
-        Text("Przygaszone też możesz wybrać — przepis nie jest pod nie oznaczony.")
-            .font(.system(size: 11.5, weight: .regular))
-            .foregroundStyle(Color.scFaint(scheme))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 6)
+    private func slotAccessibilityLabel(_ slot: MealSlot, fits: Bool, takenBy: String?) -> String {
+        var parts = [slot.title]
+        if let takenBy { parts.append("jest już: " + takenBy) }
+        if !fits { parts.append("przepis nie jest pod to oznaczony") }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Porcje
 
-    private var servingsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            EditorialSheetSectionLabel(title: "Porcje")
+    /// Jeden wiersz: etykieta z rolującą liczbą po lewej, stepper po prawej.
+    /// Podpis „tyle, ile osób je to danie” zniknął w rundzie 12 — liczba
+    /// sama nadąża za „Dla kogo”, a objaśnienie zabierało dwie linijki.
+    private var servingsRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("PORCJE")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(Color.scFaint(scheme))
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    // Liczba roluje — przy stepperze i przy regule auto, gdy
-                    // chipy „Dla kogo” przestawiają porcje.
-                    Text(PolishPlural.servings(servings))
-                        .font(.system(size: 16, weight: .heavy))
-                        .tracking(-0.3)
-                        .monospacedDigit()
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .contentTransition(.numericText(value: Double(servings)))
-
-                    Text(servingsHint)
-                        .font(.system(size: 11.5, weight: .regular))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .contentTransition(.opacity)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                SCStepper(
-                    value: $servings,
-                    accessibilityTitle: "Liczba porcji",
-                    accessibilityValue: PolishPlural.servings(servings),
-                    onChange: { _ in didOverrideServings = true }
-                )
+                // Liczba roluje — przy stepperze i przy regule auto, gdy
+                // chipy „Dla kogo” przestawiają porcje.
+                Text(PolishPlural.servings(servings))
+                    .font(.system(size: 17, weight: .heavy))
+                    .tracking(-0.3)
+                    .monospacedDigit()
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .contentTransition(.numericText(value: Double(servings)))
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .animation(.smooth(duration: 0.2), value: servingsHint)
-        }
-    }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-    /// Podpis musi opisywać stan, w którym stepper naprawdę jest.
-    ///
-    /// „Tyle, ile osób je to danie" jest prawdą dopiero od C1 — wcześniej
-    /// arkusz startował od jedynki niezależnie od audytorium. Zostaje jeszcze
-    /// jedna dziura: dopóki lista domowników nie dojedzie, przy „Wspólne" nie
-    /// mamy z czego policzyć jedzących. Liczbę wyliczy wtedy serwer (patrz
-    /// `save()`), więc podpis obiecuje dokładnie to, a nie liczbę na stepperze.
-    private var servingsHint: String {
-        if didOverrideServings {
-            return "Twoja liczba — chipy \u{201E}dla kogo\u{201D} już jej nie zmienią."
+            SCStepper(
+                value: $servings,
+                accessibilityTitle: "Liczba porcji",
+                accessibilityValue: PolishPlural.servings(servings),
+                onChange: { _ in didOverrideServings = true }
+            )
         }
-        if selectedParticipants.isEmpty, knownMemberCount == nil {
-            return "Tyle, ile osób je to danie — dokładną liczbę ustalimy przy zapisie."
-        }
-        return "Tyle, ile osób je to danie. Zmień, jeśli gotujesz na zapas."
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+        )
     }
 
     // MARK: - Stopka
@@ -610,7 +599,8 @@ struct AddToPlanSheet: View {
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.85)
+                .truncationMode(.tail)
                 .contentTransition(.numericText())
                 .frame(maxWidth: .infinity)
                 .animation(.smooth(duration: 0.25), value: summaryText)
@@ -626,14 +616,20 @@ struct AddToPlanSheet: View {
         }
     }
 
-    /// „Środa, 24 września · Obiad · 2 porcje” — a gdy ten sam przepis
-    /// stoi już w porze dla kogoś innego i razem obejmuje to cały dom,
-    /// dopisek „dla całego domu” (patrz `audienceToSave`).
+    /// „Środa, 24 września · Obiad” — porcje stoją tuż nad stopką, więc tu
+    /// ich nie powtarzamy (runda 12: widok bez przewijania). Dopiski: nazwa
+    /// dania, które zapis wyprze („zamiast: Owsianka” — dawniej podpis na
+    /// kafelku pory), albo „dla całego domu”, gdy ten sam przepis stoi już
+    /// w porze dla kogoś innego i razem obejmuje to cały dom
+    /// (patrz `audienceToSave`).
     private var summaryText: String {
         var parts = [Self.dayName(for: selectedDate)]
         if let selectedSlot { parts.append(selectedSlot.title) }
-        parts.append(PolishPlural.servings(servings))
-        if mergesIntoShared { parts.append("dla całego domu") }
+        if !isAlreadyPlanned, let replaced = conflictingMeal?.recipe.name {
+            parts.append("zamiast: " + replaced)
+        } else if mergesIntoShared {
+            parts.append("dla całego domu")
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -731,8 +727,8 @@ struct AddToPlanSheet: View {
         return !audience.isEmpty && audience.isSubset(of: Set(existing.participantIds))
     }
 
-    /// Nazwa dania, które zajmuje dany slot wybranego dnia. Pokazywana na
-    /// kaflu, żeby zajęty slot było widać PRZED tapnięciem w „Dodaj".
+    /// Nazwa dania, które zajmuje dany slot wybranego dnia — dla VoiceOver
+    /// przy kafelku pory (na ekranie zajętą porę znaczy kropka).
     private func occupiedBy(_ slot: MealSlot) -> String? {
         let audience = Set(participantsToSave)
         let meals = mealStore.meals(for: selectedDate, slot: slot)
