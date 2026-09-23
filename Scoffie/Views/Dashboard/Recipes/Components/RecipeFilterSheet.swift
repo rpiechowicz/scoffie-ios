@@ -146,6 +146,9 @@ struct RecipeFilterSheet: View {
             } action: { _, isPast in
                 withAnimation(.easeInOut(duration: 0.2)) { isHeaderCompact = isPast }
             }
+            // Pod zwiniętym nagłówkiem treść się chowa i gaśnie (wspólny
+            // „cień w dół”), zamiast przejeżdżać pod paskiem z kreską.
+            .scScrollEdgeFade(covered: Self.compactHeaderHeight, isVisible: isHeaderCompact)
             // Wspólna stopka arkuszy (`scSheetFooter`): kryjąca płyta pod
             // liczbami i „Pokaż”, przewijane sekcje giną w przejściu nad nią.
             // Szklana kapsuła, która tu była, przepuszczała treść pod spód.
@@ -195,8 +198,13 @@ struct RecipeFilterSheet: View {
         }
     }
 
+    /// Wysokość zwiniętego nagłówka — tyle treści maska chowa pod nim.
+    private static let compactHeaderHeight: CGFloat = 58
+
     /// Po przewinięciu: sam tytuł na środku, „Wyczyść” i krzyżyk po prawej —
-    /// żeby zamknąć albo wyczyścić, nie trzeba wracać na górę.
+    /// żeby zamknąć albo wyczyścić, nie trzeba wracać na górę. Bez własnego
+    /// tła i kreski: stoi na tle arkusza, a treść pod nim gaśnie
+    /// (`scScrollEdgeFade`).
     private var compactHeader: some View {
         ZStack {
             Text("Filtry")
@@ -217,15 +225,7 @@ struct RecipeFilterSheet: View {
         .padding(.top, 14)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity)
-        .background {
-            SCPageBackground(scheme: scheme)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .top)
-        }
+        .frame(height: Self.compactHeaderHeight, alignment: .top)
         .opacity(isHeaderCompact ? 1 : 0)
         .allowsHitTesting(isHeaderCompact)
         .accessibilityHidden(!isHeaderCompact)

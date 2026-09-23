@@ -47,7 +47,9 @@ struct SCSheetIconButton: View {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(tint ?? (onImage ? Color.scLabel(scheme) : Color.scMuted(scheme)))
-                .contentTransition(.symbolEffect(.replace))
+                // W górę: stary glif odjeżdża do góry, nowy wjeżdża od dołu —
+                // serce „napełnia się” ruchem, a nie przenikaniem.
+                .contentTransition(.symbolEffect(.replace.upUp))
                 .frame(width: 36, height: 36)
                 .background {
                     if onImage {

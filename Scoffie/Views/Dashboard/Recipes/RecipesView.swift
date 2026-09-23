@@ -838,6 +838,7 @@ private struct RecipeCategorySheetView: View {
                         .padding(.bottom, 32)
                     }
                     .scrollIndicators(.hidden)
+                    .scScrollEdgeFade()
                 }
             }
         }

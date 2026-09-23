@@ -77,10 +77,6 @@ struct ShoppingTodaySheet: View {
             VStack(spacing: 0) {
                 header
 
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-
                 content
 
                 footer
@@ -118,6 +114,8 @@ struct ShoppingTodaySheet: View {
             .padding(.bottom, 8)
         }
         .scrollIndicators(.hidden)
+        // Zamiast kreski pod nagłówkiem — treść gaśnie, gdy pod niego wjeżdża.
+        .scScrollEdgeFade()
     }
 
     private func dishSection(_ dish: ShoppingDish) -> some View {

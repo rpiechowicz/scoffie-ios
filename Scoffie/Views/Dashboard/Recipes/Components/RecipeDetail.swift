@@ -112,6 +112,18 @@ struct RecipeDetailView: View {
     /// przyciskami i u góry arkusza potrzebne jest wygaszenie.
     @State private var isPastPhoto = false
 
+    /// Serce w szczegółach — stan LOKALNY, zmieniany od razu po stuknięciu.
+    ///
+    /// Dotąd serce czytało `recipe.favourite`, a ten zmieniał się dopiero,
+    /// gdy rodzic w `Task` podmienił cały przepis — bez animacji w
+    /// transakcji. Kolor wskakiwał natychmiast, a symbol próbował przejść
+    /// swoim efektem, więc serce szarpało. Teraz stuknięcie animuje serce
+    /// tu i teraz, a zmiana z góry (np. cofnięcie po błędzie serwera)
+    /// tylko je wyrównuje.
+    @State private var isFavourite: Bool
+    /// Serca unoszące się po dodaniu do ulubionych — każde żyje ~0,9 s.
+    @State private var heartBursts: [UUID] = []
+
     /// Jawny `init` zamiast memberwise'owego, bo `@State` z porcjami trzeba
     /// zasiać `initialServings`. Kolejność i domyślne wartości są dobrane tak,
     /// żeby dotychczasowe wywołania `RecipeDetailView(recipe:onToggleFavorite:onClose:)`
@@ -139,6 +151,7 @@ struct RecipeDetailView: View {
         let seed = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, initialServings))
         self.initialServings = seed
         _servings = State(initialValue: seed)
+        _isFavourite = State(initialValue: recipe.favourite)
     }
 
     /// Porcje jako `Double`, bo skalowanie makr i składników liczy się
@@ -223,17 +236,33 @@ struct RecipeDetailView: View {
         // tłem, bo stoją na zdjęciu, a nie na tle arkusza.
         .overlay(alignment: .topLeading) {
             SCSheetIconButton(
-                systemName: recipe.favourite ? "heart.fill" : "heart",
-                tint: recipe.favourite ? SCPalette.terracotta : nil,
-                accessibilityLabel: recipe.favourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
+                systemName: isFavourite ? "heart.fill" : "heart",
+                tint: isFavourite ? SCPalette.terracotta : nil,
+                accessibilityLabel: isFavourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
                 onImage: true,
-                action: { onToggleFavorite?() }
+                action: { toggleFavourite() }
             )
-            .sensoryFeedback(.impact(weight: .light), trigger: recipe.favourite)
+            // Dodane do ulubionych: małe serce unosi się nad przyciskiem
+            // i gaśnie. Nakładka nie łapie dotyku.
+            .overlay {
+                ZStack {
+                    ForEach(heartBursts, id: \.self) { _ in
+                        FloatingHeart()
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: isFavourite)
             .opacity(onToggleFavorite == nil ? 0 : 1)
             .disabled(onToggleFavorite == nil)
             .padding(.leading, 20)
             .padding(.top, 16)
+        }
+        // Zmiana z góry (rodzic podmienił przepis, serwer cofnął zapis)
+        // wyrównuje serce — bez drugiej animacji, gdy stan już się zgadza.
+        .onChange(of: recipe.favourite) { _, value in
+            guard value != isFavourite else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) { isFavourite = value }
         }
         .overlay(alignment: .topTrailing) {
             SCSheetCloseButton(onImage: true) { onClose?() }
@@ -667,6 +696,27 @@ struct RecipeDetailView: View {
         formatter.dateFormat = "d MMMM"
         return formatter
     }()
+
+    // MARK: - Ulubione
+
+    /// Serce zmienia się od razu i z animacją; zapis idzie przez rodzica
+    /// (`onToggleFavorite`), który aktualizuje katalog optymistycznie.
+    private func toggleFavourite() {
+        guard let onToggleFavorite else { return }
+        let next = !isFavourite
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) {
+            isFavourite = next
+        }
+        if next {
+            let burst = UUID()
+            heartBursts.append(burst)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(950))
+                heartBursts.removeAll { $0 == burst }
+            }
+        }
+        onToggleFavorite()
+    }
 
     // MARK: - Dolny pasek akcji
 
@@ -1723,3 +1773,28 @@ private enum RecipeDetailFormat {
 }
 
 #endif
+
+// MARK: - Unoszące się serce
+
+/// Małe serce, które po dodaniu do ulubionych unosi się nad przyciskiem,
+/// rośnie i gaśnie. Ruch rusza klatkę PO wstawieniu widoku — zmiana stanu
+/// w tej samej klatce, w której widok powstaje, nie ma czego interpolować
+/// (patrz `PlanAssistantIntroSheet`: „Jedna klatka opóźnienia”).
+private struct FloatingHeart: View {
+    @State private var isFlying = false
+
+    var body: some View {
+        Image(systemName: "heart.fill")
+            .font(.system(size: 15, weight: .bold))
+            .foregroundStyle(SCPalette.terracotta)
+            .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
+            .scaleEffect(isFlying ? 1.3 : 0.7)
+            .offset(y: isFlying ? -52 : 0)
+            .opacity(isFlying ? 0 : 1)
+            .task {
+                try? await Task.sleep(for: .milliseconds(16))
+                withAnimation(.easeOut(duration: 0.85)) { isFlying = true }
+            }
+            .accessibilityHidden(true)
+    }
+}

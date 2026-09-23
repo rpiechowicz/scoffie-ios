@@ -94,6 +94,7 @@ struct LegalDocumentSheet<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
+            .scScrollEdgeFade()
         }
         .background(SCPageBackground(scheme: colorScheme).ignoresSafeArea())
         .presentationDragIndicator(.visible)

@@ -172,15 +172,11 @@ struct PlanSlotPickerSheet: View {
             VStack(spacing: 0) {
                 controls
                     .padding(.horizontal, 20)
+                    .padding(.bottom, 14)
 
-                // Kreska pod sterowaniem, żeby przewijana lista miała o co się
-                // zatrzymać. Bez niej pierwszy wiersz dojeżdżał wprost pod
-                // przełącznik zakresu i wyglądał, jakby padding się urwał.
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.top, 14)
-
+                // Bez kreski pod sterowaniem: lista gaśnie pod nim sama
+                // (`scScrollEdgeFade` na liście), więc pierwszy wiersz nie
+                // dojeżdża już wprost pod przełącznik zakresu.
                 list
 
                 footer
@@ -422,6 +418,7 @@ struct PlanSlotPickerSheet: View {
             .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
+        .scScrollEdgeFade()
         // Przewijanie listy chowa klawiaturę — inaczej zasłania ona przycisk
         // potwierdzenia dokładnie wtedy, gdy użytkownik znalazł już przepis.
         .scrollDismissesKeyboard(.interactively)
