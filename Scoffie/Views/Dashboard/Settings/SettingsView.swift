@@ -90,9 +90,6 @@ struct SettingsView: View {
     @State private var removingMemberId: String?
     @State private var invitationLink: URL?
     @State private var isCreatingInvitation = false
-    /// Dieta i alergeny domowników (`households:memberPreferences`) — do
-    /// podpisów pod imionami w arkuszu gospodarstwa.
-    @State private var memberPreferences: [String: HouseholdMemberPreferences] = [:]
     @State private var showRenameHouseholdAlert = false
     @State private var renameDraft = ""
     @State private var expandedFAQ: String? = nil
@@ -884,33 +881,22 @@ struct SettingsView: View {
     }
 
     private var householdManagementSheet: some View {
-        let hasInvitations = !sessionStore.pendingInvitations.isEmpty
-
-        return pinnedEditorialSheet {
-            householdHeader
-        } content: {
-            VStack(alignment: .leading, spacing: 0) {
-                // Skrzynka zaproszeń nad resztą i w OBU gałęziach: dla
-                // kogoś bez gospodarstwa to jedyna alternatywa dla
-                // zakładania własnego, a dla kogoś, kto już gdzieś jest —
-                // jedyne miejsce, w którym w ogóle zobaczy, że ktoś go
-                // zaprosił.
-                if hasInvitations {
-                    householdInvitationsCard
-                }
-
-                if hasHousehold {
-                    householdMembersSection
-                        .padding(.top, hasInvitations ? 20 : 0)
-                    if canCreateInvitations {
-                        householdInviteCard
-                            .padding(.top, 14)
-                    }
+        // Dwie gałęzie, bo stopka z wyjściem ma sens tylko w gospodarstwie —
+        // pusta płyta na dole arkusza bez domu byłaby kreską donikąd.
+        Group {
+            if hasHousehold {
+                pinnedEditorialSheet {
+                    householdHeader
+                } content: {
+                    householdSheetContent
+                } footer: {
                     leaveHouseholdButton
-                        .padding(.top, 24)
-                } else {
-                    householdEmptyCard
-                        .padding(.top, hasInvitations ? 18 : 0)
+                }
+            } else {
+                pinnedEditorialSheet {
+                    householdHeader
+                } content: {
+                    householdSheetContent
                 }
             }
         }
@@ -2175,6 +2161,35 @@ struct SettingsView: View {
         )
     }
 
+    /// Treść arkusza gospodarstwa — domownicy i zaproszenie, a bez domu
+    /// karta zakładania. Wyjście nie stoi tu, tylko w stopce arkusza.
+    private var householdSheetContent: some View {
+        let hasInvitations = !sessionStore.pendingInvitations.isEmpty
+
+        return VStack(alignment: .leading, spacing: 0) {
+            // Skrzynka zaproszeń nad resztą i w OBU gałęziach: dla
+            // kogoś bez gospodarstwa to jedyna alternatywa dla
+            // zakładania własnego, a dla kogoś, kto już gdzieś jest —
+            // jedyne miejsce, w którym w ogóle zobaczy, że ktoś go
+            // zaprosił.
+            if hasInvitations {
+                householdInvitationsCard
+            }
+
+            if hasHousehold {
+                householdMembersSection
+                    .padding(.top, hasInvitations ? 20 : 0)
+                if canCreateInvitations {
+                    householdInviteCard
+                        .padding(.top, 14)
+                }
+            } else {
+                householdEmptyCard
+                    .padding(.top, hasInvitations ? 18 : 0)
+            }
+        }
+    }
+
     // MARK: - Sheet building blocks
 
     /// Wraps each sheet's content in the shared editorial chassis — warm
@@ -2215,6 +2230,39 @@ struct SettingsView: View {
                 }
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
+            }
+        }
+    }
+
+    /// To samo z akcją przypiętą na dole (`scSheetFooter`, wspólna stopka
+    /// arkuszy) — gospodarstwo trzyma tam wyjście, pod ręką zamiast na końcu
+    /// listy. Stopka rezerwuje miejsce na swój cień sama, więc pod treścią
+    /// wystarczy krótki oddech.
+    private func pinnedEditorialSheet<Header: View, Content: View, Footer: View>(
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) -> some View {
+        // Wartość, nie domknięcie: `scSheetFooter` przechowuje swoje
+        // domknięcie, a parametr `footer` nie może uciec z tej funkcji.
+        let footerView = footer()
+
+        return editorialSheet {
+            VStack(spacing: 0) {
+                header()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
+
+                ScrollView {
+                    content()
+                        .padding(.horizontal, 20)
+                        .padding(.top, 6)
+                        .padding(.bottom, 8)
+                }
+                .scrollIndicators(.hidden)
+                .scScrollEdgeFade()
+                .scSheetFooter { footerView }
             }
         }
     }
@@ -2277,17 +2325,17 @@ struct SettingsView: View {
 
     // ─── Gospodarstwo ─────────────
     //
-    // Tylko to, po co się tu wchodzi: kto mieszka w domu (i czego nie je),
-    // jak zaprosić kolejną osobę i jak wyjść. Nazwa domu stoi w nagłówku
-    // z ikoną domu i jedną linijką „3 osoby · wspólny plan i lista zakupów”,
-    // ołówek do nazwy — obok krzyżyka.
+    // Tylko to, po co się tu wchodzi: kto mieszka w domu, jak zaprosić
+    // kolejną osobę i jak wyjść. Nazwa domu stoi w nagłówku z ikoną domu
+    // i jedną linijką „3 osoby · wspólny plan i lista zakupów”, ołówek do
+    // nazwy — obok krzyżyka, wyjście — w stopce na dole arkusza.
     //
-    // Dwie rundy uwag Rafała (23.09.2026): najpierw „za dużo zbędnego tekstu”
+    // Trzy rundy uwag Rafała (23.09.2026): najpierw „za dużo zbędnego tekstu”
     // (karta z powtórzoną nazwą, liczby osób w trzech miejscach, sekcja
-    // o tym, co domownicy dzielą), potem „znów pusto i smutno”. Stąd
-    // domownicy z kolorowymi etykietami (rola, dieta, alergeny) zamiast
-    // szarej linijki i zaproszenie jako osobna karta z jednym przyciskiem —
-    // bogaciej, ale bez tekstu, którego nikt tu nie szuka.
+    // o tym, co domownicy dzielą), potem „znów pusto i smutno” (zaproszenie
+    // jako osobna karta z jednym przyciskiem), a w końcu „usuń info
+    // o diecie czy czymkolwiek innym, to tu nie ma sensu”. Wiersz domownika
+    // to dziś sama tożsamość: awatar, imię i plakietki „TY” / „WŁAŚCICIEL”.
 
     private var householdOwner: HouseholdMemberSnapshot? {
         householdMembers.first { $0.role.uppercased() == "OWNER" }
@@ -2463,8 +2511,10 @@ struct SettingsView: View {
         }
     }
 
-    /// Wyjście na samym dole i w tym samym stroju co każda akcja
-    /// nieodwracalna (`SCDestructiveButton`) — nie stoi obok nazwy domu.
+    /// Wyjście w stopce arkusza (Rafał, 23.09.2026: „daj to wychodzenie jako
+    /// button na dole”), w tym samym stroju co każda akcja nieodwracalna
+    /// (`SCDestructiveButton`) i z pytaniem w alercie — nie stoi obok nazwy
+    /// domu ani na końcu przewijanej listy.
     private var leaveHouseholdButton: some View {
         SCDestructiveButton(title: "Opuść gospodarstwo", icon: "rectangle.portrait.and.arrow.right") {
             showLeaveHouseholdAlert = true
@@ -2655,33 +2705,22 @@ struct SettingsView: View {
 
     // MARK: - Member row
 
-    /// Rola i — jeśli są — dieta i alergeny: „Właściciel · Wegetariańska ·
-    /// bez: gluten, orzechy”. Zamiast e-maila: przy logowaniu przez Apple
-    /// adres bywa ukryty („Brak e-maila”), a przy wspólnym gotowaniu
-    /// ważniejsze jest, czego komuś nie podawać.
-    ///
-    /// Dane przychodzą z `households:memberPreferences` — tego samego
-    /// kontekstu, z którego korzysta asystent; serwer celowo nie dokłada do
-    /// niego wzrostu ani wagi. Cel kaloryczny zostaje poza wierszem: to dane
-    /// do liczenia porcji, nie do oglądania cudzego profilu.
-    private func memberSubtitle(_ member: HouseholdMemberSnapshot) -> String {
-        var parts: [String] = [member.role.uppercased() == "OWNER" ? "Właściciel" : "Domownik"]
-        guard let preferences = memberPreferences[member.id] else {
-            return parts[0]
-        }
-        if preferences.diet != .none {
-            parts.append(preferences.diet.title)
-        }
-        if !preferences.allergens.isEmpty {
-            let names = preferences.allergens.map { $0.pickerTitle.lowercased() }
-            let shown = names.prefix(2).joined(separator: ", ")
-            parts.append(names.count > 2 ? "bez: \(shown) +\(names.count - 2)" : "bez: \(shown)")
-        }
-        return parts.joined(separator: " · ")
+    /// Rola dla VoiceOver — to samo, co plakietki przy imieniu.
+    private func memberRoleDescription(_ member: HouseholdMemberSnapshot) -> String {
+        let role = member.role.uppercased() == "OWNER" ? "Właściciel" : "Domownik"
+        return member.id == sessionStore.currentUserId ? "\(role), to Ty" : role
     }
 
+    /// Awatar, imię i plakietki — nic więcej. Dieta, alergeny i opis roli
+    /// wyszły z wiersza (Rafał, 23.09.2026: „to tu nie ma sensu”): czego kto
+    /// nie je, pilnuje plan i asystent, a nie lista domowników. Jedna linijka
+    /// zamiast dwóch, więc każdy wiersz ma tę samą wysokość — wyznacza ją
+    /// awatar, a nie liczba etykiet.
     private func memberRow(_ member: HouseholdMemberSnapshot, showsRule: Bool) -> some View {
-        HStack(spacing: 12) {
+        let isOwner = member.role.uppercased() == "OWNER"
+        let isMe = member.id == sessionStore.currentUserId
+
+        return HStack(spacing: 12) {
             // Kolor z backendu + ziarno z id — dokładnie to, czym ten sam
             // domownik świeci na Planie. Bez tych parametrów kolor liczył
             // się z IMIENIA i ta sama osoba miała tu inny odcień niż wszędzie
@@ -2689,107 +2728,66 @@ struct SettingsView: View {
             ProfileAvatar(
                 avatarUrl: member.avatarUrl,
                 displayName: member.displayName,
-                size: 44,
+                size: 40,
                 colorIndex: member.avatarColor,
                 seed: member.id
             )
 
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    Text(member.displayName)
-                        .font(.system(size: 15, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(1)
+            HStack(spacing: 6) {
+                Text(member.displayName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
 
-                    if member.id == sessionStore.currentUserId {
-                        Text("TY")
-                            .font(.system(size: 9.5, weight: .heavy))
-                            .tracking(0.8)
-                            .foregroundStyle(SCPalette.terracotta)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
-                    }
+                if isMe {
+                    memberBadge("TY", color: SCPalette.terracotta)
                 }
 
-                memberTags(member)
+                if isOwner {
+                    memberBadge("WŁAŚCICIEL", color: SCPalette.butter)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(member.displayName)
-            .accessibilityValue(memberSubtitle(member))
+            .accessibilityValue(memberRoleDescription(member))
 
             if removingMemberId == member.id {
                 ProgressView()
                     .controlSize(.small)
                     .frame(width: 32, height: 32)
-            } else if canCreateInvitations, member.id != sessionStore.currentUserId {
+            } else if canCreateInvitations, !isMe {
                 // `canCreateInvitations` == „jestem właścicielem" — ta sama
                 // brama co przy zapraszaniu. Własnego wiersza nie da się
-                // usunąć stąd; od tego jest „Opuść gospodarstwo” na dole.
+                // usunąć stąd; od tego jest „Opuść gospodarstwo” w stopce.
                 memberActionsMenu(for: member)
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 13)
+        .padding(.vertical, 12)
         .overlay(alignment: .top) {
             if showsRule {
                 Rectangle()
                     .fill(Color.scRule(scheme))
                     .frame(height: 1)
-                    .padding(.leading, 14 + 44 + 12)
-            }
-        }
-        .animation(.smooth(duration: 0.25), value: memberPreferences[member.id])
-    }
-
-    /// Etykiety pod imieniem: rola, dieta, alergeny — każda w swoim kolorze
-    /// i z ikoną, jak w Ustawieniach diety. Czyta się je rzutem oka („komu
-    /// czego nie podawać”), czego szara linijka z kropkami nie dawała.
-    private func memberTags(_ member: HouseholdMemberSnapshot) -> some View {
-        let isOwner = member.role.uppercased() == "OWNER"
-        let preferences = memberPreferences[member.id]
-
-        // `RecipeExclusionFlow`, nie `AllergenChipFlow`: przycina etykietę do
-        // szerokości wiersza, więc długie „bez: orzeszki ziemne, skorupiaki +2”
-        // kończy się wielokropkiem zamiast wychodzić poza kartę.
-        return RecipeExclusionFlow(spacing: 5) {
-            memberTag(
-                icon: isOwner ? "crown.fill" : "person.fill",
-                text: isOwner ? "Właściciel" : "Domownik",
-                color: isOwner ? SCPalette.butter : nil
-            )
-            if let preferences, preferences.diet != .none {
-                memberTag(icon: preferences.diet.icon, text: preferences.diet.title, color: preferences.diet.accent)
-            }
-            if let preferences, !preferences.allergens.isEmpty {
-                memberTag(icon: "nosign", text: allergenTagText(preferences.allergens), color: SCPalette.terracotta)
+                    .padding(.leading, 14 + 40 + 12)
             }
         }
     }
 
-    private func allergenTagText(_ allergens: [Allergen]) -> String {
-        let names = allergens.map { $0.pickerTitle.lowercased() }
-        let shown = names.prefix(2).joined(separator: ", ")
-        return names.count > 2 ? "bez: \(shown) +\(names.count - 2)" : "bez: \(shown)"
-    }
-
-    private func memberTag(icon: String, text: String, color: Color?) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 9.5, weight: .bold))
-            Text(text)
-                .font(.system(size: 11.5, weight: .semibold))
-                .lineLimit(1)
-        }
-        .foregroundStyle(color ?? Color.scMuted(scheme))
-        .padding(.horizontal, 8)
-        .frame(height: 22)
-        .background(
-            Capsule(style: .continuous)
-                .fill((color ?? Color.scLabel(scheme)).opacity(scheme == .dark ? 0.14 : 0.10))
-        )
+    /// Mała plakietka przy imieniu — „TY” w terakocie, „WŁAŚCICIEL” w maśle.
+    /// Stały rozmiar (`fixedSize`): przy długim imieniu skraca się imię,
+    /// a nie plakietka.
+    private func memberBadge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .heavy))
+            .tracking(0.8)
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
+            .fixedSize()
     }
 
     /// Trzy kropki przy domowniku — 32pt kółko w stylistyce krzyżyka arkusza,
@@ -2834,7 +2832,6 @@ struct SettingsView: View {
             // dołączenia nowej osoby — aż do wylogowania.
             Task {
                 await preloadHouseholdContextIfNeeded(force: true)
-                memberPreferences = await sessionStore.loadHouseholdMemberPreferences()
             }
         } else {
             createHouseholdName = ""
@@ -2867,12 +2864,6 @@ struct SettingsView: View {
         guard hasHousehold else {
             invitationLink = nil
             return
-        }
-
-        // Nowy domownik albo zmiana czyjejś diety — podpisy pod imionami
-        // dociągamy tylko wtedy, gdy arkusz gospodarstwa jest otwarty.
-        if showHouseholdSheet {
-            memberPreferences = await sessionStore.loadHouseholdMemberPreferences()
         }
 
         guard canCreateInvitations else {

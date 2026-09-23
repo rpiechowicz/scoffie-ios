@@ -5,21 +5,23 @@ import SwiftUI
 //
 // Oba arkusze stoją na tym samym (runda 8, 23.09.2026 — Rafał: „żeby
 // wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”):
-// `EditorialSheetHeader` z kafelkiem i podtytułem, `SCSearchField`, pasek
-// pigułek z filtrami kategorii, notka o zawężeniu, wiersze
-// `EditorialRecipeRow`, pusty stan. Różni je tylko to, co robi wiersz —
-// otwiera przepis albo go zaznacza — i stopka wyboru.
+// `EditorialSheetHeader` z kafelkiem i podtytułem, `SCSearchField`, karta
+// kontekstu, wiersze `EditorialRecipeRow`, pusty stan. Różni je tylko to, co
+// robi wiersz — otwiera przepis albo go zaznacza — i stopka wyboru.
+//
+// Pigułek z opcjami filtrów pod szukaniem już nie ma (runda 10, Rafał:
+// „usuń to szybkie wybieranie z chips — od tego mamy filtry”): zawężanie
+// żyje w jednym miejscu, w arkuszu pod przyciskiem filtrów w nagłówku.
 
 // MARK: - Góra arkusza
 
-/// Przypięta góra arkusza z listą: nagłówek, szukanie i pasek pigułek.
-/// Jedne odstępy dla obu arkuszy — lista kategorii i wybór do planu mają się
-/// zaczynać w tym samym miejscu.
-struct RecipeListSheetTop<Header: View, Pills: View>: View {
+/// Przypięta góra arkusza z listą: nagłówek i szukanie. Jedne odstępy dla
+/// obu arkuszy — lista kategorii i wybór do planu mają się zaczynać w tym
+/// samym miejscu.
+struct RecipeListSheetTop<Header: View>: View {
     let searchPrompt: String
     @Binding var searchText: String
     @ViewBuilder var header: () -> Header
-    @ViewBuilder var pills: () -> Pills
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,12 +31,9 @@ struct RecipeListSheetTop<Header: View, Pills: View>: View {
             SCSearchField(prompt: searchPrompt, text: $searchText)
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-
-            pills()
-                .padding(.top, 10)
         }
         .padding(.top, 18)
-        .padding(.bottom, 4)
+        .padding(.bottom, 8)
     }
 }
 
@@ -55,123 +54,6 @@ struct RecipeListFilterButton: View {
             action: action
         )
         .scCountBadge(count, color: accent)
-    }
-}
-
-// MARK: - Pigułki
-
-/// Pigułka filtra — kształt i miary pigułki składnika (`RecipeExclusionPill`):
-/// 36 pt, kapsuła na `scTileBg`. Włączona ma tło zaznaczonego chipa
-/// (`scChoiceSurface`) i ptaszek — albo własny glif pigułki (serce
-/// „Ulubionych”), już w kolorze akcentu.
-struct RecipeFilterPill: View {
-    let title: String
-    var icon: String? = nil
-    let isOn: Bool
-    var accent: Color = SCPalette.terracotta
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-    /// Licznik stuknięć — haptyka tylko za dotyk, nie za zmianę z arkusza
-    /// filtrów, który zapisuje ten sam stan pod spodem.
-    @State private var taps = 0
-
-    var body: some View {
-        Button {
-            taps += 1
-            action()
-        } label: {
-            HStack(spacing: 6) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(isOn ? accent : Color.scMuted(scheme))
-                } else if isOn {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .heavy))
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
-
-                Text(title)
-                    .font(.system(size: 14.5, weight: isOn ? .semibold : .medium))
-                    .tracking(-0.2)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(isOn ? accent : Color.scLabel(scheme))
-            .padding(.horizontal, 14)
-            .frame(height: 36)
-            .scChoiceSurface(
-                Capsule(style: .continuous),
-                isOn: isOn,
-                accent: accent,
-                offFill: Color.scTileBg(scheme)
-            )
-            .contentShape(Capsule(style: .continuous))
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
-        .sensoryFeedback(.selection, trigger: taps)
-        .animation(.smooth(duration: 0.2), value: isOn)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-}
-
-/// Pasek pigułek pod szukaniem — opcje filtrów kategorii (te same, co
-/// kafelki w `RecipeCategoryFilterSheet`, ten sam stan), grupy aspektów
-/// rozdzielone cienką kreską. Pigułki to szybka droga: jedno stuknięcie
-/// zamiast arkusza; arkusz pod przyciskiem w nagłówku pokazuje te same
-/// opcje ze zdjęciem dania i liczbą przepisów.
-///
-/// `leading` to pigułki przed aspektami (w wyborze do planu: „Ulubione”
-/// i „Wszystkie pory”).
-struct RecipeFacetPillBar<Leading: View>: View {
-    let facets: [RecipeFacet]
-    @Binding var filter: RecipeCategoryFilter
-    var accent: Color = SCPalette.terracotta
-    @ViewBuilder var leading: () -> Leading
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                leading()
-
-                ForEach(Array(facets.enumerated()), id: \.element.id) { index, facet in
-                    if index > 0 || Leading.self != EmptyView.self {
-                        separator
-                    }
-
-                    ForEach(facet.options) { option in
-                        RecipeFilterPill(
-                            title: option.title,
-                            isOn: filter.contains(option.id, in: facet.kind),
-                            accent: accent
-                        ) {
-                            withAnimation(.smooth(duration: 0.2)) {
-                                filter.toggle(option.id, in: facet.kind)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            // Obwódka pigułki nie może być przycięta przez przewijany pasek.
-            .padding(.vertical, 1)
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    private var separator: some View {
-        Rectangle()
-            .fill(Color.scRule(scheme))
-            .frame(width: 1, height: 18)
-            .accessibilityHidden(true)
-    }
-}
-
-extension RecipeFacetPillBar where Leading == EmptyView {
-    init(facets: [RecipeFacet], filter: Binding<RecipeCategoryFilter>, accent: Color = SCPalette.terracotta) {
-        self.init(facets: facets, filter: filter, accent: accent, leading: { EmptyView() })
     }
 }
 
@@ -373,18 +255,23 @@ struct RecipeRowStack: View {
 
 // MARK: - Pusty stan
 
-/// Pusty stan listy w arkuszu — karta z lupą, tytułem, zdaniem i akcjami,
-/// które zdejmują to, co listę opróżniło („Wyczyść filtry”, „Pokaż przepisy
-/// z innych pór”). Wcześniej lista kategorii i wybór do planu miały dwa
-/// różne puste stany (karta z tytułem 16 pt i goły stos z tytułem 17 pt).
+/// Pusty stan listy w arkuszu — karta aplikacji: kafelek z ikoną powodu
+/// w tincie akcentu, tytuł, jedno zdanie i akcja, która ten powód zdejmuje,
+/// jako przycisk „soft” na całą szerokość; druga akcja — tekstem pod nim.
+///
+/// Ten sam układ, co karta pustego tygodnia w Planie i zaproszenie
+/// w gospodarstwie (runda 10 — Rafał: „popraw to zgodnie z naszymi
+/// standardami”). Wcześniej szara lupa nad tytułem i stos terakotowych
+/// kapsułek, bez względu na to, co opróżniło listę.
 struct RecipeListEmptyState: View {
     struct Action {
         let title: String
-        var tint: Color = SCPalette.terracotta
+        var icon: String = "arrow.counterclockwise"
         let run: () -> Void
     }
 
     var icon: String = "magnifyingglass"
+    var accent: Color = SCPalette.terracotta
     let title: String
     let message: String
     var actions: [Action] = []
@@ -392,44 +279,51 @@ struct RecipeListEmptyState: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.scMuted(scheme))
-                .accessibilityHidden(true)
+        VStack(spacing: 0) {
+            SCHeaderIconWell(icon: icon, accent: accent, size: 52)
 
             Text(title)
-                .font(.system(size: 16, weight: .heavy))
+                .font(.system(size: 17, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 14)
 
             Text(message)
-                .font(.system(size: 13))
+                .font(.system(size: 13.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if !actions.isEmpty {
-                VStack(spacing: 8) {
-                    ForEach(actions, id: \.title) { action in
-                        Button(action: action.run) {
-                            Text(action.title)
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(action.tint)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 9)
-                                .scSoftCapsule(action.tint)
-                        }
-                        .buttonStyle(PlanPressStyle(scale: 0.96))
-                    }
-                }
                 .padding(.top, 6)
+
+            if let primary = actions.first {
+                EditorialPrimaryActionButton(
+                    title: primary.title,
+                    icon: primary.icon,
+                    action: primary.run
+                )
+                .padding(.top, 18)
+            }
+
+            ForEach(actions.dropFirst(), id: \.title) { action in
+                Button(action: action.run) {
+                    Text(action.title)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(SCPalette.terracotta)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.97))
+                .padding(.top, 4)
             }
         }
+        .padding(.horizontal, 18)
+        .padding(.top, 26)
+        .padding(.bottom, actions.isEmpty ? 26 : 16)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
-        .padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.scTileBg(scheme))
@@ -438,5 +332,6 @@ struct RecipeListEmptyState: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
     }
 }

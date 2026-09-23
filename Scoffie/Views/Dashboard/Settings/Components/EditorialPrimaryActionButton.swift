@@ -40,6 +40,10 @@ struct EditorialPrimaryActionButton: View {
                     // wielokropkiem w połowie słowa.
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                    // Tytuł zmieniany w animowanej transakcji („Dodaj do
+                    // planu” → „Zamień w planie”) roluje się literami, jak
+                    // liczby w arkuszach, zamiast podmienić się w klatce.
+                    .contentTransition(.numericText())
             }
             .foregroundStyle(accent)
             .frame(maxWidth: .infinity)

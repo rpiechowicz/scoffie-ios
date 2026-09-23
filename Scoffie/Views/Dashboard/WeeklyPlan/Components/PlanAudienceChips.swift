@@ -57,6 +57,24 @@ struct PlanAudienceChips: View {
         return known.sorted()
     }
 
+    /// Audytorium zapisu, gdy TEN SAM przepis już stoi w porze dla kogoś
+    /// innego: suma osób, zwinięta do „Wspólne”, gdy obejmuje cały dom.
+    ///
+    /// Pozycja planu to jedna para (pora, przepis), więc zapis tego samego
+    /// przepisu dla drugiej osoby PRZEPISYWAŁ audytorium pierwszej — ktoś,
+    /// kto miał już ten obiad, zostawał bez posiłku (Rafał, 23.09.2026:
+    /// „powinno automatycznie wykryć i zmienić na domostwo”).
+    static func merged(
+        _ participants: [String],
+        with existing: PlanMeal?,
+        members: [HouseholdMemberSnapshot]
+    ) -> [String] {
+        guard let existing else { return participants }
+        // Któreś z nich je już całe domostwo — i tak zostaje.
+        if existing.isShared || participants.isEmpty { return [] }
+        return collapsed(Set(existing.participantIds).union(participants), members: members)
+    }
+
     /// Ile osób realnie je danie — źródło reguły auto-porcji po stronie
     /// klienta, bliźniacze do tego, co liczy serwer, gdy `plannedServings`
     /// nie przyjdzie w payloadzie.

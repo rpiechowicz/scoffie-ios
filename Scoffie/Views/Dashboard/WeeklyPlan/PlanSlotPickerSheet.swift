@@ -6,9 +6,11 @@ import SwiftUI
 ///
 /// Układ (runda 8, 23.09.2026) jest ten sam, co listy kategorii na
 /// Przepisach, i stoi na tych samych klockach (`RecipeListKit.swift`):
-/// nagłówek z kafelkiem pory i datą, szukanie, pigułki („Ulubione”,
-/// „Wszystkie pory” i filtry kategorii tej pory), wiersze `EditorialRecipeRow`
-/// — tu z kółkiem wyboru — a w stopce „Dla kogo” nad przyciskiem. Wcześniej
+/// nagłówek z kafelkiem pory i datą, szukanie, wiersze `EditorialRecipeRow`
+/// — tu z kółkiem wyboru — a w stopce „Dla kogo” nad przyciskiem. Zawężanie
+/// („Ulubione” i filtry kategorii tej pory) mieszka w arkuszu pod przyciskiem
+/// filtrów; pigułek pod szukaniem i „Wszystkich pór” nie ma od rundy 10
+/// (Rafał: „nie chcę jeść obiadu na śniadanie”, „od tego mamy filtry”). Wcześniej
 /// arkusz miał własny nagłówek, własne pole szukania, przełącznik „Pasujące /
 /// Wszystkie / Ulubione” i własne wiersze. Rafał: „żeby wszystko trzymało się
 /// kupy, nie było nic, co jest odrębnie nowe”.
@@ -80,11 +82,9 @@ struct PlanSlotPickerSheet: View {
     @State private var searchText = ""
     @State private var debouncedSearch = ""
     @State private var searchDebounceTask: Task<Void, Never>?
-    /// Tylko ulubione — pigułka z sercem (dawniej segment „Ulubione”).
+    /// Tylko ulubione — kafelek „Ulubione” w arkuszu filtrów (dawniej segment
+    /// „Ulubione”, potem pigułka pod szukaniem).
     @State private var favouritesOnly = false
-    /// Także przepisy bez tej pory — pigułka „Wszystkie pory” (dawniej segment
-    /// „Wszystkie”), np. owsianka na kolację.
-    @State private var includesOtherSlots = false
     /// Filtry kategorii tej pory (smak, rodzaj dania, mięso) — te same opcje,
     /// co w liście kategorii na Przepisach, ale własne dla tego wyboru.
     @State private var categoryFilter = RecipeCategoryFilter()
@@ -102,9 +102,6 @@ struct PlanSlotPickerSheet: View {
     /// filtrują się jak przekąski, bo pod nie podpadają na Przepisach.
     private var category: RecipesCategory { slot.baseCategory }
     private var accent: Color { slot.cozyAccent }
-    private var facets: [RecipeFacet] {
-        RecipeCategoryFacets.facets(forPicking: category, slot: slot)
-    }
 
     /// Przepisy, które w ogóle wolno wstawić w ten slot.
     ///
@@ -112,16 +109,13 @@ struct PlanSlotPickerSheet: View {
     /// temu owsianka („Śniadania") pojawia się także w drugim śniadaniu
     /// i w przekąsce, o ile ma tam ustawiony slot.
     private var scopeCatalog: [Recipe] {
-        let base = includesOtherSlots
-            ? recipeCatalogStore.recipes
-            : recipeCatalogStore.recipes.filter { $0.fits(slot) }
+        let base = recipeCatalogStore.recipes.filter { $0.fits(slot) }
         return favouritesOnly ? base.filter { $0.favourite } : base
     }
 
-    /// Ile dań przepada przez zawężenie do slotu — do decyzji, czy pokazać
-    /// wyjście awaryjne w pustym stanie.
-    private var hiddenBySlotCount: Int {
-        recipeCatalogStore.recipes.filter { !$0.fits(slot) }.count
+    /// Filtry z arkusza (aspekty i „Ulubione”) — plakietka na przycisku.
+    private var activeFilterCount: Int {
+        categoryFilter.activeCount + (favouritesOnly ? 1 : 0)
     }
 
     private var personalization: RecipePersonalization {
@@ -157,8 +151,8 @@ struct PlanSlotPickerSheet: View {
         var list = pool
         if categoryFilter.isActive {
             // W aspektach kategorii PORY, także dla dań z innych kategorii
-            // (owsianka w II śniadaniu, „Wszystkie pory”) — liczone po
-            // kategorii dania wypadały przy każdej pigułce rodzaju.
+            // (owsianka w II śniadaniu) — liczone po kategorii dania
+            // wypadały przy każdym filtrze rodzaju.
             let filter = categoryFilter
             let facetCategory = category
             list = list.filter {
@@ -212,25 +206,6 @@ struct PlanSlotPickerSheet: View {
                 // Przypięta góra — ta sama, co w liście kategorii.
                 RecipeListSheetTop(searchPrompt: "Szukaj przepisu", searchText: $searchText) {
                     header
-                } pills: {
-                    RecipeFacetPillBar(facets: facets, filter: $categoryFilter, accent: accent) {
-                        RecipeFilterPill(
-                            title: "Ulubione",
-                            icon: "heart.fill",
-                            isOn: favouritesOnly,
-                            accent: SCPalette.terracotta
-                        ) {
-                            withAnimation(.smooth(duration: 0.2)) { favouritesOnly.toggle() }
-                        }
-
-                        RecipeFilterPill(
-                            title: "Wszystkie pory",
-                            isOn: includesOtherSlots,
-                            accent: accent
-                        ) {
-                            withAnimation(.smooth(duration: 0.2)) { includesOtherSlots.toggle() }
-                        }
-                    }
                 }
 
                 list(rows: rows, poolIsEmpty: available.isEmpty)
@@ -256,9 +231,12 @@ struct PlanSlotPickerSheet: View {
         .sheet(isPresented: $isFilterSheetPresented) {
             RecipeCategoryFilterSheet(
                 category: category,
-                recipes: pool,
+                // Pula BEZ „tylko ulubionych” — kafelek „Ulubione” w arkuszu
+                // liczy, ile z niej zostanie po zaznaczeniu.
+                recipes: personalization.apply(to: recipeCatalogStore.recipes.filter { $0.fits(slot) }),
                 filter: $categoryFilter,
-                slot: slot
+                slot: slot,
+                favouritesOnly: $favouritesOnly
             )
             .presentationDetents([.large])
             .dashboardLiquidSheet()
@@ -276,7 +254,7 @@ struct PlanSlotPickerSheet: View {
             subtitle: dateLine,
             onClose: { dismiss() }
         ) {
-            RecipeListFilterButton(count: categoryFilter.activeCount, accent: accent) {
+            RecipeListFilterButton(count: activeFilterCount, accent: accent) {
                 isFilterSheetPresented = true
             }
         }
@@ -362,52 +340,66 @@ struct PlanSlotPickerSheet: View {
         .frame(maxHeight: .infinity)
     }
 
-    /// Pusty stan mówi, co opróżniło listę, a przyciski zdejmują dokładnie to.
+    /// Pusty stan mówi, co opróżniło listę, a przycisk zdejmuje dokładnie to
+    /// — karta z kafelkiem powodu (`RecipeListEmptyState`).
     private func emptyState(poolIsEmpty: Bool) -> some View {
-        // „na kolację” tylko wtedy, gdy lista naprawdę jest listą tej pory.
-        let forSlot = includesOtherSlots ? "" : " na \(slot.accusativeName)"
-        let title: String
-        let message: String
+        let forSlot = "na \(slot.accusativeName)"
+        let hasFilters = categoryFilter.isActive || favouritesOnly
+        let clearFilters = RecipeListEmptyState.Action(title: "Wyczyść filtry") {
+            withAnimation(.smooth(duration: 0.2)) {
+                categoryFilter = RecipeCategoryFilter()
+                favouritesOnly = false
+            }
+        }
+
         if !trimmedSearch.isEmpty {
-            title = "Brak wyników"
-            message = "Spróbuj innej frazy."
-        } else if categoryFilter.isActive, !poolIsEmpty {
-            title = "Brak wyników"
-            message = "Żaden przepis nie pasuje do zaznaczonych filtrów."
-        } else if favouritesOnly, scopeCatalog.isEmpty {
-            title = "Brak ulubionych"
-            message = "Nie masz jeszcze ulubionych przepisów\(forSlot)."
-        } else if !scopeCatalog.isEmpty {
-            title = "Brak przepisów"
-            message = favouritesOnly
-                ? "Twoja dieta i alergeny ukrywają wszystkie ulubione przepisy\(forSlot)."
-                : "Twoja dieta i alergeny ukrywają wszystkie przepisy\(forSlot)."
-        } else if !includesOtherSlots, hiddenBySlotCount > 0 {
-            title = "Brak przepisów"
-            message = "Żaden przepis nie ma jeszcze oznaczenia \u{201E}\(slot.title)\u{201D}."
-        } else {
-            title = "Brak przepisów"
-            message = "Katalog jest pusty."
+            return RecipeListEmptyState(
+                icon: "magnifyingglass",
+                accent: accent,
+                title: "Brak wyników",
+                message: "Nic \(forSlot) nie pasuje do tej frazy. Spróbuj innej.",
+                actions: hasFilters ? [clearFilters] : []
+            )
         }
-
-        var actions: [RecipeListEmptyState.Action] = []
         if categoryFilter.isActive, !poolIsEmpty {
-            actions.append(.init(title: "Wyczyść filtry", tint: accent) {
-                withAnimation(.smooth(duration: 0.2)) { categoryFilter = RecipeCategoryFilter() }
-            })
+            return RecipeListEmptyState(
+                icon: "line.3.horizontal.decrease",
+                accent: accent,
+                title: "Nic nie pasuje do filtrów",
+                message: "Poluzuj filtry, żeby zobaczyć przepisy \(forSlot).",
+                actions: [clearFilters]
+            )
         }
-        if favouritesOnly {
-            actions.append(.init(title: "Pokaż wszystkie przepisy") {
-                withAnimation(.smooth(duration: 0.2)) { favouritesOnly = false }
-            })
+        if favouritesOnly, scopeCatalog.isEmpty {
+            return RecipeListEmptyState(
+                icon: "heart",
+                accent: SCPalette.terracotta,
+                title: "Brak ulubionych \(forSlot)",
+                message: "Przepis dodasz do ulubionych sercem w jego szczegółach.",
+                actions: [
+                    .init(title: "Pokaż wszystkie przepisy", icon: "list.bullet") {
+                        withAnimation(.smooth(duration: 0.2)) { favouritesOnly = false }
+                    }
+                ]
+            )
         }
-        if !includesOtherSlots, hiddenBySlotCount > 0 {
-            actions.append(.init(title: "Pokaż przepisy z innych pór") {
-                withAnimation(.smooth(duration: 0.2)) { includesOtherSlots = true }
-            })
+        if !scopeCatalog.isEmpty {
+            return RecipeListEmptyState(
+                icon: personalization.diet == .none ? "exclamationmark.shield" : personalization.diet.icon,
+                accent: personalization.diet == .none ? SCPalette.terracotta : personalization.diet.accent,
+                title: personalization.diet == .none ? "Alergeny ukrywają wszystko" : "Dieta ukrywa wszystko",
+                message: favouritesOnly
+                    ? "Twoja dieta i alergeny ukrywają wszystkie ulubione przepisy \(forSlot)."
+                    : "Twoja dieta i alergeny ukrywają wszystkie przepisy \(forSlot).",
+                actions: favouritesOnly ? [clearFilters] : []
+            )
         }
-
-        return RecipeListEmptyState(title: title, message: message, actions: actions)
+        return RecipeListEmptyState(
+            icon: slot.icon,
+            accent: accent,
+            title: "Brak przepisów \(forSlot)",
+            message: "Żaden przepis nie ma jeszcze oznaczenia \u{201E}\(slot.title)\u{201D}."
+        )
     }
 
     // MARK: - Stopka
@@ -443,7 +435,7 @@ struct PlanSlotPickerSheet: View {
         }
     }
 
-    /// Zaznaczony przepis, którego nie ma już na liście (schowały go pigułki,
+    /// Zaznaczony przepis, którego nie ma już na liście (schowały go filtry,
     /// ulubione albo szukanie) — przycisk pod spodem zapisze właśnie jego,
     /// więc musi być widać, co to jest.
     private func hiddenSelection(_ recipe: Recipe) -> some View {
@@ -530,10 +522,17 @@ struct PlanSlotPickerSheet: View {
         // na widoku planu.
         let store = mealStore
         let completion = onSaveCompleted
+        // Ten sam przepis już stoi w tej porze dla kogoś innego — dokładamy
+        // osoby, zamiast przepisać audytorium (i zostawić tamtą osobę bez
+        // posiłku). Obejmuje cały dom → zapis jako „Wspólne”.
+        let existing = mealStore.meals(for: date, slot: slot).first {
+            $0.recipe.id == recipe.id && $0.recipe.id != editing?.recipe.id
+        }
+        let participants = PlanAudienceChips.merged(participantsToSave, with: existing, members: roster)
         Task { @MainActor in
             _ = await store.upsertWeekSlot(
                 recipe: recipe,
-                participantIds: participantsToSave,
+                participantIds: participants,
                 // Ten arkusz nie ma steppera porcji, więc świadomie nie wysyła
                 // pola — a pominięcie znaczy dla serwera „nie ruszaj tego, co
                 // wybrał użytkownik". Na nowym wpisie policzy porcje

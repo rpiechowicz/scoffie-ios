@@ -14,6 +14,14 @@ import SwiftUI
 ///
 /// Stan w osobnym widoku, a nie w ekranie szczegółów: stuknięcie przerysowuje
 /// sam przycisk, a nie cały arkusz ze zdjęciem, makro i krokami.
+///
+/// Wyskok serca przy dodaniu (`BurstHeart`) stoi w drzewie przez cały czas
+/// i odtwarzają go keyframe'y na podbicie licznika — bez wstawiania widoku
+/// i bez uśpień. Dawniej każde dodanie wstawiało nowe serce do nakładki,
+/// które ruszało dopiero po `Task.sleep`: przez pierwsze klatki drugie,
+/// nieruchome serce stało w pełnym kryciu na glifie, a wyskok zaczynał się
+/// z opóźnieniem. To było przycięcie w pierwszej fazie dodawania, którego
+/// odejmowanie (sama zamiana glifu) nie miało (Rafał, 23.09.2026).
 struct RecipeFavouriteButton: View {
     enum Style {
         /// Krążek jak krzyżyk arkusza — `SCSheetIconButton` w wariancie na zdjęciu.
@@ -29,7 +37,8 @@ struct RecipeFavouriteButton: View {
     let onCommit: (Bool) -> Void
 
     @State private var shown: Bool
-    @State private var bursts: [UUID] = []
+    /// Licznik dodań — każde podbicie odtwarza wyskok serca od początku.
+    @State private var burstCount = 0
     @State private var pendingSync: Task<Void, Never>?
 
     /// Po tylu ms od ostatniego stuknięcia stan idzie do katalogu — już po
@@ -46,15 +55,8 @@ struct RecipeFavouriteButton: View {
     var body: some View {
         button
             // Dodane do ulubionych: małe serce wyskakuje nad przyciskiem
-            // i gaśnie. Nakładka nie łapie dotyku.
-            .overlay {
-                ZStack {
-                    ForEach(bursts, id: \.self) { _ in
-                        FloatingHeart()
-                    }
-                }
-                .allowsHitTesting(false)
-            }
+            // i gaśnie. W spoczynku niewidoczne i nie łapie dotyku.
+            .overlay { BurstHeart(trigger: burstCount) }
             .sensoryFeedback(.impact(weight: .light), trigger: shown)
             .onChange(of: isFavourite) { _, value in
                 // Zmiana z zewnątrz (inny ekran, cofnięty zapis) wyrównuje
@@ -105,14 +107,9 @@ struct RecipeFavouriteButton: View {
         let next = !shown
         withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) { shown = next }
 
-        if next {
-            let burst = UUID()
-            bursts.append(burst)
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(900))
-                bursts.removeAll { $0 == burst }
-            }
-        }
+        // Wyskok rusza w tej samej klatce co zamiana glifu — tylko przy
+        // dodaniu; odjęcie to sama zamiana glifu.
+        if next { burstCount += 1 }
 
         pendingSync?.cancel()
         pendingSync = Task { @MainActor in
@@ -129,33 +126,59 @@ struct RecipeFavouriteButton: View {
 /// Małe serce, które po dodaniu do ulubionych wyskakuje z przycisku w górę,
 /// rośnie i gaśnie.
 ///
+/// Stoi w drzewie przez cały czas, z kryciem zero, a każde podbicie
+/// `trigger` odtwarza keyframe'y od początku (`keyframeAnimator`). Nic się
+/// nie wstawia i na nic się nie czeka, więc ruch rusza w klatce stuknięcia,
+/// razem z zamianą glifu. Krycie wchodzi od zera w 60 ms — w pierwszej
+/// klatce nie stoją dwa serca jedno na drugim.
+///
 /// Nad przyciskiem w szczegółach jest tylko 16 pt do krawędzi arkusza,
 /// a arkusz przycina wszystko, co za nią wyjdzie. Środek przycisku stoi 34 pt
 /// od krawędzi, więc serce wznosi się o 20 pt i gaśnie, zanim jej dotknie —
 /// ta sama droga mieści się też na karcie karuzeli.
 ///
-/// Każda cecha ma własną krzywą: skok sprężyną, wznoszenie z wyhamowaniem,
-/// gaśnięcie dopiero po chwili. Ruch rusza klatkę PO wstawieniu widoku —
-/// zmiana stanu w tej samej klatce, w której widok powstaje, nie ma czego
-/// interpolować (patrz `PlanAssistantIntroSheet`: „Jedna klatka opóźnienia”).
-private struct FloatingHeart: View {
-    @State private var isFlying = false
+/// Każda cecha ma własny tor: skok sprężyną, wznoszenie z wyhamowaniem,
+/// gaśnięcie dopiero po chwili. Każdy tor zaczyna się od `MoveKeyframe` —
+/// kolejne dodanie startuje od zera, a nie od końca poprzedniego wyskoku.
+private struct BurstHeart: View {
+    let trigger: Int
 
     var body: some View {
         Image(systemName: "heart.fill")
             .font(.system(size: 14, weight: .bold))
             .foregroundStyle(SCPalette.terracotta)
             .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
-            .scaleEffect(isFlying ? 1.45 : 0.6)
-            .animation(.spring(response: 0.34, dampingFraction: 0.62), value: isFlying)
-            .offset(y: isFlying ? -20 : 0)
-            .animation(.easeOut(duration: 0.6), value: isFlying)
-            .opacity(isFlying ? 0 : 1)
-            .animation(.easeIn(duration: 0.42).delay(0.18), value: isFlying)
-            .task {
-                try? await Task.sleep(for: .milliseconds(16))
-                isFlying = true
+            .keyframeAnimator(initialValue: BurstFrame(), trigger: trigger) { heart, frame in
+                heart
+                    .scaleEffect(frame.scale)
+                    .offset(y: frame.rise)
+                    .opacity(frame.opacity)
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    MoveKeyframe(0.6)
+                    SpringKeyframe(1.45, duration: 0.34, spring: Spring(response: 0.34, dampingRatio: 0.62))
+                }
+                KeyframeTrack(\.rise) {
+                    MoveKeyframe(0)
+                    LinearKeyframe(-20, duration: 0.6, timingCurve: .easeOut)
+                }
+                KeyframeTrack(\.opacity) {
+                    MoveKeyframe(0)
+                    LinearKeyframe(1, duration: 0.06)
+                    LinearKeyframe(1, duration: 0.12)
+                    LinearKeyframe(0, duration: 0.42, timingCurve: .easeIn)
+                }
             }
+            .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
+}
+
+/// Stan jednej klatki wyskoku. Wartości startowe to spoczynek — serce jest
+/// w drzewie, ale go nie widać (krycie zero), dopóki nic go nie ruszy.
+private struct BurstFrame {
+    var scale: CGFloat = 0.6
+    /// Przesunięcie w górę (ujemne) od środka przycisku.
+    var rise: CGFloat = 0
+    var opacity: Double = 0
 }

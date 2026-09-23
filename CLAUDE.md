@@ -254,7 +254,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`featuredOrder`) między ułożeniami (wyszukiwanie, filtry, dopasowanie, doba, katalog): ranking
   stawia ulubione na przodzie i polubienie przestawiało karty pod palcem — następne stuknięcie
   otwierało inny przepis. Serce na karcie to osobny przycisk NAD kartą (nie obrazek w niej).
-- Serce ulubionych = `RecipeFavouriteButton` (szczegóły posiłku i karuzela): stan LOKALNY, zapis do
+- Serce ulubionych = `RecipeFavouriteButton` (szczegóły posiłku i karuzela). Wyskok serca przy dodaniu
+  (`BurstHeart`) = TRWAŁY widok w nakładce + `keyframeAnimator` na liczniku dodań (każdy tor od
+  `MoveKeyframe`, serce wchodzi od krycia 0), nie wstawiany widok z `Task.sleep` — wstawienie i uśpienie
+  przycinały pierwszą fazę dodawania (runda 10). Stan LOKALNY, zapis do
   katalogu 650 ms po ostatnim stuknięciu, już po wyskoku serca — natychmiastowy zapis przeliczał
   pod arkuszem całą listę Przepisów w trakcie animacji (przycinało się na Macu). Zapis to WARTOŚĆ
   (`RecipeCatalogStore.setFavourite(recipeId:to:)`, no-op przy zgodnym stanie), nie przełączenie —
@@ -274,22 +277,35 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - „Wybierz przepis” w Planie (`PlanSlotPickerSheet`) i lista kategorii na Przepisach
   (`RecipeCategorySheetView`) to JEDEN układ z `RecipeListKit.swift` (runda 8, 23.09.2026 — Rafał:
   „żeby wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”): `RecipeListSheetTop`
-  (nagłówek + `SCSearchField` + pasek pigułek, przypięte), `RecipeFacetPillBar` (opcje
-  `RecipeCategoryFacets` jako `RecipeFilterPill` — ten sam stan, co kafelki `RecipeCategoryFilterSheet`
-  pod przyciskiem filtrów w nagłówku), `RecipeListContextCard` (karta `scTileBg`: wiersz diety
+  (nagłówek + `SCSearchField`, przypięte; BEZ pigułek z opcjami — runda 10: „od tego mamy filtry”,
+  zawężanie tylko w `RecipeCategoryFilterSheet` pod przyciskiem filtrów w nagłówku),
+  `RecipeListContextCard` (karta `scTileBg`: wiersz diety
   „Dieta wegetariańska · bez: gluten · ukrywa 12 przepisów” w kolorze diety i wiersz „Filtry
   z Przepisów” z „Wyczyść” — runda 9 zamiast kolorowego pudełka „Lista zawężona…”; opis filtrów
   z `RecipeFilterOptions.summaryLabels`), `RecipeRowStack` z `EditorialRecipeRow` (`.chevron` otwiera przepis,
   `.selection(isOn:)` zaznacza — kółko `SCRadioMark` w terakocie jak w Ustawieniach, tło wiersza
   w tincie akcentu; wybrany przepis schowany przez filtry pokazuje stopka) i `RecipeListEmptyState`
-  (co opróżniło listę + przyciski, które to zdejmują). W wyborze do planu: akcent i ikona PORY
+  (runda 10: karta z kafelkiem POWODU w tincie — lupa, filtry, serce, dieta, ikona pory — tytuł, zdanie
+  i akcja, która powód zdejmuje, jako `EditorialPrimaryActionButton`; druga akcja tekstem). W wyborze do
+  planu: akcent i ikona PORY
   (`slot.cozyAccent`, `slot.icon`), data i godzina w `subtitle`, filtry kategorii `slot.baseCategory`
   bez aspektu „Pora w planie” (`RecipeCategoryFacets.facets(forPicking:slot:)`, arkusz filtrów
   z `slot:`; wartości dań z INNYCH kategorii liczone w aspektach kategorii pory —
-  `RecipeFilterFactsCache.facetValues(for:in:)`), pigułki „Ulubione” (w obrębie pory, z „Wszystkie
-  pory” = wszystkie ulubione) i „Wszystkie pory” zamiast przełącznika Pasujące/Wszystkie/Ulubione,
-  a „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad
-  przyciskiem — tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
+  `RecipeFilterFactsCache.facetValues(for:in:)`); „Ulubione” to kafelek „Twoje przepisy” w tym arkuszu
+  (`favouritesOnly:`, plakietka filtrów liczy go jako jeden filtr). Lista to ZAWSZE przepisy tej pory
+  (`fits(slot)`) — „Wszystkie pory” usunięte w rundzie 10 („nie chcę jeść obiadu na śniadanie”).
+  „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad przyciskiem —
+  tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
+- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, runda 10): nagłówek z ikoną i „N min · N kcal na
+  porcję”, tydzień jak `EditorialWeekBar` (podpis „TEN TYDZIEŃ · …” + strzałki 26 pt, liczby dni rolują),
+  pory = `scChoiceSurface(.tile)` w kolorze pory + `SCHeaderIconWell`, porcje rolują (`numericText`),
+  a w stopce nad przyciskiem JEDNO rolujące zdanie „Środa, 24 września · Obiad · 2 porcje”; przycisk:
+  „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. `EditorialPrimaryActionButton` roluje
+  tytuł (`numericText`) — działa tylko w animowanej transakcji.
+- Ten sam przepis w tej samej porze dla drugiej osoby = SUMA audytoriów, a nie nadpisanie
+  (`PlanAudienceChips.merged(_:with:members:)`, runda 10): pozycja planu to para (pora, przepis), więc
+  zapis „posiłek1 dla user2” przepisywał „posiłek1 dla user1” i user1 zostawał bez jedzenia. Suma
+  obejmująca cały dom zwija się do „Wspólne”. Obowiązuje w „Wybierz przepis” i w „Dodaj do planu”.
 - Kalorie na Planie liczy się NA OSOBĘ (runda 9, 23.09.2026): pigułka nad menu sumuje dzień osoby
   z soczewki „…”, a przy „Cały dom” — tego, kto trzyma telefon (`nutritionPersonId`,
   `visibleTo(memberId:)` w każdej porze). Suma całego domu dodawała dwa różne obiady do jednego
@@ -321,7 +337,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   błąd przy polu = `SCInlineErrorText` (terakota, NIGDY `Color.red`, i bez „sprawdź połączenie” —
   sam skutek); zaznaczony chip/karta = `.scChoiceSurface` (`.chip`: pigułki filtrów, płeć/aktywność
   w Profilu i kreatorze; `.tile`: liczby `SCChoiceTile` — motyw, posiłki w planie, źródło kroków;
-  bez gradientu i cienia); pigułka filtra = `RecipeFilterPill` (haptyka za stuknięcie); karty szczegółów
+  bez gradientu i cienia); karty szczegółów
   posiłku = `scTileBg` + `scTileStroke` bez cienia; etykiety sekcji WSZĘDZIE 10,5 pt bold, tracking 1,4,
   `scFaint` (lista Ustawień, arkusze, grupy Asystenta, „Kroki”, „Dla kogo”). Asystent: nagłówki arkuszy
   (`AssistantSheetHeader`) rysuje `EditorialSheetHeader` (krzyżyk `SCSheetCloseButton`), tytuł zakładki
@@ -330,14 +346,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `ShoppingSheetHeader`.
 - Ustawienia → Gospodarstwo (23.09.2026, trzy rundy tego samego dnia — „za dużo tekstu”, potem
   „znów pusto i smutno”): nagłówek z ikoną domu, nazwą, ołówkiem i jedną linijką „3 osoby · wspólny
-  plan i lista zakupów”; domownicy z kolorowymi etykietami (rola z koroną, dieta z ikoną diety,
-  „bez: …” w terakocie) zamiast szarej linijki; zaproszenie jako osobna karta z jednym przyciskiem
-  (link jednorazowy, 7 dni). Wcześniej: nazwa w nagłówku
+  plan i lista zakupów”; domownicy: sama tożsamość — awatar, imię, plakietki „TY” / „WŁAŚCICIEL”
+  (dieta i alergeny usunięte w rundzie 10: „to tu nie ma sensu”); zaproszenie jako osobna karta
+  z jednym przyciskiem (link jednorazowy, 7 dni); „Opuść gospodarstwo” PRZYPIĘTE w stopce arkusza
+  (`scSheetFooter`, runda 10). Wcześniej: nazwa w nagłówku
   z ołówkiem obok krzyżyka (`EditorialSheetHeader` ma opcjonalne `accessory`; zmienia właściciel
   przez `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
-  `households:findById`), domownicy z rolą i — jeśli są — dietą i alergenami
-  (`households:memberPreferences` — serwer celowo NIE wysyła tam wzrostu ani wagi; cel kcal nie jest
-  pokazywany), zaproszenie jako wiersz listy (link 7 dni), „Opuść” na dole. NIC więcej — Rafał:
+  `households:findById`), zaproszenie jako wiersz listy (link 7 dni), „Opuść” na dole. NIC więcej — Rafał:
   „tylko najważniejsze rzeczy”, bez powtarzania nazwy, liczników i objaśnień. „Czego nie jem” (wykluczone
   składniki + limit czasu na danie) USUNIĘTE: walidator planu i prompt dalej czytają te kolumny,
   więc każdy zapis diety wysyła `excludedIngredientIds: []` + `maxPrepTimeMinutes: null`,
