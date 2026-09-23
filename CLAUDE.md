@@ -34,12 +34,32 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   rozwiązania typu. Kompilator NIE wskazuje tej linii — mówi `ambiguous use of 'init'`
   o kilkadziesiąt linii wyżej, przy najbliższym kontenerze SwiftUI (np. `ScrollView`).
   Jawny typ nie pomaga; pomaga domknięcie: `cond ? nil : { metoda() }`.
-- **Logika briefingu asystenta**: `sh Scripts/assistant-logic-check.sh` — kompiluje
+- **Logika powitania asystenta** (pusty ekran): `sh Scripts/assistant-logic-check.sh` — kompiluje
   `Models/Assistant/AssistantBriefing.swift` (TYLKO Foundation) ze scenariuszami
-  w `Scripts/AssistantLogic/main.swift` i sprawdza priorytety pustego ekranu (pula > nowe konto
-  > pusty tydzień > dziś > wieczór+jutro > brakująca pora główna > przyszły tydzień pod koniec
-  tygodnia > realny brak w bilansie > gotowe > weekend). Nowa sytuacja = nowy `Kind` w resolverze
-  + scenariusz tutaj. Widok (`AssistantBriefingCard`) NIE liczy nic sam.
+  w `Scripts/AssistantLogic/main.swift` i sprawdza priorytety 17 sytuacji (pula > nowe konto > późna
+  pora 22–5 > pusty tydzień (≥ 3 dni do końca) > dziś pusto > „Za 40 minut obiad” (90 min przed porą)
+  > brak śniadania / obiadu / kolacji dziś > wieczór: jutro puste / częściowe > przyszły tydzień pod
+  koniec tygodnia > realny brak w bilansie > tydzień gotowy > weekend > wieczór: jutro gotowe > dzień
+  gotowy). Nowa sytuacja = nowy `Kind` w resolverze + scenariusz tutaj. Widok (`AssistantEmptyState`)
+  NIE liczy nic sam.
+- Powitanie (23.09.2026) — makieta Claude Design „Scoffie - Asystent Empty State v2” (projekt
+  `43b605d0-…`, `components/ae-*.jsx`), wariant A: znak, otwarcie 28 semibold, zdanie pomocy 17,
+  kontekst bez słów (talerzyki pór / najbliższe danie / pasek bilansu), główna akcja „soft” na
+  szerokość treści i `AssistantChip`-y alternatyw — JEDEN blok przyklejony nad polem wiadomości
+  (wolne miejsce nad nim; gdy wyższy niż ekran, startuje od otwarcia). Ostatnia alternatywa to zawsze
+  „Mam inny pomysł” = sam fokus pola (akcje i kontekst gasną, otwarcie zostaje), a przykład w polu
+  (`briefing.placeholder`) zmienia się z sytuacją. Bez liczenia braków („0 z 4”) i dat w tekście.
+  Ruch: otwarcie i zdanie PISZĄ SIĘ (`Components/SCTypedText.swift` — nienapisana końcówka jest
+  przezroczysta, więc układ nie skacze), potem kaskada kontekstu i akcji, liczby przez `SCCountingText`;
+  gra od nowa przy wejściu na zakładkę i nowej sytuacji, a ta sama sytuacja z inną liczbą tylko roluje
+  (`numericText`). Akcje o JEDNEJ porze proszą o dania „do wyboru”, więc kończą się arkuszem wyboru
+  posiłku (prompt serwera: jedna pora albo „do wyboru” = `offer_options`).
+- Przegląd propozycji w arkuszu wyboru posiłku: karty dnia i tygodnia mają dania jako przyciski i wiersz
+  „Przeglądaj dania” (`OptionsBrowseRow`, ten sam co w karcie OPTIONS) → `AssistantOptionsStorySheet`
+  w trybie `.review` (`OptionsStoryMode`): tag = pora (· dzień), pod daniem „Zamień to danie” (wysyła
+  „Zamień w tej propozycji …: X. Pokaż 3 inne dania na tę porę do wyboru.” → serwer oddaje OPTIONS →
+  „Wybieram: …” → ta sama propozycja z nowym daniem), strona końcowa „Wszystko pasuje?” z zapisem.
+  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
