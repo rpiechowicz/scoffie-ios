@@ -11,11 +11,30 @@ import SwiftUI
 //   Meta — 12pt 500 muted, "{time} min · {kcal} kcal · {protein} g białka"
 //   with tabular nums.
 //   Trailing — terracotta heart when favourite, then 14pt chevron in faint.
+//
+// Ten sam wiersz stoi w liście kategorii i w wyborze przepisu do planu
+// (runda 8, 23.09.2026) — różni je tylko końcówka: strzałka otwiera przepis,
+// kółko wyboru go zaznacza. Wybór do planu miał wcześniej własny wiersz
+// (zdjęcie 56 pt, tytuł 15,5 pt, pełne koło z ptaszkiem) i ten sam przepis
+// wyglądał w dwóch arkuszach na dwa sposoby.
 struct EditorialRecipeRow: View {
+    /// Co stoi na końcu wiersza.
+    enum Accessory: Equatable {
+        /// Strzałka — wiersz otwiera przepis.
+        case chevron
+        /// Kółko wyboru — wiersz zaznacza przepis (wybór do planu).
+        case selection(isOn: Bool)
+    }
+
     let recipe: Recipe
+    var accessory: Accessory = .chevron
+    /// Tło zaznaczonego wiersza — akcent kategorii albo pory dnia.
+    var accent: Color = SCPalette.terracotta
     var action: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
+
+    private var isSelected: Bool { accessory == .selection(isOn: true) }
 
     var body: some View {
         Button(action: { action?() }) {
@@ -56,17 +75,32 @@ struct EditorialRecipeRow: View {
                         .accessibilityHidden(true)
                 }
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .accessibilityHidden(true)
+                switch accessory {
+                case .chevron:
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(Color.scFaint(scheme))
+                        .accessibilityHidden(true)
+                case .selection(let isOn):
+                    SCRadioMark(isOn: isOn)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
+            // Zaznaczony wiersz dostaje tint akcentu — jak zaznaczony kafelek
+            // (`SCChoiceTile`) — wcięty w marginesy listy, żeby nie dotykał
+            // krawędzi arkusza.
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(accent.opacity(scheme == .dark ? 0.12 : 0.09))
+                    .padding(.horizontal, 8)
+                    .opacity(isSelected ? 1 : 0)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var metaText: String {

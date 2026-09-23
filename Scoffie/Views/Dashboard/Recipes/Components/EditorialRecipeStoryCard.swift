@@ -3,11 +3,13 @@ import SwiftUI
 // Full-bleed story-style hero card used inside the featured carousel on
 // Przepisy v2. Source: design/Scoffie - Przepisy.html →
 // recipes-v2.jsx W3StoryCard.
-//   Outer card — 420pt tall, corner 26pt, photo `cover/center` or category
+//   Outer card — 330pt tall (makieta: 420, patrz `cardHeight`), corner 26pt, photo `cover/center` or category
 //   tint gradient placeholder with the category glyph at 84pt.
 //   Top scrim — `linear-gradient(180deg, rgba(0,0,0,0.28) 0%, transparent
 //   32%, transparent 50%, rgba(0,0,0,0.78) 100%)`.
-//   Heart chip — pinned top-trailing at 14pt inset, 32pt circle.
+//   Heart chip — pinned top-trailing at 14pt inset, 32pt circle. Rysuje go
+//   karuzela (`RecipesView`) jako osobny przycisk NAD kartą — w karcie był
+//   samym obrazkiem i stuknięcie w niego otwierało szczegóły.
 //   Title — 22pt 700, tracking -0.4, line-height 26pt, up to 3 lines,
 //   `text-shadow: 0 2px 12px rgba(0,0,0,0.6)`.
 //   Glass chips — clock + flame meta, bottom-leading inset 16pt.
@@ -15,7 +17,15 @@ struct EditorialRecipeStoryCard: View {
     /// Wysokość karty publikowana statycznie, bo karuzela w `RecipesView`
     /// używa `GeometryReader { ... }.frame(height:)` żeby uniknąć
     /// dwuwymiarowego layoutu — musi znać tę liczbę z zewnątrz.
-    static let cardHeight: CGFloat = 420
+    ///
+    /// 330, nie 420 z makiety. Zdjęcia katalogu są kwadratowe (1024², ujęcie
+    /// z góry pod kątem), a karta ma ~350 pt szerokości: przy 420 pt
+    /// wysokości `scaledToFill` skalował zdjęcie DO WYSOKOŚCI, ucinał po
+    /// ~35 pt z boków i talerz wychodził zbliżony, jak przez lupę. Przy
+    /// proporcji bliskiej kwadratu zdjęcie skaluje się do szerokości, cięcie
+    /// schodzi do kilkunastu punktów góra–dół i widać całe danie — a karta
+    /// przestaje zajmować cały ekran.
+    static let cardHeight: CGFloat = 330
 
     let recipe: Recipe
 
@@ -30,12 +40,14 @@ struct EditorialRecipeStoryCard: View {
 
             // Bottom-anchored editorial scrim — light at top so the photo
             // breathes, deep at the bottom so the title is always legible.
+            // Przyciemnienie zaczyna się niżej niż na 420-punktowej karcie —
+            // na niższej te same proporcje zasłaniały pół talerza.
             LinearGradient(
                 stops: [
-                    .init(color: Color.black.opacity(0.28), location: 0.00),
-                    .init(color: .clear,                    location: 0.32),
-                    .init(color: .clear,                    location: 0.50),
-                    .init(color: Color.black.opacity(0.78), location: 1.00)
+                    .init(color: Color.black.opacity(0.24), location: 0.00),
+                    .init(color: .clear,                    location: 0.24),
+                    .init(color: .clear,                    location: 0.52),
+                    .init(color: Color.black.opacity(0.80), location: 1.00)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -50,7 +62,6 @@ struct EditorialRecipeStoryCard: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         )
-        .overlay(alignment: .topTrailing) { heartChip }
         // Bez cienia pod kartą. Karuzela to poziomy `ScrollView`, który
         // przycina wszystko poza swoimi granicami — cień urywał się równo
         // z krawędzią sekcji zamiast zanikać, więc na dole karty rysowała
@@ -137,35 +148,15 @@ struct EditorialRecipeStoryCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Heart
-
-    private var heartChip: some View {
-        let liked = recipe.favourite
-        return ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .overlay(Circle().fill(Color.black.opacity(0.40)))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
-
-            Image(systemName: liked ? "heart.fill" : "heart")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(liked ? SCPalette.terracotta : Color.white.opacity(0.95))
-        }
-        .frame(width: 32, height: 32)
-        .padding(.top, 14)
-        .padding(.trailing, 14)
-        .accessibilityHidden(true)
-    }
-
     // MARK: - Bottom content (title + glass chips)
 
     private var bottomContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(recipe.name)
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 21, weight: .bold))
                 .tracking(-0.4)
                 .foregroundStyle(.white)
-                .lineLimit(3)
+                .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 2)

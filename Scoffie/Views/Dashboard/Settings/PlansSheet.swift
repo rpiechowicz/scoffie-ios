@@ -3,10 +3,14 @@ import SwiftUI
 
 /// „Wybierz plan" — trzy pełne karty jedna pod drugą.
 ///
-/// Każda karta mówi trzy rzeczy: dla kogo (liczba osób, z dopiskiem
-/// „Twój dom" przy planie zgodnym z Gospodarstwem — ten jest zaznaczony
-/// domyślnie), ile daje (dwa limity) i o co więcej niż tańszy plan (linia
-/// „+" z różnicą ceny). Przycisk na dole powtarza nazwę i cenę wybranego
+/// Na górze stan: jaki plan dom MA (z serwera) albo że nie ma żadnego.
+/// Liczba domowników tylko PODPOWIADA plan („Polecany”) — nigdy nie udaje,
+/// że coś jest kupione. Dawniej plan zgodny z Gospodarstwem nosił dopisek
+/// „Twój dom” z domkiem i był zaznaczony, więc dom z dwiema osobami na
+/// próbie widział „We dwoje” jak własny plan.
+///
+/// Każda karta mówi trzy rzeczy: dla kogo (liczba osób), ile daje (dwa
+/// limity) i o co więcej niż tańszy plan. Przycisk na dole powtarza nazwę i cenę wybranego
 /// planu, bo cena przy zakupie to wymóg App Store 3.1.2, a nazwa oszczędza
 /// spojrzenia z powrotem na listę.
 ///
@@ -51,24 +55,31 @@ struct PlansSheet: View {
                 // Trzy kafle do wyboru, jedna karta szczegółów: przy
                 // zmianie planu liczby i paski przeliczają się w miejscu,
                 // zamiast kazać porównywać trzy karty po kawałku.
+                currentStatus
+                    .padding(.top, 14)
+
                 HStack(spacing: 8) {
                     ForEach(SubscriptionCatalog.all) { plan in
                         PlanTile(
                             plan: plan,
                             price: price(for: plan),
                             isSelected: plan.id == selected.id,
-                            isHome: plan.id == homePlan?.id
+                            isCurrent: plan.id == currentPlan?.id,
+                            isSuggested: plan.id == suggestedPlan?.id && plan.id != currentPlan?.id
                         ) {
                             select(plan)
                         }
                     }
                 }
-                .padding(.top, 14)
+                .padding(.top, 12)
 
                 PlanDetailCard(
                     plan: selected,
                     price: price(for: selected),
-                    isHome: selected.id == homePlan?.id
+                    isCurrent: selected.id == currentPlan?.id,
+                    suggestion: selected.id == suggestedPlan?.id && selected.id != currentPlan?.id
+                        ? suggestionText
+                        : nil
                 )
                 .padding(.top, 10)
             }
@@ -83,9 +94,10 @@ struct PlansSheet: View {
             LegalDocumentSheet(title: "Polityka prywatności") { PrivacyPolicyContent() }
         }
         .task {
-            // Domyślnie plan pasujący do domu — ale tylko na wejściu, żeby
-            // nie przestawiać wyboru komuś, kto już stuknął inną kartę.
-            if let home = Self.plan(forHousehold: householdSize) { selected = home }
+            // Na wejściu: plan polecany dla domu, a gdy go nie ma — obecny.
+            // Tylko raz, żeby nie przestawiać wyboru komuś, kto już stuknął
+            // inną kartę. To jest ZAZNACZENIE kafla, nie stan zakupu.
+            if let initial = suggestedPlan ?? currentPlan { selected = initial }
             // Najpierw pytamy serwer, czy zakupy są w ogóle włączone —
             // przycisk ma być nieaktywny, dopóki nie umiemy potwierdzić
             // płatności, a nie dopiero po jej pobraniu.
@@ -100,8 +112,78 @@ struct PlansSheet: View {
         sessionStore.householdMembers.count
     }
 
-    private var homePlan: SubscriptionPlan? {
+    /// Plan pasujący do liczby domowników — PODPOWIEDŹ, nie stan zakupu.
+    private var suggestedPlan: SubscriptionPlan? {
         Self.plan(forHousehold: householdSize)
+    }
+
+    private var suggestionText: String {
+        "polecany dla \(householdSize) \(householdSize == 1 ? "osoby" : "osób")"
+    }
+
+    /// Plan, który dom MA teraz — wyłącznie z serwera. Najpierw subskrypcja
+    /// tej osoby (dokładny identyfikator produktu), potem stan domu z licznika
+    /// asystenta (domownik, za którego płaci ktoś inny). Próba, nadanie od nas
+    /// i brak danych = brak planu.
+    private var currentPlan: SubscriptionPlan? {
+        if let alive = subscriptions.state?.subscriptions.first(where: { $0.alive }),
+           let plan = SubscriptionCatalog.all.first(where: { $0.id == alive.productId }) {
+            return plan
+        }
+        guard let usage = sessionStore.agentStore?.usage,
+              !usage.isTrial,
+              usage.source == "SUBSCRIPTION"
+        else { return nil }
+        return SubscriptionCatalog.plan(named: usage.product)
+    }
+
+    /// Wiersz stanu nad kaflami: co dom ma teraz. Bez tego jedyną
+    /// informacją był zaznaczony kafel — a zaznaczenie to wybór, nie zakup.
+    private var currentStatus: some View {
+        let plan = currentPlan
+        let usage = sessionStore.agentStore?.usage
+
+        return HStack(spacing: 12) {
+            Image(systemName: plan == nil ? "circle.dashed" : "checkmark.seal.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(plan == nil ? Color.scMuted(scheme) : SCPalette.sage)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(plan.map { "Twój plan: \($0.name)" } ?? "Nie masz jeszcze planu")
+                    .font(.system(size: 15, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scLabel(scheme))
+                Text(currentStatusDetail(plan: plan, usage: usage))
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(plan == nil ? Color.scTileBg(scheme) : SCPalette.sage.opacity(scheme == .dark ? 0.12 : 0.09))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(plan == nil ? Color.scTileStroke(scheme) : SCPalette.sage.opacity(0.35), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private func currentStatusDetail(plan: SubscriptionPlan?, usage: AgentUsageDTO?) -> String {
+        guard plan != nil else {
+            return usage?.isTrial == true
+                ? "Teraz korzystasz z jednorazowej puli próbnej."
+                : "Wybierz plan, żeby asystent działał co miesiąc."
+        }
+        if let usage, !usage.isThePayer, let payer = usage.payerName, !payer.isEmpty {
+            return "Opłaca \(HouseholdMemberStyle.shortName(payer)) — pula jest wspólna dla całego domu."
+        }
+        return "Pula wspólna dla całego domu, odnawia się co miesiąc."
     }
 
     /// Plan o etykiecie zgodnej z liczbą domowników. Liczba osób jest
@@ -195,9 +277,12 @@ struct PlansSheet: View {
             && subscriptions.purchasesEnabled
             && subscriptions.product(for: selected) != nil
             && !subscriptions.isPurchasing
+            && selected.id != currentPlan?.id
     }
 
     private var purchaseTitle: String {
+        // Ten sam plan drugi raz nie ma czego odblokować.
+        if selected.id == currentPlan?.id { return "To Twój obecny plan" }
         guard canPurchase else { return "Zakupy wkrótce" }
         return "Plan \(selected.name) · \(price(for: selected)) / mies."
     }
@@ -258,8 +343,10 @@ struct PlanTile: View {
     let plan: SubscriptionPlan
     let price: String
     let isSelected: Bool
-    /// Plan zgodny z liczbą osób w Gospodarstwie — znacznik, nie ranking.
-    let isHome: Bool
+    /// Kupiony — z serwera.
+    let isCurrent: Bool
+    /// Pasuje do liczby domowników — podpowiedź, nie stan zakupu.
+    let isSuggested: Bool
     let onSelect: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -277,20 +364,15 @@ struct PlanTile: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                     Spacer(minLength: 0)
-                    radio
+                    // To samo kółko co przy celu i diecie w Ustawieniach,
+                    // tylko mniejsze — trzy kafle stoją w jednym rzędzie.
+                    SCRadioMark(isOn: isSelected, size: 18)
                 }
-                HStack(spacing: 3) {
-                    if isHome {
-                        Image(systemName: "house.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(SCPalette.sage)
-                    }
-                    Text(plan.seatsLabel)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(isHome ? SCPalette.sage : Color.scMuted(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+                Text(plan.seatsLabel)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text(price)
                     .font(.system(size: 14.5, weight: .bold))
                     .tracking(-0.3)
@@ -299,6 +381,12 @@ struct PlanTile: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .padding(.top, 6)
+
+                // Stała wysokość znacznika we wszystkich kaflach — rząd trzech
+                // kafli nie może skakać zależnie od tego, który coś niesie.
+                tag
+                    .frame(height: 16, alignment: .leading)
+                    .padding(.top, 2)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -315,33 +403,45 @@ struct PlanTile: View {
         .buttonStyle(PlanPressButtonStyle())
         .animation(.spring(response: 0.32, dampingFraction: 0.8), value: isSelected)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Plan \(plan.name), \(plan.seatsLabel), \(price) miesięcznie")
+        .accessibilityLabel("Plan \(plan.name), \(plan.seatsLabel), \(price) miesięcznie"
+            + (isCurrent ? ", Twój obecny plan" : isSuggested ? ", polecany dla Twojego domu" : ""))
         .accessibilityAddTraits(traits)
     }
 
-    /// Kółko wyboru: wypełnienie rośnie ze środka, a nie wskakuje.
-    private var radio: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.scRule(scheme), lineWidth: 1.5)
-                .opacity(isSelected ? 0 : 1)
-            Circle()
-                .fill(SCPalette.terracotta)
-                .scaleEffect(isSelected ? 1 : 0.4)
-                .opacity(isSelected ? 1 : 0)
-            Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .heavy))
-                .foregroundStyle(Color.scPageBase(scheme))
-                .scaleEffect(isSelected ? 1 : 0.5)
-                .opacity(isSelected ? 1 : 0)
+    @ViewBuilder
+    private var tag: some View {
+        if isCurrent {
+            Label("Twój plan", systemImage: "checkmark.seal.fill")
+                .font(.system(size: 10.5, weight: .bold))
+                .labelStyle(PlanTagLabelStyle())
+                .foregroundStyle(SCPalette.sage)
+        } else if isSuggested {
+            Label("Polecany", systemImage: "sparkles")
+                .font(.system(size: 10.5, weight: .bold))
+                .labelStyle(PlanTagLabelStyle())
+                .foregroundStyle(SCPalette.terracotta)
+        } else {
+            Color.clear
         }
-        .frame(width: 18, height: 18)
     }
 
     private var traits: AccessibilityTraits {
         var result: AccessibilityTraits = .isButton
         if isSelected { _ = result.insert(.isSelected) }
         return result
+    }
+}
+
+/// Znacznik kafla planu: glif i słowo w jednym rzędzie, ciasno.
+private struct PlanTagLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon
+                .font(.system(size: 9, weight: .bold))
+            configuration.title
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
     }
 }
 
@@ -354,7 +454,10 @@ struct PlanTile: View {
 struct PlanDetailCard: View {
     let plan: SubscriptionPlan
     let price: String
-    let isHome: Bool
+    /// Kupiony — z serwera.
+    let isCurrent: Bool
+    /// „polecany dla 2 osób” — podpowiedź z liczby domowników, albo `nil`.
+    let suggestion: String?
 
     @Environment(\.colorScheme) private var scheme
 
@@ -408,9 +511,12 @@ struct PlanDetailCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Text("Plan \(plan.name)".uppercased())
-                    if isHome {
-                        Text("· Twój dom".uppercased())
+                    if isCurrent {
+                        Text("· Twój plan".uppercased())
                             .foregroundStyle(SCPalette.sage)
+                    } else if let suggestion {
+                        Text("· \(suggestion)".uppercased())
+                            .foregroundStyle(SCPalette.terracotta.opacity(0.75))
                     }
                 }
                 .font(.system(size: 10.5, weight: .bold))

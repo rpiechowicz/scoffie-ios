@@ -30,9 +30,17 @@ struct RecipesView: View {
     @State private var selectedRecipe: Recipe?
     @State private var categorySheetSelection: RecipesCategory?
     @State private var featuredSelectionId: UUID?
+    /// Kolejność kart karuzeli zamrożona od ostatniego ułożenia.
+    ///
+    /// Ranking karuzeli stawia ulubione na przodzie, więc polubienie przepisu
+    /// przestawiało karty — pod palcem stawała inna karta i następne stuknięcie
+    /// otwierało inny przepis niż ten, który był przed chwilą na ekranie
+    /// (Rafał, 23.09.2026). Karuzela układa się od nowa tylko przy zmianie
+    /// wyszukiwania, filtrów, dopasowania, doby albo katalogu — patrz
+    /// `resyncFeaturedSelectionIfNeeded`. `nil` = jeszcze nie ułożona.
+    @State private var featuredOrder: [UUID]?
     @State private var filters = RecipeFilterOptions()
     @State private var isFilterSheetPresented = false
-    @State private var isPersonalizationSheetPresented = false
 
     /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
     /// Trzymany w stanie, a nie liczony w locie z `Date()`, żeby przewijanie
@@ -119,20 +127,6 @@ struct RecipesView: View {
         personalization.hiddenCount(in: searchedRecipes)
     }
 
-    /// Ile przepisów zabiera dieta / alergeny w CAŁYM katalogu. Arkusz
-    /// „Dopasowanie” mówi o ustawieniu globalnym, więc jego liczby nie mogą
-    /// się zmieniać, gdy ktoś wpisze coś w wyszukiwarkę.
-    private var hiddenInCatalogCount: Int {
-        personalization.hiddenCount(in: recipeCatalogStore.recipes)
-    }
-
-    /// Czy katalog w ogóle niesie dane do oceny diety: składniki dla
-    /// heurystyki albo tagi z serwera. Bez nich arkusz musi to powiedzieć
-    /// wprost, zamiast twierdzić, że wszystko pasuje.
-    private var hasIngredientCoverage: Bool {
-        recipeCatalogStore.recipes.contains { !$0.ingredients.isEmpty || $0.dietTags != nil }
-    }
-
     /// Czy lista jest w ogóle zawężona — steruje tekstem pustego stanu i
     /// zwijaniem pustych sekcji Tasting menu.
     private var isNarrowed: Bool {
@@ -153,15 +147,28 @@ struct RecipesView: View {
         mealSections.contains { !$0.recipes.isEmpty }
     }
 
+    /// Karty karuzeli: zamrożona kolejność (`featuredOrder`) z bieżącymi
+    /// danymi przepisów. Przepis, który zniknął z listy (np. odlubiony przy
+    /// filtrze „Ulubione”), znika też z karuzeli.
+    private var featuredRecipes: [Recipe] {
+        let visible = visibleRecipes
+        if let order = featuredOrder {
+            let byId = Dictionary(visible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let frozen = order.compactMap { byId[$0] }
+            if !frozen.isEmpty { return frozen }
+        }
+        return rankedFeaturedRecipes(from: visible)
+    }
+
     /// Top-N najlepszych kandydatów do karuzeli featured. Ulubione wygrywają,
     /// potem krótszy `prepTime`, potem większy `servings`, potem alfabetycznie.
-    private var featuredRecipes: [Recipe] {
+    private func rankedFeaturedRecipes(from visible: [Recipe]) -> [Recipe] {
         // Gdy cel porządkuje katalog, `visibleRecipes` są już ułożone od
         // najlepiej dopasowanych — drugie sortowanie po `prepTime` tylko by to
         // zepsuło. Bez celu zostaje dotychczasowa heurystyka.
         let ranked = (personalization.isEnabled && personalization.ranksCatalog)
-            ? visibleRecipes
-            : visibleRecipes.sorted(by: isFeaturedRecipePreferred(_:_:))
+            ? visible
+            : visible.sorted(by: isFeaturedRecipePreferred(_:_:))
 
         // Przy aktywnym wyszukiwaniu albo filtrach karuzela ma pokazać
         // najlepsze trafienia, a nie codzienną propozycję — użytkownik czegoś
@@ -246,6 +253,13 @@ struct RecipesView: View {
             .onChange(of: filters) { _, _ in
                 resyncFeaturedSelectionIfNeeded()
             }
+            // Karta zniknęła z zamrożonej karuzeli (np. odlubiona przy filtrze
+            // „Ulubione”) — zaznaczenie przechodzi na pierwszą, bez układania
+            // kart od nowa.
+            .onChange(of: featuredRecipes.map(\.id)) { _, ids in
+                if let current = featuredSelectionId, ids.contains(current) { return }
+                featuredSelectionId = ids.first
+            }
             .onChange(of: personalization) { _, _ in
                 resyncFeaturedSelectionIfNeeded()
             }
@@ -257,18 +271,27 @@ struct RecipesView: View {
             }
             .onDisappear { searchDebounceTask?.cancel() }
             .sheet(isPresented: $isFilterSheetPresented) {
-                RecipeFilterSheet(filters: $filters, recipes: personalizedRecipes)
+                // Pula PRZED dopasowaniem: przełącznik „Dopasowane do Ciebie”
+                // siedzi w arkuszu i liczby muszą się dać przeliczyć w obie
+                // strony.
+                RecipeFilterSheet(
+                    filters: $filters,
+                    isPersonalizationEnabled: $isPersonalizationEnabled,
+                    recipes: searchedRecipes,
+                    personalization: personalization
+                )
                     .presentationDetents([.large])
                     .dashboardLiquidSheet()
             }
             .sheet(item: $selectedRecipe) { selected in
                 RecipeDetailView(
-                    recipe: selected,
-                    onToggleFavorite: {
-                        Task {
-                            await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
-                            selectedRecipe = recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
-                        }
+                    // Żywy przepis z katalogu, nie kopia z chwili otwarcia —
+                    // serce nadąża za zapisem z karuzeli, a zapis z arkusza
+                    // nie musi niczego podmieniać w `selectedRecipe`
+                    // (przypisanie otwierało zamknięty już arkusz).
+                    recipe: recipeCatalogStore.recipes.first(where: { $0.id == selected.id }) ?? selected,
+                    onSetFavourite: { value in
+                        Task { await recipeCatalogStore.setFavourite(recipeId: selected.id, to: value) }
                     },
                     onClose: { selectedRecipe = nil },
                     // Katalog nie zna żadnego slotu, więc szczegół otwiera się
@@ -276,9 +299,11 @@ struct RecipesView: View {
                     onAddedToPlan: { _, _ in selectedRecipe = nil }
                 )
                 .presentationDetents([.large])
-                .dashboardLiquidSheet()
+                .dashboardLiquidSheet(cornerRadius: 40)
             }
             .sheet(item: $categorySheetSelection) { category in
+                let categoryRecipes = recipeCatalogStore.recipes.filter { $0.category == category }
+                let inCategory = personalization.apply(to: categoryRecipes)
                 RecipeCategorySheetView(
                     category: category,
                     // Filtry z arkusza „Filtry” obowiązują też tutaj — inaczej
@@ -286,31 +311,17 @@ struct RecipesView: View {
                     // przepisy, które użytkownik przed chwilą odsiał.
                     // Wyszukiwarka zostaje poza tym celowo: ten arkusz ma
                     // własną, do przeszukiwania kategorii.
-                    recipes: filters.apply(
-                        to: personalization.apply(
-                            to: recipeCatalogStore.recipes.filter { $0.category == category }
-                        )
-                    ),
-                    hasActiveFilters: filters.isActive,
-                    isPersonalized: personalization.isEnabled && personalization.restrictsCatalog,
-                    onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.reset() } }
+                    recipes: filters.apply(to: inCategory),
+                    // Pula dla filtrów kategorii: wszystko poza nimi samymi,
+                    // żeby kafelki liczyły „ile zostanie po zaznaczeniu”.
+                    pool: filters.withoutCategoryFilter(for: category).apply(to: inCategory),
+                    categoryFilter: categoryFilterBinding(for: category),
+                    filterLabels: filters.summaryLabels,
+                    personalization: personalization,
+                    hiddenByPersonalization: personalization.hiddenCount(in: categoryRecipes),
+                    onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.resetGlobal() } }
                 )
                 .presentationDetents([.large])
-                .dashboardLiquidSheet()
-            }
-            .sheet(isPresented: $isPersonalizationSheetPresented) {
-                RecipePersonalizationSheet(
-                    personalization: personalization,
-                    catalog: recipeCatalogStore.recipes,
-                    canEvaluateDiet: hasIngredientCoverage,
-                    isEnabled: $isPersonalizationEnabled,
-                    onClose: { isPersonalizationSheetPresented = false }
-                )
-                // Jedyny arkusz na tym ekranie, który nie jest listą — treści
-                // jest na pół ekranu, więc `.large` zostawiałby pustą dolną
-                // połowę. `.medium` otwiera go w rozmiarze treści, `.large`
-                // zostaje na duży krój systemowy.
-                .presentationDetents([.medium, .large])
                 .dashboardLiquidSheet()
             }
         }
@@ -324,12 +335,8 @@ struct RecipesView: View {
                 EditorialRecipesHeader(
                     searchText: $searchText,
                     activeFilterCount: filters.activeCount,
-                    isPersonalizationEnabled: isPersonalizationEnabled,
-                    isPersonalizationActive: personalization.isActive,
-                    hiddenRecipeCount: hiddenInCatalogCount,
                     onSubmit: { debouncedSearchText = searchText },
-                    onOpenFilters: { isFilterSheetPresented = true },
-                    onOpenPersonalization: { isPersonalizationSheetPresented = true }
+                    onOpenFilters: { isFilterSheetPresented = true }
                 )
                 .padding(.horizontal, pageHorizontalPadding)
                 .padding(.top, pageTopPadding)
@@ -434,6 +441,16 @@ struct RecipesView: View {
                                 .frame(height: EditorialRecipeStoryCard.cardHeight)
                         }
                         .buttonStyle(.plain)
+                        // Serce NAD przyciskiem karty, a nie w nim: stuknięcie
+                        // przełącza ulubione i nie otwiera szczegółów. Wcześniej
+                        // było samym obrazkiem — trafiało w kartę.
+                        .overlay(alignment: .topTrailing) {
+                            RecipeFavouriteButton(isFavourite: recipe.favourite, style: .photo) { value in
+                                Task { await recipeCatalogStore.setFavourite(recipeId: recipe.id, to: value) }
+                            }
+                            .padding(.top, 8)
+                            .padding(.trailing, 8)
+                        }
                         .padding(.horizontal, pageHorizontalPadding)
                         .frame(width: pageWidth)
                         .task {
@@ -474,27 +491,10 @@ struct RecipesView: View {
                 emptySectionCard
                     .padding(.horizontal, pageHorizontalPadding)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(section.recipes.enumerated()), id: \.element.id) { idx, recipe in
-                        EditorialRecipeRow(
-                            recipe: recipe,
-                            action: { openDetail(for: recipe) }
-                        )
-                        .task {
-                            await recipeCatalogStore.loadNextPageIfNeeded(
-                                currentItemId: recipe.id,
-                                threshold: 8
-                            )
-                        }
-
-                        if idx < section.recipes.count - 1 {
-                            Rectangle()
-                                .fill(Color.scRule(scheme))
-                                .frame(height: 1)
-                                .padding(.leading, pageHorizontalPadding + 48 + 14)
-                                .padding(.trailing, pageHorizontalPadding)
-                        }
-                    }
+                // Te same wiersze z kreskami (i to samo doczytywanie
+                // katalogu), co w liście kategorii i w wyborze do planu.
+                RecipeRowStack(recipes: section.recipes) { recipe in
+                    openDetail(for: recipe)
                 }
             }
         }
@@ -543,6 +543,23 @@ struct RecipesView: View {
                     .multilineTextAlignment(.center)
             }
 
+            if isEmptyBecauseOfPersonalization {
+                // Przełącznik „Dopasowane do Ciebie” mieszka w Filtrach, ale
+                // pusty ekran przez dietę to jedyna sytuacja, w której trzeba
+                // go szukać — więc wyłącza się go stąd jednym stuknięciem.
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { isPersonalizationEnabled = false }
+                } label: {
+                    Text("Pokaż wszystkie przepisy")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SCPalette.sage)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .scSoftCapsule(SCPalette.sage)
+                }
+                .buttonStyle(.plain)
+            }
+
             if filters.isActive {
                 Button {
                     withAnimation(.smooth(duration: 0.2)) { filters.reset() }
@@ -571,6 +588,16 @@ struct RecipesView: View {
         )
     }
 
+    /// Pusto wyłącznie przez dietę i alergeny z profilu — bez wyszukiwania
+    /// i bez filtrów, które same mogłyby wszystko odsiać.
+    private var isEmptyBecauseOfPersonalization: Bool {
+        !filters.isActive
+            && debouncedSearchText.isEmpty
+            && personalization.isEnabled
+            && personalization.restrictsCatalog
+            && hiddenByPersonalizationCount > 0
+    }
+
     private var emptyStateMessage: String {
         if filters.isActive && !debouncedSearchText.isEmpty {
             return "Żaden przepis nie pasuje do frazy i wybranych filtrów."
@@ -583,8 +610,8 @@ struct RecipesView: View {
         }
         // Pusto po samej personalizacji to inny problem niż pusta baza —
         // podpowiadamy przełącznik zamiast kazać czekać na przepisy.
-        if personalization.isEnabled, personalization.restrictsCatalog, hiddenByPersonalizationCount > 0 {
-            return "Żaden przepis w katalogu nie mieści się w Twojej diecie i alergenach. Stuknij ikonę dopasowania obok tytułu, żeby je wyłączyć."
+        if isEmptyBecauseOfPersonalization {
+            return "Żaden przepis w katalogu nie mieści się w Twojej diecie i alergenach. Dopasowanie wyłączysz tu albo w Filtrach."
         }
         return "Ta baza jest jeszcze pusta — wróć za chwilę."
     }
@@ -615,7 +642,7 @@ struct RecipesView: View {
                     RoundedRectangle(cornerRadius: 26, style: .continuous)
                         .stroke(Color.scTileStroke(scheme), lineWidth: 1)
                 )
-                .frame(height: 420)
+                .frame(height: EditorialRecipeStoryCard.cardHeight)
                 .padding(.horizontal, pageHorizontalPadding)
                 .redacted(reason: .placeholder)
 
@@ -656,10 +683,15 @@ struct RecipesView: View {
     private func makeSection(category: RecipesCategory) -> RecipeSection {
         let categoryRecipes = visibleRecipes.filter { $0.category == category }
         let preview = Array(categoryRecipes.prefix(Self.sectionPreviewLimit))
+        let categoryFilterCount = filters.categoryFilters[category]?.activeCount ?? 0
         return RecipeSection(
             category: category,
             title: RecipesConstants.displayName(for: category),
-            eyebrow: RecipeAccent.eyebrow(for: category),
+            // Zawężona sekcja mówi o tym zamiast hasła — inaczej krótsza
+            // lista wyglądałaby na brak przepisów.
+            eyebrow: categoryFilterCount > 0
+                ? "\(categoryFilterCount) \(PolishPlural.form(categoryFilterCount, one: "filtr", few: "filtry", many: "filtrów")) w tej kategorii"
+                : RecipeAccent.eyebrow(for: category),
             accent: RecipeAccent.accent(for: category),
             recipes: preview,
             totalCount: categoryRecipes.count
@@ -670,6 +702,19 @@ struct RecipesView: View {
         Task { @MainActor in
             selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
         }
+    }
+
+    /// Filtry jednej kategorii jako wiązanie do słownika w `filters` — pusty
+    /// wybór znika ze słownika, żeby `isActive` nie widziało pustych wpisów.
+    private func categoryFilterBinding(for category: RecipesCategory) -> Binding<RecipeCategoryFilter> {
+        Binding(
+            get: { filters.categoryFilters[category] ?? RecipeCategoryFilter() },
+            set: { newValue in
+                withAnimation(.smooth(duration: 0.25)) {
+                    filters.categoryFilters[category] = newValue.isActive ? newValue : nil
+                }
+            }
+        )
     }
 
     /// Stable ordering for the featured carousel.
@@ -691,6 +736,7 @@ struct RecipesView: View {
     /// jest bindingiem `.scrollPosition`, więc sam zapis wystarcza — dopóki
     /// wybrany przepis nadal jest na liście, zostawiamy pozycję nietkniętą.
     private func resyncFeaturedSelectionIfNeeded() {
+        featuredOrder = rankedFeaturedRecipes(from: visibleRecipes).map(\.id)
         let ids = featuredRecipes.map(\.id)
         if let current = featuredSelectionId, ids.contains(current) { return }
         featuredSelectionId = ids.first
@@ -723,16 +769,30 @@ struct EditorialRecipesPageDots: View {
 
 // MARK: - Category sheet
 
-// Sheet pełnoekranowy z listą przepisów w danej kategorii. Source:
-// recipes-v2.jsx W3SectionSheet — header z kolorowym pionem, search,
-// scrollowana lista RowC.
+// Arkusz z całą kategorią (chevron przy sekcji). Stoi na tych samych
+// klockach, co wybór przepisu do planu (`RecipeListKit.swift`): nagłówek
+// z kafelkiem kategorii i liczbą przepisów, szukanie, karta kontekstu,
+// wiersze `EditorialRecipeRow`; filtry kategorii pod przyciskiem w nagłówku. Wcześniej miał
+// własny nagłówek z kolorowym pionem i poświatą, niższe pole szukania bez
+// krzyżyka i podpowiedź „Szukaj w śniadania”.
 private struct RecipeCategorySheetView: View {
     let category: RecipesCategory
+    /// Przepisy kategorii po dopasowaniu i WSZYSTKICH filtrach, także tej
+    /// kategorii — to, co pokazuje lista.
     let recipes: [Recipe]
-    let hasActiveFilters: Bool
-    /// Czy pula przyszła już zawężona dietą / alergenami. Zmienia tylko
-    /// treść notki — dopasowanie zdejmuje się na ekranie listy, nie tutaj.
-    let isPersonalized: Bool
+    /// Przepisy kategorii przed jej własnymi filtrami — do arkusza filtrów
+    /// i do „24 z 132” w nagłówku.
+    let pool: [Recipe]
+    @Binding var categoryFilter: RecipeCategoryFilter
+    /// Co działa z arkusza „Filtry” (filtry WSZYSTKICH przepisów) — pusto,
+    /// gdy nic. Opis do karty nad listą (`RecipeFilterOptions.summaryLabels`).
+    let filterLabels: [String]
+    /// Dieta i alergeny z Ustawień — do karty nad listą.
+    let personalization: RecipePersonalization
+    /// Ile przepisów kategorii ukrywa dieta i alergeny (0 = nic albo
+    /// dopasowanie wyłączone). Zmienia tylko kartę — dopasowanie zdejmuje się
+    /// w Filtrach, nie tutaj.
+    let hiddenByPersonalization: Int
     let onClearFilters: () -> Void
 
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
@@ -741,18 +801,24 @@ private struct RecipeCategorySheetView: View {
 
     @State private var searchText = ""
     @State private var selectedRecipe: Recipe?
+    @State private var isFilterSheetPresented = false
 
     private var accent: Color { RecipeAccent.accent(for: category) }
+    private var hasActiveFilters: Bool { !filterLabels.isEmpty }
+
+    private var trimmedSearch: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     private var filteredRecipes: [Recipe] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = trimmedSearch
         let source: [Recipe]
-        if trimmed.isEmpty {
+        if query.isEmpty {
             source = recipes
         } else {
             source = recipes.filter {
-                $0.name.localizedCaseInsensitiveContains(trimmed) ||
-                $0.description.localizedCaseInsensitiveContains(trimmed)
+                $0.name.localizedCaseInsensitiveContains(query) ||
+                $0.description.localizedCaseInsensitiveContains(query)
             }
         }
         return source.sorted { lhs, rhs in
@@ -762,56 +828,60 @@ private struct RecipeCategorySheetView: View {
     }
 
     var body: some View {
+        let rows = filteredRecipes
+
         ZStack(alignment: .top) {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                    .padding(.horizontal, 20)
-                    // Uchwyt rysuje `presentationDragIndicator` z
-                    // `dashboardLiquidSheet()`; własna kapsułka dokładała nad
-                    // nim drugą belkę. Odstęp jak w pozostałych arkuszach.
-                    .padding(.top, 18)
-                    .padding(.bottom, 14)
-
-                sheetSearchPill
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, (hasActiveFilters || isPersonalized) ? 14 : 12)
-
-                if hasActiveFilters || isPersonalized {
-                    activeFiltersNote
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
+            VStack(spacing: 0) {
+                // Przypięta góra: nagłówek i szukanie. Uchwyt rysuje
+                // `presentationDragIndicator` z `dashboardLiquidSheet()`.
+                // Filtry kategorii tylko pod przyciskiem w nagłówku — pigułki
+                // pod szukaniem zniknęły w rundzie 10 („od tego mamy filtry”).
+                RecipeListSheetTop(
+                    searchPrompt: RecipesConstants.searchPrompt(for: category),
+                    searchText: $searchText
+                ) {
+                    EditorialSheetHeader(
+                        eyebrow: RecipeAccent.eyebrow(for: category),
+                        title: RecipesConstants.displayName(for: category),
+                        icon: RecipesConstants.icon(for: category),
+                        accent: accent,
+                        subtitle: countLine(shown: rows.count),
+                        onClose: { dismiss() }
+                    ) {
+                        RecipeListFilterButton(count: categoryFilter.activeCount, accent: accent) {
+                            isFilterSheetPresented = true
+                        }
+                    }
                 }
 
-                if filteredRecipes.isEmpty {
-                    emptyState
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                    Spacer(minLength: 0)
-                } else {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { idx, recipe in
-                                EditorialRecipeRow(
-                                    recipe: recipe,
-                                    action: { openDetail(for: recipe) }
-                                )
+                ScrollView {
+                    VStack(spacing: 0) {
+                        let context = contextRows
+                        if !context.isEmpty {
+                            RecipeListContextCard(rows: context)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 8)
+                        }
 
-                                if idx < filteredRecipes.count - 1 {
-                                    Rectangle()
-                                        .fill(Color.scRule(scheme))
-                                        .frame(height: 1)
-                                        .padding(.leading, 20 + 48 + 14)
-                                        .padding(.trailing, 20)
-                                }
+                        if rows.isEmpty {
+                            emptyState
+                                .padding(.horizontal, 20)
+                                .padding(.top, 4)
+                        } else {
+                            RecipeRowStack(recipes: rows, accent: accent) { recipe in
+                                openDetail(for: recipe)
                             }
                         }
-                        .padding(.bottom, 32)
                     }
-                    .scrollIndicators(.hidden)
+                    .padding(.top, 8)
+                    .padding(.bottom, 32)
                 }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .scScrollEdgeFade()
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -820,18 +890,21 @@ private struct RecipeCategorySheetView: View {
         // zamiast wyrzucać użytkownika na sam ekran Przepisów.
         .sheet(item: $selectedRecipe) { selected in
             RecipeDetailView(
-                recipe: selected,
-                onToggleFavorite: {
-                    Task {
-                        await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
-                        selectedRecipe = recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
-                    }
+                // Jak na Przepisach: żywy przepis z katalogu i zapis wartości.
+                recipe: recipeCatalogStore.recipes.first(where: { $0.id == selected.id }) ?? selected,
+                onSetFavourite: { value in
+                    Task { await recipeCatalogStore.setFavourite(recipeId: selected.id, to: value) }
                 },
                 onClose: { selectedRecipe = nil },
                 onAddedToPlan: { _, _ in selectedRecipe = nil }
             )
             .presentationDetents([.large])
-            .dashboardLiquidSheet()
+            .dashboardLiquidSheet(cornerRadius: 40)
+        }
+        .sheet(isPresented: $isFilterSheetPresented) {
+            RecipeCategoryFilterSheet(category: category, recipes: pool, filter: $categoryFilter)
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
         }
     }
 
@@ -841,130 +914,74 @@ private struct RecipeCategorySheetView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Capsule(style: .continuous)
-                .fill(accent)
-                .frame(width: 5, height: 36)
-                .shadow(color: accent.opacity(scheme == .dark ? 0.55 : 0.32), radius: 10, x: 0, y: 0)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(RecipeAccent.eyebrow(for: category).uppercased())
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(accent)
-
-                Text(RecipesConstants.displayName(for: category))
-                    .font(.system(size: 24, weight: .bold))
-                    .tracking(-0.4)
-                    .foregroundStyle(Color.scLabel(scheme))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            SCSheetCloseButton { dismiss() }
-        }
+    /// „132 przepisy”, a gdy filtry kategorii albo szukanie zawężają — „24 z 132
+    /// przepisów” (po „z” dopełniacz).
+    private func countLine(shown: Int) -> String {
+        let total = pool.count
+        let count = shown == total
+            ? PolishPlural.recipes(total)
+            : "\(shown) z \(total) \(total == 1 ? "przepisu" : "przepisów")"
+        guard let diet = dietNote else { return count }
+        return count + " · " + diet
     }
 
-    // Bez tej notki znikające przepisy wyglądałyby na brakujące dane, a nie
-    // na skutek filtra ustawionego ekran wyżej.
-    private var activeFiltersNote: some View {
-        HStack(spacing: 8) {
-            Image(systemName: hasActiveFilters ? "line.3.horizontal.decrease" : "wand.and.stars")
-                .font(.system(size: 11, weight: .bold))
-
-            Text(activeFiltersNoteTitle)
-                .font(.system(size: 12, weight: .semibold))
-
-            Spacer(minLength: 8)
-
-            if hasActiveFilters {
-                Button(action: onClearFilters) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .heavy))
-                        .frame(width: 22, height: 22)
-                        .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.22 : 0.14)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Wyczyść filtry")
-            }
+    /// Dieta z Ustawień jako dopisek w podtytule nagłówka („dieta
+    /// wegetariańska”), a nie osobna karta nad listą — runda 12, Rafał:
+    /// „usuń info o dieta, wrzuć to jakoś inaczej”. `nil`, gdy dopasowanie
+    /// niczego w tej kategorii nie ukrywa.
+    private var dietNote: String? {
+        guard personalization.isEnabled, personalization.restrictsCatalog,
+              hiddenByPersonalization > 0 else { return nil }
+        if personalization.diet != .none {
+            return "dieta " + personalization.diet.title.lowercased()
         }
-        .foregroundStyle(SCPalette.terracotta)
-        .padding(.leading, 12)
-        .padding(.trailing, 8)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.09))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(SCPalette.terracotta.opacity(0.28), lineWidth: 1)
-        )
+        return "bez Twoich alergenów"
     }
 
-    private var activeFiltersNoteTitle: String {
-        switch (hasActiveFilters, isPersonalized) {
-        case (true, true):   return "Lista zawężona filtrami i Twoją dietą"
-        case (true, false):  return "Lista zawężona filtrami"
-        default:             return "Lista zawężona Twoją dietą"
-        }
+    // MARK: - Karta kontekstu
+
+    /// Co zawęża tę listę spoza arkusza: dieta z Ustawień i filtry
+    /// z Przepisów. Bez tego znikające przepisy wyglądałyby na brakujące
+    /// dane, a nie na skutek ustawienia z innego ekranu.
+    private var contextRows: [RecipeListContextCard.Row] {
+        // Dieta mieszka w podtytule nagłówka (`dietNote`); karta mówi już
+        // tylko o filtrach z Przepisów, które da się stąd zdjąć.
+        let rows: [RecipeListContextCard.Row?] = [
+            .filters(filterLabels, onClear: onClearFilters)
+        ]
+        return rows.compactMap { $0 }
     }
 
-    private var sheetSearchPill: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
+    // MARK: - Pusty stan
 
-            TextField(text: $searchText) {
-                Text("Szukaj w \(RecipesConstants.displayName(for: category).lowercased())")
-                    .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
-            }
-            .font(.system(size: 15))
-            .tracking(-0.2)
-            .foregroundStyle(Color.scLabel(scheme))
-            .submitLabel(.search)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            Capsule(style: .continuous).fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-    }
-
+    /// Co opróżniło listę i jak to zdjąć — ten sam układ, co w wyborze
+    /// przepisu do planu (`RecipeListEmptyState`).
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.scMuted(scheme))
-
-            Text("Brak wyników")
-                .font(.system(size: 16, weight: .heavy))
-                .tracking(-0.3)
-                .foregroundStyle(Color.scLabel(scheme))
-
-            Text((hasActiveFilters || isPersonalized) && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                 ? "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoje preferencje."
-                 : "Spróbuj innej frazy wyszukiwania.")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.scMuted(scheme))
-                .multilineTextAlignment(.center)
+        var actions: [RecipeListEmptyState.Action] = []
+        if categoryFilter.isActive {
+            actions.append(.init(title: "Wyczyść filtry kategorii") {
+                withAnimation(.smooth(duration: 0.2)) { categoryFilter = RecipeCategoryFilter() }
+            })
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+        if hasActiveFilters {
+            actions.append(.init(title: "Wyczyść filtry z Przepisów", run: onClearFilters))
+        }
+
+        if !trimmedSearch.isEmpty {
+            return RecipeListEmptyState(
+                icon: "magnifyingglass",
+                accent: accent,
+                title: "Brak wyników",
+                message: "Nic w tej kategorii nie pasuje do frazy. Spróbuj innej.",
+                actions: actions
+            )
+        }
+        return RecipeListEmptyState(
+            icon: "line.3.horizontal.decrease",
+            accent: accent,
+            title: "Nic nie pasuje",
+            message: "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoją dietę.",
+            actions: actions
         )
     }
 }

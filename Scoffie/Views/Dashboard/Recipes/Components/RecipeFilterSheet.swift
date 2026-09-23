@@ -1,444 +1,609 @@
 import SwiftUI
 
 // Arkusz „Filtry” otwierany z przycisku obok wyszukiwarki na Przepisach.
+// Źródło: Claude Design, „Scoffie - Przepisy v3 - Filtry.html”, sekcja
+// „Filtry · wersja finalna” (`FFSheet` w `components/filtry-final.jsx`).
 //
-// Chassis jak w pozostałych arkuszach v2 (Ustawienia, Produkty): warstwa
-// `SCPageBackground`, `EditorialSheetHeader` (eyebrow + tytuł + xmark),
-// karty `scTileBg` z hairline'em `scTileStroke`, chipy w terakocie.
+// Nagłówek stoi przypięty nad przewijaną treścią (jak w każdym arkuszu,
+// `scScrollEdgeFade`). Pod nim: zasięg („Wszystkie przepisy — działają
+// w każdej kategorii”), dopasowanie do profilu, czas i trudność, kalorie
+// (wykres rozkładu, który sam jest suwakiem), dieta i cechy (kafelki 2 × 3
+// ze zdjęciem dania i liczbą przepisów), wykluczanie składników (osobny
+// arkusz). Na dole wspólna stopka: ile zostaje łącznie i w każdej kategorii,
+// i „Pokaż”.
 //
-// Zmiany idą na kopię roboczą (`draft`) — dopiero „Pokaż przepisy” zapisuje
-// je do bindingu widoku. Dzięki temu zamknięcie arkusza gestem nie zostawia
-// listy w połowicznie przefiltrowanym stanie, a licznik w stopce może na
-// żywo pokazywać, ile przepisów przetrwa wybór.
+// Zmiany idą na kopię roboczą (`draft`, `fitDraft`) — dopiero „Pokaż”
+// zapisuje je do Przepisów. Zamknięcie arkusza gestem nie zostawia listy
+// w połowie przefiltrowanej, a liczby w kapsule pokazują na żywo, co
+// zobaczy się po „Pokaż”. Arkusze kategorii i szukania piszą do tej samej
+// kopii roboczej.
 struct RecipeFilterSheet: View {
     @Binding var filters: RecipeFilterOptions
+    /// Przełącznik „Dopasowane do Ciebie” — ten sam, co różdżka na Przepisach.
+    @Binding var isPersonalizationEnabled: Bool
 
-    /// Przepisy po zastosowaniu wyszukiwarki, ale PRZED filtrami — na nich
-    /// liczony jest podgląd wyniku w stopce.
-    let recipes: [Recipe]
+    /// Profil z Ustawień (dieta, alergeny, cel). `isEnabled` nie ma tu
+    /// znaczenia — o nim decyduje `fitDraft`.
+    let personalization: RecipePersonalization
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var draft: RecipeFilterOptions
+    @State private var fitDraft: Bool
+    @State private var indexBox: IndexBox
+    @State private var isExcludePresented = false
 
-    init(filters: Binding<RecipeFilterOptions>, recipes: [Recipe]) {
+    /// Przepisy po wyszukiwarce Przepisów, ale PRZED dopasowaniem i filtrami.
+    private let recipes: [Recipe]
+
+    init(
+        filters: Binding<RecipeFilterOptions>,
+        isPersonalizationEnabled: Binding<Bool>,
+        recipes: [Recipe],
+        personalization: RecipePersonalization
+    ) {
         self._filters = filters
+        self._isPersonalizationEnabled = isPersonalizationEnabled
         self.recipes = recipes
+        self.personalization = personalization
         self._draft = State(initialValue: filters.wrappedValue)
+        self._fitDraft = State(initialValue: isPersonalizationEnabled.wrappedValue)
+        self._indexBox = State(initialValue: IndexBox())
     }
 
-    private var matchCount: Int {
-        draft.apply(to: recipes).count
+    /// Indeks liczony leniwie, raz na otwarcie arkusza. Nie w `init`: ten
+    /// odpala się przy KAŻDYM przerysowaniu Przepisów pod arkuszem, a
+    /// `State(initialValue:)` i tak wyrzuca wszystko poza pierwszą wartością —
+    /// pięćset przepisów liczyłoby się na darmo.
+    private var index: RecipeFilterIndex {
+        if let index = indexBox.index { return index }
+        let index = RecipeFilterIndex(recipes: recipes, personalization: personalization)
+        indexBox.index = index
+        return index
     }
+
+    /// Zdjęcia kafelków Diety i Cech — tak samo leniwie i raz na otwarcie.
+    /// Dania ukryte przez profil (np. z alergenem z Ustawień) biorą się
+    /// dopiero, gdy nic innego nie pasuje — niezależnie od przełącznika
+    /// „Dopasowane do Ciebie”, żeby zdjęcie nie zmieniało się z nim.
+    private var covers: RecipeFilterCovers {
+        if let covers = indexBox.covers { return covers }
+        let entries = index.entries
+        let covers = RecipeFilterCovers(recipes: recipes) { entries[$0].hiddenByProfile }
+        indexBox.covers = covers
+        return covers
+    }
+
+    // MARK: - Stan pochodny
+
+    private var resultCount: Int { index.count(draft, fit: fitDraft) }
+
+    private var lockedDiets: Set<RecipeDietFilter> {
+        fitDraft ? RecipeDietFilter.lockedByProfile(personalization) : []
+    }
+
+    /// Pole celu na linijce kalorii: od śniadania (25 % dnia) do obiadu
+    /// (40 %) — te same udziały, którymi cel porządkuje katalog.
+    private var goalZone: ClosedRange<Int>? {
+        guard fitDraft, personalization.hasAnyPreference else { return nil }
+        let daily = Double(personalization.dailyCalorieGoal)
+        let lower = Self.roundedToStep(daily * personalization.calorieShare(for: .breakfast))
+        let upper = Self.roundedToStep(daily * personalization.calorieShare(for: .lunch))
+        guard upper > lower else { return nil }
+        return lower...upper
+    }
+
+    private static func roundedToStep(_ kcal: Double) -> Int {
+        let step = Double(RecipeFilterOptions.calorieStep)
+        return Int((kcal / step).rounded() * step)
+    }
+
+    /// Z profilu, a nie ma własnego kafelka w Diecie: pozostałe alergeny
+    /// i diety spoza kafelków. Stoją z kłódką na górze listy działów.
+    private var profileChips: [RecipeFilterChipLine.Chip] {
+        guard fitDraft else { return [] }
+        var chips: [RecipeFilterChipLine.Chip] = []
+        switch personalization.diet {
+        case .pescatarian, .paleo, .highProtein:
+            chips.append(.init(id: "diet", title: personalization.diet.title, locked: true))
+        default:
+            break
+        }
+        for allergen in Allergen.allCases
+        where personalization.avoidedAllergens.contains(allergen) && allergen != .lactose && allergen != .gluten {
+            chips.append(.init(id: allergen.rawValue, title: Self.chipTitle(for: allergen), locked: true))
+        }
+        return chips
+    }
+
+    /// Nazwa alergenu na chip — bez nawiasu, który w Ustawieniach tłumaczy,
+    /// o co chodzi, a na chipie tylko go wydłuża.
+    private static func chipTitle(for allergen: Allergen) -> String {
+        switch allergen {
+        case .milk: return "Białko mleka"
+        default:    return allergen.title.components(separatedBy: " (").first ?? allergen.title
+        }
+    }
+
+    // MARK: - Body
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        EditorialSheetHeader(
-                            eyebrow: "Filtry",
-                            title: "Zawęź przepisy"
-                        ) {
-                            dismiss()
-                        }
-
-                        categorySection
-                        difficultySection
-                        prepTimeSection
-                        caloriesSection
-                        nutritionSection
-                        favouritesSection
-                        thermomixSection
-                    }
+                // Przypięty i taki sam przez cały czas. Był zwijany do samego
+                // tytułu na środku — przy przewijaniu „Filtry” przeskakiwały
+                // z lewej na środek, a Rafał chciał ich tam, gdzie zawsze.
+                header
                     .padding(.horizontal, 20)
                     .padding(.top, 18)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 12)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        fitRow
+                            .padding(.top, 6)
+                        timeAndDifficultySection
+                        caloriesSection
+                        dietSection
+                        traitsSection
+                        excludeSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
                 .scrollIndicators(.hidden)
-
-                footer
+                // Treść gaśnie, gdy wjeżdża pod nagłówek — wspólny „cień w dół”.
+                .scScrollEdgeFade()
+                // Wspólna stopka arkuszy (`scSheetFooter`): kryjąca płyta pod
+                // liczbami i „Pokaż”, przewijane sekcje giną w przejściu nad nią.
+                .scSheetFooter { footer }
             }
+        }
+        .animation(.smooth(duration: 0.22), value: draft.activeCount > 0)
+        .sensoryFeedback(.selection, trigger: draft.diets)
+        .sensoryFeedback(.selection, trigger: draft.traits)
+        .sensoryFeedback(.impact(weight: .light), trigger: fitDraft)
+        .sheet(isPresented: $isExcludePresented) {
+            RecipeExcludeSheet(
+                index: index,
+                filters: $draft,
+                fit: fitDraft,
+                profileChips: profileChips
+            )
+            .presentationDetents([.large])
+            .dashboardLiquidSheet()
         }
     }
 
-    // MARK: - Sekcje
+    // MARK: - Nagłówek
 
-    private var categorySection: some View {
-        section("Kategoria") {
-            RecipeFilterChipFlow {
-                ForEach(RecipeFilterOptions.selectableCategories) { category in
-                    RecipeFilterChip(
-                        title: RecipesConstants.displayName(for: category),
-                        icon: RecipesConstants.icon(for: category),
-                        accent: RecipeAccent.accent(for: category),
-                        isSelected: draft.categories.contains(category)
-                    ) {
-                        withAnimation(.smooth(duration: 0.18)) {
-                            draft.toggle(category: category)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var difficultySection: some View {
-        section("Trudność") {
-            RecipeFilterChipFlow {
-                ForEach(Difficulty.allCases) { difficulty in
-                    RecipeFilterChip(
-                        title: difficulty.rawValue,
-                        icon: RecipesConstants.icon(for: difficulty),
-                        accent: RecipeAccent.accent(for: difficulty),
-                        isSelected: draft.difficulties.contains(difficulty)
-                    ) {
-                        withAnimation(.smooth(duration: 0.18)) {
-                            draft.toggle(difficulty: difficulty)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var prepTimeSection: some View {
-        section("Czas przygotowania") {
-            RecipeFilterChipFlow {
-                ForEach(RecipeFilterOptions.prepTimeChoices, id: \.self) { minutes in
-                    RecipeFilterChip(
-                        title: "do \(minutes) min",
-                        icon: "clock",
-                        isSelected: draft.maxPrepTimeMinutes == minutes
-                    ) {
-                        withAnimation(.smooth(duration: 0.18)) {
-                            draft.toggle(maxPrepTime: minutes)
-                        }
-                    }
-                }
-
-                RecipeFilterChip(
-                    title: "Bez limitu",
-                    isSelected: draft.maxPrepTimeMinutes == nil
-                ) {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        draft.maxPrepTimeMinutes = nil
-                    }
-                }
-            }
-        }
-    }
-
-    private var caloriesSection: some View {
-        section("Kalorie na porcję") {
-            VStack(alignment: .leading, spacing: 10) {
-                RecipeFilterChipFlow {
-                    ForEach(RecipeFilterOptions.calorieChoices, id: \.self) { kcal in
-                        RecipeFilterChip(
-                            title: "do \(kcal) kcal",
-                            icon: "flame",
-                            isSelected: draft.maxCaloriesPerServing == kcal
-                        ) {
-                            withAnimation(.smooth(duration: 0.18)) {
-                                draft.toggle(maxCalories: kcal)
-                            }
-                        }
-                    }
-
-                    RecipeFilterChip(
-                        title: "Bez limitu",
-                        isSelected: draft.maxCaloriesPerServing == nil
-                    ) {
-                        withAnimation(.smooth(duration: 0.18)) {
-                            draft.maxCaloriesPerServing = nil
-                        }
-                    }
-                }
-
-                if draft.maxCaloriesPerServing != nil {
-                    Text("Przepisy bez policzonych makr zostają na liście.")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private var nutritionSection: some View {
-        section("Profil odżywczy") {
-            VStack(alignment: .leading, spacing: 10) {
-                RecipeFilterChipFlow {
-                    ForEach(RecipeNutritionTag.allCases) { tag in
-                        RecipeFilterChip(
-                            title: tag.title,
-                            icon: tag.icon,
-                            accent: RecipeAccent.accent(for: tag),
-                            isSelected: draft.nutritionTags.contains(tag)
-                        ) {
-                            withAnimation(.smooth(duration: 0.18)) {
-                                draft.toggle(nutritionTag: tag)
-                            }
-                        }
-                    }
-                }
-
-                if !draft.nutritionTags.isEmpty {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Na porcję: " + draft.orderedNutritionTags
-                            .map(\.thresholdDescription)
-                            .joined(separator: " · "))
-
-                        Text("Przepisy bez policzonych makr nie wchodzą.")
-                    }
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private var favouritesSection: some View {
-        section("Ulubione") {
-            Button {
-                withAnimation(.smooth(duration: 0.18)) {
-                    draft.favouritesOnly.toggle()
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: draft.favouritesOnly ? "heart.fill" : "heart")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Tylko ulubione")
-                            .font(.system(size: 14.5, weight: .semibold))
-                            .foregroundStyle(Color.scLabel(scheme))
-
-                        Text("Pokaż wyłącznie przepisy z serduszkiem")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.scMuted(scheme))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    RecipeFilterToggleIndicator(isOn: draft.favouritesOnly)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(draft.favouritesOnly ? [.isSelected, .isButton] : .isButton)
-        }
-    }
-
-    private var thermomixSection: some View {
-        section("Thermomix") {
-            Button {
-                withAnimation(.smooth(duration: 0.18)) {
-                    draft.thermomixOnly.toggle()
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "cooktop.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(SCPalette.sage)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(SCPalette.sage.opacity(scheme == .dark ? 0.20 : 0.12)))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Tylko przepisy na Thermomix")
-                            .font(.system(size: 14.5, weight: .semibold))
-                            .foregroundStyle(Color.scLabel(scheme))
-
-                        Text("Przepisy z odpowiednikiem w Cookidoo")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.scMuted(scheme))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    RecipeFilterToggleIndicator(isOn: draft.thermomixOnly)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(draft.thermomixOnly ? [.isSelected, .isButton] : .isButton)
-        }
-    }
-
-    // MARK: - Stopka
-
-    private var footer: some View {
-        HStack(spacing: 12) {
-            Button {
-                withAnimation(.smooth(duration: 0.18)) {
-                    draft.reset()
-                }
-            } label: {
-                Text("Wyczyść")
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.1)
-                    .foregroundStyle(draft.isActive ? Color.scLabel(scheme) : Color.scFaint(scheme))
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
-                    .background(Capsule().fill(Color.scChipBg(scheme)))
-                    .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .disabled(!draft.isActive)
-
-            Button {
-                filters = draft
-                dismiss()
-            } label: {
-                Text(applyTitle)
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.1)
-                    .foregroundStyle(SCPalette.terracotta)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .scSoftCapsule()
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(
-            Rectangle()
-                .fill(Color.scCanvas(scheme).opacity(0.94))
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .bottom)
+    private var header: some View {
+        RecipeFilterHeader(
+            icon: "slider.horizontal.3",
+            eyebrow: "Przepisy",
+            title: "Filtry",
+            scope: "Działają we wszystkich kategoriach",
+            canClear: draft.activeCount > 0,
+            onClear: { clearAll() },
+            onClose: { dismiss() }
         )
     }
 
-    private var applyTitle: String {
-        switch matchCount {
-        case 0:  return "Brak wyników"
-        case 1:  return "Pokaż 1 przepis"
-        default: return "Pokaż \(matchCount) \(Self.recipeNoun(for: matchCount))"
+    // MARK: - Dopasowanie
+
+    /// Co dopasowanie bierze pod uwagę — „Wegetariańska · bez: gluten,
+    /// orzechy · cel: schudnąć”. Przejęte z arkusza, który otwierała różdżka
+    /// na Przepisach: przełącznik jest teraz tylko tutaj, więc tu musi też
+    /// powiedzieć, co przełącza.
+    private var profileSummary: String {
+        var parts: [String] = []
+        if personalization.diet != .none {
+            parts.append(personalization.diet.title)
+        }
+        let allergens = Allergen.allCases.filter { personalization.avoidedAllergens.contains($0) }
+        if !allergens.isEmpty {
+            let names = allergens.map { $0.pickerTitle.lowercased() }
+            let shown = names.prefix(2).joined(separator: ", ")
+            parts.append(names.count > 2 ? "bez: \(shown) +\(names.count - 2)" : "bez: \(shown)")
+        }
+        if personalization.ranksCatalog {
+            parts.append("cel: \(personalization.goal.shortTitle.lowercased())")
+        }
+        return parts.isEmpty ? "Na podstawie Twojego profilu" : parts.joined(separator: " · ")
+    }
+
+    private var fitRow: some View {
+        let canFit = personalization.hasAnyPreference
+        let isOn = fitDraft && canFit
+        let hidden = index.profileHiddenCount
+
+        return Button {
+            withAnimation(.smooth(duration: 0.22)) { fitDraft.toggle() }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(SCPalette.sage)
+                    .frame(width: 22)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Dopasowane do Ciebie")
+                        .font(.system(size: 15, weight: .semibold))
+                        .tracking(-0.3)
+                        .foregroundStyle(Color.scLabel(scheme))
+                    Text(canFit ? profileSummary : "Ustaw dietę i cel w Ustawieniach")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if isOn, hidden > 0 {
+                        (Text("ukrywa ")
+                            + Text(verbatim: "\(hidden)").fontWeight(.semibold)
+                            + Text(verbatim: " \(PolishPlural.recipesNoun(hidden))"))
+                            .font(.system(size: 12))
+                            .monospacedDigit()
+                            .foregroundStyle(SCPalette.sage)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                RecipeFilterToggleIndicator(isOn: isOn, accent: SCPalette.sage)
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isOn ? SCPalette.sage.opacity(scheme == .dark ? 0.10 : 0.08) : Color.scTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(isOn ? SCPalette.sage.opacity(0.26) : Color.scTileStroke(scheme), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .disabled(!canFit)
+        .opacity(canFit ? 1 : 0.6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Dopasowane do Ciebie")
+        .accessibilityValue(isOn ? "włączone, \(profileSummary)" : "wyłączone")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: - Czas, trudność, kalorie
+
+    private static let timeItems: [RecipeFilterMenuTile<Int?>.Item] =
+        [.init(value: nil, title: "Dowolny")]
+        + RecipeFilterOptions.prepTimeChoices.map { minutes in
+            RecipeFilterMenuTile<Int?>.Item(value: minutes, title: "do \(minutes) min")
+        }
+
+    private static let difficultyItems: [RecipeFilterMenuTile<Difficulty?>.Item] = [
+        .init(value: nil, title: "Dowolna"),
+        .init(value: .easy, title: "Łatwa"),
+        .init(value: .medium, title: "Średnia"),
+        .init(value: .hard, title: "Trudna")
+    ]
+
+    /// Czas i trudność w jednym rzędzie — dwie krótkie decyzje, które
+    /// osobno zajmowały dwie pełne sekcje arkusza.
+    private var timeAndDifficultySection: some View {
+        RecipeFilterSection(title: "Czas i trudność") {
+            HStack(spacing: 8) {
+                RecipeFilterMenuTile(
+                    title: "Czas",
+                    icon: "clock",
+                    items: Self.timeItems,
+                    selection: $draft.maxPrepTimeMinutes
+                )
+                RecipeFilterMenuTile(
+                    title: "Trudność",
+                    icon: "chart.bar",
+                    items: Self.difficultyItems,
+                    selection: $draft.difficulty
+                )
+            }
         }
     }
 
-    /// Polska odmiana rzeczownika po liczebniku: 2–4 → „przepisy”,
-    /// 12–14 i reszta → „przepisów”.
-    private static func recipeNoun(for count: Int) -> String {
-        let lastTwo = count % 100
-        let last = count % 10
-        if (2...4).contains(last), !(12...14).contains(lastTwo) { return "przepisy" }
-        return "przepisów"
+    /// Limit stoi dużą liczbą na górze karty wykresu — etykieta sekcji go
+    /// nie powtarza.
+    private var caloriesSection: some View {
+        RecipeFilterSection(title: "Kalorie na porcję") {
+            RecipeFilterKcalChart(
+                value: $draft.maxCaloriesPerServing,
+                histogram: index.kcalHistogram(draft, fit: fitDraft),
+                goalZone: goalZone
+            )
+        }
     }
 
-    // MARK: - Chassis sekcji
+    // MARK: - Dieta i cechy
 
-    @ViewBuilder
-    private func section<Content: View>(
-        _ title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: title)
+    private var dietSection: some View {
+        let locked = lockedDiets
+        return RecipeFilterSection(title: "Dieta") {
+            VStack(alignment: .leading, spacing: 10) {
+                RecipeFilterTileGrid(items: RecipeDietFilter.allCases) { diet in
+                    let isLocked = locked.contains(diet)
+                    RecipeFilterOptionTile(
+                        title: diet.title,
+                        count: isLocked ? nil : index.count(adding: diet, to: draft, fit: fitDraft),
+                        mark: isLocked ? .locked : (draft.diets.contains(diet) ? .on : .off),
+                        cover: covers.diets[diet],
+                        icon: diet.tileIcon
+                    ) {
+                        withAnimation(.smooth(duration: 0.18)) { draft.toggle(diet: diet) }
+                    }
+                }
 
-            content()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 14)
+                if !locked.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("Z Twojego profilu · zmienisz w Ustawieniach")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundStyle(Color.scFaint(scheme))
+                    .padding(.horizontal, 6)
+                    .transition(.opacity)
+                }
+            }
+        }
+    }
+
+    private var traitsSection: some View {
+        RecipeFilterSection(title: "Cechy") {
+            RecipeFilterTileGrid(items: RecipeTraitFilter.allCases) { trait in
+                RecipeFilterOptionTile(
+                    title: trait.title,
+                    count: index.count(adding: trait, to: draft, fit: fitDraft),
+                    mark: draft.traits.contains(trait) ? .on : .off,
+                    cover: covers.traits[trait],
+                    icon: trait.tileIcon,
+                    accessibilityDetail: trait.accessibilityDetail
+                ) {
+                    withAnimation(.smooth(duration: 0.18)) { draft.toggle(trait: trait) }
+                }
+            }
+        }
+    }
+
+    // MARK: - Wykluczanie
+
+    /// Jeden kafelek zamiast pola szukania i całej listy działów — ta lista
+    /// rozciągała arkusz na kilka ekranów przewijania. Szukanie, działy
+    /// i „Cofnij” żyją w osobnym arkuszu (`RecipeExcludeSheet`).
+    private var excludeSection: some View {
+        let hidden = index.hiddenCount(by: draft.excludedIngredients, fit: fitDraft)
+        let own = draft.excludedIngredients
+            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+        let chips = profileChips + own.map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.chipTitle) }
+
+        return RecipeFilterSection(title: "Wyklucz składniki") {
+            if hidden > 0 {
+                hiddenLabel(hidden)
+                    .transition(.opacity)
+            }
+        } content: {
+            Button {
+                isExcludePresented = true
+            } label: {
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12))
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Image(systemName: "nosign")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(SCPalette.terracotta)
+                        )
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(excludeTitle(own: own.count, profile: profileChips.count))
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(-0.3)
+                            .foregroundStyle(Color.scLabel(scheme))
+                            .contentTransition(.interpolate)
+
+                        if chips.isEmpty {
+                            Text("Np. papryka, grzyby, kolendra")
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Color.scMuted(scheme))
+                                .padding(.top, 2)
+                        } else {
+                            RecipeFilterChipLine(chips: chips)
+                                .padding(.top, 7)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if !own.isEmpty {
+                        RecipeFilterCountBadge(count: own.count)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.scFaint(scheme))
+                }
+                .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color.scTileBg(scheme))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+                        .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.985))
+            .accessibilityLabel("Wyklucz składniki")
+            .accessibilityValue(chips.isEmpty ? "nic" : chips.map(\.title).joined(separator: ", "))
         }
+        .animation(.smooth(duration: 0.22), value: own)
+        .animation(.smooth(duration: 0.2), value: hidden)
     }
-}
 
-// MARK: - Chip
+    private func excludeTitle(own: Int, profile: Int) -> String {
+        // Liczba stoi w plakietce obok — tytuł jej nie powtarza.
+        if own > 0 { return "Wykluczone składniki" }
+        return profile > 0 ? "Z Twojego profilu" : "Nic nie wykluczasz"
+    }
 
-// Zaznaczony chip dostaje pełny akcent (gradient + biały tekst), niezaznaczony
-// siedzi na `scChipBg` — ten sam język co chipy alergenów w Ustawieniach.
-struct RecipeFilterChip: View {
-    let title: String
-    var icon: String? = nil
-    var accent: Color = SCPalette.terracotta
-    let isSelected: Bool
-    let action: () -> Void
+    private func hiddenLabel(_ count: Int) -> some View {
+        (Text("ukrywa ")
+            + Text(verbatim: "\(count)").fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme))
+            + Text(verbatim: " \(PolishPlural.recipesNoun(count))"))
+            .monospacedDigit()
+    }
 
-    @Environment(\.colorScheme) private var scheme
+    // MARK: - Stopka
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .bold))
+    private var footer: some View {
+        let count = resultCount
+        let byCategory = index.countsByCategory(draft, fit: fitDraft)
+
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(verbatim: "\(count)")
+                        .font(.system(size: 15, weight: .bold))
+                        .tracking(-0.3)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .contentTransition(.numericText(value: Double(count)))
+
+                    Text(verbatim: "z \(index.total) \(index.total == 1 ? "przepisu" : "przepisów")")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .lineLimit(1)
                 }
 
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(-0.1)
-                    .lineLimit(1)
+                RecipeFilterCategorySplit(counts: byCategory, totals: index.totalsByCategory)
+                    .padding(.top, 7)
             }
-            .foregroundStyle(isSelected ? .white : Color.scLabel(scheme))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(
-                    isSelected
-                        ? AnyShapeStyle(
-                            LinearGradient(
-                                colors: [accent, accent.mix(black: 0.18)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        : AnyShapeStyle(Color.scChipBg(scheme))
-                )
-            )
-            .overlay(
-                Capsule().stroke(
-                    isSelected ? accent.opacity(0.35) : Color.scTileStroke(scheme),
-                    lineWidth: 1
-                )
-            )
-            .shadow(color: accent.opacity(isSelected ? 0.20 : 0), radius: 6, x: 0, y: 3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.smooth(duration: 0.3), value: count)
+            .animation(.smooth(duration: 0.3), value: byCategory)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(footerAccessibilityLabel(count: count, byCategory: byCategory))
+
+            RecipeFilterFooterButton(title: "Pokaż", isEnabled: count > 0, action: apply)
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+        .padding(.leading, 4)
+    }
+
+    private func footerAccessibilityLabel(count: Int, byCategory: [RecipesCategory: Int]) -> String {
+        let split = RecipesCategory.catalogSections
+            .filter { (index.totalsByCategory[$0] ?? 0) > 0 }
+            .map { "\(RecipesConstants.displayName(for: $0)) \(byCategory[$0] ?? 0)" }
+            .joined(separator: ", ")
+        return "Zostaje \(PolishPlural.recipes(count)) z \(index.total). \(split)"
+    }
+
+    // MARK: - Akcje
+
+    /// „Wyczyść” działa od razu — lista pod arkuszem jest czysta bez
+    /// stuknięcia „Pokaż”. Czyści filtry wszystkich przepisów (to piętro);
+    /// filtry kategorii zostają, mają własne „Wyczyść”.
+    private func clearAll() {
+        withAnimation(.smooth(duration: 0.25)) {
+            draft.resetGlobal()
+            filters = draft
+        }
+    }
+
+    private func apply() {
+        filters = draft
+        isPersonalizationEnabled = fitDraft
+        dismiss()
+    }
+
+    /// Pudełko na indeks — klasa, żeby zapamiętanie wyniku w trakcie `body`
+    /// nie było zmianą stanu, która przerysowuje widok.
+    private final class IndexBox {
+        var index: RecipeFilterIndex?
+        var covers: RecipeFilterCovers?
     }
 }
 
-/// Zawijający rząd chipów — ten sam `Layout` co chmura alergenów.
-struct RecipeFilterChipFlow<Content: View>: View {
-    var spacing: CGFloat = 8
-    @ViewBuilder var content: () -> Content
+// MARK: - Ile zostaje w każdej kategorii
+
+/// Cztery paski pod liczbą w kapsule — szerokość paska to wielkość kategorii
+/// w katalogu, wypełnienie to ile w niej zostaje. Pod paskiem sama liczba,
+/// w kolorze kategorii (ten sam, co sekcje na Przepisach).
+private struct RecipeFilterCategorySplit: View {
+    let counts: [RecipesCategory: Int]
+    let totals: [RecipesCategory: Int]
+
+    private static let spacing: CGFloat = 3
+
+    private var categories: [RecipesCategory] {
+        RecipesCategory.catalogSections.filter { (totals[$0] ?? 0) > 0 }
+    }
 
     var body: some View {
-        AllergenChipFlow(spacing: spacing) {
-            content()
+        let visible = categories
+        let sum = visible.reduce(0) { $0 + (totals[$1] ?? 0) }
+
+        GeometryReader { proxy in
+            let usable = max(0, proxy.size.width - Self.spacing * CGFloat(max(visible.count - 1, 0)))
+
+            HStack(alignment: .top, spacing: Self.spacing) {
+                ForEach(visible) { category in
+                    let total = totals[category] ?? 0
+                    let left = counts[category] ?? 0
+                    let width = usable * CGFloat(total) / CGFloat(max(sum, 1))
+                    let accent = RecipeAccent.accent(for: category)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Capsule(style: .continuous)
+                            .fill(accent.opacity(0.2))
+                            .frame(height: 5)
+                            .overlay(alignment: .leading) {
+                                Capsule(style: .continuous)
+                                    .fill(accent)
+                                    .frame(width: left == 0 ? 0 : max(5, width * CGFloat(left) / CGFloat(max(total, 1))))
+                            }
+
+                        Text(verbatim: "\(left)")
+                            .font(.system(size: 11, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(accent)
+                            .contentTransition(.numericText(value: Double(left)))
+                            .fixedSize()
+                    }
+                    .frame(width: width, alignment: .leading)
+                }
+            }
         }
+        .frame(height: 22)
     }
 }
+
+// MARK: - Przełącznik
 
 /// Mały switch-look bez `Toggle` — cały wiersz jest przyciskiem, więc
 /// natywny toggle łapałby gest jako drugi target.
 struct RecipeFilterToggleIndicator: View {
     let isOn: Bool
+    var accent: Color = SCPalette.terracotta
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Capsule()
-            .fill(isOn ? AnyShapeStyle(SCPalette.terracotta) : AnyShapeStyle(Color.scBarTrack(scheme)))
+            .fill(isOn ? AnyShapeStyle(accent) : AnyShapeStyle(Color.scBarTrack(scheme)))
             .frame(width: 44, height: 26)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()
@@ -448,5 +613,34 @@ struct RecipeFilterToggleIndicator: View {
                     .padding(.horizontal, 3)
             }
             .animation(.smooth(duration: 0.18), value: isOn)
+    }
+}
+
+// MARK: - Glify kafelków
+
+/// Glif na kafelku, gdy żaden przepis z tą cechą nie ma zdjęcia.
+private extension RecipeDietFilter {
+    var tileIcon: String {
+        switch self {
+        case .lactoseFree: return "cup.and.saucer.fill"
+        case .vegetarian:  return "leaf.fill"
+        case .vegan:       return "carrot.fill"
+        case .withFish:    return "fish.fill"
+        case .glutenFree:  return "laurel.leading"
+        case .keto:        return "flame.fill"
+        }
+    }
+}
+
+private extension RecipeTraitFilter {
+    var tileIcon: String {
+        switch self {
+        case .highProtein: return "dumbbell.fill"
+        case .lowFat:      return "drop.fill"
+        case .highFiber:   return "leaf"
+        case .lowSalt:     return "aqi.low"
+        case .favourites:  return "heart.fill"
+        case .thermomix:   return "cooktop.fill"
+        }
     }
 }

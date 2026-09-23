@@ -306,9 +306,15 @@ struct DayPager<Content: View>: View {
                     .padding(.bottom, bottomPadding)
             }
             .scrollIndicators(.hidden)
+            // Każdy dzień zaczyna się od góry: przewinięty długi dzień
+            // zostawiał przesunięcie krótkiemu i ten wjeżdżał z podskokiem.
+            .id(Calendar.current.startOfDay(for: animatesSelectionChanges ? displayedDate : selectedDate))
             // Strona dnia jest jedynym przewijaniem na Planie — to ona
             // melduje kierunek, od którego zwija się dolne menu.
             .scTracksTabBarCompaction()
+            // Przewinięte kafle gasną pod paskiem dni zamiast chować się pod
+            // kreską — ten sam cień, co pod nagłówkiem arkusza.
+            .scScrollEdgeFade()
         } else {
             day
                 .padding(.bottom, bottomPadding)
@@ -462,6 +468,13 @@ struct DayPager<Content: View>: View {
             // Nowy dzień startuje z przeciwnej krawędzi, bez animacji —
             // dopiero powrót do zera jest animowany.
             dragOffset = forward ? travel : -travel
+            // Nowy dzień wchodzi do drzewa TERAZ, bez animacji, póki strona
+            // jest niewidoczna. W transakcji wjazdu pełny dzień przechodzący
+            // w pusty (albo odwrotnie) zmieniał wysokość przewijanej treści
+            // w trakcie sprężyny i strona szarpała (Rafał, runda 11).
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { displayedDate = target }
 
             // Data i strona ruszają TYM SAMYM wywołaniem: podkreślenie na
             // pasku dni jedzie dokładnie tak długo, jak wjeżdża strona, więc
@@ -469,7 +482,6 @@ struct DayPager<Content: View>: View {
             // stała poza `withAnimation` i dzień po prostu przeskakiwał.
             withAnimation(Self.enterAnimation) {
                 if movesSelection { selectedDate = target }
-                displayedDate = target
                 dragOffset = 0
                 pageOpacity = 1
             }

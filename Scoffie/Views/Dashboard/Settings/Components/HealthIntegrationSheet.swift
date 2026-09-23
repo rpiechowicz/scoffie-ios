@@ -114,10 +114,7 @@ struct HealthIntegrationSheet: View {
     private var connectSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
+                SCInlineErrorText(errorMessage)
                     .padding(.horizontal, 6)
             }
 
@@ -184,9 +181,17 @@ struct HealthIntegrationSheet: View {
             selectSource(source)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scMuted(scheme))
+                // Źródło jest jedno („nigdy oba” — patrz opis arkusza),
+                // więc wybór pokazuje kółko `SCRadioMark`, jak kafle planów.
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scMuted(scheme))
+
+                    Spacer(minLength: 0)
+
+                    SCRadioMark(isOn: isSelected, size: 18)
+                }
 
                 Text(title)
                     .font(.system(size: 14, weight: .bold))
@@ -200,21 +205,13 @@ struct HealthIntegrationSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected
-                        ? SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)
-                        : Color.scTileBg(scheme))
+            .scChoiceSurface(
+                RoundedRectangle(cornerRadius: 14, style: .continuous),
+                isOn: isSelected,
+                offFill: Color.scTileBg(scheme),
+                style: .tile
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        isSelected
-                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.55 : 0.45)
-                            : Color.scTileStroke(scheme),
-                        lineWidth: isSelected ? 1.4 : 1
-                    )
-            )
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -404,27 +401,13 @@ struct HealthIntegrationSheet: View {
     // MARK: - Wyłączenie
 
     private var disableButton: some View {
-        Button {
+        SCDestructiveButton(
+            title: "Wyłącz integrację",
+            icon: "link.badge.plus",
+            iconRotation: .degrees(45)
+        ) {
             showDisableAlert = true
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "link.badge.plus")
-                    .font(.system(size: 13, weight: .heavy))
-                    .rotationEffect(.degrees(45))
-                Text("Wyłącz integrację")
-                    .font(.system(size: 14, weight: .bold))
-            }
-            .foregroundStyle(Color.red.opacity(0.85))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(
-                Capsule().fill(Color.scChipBg(scheme))
-            )
-            .overlay(
-                Capsule().stroke(Color.red.opacity(0.35), lineWidth: 1)
-            )
         }
-        .buttonStyle(.plain)
         .padding(.top, 8)
     }
 

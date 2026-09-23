@@ -149,7 +149,8 @@ struct AssistantConsentGateView: View {
                     }
                     .padding(.horizontal, SCPageMetrics.horizontal)
                     .padding(.top, 6)
-                    .padding(.bottom, 16)
+                    // Zapas na cień stopki (`SCEdgeShade`), który leży na treści.
+                    .padding(.bottom, SCEdgeShade.bottomHeight)
                 }
                 .scrollIndicators(.hidden)
             }
@@ -273,8 +274,8 @@ struct AssistantConsentGateView: View {
         AssistantGroup {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Co wysyłamy do modelu")
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(0.7)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.sage(scheme))
                 VStack(alignment: .leading, spacing: 6) {
@@ -300,8 +301,8 @@ struct AssistantConsentGateView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("Czego nie wysyłamy")
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(0.7)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.faint(scheme))
                 Text(Self.notSentItems.joined(separator: " · "))
@@ -331,8 +332,10 @@ struct AssistantConsentGateView: View {
     ]
     private static let notSentItems = ["Wzrost, waga, płeć", "Rok urodzenia", "Kroki", "E-mail", "Hasło Cookidoo"]
 
-    /// `ConsentRow`: tytuł i podpis z zawijaniem, po prawej kółko 28 —
-    /// szałwia z ptaszkiem, gdy zaznaczone (= zapisane).
+    /// `ConsentRow`: tytuł i podpis z zawijaniem, po prawej pole wyboru
+    /// aplikacji (`SCCheckbox`) w szałwii. Potwierdzenia są dwa i niezależne,
+    /// więc to pole wyboru, a nie kółko — kółko z ptaszkiem 28 pt było
+    /// jedynym takim znacznikiem w aplikacji.
     private func confirmRow(isOn: Binding<Bool>, title: String, caption: String?, first: Bool) -> some View {
         Button {
             isOn.wrappedValue.toggle()
@@ -346,18 +349,8 @@ struct AssistantConsentGateView: View {
                 alignment: .top,
                 leading: { EmptyView() },
                 trailing: {
-                    ZStack {
-                        Circle().fill(isOn.wrappedValue ? AssistantLook.sage(scheme) : Color.clear)
-                        Circle().stroke(isOn.wrappedValue ? Color.clear : AssistantLook.ink(scheme).opacity(0.28), lineWidth: 1.5)
-                        if isOn.wrappedValue {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 13, weight: .black))
-                                .foregroundStyle(Color.white)
-                        }
-                    }
-                    .frame(width: 28, height: 28)
-                    .padding(.top, 4)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isOn.wrappedValue)
+                    SCCheckbox(on: isOn.wrappedValue, accent: SCPalette.sage)
+                        .padding(.top, 1)
                 }
             )
             .contentShape(Rectangle())
@@ -372,19 +365,12 @@ struct AssistantConsentGateView: View {
     @ViewBuilder
     private var footer: some View {
         VStack(spacing: 10) {
+            // Ten sam błąd nad przyciskiem, co w każdym formularzu aplikacji
+            // (`SCInlineErrorText`), zamiast własnej plakietki z wykrzyknikiem.
             if let errorMessage = currentDraft.errorMessage {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text(errorMessage)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .foregroundStyle(SCPalette.terracotta)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(SCPalette.terracotta.opacity(0.12)))
+                SCInlineErrorText(errorMessage)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 6)
             }
 
             if isGranted {

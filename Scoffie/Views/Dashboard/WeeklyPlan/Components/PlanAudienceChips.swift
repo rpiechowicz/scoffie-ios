@@ -14,7 +14,10 @@ struct PlanAudienceChips: View {
     let members: [HouseholdMemberSnapshot]
     /// Pusty zbiór znaczy „Wspólne" — danie je całe gospodarstwo.
     @Binding var selection: Set<String>
-    var sectionLabel: String = "DLA KOGO"
+    /// Etykieta nad chipami — krojem `EditorialSheetSectionLabel`, jak
+    /// „Dzień”, „Posiłek” i „Porcje” w arkuszu „Dodaj do planu”. Dawniej
+    /// miała własne 9 pt z trackingiem 2 i jako jedyna w arkuszu odstawała.
+    var sectionLabel: String = "Dla kogo"
     /// Wołane po każdej zmianie wyboru. Arkusz z porcjami podpina tu
     /// przestawienie steppera, żeby liczba porcji nadążała za audytorium,
     /// dopóki użytkownik nie ruszy go ręcznie.
@@ -54,6 +57,24 @@ struct PlanAudienceChips: View {
         return known.sorted()
     }
 
+    /// Audytorium zapisu, gdy TEN SAM przepis już stoi w porze dla kogoś
+    /// innego: suma osób, zwinięta do „Wspólne”, gdy obejmuje cały dom.
+    ///
+    /// Pozycja planu to jedna para (pora, przepis), więc zapis tego samego
+    /// przepisu dla drugiej osoby PRZEPISYWAŁ audytorium pierwszej — ktoś,
+    /// kto miał już ten obiad, zostawał bez posiłku (Rafał, 23.09.2026:
+    /// „powinno automatycznie wykryć i zmienić na domostwo”).
+    static func merged(
+        _ participants: [String],
+        with existing: PlanMeal?,
+        members: [HouseholdMemberSnapshot]
+    ) -> [String] {
+        guard let existing else { return participants }
+        // Któreś z nich je już całe domostwo — i tak zostaje.
+        if existing.isShared || participants.isEmpty { return [] }
+        return collapsed(Set(existing.participantIds).union(participants), members: members)
+    }
+
     /// Ile osób realnie je danie — źródło reguły auto-porcji po stronie
     /// klienta, bliźniacze do tego, co liczy serwer, gdy `plannedServings`
     /// nie przyjdzie w payloadzie.
@@ -64,11 +85,8 @@ struct PlanAudienceChips: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(sectionLabel)
-                .font(.system(size: 9, weight: .bold))
-                .tracking(2)
-                .foregroundStyle(Color.scMuted(scheme))
+        VStack(alignment: .leading, spacing: 10) {
+            EditorialSheetSectionLabel(title: sectionLabel)
 
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {

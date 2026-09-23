@@ -68,6 +68,16 @@ enum SubscriptionCatalog {
 
     /// Kolejność jak w karuzeli planów; `duet` jest preselekcjonowany.
     static let all: [SubscriptionPlan] = [solo, duet, family]
+
+    /// Plan po nazwie, którą oddaje serwer (`AgentUsageDTO.product`: „Solo”,
+    /// „We dwoje”, „Rodzina”; starsze wpisy mówią „Duet”). `nil` = nieznany.
+    static func plan(named name: String?) -> SubscriptionPlan? {
+        guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !name.isEmpty else {
+            return nil
+        }
+        if name == "duet" { return duet }
+        return all.first { $0.name.lowercased() == name }
+    }
     static let identifiers = all.map(\.id)
     static let recommended = duet
 

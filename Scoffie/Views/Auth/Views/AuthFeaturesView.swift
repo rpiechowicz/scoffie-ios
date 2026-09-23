@@ -125,7 +125,7 @@ struct AuthFeaturesView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scFeatureRowBg(colorScheme))
+                .fill(Color.scTileBg(colorScheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)

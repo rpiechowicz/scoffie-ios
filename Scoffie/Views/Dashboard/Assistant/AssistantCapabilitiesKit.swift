@@ -72,34 +72,17 @@ struct AssistantSurfaceCard<Content: View>: View {
 /// Stopka przyklejona do dołu: treść chowa się pod miękkim gradientem tła,
 /// jak w kreatorze „Poznajmy się". Wewnątrz przyciski w stylu `SCSoftButton`.
 struct AssistantStickyFooter<Content: View>: View {
+    /// Kolor tła ekranu pod stopką. Musi być DOKŁADNIE ten sam, co tło
+    /// arkusza — inaczej nad przyciskiem wraca twarda linia. Domyślnie
+    /// `scPageBase`; szczegóły posiłku mają własne, cieplejsze tło.
+    var base: Color? = nil
     @ViewBuilder var content: () -> Content
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(spacing: 10) { content() }
-            .padding(.horizontal, SCPageMetrics.horizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 12)
-            .background {
-                VStack(spacing: 0) {
-                    // Ten sam kolor co `SCPageBackground` (scPageBase), nie kanwa —
-                    // inny odcień rysował twardą linię nad przyciskiem. Gradient
-                    // zaczyna się NAD stopką (ujemny offset), więc nie zjada
-                    // miejsca, a treść i tak ginie pod nim łagodnie.
-                    LinearGradient(
-                        colors: [Color.scPageBase(scheme).opacity(0), Color.scPageBase(scheme)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 36)
-                    .offset(y: -36)
-                    .padding(.bottom, -36)
-                    Color.scPageBase(scheme)
-                }
-                .ignoresSafeArea(edges: .bottom)
-                .allowsHitTesting(false)
-            }
+        // Wzór, z którego wyrosła wspólna stopka arkuszy — teraz jest nią.
+        SCSheetFooter(base: base, content: content)
     }
 }
 
@@ -360,7 +343,7 @@ struct AssistantThumb: View {
     private func mini<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scInsetSurface(scheme)))
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
             .accessibilityElement(children: .combine)
     }

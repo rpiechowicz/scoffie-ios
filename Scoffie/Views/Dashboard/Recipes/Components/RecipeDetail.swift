@@ -5,7 +5,7 @@ import SwiftUI
 // z tagami, `NutriZDonutThick`, `StepsList`, `IngrCheckGrouped`, `MealDetail`
 // z `nutriStepper`).
 //
-// Od góry: zdjęcie 220 pt wtapiające się w tło arkusza, wiersz tagów
+// Od góry: zdjęcie 340 pt wtapiające się w tło arkusza, wiersz tagów
 // (kategoria · „pasuje też na” przerywaną obwódką · czas), duży tytuł z lede,
 // a pod nim trzy sekcje z akcentowym pręcikiem:
 //   • „Wartości odżywcze” (terakota) — stepper porcji siedzi W NAGŁÓWKU tej
@@ -44,7 +44,8 @@ struct RecipeDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let recipe: Recipe
-    var onToggleFavorite: (() -> Void)?
+    /// Zapis ulubionych — z docelową wartością (`nil` = serce ukryte).
+    var onSetFavourite: ((Bool) -> Void)?
     var onClose: (() -> Void)?
 
     /// Liczba porcji, od której startuje stepper. Katalog otwiera się na
@@ -114,11 +115,11 @@ struct RecipeDetailView: View {
 
     /// Jawny `init` zamiast memberwise'owego, bo `@State` z porcjami trzeba
     /// zasiać `initialServings`. Kolejność i domyślne wartości są dobrane tak,
-    /// żeby dotychczasowe wywołania `RecipeDetailView(recipe:onToggleFavorite:onClose:)`
+    /// żeby dotychczasowe wywołania `RecipeDetailView(recipe:onSetFavourite:onClose:)`
     /// kompilowały się bez zmian.
     init(
         recipe: Recipe,
-        onToggleFavorite: (() -> Void)? = nil,
+        onSetFavourite: ((Bool) -> Void)? = nil,
         onClose: (() -> Void)? = nil,
         initialServings: Int = 1,
         context: RecipeDetailContext = .catalog,
@@ -126,7 +127,7 @@ struct RecipeDetailView: View {
         onAddedToPlan: ((Date, MealSlot) -> Void)? = nil
     ) {
         self.recipe = recipe
-        self.onToggleFavorite = onToggleFavorite
+        self.onSetFavourite = onSetFavourite
         self.onClose = onClose
         self.context = context
         self.onSaveServings = onSaveServings
@@ -154,7 +155,7 @@ struct RecipeDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    DetailHeroPhoto(url: recipe.imageURL)
+                    DetailHeroPhoto(url: recipe.imageURL, isRevealed: hasAppeared)
 
                     header
                         .padding(.horizontal, 20)
@@ -177,10 +178,10 @@ struct RecipeDetailView: View {
                             .detailReveal(hasAppeared, order: 3)
                     }
 
-                    // Zapas pod dolny pasek: 28 pt przejścia + przycisk 54 pt
-                    // + margines, do tego bezpieczny obszar. Bez tej przerwy
-                    // stopka składników chowa się pod przyciskiem.
-                    Color.clear.frame(height: 96)
+                    // Zapas pod dolny pasek: przycisk z marginesami (~72 pt)
+                    // i cień nad nim (`SCEdgeShade.bottomHeight`) — przewinięta
+                    // do końca treść kończy się NAD cieniem, nie w nim.
+                    Color.clear.frame(height: 72 + SCEdgeShade.bottomHeight)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -196,53 +197,52 @@ struct RecipeDetailView: View {
             // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
             // progu, a nie w każdej klatce przewijania.
             .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top > 150
+                // Próg liczony od wysokości zdjęcia: wygaszenie wchodzi,
+                // gdy nad przyciskami zostaje już tylko jego dolny skrawek.
+                geometry.contentOffset.y + geometry.contentInsets.top > DetailHeroPhoto.height - 70
             } action: { _, isPast in
                 withAnimation(.easeInOut(duration: 0.22)) { isPastPhoto = isPast }
             }
         }
+        // Cień krawędzi — wzór dla całej aplikacji (`SCEdgeShade`): ten sam,
+        // lustrzany, stoi nad stopką każdego arkusza.
         .overlay(alignment: .top) {
-            LinearGradient(
-                stops: [
-                    .init(color: look.background, location: 0),
-                    .init(color: look.background.opacity(0.85), location: 0.55),
-                    .init(color: look.background.opacity(0), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 84)
-            .opacity(isPastPhoto ? 1 : 0)
-            .allowsHitTesting(false)
+            SCEdgeShade(edge: .top, base: look.background)
+                .frame(height: SCEdgeShade.topHeight)
+                .opacity(isPastPhoto ? 1 : 0)
         }
         .toolbar(.hidden, for: .navigationBar)
+        // Serce i krzyżyk to ten sam krążek, którym zamyka się każdy inny
+        // arkusz (`SCSheetCloseButton`), w wariancie `onImage` — z kryjącym
+        // tłem, bo stoją na zdjęciu, a nie na tle arkusza.
         .overlay(alignment: .topLeading) {
-            DetailRoundButton(
-                systemName: recipe.favourite ? "heart.fill" : "heart",
-                tint: recipe.favourite ? SCPalette.terracotta : nil,
-                accessibilityLabel: recipe.favourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
-                action: { onToggleFavorite?() }
-            )
-            .opacity(onToggleFavorite == nil ? 0 : 1)
-            .disabled(onToggleFavorite == nil)
-            .padding(.leading, 16)
-            .padding(.top, 14)
+            // Stan serca żyje w przycisku — stuknięcie przerysowuje sam
+            // przycisk, a zapis do katalogu idzie dopiero po animacji.
+            RecipeFavouriteButton(isFavourite: recipe.favourite) { value in
+                onSetFavourite?(value)
+            }
+            .opacity(onSetFavourite == nil ? 0 : 1)
+            .disabled(onSetFavourite == nil)
+            .padding(.leading, 20)
+            .padding(.top, 16)
+            .detailChrome(hasAppeared)
         }
         .overlay(alignment: .topTrailing) {
-            DetailRoundButton(
-                systemName: "xmark",
-                accessibilityLabel: "Zamknij",
-                action: { onClose?() }
-            )
-            .padding(.trailing, 16)
-            .padding(.top, 14)
+            SCSheetCloseButton(onImage: true) { onClose?() }
+                .padding(.trailing, 20)
+                .padding(.top, 16)
+                .detailChrome(hasAppeared)
         }
         .overlay(alignment: .bottom) {
             primaryActionBar
         }
-        .onAppear {
-            applyDebugLaunchOptions()
+        .onAppear { applyDebugLaunchOptions() }
+        // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
+        // wjeżdżać, dopiero potem treść. Ustawione w `onAppear` padało w tej
+        // samej klatce co wstawienie widoku i wjazd sekcji w ogóle nie grał.
+        .task {
             guard !hasAppeared else { return }
+            try? await Task.sleep(for: .milliseconds(80))
             hasAppeared = true
         }
         .sheet(isPresented: $isAddToPlanPresented) {
@@ -360,10 +360,7 @@ struct RecipeDetailView: View {
                 )
             }
 
-            DetailNutritionCard(
-                nutrition: recipe.nutrition(forServings: portions),
-                servings: servings
-            )
+            DetailNutritionCard(nutrition: recipe.nutrition(forServings: portions))
             .padding(.horizontal, 20)
         }
     }
@@ -670,10 +667,12 @@ struct RecipeDetailView: View {
 
     // MARK: - Dolny pasek akcji
 
-    /// Dolny pasek: przejście z przezroczystości w tło arkusza, na nim jeden
-    /// przycisk (albo dwa przy przepisie thermomixowym z połączonym Cookidoo).
+    /// Dolny pasek: jeden przycisk (albo dwa przy przepisie thermomixowym
+    /// z połączonym Cookidoo) na stopce, pod którą treść ginie w miękkim
+    /// gradiencie tła — ta sama stopka co w arkuszach asystenta
+    /// (`AssistantStickyFooter`), zamiast twardej linii nad przyciskiem.
     private var primaryActionBar: some View {
-        VStack(spacing: 10) {
+        AssistantStickyFooter(base: look.background) {
             thermomixFeedback
 
             if showsThermomixSplit {
@@ -685,21 +684,6 @@ struct RecipeDetailView: View {
                 planActionButton(title: primaryActionTitle)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(
-            // Kryjące tło z linią u góry — jak na każdym innym arkuszu;
-            // przy półprzezroczystym treść prześwitywała pod przyciskami.
-            Rectangle()
-                .fill(look.background)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
@@ -926,7 +910,8 @@ private enum ShoppingSendState: Equatable {
 
 /// Liczby z makiety (`D` w `detail-v2.jsx`) dla ciemnego motywu i ich
 /// odpowiedniki na kremie. Makieta jest ciemna; jasny motyw bierze akcenty
-/// z palety aplikacji i karty na ciepłej bieli z cieniem, jak reszta v2.
+/// z palety aplikacji. Karty NIE są stąd — stoją na żetonach aplikacji
+/// (`DetailCard`).
 private struct DetailLook {
     let scheme: ColorScheme
 
@@ -946,20 +931,10 @@ private struct DetailLook {
     var dim: Color { isDark ? cream.opacity(0.42) : ink.opacity(0.50) }
     var faint: Color { isDark ? cream.opacity(0.26) : ink.opacity(0.30) }
 
-    var card: Color {
-        isDark ? cream.opacity(0.045) : Color(red: 255 / 255, green: 252 / 255, blue: 246 / 255)
-    }
     var border: Color { isDark ? cream.opacity(0.08) : ink.opacity(0.08) }
     var rule: Color { isDark ? cream.opacity(0.07) : ink.opacity(0.08) }
     var chip: Color { isDark ? cream.opacity(0.06) : ink.opacity(0.045) }
     var checkboxStroke: Color { isDark ? cream.opacity(0.22) : ink.opacity(0.24) }
-
-    /// Cień pod kartą — w ciemnym motywie głęboki i miękki (karta ma się
-    /// unieść nad prawie czarnym tłem), w jasnym ledwie zaznaczony, bo
-    /// oddzielenie robi tam już biel karty na kremie.
-    var cardShadow: Color { isDark ? .black.opacity(0.30) : ink.opacity(0.07) }
-    var cardShadowRadius: CGFloat { isDark ? 16 : 14 }
-    var cardShadowY: CGFloat { isDark ? 8 : 5 }
 }
 
 // MARK: - Tło
@@ -994,15 +969,21 @@ private struct DetailBackground: View {
 
 // MARK: - Zdjęcie
 
-/// Zdjęcie 220 pt od krawędzi do krawędzi, wtapiające się w tło.
+/// Zdjęcie 340 pt od krawędzi do krawędzi, wtapiające się w tło. Przy 220 pt
+/// danie ginęło pod tytułem — teraz zajmuje mniej więcej kwadrat szerokości
+/// telefonu, a tytuł i tagi wchodzą tuż pod nim.
 ///
 /// Przy przeciągnięciu w dół rośnie od dolnej krawędzi (zamiast odsłaniać
 /// pustkę nad sobą), a przy przewijaniu w górę jedzie wolniej od treści —
 /// oba efekty to `visualEffect`, więc nie przeliczają układu co klatkę.
 private struct DetailHeroPhoto: View {
     let url: URL?
+    /// Wjazd arkusza: zdjęcie startuje lekko przybliżone i osiada — ten sam
+    /// ruch co zdjęcie w wyborze posiłku u Asystenta.
+    var isRevealed: Bool = true
 
-    private static let height: CGFloat = 220
+    // `nonisolated`, bo czyta ją domknięcie `onScrollGeometryChange` ekranu.
+    nonisolated static let height: CGFloat = 340
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1075,52 +1056,10 @@ private struct DetailHeroPhoto: View {
                 EditorialShimmerBlock()
             }
         }
+        .scaleEffect(isRevealed || reduceMotion ? 1 : 1.12)
+        .animation(.easeOut(duration: 1.1), value: isRevealed)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
-    }
-}
-
-// MARK: - Przyciski na zdjęciu
-
-/// Okrągły przycisk 44 pt na zdjęciu — szkło z ciemnym (albo kremowym)
-/// podbiciem, obwódka i miękki cień, żeby czytał się na każdym kadrze.
-private struct DetailRoundButton: View {
-    let systemName: String
-    var tint: Color?
-    let accessibilityLabel: String
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let isDark = scheme == .dark
-        let glass: Color = isDark
-            ? Color(red: 20 / 255, green: 14 / 255, blue: 10 / 255).opacity(0.60)
-            : Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.82)
-
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(tint ?? Color.scLabel(scheme))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 44, height: 44)
-                .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Circle().fill(tint.map { $0.opacity(isDark ? 0.28 : 0.20) } ?? glass))
-                }
-                .overlay(
-                    Circle().strokeBorder(
-                        tint.map { $0.opacity(0.55) }
-                            ?? (isDark ? SCPalette.labelDark.opacity(0.16) : SCPalette.labelLight.opacity(0.12)),
-                        lineWidth: 1
-                    )
-                )
-                .shadow(color: .black.opacity(isDark ? 0.35 : 0.14), radius: 8, x: 0, y: 3)
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.9))
-        .sensoryFeedback(.impact(weight: .light), trigger: systemName)
-        .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -1227,42 +1166,24 @@ private struct DetailSectionHeader<Trailing: View>: View {
 
 // MARK: - Karta
 
-/// `DCard`: promień 18, tint kremu, obwódka i światło na górnej krawędzi —
-/// plus cień, który unosi kartę nad tłem arkusza.
+/// `DCard` z makiety w promieniu 18, ale na powierzchni kart aplikacji:
+/// `scTileBg` + `scTileStroke` w obu motywach, bez cienia i bez światła na
+/// krawędzi. Dawniej jasny motyw miał tu ciepłą biel z cieniem — jedyne
+/// takie karty w aplikacji (Rafał, 23.09.2026: „wszystkie karty w tym samym
+/// kolorze”).
 private struct DetailCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let look = DetailLook(scheme: scheme)
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
         content()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(shape.fill(look.card))
+            .background(shape.fill(Color.scTileBg(scheme)))
             .clipShape(shape)
-            .overlay(shape.strokeBorder(look.border, lineWidth: 1))
-            .overlay(
-                // `inset 0 1px 0 rgba(255,255,255,0.03)` — światło na
-                // górnej krawędzi, gasnące w dół.
-                shape.strokeBorder(
-                    LinearGradient(
-                        colors: [.white.opacity(scheme == .dark ? 0.07 : 0.6), .clear],
-                        startPoint: .top,
-                        endPoint: UnitPoint(x: 0.5, y: 0.08)
-                    ),
-                    lineWidth: 1
-                )
-            )
-            .background(
-                // Cień rzuca NIEPRZEZROCZYSTA podkładka w kolorze tła arkusza:
-                // cień półprzezroczystego tintu (4,5 % kremu) byłby równie
-                // półprzezroczysty, czyli żaden.
-                shape
-                    .fill(look.background)
-                    .shadow(color: look.cardShadow, radius: look.cardShadowRadius, x: 0, y: look.cardShadowY)
-            )
+            .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 }
 
@@ -1364,9 +1285,6 @@ private struct DetailServingsStepper: View {
 /// w środku koła.
 private struct DetailNutritionCard: View {
     let nutrition: Nutrition
-    let servings: Int
-
-    @Environment(\.colorScheme) private var scheme
 
     // Cel dnia — te same klucze i ta sama reguła, co Plan i Kalendarz.
     @AppStorage(RecipePersonalization.Keys.calorieGoal)
@@ -1418,44 +1336,20 @@ private struct DetailNutritionCard: View {
         ]
     }
 
-    /// Ile procent dziennego celu kalorii to te porcje.
-    private var sharePercent: Int {
-        Int((nutrition.kcal / Double(max(targets.kcal, 1)) * 100).rounded())
-    }
-
     var body: some View {
         let rows = rows
 
         DetailCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 18) {
-                    DetailGoalRings(progresses: rows.map { $0.progress ?? 0 }, colors: rows.map(\.color))
-                        .accessibilityHidden(true)
+            HStack(alignment: .center, spacing: 18) {
+                DetailGoalRings(progresses: rows.map { $0.progress ?? 0 }, colors: rows.map(\.color))
+                    .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(rows) { row in
-                            DetailGoalLegendRow(row: row)
-                        }
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(rows) { row in
+                        DetailGoalLegendRow(row: row)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                // „Porcja to 22% Twojego dziennego celu kalorii." — jedna
-                // liczba, którą z pierścieni trzeba by zgadywać. Procent liczy
-                // tym samym ruchem, co pierścienie.
-                HStack(spacing: 0) {
-                    Text(servings == 1 ? "Porcja to " : "\(PolishPlural.servings(servings)) to razem ")
-                    CountingNumber(
-                        target: sharePercent,
-                        loadAnimation: DetailNutritionMotion.reveal,
-                        changeAnimation: DetailNutritionMotion.change
-                    )
-                    Text("% Twojego dziennego celu kalorii.")
-                }
-                .scFont(12, weight: .regular, relativeTo: .caption)
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16)
         }
@@ -1664,6 +1558,12 @@ private struct DetailIngredientRow: View {
 
 // MARK: - Wjazd sekcji
 
+/// Sekcja wjeżdża z dołu i rozjaśnia się — kaskadą, w tych samych liczbach
+/// co treść arkusza wyboru posiłku u Asystenta (`AssistantOptionsStorySheet`).
+///
+/// `geometryGroup()`: blok podjeżdża jako JEDNA całość. Bez tego elementy
+/// z własną animacją w środku (pierścienie makro, liczące cyfry) jechałyby
+/// każdy swoim tempem i przez chwilę stały na różnych wysokościach.
 private struct DetailReveal: ViewModifier {
     let isVisible: Bool
     let order: Int
@@ -1672,12 +1572,30 @@ private struct DetailReveal: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .geometryGroup()
             .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible || reduceMotion ? 0 : 16)
+            .offset(y: isVisible || reduceMotion ? 0 : 14)
             .animation(
-                .spring(response: 0.55, dampingFraction: 0.88).delay(0.06 + Double(order) * 0.06),
+                reduceMotion
+                    ? .easeInOut(duration: 0.2)
+                    : .smooth(duration: 0.55).delay(0.10 + Double(order) * 0.05),
                 value: isVisible
             )
+    }
+}
+
+/// Przyciski na zdjęciu (serce, krzyżyk) pojawiają się razem z treścią,
+/// a nie wiszą nad pustym kadrem, zanim zdjęcie osiądzie.
+private struct DetailChrome: ViewModifier {
+    let isVisible: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .scaleEffect(isVisible || reduceMotion ? 1 : 0.85)
+            .animation(.easeOut(duration: 0.35).delay(0.05), value: isVisible)
     }
 }
 
@@ -1685,6 +1603,10 @@ private extension View {
     /// Sekcje wchodzą po kolei — góra pierwsza, składniki ostatnie.
     func detailReveal(_ isVisible: Bool, order: Int) -> some View {
         modifier(DetailReveal(isVisible: isVisible, order: order))
+    }
+
+    func detailChrome(_ isVisible: Bool) -> some View {
+        modifier(DetailChrome(isVisible: isVisible))
     }
 }
 
@@ -1780,12 +1702,12 @@ private enum RecipeDetailFormat {
 #if DEBUG
 
 #Preview("Szczegóły v2 — Dark") {
-    RecipeDetailView(recipe: RecipesMock.chickenBowl, onToggleFavorite: {})
+    RecipeDetailView(recipe: RecipesMock.chickenBowl, onSetFavourite: { _ in })
         .preferredColorScheme(.dark)
 }
 
 #Preview("Szczegóły v2 — Light") {
-    RecipeDetailView(recipe: RecipesMock.chickenBowl, onToggleFavorite: {})
+    RecipeDetailView(recipe: RecipesMock.chickenBowl, onSetFavourite: { _ in })
         .preferredColorScheme(.light)
 }
 
@@ -1795,7 +1717,7 @@ private enum RecipeDetailFormat {
 #Preview("Szczegóły v2 — z planu, dark") {
     RecipeDetailView(
         recipe: RecipesMock.chickenBowl,
-        onToggleFavorite: {},
+        onSetFavourite: { _ in },
         initialServings: 2,
         context: .planned(day: Date(), slot: .lunch),
         onSaveServings: { _ in }

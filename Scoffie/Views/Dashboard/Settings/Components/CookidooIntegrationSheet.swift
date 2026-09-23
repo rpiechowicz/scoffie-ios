@@ -192,16 +192,13 @@ struct CookidooIntegrationSheet: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(
-                        errorMessage == nil ? Color.scTileStroke(scheme) : Color.red.opacity(0.55),
+                        errorMessage == nil ? Color.scTileStroke(scheme) : SCInlineErrorText.tint.opacity(0.55),
                         lineWidth: 1
                     )
             )
 
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
+                SCInlineErrorText(errorMessage)
                     .padding(.horizontal, 6)
             }
 
@@ -307,44 +304,34 @@ struct CookidooIntegrationSheet: View {
     private var disconnectButton: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.red.opacity(0.9))
+                SCInlineErrorText(errorMessage)
                     .padding(.horizontal, 6)
             }
 
-            Button {
+            // `isBusy` zapala tylko `connect` i `disconnect` (odświeżenie
+            // statusu nie), a w stanie „połączono” może to być już tylko
+            // rozłączanie — spinner w przycisku, zamiast ciszy do odpowiedzi.
+            SCDestructiveButton(
+                title: "Rozłącz konto",
+                icon: "link.badge.plus",
+                iconRotation: .degrees(45),
+                isLoading: store?.isBusy ?? false
+            ) {
                 showDisconnectAlert = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "link.badge.plus")
-                        .font(.system(size: 13, weight: .heavy))
-                        .rotationEffect(.degrees(45))
-                    Text("Rozłącz konto")
-                        .font(.system(size: 14, weight: .bold))
-                }
-                .foregroundStyle(Color.red.opacity(0.85))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(
-                    Capsule().fill(Color.scChipBg(scheme))
-                )
-                .overlay(
-                    Capsule().stroke(Color.red.opacity(0.35), lineWidth: 1)
-                )
             }
-            .buttonStyle(.plain)
         }
         .padding(.top, 8)
     }
 
     // MARK: - Stan: błąd logowania
 
+    /// Ten sam kolor co błąd pod polem (`SCInlineErrorText.tint`) — ekran
+    /// mówi o jednej rzeczy (logowanie przestało działać) jednym kolorem.
     private var authFailedBanner: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.red.opacity(0.85))
+                .foregroundStyle(SCInlineErrorText.tint)
 
             Text("Hasło do Cookidoo się zmieniło albo sesja wygasła. Zaloguj się ponownie, aby przywrócić wysyłanie na Thermomixa.")
                 .font(.system(size: 12.5, weight: .medium))
@@ -354,11 +341,11 @@ struct CookidooIntegrationSheet: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.red.opacity(scheme == .dark ? 0.14 : 0.08))
+                .fill(SCInlineErrorText.tint.opacity(scheme == .dark ? 0.14 : 0.08))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.red.opacity(0.30), lineWidth: 1)
+                .stroke(SCInlineErrorText.tint.opacity(0.30), lineWidth: 1)
         )
     }
 

@@ -112,10 +112,19 @@ enum AssistantPreviewFixtures {
 
     static func context(kind: AssistantBriefing.Kind) -> AssistantBriefingContext {
         let cal = Calendar.current
-        // Czwartek, 14:30 — środek tygodnia, przed kolacją.
-        var parts = DateComponents(year: 2026, month: 9, day: 17, hour: 14, minute: 30)
-        if kind == .tomorrowEmpty { parts.hour = 19 }
-        if kind == .nextWeekEmpty || kind == .weekendInspiration { parts.day = 19 }
+        // Czwartek 16:00 — środek tygodnia, po obiedzie, przed kolacją.
+        var parts = DateComponents(year: 2026, month: 9, day: 17, hour: 16, minute: 0)
+        switch kind {
+        case .lateNight: parts.hour = 23
+        case .tomorrowEmpty, .tomorrowPartial, .eveningReady: parts.hour = 20
+        case .cookSoon: parts.hour = 13; parts.minute = 20
+        case .breakfastMissing: parts.hour = 7
+        case .todayEmpty: parts.hour = 11
+        case .nextWeekEmpty: parts.day = 19
+        case .weekendInspiration: parts.day = 19; parts.hour = 11
+        case .balanceIssue, .weekReady: parts.day = 15
+        default: break
+        }
         let now = cal.date(from: parts) ?? Date()
         let monday = cal.date(from: DateComponents(year: 2026, month: 9, day: 14)) ?? now
         let nextMonday = cal.date(byAdding: .day, value: 7, to: monday) ?? monday
@@ -132,16 +141,24 @@ enum AssistantPreviewFixtures {
             context.isNewUser = true
             context.thisWeek = week(from: monday, plannedDays: 0)
             context.nextWeek = week(from: nextMonday, plannedDays: 0)
+        case .lateNight, .tomorrowEmpty: context.thisWeek = week(from: monday, plannedDays: 4)
+        case .tomorrowPartial:
+            context.thisWeek = week(from: monday, plannedDays: 4)
+            let friday = cal.date(byAdding: .day, value: 4, to: monday) ?? monday
+            context.thisWeek[4] = day(friday, filled: [.lunch])
         case .weekEmpty: context.thisWeek = week(from: monday, plannedDays: 0)
         case .todayEmpty: context.thisWeek = week(from: monday, plannedDays: 3)
-        case .tomorrowEmpty: context.thisWeek = week(from: monday, plannedDays: 4)
-        case .missingMeal: context.thisWeek = week(from: monday, plannedDays: 7, filled: [.breakfast, .lunch])
+        case .breakfastMissing: context.thisWeek = week(from: monday, plannedDays: 7, filled: [.lunch, .dinner])
+        case .lunchMissing:
+            parts.hour = 11
+            context.now = cal.date(from: parts) ?? now
+            context.thisWeek = week(from: monday, plannedDays: 7, filled: [.breakfast, .dinner])
+        case .dinnerMissing: context.thisWeek = week(from: monday, plannedDays: 7, filled: [.breakfast, .lunch])
         case .nextWeekEmpty: context.nextWeek = week(from: nextMonday, plannedDays: 0)
         case .balanceIssue:
             context.balance = AssistantBriefingBalance(macroGenitive: "białka", macroAccusative: "białko", unit: "g", averagePerDay: 116, target: 140, daysCounted: 5)
-        case .weekendInspiration: context.thisWeek = week(from: monday, plannedDays: 6)
-        case .dayReady: context.thisWeek = week(from: monday, plannedDays: 5)
-        case .weekReady: break
+        case .dayReady, .eveningReady: context.thisWeek = week(from: monday, plannedDays: 5)
+        case .cookSoon, .weekReady, .weekendInspiration: break
         }
         return context
     }

@@ -146,28 +146,18 @@ struct WelcomeStep3PreferencesView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     WelcomeFieldCaption(text: "Alergeny i nietolerancje")
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Stuknij, aby zaznaczyć produkty, których chcesz unikać. Możesz wybrać dowolną liczbę.")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(Color.scMuted(colorScheme))
-                            .fixedSize(horizontal: false, vertical: true)
+                    Text("Dania z nimi znikną z przepisów. Zmienisz to w Ustawieniach.")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color.scMuted(colorScheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 6)
 
-                        AllergenChipFlow(spacing: 8) {
-                            ForEach(Allergen.allCases) { candidate in
-                                AllergenChip(
-                                    allergen: candidate,
-                                    isSelected: allergens.contains(candidate),
-                                    onTap: {
-                                        withAnimation(.smooth(duration: 0.18)) {
-                                            toggleAllergen(candidate)
-                                        }
-                                    }
-                                )
-                            }
+                    // Ten sam wybór co w Ustawieniach — siatka niesie własną kartę.
+                    AllergenPicker(selected: allergens) { candidate in
+                        withAnimation(.smooth(duration: 0.18)) {
+                            toggleAllergen(candidate)
                         }
                     }
-                    .padding(18)
-                    .welcomeCard()
                 }
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
@@ -263,63 +253,6 @@ struct WelcomeStep3PreferencesView: View {
 
 }
 
-// Multi-select chip used by the allergens section. Mirrors Settings →
-// Dieta i alergeny so the visual + tap feel are identical between the
-// welcome flow and Settings.
-private struct AllergenChip: View {
-    let allergen: Allergen
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 6) {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10.5, weight: .heavy))
-                        .transition(.scale.combined(with: .opacity))
-                }
-
-                Text(allergen.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(-0.1)
-            }
-            .foregroundStyle(isSelected ? .white : Color.scLabel(colorScheme))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(
-                    isSelected
-                        ? AnyShapeStyle(
-                            LinearGradient(
-                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        : AnyShapeStyle(Color.scChipBg(colorScheme))
-                )
-            )
-            .overlay(
-                Capsule().stroke(
-                    isSelected
-                        ? SCPalette.terracotta.opacity(0.35)
-                        : Color.scTileStroke(colorScheme),
-                    lineWidth: 1
-                )
-            )
-            .shadow(
-                color: SCPalette.terracotta.opacity(isSelected ? 0.20 : 0),
-                radius: 5, x: 0, y: 2
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(allergen.title)
-        .accessibilityValue(isSelected ? "Zaznaczone" : "Niezaznaczone")
-    }
-}
 
 #Preview("Dark") {
     StatefulPreviewContainer(diet: .none, kcal: 2300, allergens: []) { diet, kcal, allergens in

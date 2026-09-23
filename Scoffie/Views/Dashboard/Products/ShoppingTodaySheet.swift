@@ -12,7 +12,7 @@ import SwiftUI
 // ze zdjęciem i licznikiem składników. Odhaczanie działa tak samo, bo to są
 // te same produkty — nie kopia.
 //
-// „Pokaż w liście zakupów” zamyka arkusz i zawęża listę do dzisiejszych
+// „Pokaż na liście zakupów” zamyka arkusz i zawęża listę do dzisiejszych
 // braków: podgląd zostaje podglądem, a tryb w sklepie trybem.
 struct ShoppingTodaySheet: View {
     let date: Date
@@ -77,10 +77,6 @@ struct ShoppingTodaySheet: View {
             VStack(spacing: 0) {
                 header
 
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-
                 content
 
                 footer
@@ -115,9 +111,13 @@ struct ShoppingTodaySheet: View {
                 }
             }
             .padding(.horizontal, SCPageMetrics.horizontal)
-            .padding(.bottom, 8)
+            // Stopka stoi pod listą, a jej cień leży na liście — ostatnie
+            // danie musi dać się wyciągnąć ponad niego.
+            .padding(.bottom, SCEdgeShade.bottomHeight)
         }
         .scrollIndicators(.hidden)
+        // Zamiast kreski pod nagłówkiem — treść gaśnie, gdy pod niego wjeżdża.
+        .scScrollEdgeFade()
     }
 
     private func dishSection(_ dish: ShoppingDish) -> some View {
@@ -232,21 +232,17 @@ struct ShoppingTodaySheet: View {
 
     // MARK: - Stopka
 
+    /// Przycisk pełnej szerokości w stopce arkusza to `EditorialPrimaryActionButton`,
+    /// jak w każdej innej stopce (patrz `SCSheetFooter`) — `SCSoftButton` 56 pt
+    /// jest przyciskiem ekranu, nie arkusza, i tu był o ~11 pt wyższy od
+    /// przycisków stopek (~45 pt).
     private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
-
-            SCSoftButton(
-                title: "Pokaż w liście zakupów",
-                leadingIcon: "list.bullet",
-                trailingIcon: nil,
-                action: onShowInList
+        SCSheetFooter {
+            EditorialPrimaryActionButton(
+                title: "Pokaż na liście zakupów",
+                icon: "list.bullet",
+                action: { onShowInList() }
             )
-            .padding(.horizontal, SCPageMetrics.horizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
         }
     }
 }

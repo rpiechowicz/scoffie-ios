@@ -1,63 +1,22 @@
 import SwiftUI
 
-// Powłoka ekranu asystenta — 1:1 z `kit.jsx` makiety v4: nagłówek w dwóch
-// rozmiarach, kapsuła limitu, okrągły przycisk, dymki wiadomości, szkic
-// odpowiedzi w trakcie tury i linia „Uwzględniłem”. Wiersz „pracuję” żyje
+// Powłoka ekranu asystenta — z `kit.jsx` makiety v4: nagłówek w dwóch
+// rozmiarach, kapsuła limitu, dymki wiadomości, szkic odpowiedzi w trakcie
+// tury i linia „Uwzględniłem”. Wiersz „pracuję” żyje
 // w `AssistantThoughtLine.swift`, atomy kart w `AssistantCardKit.swift`,
-// briefing pustego ekranu w `AssistantBriefingCard.swift`.
-
-// MARK: - Okrągły przycisk
-
-/// `LRoundBtn`: krążek 36 (34 w kompaktowym pasku) — białe tło, włoskowaty
-/// obrys, ikona 18 w kolorze tuszu. Sam RYSUNEK, żeby `Menu` mógł go
-/// użyć jako etykiety.
-struct AssistantRoundLabel: View {
-    let icon: String
-    var size: CGFloat = 36
-    var tint: Color? = nil
-    var color: Color? = nil
-    var iconSize: CGFloat = 18
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        ZStack {
-            Circle().fill(tint ?? (scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.7)))
-            Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1)
-            Image(systemName: icon)
-                .font(.system(size: iconSize, weight: .semibold))
-                .foregroundStyle(color ?? AssistantLook.ink(scheme))
-        }
-        .frame(width: size, height: size)
-        .contentShape(Circle())
-    }
-}
-
-struct AssistantRoundButton: View {
-    let icon: String
-    var size: CGFloat = 36
-    var tint: Color? = nil
-    var color: Color? = nil
-    var iconSize: CGFloat = 18
-    var accessibilityTitle: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            AssistantRoundLabel(icon: icon, size: size, tint: tint, color: color, iconSize: iconSize)
-                .scTapTarget(44, drawn: size)
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.9))
-        .accessibilityLabel(accessibilityTitle)
-    }
-}
+// briefing pustego ekranu w `AssistantBriefingCard.swift`. Okrągłe przyciski
+// są aplikacji (`SCCircleIconLabel`, `SCSheetIconButton`) — własny krążek
+// asystenta (`LRoundBtn`) zniknął razem z ostatnim wywołaniem.
 
 // MARK: - Nagłówek
 
 /// Nagłówek zakładki w dwóch rozmiarach.
 ///
-/// Duży tytuł tylko na pustym ekranie; w rozmowie kompaktowy pasek ze
-/// znakiem i słowem „Asystent” na środku oddaje miejsce strumieniowi.
+/// Duży tytuł tylko na pustym ekranie — ten sam `EditorialPageHeader`, co na
+/// pozostałych zakładkach (32 heavy, marginesy `SCPageMetrics`), żeby tytuł
+/// nie zmieniał kroju i miejsca przy przełączaniu zakładek. Makieta miała
+/// tu 34 bold i własny krążek 36 pt. W rozmowie kompaktowy pasek ze znakiem
+/// i słowem „Asystent” na środku oddaje miejsce strumieniowi.
 enum AssistantHeaderMode: Equatable {
     case large
     /// Tytuł rozmowy zostaje w modelu, ale makieta go nie pokazuje —
@@ -80,22 +39,14 @@ struct AssistantHeader<MenuContent: View>: View {
     var body: some View {
         switch mode {
         case .large:
-            HStack(alignment: .center, spacing: 8) {
-                Text("Asystent")
-                    .font(.system(size: 34, weight: .bold))
-                    .tracking(-0.6)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.9)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
-
-                accessory
-                    .fixedSize(horizontal: true, vertical: false)
-                menuButton(size: 36)
+            EditorialPageHeader(title: "Asystent") {
+                HStack(spacing: 8) {
+                    accessory
+                        .fixedSize(horizontal: true, vertical: false)
+                    menuButton(size: Self.actionSize)
+                }
             }
-            .padding(.leading, SCPageMetrics.horizontal)
-            .padding(.trailing, 16)
+            .padding(.horizontal, SCPageMetrics.horizontal)
             .padding(.top, SCPageMetrics.top)
             .padding(.bottom, 12)
 
@@ -116,23 +67,29 @@ struct AssistantHeader<MenuContent: View>: View {
 
                 HStack {
                     Spacer(minLength: 0)
-                    menuButton(size: 34)
+                    menuButton(size: Self.actionSize)
                 }
             }
             .frame(height: 46)
-            .padding(.horizontal, 16)
+            // Ten sam margines co w dużym nagłówku: „…” nie przeskakuje
+            // w bok, gdy pierwsza wiadomość zwija nagłówek.
+            .padding(.horizontal, SCPageMetrics.horizontal)
             .padding(.top, 54)
             .padding(.bottom, 8)
         }
     }
 
-    /// Ten sam krążek co `AssistantRoundLabel`, jako etykieta `Menu`.
+    /// Średnica „…” — 34 pt, jak akcje w nagłówku Planu.
+    private static var actionSize: CGFloat { 34 }
+
+    /// Ten sam krążek „…” co na Planie i w Zakupach (`SCCircleIconLabel`),
+    /// jako etykieta `Menu`. 34 pt to rysunek; cel dotyku 44.
     private func menuButton(size: CGFloat) -> some View {
         Menu {
             menu()
         } label: {
-            AssistantRoundLabel(icon: "ellipsis", size: size)
-                .scTapTarget(44, drawn: size)
+            SCCircleIconLabel(icon: "ellipsis", size: size, iconSize: 14)
+                .scTapTarget(drawn: size)
         }
         .menuOrder(.fixed)
         .accessibilityLabel("Więcej opcji asystenta")
@@ -171,7 +128,7 @@ struct AssistantQuotaPill: View {
         .padding(.leading, 8)
         .padding(.trailing, 10)
         .frame(height: 26)
-        .background(Capsule().fill(scheme == .dark ? AssistantLook.field(scheme) : Color.white.opacity(0.55)))
+        .background(Capsule().fill(AssistantLook.card(scheme)))
         .overlay(Capsule().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
         .fixedSize()
         .accessibilityElement(children: .ignore)

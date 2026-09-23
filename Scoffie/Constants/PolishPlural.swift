@@ -67,6 +67,33 @@ enum PolishPlural {
         "\(count) \(form(count, one: "lista", few: "listy", many: "list"))"
     }
 
+    /// Sam rzeczownik „przepis” po liczbie — do napisów, w których liczba
+    /// stoi osobno (roluje się albo jest pogrubiona): „132 przepisy”.
+    static func recipesNoun(_ count: Int) -> String {
+        form(count, one: "przepis", few: "przepisy", many: "przepisów")
+    }
+
+    /// Liczba przepisów, np. „48 przepisów”.
+    static func recipes(_ count: Int) -> String {
+        "\(count) \(recipesNoun(count))"
+    }
+
+    /// W ilu przepisach występuje składnik, np. „w 49 przepisach”.
+    /// Miejscownik ma tylko dwie formy: „w 1 przepisie” i „w N przepisach”.
+    static func inRecipes(_ count: Int) -> String {
+        "w \(count) \(abs(count) == 1 ? "przepisie" : "przepisach")"
+    }
+
+    /// Ile składników jest wykluczonych, np. „3 wykluczone”.
+    static func excluded(_ count: Int) -> String {
+        "\(count) \(form(count, one: "wykluczony", few: "wykluczone", many: "wykluczonych"))"
+    }
+
+    /// Ile rodzajów ma grupa składników, np. „4 rodzaje”.
+    static func kinds(_ count: Int) -> String {
+        "\(count) \(form(count, one: "rodzaj", few: "rodzaje", many: "rodzajów"))"
+    }
+
     /// Ile pozycji jest już kupionych, np. „3 kupione”.
     ///
     /// Rzeczownik zostaje domyślny („produkt”), więc odmienia się przymiotnik:

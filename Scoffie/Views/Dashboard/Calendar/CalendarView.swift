@@ -69,8 +69,8 @@ struct CalendarView: View {
     @State private var pickedCardId: String?
 
     /// Licznik przełożeń talerza ręką użytkownika — wyłącznie do haptyki.
-    /// Rośnie tylko przy stuknięciu w talerzyk albo w linię dnia, a nie przy
-    /// każdej zmianie wybranego dania: dzień ma swój sygnał w pagerze.
+    /// Rośnie tylko przy stuknięciu w talerzyk, a nie przy każdej zmianie
+    /// wybranego dania: dzień ma swój sygnał w pagerze.
     ///
     /// Kierunku przełożenia (`plateDirection`) już nie ma: niósł wyłącznie
     /// wjazd wielkiego wiersza pod talerzem z boku, a ten czytał się jako
@@ -210,6 +210,22 @@ struct CalendarView: View {
             knownHouseholdMemberCount: knownHouseholdMemberCount,
             isEaten: { $0.isEaten(by: userId) }
         )
+    }
+
+    /// „Cel dnia” w Kalendarzu jest osobisty: to, co odhaczył ten, kto trzyma
+    /// telefon — bez przełącznika osób (Rafał, runda 11: „z defaultu ma być
+    /// tylko ja”). Przełącznik osób zostaje w Planie.
+    private var dayGoalPeople: [PlanDayPerson] {
+        [
+            PlanDayPerson(
+                id: sessionStore.currentUserId ?? "me",
+                name: "Ty",
+                member: nil,
+                nutrition: eatenNutrition,
+                targets: dailyTargets,
+                isMe: true
+            )
+        ]
     }
 
     /// Suma CAŁEGO planu dnia, bez pytania o odhaczenie — „ile ten dzień miał
@@ -424,8 +440,8 @@ struct CalendarView: View {
         /// Odstęp między piętrami i nad pierwszym. Bazowo 16 (zwarty: 12).
         /// Na wysokich ekranach rośnie do 26, żeby nadmiar ponad pełny talerz
         /// rozkładał się RÓWNO między piętra, zamiast zbierać się jedną
-        /// pustką pod linią dnia — odstęp ma być wszędzie ten sam, także
-        /// na Pro Max.
+        /// pustką pod ostatnim piętrem — odstęp ma być wszędzie ten sam,
+        /// także na Pro Max.
         let gap: CGFloat
 
         var titleLines: Int { compact ? 1 : 2 }
@@ -450,7 +466,9 @@ struct CalendarView: View {
         static let titleGap: CGFloat = 5
         static let titleLine: CGFloat = 22
         static let chips: CGFloat = 30 + 12
-        static let steps: CGFloat = 70
+        /// Pasek kroków: etykieta 10,5 pt i stopka zdaniem 11,5 pt (dawniej
+        /// oba 9 pt wersalikami) — o kilka punktów wyższy niż był.
+        static let steps: CGFloat = 74
 
         /// Talerzyk wybrany + obwódka + podpisy w dwóch linijkach.
         static func strip(maxColumn: CGFloat) -> CGFloat {
@@ -474,9 +492,10 @@ struct CalendarView: View {
                 + DayTierEstimate.titleGap
                 + DayTierEstimate.titleLine * CGFloat(probe.titleLines)
                 + DayTierEstimate.strip(maxColumn: probe.maxColumn)
-                + CalendarDayLine.height
-            // Odstęp nad nadpisem i cztery między piętrami.
-            var gaps: CGFloat = 5
+            // Odstęp nad nadpisem i trzy między piętrami (nadpis, talerz,
+            // podpis, sekwencja). Linia dnia pod sekwencją zniknęła
+            // 23.09.2026 — jej wysokość i jej odstęp przeszły na talerz.
+            var gaps: CGFloat = 4
             if probe.showsChips { fixed += DayTierEstimate.chips }
             if reservesSteps {
                 fixed += DayTierEstimate.steps
@@ -527,10 +546,10 @@ struct CalendarView: View {
     ///
     /// `slot` to zmierzona wysokość pudełka talerza w kolumnie dnia — czyli
     /// dokładnie to, czego nie wzięły piętra o własnej, stałej wysokości
-    /// (nadpis, podpis, sekwencja, linia dnia, kroki). Dzięki temu strona
-    /// dnia mieści się bez przewijania na każdym telefonie: między iPhonem
-    /// SE a Pro Max jest prawie 200 pt różnicy w pionie i to talerz je
-    /// pochłania, a nie linia dnia znikająca za krawędzią.
+    /// (nadpis, podpis, sekwencja, kroki). Dzięki temu strona dnia mieści się
+    /// bez przewijania na każdym telefonie: między iPhonem SE a Pro Max jest
+    /// prawie 200 pt różnicy w pionie i to talerz je pochłania, a nie
+    /// sekwencja znikająca za krawędzią.
     ///
     /// Rant talerza jest rysowany POZA jego ramką i skaluje się razem z nim,
     /// więc pudełko dzieli się w proporcji 168 : 194 — wtedy pudełko równa
@@ -554,49 +573,18 @@ struct CalendarView: View {
         return max(0, max(floor, fit)).rounded(.down)
     }
 
-    /// Zdanie pod sekwencją: co jest dalej względem tego, co stoi na talerzu.
+    /// Przekłada talerz na `target` (stuknięcie w talerzyk) i zapamiętuje
+    /// wybór do zmiany dnia.
     ///
-    /// Kolejność sprawdzania jest kolejnością ważności. Najpierw „następny”
-    /// — jeśli użytkownik ogląda co innego, to jest jedyna rzecz, do której
-    /// musi umieć wrócić. Potem domknięcie dnia — ale tylko gdy na talerzu
-    /// stoi OSTATNIE danie: przy wcześniejszym „Potem: kolacja” jest bardziej
-    /// na miejscu niż gratulacje, a pusta pora za ostatnim daniem nie ma
-    /// prawa zasłaniać domknięcia. Na końcu sąsiad w sekwencji, bo to on
-    /// odpowiada na „co dalej”.
-    private func dayNote(items: [CalendarPlateItem], focused: CalendarPlateItem?) -> CalendarDayNote {
-        guard let focused else { return .empty(slots: items.count) }
-
-        if let next = items.first(where: { $0.status == .next }), next.id != focused.id {
-            return .next(next)
-        }
-
-        let meals = items.filter { !$0.isEmptySlot }
-        let allEaten = !meals.isEmpty && meals.allSatisfy { $0.isEaten }
-        if allEaten, focused.id == meals.last?.id { return .closed }
-
-        if let index = items.firstIndex(where: { $0.id == focused.id }), index + 1 < items.count {
-            return .after(items[index + 1])
-        }
-        return .last(focused)
-    }
-
-    /// Przekłada talerz na `target`, zapamiętując kierunek ruchu.
+    /// Talerz przenika zdjęciem, a podpis pod nim roluje cyfry i litery
+    /// (`CalendarPlateCaption`) — to, DOKĄD danie się przełożyło, mówi
+    /// rosnący talerzyk z obwódką w sekwencji.
     ///
-    /// Kierunek liczy się z MIEJSC w sekwencji i niesie go jedna rzecz:
-    /// dziesięciopunktowy przechył nazwy dania pod talerzem. Sam talerz
-    /// przenika zdjęciem, bez kierunku — a to, DOKĄD danie się przełożyło,
-    /// mówi rosnący talerzyk z obwódką w sekwencji. Z pustego talerza (dzień
-    /// bez dań) kierunku nie ma: pusty krążek nie ma pozycji w sekwencji.
-    ///
-    /// `pin` mówi, czy wybór ma zostać zapamiętany (stuknięcie w talerzyk),
-    /// czy tylko wrócić do tego, co ekran uznaje za właściwe (powrót do
-    /// następnego posiłku z linii dnia). W obu razach talerz jedzie tak samo.
-    /// Haptyka idzie stąd, a nie z sekwencji: przekłada się talerz także
-    /// stuknięciem w linię dnia, a sekwencja sama z siebie nie wie, czy
-    /// wybrany talerzyk zmienił się od stuknięcia, czy od zmiany dnia.
+    /// Haptyka idzie stąd, a nie z sekwencji: sekwencja sama z siebie nie
+    /// wie, czy wybrany talerzyk zmienił się od stuknięcia, czy od zmiany
+    /// dnia. Stuknięcie w talerzyk, który już stoi na środku, nie dzwoni.
     private func movePlate(
         to target: CalendarPlateItem,
-        pin: Bool,
         in items: [CalendarPlateItem],
         from current: CalendarPlateItem?
     ) {
@@ -606,7 +594,12 @@ struct CalendarView: View {
         if from == nil || to != from {
             plateMoves += 1
         }
-        pickedCardId = pin ? target.id : nil
+        // Danie, które talerz i tak pokazałby sam (następne za zegarem),
+        // zdejmuje przypięcie zamiast je utrwalać. Dawniej wracało się tak
+        // przez linię „Następny: …” pod talerzykami; bez niej po jednym
+        // stuknięciu talerz stałby na śniadaniu do końca dnia.
+        let automatic = focusedItem(from: items, pick: nil)?.id
+        pickedCardId = target.id == automatic ? nil : target.id
     }
 
     /// Stan każdego posiłku dnia względem „teraz", po jednym wpisie na
@@ -794,8 +787,9 @@ struct CalendarView: View {
                 case .dayGoal:
                     PlanDayGoalSheet(
                         date: selectedDate,
-                        nutrition: eatenNutrition,
-                        targets: dailyTargets,
+                        people: dayGoalPeople,
+                        initialPersonId: sessionStore.currentUserId,
+                        members: sessionStore.householdMembers,
                         // 0,9 wysokości zakładki: arkusz „do treści" nie ma
                         // prawa dojechać pod sam pasek stanu, bo wtedy
                         // przestaje być podglądem, a zaczyna być ekranem.
@@ -808,18 +802,13 @@ struct CalendarView: View {
             }
             .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
-                    recipe: target.recipe,
-                    onToggleFavorite: {
-                        Task { @MainActor in
-                            await recipeCatalogStore.toggleFavorite(recipeId: target.recipe.id)
-                            let refreshed = await recipeCatalogStore.loadRecipeDetail(recipeId: target.recipe.id)
-                                ?? recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id })
-                                ?? target.recipe
-                            // Podmieniamy sam przepis, nie cały cel — `id`
-                            // zostaje ten sam, więc arkusz się nie przeładowuje
-                            // i porcje wybrane stepperem przeżywają serduszko.
-                            detailTarget?.recipe = refreshed
-                        }
+                    // Żywy przepis z katalogu: serce nadąża za zapisem, a cel
+                    // (`detailTarget`) nie jest podmieniany po zapisie — przy
+                    // zamkniętym i otwartym w międzyczasie innym posiłku
+                    // podmiana wpisywała stary przepis do nowego arkusza.
+                    recipe: recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id }) ?? target.recipe,
+                    onSetFavourite: { value in
+                        Task { await recipeCatalogStore.setFavourite(recipeId: target.recipe.id, to: value) }
                     },
                     onClose: { detailTarget = nil },
                     // Stepper startuje od liczby, którą pokazuje reszta ekranu.
@@ -838,7 +827,7 @@ struct CalendarView: View {
                     }
                 )
                 .presentationDetents([.large])
-                .dashboardLiquidSheet()
+                .dashboardLiquidSheet(cornerRadius: 40)
             }
         }
     }
@@ -846,8 +835,8 @@ struct CalendarView: View {
     // MARK: - Pieces
 
     /// Cały ekran przy zadanej chwili. Przypięty zostaje pasek dni i nagłówek
-    /// dnia — wszystko, co odpowiada na „gdzie jestem”. Talerz, sekwencja
-    /// i linia dnia jadą razem z dniem, bo one tym dniem są.
+    /// dnia — wszystko, co odpowiada na „gdzie jestem”. Talerz, podpis
+    /// i sekwencja jadą razem z dniem, bo one tym dniem są.
     ///
     /// Łuk doby, który stał tu wcześniej, zszedł z ekranu razem z listą
     /// wierszy pod nim: rysował „gdzie w dobie jestem” kosztem miejsca na
@@ -895,8 +884,8 @@ struct CalendarView: View {
                 datesViewModel: datesViewModel,
                 selectedDate: $selectedDate,
                 // 16, nie 40: pigułka „Cel dnia" wstawia pod treść własny
-                // bezpieczny obszar, więc to już tylko prześwit MIĘDZY linią
-                // dnia a szkłem.
+                // bezpieczny obszar, więc to już tylko prześwit MIĘDZY
+                // ostatnim piętrem dnia a szkłem.
                 bottomPadding: 16,
                 // Stuknięcie w pasek dni i strzałki tygodnia jadą tak samo
                 // jak machnięcie palcem. Warunek jest jeden: strona MUSI
@@ -951,9 +940,8 @@ struct CalendarView: View {
         .ignoresSafeArea(.container, edges: .top)
     }
 
-    /// Jeden dzień: nadpis z porą, talerz, podpis pod nim, sekwencja dań
-    /// i jedno zdanie na koniec. Ruch palcem w bok przestawia dzień, tak samo
-    /// jak w Planie tygodnia.
+    /// Jeden dzień: nadpis z porą, talerz, podpis pod nim i sekwencja dań.
+    /// Ruch palcem w bok przestawia dzień, tak samo jak w Planie tygodnia.
     ///
     /// Wszystko liczy się tu z `date`, a nie z `selectedDate`: `DayPager`
     /// trzyma starą stronę na ekranie przez czas zjazdu, więc strona
@@ -999,9 +987,9 @@ struct CalendarView: View {
             }
         }
         .padding(.horizontal, SCPageMetrics.horizontal)
-        // Jedna haptyka na jedno przełożenie talerza — stuknięcie w talerzyk
-        // albo w linię dnia. Zmiana dnia ma swój sygnał w pagerze. Odhaczenie
-        // ma własny, cięższy: to zapis, nie nawigacja.
+        // Jedna haptyka na jedno przełożenie talerza — stuknięcie w talerzyk.
+        // Zmiana dnia ma swój sygnał w pagerze. Odhaczenie ma własny,
+        // cięższy: to zapis, nie nawigacja.
         .sensoryFeedback(.selection, trigger: plateMoves)
         .sensoryFeedback(.impact(weight: .medium), trigger: eatenToggles)
         // Kopia wyjeżdżająca schodzi z drzewa, gdy sprężyna osiądzie —
@@ -1050,8 +1038,8 @@ struct CalendarView: View {
     /// krawędź — unosi się, maleje i gaśnie — a wjeżdżające przychodzi tą
     /// samą drogą od drugiej strony. Każde piętro ma własną głębię
     /// (paralaksa): talerz jedzie najdalej i najwyżej, podpis mniej,
-    /// sekwencja i linia dnia ledwie. Wszystkie z JEDNEJ liczby `progress`,
-    /// więc zawsze w takcie.
+    /// sekwencja ledwie. Wszystkie z JEDNEJ liczby `progress`, więc zawsze
+    /// w takcie.
     ///
     /// `Animatable` po `progress`: SwiftUI interpoluje surową liczbę,
     /// a położenie liczy się z niej przy każdej klatce. Stary dzień gaśnie
@@ -1088,7 +1076,7 @@ struct CalendarView: View {
     /// Piętra dnia w zmierzonym pudełku.
     ///
     /// Kolejność jest kolejnością czytania: pora → danie → co z nim → reszta
-    /// dnia → co dalej. Każde piętro poza talerzem ma WŁASNĄ, stałą wysokość
+    /// dnia (→ kroki). Każde piętro poza talerzem ma WŁASNĄ, stałą wysokość
     /// — tę samą na pustym dniu i na pełnym, przy krótkiej nazwie i przy
     /// długiej, przy czterech porach i przy sześciu — a między piętrami
     /// (i nad pierwszym) stoi wszędzie ten sam odstęp. To są dwa warunki
@@ -1099,7 +1087,7 @@ struct CalendarView: View {
     /// o stałej wysokości mają priorytet 1 — dostają swoje jako pierwsze.
     /// Talerz (priorytet 0) bierze WSZYSTKO, co zostało, do sufitu ze swojego
     /// pełnego rozmiaru z rantami. Jeśli coś jeszcze zostanie, zostaje pustym
-    /// miejscem pod linią dnia — kolumna jest przypięta do góry i nie
+    /// miejscem pod ostatnim piętrem — kolumna jest przypięta do góry i nie
     /// potrzebuje do tego rozpórki (rozpórka kosztowałaby jeden odstęp
     /// z budżetu talerza, także wtedy, gdy sama ma zero wysokości).
     private func dayBody(
@@ -1124,7 +1112,6 @@ struct CalendarView: View {
 
         let focused = focusedItem(from: items, pick: pick)
         let canToggle = canLog && focused?.isEmptySlot == false
-        let note = dayNote(items: items, focused: focused)
         // Ziarno wariantów zdań: ten sam dzień mówi zawsze tak samo, kolejny
         // inaczej (`CalendarVoice`).
         let dayKey = MealCalendarStore.dateKey(for: date)
@@ -1192,21 +1179,9 @@ struct CalendarView: View {
                 selectedId: focused?.id,
                 width: area.width,
                 maxColumn: fit.maxColumn,
-                onSelect: { movePlate(to: $0, pin: true, in: items, from: focused) }
+                onSelect: { movePlate(to: $0, in: items, from: focused) }
             )
             .modifier(turn.effect(travel: 56, lift: 0, shrink: 0.05))
-            .layoutPriority(1)
-
-            CalendarDayLine(
-                note: note,
-                dayKey: dayKey,
-                onReturnToNext: {
-                    guard let next = items.first(where: { $0.status == .next }) else { return }
-                    movePlate(to: next, pin: false, in: items, from: focused)
-                },
-                onSelect: { movePlate(to: $0, pin: true, in: items, from: focused) }
-            )
-            .modifier(turn.effect(travel: 36, lift: 0, shrink: 0))
             .layoutPriority(1)
 
             // Kroki z HealthKit: piętro zarezerwowane na każdy dzień
@@ -1301,9 +1276,9 @@ struct CalendarView: View {
     /// które właśnie stuknął, cofnięcie musiałby szukać w sekwencji,
     /// a szybkie podwójne stuknięcie odhaczałoby dwa różne dania. Przypięte
     /// danie zostaje, pieczątka i pierścień zmieniają się w miejscu,
-    /// a linia dnia od razu podaje drogę do następnego. Przypięcie schodzi
-    /// przy zmianie dnia (`onChange(of: selectedDate)`) i przy powrocie
-    /// z linii dnia (`movePlate(pin: false)`).
+    /// a następne danie dnia dalej nosi obwódkę w sekwencji — stuknięcie
+    /// w nie przekłada talerz. Przypięcie schodzi przy zmianie dnia
+    /// (`onChange(of: selectedDate)`).
     ///
     /// Talerz dostaje same fakty do narysowania (`CalendarPlateItem`), więc
     /// wpis planu trzeba tu odszukać po identyfikatorze kafla. Dzień, który

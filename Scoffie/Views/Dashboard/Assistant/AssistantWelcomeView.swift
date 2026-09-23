@@ -62,8 +62,8 @@ struct AssistantWelcomeView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, SCPageMetrics.horizontal)
-            // Zapas na gradient stopki (36 pt), gdy jednak trzeba przewinąć.
-            .padding(.bottom, 40)
+            // Zapas na cień stopki (`SCEdgeShade`), gdy jednak trzeba przewinąć.
+            .padding(.bottom, SCEdgeShade.bottomHeight + 4)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)

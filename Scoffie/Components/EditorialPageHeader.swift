@@ -57,6 +57,9 @@ struct EditorialPageHeader<Trailing: View>: View {
             .foregroundStyle(Color.scLabel(scheme))
             .lineLimit(1)
             .minimumScaleFactor(allowsScaling ? 0.75 : 1)
+            // VoiceOver ogłasza tytuł zakładki jako nagłówek — na każdej
+            // zakładce tak samo, bo każda stoi na tym komponencie.
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

@@ -203,6 +203,48 @@ struct BackendHouseholdMemberDTO: Decodable {
     let user: UserDTO
 }
 
+/// Jeden wiersz `households:memberPreferences` — dieta i alergeny (arkusz
+/// gospodarstwa) oraz cele dnia (arkusz „Cel dnia” w Planie, przełącznik
+/// osób). Ograniczenia i poziom aktywności są dla asystenta i tu się ich nie
+/// dekoduje.
+struct BackendMemberContextDTO: Decodable {
+    let userId: String
+    let dietPreference: String?
+    let allergens: [String]?
+    /// Cele policzone na serwerze (`toMemberContext`): kalorie zawsze, makra,
+    /// gdy da się je policzyć z sylwetki. Samej sylwetki serwer celowo nie
+    /// wysyła nikomu poza właścicielem konta.
+    let targets: Targets?
+
+    struct Targets: Decodable {
+        /// `Double`, nie `Int`: makra liczone na serwerze bywają ułamkowe,
+        /// a jedna liczba z przecinkiem wywaliłaby dekodowanie całego wiersza.
+        let calorieGoal: Double?
+        let macros: Macros?
+    }
+
+    struct Macros: Decodable {
+        let proteinG: Double
+        let fatG: Double
+        let carbsG: Double
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case userId, dietPreference, allergens, targets
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
+        dietPreference = try container.decodeIfPresent(String.self, forKey: .dietPreference)
+        allergens = try container.decodeIfPresent([String].self, forKey: .allergens)
+        // Cele są dodatkiem: pole w nieznanym kształcie nie może wywrócić
+        // całej odpowiedzi, bo razem z nim znikałyby dieta i alergeny
+        // w arkuszu gospodarstwa.
+        targets = try? container.decodeIfPresent(Targets.self, forKey: .targets)
+    }
+}
+
 struct HouseholdMembersCachePayload: Codable {
     let householdId: String
     let members: [HouseholdMemberSnapshot]

@@ -12,7 +12,7 @@ struct EditorialPrimaryActionButton: View {
     /// Barwa przycisku. Terakota domyślnie — bo tak wygląda akcja główna.
     /// Neutralną (`Color.scLabel`) bierze druga akcja stojąca OBOK głównej:
     /// dwa terakotowe przyciski w jednym rzędzie kłóciłyby się o to, który
-    /// z nich jest tym właściwym. Patrz `CalendarEmptyDayNote`.
+    /// z nich jest tym właściwym.
     var accent: Color = SCPalette.terracotta
     var isEnabled: Bool = true
     var isLoading: Bool = false
@@ -40,6 +40,10 @@ struct EditorialPrimaryActionButton: View {
                     // wielokropkiem w połowie słowa.
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                    // Tytuł zmieniany w animowanej transakcji („Dodaj do
+                    // planu” → „Zamień w planie”) roluje się literami, jak
+                    // liczby w arkuszach, zamiast podmienić się w klatce.
+                    .contentTransition(.numericText())
             }
             .foregroundStyle(accent)
             .frame(maxWidth: .infinity)

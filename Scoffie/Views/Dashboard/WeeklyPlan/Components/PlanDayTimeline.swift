@@ -121,52 +121,55 @@ struct PlanDayTimeline: View {
 
     /// Karta nad osią: „ten tydzień jest jeszcze pusty" i droga do asystenta.
     ///
-    /// Ta sama akcja, co pigułka z iskierkami w nagłówku ekranu — ale tamta
-    /// jest ikoną bez podpisu i przy pustym tygodniu nikt nie wie, że to
-    /// właśnie ona. Karta mówi to słowami, raz, i znika z pierwszym posiłkiem.
+    /// Układ kart aplikacji (runda 9, 23.09.2026): kafelek z ikoną asystenta,
+    /// etykieta i tytuł, jedno zdanie i przycisk „soft” na całą szerokość —
+    /// jak zaproszenie w gospodarstwie. Wcześniej cała karta była wierszem
+    /// z kółkiem i strzałką, a jedynym słowem o akcji był dopisek pod tytułem.
+    /// Znika z pierwszym posiłkiem; pigułka „Ułóż” w nagłówku zostaje.
     private var emptyWeekCallout: some View {
-        Button { pagerGate.ifNotSwiping(onAssistant) } label: {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: MenuConstans.Assistant.icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(SCPalette.terracotta)
-                    .frame(width: 36, height: 36)
-                    .scSoftSurface(Circle())
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                SCHeaderIconWell(icon: MenuConstans.Assistant.icon, accent: SCPalette.terracotta, size: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
+                    Text("ASYSTENT")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(SCPalette.terracotta)
+
                     Text("Ten tydzień jest jeszcze pusty")
-                        .scFont(14.5, weight: .semibold, relativeTo: .footnote)
+                        .scFont(16, weight: .semibold, relativeTo: .callout)
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
-
-                    Text("Asystent ułoży go w kilka sekund. Możesz też dodać posiłki ręcznie niżej.")
-                        .scFont(12.5, relativeTo: .caption)
-                        .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .multilineTextAlignment(.leading)
-
-                Spacer(minLength: 4)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.scFaint(scheme))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.scTileBg(scheme))
+            .accessibilityElement(children: .combine)
+
+            Text("Ułożę go w kilka sekund — pod Twoją dietę i pory posiłków.")
+                .scFont(13, relativeTo: .footnote)
+                .foregroundStyle(Color.scMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+
+            EditorialPrimaryActionButton(
+                title: "Ułóż tydzień z asystentem",
+                icon: MenuConstans.Assistant.icon,
+                // Domknięcie, nie referencja do metody (SE-0418, `CLAUDE.md`).
+                action: { pagerGate.ifNotSwiping(onAssistant) }
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.top, 12)
         }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
-        .accessibilityLabel("Ten tydzień jest jeszcze pusty. Zaplanuj z asystentem")
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+        )
     }
 
     // MARK: - Nagłówek dnia

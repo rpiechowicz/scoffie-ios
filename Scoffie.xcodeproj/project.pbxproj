@@ -97,10 +97,11 @@
 				};
 			};
 			buildConfigurationList = 010DDB712F3235DD007CBEBF /* Build configuration list for PBXProject "Scoffie" */;
-			developmentRegion = en;
+			developmentRegion = pl;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				pl,
 				Base,
 			);
 			mainGroup = 010DDB6D2F3235DD007CBEBF;

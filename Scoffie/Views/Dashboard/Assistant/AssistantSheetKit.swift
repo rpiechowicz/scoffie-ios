@@ -1,9 +1,11 @@
 import SwiftUI
 
-// Arkusze asystenta — 1:1 z `LSheet`, `LGroup`, `LRow` z makiety v4
-// („05 · Arkusze i stany ekranu”). JEDEN nagłówek dla wszystkich arkuszy:
-// eyebrow · tytuł · X (+ opcjonalna akcja), zgrupowane listy jak iOS inset
-// grouped, stopka przypięta do dołu nad gradientem tła.
+// Arkusze asystenta — układ z `LSheet`, `LGroup`, `LRow` z makiety v4
+// („05 · Arkusze i stany ekranu”): zgrupowane listy jak iOS inset grouped,
+// stopka przypięta do dołu. Nagłówek i stopka są już wspólne z resztą
+// aplikacji (`EditorialSheetHeader`, `SCSheetFooter`) — arkusz asystenta
+// otwarty z Ustawień („Asystent i plan”, „Wybierz plan”) nie może mieć
+// innego krzyżyka i innego tytułu niż arkusz obok.
 
 // MARK: - Szkielet arkusza
 
@@ -22,20 +24,39 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
         ZStack(alignment: .bottom) {
             SCPageBackground(scheme: scheme).ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    AssistantSheetHeader(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: action)
-                    content()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 4)
-                }
-                .padding(.bottom, 140)
-            }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
+            // Nagłówek przypięty NAD listą, jak w pozostałych arkuszach:
+            // przewijał się razem z treścią i w długich arkuszach (plany,
+            // zgoda) krzyżyk uciekał z ekranu.
+            VStack(spacing: 0) {
+                AssistantSheetHeader(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: action)
+                    .padding(.bottom, 8)
 
-            AssistantSheetFooter { footer() }
+                // Stopka przez `safeAreaInset` (`scSheetFooter`), nie nad listą
+                // w `ZStack` — treść kończy się nad nią sama, bez 140 pt zapasu.
+                // Arkusz bez stopki nie dostaje nawet pustej płyty na dole.
+                if Footer.self == EmptyView.self {
+                    list
+                } else {
+                    list.scSheetFooter(horizontalPadding: 16) { footer() }
+                }
+            }
         }
+    }
+
+    private var list: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                content()
+                    .padding(.horizontal, 16)
+            }
+            // Stopka rezerwuje miejsce na swój cień sama (`scSheetFooter`),
+            // więc przy stopce wystarczy krótki oddech.
+            .padding(.bottom, Footer.self == EmptyView.self ? 24 : 8)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        // Treść gaśnie pod przypiętym nagłówkiem zamiast kreski.
+        .scScrollEdgeFade()
     }
 }
 
@@ -67,6 +88,11 @@ extension AssistantSheetScaffold where Action == EmptyView, Footer == EmptyView 
 /// Nagłówek arkusza — TEN SAM dla każdego arkusza asystenta, także tych,
 /// które nie przewijają listy (onboarding z kartami): eyebrow · tytuł ·
 /// podtytuł po lewej, opcjonalna akcja i X po prawej.
+///
+/// Rysuje go `EditorialSheetHeader`, domyślny nagłówek arkusza w aplikacji.
+/// Wcześniej asystent miał własny krój (eyebrow 11 pt, tytuł 26 bold)
+/// i własny krzyżyk 34 pt — obok arkuszy Ustawień wyglądało to jak druga
+/// aplikacja.
 struct AssistantSheetHeader<Action: View>: View {
     var eyebrow: String = "Asystent"
     let title: String
@@ -74,52 +100,16 @@ struct AssistantSheetHeader<Action: View>: View {
     var onClose: () -> Void
     @ViewBuilder var action: () -> Action
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(eyebrow)
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.9)
-                    .textCase(.uppercase)
-                    .foregroundStyle(AssistantLook.terra(scheme))
-                    .lineLimit(1)
-                Text(title)
-                    .font(.system(size: 26, weight: .bold))
-                    .tracking(-0.6)
-                    .lineSpacing(2)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-                    .accessibilityAddTraits(.isHeader)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 14))
-                        .lineSpacing(3)
-                        .foregroundStyle(AssistantLook.muted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 6)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 8) {
-                action()
-                AssistantRoundButton(
-                    icon: "xmark",
-                    size: 34,
-                    tint: AssistantLook.ink(scheme).opacity(0.06),
-                    iconSize: 15,
-                    accessibilityTitle: "Zamknij",
-                    action: onClose
-                )
-            }
-            .fixedSize()
-        }
-        .padding(.leading, 20)
-        .padding(.trailing, 18)
-        .padding(.top, 26)
+        EditorialSheetHeader(
+            eyebrow: eyebrow,
+            title: title,
+            subtitle: subtitle,
+            onClose: onClose,
+            accessory: action
+        )
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
     }
 }
 
@@ -129,37 +119,21 @@ extension AssistantSheetHeader where Action == EmptyView {
     }
 }
 
-/// Stopka przypięta do dołu: treść ginie pod gradientem tła (od 0 do 34 %).
+/// Stopka arkusza asystenta — wspólna stopka aplikacji (`SCSheetFooter`)
+/// z wcięciem list asystenta (16 pt).
 struct AssistantSheetFooter<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        VStack(spacing: 0) { content() }
-            .padding(.horizontal, 16)
-            .padding(.top, 28)
-            .padding(.bottom, 12)
-            .frame(maxWidth: .infinity)
-            .background {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.scPageBase(scheme).opacity(0), location: 0),
-                        .init(color: Color.scPageBase(scheme), location: 0.34),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea(edges: .bottom)
-                .allowsHitTesting(false)
-            }
+        SCSheetFooter(horizontalPadding: 16, content: content)
     }
 }
 
 // MARK: - Zgrupowana lista
 
-/// `LGroup`: tytuł 12/700 wersalikami (+ dopisek po prawej) nad kartą
-/// o promieniu 20.
+/// `LGroup`: tytuł wersalikami (+ dopisek po prawej) nad kartą o promieniu
+/// 20. Tytuł ma krój etykiet sekcji aplikacji (`EditorialSheetSectionLabel`:
+/// 10,5 pt, tracking 1,4), a nie 12/700 z makiety.
 struct AssistantGroup<Content: View, Aside: View>: View {
     var title: String? = nil
     var titleColor: Color? = nil
@@ -178,10 +152,10 @@ struct AssistantGroup<Content: View, Aside: View>: View {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     if let title {
                         Text(title)
-                            .font(.system(size: 12, weight: .bold))
-                            .tracking(0.7)
+                            .font(.system(size: 10.5, weight: .bold))
+                            .tracking(1.4)
                             .textCase(.uppercase)
-                            .foregroundStyle(titleColor ?? AssistantLook.faint(scheme))
+                            .foregroundStyle(titleColor ?? Color.scFaint(scheme))
                     }
                     Spacer(minLength: 0)
                     aside()
@@ -198,8 +172,6 @@ struct AssistantGroup<Content: View, Aside: View>: View {
                 .background(shape.fill(AssistantLook.card(scheme)))
                 .clipShape(shape)
                 .overlay(shape.stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
-                .shadow(color: Color.black.opacity(scheme == .dark ? 0 : 0.04), radius: 1, y: 1)
-                .shadow(color: Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(scheme == .dark ? 0 : 0.10), radius: 12, y: 8)
         }
         .padding(.top, 14)
     }

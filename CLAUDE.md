@@ -34,12 +34,32 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   rozwiązania typu. Kompilator NIE wskazuje tej linii — mówi `ambiguous use of 'init'`
   o kilkadziesiąt linii wyżej, przy najbliższym kontenerze SwiftUI (np. `ScrollView`).
   Jawny typ nie pomaga; pomaga domknięcie: `cond ? nil : { metoda() }`.
-- **Logika briefingu asystenta**: `sh Scripts/assistant-logic-check.sh` — kompiluje
+- **Logika powitania asystenta** (pusty ekran): `sh Scripts/assistant-logic-check.sh` — kompiluje
   `Models/Assistant/AssistantBriefing.swift` (TYLKO Foundation) ze scenariuszami
-  w `Scripts/AssistantLogic/main.swift` i sprawdza priorytety pustego ekranu (pula > nowe konto
-  > pusty tydzień > dziś > wieczór+jutro > brakująca pora główna > przyszły tydzień pod koniec
-  tygodnia > realny brak w bilansie > gotowe > weekend). Nowa sytuacja = nowy `Kind` w resolverze
-  + scenariusz tutaj. Widok (`AssistantBriefingCard`) NIE liczy nic sam.
+  w `Scripts/AssistantLogic/main.swift` i sprawdza priorytety 17 sytuacji (pula > nowe konto > późna
+  pora 22–5 > pusty tydzień (≥ 3 dni do końca) > dziś pusto > „Za 40 minut obiad” (90 min przed porą)
+  > brak śniadania / obiadu / kolacji dziś > wieczór: jutro puste / częściowe > przyszły tydzień pod
+  koniec tygodnia > realny brak w bilansie > tydzień gotowy > weekend > wieczór: jutro gotowe > dzień
+  gotowy). Nowa sytuacja = nowy `Kind` w resolverze + scenariusz tutaj. Widok (`AssistantEmptyState`)
+  NIE liczy nic sam.
+- Powitanie (23.09.2026) — makieta Claude Design „Scoffie - Asystent Empty State v2” (projekt
+  `43b605d0-…`, `components/ae-*.jsx`), wariant A: znak 24 pt (większy niż w makiecie), otwarcie 28 semibold, zdanie pomocy 17,
+  kontekst bez słów (talerzyki pór / najbliższe danie / pasek bilansu), główna akcja „soft” na
+  szerokość treści i `AssistantChip`-y alternatyw — JEDEN blok przyklejony nad polem wiadomości
+  (wolne miejsce nad nim; gdy wyższy niż ekran, startuje od otwarcia). Ostatnia alternatywa to zawsze
+  „Mam inny pomysł” = sam fokus pola (akcje i kontekst gasną, otwarcie zostaje), a przykład w polu
+  (`briefing.placeholder`) zmienia się z sytuacją. Bez liczenia braków („0 z 4”) i dat w tekście.
+  Ruch: otwarcie (65 zn/s) i zdanie (170 zn/s) PISZĄ SIĘ (`Components/SCTypedText.swift` — nienapisana końcówka jest
+  przezroczysta, więc układ nie skacze), potem kaskada kontekstu i akcji, liczby przez `SCCountingText`;
+  gra od nowa przy wejściu na zakładkę i nowej sytuacji, a ta sama sytuacja z inną liczbą tylko roluje
+  (`numericText`). Akcje o JEDNEJ porze proszą o dania „do wyboru”, więc kończą się arkuszem wyboru
+  posiłku (prompt serwera: jedna pora albo „do wyboru” = `offer_options`).
+- Przegląd propozycji w arkuszu wyboru posiłku: karty dnia i tygodnia mają dania jako przyciski i wiersz
+  „Przeglądaj dania” (`OptionsBrowseRow`, ten sam co w karcie OPTIONS) → `AssistantOptionsStorySheet`
+  w trybie `.review` (`OptionsStoryMode`): tag = pora (· dzień), pod daniem „Zamień to danie” (wysyła
+  „Zamień w tej propozycji …: X. Pokaż 3 inne dania na tę porę do wyboru.” → serwer oddaje OPTIONS →
+  „Wybieram: …” → ta sama propozycja z nowym daniem), strona końcowa „Wszystko pasuje?” z zapisem.
+  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
@@ -118,7 +138,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   język systemu) i „Dynamic Empty States” (`claude.ai/artifact/43pdC2GemR7abQDdGepU65`: 12 wariantów
   briefingu, kółka zamiast kafelków, reguły priorytetu). Rozpakowanie: manifest base64+gzip w HTML.
   Liczby z `kit.jsx` (`L`) siedzą w `AssistantLook` (`AssistantCardKit.swift`) — jasny motyw co do
-  wartości, ciemny na palecie aplikacji. Arkusze stoją na `AssistantSheetKit.swift`
+  wartości, ciemny na palecie aplikacji. WYJĄTEK od 23.09.2026: powierzchnie (`card`, `cardStroke`,
+  `field`) to żetony aplikacji (`scTileBg` / `scTileStroke` / `scChipBg`) w obu motywach, bez cienia —
+  białe karty z makiety odstawały od reszty („wszystkie karty w tym samym kolorze”, decyzja Rafała).
+  Nowa karta gdziekolwiek = `scTileBg` + `scTileStroke`; `scCardSurface`/`scInsetSurface` zostały tylko
+  pod pływające kontrolki. Arkusze stoją na `AssistantSheetKit.swift`
   (`AssistantSheetScaffold` = eyebrow · tytuł · X, `AssistantGroup`, `AssistantRow`). Stan pracy
   (`AssistantThoughtLine`, faza `working`) to „Oddech łuku” (artefakt `claude.ai/artifact/7vwJmr2mCR8xTYnjAJ9F3s`):
   znak, łuk i status w TERAKOCIE (nie indygo z makiety — decyzja Rafała 21.09.2026), obrót 2,4 s,
@@ -167,6 +191,205 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
   Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
+- Filtry przepisów v3 (23.09.2026) — makieta Claude Design „Scoffie - Przepisy v3 - Filtry”
+  (projekt `43b605d0-…`, `components/filtry-final.jsx`). `RecipeFilterSheet` + klocki w
+  `RecipeFilterKit.swift` + arkusze-dzieci `RecipeExcludeSheets.swift`. Po uwagach Rafała (23.09):
+  wykluczanie to JEDEN kafelek w Filtrach, a szukanie + działy mieszkają w `RecipeExcludeSheet`
+  (dział → `RecipeExcludeCategorySheet`); czas i trudność to dwa kafelki z menu w jednym rzędzie;
+  kalorie to WYKRES, KTÓRY JEST SUWAKIEM (`RecipeFilterKcalChart`): słupki rozkładu
+  (`RecipeFilterIndex.kcalHistogram`, przy pozostałych filtrach, bez samego limitu) stoją dokładnie
+  na przedziałach skali, limit to pionowa kreska z gałką na osi, którą prowadzi się po całym wykresie;
+  osobnego toru z wypełnieniem nie ma (Rafał: „zrezygnuj z tego Progressu”). Limit stoi dużą liczbą
+  na górze karty, obok krzyżyk, który go zdejmuje, i „Do celu”; cel = szałwiowy odcinek NA osi z podpisem
+  „500 · Twój cel · 800” — nigdy napis nad słupkami, bo przecinała go kreska. Aktywny przycisk
+  filtrów na Przepisach = wariant „podświetlony”
+  (`SCCircleIconLabel(highlighted:)`), nie pełna terakota. Przełącznik „Dopasowane do Ciebie” jest
+  TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
+  i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
+  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`) = miniatura ZDJĘCIA
+  DANIA z tą cechą + nazwa + liczba przepisów; zaznaczenie = tint, obwódka wokół miniatury i znaczek
+  z ptaszkiem (nie samo pole wyboru — „smutne”, Rafał 23.09). Zdjęcia dobiera `RecipeFilterCovers`
+  / `RecipeFacetCovers` raz na otwarcie, z puli przed filtrami, każdy przepis na jednym kafelku;
+  miniatura BEZ przybliżenia (zdjęcia katalogu to 1344×768 z talerzem na środku — `scaledToFill`
+  w kwadracie już wycina środek, a dawne ×1,45 ucinało rant każdego talerza, runda 9);
+  bez zdjęcia glif — i najpierw dania, których profil NIE ukrywa (kafelek nie pokaże dania z alergenem
+  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii; siatka to `RecipeFilterTileGrid` (wiersze
+  `HStack` z `fixedSize` w pionie), bo `LazyVGrid` stawiał obok siebie kafelki różnej wysokości.
+  Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
+  tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
+  per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie
+  raz na otwarcie). Wykluczanie składników jest po stronie telefonu, po nazwie i dziale
+  z listy przepisów (`RecipeIngredient.department` = dział sklepu, te same alejki co Zakupy);
+  grupa („Papryka · wszystkie”) = wspólny pierwszy wyraz w JEDNYM dziale, bez przyimka jako
+  drugiego wyrazu (`IngredientExclusion.groupStem`). Odejścia od makiety: cechy „Jedno naczynie /
+  Do pudełka / Budżetowe / Na zimno” zastąpione policzalnymi (katalog ich nie niesie),
+  „Mięso i ryby / Zioła” to prawdziwe działy sklepu, kategoria składników ma krzyżyk zamiast
+  „wstecz”, przyciski „soft”, szukanie kończy „Gotowe” zamiast „Anuluj”, a składniki to CHMURA
+  PIGUŁEK (`RecipeExclusionPill` w `RecipeExclusionFlow`), nie wiersze z „Wyklucz” przy każdym —
+  terakota = wykluczony, przerywana obwódka = wykluczony z całą grupą. Grupa („Papryka”) ma
+  strzałkę i ROZWIJA rodzaje w panelu na całą szerokość chmury (tam „Wszystkie”); sama nie
+  wyklucza. Działy mają ikony i barwy alejek Zakupów (`ProductConstants.departmentIcon/Color`),
+  wyniki szukania są pogrupowane po działach.
+- Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
+  (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): kryjąca płyta w kolorze tła
+  (`scPageBase`, czyli dół `SCPageBackground`) + cień krawędzi NAD nią, bez kreski i bez szkła.
+  Cień to `SCEdgeShade` (`Components/SCEdgeShade.swift`) — JEDEN na górę i dół: górny pasek
+  szczegółów posiłku (84 pt, przyciski stoją na nim) i jego lustro nad stopką (56 pt, zaczyna się
+  na krawędzi płyty, nie wchodzi na przycisk). Rafał: „bardzo mi się podoba shadow górny, zrób taki
+  sam od dołu”. Na przewijanej treści przez `.scSheetFooter` (`safeAreaInset`, cień WLICZONY
+  w wysokość — przewinięta do końca treść kończy się nad nim), pod listą w `VStack` jako ostatnie
+  dziecko — wtedy cień leży na liście i lista MUSI mieć na dole `.padding(.bottom,
+  SCEdgeShade.bottomHeight)`. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
+  obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
+  tylko nakładki na nią; kreator (`WelcomeFooter`) zostaje przy swoim układzie (kropki kroków).
+- Przypięty nagłówek nad przewijaną treścią arkusza = BEZ kreski: `.scScrollEdgeFade()` na
+  `ScrollView` (`Components/SCScrollEdgeFade.swift`) — górny brzeg treści gaśnie (maska, więc działa
+  na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Wzór:
+  szczegóły posiłku. Nagłówek stoi NAD `ScrollView` w `VStack` — nie przewija się i nie zwija
+  (zwijany „Filtrów”, z tytułem przeskakującym na środek, zniknął 23.09 na prośbę Rafała). Tak stoją
+  też filtry kategorii, oba arkusze wykluczania, lista kategorii, wybór przepisu do planu, „Dodaj do
+  planu”, Dieta, FAQ, Profil, Posiłki w planie, gospodarstwo, zgłoszenie odpowiedzi i wszystkie arkusze
+  na `AssistantSheetScaffold` (runda 8). Wyjątek: `PlanDayGoalSheet` mierzy wysokość treści pod
+  detent, więc nagłówek zostaje w mierzonej treści. Plan tygodnia też bez kreski pod nagłówkiem —
+  `scScrollEdgeFade` na przewijanej gałęzi `DayPager`. Maska sięga pod pasek domowy (`ignoresSafeArea`).
+- Plany asystenta: to, co dom MA, bierze się WYŁĄCZNIE z serwera (`BillingStateDTO.subscriptions`
+  z `alive`, potem `AgentUsageDTO.source == "SUBSCRIPTION"` + `product`). Liczba domowników
+  (`PlansSheet.plan(forHousehold:)`) tylko PODPOWIADA („Polecany”, „polecamy We dwoje”) — nigdy nie
+  pisze „Twój …”. Kiedyś „Twój dom” przy planie z liczby osób czytało się jak kupiony plan.
+- Alergeny w Ustawieniach → „Dieta i alergeny”: sam wynik (`AllergenSummaryCard` — „Omijamy 3 alergeny ·
+  ukrywa 84 przepisy” + etykiety), wybór w osobnym arkuszu (`AllergenPickerSheet`: trzy grupy, ikona
+  i jedno zdanie przy każdym alergenie, pole wyboru). Trzy układy w samym arkuszu diety odpadły
+  (chmura, kafle z opisami, siatka pigułek — „dalej nie jest ładne UX”). Kreator powitalny zostaje
+  przy siatce 3 × 5 (`AllergenPicker`), bo tam wybór jest treścią kroku.
+- Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
+  (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
+  liczone z NAZWY dania i składników (katalog nie ma tagów), sprawdzone na 495 przepisach
+  z `prisma/catalog`; nowe słowo kluczowe = sprawdź pokrycie na katalogu, nie na oko. W obrębie
+  aspektu LUB, między aspektami I. Wybór żyje w `RecipeFilterOptions.categoryFilters`, więc lista,
+  stopka „Filtrów” i liczniki liczą się jedną regułą; `activeCount` (plakietka w nagłówku) liczy
+  TYLKO filtry globalne, „Wyczyść” w każdym arkuszu czyści tylko swoje piętro (`resetGlobal`)
+  i działa od razu, bez „Pokaż”.
+- Karuzela na Przepisach: karta 330 pt (nie 420 z makiety) — zdjęcia są kwadratowe i przy 420
+  `scaledToFill` skalował je do wysokości, przybliżając talerz. Kolejność kart jest ZAMROŻONA
+  (`featuredOrder`) między ułożeniami (wyszukiwanie, filtry, dopasowanie, doba, katalog): ranking
+  stawia ulubione na przodzie i polubienie przestawiało karty pod palcem — następne stuknięcie
+  otwierało inny przepis. Serce na karcie to osobny przycisk NAD kartą (nie obrazek w niej).
+- Serce ulubionych = `RecipeFavouriteButton` (szczegóły posiłku i karuzela). Wyskok serca przy dodaniu
+  (`BurstHeart`) = TRWAŁY widok w nakładce + `keyframeAnimator` na liczniku dodań (każdy tor od
+  `MoveKeyframe`, serce wchodzi od krycia 0), nie wstawiany widok z `Task.sleep` — wstawienie i uśpienie
+  przycinały pierwszą fazę dodawania (runda 10). Stan LOKALNY, zapis do
+  katalogu 650 ms po ostatnim stuknięciu, już po wyskoku serca — natychmiastowy zapis przeliczał
+  pod arkuszem całą listę Przepisów w trakcie animacji (przycinało się na Macu). Zapis to WARTOŚĆ
+  (`RecipeCatalogStore.setFavourite(recipeId:to:)`, no-op przy zgodnym stanie), nie przełączenie —
+  przełącznik liczony od nieaktualnej kopii przestawiał serce w złą stronę. Arkusz szczegółów dostaje
+  ŻYWY przepis z katalogu (`recipes.first { $0.id == … } ?? kopia`) i nikt nie podmienia po zapisie
+  `selectedRecipe` / `detailTarget` — przypisanie otwierało zamknięty arkusz albo wpisywało stary
+  przepis do nowego.
+- Wjazd szczegółów posiłku jak wybór posiłku u Asystenta: `hasAppeared` w `.task` po 80 ms (klatka
+  oddechu — w `onAppear` padało w klatce wstawienia i nic nie grało), zdjęcie osiada z 1,12, sekcje
+  kaskadą (`smooth 0,55`, opóźnienie 0,10 + 0,05·n), serce i krzyżyk wchodzą z treścią; arkusz ma
+  rogi 40 pt (`dashboardLiquidSheet(cornerRadius: 40)`) we wszystkich czterech miejscach otwarcia.
+- Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: `EditorialSheetHeader` z kafelkiem,
+  zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka. Linijka „Aktywne: …” pod spodem
+  zniknęła w rundzie 9 („niepotrzebne”) — co działa, widać na kafelkach. „Wyczyść” obok krzyżyka
+  mają też oba arkusze wykluczania (dział czyści swój dział, główny — wszystko) i wybór alergenów
+  w Ustawieniach (zostają id alergenów nieznanych tej wersji — unia z `SettingsView`).
+- „Wybierz przepis” w Planie (`PlanSlotPickerSheet`) i lista kategorii na Przepisach
+  (`RecipeCategorySheetView`) to JEDEN układ z `RecipeListKit.swift` (runda 8, 23.09.2026 — Rafał:
+  „żeby wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”): `RecipeListSheetTop`
+  (nagłówek + `SCSearchField`, przypięte; BEZ pigułek z opcjami — runda 10: „od tego mamy filtry”,
+  zawężanie tylko w `RecipeCategoryFilterSheet` pod przyciskiem filtrów w nagłówku),
+  `RecipeListContextCard` (karta `scTileBg`: wiersz diety
+  „Dieta wegetariańska · bez: gluten · ukrywa 12 przepisów” w kolorze diety i wiersz „Filtry
+  z Przepisów” z „Wyczyść” — runda 9 zamiast kolorowego pudełka „Lista zawężona…”; na liście
+  KATEGORII wiersza diety nie ma od rundy 12 — dieta to dopisek w podtytule nagłówka
+  „118 przepisów · dieta wegetariańska” / „· bez Twoich alergenów”, gdy coś ukrywa; opis filtrów
+  z `RecipeFilterOptions.summaryLabels`), `RecipeRowStack` z `EditorialRecipeRow` (`.chevron` otwiera przepis,
+  `.selection(isOn:)` zaznacza — kółko `SCRadioMark` w terakocie jak w Ustawieniach, tło wiersza
+  w tincie akcentu; wybrany przepis schowany przez filtry pokazuje stopka) i `RecipeListEmptyState`
+  (runda 10: karta z kafelkiem POWODU w tincie — lupa, filtry, serce, dieta, ikona pory — tytuł, zdanie
+  i akcja, która powód zdejmuje, jako `EditorialPrimaryActionButton`; druga akcja tekstem). W wyborze do
+  planu: akcent i ikona PORY
+  (`slot.cozyAccent`, `slot.icon`), data i godzina w `subtitle`, filtry kategorii `slot.baseCategory`
+  bez aspektu „Pora w planie” (`RecipeCategoryFacets.facets(forPicking:slot:)`, arkusz filtrów
+  z `slot:`; wartości dań z INNYCH kategorii liczone w aspektach kategorii pory —
+  `RecipeFilterFactsCache.facetValues(for:in:)`); „Ulubione” to kafelek „Twoje przepisy” w tym arkuszu
+  (`favouritesOnly:`, plakietka filtrów liczy go jako jeden filtr). Lista to ZAWSZE przepisy tej pory
+  (`fits(slot)`) — „Wszystkie pory” usunięte w rundzie 10 („nie chcę jeść obiadu na śniadanie”).
+  „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad przyciskiem —
+  tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
+- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, napisany od zera w rundzie 13): trzy pytania bez
+  przewijania — KIEDY: przewijany pasek 28 dni od dziś (bez minionych dni i bez strzałek tygodnia,
+  kreska przed poniedziałkiem, „DZIŚ”, kropka szałwii = coś stoi); POSIŁEK: lista pór w jednej karcie
+  (kafelek pory, nazwa, po prawej danie, które już tam stoi, `SCRadioMark` w kolorze pory, pora spoza
+  przepisu przygaszona); DLA KOGO + porcje w jednej karcie (`PlanAudienceChips`, pod kreską „2 porcje”
+  + `SCStepper`). W stopce rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” / „dla całego
+  domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. `ViewThatFits(in:
+  .vertical)` przełącza na `ScrollView` tylko, gdy nie wejdzie (SE, duża czcionka).
+  `EditorialPrimaryActionButton` roluje tytuł (`numericText`) — działa tylko w animowanej transakcji.
+- Ten sam przepis w tej samej porze dla drugiej osoby = SUMA audytoriów, a nie nadpisanie
+  (`PlanAudienceChips.merged(_:with:members:)`, runda 10): pozycja planu to para (pora, przepis), więc
+  zapis „posiłek1 dla user2” przepisywał „posiłek1 dla user1” i user1 zostawał bez jedzenia. Suma
+  obejmująca cały dom zwija się do „Wspólne”. Obowiązuje w „Wybierz przepis” i w „Dodaj do planu”.
+- Kalorie na Planie liczy się NA OSOBĘ (runda 9, 23.09.2026): pigułka nad menu sumuje dzień osoby
+  z soczewki „…”, a przy „Cały dom” — tego, kto trzyma telefon (`nutritionPersonId`,
+  `visibleTo(memberId:)` w każdej porze). Suma całego domu dodawała dwa różne obiady do jednego
+  osobistego celu (~3000 kcal na osobę, która zje jeden). Arkusz „Cel dnia” (`PlanDayGoalSheet`
+  z `people: [PlanDayPerson]`) ma przy wielu domownikach przełącznik osób obok krzyżyka
+  (`PlanPersonSwitcher`: awatary, wybrana osoba z imieniem na tincie swojego koloru): dania, suma
+  i CEL tej osoby. Cele domowników przychodzą z serwera w `households:memberPreferences`
+  (`targets: {calorieGoal, macros}` — policzone w `toMemberContext`, BEZ sylwetki) →
+  `HouseholdMemberPreferences.targets`. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
+  kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka, runda 13: mniejsza — awatary 22 pt, wysokość 26, imię 12 pt) z obwódką w kolorze osoby,
+  wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
+  dzień („Twój dzień · 3 z 4 posiłków” / „Dzień: Ania · …”). Pełnoszerokościowe zakładki z rundy 11
+  odpadły. Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
+  Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
+- `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
+  (między zjazdem a wjazdem), a przewijanie ma `.id` dnia — pełny ↔ pusty dzień szarpał wjazdem.
+  Powrót do bieżącego tygodnia w pasku dni = „↩ Wróć do dziś” (samo „DZIŚ” czytało się jak znacznik dnia).
+- Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
+  podświetlone kółko z iskierkami; karta pustego tygodnia w `PlanDayTimeline` = kafelek, „ASYSTENT”,
+  tytuł, jedno zdanie i `EditorialPrimaryActionButton` (runda 9, „przerób na aktualne standardy”).
+- Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
+  „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
+  Przełożenie dania (stuknięcie talerzyka) ROLUJE cyfry i tekst (`.numericText()`): wielki wiersz
+  ma tożsamość po RODZAJU zdania (cyfry/słowa), nie po daniu — przenika się tylko cyfry ↔ słowa;
+  nazwa dania i nadpis („OBIAD · 14:00”) też rolują (nadpis przenika się tylko pora z godziną ↔ bez).
+  Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
+- Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
+  (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
+  nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
+  gospodarstwo). Pole szukania = `SCSearchField` (kapsuła 44 pt, krzyżyk, obwódka przy fokusie; przy
+  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — jedyny wyjątek to pływające pole
+  rozmów Asystenta. Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
+  Podpowiedź szukania kategorii: `RecipesConstants.searchPrompt(for:)` („Szukaj w śniadaniach”, nie „w śniadania”).
+- Po audycie spójności (runda 8, 23.09.2026, 26 punktów): akcja niszcząca = `SCDestructiveButton`
+  (soft kapsuła w ciepłej czerwieni: wyloguj, usuń konto, opuść gospodarstwo, odłącz Cookidoo/Zdrowie);
+  błąd przy polu = `SCInlineErrorText` (terakota, NIGDY `Color.red`, i bez „sprawdź połączenie” —
+  sam skutek); zaznaczony chip/karta = `.scChoiceSurface` (`.chip`: pigułki filtrów, płeć/aktywność
+  w Profilu i kreatorze; `.tile`: liczby `SCChoiceTile` — motyw, posiłki w planie, źródło kroków;
+  bez gradientu i cienia); karty szczegółów
+  posiłku = `scTileBg` + `scTileStroke` bez cienia; etykiety sekcji WSZĘDZIE 10,5 pt bold, tracking 1,4,
+  `scFaint` (lista Ustawień, arkusze, grupy Asystenta, „Kroki”, „Dla kogo”). Asystent: nagłówki arkuszy
+  (`AssistantSheetHeader`) rysuje `EditorialSheetHeader` (krzyżyk `SCSheetCloseButton`), tytuł zakładki
+  to `EditorialPageHeader`, przycisk wysyłania „soft”. Świadomie zostały: nagłówek kreatora
+  (`WelcomeStepHeader`), kreski w historii i archiwum Zakupów (ten sam układ co ekran Zakupów),
+  `ShoppingSheetHeader`.
+- Ustawienia → Gospodarstwo (23.09.2026, trzy rundy tego samego dnia — „za dużo tekstu”, potem
+  „znów pusto i smutno”): nagłówek z ikoną domu, nazwą, ołówkiem i jedną linijką „3 osoby · wspólny
+  plan i lista zakupów”; domownicy: sama tożsamość — awatar, imię, plakietki „TY” / „WŁAŚCICIEL”
+  (dieta i alergeny usunięte w rundzie 10: „to tu nie ma sensu”); zaproszenie jako osobna karta
+  z jednym przyciskiem (link jednorazowy, 7 dni); „Opuść gospodarstwo” PRZYPIĘTE w stopce arkusza
+  (`scSheetFooter`, runda 10). Wcześniej: nazwa w nagłówku
+  z ołówkiem obok krzyżyka (`EditorialSheetHeader` ma opcjonalne `accessory`; zmienia właściciel
+  przez `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
+  `households:findById`), zaproszenie jako wiersz listy (link 7 dni), „Opuść” na dole. NIC więcej — Rafał:
+  „tylko najważniejsze rzeczy”, bez powtarzania nazwy, liczników i objaśnień. „Czego nie jem” (wykluczone
+  składniki + limit czasu na danie) USUNIĘTE: walidator planu i prompt dalej czytają te kolumny,
+  więc każdy zapis diety wysyła `excludedIngredientIds: []` + `maxPrepTimeMinutes: null`,
+  a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
+  nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
   auth|auth-error|legal|thought|plate` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.

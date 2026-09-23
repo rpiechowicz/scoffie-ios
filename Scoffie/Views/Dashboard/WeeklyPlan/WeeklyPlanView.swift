@@ -37,6 +37,10 @@ struct WeeklyPlanView: View {
     /// wspólny zostaje tylko tydzień.
     @State private var selectedDate: Date = Date()
     @State private var profile: PlanProfile = .household
+    /// Dieta, alergeny i cele dnia domowników (`households:memberPreferences`)
+    /// — do arkusza „Cel dnia” po przełączeniu na inną osobę i do pigułki,
+    /// gdy soczewka „…” stoi na kimś innym.
+    @State private var memberPreferences: [String: HouseholdMemberPreferences] = [:]
     @State private var pickerTarget: PickerTarget?
     @State private var detailTarget: DetailTarget?
     @State private var showClearDayAlert = false
@@ -199,15 +203,85 @@ struct WeeklyPlanView: View {
         )
     }
 
-    /// Wybrany dzień policzony raz — pigułka nad menu i arkusz „Cel dnia"
-    /// biorą liczby stąd, przez tę samą listę slotów i tę samą soczewkę
-    /// profilu, co oś dnia pod spodem.
-    private var selectedDayNutrition: PlanDayNutrition {
-        PlanDayNutrition.make(
-            slots: visibleSlots(on: selectedDate),
-            meals: { visibleMeals(date: selectedDate, slot: $0) },
+    /// Czyj dzień liczy pigułka nad menu: osoba z soczewki „…”, a przy
+    /// „Cały dom” — ten, kto trzyma telefon.
+    ///
+    /// Suma „całego domu” nie jest niczyim talerzem: przy dwóch różnych
+    /// obiadach w tej samej porze pigułka dodawała oba do jednego osobistego
+    /// celu i pokazywała ~3000 kcal osobie, która zje jeden (Rafał,
+    /// 23.09.2026). Oś dnia dalej pokazuje dania wszystkich obok siebie —
+    /// zmienia się tylko to, co się SUMUJE.
+    private var nutritionPersonId: String? {
+        profile.memberId ?? sessionStore.currentUserId
+    }
+
+    /// Dzień jednej osoby: w każdej porze jej danie osobiste albo wspólne
+    /// (`visibleTo(memberId:)`). Dom jednoosobowy — i skład jeszcze
+    /// niewczytany — liczy wszystko, co stoi w dniu.
+    private func dayNutrition(on date: Date, for personId: String?) -> PlanDayNutrition {
+        let person = members.count > 1 ? personId : nil
+        return PlanDayNutrition.make(
+            slots: visibleSlots(on: date),
+            meals: { slot in
+                let all = mealStore.meals(for: date, slot: slot)
+                guard let person else { return all }
+                return all.visibleTo(memberId: person)
+            },
             knownHouseholdMemberCount: knownHouseholdMemberCount
         )
+    }
+
+    /// Wybrany dzień osoby z pigułki — policzony raz dla pigułki nad menu.
+    private var selectedDayNutrition: PlanDayNutrition {
+        dayNutrition(on: selectedDate, for: nutritionPersonId)
+    }
+
+    /// Cel osoby, której dzień liczy pigułka: mój z Ustawień, domownika —
+    /// z serwera. Zanim cel domownika przyjdzie, pigułka mierzy do mojego.
+    private func dailyTargets(for personId: String?) -> DailyNutritionTargets {
+        guard let personId, personId != sessionStore.currentUserId,
+              let theirs = memberPreferences[personId]?.targets else { return dailyTargets }
+        return theirs
+    }
+
+    /// Cele domowników z serwera. Pusta odpowiedź (błąd, anulowanie) NIE
+    /// nadpisuje tego, co już jest — inaczej jedno zerwane połączenie
+    /// gasiło cele w przełączniku do końca sesji.
+    private func refreshMemberPreferences() async {
+        guard members.count > 1 else { return }
+        let loaded = await sessionStore.loadHouseholdMemberPreferences()
+        guard !Task.isCancelled, !loaded.isEmpty else { return }
+        memberPreferences = loaded
+    }
+
+    /// Osoby w arkuszu „Cel dnia” — ja pierwszy, potem domownicy w kolejności
+    /// składu, każdy ze swoimi daniami i swoim celem.
+    private var dayGoalPeople: [PlanDayPerson] {
+        let me = sessionStore.currentUserId
+        guard members.count > 1 else {
+            return [
+                PlanDayPerson(
+                    id: me ?? "me",
+                    name: "Ty",
+                    member: nil,
+                    nutrition: selectedDayNutrition,
+                    targets: dailyTargets,
+                    isMe: true
+                )
+            ]
+        }
+        let ordered = members.filter { $0.id == me } + members.filter { $0.id != me }
+        return ordered.map { member in
+            let isMe = member.id == me
+            return PlanDayPerson(
+                id: member.id,
+                name: HouseholdMemberStyle.shortName(member.displayName),
+                member: member,
+                nutrition: dayNutrition(on: selectedDate, for: member.id),
+                targets: isMe ? dailyTargets : memberPreferences[member.id]?.targets,
+                isMe: isMe
+            )
+        }
     }
 
     /// Posiłki slotu, zawężone do bieżącego profilu.
@@ -294,16 +368,13 @@ struct WeeklyPlanView: View {
                             plannedDates: plannedDates
                         )
                         .padding(.horizontal, SCPageMetrics.horizontal)
-
-                        // 14 pt nad kreską i nic pod nią: odstęp od kreski do
-                        // nazwy dnia należy do osi (`PlanDayTimeline` zaczyna
-                        // się własnym paddingiem 18 pt), żeby liczyć go w
-                        // jednym miejscu, a nie po obu stronach granicy.
-                        Rectangle()
-                            .fill(Color.scRule(scheme))
-                            .frame(height: 1)
-                            .padding(.horizontal, SCPageMetrics.horizontal)
-                            .padding(.top, 14)
+                        // Bez kreski pod paskiem dni: strona dnia gaśnie pod
+                        // nim sama (`scScrollEdgeFade` w `DayPager`), jak treść
+                        // pod przypiętym nagłówkiem arkusza. Kreska stała tu
+                        // na stałe, także gdy nic pod nią nie przejeżdżało.
+                        // Odstęp do nazwy dnia należy do osi (`PlanDayTimeline`
+                        // zaczyna się własnym paddingiem 18 pt).
+                        .padding(.bottom, 14)
 
                         // Bez czerwonego wiersza błędu: od kiedy most z korzenia
                         // aplikacji wystawia `errorMessage` jako toast, ten sam
@@ -344,8 +415,13 @@ struct WeeklyPlanView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 PlanDayGoalBar(
                     nutrition: selectedDayNutrition,
-                    targets: dailyTargets,
-                    action: { simpleSheet = .dayGoal }
+                    targets: dailyTargets(for: nutritionPersonId),
+                    action: {
+                        simpleSheet = .dayGoal
+                        // Cel domownika mógł się zmienić od ostatniego
+                        // odczytu — arkusz dociąga świeży w tle.
+                        Task { await refreshMemberPreferences() }
+                    }
                 )
                 .frame(width: goalBarWidth)
                 .padding(.bottom, 8)
@@ -396,6 +472,11 @@ struct WeeklyPlanView: View {
                 // gospodarstwa, więc musi być wczytany.
                 await sessionStore.refreshHouseholdMembers(force: false)
             }
+            // Cele domowników do przełącznika osób w „Cel dnia” — przy każdej
+            // zmianie składu. Dom jednoosobowy nie ma kogo przełączać.
+            .task(id: members.map(\.id)) {
+                await refreshMemberPreferences()
+            }
             // Powrót na zakładkę: dzień mógł zostać zmieniony na innej.
             // Flaga zamiast `onAppear`, bo zakładki żyją wszystkie naraz.
             .onChange(of: isActiveTab, initial: true) { _, active in
@@ -434,8 +515,10 @@ struct WeeklyPlanView: View {
                 case .dayGoal:
                     PlanDayGoalSheet(
                         date: selectedDate,
-                        nutrition: selectedDayNutrition,
-                        targets: dailyTargets,
+                        people: dayGoalPeople,
+                        // Arkusz otwiera się na tej samej osobie, co pigułka.
+                        initialPersonId: nutritionPersonId,
+                        members: members,
                         // 0,9 wysokości zakładki: arkusz „do treści" nie ma
                         // prawa dojechać pod sam pasek stanu, bo wtedy
                         // przestaje być podglądem, a zaczyna być ekranem.
@@ -489,19 +572,13 @@ struct WeeklyPlanView: View {
             }
             .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
-                    recipe: target.recipe,
-                    onToggleFavorite: {
-                        Task { @MainActor in
-                            await recipeCatalogStore.toggleFavorite(recipeId: target.recipe.id)
-                            let refreshed = await recipeCatalogStore.loadRecipeDetail(recipeId: target.recipe.id)
-                                ?? recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id })
-                                ?? target.recipe
-                            // Podmieniamy sam przepis, nie cały cel — `id`
-                            // zostaje ten sam, więc arkusz się nie przeładowuje
-                            // i liczba porcji wybrana stepperem przeżywa
-                            // kliknięcie w serduszko.
-                            detailTarget?.recipe = refreshed
-                        }
+                    // Żywy przepis z katalogu: serce nadąża za zapisem, a cel
+                    // (`detailTarget`) nie jest podmieniany po zapisie — przy
+                    // zamkniętym i otwartym w międzyczasie innym posiłku
+                    // podmiana wpisywała stary przepis do nowego arkusza.
+                    recipe: recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id }) ?? target.recipe,
+                    onSetFavourite: { value in
+                        Task { await recipeCatalogStore.setFavourite(recipeId: target.recipe.id, to: value) }
                     },
                     onClose: { detailTarget = nil },
                     // Stepper startuje od liczby, którą pokazuje wiersz planu.
@@ -516,7 +593,7 @@ struct WeeklyPlanView: View {
                     }
                 )
                 .presentationDetents([.large])
-                .dashboardLiquidSheet()
+                .dashboardLiquidSheet(cornerRadius: 40)
             }
         }
     }
@@ -531,22 +608,16 @@ struct WeeklyPlanView: View {
     private var headerRow: some View {
         EditorialPageHeader(title: "Plan tygodnia") {
             HStack(spacing: 6) {
-                // Asystent stoi w nagłówku EKRANU, a nie w nagłówku dnia.
+                // Asystent stoi w nagłówku EKRANU, a nie w nagłówku dnia —
+                // dotyczy całego tygodnia, tak jak sąsiednie akcje.
                 //
-                // Wcześniej był 44-punktową pigułką obok nazwy dnia — czyli
-                // jedyną akcją, która wyglądała, jakby dotyczyła poniedziałku,
-                // a otwierała planszę na cały tydzień. Tutaj mówi to samo, co
-                // sąsiednie akcje: rzecz dotyczy tego planu, nie tej strony.
-                // Podświetlona, bo to jedyna akcja nagłówka, która coś tworzy.
-                EditorialIconButton(
-                    icon: MenuConstans.Assistant.icon,
-                    highlighted: true,
-                    size: Self.headerActionSize,
-                    tapTarget: 44
-                ) {
-                    simpleSheet = .assistantIntro
-                }
-                .accessibilityLabel("Zaplanuj z asystentem")
+                // Pigułka z podpisem, a nie sama ikona (runda 9, 23.09.2026 —
+                // „przerób na aktualne standardy”): podświetlone kółko
+                // z iskierkami było jedyną pomarańczową plamą bez słowa
+                // w nagłówkach aplikacji i przy pustym tygodniu nikt nie
+                // wiedział, że to właśnie ono układa plan. „Ułóż” mówi to
+                // wprost, w wariancie „soft”, jak każda akcja główna.
+                PlanAssistantPill { simpleSheet = .assistantIntro }
 
                 // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.

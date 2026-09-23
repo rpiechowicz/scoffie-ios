@@ -125,15 +125,10 @@ struct MealTimesSheet: View {
     private var saveStatus: some View {
         if let errorMessage {
             VStack(alignment: .leading, spacing: 6) {
-                Text(errorMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
+                SCInlineErrorText(errorMessage)
 
                 if let lastFailed {
-                    Button("Spróbuj ponownie") { save(lastFailed) }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
+                    SCRetryButton { save(lastFailed) }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -147,7 +142,8 @@ struct MealTimesSheet: View {
         Task { @MainActor in
             let saved = await sessionStore.saveMealSlotSchedule(next)
             if !saved {
-                errorMessage = "Nie udało się zapisać godzin. Sprawdź połączenie i spróbuj ponownie."
+                // Sam skutek, bez diagnozy łączności — patrz `MealSlotsSheet`.
+                errorMessage = "Nie udało się zapisać godzin."
                 lastFailed = next
             }
         }
@@ -271,8 +267,12 @@ struct MealTimesSheet: View {
 /// przejmuje pionowe przeciągnięcia w swoim obszarze i **nie da się** tego
 /// wyłączyć. Wstawione w `ScrollView` zjadało przewijanie listy i gest
 /// zamknięcia arkusza. Tutaj nic nie przewija się pod spodem, więc koło może
-/// sobie łapać wszystko, co chce — a arkusz zamyka się uchwytem, przyciskiem
+/// sobie łapać wszystko, co chce — a arkusz zamyka się uchwytem, krzyżykiem
 /// albo stuknięciem w tło.
+///
+/// Godzina zapisuje się sama przy każdym obrocie koła (`onPick`), więc nie
+/// ma czego zatwierdzać: zamyka się krzyżykiem, jak każdy arkusz, a nie
+/// przyciskiem „Gotowe”, który udawał zapis.
 private struct MealTimeEditorSheet: View {
     let slot: MealSlot
     let minutes: Int?
@@ -308,7 +308,16 @@ private struct MealTimeEditorSheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                header
+                EditorialSheetHeader(
+                    eyebrow: "Pora posiłku",
+                    title: slot.title,
+                    icon: slot.icon,
+                    accent: slot.cozyAccent,
+                    onClose: onClose
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 4)
 
                 DatePicker(
                     "",
@@ -340,40 +349,5 @@ private struct MealTimeEditorSheet: View {
         .onChange(of: selection) { _, newValue in
             onPick(MealSlotSchedule.minutes(from: newValue))
         }
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(slot.cozyAccent.opacity(scheme == .dark ? 0.22 : 0.16))
-
-                Image(systemName: slot.icon)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(slot.cozyAccent)
-            }
-            .frame(width: 32, height: 32)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Pora posiłku")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(SCPalette.terracotta)
-
-                Text(slot.title)
-                    .font(.system(size: 19, weight: .heavy))
-                    .tracking(-0.3)
-                    .foregroundStyle(Color.scLabel(scheme))
-            }
-
-            Spacer(minLength: 8)
-
-            Button("Gotowe", action: onClose)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(SCPalette.terracotta)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 26)
-        .padding(.bottom, 4)
     }
 }

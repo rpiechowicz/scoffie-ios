@@ -616,7 +616,8 @@ struct AssistantView: View {
                     slot: briefingSlot,
                     title: meal.recipe.name,
                     kcal: Int(nutrition.kcal.rounded()),
-                    imageURL: meal.recipe.imageURL
+                    imageURL: meal.recipe.imageURL,
+                    minutes: meal.recipe.prepTimeMinutes
                 )
             )
         }
@@ -689,10 +690,13 @@ struct AssistantView: View {
         )
     }
 
-    /// Akcja z karty briefingu.
+    /// Akcja z powitania.
     private func perform(_ action: AssistantBriefing.Action) {
         switch action.kind {
         case let .ask(prompt): ask(prompt)
+        // „Mam inny pomysł” tylko ustawia fokus — akcje gasną, otwarcie
+        // zostaje nad polem jako temat rozmowy.
+        case .compose: isComposerFocused = true
         case .openPlans: showPaywall = true
         case .openHistory: showConversations = true
         }
@@ -717,18 +721,22 @@ struct AssistantView: View {
     private var conversation: some View {
         ZStack {
             if isConversationEmpty {
-                // Briefing stoi u góry, pod nagłówkiem — nie na środku:
-                // karta z listą pór albo paskiem tygodnia bywa wysoka i na
-                // małym ekranie centrowanie wypychało jej dół pod pole.
-                // Przewijanie tylko wtedy, gdy naprawdę nie mieści się
-                // (Dynamic Type, iPhone SE) — `basedOnSize`.
-                ScrollView {
-                    emptyState
-                        .padding(.horizontal, SCPageMetrics.horizontal)
-                        .padding(.top, 4)
-                        .padding(.bottom, 16)
+                // Powitanie stoi PRZY POLU, nie pod nagłówkiem (makieta
+                // „Empty state v2”, wariant A): pytanie i odpowiedzi pod
+                // kciukiem, tam, gdzie zacznie się rozmowa. Wolne miejsce
+                // zostaje NAD blokiem. Gdy blok jest wyższy niż ekran
+                // (Dynamic Type, iPhone SE), startuje od otwarcia i przewija
+                // się — czytamy od początku, nie od środka.
+                GeometryReader { geometry in
+                    ScrollView {
+                        emptyState
+                            .padding(.horizontal, SCPageMetrics.horizontal)
+                            .padding(.top, 4)
+                            .padding(.bottom, 20)
+                            .frame(minHeight: geometry.size.height, alignment: .bottom)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -923,7 +931,19 @@ struct AssistantView: View {
     }
 
     private var emptyState: some View {
-        AssistantEmptyState(briefing: briefing, onAction: perform)
+        AssistantEmptyState(briefing: briefing, composing: isComposerFocused, onAction: perform)
+    }
+
+    /// Przykład w polu: na pustym ekranie pasuje do sytuacji z powitania
+    /// („Np. mam kurczaka i paprykę”), w rozmowie — zwykłe zaproszenie.
+    private var composerPrompt: String {
+        if store.isUnavailable { return "Asystent jest teraz niedostępny" }
+        if store.isLocked { return "Chwila przerwy — spróbuj za moment" }
+        if isConversationEmpty, editing == nil {
+            let example = briefing.placeholder
+            if !example.isEmpty { return example }
+        }
+        return "Napisz do asystenta…"
     }
 
     // MARK: - Pole wiadomości
@@ -970,19 +990,13 @@ struct AssistantView: View {
     }
 
     /// `LComposer` z makiety: pole 50 pt w pigułce z włoskowatym obrysem,
-    /// obok krążek 50 — terakotowy, gdy jest co wysłać albo tura biegnie
-    /// (wtedy strzałka staje się stopem); przy poprawce pytania pole
-    /// dostaje obrys terakoty i poświatę.
+    /// obok krążek 50 — w terakocie wariantu „soft”, gdy jest co wysłać albo
+    /// tura biegnie (wtedy strzałka staje się stopem); przy poprawce pytania
+    /// pole dostaje obrys terakoty i poświatę.
     private var composerField: some View {
         let active = store.isSending || editing != nil || canSend
         return HStack(alignment: .bottom, spacing: 10) {
-            TextField(
-                store.isUnavailable
-                    ? "Asystent jest teraz niedostępny"
-                    : (store.isLocked ? "Chwila przerwy — spróbuj za moment" : "Napisz do asystenta…"),
-                text: $draft,
-                axis: .vertical
-            )
+            TextField(composerPrompt, text: $draft, axis: .vertical)
             // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
             // w sobotę, dwie osoby bez glutenu…").
             .lineLimit(1...8)
@@ -1018,11 +1032,23 @@ struct AssistantView: View {
                 if store.isSending { store.stopWaiting() } else { send() }
             } label: {
                 ZStack {
-                    Circle().fill(active ? AssistantLook.terra(scheme) : AssistantLook.input(scheme))
-                    Circle().stroke(active ? Color.clear : AssistantLook.cardStroke(scheme), lineWidth: 1)
+                    // Wygaszony: krążek jak pole obok.
+                    Group {
+                        Circle().fill(AssistantLook.input(scheme))
+                        Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1)
+                    }
+                    .opacity(active ? 0 : 1)
+
+                    // Aktywny: wariant „soft” (`scSoftSurface`), jak każda
+                    // akcja główna — pełna terakotowa tarcza z białą strzałką
+                    // była jedyną taką plamą koloru na ekranie.
+                    Color.clear
+                        .scSoftSurface(Circle())
+                        .opacity(active ? 1 : 0)
+
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
-                        .foregroundStyle(active ? Color.white : AssistantLook.ink(scheme).opacity(0.45))
+                        .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 50, height: 50)
@@ -1736,7 +1762,9 @@ private struct MessageBubble: View {
                 onRevise: onRevise,
                 onAskNew: onAskNew,
                 onUndo: { onUndo(planWeek.proposalId) },
-                onOpenPlan: onOpenPlan
+                onOpenPlan: onOpenPlan,
+                onAsk: onAsk,
+                onCompose: onCompose
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -1746,7 +1774,9 @@ private struct MessageBubble: View {
                 onRevise: onRevise,
                 onAskNew: onAskNew,
                 onUndo: { onUndo(planDay.proposalId) },
-                onOpenPlan: onOpenPlan
+                onOpenPlan: onOpenPlan,
+                onAsk: onAsk,
+                onCompose: onCompose
             )
         case .options(let options):
             AssistantOptionsCard(

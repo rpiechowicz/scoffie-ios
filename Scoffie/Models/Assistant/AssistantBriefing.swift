@@ -1,17 +1,29 @@
 import Foundation
 
-// Briefing pustej rozmowy z asystentem — LOGIKA, bez SwiftUI.
+// Powitanie pustej rozmowy z asystentem — LOGIKA, bez SwiftUI.
 //
 // Pusty ekran asystenta nie jest jednym zdaniem dla wszystkich. Telefon zna
 // godzinę, dzień tygodnia, plan tego i przyszłego tygodnia, godziny posiłków,
-// bilans makro i stan puli — z tego składa się JEDEN briefing: co jest
-// najważniejsze w tej chwili i co da się z tym zrobić jednym stuknięciem.
+// bilans makro i stan puli — z tego składa się JEDNO powitanie: otwarcie,
+// jedno zdanie pomocy, główna akcja i jedna alternatywa. „Mam inny pomysł”
+// (fokus pola) dokłada widok zawsze, a przykład w polu zmienia się razem
+// z sytuacją. Makieta: „Scoffie — Asystent · Empty state v2”, wariant A.
 //
 // Podział na trzy warstwy jest celowy:
 //   - `AssistantBriefingContext` — fakty (co aplikacja wie),
 //   - `AssistantBriefingResolver` — priorytety (co z tych faktów wynika),
 //   - `AssistantBriefing` — model widoku (co narysować, bez wiedzy, jak).
-// Widok (`AssistantBriefingCard`) dostaje gotowy model i nie liczy nic sam.
+// Widok (`AssistantGreeting`) dostaje gotowy model i nie liczy nic sam.
+//
+// Język (reguła z makiety): mówimy, w czym mogę pomóc. Bez liczenia braków
+// („0 z 4”), bez dat i bez ponaglania. Stan dnia mówią talerzyki (zdjęcie
+// albo pusty krążek), nie liczby.
+//
+// Akcje, które dotyczą JEDNEJ pory („Pokaż 3 pomysły”), proszą wprost
+// o dania „do wyboru” — serwer odpowiada wtedy kartą OPTIONS, czyli
+// arkuszem wyboru posiłku ze zdjęciem, opisem i makro. Plan dnia albo
+// tygodnia to propozycja do zatwierdzenia, której dania przegląda się
+// w tym samym arkuszu.
 //
 // Plik importuje TYLKO Foundation, żeby dało się go skompilować razem
 // z `Scripts/AssistantLogic/main.swift` bez Xcode — to jedyny sposób na
@@ -19,7 +31,7 @@ import Foundation
 
 // MARK: - Fakty
 
-/// Pora dnia w słowniku briefingu — kopia `MealSlot` bez zależności od
+/// Pora dnia w słowniku powitania — kopia `MealSlot` bez zależności od
 /// SwiftUI (tam `cozyAccent` jest `Color`). Mapowanie 1:1 po `rawValue`.
 enum AssistantBriefingSlot: String, CaseIterable, Comparable, Hashable {
     case breakfast
@@ -29,7 +41,7 @@ enum AssistantBriefingSlot: String, CaseIterable, Comparable, Hashable {
     case dinner
     case snack
 
-    /// Posiłki, których brak jest WAŻNY — pusty podwieczorek nie robi briefingu.
+    /// Posiłki, których brak jest WAŻNY — pusty podwieczorek nie robi powitania.
     static let core: [AssistantBriefingSlot] = [.breakfast, .lunch, .dinner]
 
     var order: Int { Self.allCases.firstIndex(of: self) ?? 0 }
@@ -49,7 +61,19 @@ enum AssistantBriefingSlot: String, CaseIterable, Comparable, Hashable {
         }
     }
 
-    /// Biernik po czasowniku: „Dobierz kolację”.
+    /// Krótka nazwa pod talerzykiem — pięć pór musi zmieścić się w rzędzie.
+    var shortTitle: String {
+        switch self {
+        case .breakfast: return "Śniad."
+        case .secondBreakfast: return "II śn."
+        case .lunch: return "Obiad"
+        case .afternoonSnack: return "Podw."
+        case .dinner: return "Kolacja"
+        case .snack: return "Przek."
+        }
+    }
+
+    /// Biernik po czasowniku: „Dobierz kolację”, „masz już obiad”.
     var accusative: String {
         switch self {
         case .breakfast: return "śniadanie"
@@ -61,12 +85,11 @@ enum AssistantBriefingSlot: String, CaseIterable, Comparable, Hashable {
         }
     }
 
-    /// „Kolacja jest jeszcze pusta” — rodzaj gramatyczny nazwy pory.
-    var emptyPredicate: String {
+    /// Mianownik małą literą: „Za 40 minut obiad.”
+    var nominative: String {
         switch self {
-        case .breakfast, .secondBreakfast: return "jest jeszcze puste"
-        case .lunch, .afternoonSnack: return "jest jeszcze pusty"
-        case .dinner, .snack: return "jest jeszcze pusta"
+        case .secondBreakfast: return "II śniadanie"
+        default: return title.lowercased()
         }
     }
 
@@ -84,7 +107,7 @@ enum AssistantBriefingSlot: String, CaseIterable, Comparable, Hashable {
     }
 }
 
-/// Jeden dzień planu widziany z briefingu.
+/// Jeden dzień planu widziany z powitania.
 struct AssistantBriefingDay: Equatable {
     struct Meal: Equatable {
         let slot: AssistantBriefingSlot
@@ -92,6 +115,8 @@ struct AssistantBriefingDay: Equatable {
         /// Kalorie na osobę; 0 = nieznane.
         let kcal: Int
         let imageURL: URL?
+        /// Czas przygotowania; 0 = nieznany.
+        var minutes: Int = 0
     }
 
     let date: Date
@@ -105,11 +130,19 @@ struct AssistantBriefingDay: Equatable {
     var missingSlots: [AssistantBriefingSlot] {
         enabledSlots.filter { !plannedSlots.contains($0) }.sorted()
     }
+    /// Brakujące pory GŁÓWNE (śniadanie, obiad, kolacja).
+    var missingCoreSlots: [AssistantBriefingSlot] {
+        missingSlots.filter { AssistantBriefingSlot.core.contains($0) }
+    }
     /// Każda planowana pora ma danie.
     var isComplete: Bool { isPlanned && missingSlots.isEmpty }
+
+    func meal(_ slot: AssistantBriefingSlot) -> Meal? {
+        meals.first { $0.slot == slot }
+    }
 }
 
-/// Bilans makro policzony z PRAWDZIWYCH liczb — briefing nigdy ich nie zmyśla.
+/// Bilans makro policzony z PRAWDZIWYCH liczb — powitanie nigdy ich nie zmyśla.
 struct AssistantBriefingBalance: Equatable {
     /// Dopełniacz: „brakuje Ci białka”.
     let macroGenitive: String
@@ -150,354 +183,430 @@ struct AssistantBriefingContext {
 // MARK: - Model widoku
 
 struct AssistantBriefing: Equatable {
-    enum Kind: String, Equatable {
+    enum Kind: String, Equatable, CaseIterable {
         case trialExhausted
         case newUser
+        case lateNight
         case weekEmpty
         case todayEmpty
+        case cookSoon
+        case breakfastMissing
+        case lunchMissing
+        case dinnerMissing
         case tomorrowEmpty
-        case missingMeal
+        case tomorrowPartial
         case nextWeekEmpty
         case balanceIssue
-        case dayReady
         case weekReady
         case weekendInspiration
+        case eveningReady
+        case dayReady
     }
 
-    /// Stan kółka dnia albo posiłku (`EDot` z makiety): pusty = kreskowany
-    /// ring, częściowy = ring z ułamkiem, gotowy = pełny dysk z ptaszkiem.
-    enum DotState: Equatable {
-        case empty
-        case partial(Double)
-        case full
-    }
-
-    struct DayMark: Equatable, Identifiable {
+    /// Talerzyk jednej pory: zdjęcie dania albo pusty, kreskowany krążek.
+    struct Plate: Equatable, Identifiable {
         let id: String
-        /// „Pn”.
-        let short: String
-        /// „22” — numer dnia pod kółkiem.
-        let dayNumber: String
-        let state: DotState
-        let isToday: Bool
-
-        var planned: Bool { state != .empty }
-    }
-
-    struct SlotMark: Equatable, Identifiable {
-        let id: String
+        /// „Obiad” — krótko, pod talerzykiem.
         let title: String
+        let imageURL: URL?
         let filled: Bool
+        /// Pora, o której mówi powitanie — podświetlona.
+        let isFocus: Bool
     }
 
-    struct MealPreview: Equatable, Identifiable {
-        let id: String
-        let slotTitle: String
+    /// Jedno danie z planu — zdjęcie, nazwa i liczby, które liczą się od zera.
+    struct MealPreview: Equatable {
+        /// „OBIAD · 14:00”.
+        let eyebrow: String
         let title: String
+        let minutes: Int
         let kcal: Int
         let imageURL: URL?
     }
 
-    /// Sześć typów wizualizacji kontekstu — stała wysokość strefy.
+    /// Kontekst pod zdaniem pomocy — mówi stan bez słów.
     enum Visual: Equatable {
-        /// Tydzień: siedem kółek z numerami dni.
-        case week([DayMark])
-        /// Dzień: mini oś posiłków pod etykietą („Dziś”, „Jutro”).
-        case day(label: String, slots: [SlotMark])
-        /// Lekki podgląd istniejących posiłków dnia.
-        case meals([MealPreview])
-        /// Średnia vs cel na jednym pasku.
+        case plain
+        /// Pory jednego dnia jako talerzyki.
+        case plates([Plate])
+        /// Najbliższe danie z planu.
+        case meal(MealPreview)
+        /// Średnia vs cel na jednym pasku — liczby liczą się od zera.
         case balance(current: Int, target: Int, unit: String)
-        /// Trzy miniatury przepisów — bez nazw i bez wyboru.
-        case teaser([URL?])
-        /// Znak marki — gdy nie ma danych, których warto pokazać.
-        case brand(muted: Bool)
     }
 
     struct Action: Equatable, Identifiable {
         enum Kind: Equatable {
-            /// Wysyła gotowe zdanie do asystenta.
+            /// Wysyła gotowe zdanie do asystenta — w historii widać, o co poproszono.
             case ask(String)
+            /// „Mam inny pomysł” — tylko fokus pola, nic nie wysyła.
+            case compose
             case openPlans
             case openHistory
         }
 
         let title: String
         let kind: Kind
-        /// Symbol w kafelku po lewej wiersza akcji wtórnej.
-        var icon: String? = nil
 
         var id: String { title }
 
-        static func ask(_ title: String, _ prompt: String, icon: String? = nil) -> Action {
-            Action(title: title, kind: .ask(prompt), icon: icon)
+        static func ask(_ title: String, _ prompt: String) -> Action {
+            Action(title: title, kind: .ask(prompt))
         }
-    }
 
-    /// Podsumowanie pod wizualizacją z LICZBĄ osobno — liczba przewija się
-    /// (`CountingNumber`), tekst stoi: „0 z 7 dni zaplanowanych”,
-    /// „2 z 3 posiłków”, „Poniżej celu w 5 z 7 dni”.
-    struct Summary: Equatable {
-        var prefix: String? = nil
-        let value: Int
-        let text: String
-
-        var sentence: String {
-            [prefix, String(value), text].compactMap { $0 }.joined(separator: " ")
-        }
+        static let compose = Action(title: "Mam inny pomysł", kind: .compose)
     }
 
     let kind: Kind
-    /// Eyebrow nazywa sytuację: „Widzę w Twoim planie”, „Na dziś”, „Bilans tygodnia”.
-    let eyebrow: String
-    /// Data albo zakres po prawej: „Śr 16 wrz”, „21–27 wrz”; `nil` = brak.
-    let dateLabel: String?
-    /// Jedno zdanie, stwierdza fakt.
+    /// Otwarcie — jedno pytanie albo stwierdzenie, do trzech linii.
     let headline: String
-    /// Jedno zdanie: co mogę zrobić.
+    /// Jedno zdanie: w czym mogę pomóc.
     let supporting: String
     let visual: Visual
-    /// Pod wizualizacją (tydzień, dzień, bilans).
-    let summary: Summary?
     let primary: Action
-    /// Najwyżej dwie.
-    let secondary: [Action]
-    /// Co się stanie po dotknięciu: „Najpierw pokażę propozycję do zatwierdzenia.”
-    let helper: String?
+    /// Alternatywy pod główną akcją; ostatnia to zwykle „Mam inny pomysł”.
+    let alternatives: [Action]
+    /// Przykład pytania w polu wiadomości — pasuje do sytuacji.
+    let placeholder: String
 
-    /// Wyciszona wersja karty (wykorzystany limit): znak i eyebrow w szarości.
+    /// Wyciszona wersja (wykorzystany limit): znak w szarości, bez pola.
     var isQuiet: Bool { kind == .trialExhausted }
 }
 
 // MARK: - Resolver
 
 enum AssistantBriefingResolver {
+    /// Ile przed porą posiłku powitanie mówi „Za 40 minut obiad”.
+    static let cookSoonWindow = 90
+
     /// Kolejność sprawdzeń JEST specyfikacją: pierwsza prawdziwa sytuacja
-    /// wygrywa, pokazuje się jedna karta.
+    /// wygrywa, pokazuje się jedno powitanie.
     static func resolve(_ c: AssistantBriefingContext) -> AssistantBriefing {
         let cal = c.calendar
         let hour = cal.component(.hour, from: c.now)
         let minuteOfDay = hour * 60 + cal.component(.minute, from: c.now)
         // 1 = niedziela w kalendarzu gregoriańskim.
         let weekday = cal.component(.weekday, from: c.now)
-        let isWeekendish = weekday == 5 || weekday == 6 || weekday == 7 || weekday == 1
-        let isWeekend = weekday == 6 || weekday == 7 || weekday == 1
+        let isWeekend = weekday == 7 || weekday == 1
+        let isLateWeek = weekday == 5 || weekday == 6 || isWeekend
         let allDays = c.thisWeek + c.nextWeek
         let today = allDays.first { cal.isDate($0.date, inSameDayAs: c.now) }
         let tomorrowDate = cal.date(byAdding: .day, value: 1, to: c.now) ?? c.now
         let tomorrow = allDays.first { cal.isDate($0.date, inSameDayAs: tomorrowDate) }
-        let todayDate = shortDayLabel(c.now, cal)
-        let proposal = "Najpierw pokażę propozycję do zatwierdzenia."
-        let viewOnly = "Bez zmian w planie — tylko podgląd."
+        let time = { (slot: AssistantBriefingSlot) in c.slotMinutes[slot] ?? slot.defaultMinutes }
 
         // 1. Wyczerpana pula — nic nie da się wysłać, więc żadna podpowiedź
-        //    nie ma prawa się pojawić. Karta wyciszona, bez composera.
+        //    nie ma prawa się pojawić. Wyciszone, bez pola wiadomości.
         if c.trialExhausted {
             return AssistantBriefing(
                 kind: .trialExhausted,
-                eyebrow: "Asystent",
-                dateLabel: nil,
                 headline: "Darmowe wiadomości są wykorzystane.",
-                supporting: "Rozmowy i zapisany plan zostają.",
-                visual: .brand(muted: true),
-                summary: nil,
+                supporting: "Rozmowy i zapisany plan zostają. Pełny asystent jest w planach.",
+                visual: .plain,
                 primary: AssistantBriefing.Action(title: "Zobacz plany", kind: .openPlans),
-                secondary: [AssistantBriefing.Action(title: "Historia rozmów", kind: .openHistory, icon: "clock")],
-                helper: nil
+                alternatives: [AssistantBriefing.Action(title: "Historia rozmów", kind: .openHistory)],
+                placeholder: ""
             )
         }
 
         // 2. Nowe konto — Scoffie nie zna jeszcze tego domu i nie udaje, że zna.
         if c.isNewUser {
+            let name = firstName(c.displayName)
             return AssistantBriefing(
                 kind: .newUser,
-                eyebrow: "Zacznijmy",
-                dateLabel: nil,
-                headline: "Co chcesz zaplanować jako pierwsze?",
-                supporting: "Możesz zacząć od jednego posiłku albo całego tygodnia.",
-                visual: .brand(muted: false),
-                summary: nil,
-                primary: .ask("Ułóż pierwszy dzień", "Ułóż mi dzisiejszy dzień pod mój cel"),
-                secondary: [
-                    .ask("Znajdź pomysł na obiad", "Co zjeść dziś na obiad?", icon: "fork.knife"),
-                    .ask("Zaplanuj cały tydzień", "Zaplanuj mi cały ten tydzień", icon: "calendar"),
-                ],
-                helper: proposal
+                headline: name.map { "Cześć, \($0). Od czego zaczniemy?" } ?? "Cześć, od czego zaczniemy?",
+                supporting: "Mogę ułożyć plan na kilka dni albo podsunąć jeden przepis na dziś.",
+                visual: .plain,
+                primary: .ask("Zaproponuj 3 dni", "Zaproponuj plan na 3 dni pod nasze cele"),
+                alternatives: [.ask("Co potrafisz?", "Co potrafisz?"), .compose],
+                placeholder: "Np. tydzień obiadów bez mięsa"
             )
         }
 
-        // 3. Bieżący tydzień w całości pusty.
-        if !c.thisWeek.isEmpty, c.thisWeek.allSatisfy({ !$0.isPlanned }) {
+        // 3. Późna pora (22:00–4:59) — nie gotujemy, najwyżej myślimy o jutrze.
+        if hour >= 22 || hour < 5 {
+            // Po północy „jutro” to już dzisiejszy dzień.
+            let next = hour < 5 ? today : tomorrow
+            let light = AssistantBriefing.Action.ask("Coś lekkiego na teraz", "Pokaż 3 lekkie przekąski na wieczór do wyboru")
+            if let next, !next.isPlanned {
+                return AssistantBriefing(
+                    kind: .lateNight,
+                    headline: "Późno już. Ułożymy jutro na spokojnie?",
+                    supporting: "Rano będzie wiadomo, co przygotować — bez myślenia przed kawą.",
+                    visual: .plates(plates(next, focus: nil)),
+                    primary: .ask("Ułóż jutro", "Zaproponuj cały dzień na jutro"),
+                    alternatives: [light, .compose],
+                    placeholder: "Np. coś lekkiego bez gotowania"
+                )
+            }
+            return AssistantBriefing(
+                kind: .lateNight,
+                headline: "Jutro jest już w planie.",
+                supporting: "Jeśli coś Cię jeszcze kusi, podsunę lekką przekąskę.",
+                visual: next.map { AssistantBriefing.Visual.plates(plates($0, focus: nil)) } ?? AssistantBriefing.Visual.plain,
+                primary: light,
+                alternatives: [.ask("Zakupy na jutro", "Co muszę kupić na jutro?"), .compose],
+                placeholder: "Np. coś lekkiego bez gotowania"
+            )
+        }
+
+        // 4. Bieżący tydzień w całości pusty — gdy zostało z niego dość dni,
+        //    żeby planowanie go miało sens (w piątek wieczorem już nie).
+        let remainingThisWeek = c.thisWeek.filter { cal.startOfDay(for: $0.date) >= cal.startOfDay(for: c.now) }
+        if !c.thisWeek.isEmpty, c.thisWeek.allSatisfy({ !$0.isPlanned }), remainingThisWeek.count >= 3 {
+            let evening = hour >= 17
             return AssistantBriefing(
                 kind: .weekEmpty,
-                eyebrow: "Widzę w Twoim planie",
-                dateLabel: rangeLabel(c.thisWeek, cal),
-                headline: "Ten tydzień jest jeszcze pusty.",
-                supporting: "Mogę ułożyć go pod Wasze cele i przepisy.",
-                visual: .week(marks(c.thisWeek, now: c.now, cal)),
-                summary: plannedDaysSummary(c.thisWeek),
-                primary: .ask("Zaplanuj ten tydzień", "Zaplanuj mi cały ten tydzień pod nasze cele i przepisy"),
-                secondary: [
-                    .ask("Ułóż tylko dzisiejszy dzień", "Ułóż mi tylko dzisiejszy dzień", icon: "calendar"),
-                    .ask("Pokaż szybkie kolacje", "Daj mi trzy szybkie kolacje do wyboru", icon: "clock"),
+                headline: "Ułożymy ten tydzień?",
+                supporting: "Dobiorę posiłki pod Wasze cele i przepisy — albo zacznijmy od jednego dnia.",
+                visual: .plain,
+                primary: .ask("Zaplanuj tydzień", "Zaplanuj mi resztę tego tygodnia pod nasze cele i przepisy"),
+                alternatives: [
+                    evening
+                        ? AssistantBriefing.Action.ask("Tylko jutro", "Zaproponuj cały dzień na jutro")
+                        : AssistantBriefing.Action.ask("Tylko dziś", "Zaproponuj cały dzisiejszy dzień"),
+                    .compose,
                 ],
-                helper: proposal
+                placeholder: "Np. obiady do 30 minut przez cały tydzień"
             )
         }
 
-        // 4. Dziś pusto (i jest jeszcze pora, żeby coś z tym zrobić).
-        if let today, !today.isPlanned, hour < 20 {
+        // 5. Dziś pusto, a do kolacji jest jeszcze czas.
+        if let today, !today.isPlanned, minuteOfDay < time(.dinner) {
+            let next = upcomingSlot(today.enabledSlots.isEmpty ? AssistantBriefingSlot.core : today.enabledSlots, minuteOfDay: minuteOfDay, times: c.slotMinutes) ?? .dinner
             return AssistantBriefing(
                 kind: .todayEmpty,
-                eyebrow: "Na dziś",
-                dateLabel: todayDate,
-                headline: "Dziś jeszcze nic nie zaplanowano.",
-                supporting: "Mogę ułożyć cały dzień albo znaleźć tylko jeden posiłek.",
-                visual: .day(label: "Dziś", slots: slotMarks(today)),
-                summary: mealsSummary(today),
-                primary: .ask("Ułóż dzisiejszy dzień", "Ułóż mi dzisiejszy dzień pod mój cel"),
-                secondary: [
-                    .ask("Co dziś na obiad?", "Co zjeść dziś na obiad?", icon: "fork.knife"),
-                    .ask("3 szybkie kolacje", "Daj mi trzy szybkie kolacje do wyboru", icon: "clock"),
-                ],
-                helper: proposal
+                headline: "Dziś jeszcze nic nie ma w planie.",
+                supporting: "Ułożę cały dzień albo pokażę pomysły na \(next.accusative).",
+                visual: .plates(plates(today, focus: next)),
+                primary: .ask("Ułóż dzisiejszy dzień", "Zaproponuj cały dzisiejszy dzień"),
+                alternatives: [ideas(for: next, day: "dziś", title: "Pomysły na \(next.accusative)"), .compose],
+                placeholder: placeholder(for: next)
             )
         }
 
-        // 5. Wieczór, a jutro pusto.
-        if hour >= 17, let tomorrow, !tomorrow.isPlanned {
+        // 6. Najbliższe danie z planu zaraz — przepis ważniejszy niż planowanie.
+        if let today, let soon = upcomingPlannedMeal(today, minuteOfDay: minuteOfDay, times: c.slotMinutes) {
+            let minutesLeft = time(soon.slot) - minuteOfDay
             return AssistantBriefing(
-                kind: .tomorrowEmpty,
-                eyebrow: "Na jutro",
-                dateLabel: shortDayLabel(tomorrowDate, cal),
-                headline: "Jutro w planie jest jeszcze pusto.",
-                supporting: "Ułóżmy je teraz, żeby rano było wiadomo, co przygotować.",
-                visual: .day(label: "Jutro", slots: slotMarks(tomorrow)),
-                summary: mealsSummary(tomorrow),
-                primary: .ask("Ułóż jutro", "Ułóż mi jutrzejszy dzień"),
-                secondary: [
-                    .ask("Co na śniadanie?", "Co na jutrzejsze śniadanie?", icon: "fork.knife"),
-                    .ask("Zakupy na jutro", "Co muszę dokupić na jutro?", icon: "cart"),
+                kind: .cookSoon,
+                headline: cookSoonHeadline(slot: soon.slot, minutesLeft: minutesLeft),
+                supporting: "Rozpiszę kroki albo podmienię na coś szybszego.",
+                visual: .meal(AssistantBriefing.MealPreview(
+                    eyebrow: "\(soon.slot.title) · \(clock(time(soon.slot)))",
+                    title: soon.title,
+                    minutes: soon.minutes,
+                    kcal: soon.kcal,
+                    imageURL: soon.imageURL
+                )),
+                primary: .ask("Jak to ugotować?", "Jak ugotować \(soon.title)? Rozpisz kroki."),
+                alternatives: [
+                    .ask("Coś szybszego", "Pokaż 3 szybsze zamienniki na dzisiejszy \(soon.slot.nominative) (\(soon.title)) do wyboru"),
+                    .compose,
                 ],
-                helper: proposal
+                placeholder: "Np. czym zastąpić składnik, którego nie mam"
             )
         }
 
-        // 6. Dziś jest plan, ale brakuje ważnej pory, która jeszcze nie minęła.
+        // 7. Dziś jest plan, ale brakuje ważnej pory, która jeszcze nie minęła.
         if let today, today.isPlanned,
            let missing = upcomingMissingCoreSlot(today, minuteOfDay: minuteOfDay, times: c.slotMinutes) {
-            return AssistantBriefing(
-                kind: .missingMeal,
-                eyebrow: "Brakuje jednego posiłku",
-                dateLabel: todayDate,
-                headline: "\(missing.title) \(missing.emptyPredicate).",
-                supporting: "Reszta dnia jest już ustawiona.",
-                visual: .day(label: "Dziś", slots: slotMarks(today)),
-                summary: mealsSummary(today),
-                primary: .ask("Dobierz \(missing.accusative)", "Dobierz mi \(missing.accusative) na dziś"),
-                secondary: [
-                    .ask("Coś do 30 minut", "Coś na \(missing.accusative) do 30 minut", icon: "clock"),
-                    .ask("Pokaż 3 propozycje", "Daj mi trzy propozycje na \(missing.accusative)", icon: "fork.knife"),
-                ],
-                helper: proposal
-            )
+            return missingMeal(missing, today: today)
         }
 
-        // 7. Koniec tygodnia, a przyszły tydzień pusty.
-        if isWeekendish, !c.nextWeek.isEmpty, c.nextWeek.allSatisfy({ !$0.isPlanned }) {
+        // 8. Wieczór, a jutro pusto albo tylko częściowo.
+        if hour >= 17, let tomorrow {
+            if !tomorrow.isPlanned {
+                let first = (tomorrow.enabledSlots.isEmpty ? AssistantBriefingSlot.core : tomorrow.enabledSlots).min() ?? .breakfast
+                return AssistantBriefing(
+                    kind: .tomorrowEmpty,
+                    headline: "Zaplanujemy coś dobrego na jutro?",
+                    supporting: "Mogę zaproponować cały dzień albo pomóc wybrać jeden posiłek.",
+                    visual: .plates(plates(tomorrow, focus: nil)),
+                    primary: .ask("Zaproponuj dzień", "Zaproponuj cały dzień na jutro"),
+                    alternatives: [ideas(for: first, day: "jutro", title: "Tylko \(first.accusative)"), .compose],
+                    placeholder: "Np. coś na kolację w 15 minut"
+                )
+            }
+            let missing = tomorrow.missingCoreSlots
+            if let first = missing.first {
+                let planned = tomorrow.meals.map(\.slot).sorted().prefix(2).map(\.accusative)
+                return AssistantBriefing(
+                    kind: .tomorrowPartial,
+                    headline: "Jutro masz już \(joined(planned)). Dobierzemy resztę?",
+                    supporting: "Dobiorę brakujące posiłki tak, żeby dzień się domykał.",
+                    visual: .plates(plates(tomorrow, focus: first)),
+                    primary: .ask(
+                        "Dobierz resztę dnia",
+                        "Dobierz brakujące posiłki na jutro: \(joined(missing.map(\.accusative)))"
+                    ),
+                    alternatives: [ideas(for: first, day: "jutro", title: "Tylko \(first.accusative)"), .compose],
+                    placeholder: placeholder(for: first)
+                )
+            }
+        }
+
+        // 9. Koniec tygodnia, a przyszły tydzień pusty.
+        if isLateWeek, !c.nextWeek.isEmpty, c.nextWeek.allSatisfy({ !$0.isPlanned }) {
             return AssistantBriefing(
                 kind: .nextWeekEmpty,
-                eyebrow: "Widzę w Twoim planie",
-                dateLabel: rangeLabel(c.nextWeek, cal),
                 headline: "Przyszły tydzień jest jeszcze pusty.",
-                supporting: "Uwzględnię Wasze cele, przepisy i plan dnia.",
-                visual: .week(marks(c.nextWeek, now: c.now, cal)),
-                summary: plannedDaysSummary(c.nextWeek),
-                primary: .ask("Zaplanuj przyszły tydzień", "Zaplanuj mi przyszły tydzień"),
-                secondary: [
-                    .ask("Zakupy na przyszły tydzień", "Co muszę kupić na przyszły tydzień?", icon: "cart"),
-                    .ask("3 pomysły na weekendowy obiad", "Daj mi trzy pomysły na weekendowy obiad", icon: "fork.knife"),
-                ],
-                helper: proposal
+                supporting: "Ułożę go teraz, a zakupy zrobisz na spokojnie przed poniedziałkiem.",
+                visual: .plain,
+                primary: .ask("Zaplanuj przyszły tydzień", "Zaplanuj mi przyszły tydzień pod nasze cele i przepisy"),
+                alternatives: [.ask("Tylko poniedziałek", "Zaproponuj cały dzień na najbliższy poniedziałek"), .compose],
+                placeholder: "Np. obiady do pracy na cały tydzień"
             )
         }
 
-        // 8. Realny brak w bilansie — tylko z policzonych liczb.
+        // 10. Realny brak w bilansie — tylko z policzonych liczb.
         if let balance = c.balance, isSignificant(balance) {
             return AssistantBriefing(
                 kind: .balanceIssue,
-                eyebrow: "Bilans tygodnia",
-                dateLabel: rangeLabel(c.thisWeek, cal),
                 headline: "W tym tygodniu brakuje Ci \(balance.macroGenitive).",
-                supporting: "Średnio \(balance.deficit) \(balance.unit) dziennie poniżej celu.",
+                supporting: "Podmienię jeden posiłek albo dołożę coś, co domknie cel.",
                 visual: .balance(current: balance.averagePerDay, target: balance.target, unit: balance.unit),
-                summary: balance.daysBelowTarget.map {
-                    AssistantBriefing.Summary(prefix: "Poniżej celu w", value: $0, text: "z \(balance.daysCounted) dni")
-                },
                 primary: .ask("Pokaż, co poprawić", "Czego brakuje w planie, żeby domknąć \(balance.macroAccusative)?"),
-                secondary: [
-                    .ask("Podmień 1 posiłek", "Podmień jeden posiłek w tym tygodniu na taki z większą ilością \(balance.macroGenitive)", icon: "arrow.triangle.2.circlepath"),
-                    .ask("Dodaj coś wysokobiałkowego", "Dołóż do planu coś z dużą ilością \(balance.macroGenitive)", icon: "plus"),
+                alternatives: [
+                    .ask("Podmień 1 posiłek", "Pokaż 3 dania z większą ilością \(balance.macroGenitive) do wyboru, żeby podmienić jeden posiłek w tym tygodniu"),
+                    .compose,
                 ],
-                helper: "Pokażę propozycje zmian do zatwierdzenia."
+                placeholder: "Np. więcej \(balance.macroGenitive) w śniadaniach"
             )
         }
 
-        // 9. Tydzień gotowy: od dziś do niedzieli każdy dzień ma plan.
-        if let today, today.isComplete, restOfWeekPlanned(c.thisWeek, from: c.now, cal) {
+        // 11. Tydzień gotowy: od dziś do niedzieli każdy dzień ma plan.
+        if let today, today.isComplete, restOfWeekPlanned(c.thisWeek, from: c.now, cal), !isWeekend {
             return AssistantBriefing(
                 kind: .weekReady,
-                eyebrow: "Ten tydzień",
-                dateLabel: rangeLabel(c.thisWeek, cal),
-                headline: "Plan wygląda na gotowy.",
-                supporting: "Mogę pomóc z zakupami albo zrobić drobną zmianę.",
-                visual: .week(marks(c.thisWeek, now: c.now, cal)),
-                summary: plannedDaysSummary(c.thisWeek),
-                primary: .ask("Pokaż listę zakupów", "Co muszę kupić na ten tydzień?"),
-                secondary: [
-                    .ask("Podmień jedno danie", "Podmień jedno danie w tym tygodniu na coś innego", icon: "arrow.triangle.2.circlepath"),
-                    .ask("Sprawdź mój bilans", "Jak wychodzi mój bilans w tym tygodniu?", icon: "target"),
-                ],
-                helper: "Lista z tego, co już jest w planie."
+                headline: "Do niedzieli wszystko jest w planie.",
+                supporting: "Zbiorę listę zakupów albo podsunę coś nowego na odmianę.",
+                visual: .plates(plates(today, focus: nil)),
+                primary: .ask("Lista zakupów", "Co muszę kupić na ten tydzień?"),
+                alternatives: [.ask("Coś nowego na weekend", "Pokaż 3 nowe pomysły na weekendowy obiad do wyboru"), .compose],
+                placeholder: "Np. zamień piątkową kolację na rybę"
             )
         }
 
-        // 10. Weekend bez pilnych spraw — pomysł zamiast obowiązku.
-        if isWeekend, let today, today.isPlanned {
+        // 12. Weekend z planem na dziś — pomysł zamiast obowiązku.
+        if isWeekend, let today, today.isPlanned, hour < 17 {
             return AssistantBriefing(
                 kind: .weekendInspiration,
-                eyebrow: "Na weekend",
-                dateLabel: weekendLabel(c.now, cal),
                 headline: "Masz ochotę ugotować coś większego?",
-                supporting: "Mogę wybrać coś dla całego domu z Waszych przepisów.",
-                visual: .teaser(teaserImages(c)),
-                summary: nil,
-                primary: .ask("Pokaż 3 pomysły", "Daj mi trzy pomysły na weekendowy obiad"),
-                secondary: [
-                    .ask("Coś do godziny", "Coś na weekendowy obiad do godziny gotowania", icon: "clock"),
-                    .ask("Coś dla całego domu", "Wybierz danie na weekend dla całego domu", icon: "person.2"),
-                ],
-                helper: "Z Waszych przepisów, do wyboru."
+                supporting: "Wybiorę coś dla całego domu z Waszych przepisów.",
+                visual: .plates(plates(today, focus: nil)),
+                primary: .ask("Pokaż 3 pomysły", "Pokaż 3 pomysły na weekendowy obiad dla całego domu do wyboru"),
+                alternatives: [.ask("Coś do godziny", "Pokaż 3 weekendowe obiady do godziny gotowania do wyboru"), .compose],
+                placeholder: "Np. coś na obiad z rodziną, bez ryby"
             )
         }
 
-        // 11. Dzień gotowy — stan spokojny, podpowiedzi o poprawkach.
+        // 13. Wieczór, a jutro gotowe.
+        if hour >= 17, let tomorrow, tomorrow.isPlanned {
+            return AssistantBriefing(
+                kind: .eveningReady,
+                headline: "Jutro też jest gotowe.",
+                supporting: "Zbiorę zakupy na jutro albo podmienię jedno danie.",
+                visual: .plates(plates(tomorrow, focus: nil)),
+                primary: .ask("Zakupy na jutro", "Co muszę kupić na jutro?"),
+                alternatives: [.ask("Zamień posiłek", "Chcę zamienić jeden jutrzejszy posiłek"), .compose],
+                placeholder: "Np. zamień jutrzejszy obiad na coś szybszego"
+            )
+        }
+
+        // 14. Dzień gotowy — stan spokojny, pomoc przy drobnych zmianach.
         let readyDay = today ?? tomorrow
         return AssistantBriefing(
             kind: .dayReady,
-            eyebrow: "Dzisiaj",
-            dateLabel: todayDate,
-            headline: "Plan na dziś jest gotowy.",
-            supporting: "Mogę go poprawić, sprawdzić bilans albo przygotować zakupy.",
-            visual: readyDay.map { AssistantBriefing.Visual.meals(mealPreviews($0)) } ?? AssistantBriefing.Visual.brand(muted: false),
-            summary: nil,
-            primary: .ask("Sprawdź mój bilans", "Jak wychodzi mój bilans w tym tygodniu?"),
-            secondary: [
-                .ask("Podmień dzisiejszą kolację", "Podmień dzisiejszą kolację na coś szybszego", icon: "arrow.triangle.2.circlepath"),
-                .ask("Co muszę kupić na ten tydzień?", "Co muszę kupić na ten tydzień?", icon: "cart"),
-            ],
-            helper: viewOnly
+            headline: hour < 11 ? "Dzień jest ułożony." : "Na dziś wszystko jest w planie.",
+            supporting: "Jeśli masz ochotę na odmianę, podmienię jeden posiłek.",
+            visual: readyDay.map { AssistantBriefing.Visual.plates(plates($0, focus: nil)) } ?? AssistantBriefing.Visual.plain,
+            primary: .ask("Zamień posiłek", "Chcę zamienić jeden dzisiejszy posiłek"),
+            alternatives: [.ask("Sprawdź bilans", "Jak wychodzi mój bilans w tym tygodniu?"), .compose],
+            placeholder: "Np. zamień kolację na coś lżejszego"
         )
+    }
+
+    // MARK: - Sytuacje z porą
+
+    /// Brakująca pora główna dziś — każda ma własne otwarcie i przykład.
+    static func missingMeal(_ slot: AssistantBriefingSlot, today: AssistantBriefingDay) -> AssistantBriefing {
+        let visual = AssistantBriefing.Visual.plates(plates(today, focus: slot))
+        switch slot {
+        case .breakfast:
+            return AssistantBriefing(
+                kind: .breakfastMissing,
+                headline: "Co dziś na śniadanie?",
+                supporting: "Pokażę trzy pomysły z Twoich przepisów — wybierzesz jeden.",
+                visual: visual,
+                primary: ideas(for: .breakfast, day: "dziś"),
+                alternatives: [.ask("Coś w 10 minut", "Pokaż 3 śniadania do 10 minut na dziś do wyboru"), .compose],
+                placeholder: placeholder(for: .breakfast)
+            )
+        case .lunch:
+            return AssistantBriefing(
+                kind: .lunchMissing,
+                headline: "Co dziś na obiad?",
+                supporting: "Reszta dnia już jest — dobiorę obiad, który do niej pasuje.",
+                visual: visual,
+                primary: ideas(for: .lunch, day: "dziś"),
+                alternatives: [.ask("Coś do 30 minut", "Pokaż 3 obiady do 30 minut na dziś do wyboru"), .compose],
+                placeholder: placeholder(for: .lunch)
+            )
+        default:
+            return AssistantBriefing(
+                kind: .dinnerMissing,
+                headline: "Co dziś na kolację?",
+                supporting: "Podsunę trzy pomysły albo dopasuję coś do tego, co masz w lodówce.",
+                visual: visual,
+                primary: ideas(for: .dinner, day: "dziś"),
+                alternatives: [.ask("Coś lekkiego", "Pokaż 3 lekkie kolacje na dziś do wyboru"), .compose],
+                placeholder: placeholder(for: .dinner)
+            )
+        }
+    }
+
+    /// „Pokaż 3 pomysły” — prośba o dania DO WYBORU, na którą serwer
+    /// odpowiada arkuszem wyboru posiłku.
+    static func ideas(for slot: AssistantBriefingSlot, day: String, title: String = "Pokaż 3 pomysły") -> AssistantBriefing.Action {
+        .ask(title, "Pokaż 3 pomysły na \(slot.accusative) na \(day) do wyboru")
+    }
+
+    /// Przykład w polu — pasuje do pory, o której mowa.
+    static func placeholder(for slot: AssistantBriefingSlot) -> String {
+        switch slot {
+        case .breakfast, .secondBreakfast: return "Np. coś na słodko z płatkami owsianymi"
+        case .lunch: return "Np. mam kurczaka i paprykę"
+        case .dinner: return "Np. mam jajka i szpinak"
+        case .afternoonSnack, .snack: return "Np. coś słodkiego bez cukru"
+        }
+    }
+
+    /// „Za 40 minut obiad.”, „Za godzinę kolacja.”, „Zaraz śniadanie.”
+    static func cookSoonHeadline(slot: AssistantBriefingSlot, minutesLeft: Int) -> String {
+        let meal = slot.nominative
+        switch minutesLeft {
+        case ..<6: return "Zaraz \(meal)."
+        case 6..<60: return "Za \(minutesLeft) \(minutesWord(minutesLeft)) \(meal)."
+        case 60..<75: return "Za godzinę \(meal)."
+        default: return "Za półtorej godziny \(meal)."
+        }
+    }
+
+    /// „minutę”, „minuty”, „minut” — biernik po „za”.
+    static func minutesWord(_ count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+        if count == 1 { return "minutę" }
+        if (2...4).contains(mod10), !(12...14).contains(mod100) { return "minuty" }
+        return "minut"
+    }
+
+    /// „obiad”, „obiad i kolację”, „śniadanie, obiad i kolację”.
+    static func joined(_ words: [String]) -> String {
+        guard let last = words.last else { return "" }
+        guard words.count > 1 else { return last }
+        return words.dropLast().joined(separator: ", ") + " i " + last
     }
 
     // MARK: - Reguły pomocnicze
@@ -518,9 +627,30 @@ enum AssistantBriefingResolver {
         minuteOfDay: Int,
         times: [AssistantBriefingSlot: Int]
     ) -> AssistantBriefingSlot? {
-        day.missingSlots
-            .filter { AssistantBriefingSlot.core.contains($0) }
-            .first { (times[$0] ?? $0.defaultMinutes) > minuteOfDay }
+        day.missingCoreSlots.first { (times[$0] ?? $0.defaultMinutes) > minuteOfDay }
+    }
+
+    /// Najbliższa pora (dowolna z podanych), której godzina jeszcze nie minęła.
+    static func upcomingSlot(
+        _ slots: [AssistantBriefingSlot],
+        minuteOfDay: Int,
+        times: [AssistantBriefingSlot: Int]
+    ) -> AssistantBriefingSlot? {
+        slots.sorted().first { (times[$0] ?? $0.defaultMinutes) > minuteOfDay }
+    }
+
+    /// Danie z planu, którego pora przypada w ciągu `cookSoonWindow` minut.
+    static func upcomingPlannedMeal(
+        _ day: AssistantBriefingDay,
+        minuteOfDay: Int,
+        times: [AssistantBriefingSlot: Int]
+    ) -> AssistantBriefingDay.Meal? {
+        day.meals
+            .sorted { $0.slot < $1.slot }
+            .first { meal in
+                let left = (times[meal.slot] ?? meal.slot.defaultMinutes) - minuteOfDay
+                return left >= 0 && left <= cookSoonWindow
+            }
     }
 
     static func restOfWeekPlanned(_ week: [AssistantBriefingDay], from now: Date, _ cal: Calendar) -> Bool {
@@ -529,89 +659,22 @@ enum AssistantBriefingResolver {
         return !remaining.isEmpty && remaining.allSatisfy(\.isPlanned)
     }
 
-    static func plannedDaysSummary(_ week: [AssistantBriefingDay]) -> AssistantBriefing.Summary {
-        let planned = week.filter(\.isPlanned).count
-        return AssistantBriefing.Summary(value: planned, text: "z \(week.count) dni zaplanowanych")
-    }
-
-    static func marks(_ week: [AssistantBriefingDay], now: Date, _ cal: Calendar) -> [AssistantBriefing.DayMark] {
-        week.map { day in
-            AssistantBriefing.DayMark(
-                id: dateKey(day.date, cal),
-                short: shortWeekday(day.date, cal),
-                dayNumber: String(cal.component(.day, from: day.date)),
-                state: dotState(day),
-                isToday: cal.isDate(day.date, inSameDayAs: now)
-            )
-        }
-    }
-
-    /// Pusty / częściowy (ułamek pór z daniem) / gotowy.
-    static func dotState(_ day: AssistantBriefingDay) -> AssistantBriefing.DotState {
-        guard day.isPlanned else { return .empty }
-        if day.isComplete { return .full }
-        let total = max(1, day.enabledSlots.count)
-        return .partial(Double(day.plannedSlots.count) / Double(total))
-    }
-
-    static func slotMarks(_ day: AssistantBriefingDay) -> [AssistantBriefing.SlotMark] {
-        let planned = day.plannedSlots
-        return day.enabledSlots.sorted().map { slot in
-            AssistantBriefing.SlotMark(id: slot.rawValue, title: slot.title, filled: planned.contains(slot))
-        }
-    }
-
-    /// „2 z 3 posiłków”.
-    static func mealsSummary(_ day: AssistantBriefingDay) -> AssistantBriefing.Summary {
-        AssistantBriefing.Summary(value: day.plannedSlots.count, text: "z \(max(day.enabledSlots.count, day.plannedSlots.count)) \(mealsWord(day.enabledSlots.count))")
-    }
-
-    static func mealsWord(_ count: Int) -> String {
-        if count == 1 { return "posiłku" }
-        return "posiłków"
-    }
-
-    /// Trzy miniatury z planu tygodnia (najpierw z dzisiejszego dnia); brak
-    /// zdjęcia zostawia puste miejsce, które widok wypełnia zapasem.
-    static func teaserImages(_ c: AssistantBriefingContext) -> [URL?] {
-        var urls: [URL?] = []
-        for day in c.thisWeek.reversed() + c.nextWeek {
-            for meal in day.meals where !urls.contains(meal.imageURL) {
-                urls.append(meal.imageURL)
-                if urls.count == 3 { return urls }
-            }
-        }
-        while urls.count < 3 { urls.append(nil) }
-        return urls
-    }
-
-    /// Najwyżej trzy dania dnia — karta ma być do ogarnięcia jednym spojrzeniem.
-    static func mealPreviews(_ day: AssistantBriefingDay) -> [AssistantBriefing.MealPreview] {
-        day.meals.sorted { $0.slot < $1.slot }.prefix(3).map { meal in
-            AssistantBriefing.MealPreview(
-                id: meal.slot.rawValue,
-                slotTitle: meal.slot.title,
-                title: meal.title,
-                kcal: meal.kcal,
-                imageURL: meal.imageURL
+    /// Talerzyki pór dnia w porządku dnia; `focus` = pora, o której mowa.
+    static func plates(_ day: AssistantBriefingDay, focus: AssistantBriefingSlot?) -> [AssistantBriefing.Plate] {
+        let slots = day.enabledSlots.isEmpty ? AssistantBriefingSlot.core : day.enabledSlots
+        return slots.sorted().map { slot in
+            let meal = day.meal(slot)
+            return AssistantBriefing.Plate(
+                id: slot.rawValue,
+                title: slots.count > 4 ? slot.shortTitle : slot.title,
+                imageURL: meal?.imageURL,
+                filled: meal != nil,
+                isFocus: slot == focus
             )
         }
     }
 
     // MARK: - Teksty
-
-    static func greeting(hour: Int, name: String?) -> String {
-        let base: String
-        switch hour {
-        case 5..<11: base = "Dzień dobry"
-        case 11..<17: base = "Cześć"
-        case 17..<22: base = "Dobry wieczór"
-        default: base = "Późna pora"
-        }
-        // Mianownik po przecinku, nie wołacz: wołacz jest dla imion nie do
-        // przewidzenia (Kuba → Kubo, Rafał → Rafale) i potrafi wyjść potworkiem.
-        return name.map { "\(base), \($0)" } ?? base
-    }
 
     /// Pierwsze słowo z profilu — „Rafał Piechowicz” wita się jak „Rafał”.
     ///
@@ -629,93 +692,5 @@ enum AssistantBriefingResolver {
 
     static func clock(_ minutes: Int) -> String {
         String(format: "%02d:%02d", minutes / 60, minutes % 60)
-    }
-
-    static func dateKey(_ date: Date, _ cal: Calendar) -> String {
-        let parts = cal.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-    }
-
-    private static let polish = Locale(identifier: "pl_PL")
-
-    private static func formatter(_ format: String, _ cal: Calendar) -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = polish
-        formatter.calendar = cal
-        formatter.timeZone = cal.timeZone
-        formatter.dateFormat = format
-        return formatter
-    }
-
-    /// „czwartek”.
-    static func weekdayName(_ date: Date, _ cal: Calendar) -> String {
-        formatter("EEEE", cal).string(from: date)
-    }
-
-    /// „Czw”.
-    static func shortWeekday(_ date: Date, _ cal: Calendar) -> String {
-        // Dwuliterowe jak w makiecie: siedem kafelków musi zmieścić się w karcie.
-        switch cal.component(.weekday, from: date) {
-        case 2: return "Pn"
-        case 3: return "Wt"
-        case 4: return "Śr"
-        case 5: return "Cz"
-        case 6: return "Pt"
-        case 7: return "Sb"
-        default: return "Nd"
-        }
-    }
-
-    /// „19 września”.
-    static func dayLabel(_ date: Date, _ cal: Calendar) -> String {
-        formatter("d MMMM", cal).string(from: date)
-    }
-
-    /// „Śr 16 wrz” — dzień po prawej od eyebrow.
-    static func shortDayLabel(_ date: Date, _ cal: Calendar) -> String {
-        let day = formatter("d MMM", cal).string(from: date).replacingOccurrences(of: ".", with: "")
-        return "\(shortWeekdayLong(date, cal)) \(day)"
-    }
-
-    /// „Czw” — trzyliterowy skrót do etykiety daty (w pasku tygodnia „Cz”).
-    static func shortWeekdayLong(_ date: Date, _ cal: Calendar) -> String {
-        switch cal.component(.weekday, from: date) {
-        case 2: return "Pn"
-        case 3: return "Wt"
-        case 4: return "Śr"
-        case 5: return "Czw"
-        case 6: return "Pt"
-        case 7: return "Sb"
-        default: return "Nd"
-        }
-    }
-
-    /// „19–20 wrz” — sobota i niedziela tego weekendu.
-    static func weekendLabel(_ now: Date, _ cal: Calendar) -> String? {
-        let weekday = cal.component(.weekday, from: now)
-        // Sobota = 7, niedziela = 1.
-        let saturday: Date?
-        if weekday == 7 {
-            saturday = cal.startOfDay(for: now)
-        } else if weekday == 1 {
-            saturday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now))
-        } else {
-            saturday = cal.date(byAdding: .day, value: 7 - weekday, to: cal.startOfDay(for: now))
-        }
-        guard let saturday, let sunday = cal.date(byAdding: .day, value: 1, to: saturday) else { return nil }
-        let days = [saturday, sunday].map { AssistantBriefingDay(date: $0, enabledSlots: [], meals: []) }
-        return rangeLabel(days, cal)
-    }
-
-    /// „22–28 wrz” albo „29 wrz – 5 paź”.
-    static func rangeLabel(_ week: [AssistantBriefingDay], _ cal: Calendar) -> String? {
-        guard let first = week.first?.date, let last = week.last?.date else { return nil }
-        let short = formatter("d MMM", cal)
-        let sameMonth = cal.component(.month, from: first) == cal.component(.month, from: last)
-        if sameMonth {
-            let day = formatter("d", cal).string(from: first)
-            return "\(day)–\(short.string(from: last))".replacingOccurrences(of: ".", with: "")
-        }
-        return "\(short.string(from: first)) – \(short.string(from: last))".replacingOccurrences(of: ".", with: "")
     }
 }
