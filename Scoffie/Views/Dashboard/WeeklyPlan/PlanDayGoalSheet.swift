@@ -18,7 +18,7 @@ import SwiftUI
 /// posiłków zaczyna się przewijać w środku.
 ///
 /// **Każdy liczy swój talerz.** W domu wieloosobowym obok krzyżyka stoi
-/// zakładki osób pod nagłówkiem (`PlanPersonSwitcher`): domyślnie ja, stuknięcie
+/// przełącznik osób obok krzyżyka (`PlanPersonSwitcher`): domyślnie ja, stuknięcie
 /// pokazuje dania, sumę i cel domownika. Dawniej arkusz sumował wszystkie
 /// dania pory — dwa różne obiady szły do jednego celu i wychodziło ~3000 kcal
 /// na osobę, która zje jeden (Rafał, 23.09.2026).
@@ -141,11 +141,6 @@ struct PlanDayGoalSheet: View {
             header
                 .padding(.top, 22)
 
-            if people.count > 1 {
-                PlanPersonSwitcher(people: people, members: members, selection: $selectedId)
-                    .padding(.top, 16)
-            }
-
             goalRow
                 .padding(.top, 20)
 
@@ -185,7 +180,11 @@ struct PlanDayGoalSheet: View {
             title: "Cel dnia",
             subtitle: subtitle,
             onClose: { dismiss() }
-        )
+        ) {
+            if people.count > 1 {
+                PlanPersonSwitcher(people: people, members: members, selection: $selectedId)
+            }
+        }
     }
 
     /// „3 z 3 posiłków” — pory, w których wybrana osoba ma danie. Kropki na
@@ -197,7 +196,12 @@ struct PlanDayGoalSheet: View {
     /// wzięła się suma nad listą.
     private var subtitle: String {
         let what = nutrition.countsOnlyEaten ? "zjedzone" : "posiłków"
-        return "\(nutrition.filledSlots) z \(nutrition.slotCount) \(what)"
+        let count = "\(nutrition.filledSlots) z \(nutrition.slotCount) \(what)"
+        // Przy kilku osobach zdanie mówi, CZYJ to dzień — awatar w kapsule
+        // obok krzyżyka to za mało, żeby przeczytać to bez zgadywania.
+        guard people.count > 1 else { return count }
+        let whose = person.isMe ? "Twój dzień" : "Dzień: " + person.name
+        return whose + " · " + count
     }
 
     // MARK: - Pierścienie i legenda
@@ -334,234 +338,15 @@ struct PlanDayPerson: Identifiable {
     )
 }
 
-/// Zakładki osób pod nagłówkiem „Cel dnia”: pełna szerokość, każda osoba
-/// z awatarem i imieniem, zaznaczenie w kolorze osoby przejeżdża między
-/// zakładkami.
+/// Przełącznik osób obok krzyżyka: kapsuła z awatarami, wybrana osoba
+/// rozwija się do awatara z imieniem na tincie swojego koloru.
 ///
-/// Runda 11 (Rafał: „popraw to przełączanie”): dotąd kapsuła z awatarami
-/// wciśnięta obok krzyżyka — imię tylko przy wybranej osobie, reszta jako
-/// same kółka, więc nie było wiadomo, na kogo się przełącza.
-struct PlanPersonSwitcher: View {
-    let people: [PlanDayPerson]
-    let members: [HouseholdMemberSnapshot]
-    @Binding var selection: String
-
-    @Environment(\.colorScheme) private var scheme
-    @Namespace private var selectionNS
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(people) { person in
-                segment(person)
-            }
-        }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scChipBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .sensoryFeedback(.selection, trigger: selection)
-    }
-
-    private func segment(_ person: PlanDayPerson) -> some View {
-        let isOn = person.id == selection
-        let tint = person.member.map { HouseholdMemberStyle.color(for: $0.id, in: members) }
-            ?? SCPalette.terracotta
-
-        return Button {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                selection = person.id
-            }
-        } label: {
-            HStack(spacing: 7) {
-                avatar(person)
-
-                Text(person.isMe ? "\(person.name) · Ty" : person.name)
-                    .font(.system(size: 13.5, weight: isOn ? .semibold : .medium))
-                    .tracking(-0.2)
-                    .foregroundStyle(isOn ? Color.scLabel(scheme) : Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity)
-            .frame(height: 38)
-            .background {
-                if isOn {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                .strokeBorder(tint.opacity(scheme == .dark ? 0.55 : 0.45), lineWidth: 1.2)
-                        )
-                        // Zaznaczenie przejeżdża między zakładkami, zamiast
-                        // gasnąć w jednej i zapalać się w drugiej.
-                        .matchedGeometryEffect(id: "selection", in: selectionNS)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(person.name)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-
-    @ViewBuilder
-    private func avatar(_ person: PlanDayPerson) -> some View {
-        if let member = person.member {
-            MemberAvatar(member: member, members: members, size: 24)
-        } else {
-            Image(systemName: "person.fill")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.scMuted(scheme))
-                .frame(width: 24, height: 24)
-        }
-    }
-}
-
-// MARK: - Pierścienie i legenda
-
-    private var goalRow: some View {
-        HStack(alignment: .center, spacing: 18) {
-            rings
-            legend
-        }
-    }
-
-    private var rings: some View {
-        PlanGoalRings(
-            rings: legendRows.map {
-                PlanGoalRings.Ring(progress: $0.progress ?? 0, color: $0.color)
-            }
-        )
-        .accessibilityHidden(true)
-    }
-
-    private var legend: some View {
-        // 14, nie 11: cztery wiersze mają wypełnić wysokość wykresu obok,
-        // a nie stać zbite w jego środku.
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(legendRows) { row in
-                PlanGoalLegendRow(row: row)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Kolejność wierszy jest kolejnością pierścieni: kalorie na zewnątrz,
-    /// makra do środka.
-    ///
-    /// Kolory idą z `SCMacroPalette`, wspólnej z licznikiem Kalendarza
-    /// i z paskiem pigułki.
-    private var legendRows: [PlanGoalLegendRow.Row] {
-        let targets = person.targets
-        let macros = targets?.macros
-
-        return [
-            PlanGoalLegendRow.Row(
-                id: "kcal",
-                title: "Kalorie",
-                color: SCMacroPalette.calories,
-                value: nutrition.kcal,
-                target: targets?.kcal,
-                unit: "kcal"
-            ),
-            PlanGoalLegendRow.Row(
-                id: "protein",
-                title: "Białko",
-                color: SCMacroPalette.protein,
-                value: nutrition.protein,
-                target: macros?.proteinG,
-                unit: "g"
-            ),
-            PlanGoalLegendRow.Row(
-                id: "fat",
-                title: "Tłuszcze",
-                color: SCMacroPalette.fat,
-                value: nutrition.fat,
-                target: macros?.fatG,
-                unit: "g"
-            ),
-            PlanGoalLegendRow.Row(
-                id: "carbs",
-                title: "Węgle",
-                color: SCMacroPalette.carbs,
-                value: nutrition.carbs,
-                target: macros?.carbsG,
-                unit: "g"
-            )
-        ]
-    }
-
-    /// Cel makr da się policzyć dopiero z sylwetki — mówimy to wprost, zamiast
-    /// zostawiać trzy wiersze bez prawej strony i pierścienie bez postępu.
-    /// Domownik uzupełnia sylwetkę u siebie; cel, który jeszcze nie
-    /// przyszedł z serwera, nie jest powodem do podpowiedzi.
-    private var macroHint: String? {
-        guard let targets = person.targets, targets.macros == nil else { return nil }
-        return person.isMe
-            ? "Cele makro policzymy, gdy uzupełnisz sylwetkę w Ustawieniach → Twoje dane."
-            : "Cele makro pojawią się, gdy \(person.name) uzupełni sylwetkę."
-    }
-
-    // MARK: - Posiłki
-
-    private var mealsList: some View {
-        VStack(spacing: 12) {
-            ForEach(nutrition.entries) { entry in
-                PlanGoalMealRow(entry: entry, showsEatenState: nutrition.countsOnlyEaten)
-            }
-        }
-    }
-
-    private static let longDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "pl_PL")
-        f.dateFormat = "EEEE"
-        return f
-    }()
-}
-
-// MARK: - Osoba i przełącznik
-
-/// Jedna osoba w arkuszu „Cel dnia”: jej posiłki, jej suma i jej cel.
-struct PlanDayPerson: Identifiable {
-    let id: String
-    /// Imię do przełącznika — pierwszy wyraz, jak na chipach „Dla kogo”.
-    let name: String
-    /// `nil` w domu jednoosobowym.
-    let member: HouseholdMemberSnapshot?
-    let nutrition: PlanDayNutrition
-    /// `nil`, dopóki cel domownika nie przyjdzie z serwera.
-    let targets: DailyNutritionTargets?
-    let isMe: Bool
-
-    /// Pusty dzień bez celu — zastępstwo, gdyby lista osób była pusta.
-    static let empty = PlanDayPerson(
-        id: "",
-        name: "",
-        member: nil,
-        nutrition: PlanDayNutrition(
-            entries: [],
-            total: .zero,
-            filledSlots: 0,
-            slotCount: 0,
-            countsOnlyEaten: false
-        ),
-        targets: nil,
-        isMe: true
-    )
-}
-
-/// Przełącznik osób obok krzyżyka: awatary w kapsule, wybrana osoba
-/// z imieniem na tincie swojego koloru (kolor z chipów „Dla kogo”).
-///
-/// Tylko awatar dla pozostałych — dwa imiona obok tytułu „Cel dnia”
-/// i krzyżyka nie zmieściłyby się w jednym wierszu przy trzech domownikach.
+/// Runda 12 — Rafał wrócił do tego układu („1 widok mi się podobał”) po
+/// próbie z zakładkami na całą szerokość, ale „dopracować trzeba”:
+/// awatary 28 pt z obwódką w kolorze osoby (także niewybrane — widać, kto
+/// jest do wyboru), cel dotyku całej wysokości kapsuły, imię wjeżdża
+/// kryciem razem z przesunięciem tła, a nie skokiem szerokości; czyj to
+/// dzień, mówi też podtytuł arkusza.
 struct PlanPersonSwitcher: View {
     let people: [PlanDayPerson]
     let members: [HouseholdMemberSnapshot]
@@ -576,25 +361,30 @@ struct PlanPersonSwitcher: View {
                 segment(person)
             }
         }
-        .padding(2)
-        .frame(height: 36)
+        .padding(3)
         .background(Capsule(style: .continuous).fill(Color.scChipBg(scheme)))
         .overlay(Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
         .sensoryFeedback(.selection, trigger: selection)
+        .animation(.spring(response: 0.36, dampingFraction: 0.84), value: selection)
+    }
+
+    private func tint(of person: PlanDayPerson) -> Color {
+        person.member.map { HouseholdMemberStyle.color(for: $0.id, in: members) } ?? SCPalette.terracotta
     }
 
     private func segment(_ person: PlanDayPerson) -> some View {
         let isOn = person.id == selection
-        let tint = person.member.map { HouseholdMemberStyle.color(for: $0.id, in: members) }
-            ?? SCPalette.terracotta
+        let tint = tint(of: person)
 
         return Button {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+            // Animowana transakcja, nie samo `.animation` na kapsule: podtytuł,
+            // liczby legendy i pierścienie w arkuszu też mają się przetoczyć.
+            withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
                 selection = person.id
             }
         } label: {
             HStack(spacing: 6) {
-                avatar(person)
+                avatar(person, tint: tint, isOn: isOn)
 
                 if isOn {
                     Text(person.name)
@@ -603,12 +393,12 @@ struct PlanPersonSwitcher: View {
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
                         .fixedSize()
-                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
+                        .transition(.opacity)
                 }
             }
-            .padding(.leading, 3)
-            .padding(.trailing, isOn ? 11 : 3)
-            .frame(height: 30)
+            .padding(.leading, 2)
+            .padding(.trailing, isOn ? 11 : 2)
+            .frame(height: 32)
             .background {
                 if isOn {
                     Capsule(style: .continuous)
@@ -617,28 +407,32 @@ struct PlanPersonSwitcher: View {
                             Capsule(style: .continuous)
                                 .strokeBorder(tint.opacity(scheme == .dark ? 0.55 : 0.45), lineWidth: 1.2)
                         )
-                        // Zaznaczenie przejeżdża między awatarami, zamiast
-                        // gasnąć w jednym i zapalać się w drugim.
                         .matchedGeometryEffect(id: "selection", in: selectionNS)
                 }
             }
             .contentShape(Capsule(style: .continuous))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(person.name)
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .accessibilityLabel(person.isMe ? "\(person.name), Ty" : person.name)
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 
     @ViewBuilder
-    private func avatar(_ person: PlanDayPerson) -> some View {
-        if let member = person.member {
-            MemberAvatar(member: member, members: members, size: 24)
-        } else {
-            Image(systemName: "person.fill")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.scMuted(scheme))
-                .frame(width: 24, height: 24)
+    private func avatar(_ person: PlanDayPerson, tint: Color, isOn: Bool) -> some View {
+        Group {
+            if let member = person.member {
+                MemberAvatar(member: member, members: members, size: 28)
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .frame(width: 28, height: 28)
+            }
         }
+        // Niewybrana osoba przygaszona, ale z obwódką swojego koloru —
+        // kółka bez podpisu i tak mają się dać rozróżnić.
+        .overlay(Circle().strokeBorder(tint.opacity(isOn ? 0 : 0.6), lineWidth: 1.5))
+        .opacity(isOn ? 1 : 0.7)
     }
 }
 

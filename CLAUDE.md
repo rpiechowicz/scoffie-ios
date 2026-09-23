@@ -281,7 +281,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zawężanie tylko w `RecipeCategoryFilterSheet` pod przyciskiem filtrów w nagłówku),
   `RecipeListContextCard` (karta `scTileBg`: wiersz diety
   „Dieta wegetariańska · bez: gluten · ukrywa 12 przepisów” w kolorze diety i wiersz „Filtry
-  z Przepisów” z „Wyczyść” — runda 9 zamiast kolorowego pudełka „Lista zawężona…”; opis filtrów
+  z Przepisów” z „Wyczyść” — runda 9 zamiast kolorowego pudełka „Lista zawężona…”; na liście
+  KATEGORII wiersza diety nie ma od rundy 12 — dieta to dopisek w podtytule nagłówka
+  „118 przepisów · dieta wegetariańska” / „· bez Twoich alergenów”, gdy coś ukrywa; opis filtrów
   z `RecipeFilterOptions.summaryLabels`), `RecipeRowStack` z `EditorialRecipeRow` (`.chevron` otwiera przepis,
   `.selection(isOn:)` zaznacza — kółko `SCRadioMark` w terakocie jak w Ustawieniach, tło wiersza
   w tincie akcentu; wybrany przepis schowany przez filtry pokazuje stopka) i `RecipeListEmptyState`
@@ -299,8 +301,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, runda 10): nagłówek z ikoną i „N min · N kcal na
   porcję”, tydzień jak `EditorialWeekBar` (podpis „TEN TYDZIEŃ · …” + strzałki 26 pt, liczby dni rolują),
   pory = `scChoiceSurface(.tile)` w kolorze pory + `SCHeaderIconWell`, porcje rolują (`numericText`),
-  a w stopce nad przyciskiem JEDNO rolujące zdanie „Środa, 24 września · Obiad · 2 porcje”; przycisk:
-  „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. `EditorialPrimaryActionButton` roluje
+  a w stopce nad przyciskiem JEDNO rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” albo
+  „dla całego domu”); przycisk: „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Runda 12:
+  BEZ przewijania — pory w 3 kolumnach jako pionowe kafelki (zajęta = kropka szałwii), porcje jednym
+  wierszem ze stepperem, bez podpisów-objaśnień; `ViewThatFits(in: .vertical)` przełącza na
+  `ScrollView` tylko, gdy formularz nie wejdzie (SE, duża czcionka). `EditorialPrimaryActionButton` roluje
   tytuł (`numericText`) — działa tylko w animowanej transakcji.
 - Ten sam przepis w tej samej porze dla drugiej osoby = SUMA audytoriów, a nie nadpisanie
   (`PlanAudienceChips.merged(_:with:members:)`, runda 10): pozycja planu to para (pora, przepis), więc
@@ -314,8 +319,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`PlanPersonSwitcher`: awatary, wybrana osoba z imieniem na tincie swojego koloru): dania, suma
   i CEL tej osoby. Cele domowników przychodzą z serwera w `households:memberPreferences`
   (`targets: {calorieGoal, macros}` — policzone w `toMemberContext`, BEZ sylwetki) →
-  `HouseholdMemberPreferences.targets`. Przełącznik to pełnoszerokościowe zakładki POD nagłówkiem
-  (awatar + imię każdej osoby, runda 11). Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
+  `HouseholdMemberPreferences.targets`. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
+  kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka) — awatary 28 pt z obwódką w kolorze osoby,
+  wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
+  dzień („Twój dzień · 3 z 4 posiłków” / „Dzień: Ania · …”). Pełnoszerokościowe zakładki z rundy 11
+  odpadły. Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
   Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
 - `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
   (między zjazdem a wjazdem), a przewijanie ma `.id` dnia — pełny ↔ pusty dzień szarpał wjazdem.
