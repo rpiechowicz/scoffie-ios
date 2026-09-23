@@ -356,12 +356,12 @@ struct PlanPersonSwitcher: View {
     @Namespace private var selectionNS
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1) {
             ForEach(people) { person in
                 segment(person)
             }
         }
-        .padding(3)
+        .padding(2)
         .background(Capsule(style: .continuous).fill(Color.scChipBg(scheme)))
         .overlay(Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
         .sensoryFeedback(.selection, trigger: selection)
@@ -383,12 +383,12 @@ struct PlanPersonSwitcher: View {
                 selection = person.id
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 avatar(person, tint: tint, isOn: isOn)
 
                 if isOn {
                     Text(person.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
@@ -397,8 +397,8 @@ struct PlanPersonSwitcher: View {
                 }
             }
             .padding(.leading, 2)
-            .padding(.trailing, isOn ? 11 : 2)
-            .frame(height: 32)
+            .padding(.trailing, isOn ? 9 : 2)
+            .frame(height: 26)
             .background {
                 if isOn {
                     Capsule(style: .continuous)
@@ -421,17 +421,17 @@ struct PlanPersonSwitcher: View {
     private func avatar(_ person: PlanDayPerson, tint: Color, isOn: Bool) -> some View {
         Group {
             if let member = person.member {
-                MemberAvatar(member: member, members: members, size: 28)
+                MemberAvatar(member: member, members: members, size: 22)
             } else {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Color.scMuted(scheme))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 22, height: 22)
             }
         }
         // Niewybrana osoba przygaszona, ale z obwódką swojego koloru —
         // kółka bez podpisu i tak mają się dać rozróżnić.
-        .overlay(Circle().strokeBorder(tint.opacity(isOn ? 0 : 0.6), lineWidth: 1.5))
+        .overlay(Circle().strokeBorder(tint.opacity(isOn ? 0 : 0.6), lineWidth: 1.2))
         .opacity(isOn ? 1 : 0.7)
     }
 }
