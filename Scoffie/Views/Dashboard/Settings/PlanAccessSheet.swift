@@ -599,6 +599,9 @@ struct PlanBadge: View {
     }
 }
 
+/// Etykieta sekcji — krój `EditorialSheetSectionLabel` (10,5 pt, tracking
+/// 1,4), jak w każdym arkuszu; odstępy zostają pod wcięcie tekstów tego
+/// arkusza (4 pt).
 struct PlanSectionLabel: View {
     let text: String
 
@@ -608,8 +611,8 @@ struct PlanSectionLabel: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .bold))
-            .tracking(0.8)
+            .font(.system(size: 10.5, weight: .bold))
+            .tracking(1.4)
             .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)

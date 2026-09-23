@@ -453,9 +453,44 @@ struct RecipeFilterFacts {
 
 enum RecipeFilterFactsCache {
     private static var storage: [UUID: (fingerprint: Int, facts: RecipeFilterFacts)] = [:]
+    /// Wartości aspektów przepisu liczone w INNEJ kategorii niż jego własna
+    /// (wybór do planu) — osobno, żeby nie mieszać ich z faktami przepisu.
+    private static var foreignFacets: [ForeignKey: (fingerprint: Int, values: [RecipeFacetKind: Set<String>])] = [:]
+
+    private struct ForeignKey: Hashable {
+        let recipeId: UUID
+        let category: RecipesCategory
+    }
 
     @MainActor
     static func facts(for recipe: Recipe) -> RecipeFilterFacts {
+        let stamp = fingerprint(of: recipe)
+        if let cached = storage[recipe.id], cached.fingerprint == stamp {
+            return cached.facts
+        }
+        let facts = RecipeFilterFacts(recipe)
+        storage[recipe.id] = (stamp, facts)
+        return facts
+    }
+
+    /// Wartości aspektów przepisu w aspektach podanej kategorii — patrz
+    /// `RecipeCategoryFacets.values(for:in:)`. Przepis z tej samej kategorii
+    /// bierze je z faktów.
+    @MainActor
+    static func facetValues(for recipe: Recipe, in category: RecipesCategory) -> [RecipeFacetKind: Set<String>] {
+        guard recipe.category != category else { return facts(for: recipe).facetValues }
+        let key = ForeignKey(recipeId: recipe.id, category: category)
+        let stamp = fingerprint(of: recipe)
+        if let cached = foreignFacets[key], cached.fingerprint == stamp {
+            return cached.values
+        }
+        let values = RecipeCategoryFacets.values(for: recipe, in: category)
+        foreignFacets[key] = (stamp, values)
+        return values
+    }
+
+    @MainActor
+    private static func fingerprint(of recipe: Recipe) -> Int {
         // Ulubione zmieniają się w trakcie sesji, a lista potrafi przyjść
         // uboższa niż szczegóły — każde z pól, z których liczą się fakty,
         // musi unieważniać wpis.
@@ -478,13 +513,6 @@ enum RecipeFilterFactsCache {
             hasher.combine(ingredient.name)
             hasher.combine(ingredient.department)
         }
-        let fingerprint = hasher.finalize()
-
-        if let cached = storage[recipe.id], cached.fingerprint == fingerprint {
-            return cached.facts
-        }
-        let facts = RecipeFilterFacts(recipe)
-        storage[recipe.id] = (fingerprint, facts)
-        return facts
+        return hasher.finalize()
     }
 }

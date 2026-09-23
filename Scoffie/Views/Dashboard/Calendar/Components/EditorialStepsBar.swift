@@ -1,9 +1,11 @@
 import SwiftUI
 
-// Editorial steps bar — rysowany w Kalendarzu bezpośrednio pod blokiem makro,
-// tym samym językiem: eyebrow, licznik z rolującymi cyframi, kapsułowy pasek
-// wysokości 4 i stopka 9pt. Skala licznika to 20pt (jak MacroStat), nie 44pt —
-// kroki są danymi drugiego planu względem kalorii.
+// Editorial steps bar — ostatnie piętro dnia w Kalendarzu: etykieta, licznik
+// z rolującymi cyframi, kapsułowy pasek wysokości 4 i stopka. Skala licznika
+// to 20pt, nie 44pt — kroki są danymi drugiego planu względem kalorii.
+// Etykieta ma krój etykiet sekcji aplikacji (10,5 pt, tracking 1,4), a stopka
+// jest zwykłym zdaniem — dawne 9 pt wersalikami zostało po komponencie
+// makro, którego już nie ma.
 //
 // `steps == nil` znaczy „brak danych" (odmowa odczytu w Zdrowiu, brak próbek,
 // Garmin bez syncu) — pasek stoi pusty, a stopka mówi to wprost. Zera z
@@ -35,9 +37,9 @@ struct EditorialStepsBar: View {
 
         VStack(alignment: .leading, spacing: 6) {
             Text("KROKI")
-                .font(.system(size: 9, weight: .bold))
-                .tracking(2)
-                .foregroundStyle(muted)
+                .font(.system(size: 10.5, weight: .bold))
+                .tracking(1.4)
+                .foregroundStyle(faint)
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 CountingNumber(target: steps ?? 0)
@@ -73,16 +75,14 @@ struct EditorialStepsBar: View {
 
             HStack {
                 progressFootnote
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(0.4)
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(muted)
 
                 Spacer()
 
                 if source == .garmin {
-                    Text("ŹRÓDŁO: GARMIN")
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(0.4)
+                    Text("Źródło: Garmin")
+                        .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(muted)
                 }
             }
@@ -98,10 +98,10 @@ struct EditorialStepsBar: View {
             // nie błąd; przycina się tylko sam pasek.
             HStack(spacing: 0) {
                 CountingNumber(target: goalPct)
-                Text("% CELU KROKÓW")
+                Text("% celu kroków")
             }
         } else {
-            Text("BRAK DANYCH O KROKACH")
+            Text("Brak danych o krokach")
         }
     }
 }

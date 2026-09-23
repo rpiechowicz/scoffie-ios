@@ -117,26 +117,22 @@ struct WelcomeStep4MealsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                selectionMark(isEnabled: isEnabled)
+                // Pole wyboru, jak w Ustawieniach → „Posiłki w planie”:
+                // posiłków włącza się dowolnie wiele, a „wiele z wielu” to
+                // w aplikacji `SCCheckbox`. Świadomie nie `Toggle` —
+                // przełącznik w klikalnej karcie zjadałby stuknięcia raz
+                // sobie, raz karcie.
+                SCCheckbox(on: isEnabled, accent: SCPalette.terracotta)
             }
             .padding(14)
             .frame(minHeight: 84)
-            .background(
-                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
-                    .fill(
-                        isEnabled
-                            ? SCPalette.terracotta.opacity(colorScheme == .dark ? 0.10 : 0.07)
-                            : Color.scTileBg(colorScheme)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous)
-                    .stroke(
-                        isEnabled
-                            ? SCPalette.terracotta.opacity(colorScheme == .dark ? 0.45 : 0.36)
-                            : Color.scTileStroke(colorScheme),
-                        lineWidth: isEnabled ? 1.4 : 1
-                    )
+            // Włączona karta jak zaznaczony `SCChoiceTile`: tint i obwódka
+            // akcentu.
+            .scChoiceSurface(
+                RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous),
+                isOn: isEnabled,
+                offFill: Color.scTileBg(colorScheme),
+                style: .tile
             )
             .contentShape(RoundedRectangle(cornerRadius: WelcomeLayout.cardRadius, style: .continuous))
         }
@@ -144,30 +140,6 @@ struct WelcomeStep4MealsView: View {
         .accessibilityLabel("\(slot.title). \(slot.settingsSubtitle)")
         .accessibilityAddTraits(isEnabled ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(isEnabled ? "Stuknij, aby wyłączyć" : "Stuknij, aby włączyć")
-    }
-
-    /// Znacznik o stałej średnicy zamiast `Toggle` — przełącznik wewnątrz
-    /// klikalnej karty zjadałby stuknięcia raz sobie, raz karcie.
-    private func selectionMark(isEnabled: Bool) -> some View {
-        ZStack {
-            if isEnabled {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(.white)
-            } else {
-                Circle()
-                    .stroke(Color.scFaint(colorScheme), lineWidth: 1.8)
-            }
-        }
-        .frame(width: 24, height: 24)
     }
 
     // MARK: - Podgląd godzin

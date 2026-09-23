@@ -309,6 +309,9 @@ struct DayPager<Content: View>: View {
             // Strona dnia jest jedynym przewijaniem na Planie — to ona
             // melduje kierunek, od którego zwija się dolne menu.
             .scTracksTabBarCompaction()
+            // Przewinięte kafle gasną pod paskiem dni zamiast chować się pod
+            // kreską — ten sam cień, co pod nagłówkiem arkusza.
+            .scScrollEdgeFade()
         } else {
             day
                 .padding(.bottom, bottomPadding)

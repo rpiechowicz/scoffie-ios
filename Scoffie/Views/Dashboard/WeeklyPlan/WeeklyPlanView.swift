@@ -294,16 +294,13 @@ struct WeeklyPlanView: View {
                             plannedDates: plannedDates
                         )
                         .padding(.horizontal, SCPageMetrics.horizontal)
-
-                        // 14 pt nad kreską i nic pod nią: odstęp od kreski do
-                        // nazwy dnia należy do osi (`PlanDayTimeline` zaczyna
-                        // się własnym paddingiem 18 pt), żeby liczyć go w
-                        // jednym miejscu, a nie po obu stronach granicy.
-                        Rectangle()
-                            .fill(Color.scRule(scheme))
-                            .frame(height: 1)
-                            .padding(.horizontal, SCPageMetrics.horizontal)
-                            .padding(.top, 14)
+                        // Bez kreski pod paskiem dni: strona dnia gaśnie pod
+                        // nim sama (`scScrollEdgeFade` w `DayPager`), jak treść
+                        // pod przypiętym nagłówkiem arkusza. Kreska stała tu
+                        // na stałe, także gdy nic pod nią nie przejeżdżało.
+                        // Odstęp do nazwy dnia należy do osi (`PlanDayTimeline`
+                        // zaczyna się własnym paddingiem 18 pt).
+                        .padding(.bottom, 14)
 
                         // Bez czerwonego wiersza błędu: od kiedy most z korzenia
                         // aplikacji wystawia `errorMessage` jako toast, ten sam

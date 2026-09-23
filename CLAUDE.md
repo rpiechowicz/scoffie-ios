@@ -225,7 +225,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Wzór:
   szczegóły posiłku. Nagłówek stoi NAD `ScrollView` w `VStack` — nie przewija się i nie zwija
   (zwijany „Filtrów”, z tytułem przeskakującym na środek, zniknął 23.09 na prośbę Rafała). Tak stoją
-  też filtry kategorii i oba arkusze wykluczania. Maska sięga pod pasek domowy (`ignoresSafeArea`).
+  też filtry kategorii, oba arkusze wykluczania, lista kategorii, wybór przepisu do planu, „Dodaj do
+  planu”, Dieta, FAQ, Profil, Posiłki w planie, gospodarstwo, zgłoszenie odpowiedzi i wszystkie arkusze
+  na `AssistantSheetScaffold` (runda 8). Wyjątek: `PlanDayGoalSheet` mierzy wysokość treści pod
+  detent, więc nagłówek zostaje w mierzonej treści. Plan tygodnia też bez kreski pod nagłówkiem —
+  `scScrollEdgeFade` na przewijanej gałęzi `DayPager`. Maska sięga pod pasek domowy (`ignoresSafeArea`).
 - Plany asystenta: to, co dom MA, bierze się WYŁĄCZNIE z serwera (`BillingStateDTO.subscriptions`
   z `alive`, potem `AgentUsageDTO.source == "SUBSCRIPTION"` + `product`). Liczba domowników
   (`PlansSheet.plan(forHousehold:)`) tylko PODPOWIADA („Polecany”, „polecamy We dwoje”) — nigdy nie
@@ -260,9 +264,45 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   oddechu — w `onAppear` padało w klatce wstawienia i nic nie grało), zdjęcie osiada z 1,12, sekcje
   kaskadą (`smooth 0,55`, opóźnienie 0,10 + 0,05·n), serce i krzyżyk wchodzą z treścią; arkusz ma
   rogi 40 pt (`dashboardLiquidSheet(cornerRadius: 40)`) we wszystkich czterech miejscach otwarcia.
-- Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: ikona w tincie akcentu, eyebrow,
-  tytuł, zdanie o zasięgu i „Aktywne: czas, kalorie” (gdy coś włączone). Osobny wiersz zasięgu
-  pod nagłówkiem zniknął.
+- Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: `EditorialSheetHeader` z kafelkiem,
+  zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka + „Aktywne: czas, kalorie” (gdy coś
+  włączone). Osobny wiersz zasięgu pod nagłówkiem zniknął.
+- „Wybierz przepis” w Planie (`PlanSlotPickerSheet`) i lista kategorii na Przepisach
+  (`RecipeCategorySheetView`) to JEDEN układ z `RecipeListKit.swift` (runda 8, 23.09.2026 — Rafał:
+  „żeby wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”): `RecipeListSheetTop`
+  (nagłówek + `SCSearchField` + pasek pigułek, przypięte), `RecipeFacetPillBar` (opcje
+  `RecipeCategoryFacets` jako `RecipeFilterPill` — ten sam stan, co kafelki `RecipeCategoryFilterSheet`
+  pod przyciskiem filtrów w nagłówku), `RecipeListNote` (szałwia = dieta ukrywa N, terakota = filtry
+  z krzyżykiem), `RecipeRowStack` z `EditorialRecipeRow` (`.chevron` otwiera przepis,
+  `.selection(isOn:)` zaznacza — kółko `SCRadioMark` w terakocie jak w Ustawieniach, tło wiersza
+  w tincie akcentu; wybrany przepis schowany przez filtry pokazuje stopka) i `RecipeListEmptyState`
+  (co opróżniło listę + przyciski, które to zdejmują). W wyborze do planu: akcent i ikona PORY
+  (`slot.cozyAccent`, `slot.icon`), data i godzina w `subtitle`, filtry kategorii `slot.baseCategory`
+  bez aspektu „Pora w planie” (`RecipeCategoryFacets.facets(forPicking:slot:)`, arkusz filtrów
+  z `slot:`; wartości dań z INNYCH kategorii liczone w aspektach kategorii pory —
+  `RecipeFilterFactsCache.facetValues(for:in:)`), pigułki „Ulubione” (w obrębie pory, z „Wszystkie
+  pory” = wszystkie ulubione) i „Wszystkie pory” zamiast przełącznika Pasujące/Wszystkie/Ulubione,
+  a „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad
+  przyciskiem — tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
+- Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
+  (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
+  nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
+  gospodarstwo). Pole szukania = `SCSearchField` (kapsuła 44 pt, krzyżyk, obwódka przy fokusie; przy
+  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — jedyny wyjątek to pływające pole
+  rozmów Asystenta. Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
+  Podpowiedź szukania kategorii: `RecipesConstants.searchPrompt(for:)` („Szukaj w śniadaniach”, nie „w śniadania”).
+- Po audycie spójności (runda 8, 23.09.2026, 26 punktów): akcja niszcząca = `SCDestructiveButton`
+  (soft kapsuła w ciepłej czerwieni: wyloguj, usuń konto, opuść gospodarstwo, odłącz Cookidoo/Zdrowie);
+  błąd przy polu = `SCInlineErrorText` (terakota, NIGDY `Color.red`, i bez „sprawdź połączenie” —
+  sam skutek); zaznaczony chip/karta = `.scChoiceSurface` (`.chip`: pigułki filtrów, płeć/aktywność
+  w Profilu i kreatorze; `.tile`: liczby `SCChoiceTile` — motyw, posiłki w planie, źródło kroków;
+  bez gradientu i cienia); pigułka filtra = `RecipeFilterPill` (haptyka za stuknięcie); karty szczegółów
+  posiłku = `scTileBg` + `scTileStroke` bez cienia; etykiety sekcji WSZĘDZIE 10,5 pt bold, tracking 1,4,
+  `scFaint` (lista Ustawień, arkusze, grupy Asystenta, „Kroki”, „Dla kogo”). Asystent: nagłówki arkuszy
+  (`AssistantSheetHeader`) rysuje `EditorialSheetHeader` (krzyżyk `SCSheetCloseButton`), tytuł zakładki
+  to `EditorialPageHeader`, przycisk wysyłania „soft”. Świadomie zostały: nagłówek kreatora
+  (`WelcomeStepHeader`), kreski w historii i archiwum Zakupów (ten sam układ co ekran Zakupów),
+  `ShoppingSheetHeader`.
 - Ustawienia → Gospodarstwo (23.09.2026, trzy rundy tego samego dnia — „za dużo tekstu”, potem
   „znów pusto i smutno”): nagłówek z ikoną domu, nazwą, ołówkiem i jedną linijką „3 osoby · wspólny
   plan i lista zakupów”; domownicy z kolorowymi etykietami (rola z koroną, dieta z ikoną diety,

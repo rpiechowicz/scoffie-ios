@@ -161,27 +161,12 @@ private struct SexChip: View {
                 Text(candidate.title)
                     .font(.system(size: 15, weight: .semibold))
             }
-            .foregroundStyle(isSelected ? Color.white : Color.scLabel(colorScheme))
+            .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [SCPalette.terracotta.opacity(0.95), SCPalette.terracotta],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            : AnyShapeStyle(Color.scChipBg(colorScheme))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.scTileStroke(colorScheme), lineWidth: 1)
-            )
+            // Ten sam chip co w „Twoich danych” w Ustawieniach — wybór
+            // w wariancie „soft”, nie pełna terakota z białym napisem.
+            .scChoiceSurface(RoundedRectangle(cornerRadius: 12, style: .continuous), isOn: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(candidate.title)

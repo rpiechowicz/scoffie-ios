@@ -450,7 +450,9 @@ struct CalendarView: View {
         static let titleGap: CGFloat = 5
         static let titleLine: CGFloat = 22
         static let chips: CGFloat = 30 + 12
-        static let steps: CGFloat = 70
+        /// Pasek kroków: etykieta 10,5 pt i stopka zdaniem 11,5 pt (dawniej
+        /// oba 9 pt wersalikami) — o kilka punktów wyższy niż był.
+        static let steps: CGFloat = 74
 
         /// Talerzyk wybrany + obwódka + podpisy w dwóch linijkach.
         static func strip(maxColumn: CGFloat) -> CGFloat {

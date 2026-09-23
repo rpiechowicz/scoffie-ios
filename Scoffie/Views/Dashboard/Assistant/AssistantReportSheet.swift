@@ -26,99 +26,103 @@ struct AssistantReportSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(eyebrow: "Asystent", title: "Zgłoś odpowiedź") {
-                        dismiss()
-                    }
-
-                    Text(message.text)
-                        .font(.system(size: 13))
-                        .lineLimit(4)
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-
-                    EditorialSheetSectionLabel(title: "Co jest nie tak")
-                    VStack(spacing: 0) {
-                        ForEach(Array(Self.reasons.enumerated()), id: \.element.code) { index, item in
-                            Button {
-                                reason = item.code
-                            } label: {
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.title)
-                                            .font(.system(size: 14.5, weight: .semibold))
-                                            .foregroundStyle(Color.scLabel(scheme))
-                                        Text(item.detail)
-                                            .font(.system(size: 12.5))
-                                            .foregroundStyle(Color.scMuted(scheme))
-                                    }
-                                    Spacer(minLength: 0)
-                                    Image(systemName: reason == item.code ? "largecircle.fill.circle" : "circle")
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundStyle(reason == item.code ? SCPalette.terracotta : Color.scTileStroke(scheme))
-                                }
-                                .padding(14)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(reason == item.code ? [.isSelected] : [])
-                            if index < Self.reasons.count - 1 {
-                                Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
-                            }
-                        }
-                    }
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-
-                    EditorialSheetSectionLabel(title: "Komentarz (opcjonalnie)")
-                    TextField("Co powinno być inaczej?", text: $comment, axis: .vertical)
-                        .lineLimit(3...6)
-                        .font(.system(size: 14.5))
-                        .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(SCPalette.terracotta)
-                    }
-
-                    let reportTone: Color = isDone ? SCPalette.sage : SCPalette.terracotta
-                    Button(action: submit) {
-                        HStack(spacing: 8) {
-                            if isSending {
-                                ProgressView().controlSize(.small).tint(reportTone)
-                            } else {
-                                Image(systemName: isDone ? "checkmark" : "flag.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                            }
-                            Text(isDone ? "Zgłoszono" : "Wyślij zgłoszenie")
-                                .font(.system(size: 15, weight: .bold))
-                        }
-                        .foregroundStyle(reportTone)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .scSoftCapsule(reportTone)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isSending || isDone)
-
-                    Text("Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 0) {
+                // Nagłówek przypięty nad treścią, jak w pozostałych arkuszach —
+                // przy otwartej klawiaturze krzyżyk nie ucieka w górę.
+                EditorialSheetHeader(eyebrow: "Asystent", title: "Zgłoś odpowiedź") {
+                    dismiss()
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
-                .padding(.bottom, 28)
+                .padding(.bottom, 12)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(message.text)
+                            .font(.system(size: 13))
+                            .lineLimit(4)
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
+
+                        EditorialSheetSectionLabel(title: "Co jest nie tak")
+                        VStack(spacing: 0) {
+                            ForEach(Array(Self.reasons.enumerated()), id: \.element.code) { index, item in
+                                Button {
+                                    reason = item.code
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.title)
+                                                .font(.system(size: 14.5, weight: .semibold))
+                                                .foregroundStyle(Color.scLabel(scheme))
+                                            Text(item.detail)
+                                                .font(.system(size: 12.5))
+                                                .foregroundStyle(Color.scMuted(scheme))
+                                        }
+                                        Spacer(minLength: 0)
+                                        SCRadioMark(isOn: reason == item.code)
+                                    }
+                                    .padding(14)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(reason == item.code ? [.isSelected] : [])
+                                if index < Self.reasons.count - 1 {
+                                    Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
+                                }
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
+
+                        EditorialSheetSectionLabel(title: "Komentarz (opcjonalnie)")
+                        TextField("Co powinno być inaczej?", text: $comment, axis: .vertical)
+                            .lineLimit(3...6)
+                            .font(.system(size: 14.5))
+                            .padding(14)
+                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
+
+                        if let errorMessage {
+                            SCInlineErrorText(errorMessage)
+                        }
+
+                        let reportTone: Color = isDone ? SCPalette.sage : SCPalette.terracotta
+                        Button(action: submit) {
+                            HStack(spacing: 8) {
+                                if isSending {
+                                    ProgressView().controlSize(.small).tint(reportTone)
+                                } else {
+                                    Image(systemName: isDone ? "checkmark" : "flag.fill")
+                                        .font(.system(size: 14, weight: .bold))
+                                }
+                                Text(isDone ? "Zgłoszono" : "Wyślij zgłoszenie")
+                                    .font(.system(size: 15, weight: .bold))
+                            }
+                            .foregroundStyle(reportTone)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .scSoftCapsule(reportTone)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSending || isDone)
+
+                        Text("Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.scFaint(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 6)
+                    .padding(.bottom, 28)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .scScrollEdgeFade()
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
             .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }

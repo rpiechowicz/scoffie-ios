@@ -42,13 +42,11 @@ struct AuthActionsView: View {
             .opacity(isLoading ? 0.85 : 1)
 
             if let errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color(red: 0.85, green: 0.35, blue: 0.35))
+                // Ekran nie przewija się, więc układ jest ciasny — błąd ma
+                // zabrać miejsce hero u góry, a nie uciąć się do „Spróbuj p…”
+                // (`SCInlineErrorText` ma `fixedSize` w pionie).
+                SCInlineErrorText(errorMessage)
                     .multilineTextAlignment(.center)
-                    // Ekran nie przewija się, więc układ jest ciasny — błąd ma
-                    // zabrać miejsce hero u góry, a nie uciąć się do „Spróbuj p…”.
-                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
             }
         }

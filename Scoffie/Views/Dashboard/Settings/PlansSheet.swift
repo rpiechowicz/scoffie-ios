@@ -364,7 +364,9 @@ struct PlanTile: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                     Spacer(minLength: 0)
-                    radio
+                    // To samo kółko co przy celu i diecie w Ustawieniach,
+                    // tylko mniejsze — trzy kafle stoją w jednym rzędzie.
+                    SCRadioMark(isOn: isSelected, size: 18)
                 }
                 Text(plan.seatsLabel)
                     .font(.system(size: 11.5))
@@ -421,25 +423,6 @@ struct PlanTile: View {
         } else {
             Color.clear
         }
-    }
-
-    /// Kółko wyboru: wypełnienie rośnie ze środka, a nie wskakuje.
-    private var radio: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.scRule(scheme), lineWidth: 1.5)
-                .opacity(isSelected ? 0 : 1)
-            Circle()
-                .fill(SCPalette.terracotta)
-                .scaleEffect(isSelected ? 1 : 0.4)
-                .opacity(isSelected ? 1 : 0)
-            Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .heavy))
-                .foregroundStyle(Color.scPageBase(scheme))
-                .scaleEffect(isSelected ? 1 : 0.5)
-                .opacity(isSelected ? 1 : 0)
-        }
-        .frame(width: 18, height: 18)
     }
 
     private var traits: AccessibilityTraits {

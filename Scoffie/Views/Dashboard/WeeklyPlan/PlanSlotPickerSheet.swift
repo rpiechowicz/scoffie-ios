@@ -4,16 +4,22 @@ import SwiftUI
 /// go wprost do planu tygodnia — cel „Wybierz przepis” / „Zamień przepis”
 /// z osi dnia (`PlanDayTimeline`).
 ///
-/// Źródło układu: canvas claude.ai → „Weekly Meals - Plan v2.html”, artboard F1
-/// (`components/plan-v2-edit.jsx`, `P2PickSheet`).
+/// Układ (runda 8, 23.09.2026) jest ten sam, co listy kategorii na
+/// Przepisach, i stoi na tych samych klockach (`RecipeListKit.swift`):
+/// nagłówek z kafelkiem pory i datą, szukanie, pigułki („Ulubione”,
+/// „Wszystkie pory” i filtry kategorii tej pory), wiersze `EditorialRecipeRow`
+/// — tu z kółkiem wyboru — a w stopce „Dla kogo” nad przyciskiem. Wcześniej
+/// arkusz miał własny nagłówek, własne pole szukania, przełącznik „Pasujące /
+/// Wszystkie / Ulubione” i własne wiersze. Rafał: „żeby wszystko trzymało się
+/// kupy, nie było nic, co jest odrębnie nowe”.
 ///
 /// **Wybór, potem potwierdzenie — nie zapis od pierwszego stuknięcia.**
 /// Poprzednia wersja zapisywała przepis w chwili stuknięcia w kafel, więc
 /// rząd chipów „Dla kogo” trzeba było zauważyć i ustawić ZANIM się cokolwiek
 /// dotknęło. Kto tego nie zrobił — a to jest domyślne zachowanie oka, które
 /// szuka jedzenia, a nie ustawień — dostawał posiłek zapisany jako „Wspólne”
-/// i nie miał gdzie tego odkręcić. Teraz stuknięcie zaznacza, a stopka mówi
-/// wprost, dla kogo danie poleci, zanim poleci.
+/// i nie miał gdzie tego odkręcić. Teraz stuknięcie zaznacza, a chipy stoją
+/// tuż nad przyciskiem, który zapisuje.
 struct PlanSlotPickerSheet: View {
     let date: Date
     let slot: MealSlot
@@ -74,7 +80,15 @@ struct PlanSlotPickerSheet: View {
     @State private var searchText = ""
     @State private var debouncedSearch = ""
     @State private var searchDebounceTask: Task<Void, Never>?
-    @State private var scope: Scope = .fitting
+    /// Tylko ulubione — pigułka z sercem (dawniej segment „Ulubione”).
+    @State private var favouritesOnly = false
+    /// Także przepisy bez tej pory — pigułka „Wszystkie pory” (dawniej segment
+    /// „Wszystkie”), np. owsianka na kolację.
+    @State private var includesOtherSlots = false
+    /// Filtry kategorii tej pory (smak, rodzaj dania, mięso) — te same opcje,
+    /// co w liście kategorii na Przepisach, ale własne dla tego wyboru.
+    @State private var categoryFilter = RecipeCategoryFilter()
+    @State private var isFilterSheetPresented = false
     @State private var isSaving = false
     /// Pusty zbiór znaczy „Wspólne" — je całe gospodarstwo.
     @State private var selectedParticipants: Set<String> = []
@@ -82,24 +96,15 @@ struct PlanSlotPickerSheet: View {
     /// zapisać i przycisk stopki jest wyłączony.
     @State private var selectedRecipeId: UUID?
 
-    /// Zakres listy. Zastąpił dwa osobne przełączniki („tylko ulubione”
-    /// w pasku narzędzi i ukryte „pokaż cały katalog” w notce), których razem
-    /// nie dało się odczytać z ekranu — teraz widać wprost, którą listę się
-    /// ogląda.
-    private enum Scope: String, CaseIterable, Identifiable {
-        case fitting, all, favourites
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .fitting:    return "Pasujące"
-            case .all:        return "Wszystkie"
-            case .favourites: return "Ulubione"
-            }
-        }
-    }
-
     // MARK: - Derived
+
+    /// Kategoria, której filtry dostaje pora — II śniadanie i podwieczorek
+    /// filtrują się jak przekąski, bo pod nie podpadają na Przepisach.
+    private var category: RecipesCategory { slot.baseCategory }
+    private var accent: Color { slot.cozyAccent }
+    private var facets: [RecipeFacet] {
+        RecipeCategoryFacets.facets(forPicking: category, slot: slot)
+    }
 
     /// Przepisy, które w ogóle wolno wstawić w ten slot.
     ///
@@ -107,11 +112,10 @@ struct PlanSlotPickerSheet: View {
     /// temu owsianka („Śniadania") pojawia się także w drugim śniadaniu
     /// i w przekąsce, o ile ma tam ustawiony slot.
     private var scopeCatalog: [Recipe] {
-        switch scope {
-        case .fitting:    return recipeCatalogStore.recipes.filter { $0.fits(slot) }
-        case .all:        return recipeCatalogStore.recipes
-        case .favourites: return recipeCatalogStore.recipes.filter(\.favourite)
-        }
+        let base = includesOtherSlots
+            ? recipeCatalogStore.recipes
+            : recipeCatalogStore.recipes.filter { $0.fits(slot) }
+        return favouritesOnly ? base.filter { $0.favourite } : base
     }
 
     /// Ile dań przepada przez zawężenie do slotu — do decyzji, czy pokazać
@@ -136,14 +140,36 @@ struct PlanSlotPickerSheet: View {
         personalization.hiddenCount(in: scopeCatalog)
     }
 
-    private var filtered: [Recipe] {
-        // Ta sama kolejność, co na Przepisach: najpierw preferencje (dieta
-        // i alergeny odsiewają, cel porządkuje), potem szukanie.
-        var list = personalization.apply(to: scopeCatalog)
-        if !debouncedSearch.isEmpty {
+    /// Pula po dopasowaniu, przed filtrami kategorii i szukaniem — na niej
+    /// liczy kafelki arkusz filtrów.
+    ///
+    /// Ta sama kolejność, co na Przepisach: najpierw preferencje (dieta
+    /// i alergeny odsiewają, cel porządkuje), potem reszta.
+    private var pool: [Recipe] {
+        personalization.apply(to: scopeCatalog)
+    }
+
+    private var trimmedSearch: String {
+        debouncedSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func visibleRecipes(in pool: [Recipe]) -> [Recipe] {
+        var list = pool
+        if categoryFilter.isActive {
+            // W aspektach kategorii PORY, także dla dań z innych kategorii
+            // (owsianka w II śniadaniu, „Wszystkie pory”) — liczone po
+            // kategorii dania wypadały przy każdej pigułce rodzaju.
+            let filter = categoryFilter
+            let facetCategory = category
             list = list.filter {
-                $0.name.localizedCaseInsensitiveContains(debouncedSearch) ||
-                $0.description.localizedCaseInsensitiveContains(debouncedSearch)
+                filter.matches(RecipeFilterFactsCache.facetValues(for: $0, in: facetCategory))
+            }
+        }
+        let query = trimmedSearch
+        if !query.isEmpty {
+            list = list.filter {
+                $0.name.localizedCaseInsensitiveContains(query) ||
+                $0.description.localizedCaseInsensitiveContains(query)
             }
         }
         return list
@@ -162,26 +188,55 @@ struct PlanSlotPickerSheet: View {
             ?? editing?.recipe
     }
 
+    /// Skład gospodarstwa — najpierw żywy ze `SessionStore`, a dopiero potem
+    /// ten podany przy otwarciu arkusza.
+    ///
+    /// Arkusz dostaje listę jako `let`, więc gdy skład dojeżdżał z serwera
+    /// PO jego otwarciu, chipy „Dla kogo” już się nie pojawiały — arkusz
+    /// zostawał z pustą listą sprzed odpowiedzi.
+    private var roster: [HouseholdMemberSnapshot] {
+        sessionStore.householdMembers.isEmpty ? members : sessionStore.householdMembers
+    }
+
     // MARK: - Body
 
     var body: some View {
+        let available = pool
+        let rows = visibleRecipes(in: available)
+
         ZStack {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                controls
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 14)
+                // Przypięta góra — ta sama, co w liście kategorii.
+                RecipeListSheetTop(searchPrompt: "Szukaj przepisu", searchText: $searchText) {
+                    header
+                } pills: {
+                    RecipeFacetPillBar(facets: facets, filter: $categoryFilter, accent: accent) {
+                        RecipeFilterPill(
+                            title: "Ulubione",
+                            icon: "heart.fill",
+                            isOn: favouritesOnly,
+                            accent: SCPalette.terracotta
+                        ) {
+                            withAnimation(.smooth(duration: 0.2)) { favouritesOnly.toggle() }
+                        }
 
-                // Bez kreski pod sterowaniem: lista gaśnie pod nim sama
-                // (`scScrollEdgeFade` na liście), więc pierwszy wiersz nie
-                // dojeżdża już wprost pod przełącznik zakresu.
-                list
+                        RecipeFilterPill(
+                            title: "Wszystkie pory",
+                            isOn: includesOtherSlots,
+                            accent: accent
+                        ) {
+                            withAnimation(.smooth(duration: 0.2)) { includesOtherSlots.toggle() }
+                        }
+                    }
+                }
 
-                footer
+                list(rows: rows, poolIsEmpty: available.isEmpty)
+
+                footer(visible: rows)
             }
-            .padding(.top, 18)
         }
         .task { await recipeCatalogStore.loadIfNeeded() }
         // Skład gospodarstwa dociągamy TAKŻE stąd, nie tylko z ekranu planu:
@@ -198,223 +253,101 @@ struct PlanSlotPickerSheet: View {
             }
         }
         .onDisappear { searchDebounceTask?.cancel() }
-    }
-
-    // MARK: - Góra arkusza
-
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-
-            audienceSection
-                .padding(.top, 18)
-
-            searchField
-                .padding(.top, 14)
-
-            scopePicker
-                .padding(.top, 10)
-
-            if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .padding(.top, 10)
-            }
-        }
-    }
-
-    /// „Dla kogo” — chipy, a gdy nie ma z kogo wybierać, zdanie mówiące dlaczego.
-    ///
-    /// Cichy brak tego rzędu był najgorszą z możliwych odpowiedzi: dom
-    /// jednoosobowy dostawał arkusz bez śladu po tym, że przypisywanie dań
-    /// konkretnym osobom w ogóle istnieje, i wyglądało to jak brakująca
-    /// funkcja, a nie jak brak domowników.
-    @ViewBuilder
-    private var audienceSection: some View {
-        if roster.count > 1 {
-            PlanAudienceChips(
-                members: roster,
-                selection: $selectedParticipants
+        .sheet(isPresented: $isFilterSheetPresented) {
+            RecipeCategoryFilterSheet(
+                category: category,
+                recipes: pool,
+                filter: $categoryFilter,
+                slot: slot
             )
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("DLA KOGO")
-                    .scFont(9, weight: .bold, relativeTo: .caption2)
-                    .tracking(2)
-                    .foregroundStyle(Color.scMuted(scheme))
-
-                HStack(spacing: 8) {
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.scFaint(scheme))
-
-                    Text("Na razie planujesz dla siebie. Dodaj domownika w Ustawieniach, żeby przypisywać dania konkretnym osobom.")
-                        .scFont(12, weight: .medium, relativeTo: .caption)
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Spacer(minLength: 0)
-                }
-            }
+            .presentationDetents([.large])
+            .dashboardLiquidSheet()
         }
     }
 
-    /// Skład gospodarstwa — najpierw żywy ze `SessionStore`, a dopiero potem
-    /// ten podany przy otwarciu arkusza.
-    ///
-    /// Arkusz dostaje listę jako `let`, więc gdy skład dojeżdżał z serwera
-    /// PO jego otwarciu, chipy „Dla kogo” już się nie pojawiały — arkusz
-    /// zostawał z pustą listą sprzed odpowiedzi.
-    private var roster: [HouseholdMemberSnapshot] {
-        sessionStore.householdMembers.isEmpty ? members : sessionStore.householdMembers
-    }
+    // MARK: - Nagłówek
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(contextLine)
-                    .scFont(10, weight: .bold, relativeTo: .caption2)
-                    .tracking(2)
-                    .foregroundStyle(slot.cozyAccent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Text(editing == nil ? "Wybierz przepis" : "Zmień przepis")
-                    .scFont(24, weight: .bold, relativeTo: .title2)
-                    .tracking(-0.5)
-                    .foregroundStyle(Color.scLabel(scheme))
+        EditorialSheetHeader(
+            eyebrow: slot.title,
+            title: editing == nil ? "Wybierz przepis" : "Zmień przepis",
+            icon: slot.icon,
+            accent: accent,
+            subtitle: dateLine,
+            onClose: { dismiss() }
+        ) {
+            RecipeListFilterButton(count: categoryFilter.activeCount, accent: accent) {
+                isFilterSheetPresented = true
             }
-
-            Spacer(minLength: 8)
-
-            SCSheetCloseButton { dismiss() }
         }
     }
 
-    /// „OBIAD · PONIEDZIAŁEK, 8 WRZ · 14:00” — slot bez stałej pory gubi ostatni człon
+    /// „Środa, 23 września · 08:00” — slot bez stałej pory gubi ostatni człon
     /// razem z separatorem, zamiast zostawić wiszącą kropkę.
-    private var contextLine: String {
-        var parts = [
-            slot.title.uppercased(),
-            Self.dayFormatter.string(from: date).uppercased()
-        ]
+    private var dateLine: String {
+        let day = Self.dayFormatter.string(from: date)
+        var parts = [String(day.prefix(1)).uppercased() + String(day.dropFirst())]
         if let time = sessionStore.mealSlotSchedule.time(for: slot) {
             parts.append(time)
         }
         return parts.joined(separator: " · ")
     }
 
-    private var searchField: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.scFaint(scheme))
-
-            TextField("Szukaj w przepisach", text: $searchText)
-                .textFieldStyle(.plain)
-                .scFont(15, weight: .regular, relativeTo: .subheadline)
-                .foregroundStyle(Color.scLabel(scheme))
-                .submitLabel(.search)
-                .autocorrectionDisabled()
-
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.scFaint(scheme))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Wyczyść szukanie")
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-    }
-
-    private var scopePicker: some View {
-        HStack(spacing: 4) {
-            ForEach(Scope.allCases) { option in
-                let isOn = option == scope
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-                        scope = option
-                    }
-                } label: {
-                    Text(option.title)
-                        .scFont(13.5, weight: .semibold, relativeTo: .footnote)
-                        .tracking(-0.2)
-                        .foregroundStyle(isOn ? Color.scLabel(scheme) : Color.scMuted(scheme))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 32)
-                        .background {
-                            if isOn {
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .fill(Color.scTileBg(scheme))
-                                    .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-                                    // Zaznaczenie SUWA się między segmentami,
-                                    // zamiast gasnąć w jednym i zapalać w drugim.
-                                    .matchedGeometryEffect(id: "scope", in: scopeNS)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isOn ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.scChipBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-    }
-
-    @Namespace private var scopeNS
-
     // MARK: - Lista
 
-    private var list: some View {
+    private func list(rows: [Recipe], poolIsEmpty: Bool) -> some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                if hiddenByPersonalizationCount > 0 {
-                    personalizationNote
-                        .padding(.bottom, 6)
+            VStack(spacing: 0) {
+                if let errorMessage = mealStore.errorMessage, !errorMessage.isEmpty {
+                    RecipeListNote(
+                        icon: "exclamationmark.circle",
+                        text: errorMessage,
+                        tint: SCPalette.terracotta
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
                 }
 
-                if filtered.isEmpty, !recipeCatalogStore.didLoad {
+                // Notka nad listą. Bez niej krótka lista wygląda na brak
+                // przepisów, a nie na skutek ustawień z zupełnie innego ekranu.
+                // Nad pustym stanem jej nie ma — ten mówi o diecie sam.
+                if hiddenByPersonalizationCount > 0, !rows.isEmpty {
+                    RecipeListNote(
+                        icon: "wand.and.stars",
+                        text: "Dopasowane do Ciebie · ukrywa \(PolishPlural.recipes(hiddenByPersonalizationCount))"
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
+
+                if rows.isEmpty, !recipeCatalogStore.didLoad {
                     // Katalog jeszcze jedzie. „Brak wyników” w tym momencie
                     // to nieprawda, którą użytkownik czyta jako pustą apkę.
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 48)
-                } else if filtered.isEmpty {
-                    emptyState
+                } else if rows.isEmpty {
+                    emptyState(poolIsEmpty: poolIsEmpty)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
                 } else {
-                    ForEach(Array(filtered.enumerated()), id: \.element.id) { index, recipe in
-                        row(recipe, isLast: index == filtered.count - 1)
-                            .task {
-                                await recipeCatalogStore.loadNextPageIfNeeded(
-                                    currentItemId: recipe.id,
-                                    threshold: 8
-                                )
-                            }
+                    // Zaznaczenie działa jak pokrętło wyboru, nie jak
+                    // checkbox: stuknięcie w zaznaczony wiersz go NIE
+                    // odznacza. Odznaczenie w trybie edycji zostawiało arkusz
+                    // bez przepisu do zapisania i wyszarzało przycisk, choć
+                    // użytkownik chciał zmienić tylko to, dla kogo danie jest.
+                    RecipeRowStack(
+                        recipes: rows,
+                        mode: .select(selectedRecipeId),
+                        accent: accent
+                    ) { recipe in
+                        withAnimation(.spring(response: 0.26, dampingFraction: 0.9)) {
+                            selectedRecipeId = recipe.id
+                        }
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+            .padding(.top, 8)
             // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
             .padding(.bottom, SCEdgeShade.bottomHeight)
         }
@@ -423,215 +356,80 @@ struct PlanSlotPickerSheet: View {
         // Przewijanie listy chowa klawiaturę — inaczej zasłania ona przycisk
         // potwierdzenia dokładnie wtedy, gdy użytkownik znalazł już przepis.
         .scrollDismissesKeyboard(.interactively)
-        // Lista jest jedyną przewijaną częścią arkusza — góra z chipami
-        // i stopka z przyciskiem stoją, bo obie odpowiadają na pytanie
+        .sensoryFeedback(.selection, trigger: selectedRecipeId)
+        // Lista jest jedyną przewijaną częścią arkusza — góra z szukaniem
+        // i stopka z „Dla kogo” stoją, bo obie odpowiadają na pytanie
         // „co się stanie, gdy stuknę”, i muszą być widoczne w tej chwili.
         .frame(maxHeight: .infinity)
     }
 
-    private func row(_ recipe: Recipe, isLast: Bool) -> some View {
-        let isOn = recipe.id == selectedRecipeId
-
-        // Zaznaczenie działa jak pokrętło wyboru, nie jak checkbox: stuknięcie
-        // w zaznaczony wiersz go NIE odznacza. Odznaczenie w trybie edycji
-        // zostawiało arkusz bez przepisu do zapisania i wyszarzało przycisk,
-        // choć użytkownik chciał zmienić tylko to, dla kogo danie jest.
-        return Button {
-            withAnimation(.spring(response: 0.26, dampingFraction: 0.9)) {
-                selectedRecipeId = recipe.id
-            }
-        } label: {
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    thumbnail(recipe)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(recipe.name)
-                            .scFont(15.5, weight: .semibold, relativeTo: .subheadline)
-                            .tracking(-0.3)
-                            .foregroundStyle(Color.scLabel(scheme))
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2)
-
-                        Text("\(recipe.prepTimeMinutes) min · \(Int(recipe.nutritionPerServing.kcal.rounded())) kcal")
-                            .scFont(12.5, weight: .regular, relativeTo: .caption)
-                            .monospacedDigit()
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    selectionMark(isOn: isOn)
-                }
-                .padding(.vertical, 10)
-                .contentShape(Rectangle())
-
-                if !isLast {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-            }
+    /// Pusty stan mówi, co opróżniło listę, a przyciski zdejmują dokładnie to.
+    private func emptyState(poolIsEmpty: Bool) -> some View {
+        // „na kolację” tylko wtedy, gdy lista naprawdę jest listą tej pory.
+        let forSlot = includesOtherSlots ? "" : " na \(slot.accusativeName)"
+        let title: String
+        let message: String
+        if !trimmedSearch.isEmpty {
+            title = "Brak wyników"
+            message = "Spróbuj innej frazy."
+        } else if categoryFilter.isActive, !poolIsEmpty {
+            title = "Brak wyników"
+            message = "Żaden przepis nie pasuje do zaznaczonych filtrów."
+        } else if favouritesOnly, scopeCatalog.isEmpty {
+            title = "Brak ulubionych"
+            message = "Nie masz jeszcze ulubionych przepisów\(forSlot)."
+        } else if !scopeCatalog.isEmpty {
+            title = "Brak przepisów"
+            message = favouritesOnly
+                ? "Twoja dieta i alergeny ukrywają wszystkie ulubione przepisy\(forSlot)."
+                : "Twoja dieta i alergeny ukrywają wszystkie przepisy\(forSlot)."
+        } else if !includesOtherSlots, hiddenBySlotCount > 0 {
+            title = "Brak przepisów"
+            message = "Żaden przepis nie ma jeszcze oznaczenia \u{201E}\(slot.title)\u{201D}."
+        } else {
+            title = "Brak przepisów"
+            message = "Katalog jest pusty."
         }
-        .buttonStyle(PlanPressStyle(scale: 0.99))
-        .accessibilityLabel(recipe.name)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
 
-    private func selectionMark(isOn: Bool) -> some View {
-        ZStack {
-            Circle()
-                .fill(isOn ? SCPalette.terracotta : .clear)
-            Circle()
-                .stroke(
-                    isOn ? .clear : Color.scLabel(scheme).opacity(0.22),
-                    lineWidth: 1.6
-                )
-            if isOn {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(.white)
-            }
+        var actions: [RecipeListEmptyState.Action] = []
+        if categoryFilter.isActive, !poolIsEmpty {
+            actions.append(.init(title: "Wyczyść filtry", tint: accent) {
+                withAnimation(.smooth(duration: 0.2)) { categoryFilter = RecipeCategoryFilter() }
+            })
         }
-        .frame(width: 26, height: 26)
-    }
-
-    /// Zdjęcie albo kafel zastępczy — jedno ALBO drugie.
-    ///
-    /// Warstwowy `ZStack` ze zdjęciem dochodzącym zanikiem nad kaflem zostawiał
-    /// przepisy bez widocznego zdjęcia: zanik startował od `opacity(0)`
-    /// i sterował nim `onAppear`, więc gdy nie doszedł, na wierzchu stał
-    /// przezroczysty obrazek. Tu jest ten sam kształt, co w `RecipeCarouselCard`.
-    private func thumbnail(_ recipe: Recipe) -> some View {
-        Group {
-            if let url = recipe.imageURL {
-                CachedAsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        placeholderThumb
-                    }
-                }
-            } else {
-                placeholderThumb
-            }
+        if favouritesOnly {
+            actions.append(.init(title: "Pokaż wszystkie przepisy") {
+                withAnimation(.smooth(duration: 0.2)) { favouritesOnly = false }
+            })
         }
-        .frame(width: 56, height: 56)
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-    }
-
-    private var placeholderThumb: some View {
-        ZStack {
-            LinearGradient(
-                colors: [slot.cozyTint, slot.cozyTint.mix(black: 0.32)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            PlanDiagonalHatch(color: .white.opacity(0.07))
-
-            Image(systemName: slot.icon)
-                .font(.system(size: 18, weight: .light))
-                .foregroundStyle(.white.opacity(0.85))
+        if !includesOtherSlots, hiddenBySlotCount > 0 {
+            actions.append(.init(title: "Pokaż przepisy z innych pór") {
+                withAnimation(.smooth(duration: 0.2)) { includesOtherSlots = true }
+            })
         }
-    }
 
-    /// Notka nad listą. Bez niej krótka lista wygląda na brak przepisów,
-    /// a nie na skutek ustawień z zupełnie innego ekranu.
-    private var personalizationNote: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "wand.and.stars")
-                .font(.system(size: 11, weight: .bold))
-
-            Text("Ukryto \(hiddenByPersonalizationCount) \(PolishPlural.recipesNoun(hiddenByPersonalizationCount)) spoza Twojej diety i alergenów.")
-                .scFont(12, weight: .semibold, relativeTo: .caption)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(SCPalette.sage.mix(black: 0.20))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.16 : 0.10))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(SCPalette.sage.opacity(0.28), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.scMuted(scheme))
-
-            Text("Brak wyników")
-                .scFont(17, weight: .bold, relativeTo: .body)
-                .foregroundStyle(Color.scLabel(scheme))
-
-            Text(emptyStateHint)
-                .scFont(13, weight: .medium, relativeTo: .footnote)
-                .foregroundStyle(Color.scMuted(scheme))
-                .multilineTextAlignment(.center)
-
-            if scope == .fitting, hiddenBySlotCount > 0, debouncedSearch.isEmpty {
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-                        scope = .all
-                    }
-                } label: {
-                    Text("Pokaż wszystkie przepisy")
-                        .scFont(13.5, weight: .semibold, relativeTo: .footnote)
-                        .foregroundStyle(SCPalette.terracotta)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .scSoftCapsule()
-                }
-                .buttonStyle(PlanPressStyle(scale: 0.96))
-                .padding(.top, 2)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 48)
-    }
-
-    private var emptyStateHint: String {
-        if !debouncedSearch.isEmpty { return "Spróbuj innej frazy." }
-        switch scope {
-        case .fitting:
-            return "Żaden przepis nie ma jeszcze oznaczenia \u{201E}\(slot.title)\u{201D}."
-        case .favourites:
-            return "Nie masz jeszcze ulubionych przepisów."
-        case .all:
-            return "Katalog jest pusty."
-        }
+        return RecipeListEmptyState(title: title, message: message, actions: actions)
     }
 
     // MARK: - Stopka
 
-    /// Audytorium powiedziane wprost NAD przyciskiem, a nie w nim.
+    /// „Dla kogo” stoi tuż nad przyciskiem, a nie w nim.
     ///
     /// W przycisku musiałoby stać „Dodaj dla Zosi”, czyli imię w dopełniaczu —
     /// a polskiej odmiany imion nie da się wyliczyć regułą, która nie kaleczy
-    /// co dziesiątego („Marek” → „Marka”, ale „Paweł” → „Pawła”). Osobny wiersz
-    /// z awatarami mówi to samo w mianowniku i przy okazji pokazuje twarze.
-    private var footer: some View {
+    /// co dziesiątego („Marek” → „Marka”, ale „Paweł” → „Pawła”). Chipy mówią
+    /// to samo w mianowniku, pokazują twarze i dają się przestawić w miejscu,
+    /// w którym zapada decyzja.
+    private func footer(visible rows: [Recipe]) -> some View {
         SCSheetFooter {
-            if roster.count > 1 {
-                audienceSummary
+            if let selected = selectedRecipe, !rows.contains(where: { $0.id == selected.id }) {
+                hiddenSelection(selected)
             }
+
+            audience
 
             // Ten sam przycisk, co w każdym innym arkuszu aplikacji: terakota
             // w wariancie „soft” (tint + obwódka, bez gradientu i cienia).
-            // Wcześniej to CTA malowało się po swojemu i było jedyną pełną
-            // plamą koloru w całej apce.
             EditorialPrimaryActionButton(
                 title: ctaTitle,
                 icon: ctaIcon,
@@ -646,28 +444,58 @@ struct PlanSlotPickerSheet: View {
         }
     }
 
-    private var audienceSummary: some View {
-        HStack(spacing: 8) {
-            PlanWhoBadge(participantIds: participantsToSave, members: roster, size: 22)
+    /// Zaznaczony przepis, którego nie ma już na liście (schowały go pigułki,
+    /// ulubione albo szukanie) — przycisk pod spodem zapisze właśnie jego,
+    /// więc musi być widać, co to jest.
+    private func hiddenSelection(_ recipe: Recipe) -> some View {
+        HStack(spacing: 10) {
+            EditorialRecipeCover(recipe: recipe, size: 28, cornerRadius: 8)
 
-            Text(audienceText)
-                .scFont(13, weight: .semibold, relativeTo: .footnote)
+            Text(recipe.name)
+                .font(.system(size: 13, weight: .semibold))
                 .tracking(-0.2)
-                .foregroundStyle(Color.scMuted(scheme))
+                .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+
+            SCRadioMark(isOn: true, size: 18)
         }
+        .padding(.horizontal, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Wybrany przepis: \(recipe.name)")
     }
 
-    private var audienceText: String {
-        let ids = participantsToSave
-        guard !ids.isEmpty else { return "Dla całego domu" }
-        let names = roster
-            .filter { ids.contains($0.id) }
-            .map { HouseholdMemberStyle.shortName($0.displayName) }
-        return "Tylko dla: " + names.joined(separator: ", ")
+    /// Chipy domowników, a gdy nie ma z kogo wybierać — zdanie mówiące dlaczego.
+    ///
+    /// Cichy brak tego rzędu był najgorszą z możliwych odpowiedzi: dom
+    /// jednoosobowy dostawał arkusz bez śladu po tym, że przypisywanie dań
+    /// konkretnym osobom w ogóle istnieje, i wyglądało to jak brakująca
+    /// funkcja, a nie jak brak domowników.
+    @ViewBuilder
+    private var audience: some View {
+        if roster.count > 1 {
+            PlanAudienceChips(
+                members: roster,
+                selection: $selectedParticipants
+            )
+        } else {
+            HStack(spacing: 8) {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.scFaint(scheme))
+
+                Text("Dla Ciebie · domowników dodasz w Ustawieniach")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
+            .accessibilityElement(children: .combine)
+        }
     }
 
     private var ctaTitle: String {
@@ -752,10 +580,11 @@ struct PlanSlotPickerSheet: View {
         dismiss()
     }
 
+    /// „środa, 23 września” — pełna nazwa miesiąca w dopełniaczu.
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "pl_PL")
-        f.dateFormat = "EEEE, d MMM"
+        f.dateFormat = "EEEE, d MMMM"
         return f
     }()
 }

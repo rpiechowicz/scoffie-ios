@@ -47,14 +47,27 @@ struct PlanAssistantIntroSheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Nagłówek jak w każdym arkuszu: ikona asystenta w tincie,
+                // obietnica, zdanie pod spodem i krzyżyk. Wcześniej stał tu
+                // wyśrodkowany kafel 72 pt w pełnej terakocie z cieniem,
+                // a arkusz nie miał krzyżyka — zamykało się go tylko gestem
+                // albo „Wolę ułożyć sam”.
+                EditorialSheetHeader(
+                    eyebrow: "Asystent",
+                    title: weekIsEmpty ? "Ułożę Ci ten tydzień" : "Uzupełnię ten tydzień",
+                    icon: MenuConstans.Assistant.icon,
+                    subtitle: introSubtitle,
+                    onClose: { dismiss() }
+                )
+                .padding(.horizontal, SCPageMetrics.horizontal)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+                .stagger(appeared, step: 0)
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        intro
-                            .frame(maxWidth: .infinity)
-                            .stagger(appeared, step: 0)
-
-                        sectionLabel("JAK DOBIERAM")
-                            .padding(.top, 28)
+                        EditorialSheetSectionLabel(title: "Jak dobieram")
+                            .padding(.top, 8)
                             .stagger(appeared, step: 1)
 
                         VStack(spacing: 8) {
@@ -63,25 +76,25 @@ struct PlanAssistantIntroSheet: View {
                                     .stagger(appeared, step: 2 + index)
                             }
                         }
-                        .padding(.top, 10)
+                        .padding(.top, 4)
 
                         previewHeader
                             .padding(.top, 26)
                             .stagger(appeared, step: 5)
 
                         previewStrip
-                            .padding(.top, 10)
+                            .padding(.top, 4)
                             .stagger(appeared, step: 6)
                     }
-                    .padding(.horizontal, 22)
+                    .padding(.horizontal, SCPageMetrics.horizontal)
                     // Zapas na cień stopki (`SCEdgeShade`), który leży na treści.
                     .padding(.bottom, SCEdgeShade.bottomHeight)
                 }
                 .scrollIndicators(.hidden)
+                .scScrollEdgeFade()
 
                 footer
             }
-            .padding(.top, 24)
         }
         .task {
             // Jedna klatka opóźnienia — bez niej stan zmienia się w tej samej
@@ -115,46 +128,6 @@ struct PlanAssistantIntroSheet: View {
     }
 
     // MARK: - Nagłówek
-
-    private var intro: some View {
-        VStack(spacing: 0) {
-            // 72 pt, nie 52: to jedyny znak graficzny na całym arkuszu i on
-            // ma nieść „to robi asystent”, zanim ktokolwiek przeczyta tytuł.
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.16)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .shadow(color: SCPalette.terracotta.opacity(0.35), radius: 22, x: 0, y: 10)
-
-                Image(systemName: MenuConstans.Assistant.icon)
-                    .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 72, height: 72)
-            .padding(.top, 6)
-
-            Text(weekIsEmpty ? "Ułożę Ci ten tydzień" : "Uzupełnię ten tydzień")
-                .font(.system(size: 25, weight: .bold))
-                .tracking(-0.6)
-                .foregroundStyle(Color.scLabel(scheme))
-                .multilineTextAlignment(.center)
-                .padding(.top, 20)
-
-            Text(introSubtitle)
-                .font(.system(size: 14.5, weight: .regular))
-                .tracking(-0.2)
-                .foregroundStyle(Color.scMuted(scheme))
-                .multilineTextAlignment(.center)
-                .lineSpacing(2.5)
-                .frame(maxWidth: 300)
-                .padding(.top, 8)
-        }
-    }
 
     private var introSubtitle: String {
         // Bez obietnicy „nie ruszę tego, co stoi": arkusz nie wie, co asystent
@@ -275,18 +248,28 @@ struct PlanAssistantIntroSheet: View {
 
     // MARK: - Podgląd tygodnia
 
+    /// Etykieta sekcji z dopiskiem po prawej — krój i wcięcie
+    /// `EditorialSheetSectionLabel`, jak „Jak dobieram” nad nią.
     private var previewHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            sectionLabel("TAK MOŻE WYGLĄDAĆ")
+            Text("TAK MOŻE WYGLĄDAĆ")
+                .font(.system(size: 10.5, weight: .bold))
+                .tracking(1.4)
+                .foregroundStyle(Color.scFaint(scheme))
+                .lineLimit(1)
 
             Spacer(minLength: 4)
 
-            Text("przykład · \(7 * max(1, slotsPerDay)) posiłków + lista zakupów")
+            // Odmiana przez `PolishPlural`: sześć posiłków dziennie to
+            // „42 posiłki”, nie „42 posiłków”.
+            Text("przykład · \(PolishPlural.meals(7 * max(1, slotsPerDay))) + lista zakupów")
                 .font(.system(size: 11.5, weight: .regular))
                 .foregroundStyle(Color.scFaint(scheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
+        .padding(.horizontal, 6)
+        .padding(.bottom, 6)
     }
 
     /// Siedem dni z prawdziwymi daniami z katalogu.
@@ -375,7 +358,7 @@ struct PlanAssistantIntroSheet: View {
     // MARK: - Stopka
 
     private var footer: some View {
-        SCSheetFooter(horizontalPadding: 22) {
+        SCSheetFooter {
             // Ten sam przycisk, co w stopkach pozostałych arkuszy — terakota
             // w wariancie „soft”, bez gradientu i cienia.
             EditorialPrimaryActionButton(
@@ -403,14 +386,6 @@ struct PlanAssistantIntroSheet: View {
     }
 
     // MARK: - Wspólne
-
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .bold))
-            .tracking(1)
-            .foregroundStyle(Color.scFaint(scheme))
-            .lineLimit(1)
-    }
 
     private static let shortDayFormatter: DateFormatter = {
         let f = DateFormatter()

@@ -80,10 +80,7 @@ struct DataExportSheet: View {
                         }
 
                         if let errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(SCPalette.terracotta)
-                                .fixedSize(horizontal: false, vertical: true)
+                            SCInlineErrorText(errorMessage)
                         }
                     }
                     .padding(16)

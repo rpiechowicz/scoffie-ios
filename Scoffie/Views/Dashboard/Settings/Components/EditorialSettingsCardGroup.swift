@@ -30,8 +30,11 @@ struct EditorialSettingsCardGroup<Content: View>: View {
 }
 
 // Section header above a card group — small uppercase label, dim color.
-// Source: settings.jsx → `SectionHeader`.
-//   `padding: '0 6px 8px', marginTop: 20`. 11pt 600 tracking 0.7 dim.
+// Source: settings.jsx → `SectionHeader`, `padding: '0 6px 8px', marginTop: 20`.
+// Krój ten sam co `EditorialSheetSectionLabel` (10,5 pt bold, tracking 1,4):
+// makieta dawała liście 11 pt semibold z trackingiem 0,7, więc etykieta
+// „KONTO” na liście i „PROFIL” w arkuszu, który się z niej otwiera, były
+// dwoma różnymi krojami tej samej rzeczy.
 struct EditorialSettingsSectionHeader: View {
     let title: String
 
@@ -39,8 +42,8 @@ struct EditorialSettingsSectionHeader: View {
 
     var body: some View {
         Text(title.uppercased())
-            .font(.system(size: 11, weight: .semibold))
-            .tracking(0.7)
+            .font(.system(size: 10.5, weight: .bold))
+            .tracking(1.4)
             .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)

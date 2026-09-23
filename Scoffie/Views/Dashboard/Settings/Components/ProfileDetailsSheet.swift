@@ -87,28 +87,36 @@ struct ProfileDetailsSheet: View {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane") {
-                        commitAndClose()
-                    }
-
-                    Text("Na podstawie tych danych aplikacja podpowiada zapotrzebowanie kaloryczne. Zostają na Twoim koncie — nie trafiają nigdzie dalej.")
-                        .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    identitySection
-                    bodySection
-                    activitySection
-                    deleteAccountSection
+            VStack(spacing: 0) {
+                // Przypięty nad treścią: arkusz jest dłuższy niż ekran,
+                // a nagłówek w `ScrollView` odjeżdżał razem z krzyżykiem.
+                EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane") {
+                    commitAndClose()
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
-                .padding(.bottom, 28)
+                .padding(.bottom, 12)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Na podstawie tych danych aplikacja podpowiada zapotrzebowanie kaloryczne. Zostają na Twoim koncie — nie trafiają nigdzie dalej.")
+                            .font(.system(size: 13.5, weight: .regular))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        identitySection
+                        bodySection
+                        activitySection
+                        deleteAccountSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 6)
+                    .padding(.bottom, 28)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .scScrollEdgeFade()
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
         }
         .onAppear {
             normaliseStoredValues()
@@ -473,11 +481,11 @@ struct ProfileDetailsSheet: View {
                 Text(level.label)
                     .font(.system(size: 17, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? .white : Color.scLabel(scheme))
+                    .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(scheme))
 
                 Text(level.subtitle)
                     .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(isSelected ? .white.opacity(0.9) : Color.scMuted(scheme))
+                    .foregroundStyle(isSelected ? SCPalette.terracotta.opacity(0.85) : Color.scMuted(scheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -485,24 +493,7 @@ struct ProfileDetailsSheet: View {
             .frame(maxWidth: .infinity, minHeight: 62)
             .padding(.horizontal, 4)
             .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            : AnyShapeStyle(Color.scChipBg(scheme))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.scTileStroke(scheme), lineWidth: 1)
-            )
+            .scChoiceSurface(RoundedRectangle(cornerRadius: 12, style: .continuous), isOn: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(level.label) treningów w tygodniu, \(level.subtitle)")
@@ -513,41 +504,21 @@ struct ProfileDetailsSheet: View {
 
     /// Świadomie na samym dole i świadomie bez ikony w kaflu — to jedyna
     /// nieodwracalna rzecz w tym arkuszu i ma wyglądać inaczej niż wszystko
-    /// nad nią. Potwierdzenie w alercie wymienia z nazwy, co zniknie:
-    /// „wszystkie dane" nie mówi nikomu nic.
+    /// nad nią (`SCDestructiveButton`). Potwierdzenie w alercie wymienia
+    /// z nazwy, co zniknie: „wszystkie dane" nie mówi nikomu nic.
     private var deleteAccountSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button {
+            SCDestructiveButton(
+                title: isDeleting ? "Usuwam konto…" : "Usuń konto",
+                icon: "trash.fill",
+                isLoading: isDeleting
+            ) {
                 focusedField = nil
                 isConfirmingDeletion = true
-            } label: {
-                HStack(spacing: 8) {
-                    if isDeleting {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.red)
-                    } else {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 12, weight: .bold))
-                    }
-
-                    Text(isDeleting ? "Usuwam konto…" : "Usuń konto")
-                        .font(.system(size: 14, weight: .bold))
-                        .tracking(-0.1)
-                }
-                .foregroundStyle(.red)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(Capsule().fill(Color.red.opacity(scheme == .dark ? 0.14 : 0.10)))
             }
-            .buttonStyle(.plain)
-            .disabled(isDeleting)
 
             if let deletionError {
-                Text(deletionError)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                SCInlineErrorText(deletionError)
             }
         }
         .padding(.top, 6)
@@ -783,27 +754,10 @@ struct ProfileDetailsSheet: View {
                     .font(.system(size: 14, weight: .semibold))
                     .tracking(-0.1)
             }
-            .foregroundStyle(isSelected ? .white : Color.scLabel(scheme))
+            .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(scheme))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            : AnyShapeStyle(Color.scChipBg(scheme))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.scTileStroke(scheme), lineWidth: 1)
-            )
+            .scChoiceSurface(RoundedRectangle(cornerRadius: 12, style: .continuous), isOn: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(candidate.title)
@@ -856,10 +810,12 @@ struct ProfileDetailsSheet: View {
 
     // MARK: - Chassis
 
+    /// Krój `EditorialSheetSectionLabel`, bez jej marginesów — podpis stoi
+    /// nad polem wewnątrz karty.
     private func fieldCaption(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.system(size: 10.5, weight: .bold))
-            .tracking(1.2)
+            .tracking(1.4)
             .foregroundStyle(Color.scFaint(scheme))
     }
 

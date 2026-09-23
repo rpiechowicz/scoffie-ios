@@ -21,6 +21,22 @@ enum RecipesConstants {
         }
     }
 
+    /// Podpowiedź pola szukania w liście kategorii — „Szukaj w śniadaniach”.
+    ///
+    /// Składana dotąd z „Szukaj w ” i nazwy w mianowniku dawała „Szukaj
+    /// w śniadania”, „Szukaj w obiady”. Miejscownik i sam przyimek („we
+    /// wszystkich”) zależą od kategorii, więc całe zdanie stoi tutaj.
+    static func searchPrompt(for category: RecipesCategory) -> String {
+        switch category {
+        case .all:       return "Szukaj we wszystkich przepisach"
+        case .favourite: return "Szukaj w ulubionych"
+        case .breakfast: return "Szukaj w śniadaniach"
+        case .lunch:     return "Szukaj w obiadach"
+        case .dinner:    return "Szukaj w kolacjach"
+        case .snacks:    return "Szukaj w przekąskach i deserach"
+        }
+    }
+
     /// Krótsza etykieta pod ciasne miejsca — plakietki i pigułki, gdzie obok
     /// stoi jeszcze chip „THERMOMIX" i stempel z czasem.
     ///

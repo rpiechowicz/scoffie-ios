@@ -60,7 +60,11 @@ struct PlanDayGoalSheet: View {
     /// na posiłek. Nie musi być dokładny — ma tylko trafić w okolicę, zanim
     /// pomiar poda liczbę prawdziwą.
     private static func estimatedHeight(rows: Int, hasMacroTargets: Bool) -> CGFloat {
-        let chrome: CGFloat = 320
+        // 337 = zmierzone ~317 + ten sam zapas ~20 pt, co wcześniej przy 320:
+        // nagłówek arkusza (`EditorialSheetHeader` z eyebrow i zdaniem pod
+        // spodem) urósł o ~23,5 pt, a etykieta „W posiłkach” bez kreski nad
+        // nią zabiera ~7 pt mniej niż dawna kreska z napisem.
+        let chrome: CGFloat = 337
         let list = CGFloat(max(rows, 1)) * 40 + CGFloat(max(rows - 1, 0)) * 12
         return chrome + list + (hasMacroTargets ? 0 : 40)
     }
@@ -115,11 +119,16 @@ struct PlanDayGoalSheet: View {
             goalRow
                 .padding(.top, 20)
 
-            mealsRule
-                .padding(.top, 22)
+            // Etykieta sekcji jak w każdym arkuszu, bez kreski nad nią —
+            // odstęp wystarcza, żeby oddzielić pierścienie od listy.
+            EditorialSheetSectionLabel(title: "W posiłkach")
+                // Etykieta ma wcięcie 6 pt pod karty; tu wiersze nie stoją
+                // w karcie, więc równa do krawędzi, jak nagłówek i pierścienie.
+                .padding(.horizontal, -6)
+                .padding(.top, 24)
 
             mealsList
-                .padding(.top, 14)
+                .padding(.top, 8)
 
             if targets.macros == nil {
                 macroHint
@@ -133,39 +142,27 @@ struct PlanDayGoalSheet: View {
 
     // MARK: - Nagłówek
 
+    /// Domyślny nagłówek arkusza: dzień w eyebrow, „Cel dnia”, a pod spodem
+    /// liczba posiłków. Wcześniej własny tytuł bez eyebrow — jedyny arkusz
+    /// Planu, który zaczynał się inaczej niż reszta.
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Cel dnia")
-                    .scFont(24, weight: .heavy, relativeTo: .title2)
-                    .tracking(-0.4)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-
-                Text(subtitle)
-                    .scFont(13, weight: .regular, relativeTo: .footnote)
-                    .tracking(-0.1)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            SCSheetCloseButton { dismiss() }
-        }
+        EditorialSheetHeader(
+            eyebrow: Self.longDayFormatter.string(from: date),
+            title: "Cel dnia",
+            subtitle: subtitle,
+            onClose: { dismiss() }
+        )
     }
 
-    /// „Poniedziałek · 3 z 3 posiłków" — ta sama para liczb, co w nagłówku
-    /// dnia na osi, żeby arkusz nie opisywał innego dnia niż ekran pod nim.
+    /// „3 z 3 posiłków” — ta sama para liczb, co w nagłówku dnia na osi, żeby
+    /// arkusz nie opisywał innego dnia niż ekran pod nim.
     ///
     /// W Kalendarzu ta sama para liczy co innego: nie ile pór jest
     /// zaplanowanych, tylko ile już zjedzonych — bo to jest liczba, z której
     /// wzięła się suma nad listą.
     private var subtitle: String {
-        let day = Self.longDayFormatter.string(from: date).capitalized
         let what = nutrition.countsOnlyEaten ? "zjedzone" : "posiłków"
-        return "\(day) · \(nutrition.filledSlots) z \(nutrition.slotCount) \(what)"
+        return "\(nutrition.filledSlots) z \(nutrition.slotCount) \(what)"
     }
 
     // MARK: - Pierścienie i legenda
@@ -252,19 +249,6 @@ struct PlanDayGoalSheet: View {
     }
 
     // MARK: - Posiłki
-
-    private var mealsRule: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
-
-            Text("W POSIŁKACH")
-                .scFont(10.5, weight: .bold, relativeTo: .caption2)
-                .tracking(1.4)
-                .foregroundStyle(Color.scFaint(scheme))
-        }
-    }
 
     private var mealsList: some View {
         VStack(spacing: 12) {

@@ -58,15 +58,17 @@ extension RecipeFilterSection where Trailing == EmptyView {
 
 // MARK: - Nagłówek arkusza filtrów
 
-/// Nagłówek „Filtrów” i filtrów kategorii: ikona w tincie akcentu, eyebrow,
-/// tytuł, pod spodem zasięg i — gdy coś jest włączone — co zawęża listę.
-/// „Wyczyść” i krzyżyk po prawej.
+/// Nagłówek „Filtrów” i filtrów kategorii: wspólny nagłówek arkusza
+/// (`EditorialSheetHeader` z kafelkiem w tincie akcentu i zdaniem o zasięgu),
+/// „Wyczyść” obok krzyżyka, a pod spodem — gdy coś jest włączone — co zawęża
+/// listę.
 ///
 /// Zasięg stał dotąd osobnym wierszem pod nagłówkiem („Wszystkie przepisy ·
 /// Działają w każdej kategorii”), a nagłówek był samym słowem „Filtry” —
 /// Rafał (23.09.2026): „dodaj ciut więcej tekstu i ulepsz to wizualnie, ale
-/// nie przesadzaj”. Teraz jedno zdanie o zasięgu i jedna linijka o tym, co
-/// działa, stoją w przypiętym nagłówku, a wiersz zasięgu zniknął z treści.
+/// nie przesadzaj”. Od rundy 8 układ z kafelkiem mieszka w samym
+/// `EditorialSheetHeader`, bo tak samo stoi lista kategorii, wybór przepisu
+/// do planu i gospodarstwo — tu zostaje tylko linijka „Aktywne: …”.
 struct RecipeFilterHeader: View {
     let icon: String
     let eyebrow: String
@@ -80,54 +82,21 @@ struct RecipeFilterHeader: View {
     let onClear: () -> Void
     let onClose: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 10) {
-                HStack(spacing: 11) {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
-                        .frame(width: 44, height: 44)
-                        .overlay(
-                            Image(systemName: icon)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(accent)
-                        )
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(eyebrow.uppercased())
-                            .font(.system(size: 10.5, weight: .bold))
-                            .tracking(1.4)
-                            .foregroundStyle(accent)
-                            .lineLimit(1)
-
-                        Text(title)
-                            .font(.system(size: 24, weight: .heavy))
-                            .tracking(-0.4)
-                            .foregroundStyle(Color.scLabel(scheme))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
-
+            EditorialSheetHeader(
+                eyebrow: eyebrow,
+                title: title,
+                icon: icon,
+                accent: accent,
+                subtitle: scope,
+                onClose: onClose
+            ) {
                 if canClear {
                     RecipeFilterClearButton(action: onClear)
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
-
-                SCSheetCloseButton(action: onClose)
             }
-
-            Text(scope)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.scMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
 
             if let activeSummary {
                 Text(activeSummary)
@@ -1016,97 +985,6 @@ struct RecipeFilterChipLine: View {
     }
 }
 
-// MARK: - Pole szukania
-
-/// Pole szukania składnika. W arkuszu filtrów jest tylko wejściem do arkusza
-/// szukania (`onTap`), w arkuszach-dzieciach — prawdziwym polem.
-struct RecipeFilterSearchField: View {
-    let prompt: String
-    var text: Binding<String>? = nil
-    var focus: FocusState<Bool>.Binding? = nil
-    var isActive: Bool = false
-    var onTap: (() -> Void)? = nil
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        if let onTap {
-            Button(action: onTap) { field }
-                .buttonStyle(PlanPressStyle(scale: 0.985))
-        } else {
-            field
-        }
-    }
-
-    private var field: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.scFaint(scheme))
-
-            if let text {
-                textField(text)
-                if !text.wrappedValue.isEmpty {
-                    Button {
-                        text.wrappedValue = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.scFaint(scheme))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Wyczyść pole")
-                    .transition(.opacity)
-                }
-            } else {
-                Text(prompt)
-                    .font(.system(size: 15))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(.leading, 14)
-        .padding(.trailing, 12)
-        .frame(height: 46)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scChipBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    isActive ? SCPalette.terracotta.opacity(0.6) : Color.scTileStroke(scheme),
-                    lineWidth: isActive ? 1.5 : 1
-                )
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .animation(.smooth(duration: 0.18), value: isActive)
-        .animation(.smooth(duration: 0.18), value: text?.wrappedValue.isEmpty ?? true)
-    }
-
-    @ViewBuilder
-    private func textField(_ text: Binding<String>) -> some View {
-        let field = TextField(text: text) {
-            Text(prompt).foregroundStyle(Color.scFaint(scheme))
-        }
-        .font(.system(size: 16))
-        .tracking(-0.2)
-        .foregroundStyle(Color.scLabel(scheme))
-        .tint(SCPalette.terracotta)
-        .submitLabel(.search)
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-
-        if let focus {
-            field.focused(focus)
-        } else {
-            field
-        }
-    }
-}
-
 // MARK: - Składnik jako pigułka
 
 /// Stan składnika w wykluczeniach.
@@ -1345,19 +1223,13 @@ struct RecipeExclusionDepartmentIcon: View {
     let department: String
     var size: CGFloat = 34
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        let accent = ProductConstants.departmentColor(for: department)
-        RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-            .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
-            .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: ProductConstants.departmentIcon(for: department))
-                    .font(.system(size: size * 0.44, weight: .semibold))
-                    .foregroundStyle(accent)
-            )
-            .accessibilityHidden(true)
+        // Ten sam kafelek, co w nagłówkach arkuszy (`SCHeaderIconWell`).
+        SCHeaderIconWell(
+            icon: ProductConstants.departmentIcon(for: department),
+            accent: ProductConstants.departmentColor(for: department),
+            size: size
+        )
     }
 }
 

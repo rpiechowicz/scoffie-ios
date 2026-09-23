@@ -127,6 +127,14 @@ enum RecipeCategoryFacets {
         }
     }
 
+    /// Aspekty listy przepisów: w liście kategorii wszystkie, w wyborze
+    /// przepisu do planu bez „Pory w planie” — pora jest tam już wybrana.
+    static func facets(forPicking category: RecipesCategory, slot: MealSlot?) -> [RecipeFacet] {
+        let all = facets(for: category)
+        guard slot != nil else { return all }
+        return all.filter { $0.kind != .slot }
+    }
+
     private static let tasteFacet = RecipeFacet(kind: .taste, title: "Smak", options: [
         .init(id: "sweet", title: "Na słodko"),
         .init(id: "savory", title: "Na słono")
@@ -144,13 +152,22 @@ enum RecipeCategoryFacets {
     /// (`RecipeFilterFactsCache`), bo arkusz przelicza liczniki przy każdym
     /// stuknięciu.
     static func values(for recipe: Recipe) -> [RecipeFacetKind: Set<String>] {
+        values(for: recipe, in: recipe.category)
+    }
+
+    /// Wartości przepisu w aspektach PODANEJ kategorii — wybór przepisu do
+    /// planu pokazuje pigułki kategorii pory, a na liście stoją też dania
+    /// z innych kategorii (owsianka w II śniadaniu, „Wszystkie pory”).
+    /// Liczone po kategorii dania gubiły je przy każdej pigułce rodzaju,
+    /// a „bake” znaczył w kolacji zapiekankę, w przekąskach — ciasto.
+    static func values(for recipe: Recipe, in category: RecipesCategory) -> [RecipeFacetKind: Set<String>] {
         let title = " " + RecipeDietClassifier.normalize(recipe.name) + " "
         let ingredients = recipe.ingredients.map {
             FoldedIngredient(name: RecipeDietClassifier.normalize($0.name), department: $0.department ?? "")
         }
 
         var values: [RecipeFacetKind: Set<String>] = [:]
-        switch recipe.category {
+        switch category {
         case .breakfast:
             values[.taste] = [taste(title: title, ingredients: ingredients)]
             if let dish = firstMatch(in: title, table: breakfastDishes) { values[.dish] = [dish] }

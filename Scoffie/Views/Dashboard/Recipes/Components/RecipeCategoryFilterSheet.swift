@@ -13,9 +13,16 @@ import SwiftUI
 //
 // Zmiany idą na kopię roboczą — „Pokaż” zapisuje, zamknięcie gestem nie.
 // „Wyczyść” działa od razu, jak w arkuszu „Filtry”.
+//
+// Ten sam arkusz otwiera wybór przepisu do planu (`slot`): wtedy świeci
+// kolorem i ikoną pory, a aspekt „Pora w planie” znika — pora jest już
+// wybrana. Te same opcje stoją w obu listach jako pigułki pod szukaniem
+// (`RecipeFacetPillBar`); tu mają zdjęcie dania i liczbę przepisów.
 struct RecipeCategoryFilterSheet: View {
     let category: RecipesCategory
     @Binding var filter: RecipeCategoryFilter
+    /// Pora z planu, gdy arkusz otwiera wybór przepisu do planu.
+    let slot: MealSlot?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -27,23 +34,31 @@ struct RecipeCategoryFilterSheet: View {
     /// ale PRZED filtrami tej kategorii — na nich liczą się kafelki.
     private let recipes: [Recipe]
 
-    init(category: RecipesCategory, recipes: [Recipe], filter: Binding<RecipeCategoryFilter>) {
+    init(
+        category: RecipesCategory,
+        recipes: [Recipe],
+        filter: Binding<RecipeCategoryFilter>,
+        slot: MealSlot? = nil
+    ) {
         self.category = category
         self.recipes = recipes
+        self.slot = slot
         self._filter = filter
         self._draft = State(initialValue: filter.wrappedValue)
         self._valuesBox = State(initialValue: ValuesBox())
     }
 
-    private var facets: [RecipeFacet] { RecipeCategoryFacets.facets(for: category) }
-    private var accent: Color { RecipeAccent.accent(for: category) }
+    private var facets: [RecipeFacet] { RecipeCategoryFacets.facets(forPicking: category, slot: slot) }
+    private var accent: Color { slot?.cozyAccent ?? RecipeAccent.accent(for: category) }
 
     /// Wartości aspektów każdego przepisu puli — liczone raz na otwarcie
     /// (patrz `IndexBox` w `RecipeFilterSheet`: `init` odpala się przy każdym
-    /// przerysowaniu listy pod arkuszem).
+    /// przerysowaniu listy pod arkuszem). W aspektach TEJ kategorii, także
+    /// dla dań z innej — w wyborze do planu stoją obok siebie.
     private var values: [[RecipeFacetKind: Set<String>]] {
         if let values = valuesBox.values { return values }
-        let values = recipes.map { RecipeFilterFactsCache.facts(for: $0).facetValues }
+        let facetCategory = category
+        let values = recipes.map { RecipeFilterFactsCache.facetValues(for: $0, in: facetCategory) }
         valuesBox.values = values
         return values
     }
@@ -101,16 +116,23 @@ struct RecipeCategoryFilterSheet: View {
 
     private var header: some View {
         RecipeFilterHeader(
-            icon: RecipesConstants.icon(for: category),
-            eyebrow: "Filtry kategorii",
-            title: RecipesConstants.displayName(for: category),
-            scope: "Tylko w tej kategorii — razem z filtrami wszystkich przepisów",
+            icon: slot?.icon ?? RecipesConstants.icon(for: category),
+            eyebrow: slot == nil ? "Filtry kategorii" : "Filtry",
+            title: slot?.title ?? RecipesConstants.displayName(for: category),
+            scope: scopeLine,
             activeSummary: activeSummary,
             accent: accent,
             canClear: draft.isActive,
             onClear: { clearAll() },
             onClose: { dismiss() }
         )
+    }
+
+    /// Gdzie działają — w liście kategorii razem z filtrami wszystkich
+    /// przepisów, w wyborze do planu tylko w tym wyborze.
+    private var scopeLine: String {
+        guard let slot else { return "Tylko w tej kategorii — razem z filtrami wszystkich przepisów" }
+        return "Zawężają listę przepisów na \(slot.accusativeName)"
     }
 
     /// Które aspekty zawężają teraz kategorię — „Aktywne: smak, rodzaj dania”.
@@ -141,7 +163,7 @@ struct RecipeCategoryFilterSheet: View {
                     mark: draft.contains(option.id, in: facet.kind) ? .on : .off,
                     accent: accent,
                     cover: covers.cover(for: option.id, in: facet.kind),
-                    icon: RecipesConstants.icon(for: category)
+                    icon: slot?.icon ?? RecipesConstants.icon(for: category)
                 ) {
                     withAnimation(.smooth(duration: 0.18)) {
                         draft.toggle(option.id, in: facet.kind)
@@ -168,7 +190,7 @@ struct RecipeCategoryFilterSheet: View {
                         .foregroundStyle(Color.scLabel(scheme))
                         .contentTransition(.numericText(value: Double(count)))
 
-                    Text(verbatim: "z \(total) w tej kategorii")
+                    Text(verbatim: "z \(total) \(totalContext)")
                         .font(.system(size: 12.5))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
@@ -194,11 +216,16 @@ struct RecipeCategoryFilterSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.smooth(duration: 0.3), value: count)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Zostaje \(PolishPlural.recipes(count)) z \(total) w tej kategorii")
+            .accessibilityLabel("Zostaje \(PolishPlural.recipes(count)) z \(total) \(totalContext)")
 
             RecipeFilterFooterButton(title: "Pokaż", isEnabled: count > 0, action: apply)
         }
         .padding(.leading, 4)
+    }
+
+    /// Z czego liczy się stopka — kategoria albo pula wyboru do planu.
+    private var totalContext: String {
+        slot == nil ? "w tej kategorii" : "do wyboru"
     }
 
     // MARK: - Akcje

@@ -111,12 +111,14 @@ struct ShoppingHistorySheet: View {
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
 
+            // Krój pustych stanów list (16 heavy / 13), jak `noteCard` Zakupów.
             Text("Historia jest pusta")
-                .font(.system(size: 14, weight: .heavy))
+                .font(.system(size: 16, weight: .heavy))
+                .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
 
             Text("Zamknięte listy zakupów trafią tutaj same.")
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

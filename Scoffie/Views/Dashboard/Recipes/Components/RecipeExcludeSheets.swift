@@ -58,7 +58,7 @@ struct RecipeExcludeCategorySheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        RecipeFilterSearchField(
+                        SCSearchField(
                             prompt: department.searchPrompt,
                             text: $query,
                             focus: $isSearchFocused,
@@ -89,33 +89,16 @@ struct RecipeExcludeCategorySheet: View {
 
     // MARK: Nagłówek
 
-    /// Jak `EditorialSheetHeader`, tylko przy nazwie działu stoi jego ikona
-    /// — ta sama, co przy alejce na Zakupach.
+    /// Wspólny nagłówek arkusza z kafelkiem działu — ta sama ikona i barwa,
+    /// co przy alejce na Zakupach.
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("WYKLUCZ SKŁADNIKI")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(SCPalette.terracotta)
-                    .lineLimit(1)
-
-                HStack(spacing: 10) {
-                    RecipeExclusionDepartmentIcon(department: department.name, size: 30)
-                    Text(department.name)
-                        .font(.system(size: 24, weight: .heavy))
-                        .tracking(-0.4)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            SCSheetCloseButton { dismiss() }
-        }
+        EditorialSheetHeader(
+            eyebrow: "Wyklucz składniki",
+            title: department.name,
+            icon: ProductConstants.departmentIcon(for: department.name),
+            accent: ProductConstants.departmentColor(for: department.name),
+            onClose: { dismiss() }
+        )
     }
 
     private func sectionLabel(_ title: String) -> some View {
@@ -335,7 +318,7 @@ struct RecipeExcludeSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        RecipeFilterSearchField(
+                        SCSearchField(
                             prompt: "Szukaj składnika, np. papryka",
                             text: $query,
                             focus: $isFocused,

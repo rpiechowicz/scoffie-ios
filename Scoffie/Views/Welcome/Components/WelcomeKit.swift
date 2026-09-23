@@ -41,38 +41,15 @@ extension View {
     }
 }
 
-/// Kropka wyboru „jedno z wielu". Krok 2 i 3 miały własne, różniące się
-/// o 2 pt średnicy — obok siebie na kolejnych ekranach widać to gołym okiem.
-struct WelcomeRadioDot: View {
-    let isSelected: Bool
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        ZStack {
-            if isSelected {
-                Circle()
-                    .fill(SCPalette.terracotta)
-                    .frame(width: 22, height: 22)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 8, height: 8)
-                    .transition(.scale.combined(with: .opacity))
-            } else {
-                Circle()
-                    .stroke(Color.scFaint(colorScheme), lineWidth: 1.8)
-                    .frame(width: 22, height: 22)
-            }
-        }
-        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isSelected)
-    }
-}
-
-/// Wiersz opcji z ikoną w kafelku, tytułem, podpisem i kropką wyboru —
+/// Wiersz opcji z ikoną w kafelku, tytułem, podpisem i kółkiem wyboru —
 /// ten sam dla celu (krok 2) i sposobu odżywiania (krok 3). Wcześniej dwa
 /// prywatne widoki o innych wymiarach: ikona 30 vs 32, odstęp 12 vs 14,
 /// margines 14 vs 16, a separator pod nimi liczony osobno i w kroku 3
 /// o 2 pt za krótko.
+///
+/// Kółko to `SCRadioMark` — to samo, co przy celu i diecie w Ustawieniach,
+/// bo kreator i Ustawienia pytają o te same rzeczy. Kreator miał dotąd
+/// własną kropkę (pełne koło z białym środkiem).
 struct WelcomeOptionRow: View {
     let icon: String
     let accent: Color
@@ -119,7 +96,7 @@ struct WelcomeOptionRow: View {
 
                 Spacer(minLength: 8)
 
-                WelcomeRadioDot(isSelected: isSelected)
+                SCRadioMark(isOn: isSelected)
             }
             .padding(.horizontal, Self.horizontalPadding)
             .padding(.vertical, 12)
