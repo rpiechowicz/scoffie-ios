@@ -166,14 +166,19 @@ struct AddToPlanSheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Nagłówek przypięty nad treścią, jak stopka pod nią — wcześniej
+                // przewijał się razem z sekcjami i krzyżyk uciekał z ekranu.
+                EditorialSheetHeader(
+                    eyebrow: "DODAJ DO PLANU",
+                    title: recipe.name,
+                    onClose: { dismiss() }
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 22)
+                .padding(.bottom, 12)
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        EditorialSheetHeader(
-                            eyebrow: "DODAJ DO PLANU",
-                            title: recipe.name,
-                            onClose: { dismiss() }
-                        )
-
                         daySection(plannedDays: overview.plannedDays)
                         slotSection(visibleSlots)
 
@@ -190,11 +195,12 @@ struct AddToPlanSheet: View {
                         servingsSection
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 22)
+                    .padding(.top, 6)
                     // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
                     .padding(.bottom, SCEdgeShade.bottomHeight)
                 }
                 .scrollIndicators(.hidden)
+                .scScrollEdgeFade()
                 .disabled(isSaving)
 
                 footer

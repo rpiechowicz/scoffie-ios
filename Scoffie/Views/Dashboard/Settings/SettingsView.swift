@@ -73,6 +73,7 @@ struct SettingsView: View {
     @State private var householdNameError: String? = nil
     @State private var showLogoutAlert = false
     @State private var showLeaveHouseholdAlert = false
+    @State private var showResetPreferencesAlert = false
     /// `task(id:)` odpala się także przy pierwszym pokazaniu widoku, nie
     /// tylko przy zmianie tokenu — a pierwsze odpalenie to żadna edycja.
     /// Bez tych strażników samo OTWARCIE arkusza diety / powiadomień
@@ -502,7 +503,10 @@ struct SettingsView: View {
                             integrationsSection
                             infoSection
 
-                            EditorialLogoutButton(isLoading: false) {
+                            SCDestructiveButton(
+                                title: "Wyloguj się",
+                                icon: "rectangle.portrait.and.arrow.right"
+                            ) {
                                 showLogoutAlert = true
                             }
                             .padding(.top, 20)
@@ -861,9 +865,7 @@ struct SettingsView: View {
                     )
 
                     if let error = sessionStore.authError, !error.isEmpty {
-                        Text(error)
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(.red)
+                        SCInlineErrorText(error)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -875,83 +877,78 @@ struct SettingsView: View {
     }
 
     private var householdManagementSheet: some View {
-        editorialSheet {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    householdHeader
+        let hasInvitations = !sessionStore.pendingInvitations.isEmpty
 
-                    // Skrzynka zaproszeń nad resztą i w OBU gałęziach: dla
-                    // kogoś bez gospodarstwa to jedyna alternatywa dla
-                    // zakładania własnego, a dla kogoś, kto już gdzieś jest —
-                    // jedyne miejsce, w którym w ogóle zobaczy, że ktoś go
-                    // zaprosił.
-                    if !sessionStore.pendingInvitations.isEmpty {
-                        householdInvitationsCard
-                            .padding(.top, 18)
-                    }
+        return pinnedEditorialSheet {
+            householdHeader
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                // Skrzynka zaproszeń nad resztą i w OBU gałęziach: dla
+                // kogoś bez gospodarstwa to jedyna alternatywa dla
+                // zakładania własnego, a dla kogoś, kto już gdzieś jest —
+                // jedyne miejsce, w którym w ogóle zobaczy, że ktoś go
+                // zaprosił.
+                if hasInvitations {
+                    householdInvitationsCard
+                }
 
-                    if hasHousehold {
-                        householdMembersSection
-                            .padding(.top, 20)
-                        if canCreateInvitations {
-                            householdInviteCard
-                                .padding(.top, 14)
-                        }
-                        leaveHouseholdButton
-                            .padding(.top, 24)
-                    } else {
-                        householdEmptyCard
-                            .padding(.top, 18)
+                if hasHousehold {
+                    householdMembersSection
+                        .padding(.top, hasInvitations ? 20 : 0)
+                    if canCreateInvitations {
+                        householdInviteCard
+                            .padding(.top, 14)
+                    }
+                    leaveHouseholdButton
+                        .padding(.top, 24)
+                } else {
+                    householdEmptyCard
+                        .padding(.top, hasInvitations ? 18 : 0)
+                }
+            }
+        }
+        .alert("Opuścić gospodarstwo?", isPresented: $showLeaveHouseholdAlert) {
+            Button("Anuluj", role: .cancel) {}
+            Button("Opuść", role: .destructive) {
+                Task {
+                    await sessionStore.leaveCurrentHousehold()
+                    if sessionStore.currentHouseholdId == nil {
+                        persistedHouseholdName = ""
+                        showHouseholdSheet = false
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
             }
-            .scrollIndicators(.hidden)
-            .alert("Opuścić gospodarstwo?", isPresented: $showLeaveHouseholdAlert) {
-                Button("Anuluj", role: .cancel) {}
-                Button("Opuść", role: .destructive) {
-                    Task {
-                        await sessionStore.leaveCurrentHousehold()
-                        if sessionStore.currentHouseholdId == nil {
-                            persistedHouseholdName = ""
-                            showHouseholdSheet = false
-                        }
-                    }
-                }
-            } message: {
-                Text("Stracisz dostęp do wspólnego planu i listy zakupów.")
+        } message: {
+            Text("Stracisz dostęp do wspólnego planu i listy zakupów.")
+        }
+        .alert(
+            "Usunąć domownika?",
+            isPresented: Binding(
+                get: { memberToRemove != nil },
+                set: { if !$0 { memberToRemove = nil } }
+            ),
+            presenting: memberToRemove
+        ) { member in
+            Button("Anuluj", role: .cancel) {}
+            Button("Usuń", role: .destructive) {
+                Task { await removeMember(member) }
             }
-            .alert(
-                "Usunąć domownika?",
-                isPresented: Binding(
-                    get: { memberToRemove != nil },
-                    set: { if !$0 { memberToRemove = nil } }
-                ),
-                presenting: memberToRemove
-            ) { member in
-                Button("Anuluj", role: .cancel) {}
-                Button("Usuń", role: .destructive) {
-                    Task { await removeMember(member) }
-                }
-            } message: { member in
-                Text("\(member.displayName) straci dostęp do wspólnego planu i listy zakupów tego gospodarstwa.")
+        } message: { member in
+            Text("\(member.displayName) straci dostęp do wspólnego planu i listy zakupów tego gospodarstwa.")
+        }
+        .alert("Nazwa gospodarstwa", isPresented: $showRenameHouseholdAlert) {
+            TextField("Np. Dom", text: $renameDraft)
+                .textInputAutocapitalization(.words)
+            Button("Anuluj", role: .cancel) {}
+            Button("Zapisz") {
+                let name = renameDraft
+                Task { await sessionStore.renameHousehold(to: name) }
             }
-            .alert("Nazwa gospodarstwa", isPresented: $showRenameHouseholdAlert) {
-                TextField("Np. Dom", text: $renameDraft)
-                    .textInputAutocapitalization(.words)
-                Button("Anuluj", role: .cancel) {}
-                Button("Zapisz") {
-                    let name = renameDraft
-                    Task { await sessionStore.renameHousehold(to: name) }
-                }
-                .disabled(!SessionStore.isValidHouseholdName(
-                    renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                ))
-            } message: {
-                Text("Widzą ją wszyscy domownicy. Od 2 do 64 znaków.")
-            }
+            .disabled(!SessionStore.isValidHouseholdName(
+                renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            ))
+        } message: {
+            Text("Widzą ją wszyscy domownicy. Od 2 do 64 znaków.")
         }
     }
 
@@ -1255,31 +1252,19 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                themeSelectionIndicator(selected: selected)
+                SCRadioMark(isOn: selected)
             }
             .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(
-                        selected
-                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.10 : 0.07)
-                            : Color.scTileBg(scheme)
-                    )
+            // Zaznaczenie jak zaznaczony `SCChoiceTile`: tint i obwódka
+            // akcentu, bez cienia. Terakotowa poświata pod wybraną kartą była
+            // jedynym cieniem na kartach Ustawień.
+            .scChoiceSurface(
+                RoundedRectangle(cornerRadius: 18, style: .continuous),
+                isOn: selected,
+                offFill: Color.scTileBg(scheme),
+                style: .tile
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(
-                        selected
-                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.36)
-                            : Color.scTileStroke(scheme),
-                        lineWidth: selected ? 1.4 : 1
-                    )
-            )
-            .shadow(
-                color: SCPalette.terracotta.opacity(selected ? 0.18 : 0),
-                radius: 14, x: 0, y: 8
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(theme.title)\(selected ? ", wybrane" : "")")
@@ -1346,28 +1331,6 @@ struct SettingsView: View {
         }
     }
 
-    private func themeSelectionIndicator(selected: Bool) -> some View {
-        ZStack {
-            Circle()
-                .fill(selected ? SCPalette.terracotta : Color.scChipBg(scheme))
-            Circle()
-                .stroke(
-                    selected
-                        ? SCPalette.terracotta
-                        : Color.scFaint(scheme),
-                    lineWidth: selected ? 0 : 1.4
-                )
-
-            if selected {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(.white)
-            }
-        }
-        .frame(width: 24, height: 24)
-        .animation(.smooth(duration: 0.2), value: selected)
-    }
-
     private func themeEyebrow(for theme: AppTheme) -> String {
         switch theme {
         case .system: return "Synchronizacja z systemem"
@@ -1393,37 +1356,31 @@ struct SettingsView: View {
     // Both selections persist to `@AppStorage` instantly — the xmark
     // button is the only way out, no save / cancel needed.
     private var dietSheet: some View {
-        editorialSheet {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(
-                        eyebrow: "Personalizacja",
-                        title: "Dieta i alergeny"
-                    ) {
-                        showDietSheet = false
-                    }
-
-                    Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
-                        .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    calorieGoalSection
-                    macroSection
-                    goalPickerSection
-                    dietPickerSection
-                    allergensSection
-
-                    if hasCustomisedPreferences {
-                        resetPreferencesButton
-                            .padding(.top, 4)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
+        pinnedEditorialSheet {
+            EditorialSheetHeader(
+                eyebrow: "Personalizacja",
+                title: "Dieta i alergeny"
+            ) {
+                showDietSheet = false
             }
-            .scrollIndicators(.hidden)
+        } content: {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
+                    .font(.system(size: 13.5, weight: .regular))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                calorieGoalSection
+                macroSection
+                goalPickerSection
+                dietPickerSection
+                allergensSection
+
+                if hasCustomisedPreferences {
+                    resetPreferencesButton
+                        .padding(.top, 4)
+                }
+            }
         }
         .sheet(isPresented: $showAllergenPicker) {
             AllergenPickerSheet(
@@ -1433,6 +1390,14 @@ struct SettingsView: View {
             )
             .presentationDetents([.large])
             .dashboardLiquidSheet()
+        }
+        // Na arkuszu diety, a nie na ekranie Ustawień — alert podpięty pod
+        // widok przykryty arkuszem się nie pokaże.
+        .alert("Wyczyścić preferencje?", isPresented: $showResetPreferencesAlert) {
+            Button("Anuluj", role: .cancel) {}
+            Button("Wyczyść", role: .destructive) { resetPreferences() }
+        } message: {
+            Text("Dieta, cel, makroskładniki i alergeny wrócą do ustawień domyślnych. Przepisy ukryte przez alergeny znów się pokażą.")
         }
         // Debounced sync: every time any of the three preference fields
         // changes the previous task is cancelled and a new one is scheduled
@@ -1545,7 +1510,7 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                radioIndicator(selected: isSelected)
+                SCRadioMark(isOn: isSelected)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -1665,7 +1630,7 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                radioIndicator(selected: isSelected)
+                SCRadioMark(isOn: isSelected)
             }
             // Dokładnie ta sama geometria co `goalRow` — obie sekcje to ta
             // sama lista wyboru i mają wyglądać identycznie. Wcześniej dieta
@@ -1686,29 +1651,6 @@ struct SettingsView: View {
         }
         .accessibilityLabel(diet.title)
         .accessibilityValue(isSelected ? "Wybrane" : "")
-    }
-
-    /// Hollow ring → terracotta filled dot when selected. Same visual
-    /// language as iOS group-pickers, just in our cozy palette.
-    private func radioIndicator(selected: Bool) -> some View {
-        ZStack {
-            Circle()
-                .stroke(
-                    selected
-                        ? SCPalette.terracotta
-                        : Color.scFaint(scheme),
-                    lineWidth: 1.6
-                )
-                .frame(width: 22, height: 22)
-
-            if selected {
-                Circle()
-                    .fill(SCPalette.terracotta)
-                    .frame(width: 12, height: 12)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .animation(.smooth(duration: 0.18), value: selected)
     }
 
     // ─── Makroskładniki ──────────
@@ -2041,66 +1983,53 @@ struct SettingsView: View {
         return RecipePersonalization(avoidedAllergens: selectedAllergens).hiddenCount(in: recipes)
     }
 
-    /// Dim red pill that wipes the diet preference, calorie goal and all
-    /// allergens in one tap — only shown when there's actually something
-    /// to reset.
+    /// Czyści dietę, cel kaloryczny, makro i wszystkie alergeny — widoczne
+    /// tylko wtedy, gdy jest co czyścić, i dopiero po potwierdzeniu
+    /// (`showResetPreferencesAlert`), jak każda akcja w `SCDestructiveButton`.
+    /// Jedno stuknięcie zdejmowało też alergeny, a przepisy, które ukrywały,
+    /// wracały na listę bez słowa.
     private var resetPreferencesButton: some View {
-        Button {
-            withAnimation(.smooth(duration: 0.22)) {
-                dietPreferenceRaw = DietPreference.none.rawValue
-                // Jedyne miejsce, gdzie unia „znane ∪ nieznane" celowo NIE
-                // obowiązuje: „Wyczyść" to jawna decyzja i kasuje też wartości,
-                // których ten build nie umie narysować.
-                allergensRaw = ""
-                calorieGoal = Self.calorieGoalDefault
-                goalRaw = UserGoal.healthy.rawValue
-                resetMacroOverrides()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 12, weight: .heavy))
-                Text("Wyczyść preferencje")
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(-0.1)
-            }
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Capsule().fill(Color.red.opacity(scheme == .dark ? 0.14 : 0.10)))
+        SCDestructiveButton(title: "Wyczyść preferencje", icon: "arrow.counterclockwise") {
+            showResetPreferencesAlert = true
         }
-        .buttonStyle(.plain)
+    }
+
+    private func resetPreferences() {
+        withAnimation(.smooth(duration: 0.22)) {
+            dietPreferenceRaw = DietPreference.none.rawValue
+            // Jedyne miejsce, gdzie unia „znane ∪ nieznane" celowo NIE
+            // obowiązuje: „Wyczyść" to jawna decyzja i kasuje też wartości,
+            // których ten build nie umie narysować.
+            allergensRaw = ""
+            calorieGoal = Self.calorieGoalDefault
+            goalRaw = UserGoal.healthy.rawValue
+            resetMacroOverrides()
+        }
     }
 
     private var helpSheet: some View {
-        editorialSheet {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(
-                        eyebrow: "Wsparcie",
-                        title: "Pomoc i FAQ"
-                    ) {
-                        showHelpSheet = false
-                        expandedFAQ = nil
-                    }
-
-                    Text("Najczęściej zadawane pytania o planowanie posiłków, listę zakupów i wspólne gospodarstwo. Nie znalazłeś odpowiedzi? Napisz do nas.")
-                        .font(.system(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    ForEach(Self.faqSections) { section in
-                        faqSectionCard(section)
-                    }
-
-                    contactCard
-                        .padding(.top, 4)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
+        pinnedEditorialSheet {
+            EditorialSheetHeader(
+                eyebrow: "Wsparcie",
+                title: "Pomoc i FAQ"
+            ) {
+                showHelpSheet = false
+                expandedFAQ = nil
             }
-            .scrollIndicators(.hidden)
+        } content: {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Najczęściej zadawane pytania o planowanie posiłków, listę zakupów i wspólne gospodarstwo. Nie znalazłeś odpowiedzi? Napisz do nas.")
+                    .font(.system(size: 13.5, weight: .regular))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(Self.faqSections) { section in
+                    faqSectionCard(section)
+                }
+
+                contactCard
+                    .padding(.top, 4)
+            }
         }
     }
 
@@ -2254,6 +2183,34 @@ struct SettingsView: View {
         }
     }
 
+    /// Arkusz z nagłówkiem przypiętym NAD przewijaną treścią — dla arkuszy
+    /// dłuższych niż ekran (dieta, pomoc, gospodarstwo). Nagłówek wewnątrz
+    /// `ScrollView` odjeżdżał razem z krzyżykiem; tu stoi, a treść gaśnie pod
+    /// nim (`scScrollEdgeFade`), bez kreski — jak w szczegółach posiłku
+    /// i w filtrach przepisów.
+    private func pinnedEditorialSheet<Header: View, Content: View>(
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        editorialSheet {
+            VStack(spacing: 0) {
+                header()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
+
+                ScrollView {
+                    content()
+                        .padding(.horizontal, 20)
+                        .padding(.top, 6)
+                        .padding(.bottom, 28)
+                }
+                .scrollIndicators(.hidden)
+                .scScrollEdgeFade()
+            }
+        }
+    }
+
     private var editorialNameInputCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             EditorialSheetSectionLabel(title: "Nazwa")
@@ -2273,7 +2230,7 @@ struct SettingsView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             householdNameError != nil
-                                ? Color.red.opacity(0.6)
+                                ? SCInlineErrorText.tint.opacity(0.6)
                                 : Color.scTileStroke(scheme),
                             lineWidth: householdNameError != nil ? 1.5 : 1
                         )
@@ -2283,9 +2240,7 @@ struct SettingsView: View {
                 }
 
             if let error = householdNameError {
-                Text(error)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.red)
+                SCInlineErrorText(error)
                     .padding(.horizontal, 4)
             }
 
@@ -2296,7 +2251,7 @@ struct SettingsView: View {
                     .monospacedDigit()
                     .foregroundStyle(
                         trimmedCreateHouseholdName.count > Self.householdNameMaxLength
-                            ? .red
+                            ? SCInlineErrorText.tint
                             : Color.scFaint(scheme)
                     )
             }
@@ -2377,61 +2332,32 @@ struct SettingsView: View {
             }
 
             if let error = sessionStore.authError, !error.isEmpty {
-                Text(error)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                SCInlineErrorText(error)
                     .padding(.horizontal, 6)
                     .padding(.top, 10)
             }
         }
     }
 
-    /// Nagłówek arkusza gospodarstwa: jak `EditorialSheetHeader`, tylko przy
-    /// nazwie stoi ikona domu (ta sama co w wierszu „Gospodarstwo”
-    /// w Ustawieniach), a pod nią jedna linijka o domu.
+    /// Nagłówek arkusza gospodarstwa: wspólny `EditorialSheetHeader` z ikoną
+    /// domu w szałwii (ta sama co w wierszu „Gospodarstwo” w Ustawieniach),
+    /// nazwą domu i jedną linijką o nim. Ołówek do nazwy stoi obok krzyżyka.
     private var householdHeader: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text((hasHousehold ? "Twoje gospodarstwo" : "Gospodarstwo").uppercased())
-                    .font(.system(size: 10.5, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(SCPalette.terracotta)
-                    .lineLimit(1)
-
-                HStack(spacing: 10) {
-                    EditorialSettingsTileIcon(icon: "house.fill", color: SCPalette.sage)
-                    Text(hasHousehold ? persistedHouseholdName : "Brak gospodarstwa")
-                        .font(.system(size: 24, weight: .heavy))
-                        .tracking(-0.4)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
+        EditorialSheetHeader(
+            eyebrow: hasHousehold ? "Twoje gospodarstwo" : "Gospodarstwo",
+            title: hasHousehold ? persistedHouseholdName : "Brak gospodarstwa",
+            icon: "house.fill",
+            accent: SCPalette.sage,
+            subtitle: hasHousehold && !householdMembers.isEmpty ? householdSummary : nil,
+            onClose: { showHouseholdSheet = false }
+        ) {
+            // Nazwę zmienia tylko właściciel — ta sama brama co na
+            // serwerze (`ensureOwner` w `households:updateName`).
+            if hasHousehold && canCreateInvitations {
+                SCSheetIconButton(systemName: "pencil", accessibilityLabel: "Zmień nazwę gospodarstwa") {
+                    renameDraft = persistedHouseholdName
+                    showRenameHouseholdAlert = true
                 }
-                .padding(.top, 6)
-
-                if hasHousehold, !householdMembers.isEmpty {
-                    Text(householdSummary)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .contentTransition(.numericText())
-                        .padding(.top, 8)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            HStack(spacing: 8) {
-                // Nazwę zmienia tylko właściciel — ta sama brama co na
-                // serwerze (`ensureOwner` w `households:updateName`).
-                if hasHousehold && canCreateInvitations {
-                    SCSheetIconButton(systemName: "pencil", accessibilityLabel: "Zmień nazwę gospodarstwa") {
-                        renameDraft = persistedHouseholdName
-                        showRenameHouseholdAlert = true
-                    }
-                }
-                SCSheetCloseButton { showHouseholdSheet = false }
             }
         }
     }
@@ -2529,25 +2455,12 @@ struct SettingsView: View {
         }
     }
 
-    /// Wyjście na samym dole i w tym samym stroju co „Wyczyść preferencje” —
-    /// akcja nieodwracalna nie stoi obok nazwy domu.
+    /// Wyjście na samym dole i w tym samym stroju co każda akcja
+    /// nieodwracalna (`SCDestructiveButton`) — nie stoi obok nazwy domu.
     private var leaveHouseholdButton: some View {
-        Button {
+        SCDestructiveButton(title: "Opuść gospodarstwo", icon: "rectangle.portrait.and.arrow.right") {
             showLeaveHouseholdAlert = true
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 12, weight: .heavy))
-                Text("Opuść gospodarstwo")
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(-0.1)
-            }
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Capsule().fill(Color.red.opacity(scheme == .dark ? 0.14 : 0.10)))
         }
-        .buttonStyle(.plain)
         .disabled(sessionStore.isSigningIn)
         .opacity(sessionStore.isSigningIn ? 0.55 : 1)
     }
@@ -2611,16 +2524,22 @@ struct SettingsView: View {
             // Dołączenie z gospodarstwa oznacza jego opuszczenie, więc etykieta
             // mówi to wprost zamiast obiecywać samo „Dołącz".
             HStack(spacing: 10) {
+                // Neutralna obok terakotowej — jak `AssistantGhostButton`:
+                // tło o ton od karty i cienka obwódka. Wcześniej kapsuła
+                // wypełniona kolorem tekstu (`scFaint`) czytała się jak ciężka
+                // szara płyta, mocniejsza niż akcja główna obok.
                 Button {
                     Task { await sessionStore.declineInvitation(token: invitation.token) }
                 } label: {
                     Text("Odrzuć")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.scMuted(scheme))
+                        .foregroundStyle(Color.scLabel(scheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
-                        .background(
-                            Capsule().fill(Color.scFaint(scheme))
+                        .background(Capsule(style: .continuous).fill(Color.scChipBg(scheme)))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1.2)
                         )
                 }
                 .buttonStyle(.plain)

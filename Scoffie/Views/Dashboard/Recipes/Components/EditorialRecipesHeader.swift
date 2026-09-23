@@ -5,9 +5,8 @@ import SwiftUI
 //   Outer block — `padding: '58px 20px 16px'` for the title row,
 //   `0 20px 18px` for the search row.
 //   Title — `EditorialPageHeader`, wspólny dla wszystkich zakładek.
-//   Search — pill, `padding: 12px 14px 12px 16px`, rounded 99,
-//   surface bg + line border + inset highlight. Magnifying glass icon
-//   at 17pt with dim color; placeholder "Szukaj przepisów" at 16pt.
+//   Search — wspólne pole `SCSearchField` (kapsuła 44 pt, lupa, krzyżyk),
+//   to samo, co w liście kategorii i w wyborze przepisu do planu.
 //
 // Settings drops the "№ X · …" eyebrow because there's no week context to
 // surface — same call here. The recipe list is a global library, not a
@@ -22,7 +21,6 @@ struct EditorialRecipesHeader: View {
     var onOpenFilters: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
-    @FocusState private var isSearchFocused: Bool
 
     private var hasActiveFilters: Bool { activeFilterCount > 0 }
 
@@ -34,16 +32,21 @@ struct EditorialRecipesHeader: View {
             EditorialPageHeader("Przepisy")
 
             HStack(spacing: 10) {
-                searchPill
+                // To samo pole, co w liście kategorii, w wyborze przepisu do
+                // planu i w wykluczaniu składników (`SCSearchField`).
+                SCSearchField(
+                    prompt: "Szukaj przepisów",
+                    text: $searchText,
+                    onSubmit: { onSubmit?() }
+                )
 
                 filterButton
             }
         }
     }
 
-    // Przycisk filtra dzieli z pigułką te same `padding(.vertical, 12)` i
-    // wysokość linii 16pt fonta, więc oba elementy kończą się dokładnie na
-    // tej samej wysokości bez wpisywania sztywnego `frame`.
+    // Przycisk filtra ma wysokość pola szukania (`SCSearchField`, 44 pt),
+    // więc oba elementy kończą się dokładnie na tej samej wysokości.
     //
     // Włączone filtry to ten sam wariant „podświetlony”, co różdżka obok
     // (`SCCircleIconLabel(highlighted:)`): tint i obwódka akcentu, glif
@@ -71,10 +74,9 @@ struct EditorialRecipesHeader: View {
             }
             .foregroundStyle(hasActiveFilters ? SCPalette.terracotta : Color.scLabel(scheme))
             .frame(minWidth: 20)
-            .frame(height: 19)
             .padding(.leading, hasActiveFilters ? 14 : 13)
             .padding(.trailing, hasActiveFilters ? 10 : 13)
-            .padding(.vertical, 12)
+            .frame(height: 44)
             .background(
                 Capsule(style: .continuous)
                     .fill(hasActiveFilters ? SCPalette.terracotta.opacity(0.20) : Color.scTileBg(scheme))
@@ -95,51 +97,5 @@ struct EditorialRecipesHeader: View {
                 ? "Filtry, aktywne: \(activeFilterCount)"
                 : "Filtry"
         )
-    }
-
-    private var searchPill: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
-
-            TextField(text: $searchText) {
-                Text("Szukaj przepisów")
-                    .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
-            }
-            .font(.system(size: 16))
-            .tracking(-0.2)
-            .foregroundStyle(Color.scLabel(scheme))
-            .focused($isSearchFocused)
-            .submitLabel(.search)
-            .onSubmit { onSubmit?() }
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Wyczyść wyszukiwanie")
-            }
-        }
-        .padding(.leading, 16)
-        .padding(.trailing, 14)
-        .padding(.vertical, 12)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .contentShape(Capsule(style: .continuous))
-        .onTapGesture { isSearchFocused = true }
     }
 }

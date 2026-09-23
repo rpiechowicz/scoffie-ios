@@ -72,9 +72,11 @@ struct AssistantCapabilitiesSheet: View {
     private var ruleCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
+                // Krój etykiet sekcji aplikacji (10,5 pt, tracking 1,4), jak
+                // etykiety w karcie zgody.
                 Text("Jedna zasada")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.9)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.terra(scheme))
                 Spacer(minLength: 10)

@@ -141,7 +141,8 @@ struct AssistantMemorySheet: View {
         return formatter
     }()
 
-    /// `MemoryEmpty`: znak w szarości, „Na razie nic” i jedno zdanie.
+    /// `MemoryEmpty`: znak w szarości, „Na razie nic” i jedno zdanie — krojem
+    /// pustych stanów aplikacji (tytuł 16 heavy, zdanie 13 pt).
     private var emptyState: some View {
         VStack(spacing: 0) {
             SCMarkShape()
@@ -150,14 +151,14 @@ struct AssistantMemorySheet: View {
                 .accessibilityHidden(true)
 
             Text("Na razie nic")
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: 16, weight: .heavy))
                 .tracking(-0.3)
                 .foregroundStyle(AssistantLook.ink(scheme))
                 .padding(.top, 14)
 
             Text("Gdy powiesz asystentowi coś trwałego o swoim domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
-                .font(.system(size: 14))
-                .lineSpacing(4)
+                .font(.system(size: 13))
+                .lineSpacing(3)
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

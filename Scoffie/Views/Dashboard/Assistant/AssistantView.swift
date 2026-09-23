@@ -970,9 +970,9 @@ struct AssistantView: View {
     }
 
     /// `LComposer` z makiety: pole 50 pt w pigułce z włoskowatym obrysem,
-    /// obok krążek 50 — terakotowy, gdy jest co wysłać albo tura biegnie
-    /// (wtedy strzałka staje się stopem); przy poprawce pytania pole
-    /// dostaje obrys terakoty i poświatę.
+    /// obok krążek 50 — w terakocie wariantu „soft”, gdy jest co wysłać albo
+    /// tura biegnie (wtedy strzałka staje się stopem); przy poprawce pytania
+    /// pole dostaje obrys terakoty i poświatę.
     private var composerField: some View {
         let active = store.isSending || editing != nil || canSend
         return HStack(alignment: .bottom, spacing: 10) {
@@ -1018,11 +1018,23 @@ struct AssistantView: View {
                 if store.isSending { store.stopWaiting() } else { send() }
             } label: {
                 ZStack {
-                    Circle().fill(active ? AssistantLook.terra(scheme) : AssistantLook.input(scheme))
-                    Circle().stroke(active ? Color.clear : AssistantLook.cardStroke(scheme), lineWidth: 1)
+                    // Wygaszony: krążek jak pole obok.
+                    Group {
+                        Circle().fill(AssistantLook.input(scheme))
+                        Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1)
+                    }
+                    .opacity(active ? 0 : 1)
+
+                    // Aktywny: wariant „soft” (`scSoftSurface`), jak każda
+                    // akcja główna — pełna terakotowa tarcza z białą strzałką
+                    // była jedyną taką plamą koloru na ekranie.
+                    Color.clear
+                        .scSoftSurface(Circle())
+                        .opacity(active ? 1 : 0)
+
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
-                        .foregroundStyle(active ? Color.white : AssistantLook.ink(scheme).opacity(0.45))
+                        .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 50, height: 50)

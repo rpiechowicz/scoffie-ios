@@ -910,7 +910,8 @@ private enum ShoppingSendState: Equatable {
 
 /// Liczby z makiety (`D` w `detail-v2.jsx`) dla ciemnego motywu i ich
 /// odpowiedniki na kremie. Makieta jest ciemna; jasny motyw bierze akcenty
-/// z palety aplikacji i karty na ciepłej bieli z cieniem, jak reszta v2.
+/// z palety aplikacji. Karty NIE są stąd — stoją na żetonach aplikacji
+/// (`DetailCard`).
 private struct DetailLook {
     let scheme: ColorScheme
 
@@ -930,20 +931,10 @@ private struct DetailLook {
     var dim: Color { isDark ? cream.opacity(0.42) : ink.opacity(0.50) }
     var faint: Color { isDark ? cream.opacity(0.26) : ink.opacity(0.30) }
 
-    var card: Color {
-        isDark ? cream.opacity(0.045) : Color(red: 255 / 255, green: 252 / 255, blue: 246 / 255)
-    }
     var border: Color { isDark ? cream.opacity(0.08) : ink.opacity(0.08) }
     var rule: Color { isDark ? cream.opacity(0.07) : ink.opacity(0.08) }
     var chip: Color { isDark ? cream.opacity(0.06) : ink.opacity(0.045) }
     var checkboxStroke: Color { isDark ? cream.opacity(0.22) : ink.opacity(0.24) }
-
-    /// Cień pod kartą — w ciemnym motywie głęboki i miękki (karta ma się
-    /// unieść nad prawie czarnym tłem), w jasnym ledwie zaznaczony, bo
-    /// oddzielenie robi tam już biel karty na kremie.
-    var cardShadow: Color { isDark ? .black.opacity(0.30) : ink.opacity(0.07) }
-    var cardShadowRadius: CGFloat { isDark ? 16 : 14 }
-    var cardShadowY: CGFloat { isDark ? 8 : 5 }
 }
 
 // MARK: - Tło
@@ -1175,42 +1166,24 @@ private struct DetailSectionHeader<Trailing: View>: View {
 
 // MARK: - Karta
 
-/// `DCard`: promień 18, tint kremu, obwódka i światło na górnej krawędzi —
-/// plus cień, który unosi kartę nad tłem arkusza.
+/// `DCard` z makiety w promieniu 18, ale na powierzchni kart aplikacji:
+/// `scTileBg` + `scTileStroke` w obu motywach, bez cienia i bez światła na
+/// krawędzi. Dawniej jasny motyw miał tu ciepłą biel z cieniem — jedyne
+/// takie karty w aplikacji (Rafał, 23.09.2026: „wszystkie karty w tym samym
+/// kolorze”).
 private struct DetailCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let look = DetailLook(scheme: scheme)
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
         content()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(shape.fill(look.card))
+            .background(shape.fill(Color.scTileBg(scheme)))
             .clipShape(shape)
-            .overlay(shape.strokeBorder(look.border, lineWidth: 1))
-            .overlay(
-                // `inset 0 1px 0 rgba(255,255,255,0.03)` — światło na
-                // górnej krawędzi, gasnące w dół.
-                shape.strokeBorder(
-                    LinearGradient(
-                        colors: [.white.opacity(scheme == .dark ? 0.07 : 0.6), .clear],
-                        startPoint: .top,
-                        endPoint: UnitPoint(x: 0.5, y: 0.08)
-                    ),
-                    lineWidth: 1
-                )
-            )
-            .background(
-                // Cień rzuca NIEPRZEZROCZYSTA podkładka w kolorze tła arkusza:
-                // cień półprzezroczystego tintu (4,5 % kremu) byłby równie
-                // półprzezroczysty, czyli żaden.
-                shape
-                    .fill(look.background)
-                    .shadow(color: look.cardShadow, radius: look.cardShadowRadius, x: 0, y: look.cardShadowY)
-            )
+            .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 }
 

@@ -184,9 +184,7 @@ struct WelcomeStep4HouseholdView: View {
             }
 
             if let errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.red)
+                SCInlineErrorText(errorMessage)
                     .multilineTextAlignment(.leading)
                     .padding(.top, 4)
             }

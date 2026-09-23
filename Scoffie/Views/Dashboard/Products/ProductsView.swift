@@ -636,6 +636,9 @@ struct ProductsView: View {
         }
     }
 
+    /// Karta pustego stanu — tytuł 16 heavy i zdanie 13 pt, jak pusty stan
+    /// list przepisów (`RecipeListEmptyState`); dawne 14/12 było najmniejszym
+    /// z czterech krojów pustych stanów w aplikacji.
     private func noteCard(icon: String, tint: Color, title: String, subtitle: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
@@ -643,13 +646,14 @@ struct ProductsView: View {
                 .foregroundStyle(tint)
 
             Text(title)
-                .font(.system(size: 14, weight: .heavy))
+                .font(.system(size: 16, weight: .heavy))
+                .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(subtitle)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

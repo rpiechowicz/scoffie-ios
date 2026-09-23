@@ -21,13 +21,12 @@ struct AssistantConversationsSheet: View {
                 title: "Rozmowy",
                 onClose: { dismiss() },
                 action: {
-                    AssistantRoundButton(
-                        icon: "square.and.pencil",
-                        size: 34,
-                        tint: AssistantLook.terraTint(scheme),
-                        color: AssistantLook.terra(scheme),
-                        iconSize: 16,
-                        accessibilityTitle: "Nowa rozmowa"
+                    // Ten sam krążek, co krzyżyk obok (`SCSheetIconButton`) —
+                    // dwa przyciski w nagłówku to jeden komplet.
+                    SCSheetIconButton(
+                        systemName: "square.and.pencil",
+                        tint: SCPalette.terracotta,
+                        accessibilityLabel: "Nowa rozmowa"
                     ) {
                         Task {
                             await store.startNewConversation()

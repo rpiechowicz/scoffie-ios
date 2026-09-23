@@ -61,54 +61,62 @@ struct MealSlotsSheet: View {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(
-                        eyebrow: "Gospodarstwo",
-                        title: "Posiłki w planie",
-                        onClose: onClose
-                    )
-
-                    leadSentence
-                    coreRuleCard
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        EditorialSheetSectionLabel(title: "Dodatkowe posiłki")
-
-                        ForEach(MealSlot.optionalSlots) { slot in
-                            optionalCard(slot, planned: counts[slot] ?? 0)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        EditorialSheetSectionLabel(title: "Rozkład dnia")
-
-                        EditorialSettingsCardGroup {
-                            EditorialSettingsRow(
-                                icon: "clock.fill",
-                                iconColor: SCPalette.indigo,
-                                title: "Pory posiłków",
-                                value: mealTimesRowValue,
-                                isLast: true,
-                                action: { showTimes = true }
-                            )
-                        }
-                    }
-
-                    introCard
-                    saveStatus
-
-                    Text("Wyłączony posiłek znika z planu, ale zaplanowane dania w nim zostają.")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 6)
-                }
+            VStack(spacing: 0) {
+                // Przypięty nad treścią — lista kart jest dłuższa niż ekran,
+                // a krzyżyk nie ma prawa odjeżdżać razem z nią.
+                EditorialSheetHeader(
+                    eyebrow: "Gospodarstwo",
+                    title: "Posiłki w planie",
+                    onClose: onClose
+                )
                 .padding(.horizontal, 20)
-                .padding(.top, 22)
-                .padding(.bottom, 40)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        leadSentence
+                        coreRuleCard
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            EditorialSheetSectionLabel(title: "Dodatkowe posiłki")
+
+                            ForEach(MealSlot.optionalSlots) { slot in
+                                optionalCard(slot, planned: counts[slot] ?? 0)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            EditorialSheetSectionLabel(title: "Rozkład dnia")
+
+                            EditorialSettingsCardGroup {
+                                EditorialSettingsRow(
+                                    icon: "clock.fill",
+                                    iconColor: SCPalette.indigo,
+                                    title: "Pory posiłków",
+                                    value: mealTimesRowValue,
+                                    isLast: true,
+                                    action: { showTimes = true }
+                                )
+                            }
+                        }
+
+                        introCard
+                        saveStatus
+
+                        Text("Wyłączony posiłek znika z planu, ale zaplanowane dania w nim zostają.")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Color.scFaint(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 6)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 6)
+                    .padding(.bottom, 40)
+                }
+                .scrollIndicators(.hidden)
+                .scScrollEdgeFade()
             }
-            .scrollIndicators(.hidden)
         }
         .sheet(isPresented: $showTimes) {
             MealTimesSheet { showTimes = false }
@@ -243,26 +251,22 @@ struct MealSlotsSheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                selectionMark(isEnabled: isEnabled)
+                // Pole wyboru, nie kółko: posiłków dodatkowych włącza się
+                // dowolnie wiele naraz, a „wiele z wielu” to w aplikacji
+                // `SCCheckbox` (kółko jest dla wyboru jednego — `SCRadioMark`).
+                // Świadomie nie `Toggle`: przełącznik w klikalnej karcie
+                // zjadałby stuknięcia raz sobie, raz karcie.
+                SCCheckbox(on: isEnabled, accent: SCPalette.terracotta)
             }
             .padding(14)
             .frame(minHeight: 84)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        isEnabled
-                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.10 : 0.07)
-                            : Color.scTileBg(scheme)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        isEnabled
-                            ? SCPalette.terracotta.opacity(scheme == .dark ? 0.45 : 0.36)
-                            : Color.scTileStroke(scheme),
-                        lineWidth: isEnabled ? 1.4 : 1
-                    )
+            // Włączona karta jak zaznaczony `SCChoiceTile`: tint i obwódka
+            // akcentu.
+            .scChoiceSurface(
+                RoundedRectangle(cornerRadius: 16, style: .continuous),
+                isOn: isEnabled,
+                offFill: Color.scTileBg(scheme),
+                style: .tile
             )
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
@@ -271,33 +275,6 @@ struct MealSlotsSheet: View {
         .accessibilityLabel("\(slot.title). \(slot.settingsSubtitle)")
         .accessibilityAddTraits(isEnabled ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(isEnabled ? "Stuknij, aby wyłączyć" : "Stuknij, aby włączyć")
-    }
-
-    /// Znacznik wyboru o stałej średnicy — świadomie **nie** `Toggle`.
-    /// Przełącznik w klikalnej karcie zjadałby stuknięcia raz sobie, raz
-    /// karcie, a wyjęty poza kartę odebrałby jej cel dotyku i wrócił do
-    /// wiersza z kontrolką przy krawędzi.
-    private func selectionMark(isEnabled: Bool) -> some View {
-        ZStack {
-            if isEnabled {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
-            } else {
-                Circle()
-                    .stroke(Color.scRule(scheme), lineWidth: 1.5)
-            }
-        }
-        .frame(width: 26, height: 26)
     }
 
     // MARK: - Zasięg i stan zapisu
@@ -338,15 +315,10 @@ struct MealSlotsSheet: View {
     private var saveStatus: some View {
         if let errorMessage {
             VStack(alignment: .leading, spacing: 6) {
-                Text(errorMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
+                SCInlineErrorText(errorMessage)
 
                 if let lastFailed {
-                    Button("Spróbuj ponownie") { apply(lastFailed) }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
+                    SCRetryButton { apply(lastFailed) }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -387,7 +359,9 @@ struct MealSlotsSheet: View {
         Task { @MainActor in
             let saved = await sessionStore.saveMealSlotConfiguration(next)
             if !saved {
-                errorMessage = "Nie udało się zapisać zmiany. Sprawdź połączenie i spróbuj ponownie."
+                // Sam skutek, bez diagnozy łączności: brak sieci ma w aplikacji
+                // jedno miejsce (pasek u góry), a „Spróbuj ponownie” stoi obok.
+                errorMessage = "Nie udało się zapisać zmiany."
                 lastFailed = next
             }
         }

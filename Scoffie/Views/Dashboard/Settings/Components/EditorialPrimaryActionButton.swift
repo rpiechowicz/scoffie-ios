@@ -12,7 +12,7 @@ struct EditorialPrimaryActionButton: View {
     /// Barwa przycisku. Terakota domyślnie — bo tak wygląda akcja główna.
     /// Neutralną (`Color.scLabel`) bierze druga akcja stojąca OBOK głównej:
     /// dwa terakotowe przyciski w jednym rzędzie kłóciłyby się o to, który
-    /// z nich jest tym właściwym. Patrz `CalendarEmptyDayNote`.
+    /// z nich jest tym właściwym.
     var accent: Color = SCPalette.terracotta
     var isEnabled: Bool = true
     var isLoading: Bool = false

@@ -111,10 +111,10 @@ private struct ActivityChip: View {
                 Text(level.label)
                     .font(.system(size: 18, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? Color.white : Color.scLabel(colorScheme))
+                    .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
                 Text(level.subtitle)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : Color.scMuted(colorScheme))
+                    .foregroundStyle(isSelected ? SCPalette.terracotta.opacity(0.85) : Color.scMuted(colorScheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -122,25 +122,9 @@ private struct ActivityChip: View {
             .frame(maxWidth: .infinity, minHeight: 64)
             .padding(.horizontal, 4)
             .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [SCPalette.terracotta.opacity(0.95), SCPalette.terracotta],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            : AnyShapeStyle(Color.scChipBg(colorScheme))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.scTileStroke(colorScheme), lineWidth: 1)
-            )
-            .shadow(color: SCPalette.terracotta.opacity(isSelected ? 0.18 : 0), radius: 8, x: 0, y: 4)
+            // Ten sam chip co w „Twoich danych” w Ustawieniach: wybór
+            // w wariancie „soft”, bez gradientu i bez cienia.
+            .scChoiceSurface(RoundedRectangle(cornerRadius: 12, style: .continuous), isOn: isSelected)
         }
         .buttonStyle(.plain)
     }

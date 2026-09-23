@@ -12,7 +12,7 @@ import SwiftUI
 // ze zdjęciem i licznikiem składników. Odhaczanie działa tak samo, bo to są
 // te same produkty — nie kopia.
 //
-// „Pokaż w liście zakupów” zamyka arkusz i zawęża listę do dzisiejszych
+// „Pokaż na liście zakupów” zamyka arkusz i zawęża listę do dzisiejszych
 // braków: podgląd zostaje podglądem, a tryb w sklepie trybem.
 struct ShoppingTodaySheet: View {
     let date: Date
@@ -232,13 +232,16 @@ struct ShoppingTodaySheet: View {
 
     // MARK: - Stopka
 
+    /// Przycisk pełnej szerokości w stopce arkusza to `EditorialPrimaryActionButton`,
+    /// jak w każdej innej stopce (patrz `SCSheetFooter`) — `SCSoftButton` 56 pt
+    /// jest przyciskiem ekranu, nie arkusza, i tu był o ~11 pt wyższy od
+    /// przycisków stopek (~45 pt).
     private var footer: some View {
         SCSheetFooter {
-            SCSoftButton(
-                title: "Pokaż w liście zakupów",
-                leadingIcon: "list.bullet",
-                trailingIcon: nil,
-                action: onShowInList
+            EditorialPrimaryActionButton(
+                title: "Pokaż na liście zakupów",
+                icon: "list.bullet",
+                action: { onShowInList() }
             )
         }
     }
