@@ -97,49 +97,52 @@ struct EditorialRecipesHeader: View {
     // Przycisk filtra dzieli z pigułką te same `padding(.vertical, 12)` i
     // wysokość linii 16pt fonta, więc oba elementy kończą się dokładnie na
     // tej samej wysokości bez wpisywania sztywnego `frame`.
+    //
+    // Włączone filtry to ten sam wariant „podświetlony”, co różdżka obok
+    // (`SCCircleIconLabel(highlighted:)`): tint i obwódka akcentu, glif
+    // w akcencie. Dawniej była tu pełna terakota z gradientem, białym glifem
+    // i cieniem — jedyna taka plama koloru w nagłówkach aplikacji. Liczba
+    // grup stoi w małej plakietce, jak liczniki w arkuszu filtrów.
     private var filterButton: some View {
         Button {
             onOpenFilters?()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 7) {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.system(size: 15, weight: .bold))
 
                 if hasActiveFilters {
-                    Text("\(activeFilterCount)")
-                        .font(.system(size: 13, weight: .heavy))
+                    Text(verbatim: "\(activeFilterCount)")
+                        .font(.system(size: 11.5, weight: .heavy))
                         .monospacedDigit()
-                        .transition(.scale.combined(with: .opacity))
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText(value: Double(activeFilterCount)))
+                        .frame(minWidth: 19, minHeight: 19)
+                        .background(Capsule(style: .continuous).fill(SCPalette.terracotta))
+                        .transition(.scale(scale: 0.4).combined(with: .opacity))
                 }
             }
-            .foregroundStyle(hasActiveFilters ? .white : Color.scLabel(scheme))
+            .foregroundStyle(hasActiveFilters ? SCPalette.terracotta : Color.scLabel(scheme))
             .frame(minWidth: 20)
             .frame(height: 19)
-            .padding(.horizontal, hasActiveFilters ? 14 : 13)
+            .padding(.leading, hasActiveFilters ? 14 : 13)
+            .padding(.trailing, hasActiveFilters ? 10 : 13)
             .padding(.vertical, 12)
             .background(
-                Capsule(style: .continuous).fill(
-                    hasActiveFilters
-                        ? AnyShapeStyle(
-                            LinearGradient(
-                                colors: [SCPalette.terracotta, SCPalette.terracotta.mix(black: 0.18)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        : AnyShapeStyle(Color.scTileBg(scheme))
-                )
+                Capsule(style: .continuous)
+                    .fill(hasActiveFilters ? SCPalette.terracotta.opacity(0.20) : Color.scTileBg(scheme))
             )
             .overlay(
                 Capsule(style: .continuous).stroke(
-                    hasActiveFilters ? SCPalette.terracotta.opacity(0.35) : Color.scTileStroke(scheme),
+                    hasActiveFilters ? SCPalette.terracotta.opacity(0.40) : Color.scTileStroke(scheme),
                     lineWidth: 1
                 )
             )
-            .shadow(color: SCPalette.terracotta.opacity(hasActiveFilters ? 0.24 : 0), radius: 8, x: 0, y: 4)
+            .contentShape(Capsule(style: .continuous))
         }
-        .buttonStyle(.plain)
-        .animation(.smooth(duration: 0.2), value: hasActiveFilters)
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .animation(.spring(response: 0.34, dampingFraction: 0.78), value: hasActiveFilters)
+        .animation(.easeOut(duration: 0.25), value: activeFilterCount)
         .accessibilityLabel(
             hasActiveFilters
                 ? "Filtry, aktywne: \(activeFilterCount)"

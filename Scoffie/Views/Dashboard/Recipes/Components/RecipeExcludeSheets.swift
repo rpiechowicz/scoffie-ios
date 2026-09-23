@@ -1,15 +1,19 @@
 import SwiftUI
 
-// Dwa arkusze nad arkuszem „Filtry”, oba piszą do jego kopii roboczej:
+// Wykluczanie składników — dwa arkusze nad arkuszem „Filtry”, oba piszą do
+// jego kopii roboczej:
 //
-// - `RecipeExcludeCategorySheet` — stuknięcie w dział („Warzywa”): na górze
+// - `RecipeExcludeSheet` — kafelek „Wyklucz składniki” w Filtrach: pasek
+//   „Wykluczone”, szukanie w miejscu (wyniki od drugiej litery, grupa zaraz
+//   pod trafieniem, „Cofnij” nad klawiaturą) i działy sklepu.
+//   Źródło: `FFSearch` + lista kategorii z `FFSheet` w `filtry-final.jsx`.
+//   W makiecie działy stały w samych Filtrach — rozciągały arkusz na kilka
+//   ekranów przewijania, więc mają własny arkusz (decyzja Rafała 23.09.2026).
+// - `RecipeExcludeCategorySheet` — stuknięty dział („Warzywa”): na górze
 //   wykluczone z „Przywróć”, pod nimi reszta od najczęstszych w przepisach.
-//   Źródło: `FFCategory` w `components/filtry-final.jsx`.
-// - `RecipeExcludeSearchSheet` — stuknięcie w pole „Szukaj składnika”: pasek
-//   „Wykluczone” u góry, wyniki od drugiej litery, po „Wyklucz” chip dochodzi
-//   do paska, a nad klawiaturą stoi „Cofnij”. Źródło: `FFSearch`.
+//   Źródło: `FFCategory`.
 //
-// Odejście od makiety: makieta ma w arkuszu kategorii strzałkę „wstecz”.
+// Odejście od makiety: makieta ma w arkuszu działu strzałkę „wstecz”.
 // W aplikacji arkusz się ZAMYKA, a nie cofa (`SCSheetCloseButton`), więc
 // stoi krzyżyk — tak samo jak na każdym innym arkuszu nałożonym na arkusz.
 
@@ -262,9 +266,16 @@ struct RecipeExcludeCategorySheet: View {
     }
 }
 
-// MARK: - Szukanie
+// MARK: - Wykluczanie
 
-struct RecipeExcludeSearchSheet: View {
+/// Arkusz „Wyklucz składniki” — otwierany kafelkiem z arkusza „Filtry”.
+///
+/// Od góry: pasek „Wykluczone” (chipy, stuknięcie przywraca), pole
+/// szukania, pod nim działy sklepu. Od drugiej litery w polu działy ustępują
+/// wynikom — szukanie jest tutaj, w miejscu, a nie w kolejnym arkuszu.
+/// Po „Wyklucz” chip dochodzi do paska, a nad klawiaturą (albo dołem
+/// arkusza) stoi „Cofnij”. Dział otwiera `RecipeExcludeCategorySheet`.
+struct RecipeExcludeSheet: View {
     let index: RecipeFilterIndex
     @Binding var filters: RecipeFilterOptions
     let fit: Bool
@@ -276,6 +287,7 @@ struct RecipeExcludeSearchSheet: View {
 
     @State private var query = ""
     @FocusState private var isFocused: Bool
+    @State private var openDepartment: IngredientDepartment?
     /// Kolejność chipów w pasku: stare po kolei, nowe na końcu — `Set` nie
     /// ma własnej, a chip dochodzący do paska nie może wskoczyć w środek.
     @State private var chipOrder: [IngredientExclusion] = []
@@ -283,12 +295,6 @@ struct RecipeExcludeSearchSheet: View {
     @State private var undo: Undo?
     @State private var showsAllChips = false
     @State private var undoTask: Task<Void, Never>?
-
-    private struct PopularItem: Identifiable {
-        let item: IngredientItem
-        let parent: IngredientGroup?
-        var id: String { item.id }
-    }
 
     private struct Undo: Equatable {
         let exclusion: IngredientExclusion
@@ -302,42 +308,47 @@ struct RecipeExcludeSearchSheet: View {
         IngredientSearch.fold(query).trimmingCharacters(in: .whitespaces)
     }
 
+    private var isSearching: Bool { foldedQuery.count >= 2 }
+
     var body: some View {
         ZStack(alignment: .top) {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    EditorialSheetHeader(eyebrow: "Filtry", title: "Wyklucz składniki") {
+                        dismiss()
+                    }
+
+                    strip
+                        .padding(.top, 18)
+
                     RecipeFilterSearchField(
-                        prompt: "Szukaj składnika",
+                        prompt: "Szukaj składnika, np. papryka",
                         text: $query,
                         focus: $isFocused,
                         isActive: isFocused
                     )
+                    .padding(.top, 14)
 
-                    Button("Gotowe") { dismiss() }
-                        .font(.system(size: 15.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .buttonStyle(.plain)
+                    if isSearching {
+                        results
+                            .transition(.opacity)
+                    } else {
+                        departments
+                            .transition(.opacity)
+                    }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 24)
-                .padding(.bottom, 14)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        strip
-                        results
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
-                    .containerRelativeFrame(.horizontal)
-                    .animation(.smooth(duration: 0.25), value: filters.excludedIngredients)
-                }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
+                .containerRelativeFrame(.horizontal)
+                .animation(.smooth(duration: 0.25), value: filters.excludedIngredients)
+                .animation(.smooth(duration: 0.2), value: isSearching)
             }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
         }
         // Nad klawiaturą — bezpieczny obszar arkusza kończy się na niej.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -346,12 +357,113 @@ struct RecipeExcludeSearchSheet: View {
         .sensoryFeedback(.selection, trigger: filters.excludedIngredients)
         .task {
             chipOrder = filters.excludedIngredients.sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
-            // Klawiatura dopiero po wjeździe arkusza — wcześniej fokus ginie
-            // razem z przejściem.
-            try? await Task.sleep(for: .milliseconds(350))
-            isFocused = true
         }
         .onDisappear { undoTask?.cancel() }
+        .sheet(item: $openDepartment) { department in
+            RecipeExcludeCategorySheet(
+                department: department,
+                index: index,
+                filters: $filters,
+                fit: fit
+            )
+            .presentationDetents([.large])
+            .dashboardLiquidSheet()
+        }
+    }
+
+    // MARK: Działy
+
+    private var departments: some View {
+        let list = index.departments
+
+        return VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetSectionLabel(title: "Przeglądaj kategorie")
+                .padding(.top, 22)
+                .padding(.bottom, 2)
+
+            VStack(spacing: 0) {
+                ForEach(Array(list.enumerated()), id: \.element.id) { offset, department in
+                    departmentRow(department, showsRule: offset > 0)
+                }
+
+                if list.isEmpty {
+                    Text("Przepisy nie mają jeszcze listy składników.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.scTileBg(scheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private func departmentRow(_ department: IngredientDepartment, showsRule: Bool) -> some View {
+        let excluded = department.excluded(in: filters.excludedIngredients)
+        let chips = excluded.map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.chipTitle) }
+
+        return Button {
+            isFocused = false
+            openDepartment = department
+        } label: {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(department.name)
+                        .font(.system(size: 15, weight: .medium))
+                        .tracking(-0.25)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(1)
+
+                    if chips.isEmpty {
+                        Text(PolishPlural.ingredients(department.ingredientCount))
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Color.scFaint(scheme))
+                            .padding(.top, 3)
+                            .transition(.opacity)
+                    } else {
+                        RecipeFilterChipLine(chips: chips)
+                            .padding(.top, 7)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !chips.isEmpty {
+                    RecipeFilterCountBadge(count: chips.count)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.scFaint(scheme))
+            }
+            .padding(.vertical, 12)
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .overlay(alignment: .top) {
+            if showsRule {
+                Rectangle()
+                    .fill(Color.scRule(scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 14)
+            }
+        }
+        .animation(.smooth(duration: 0.22), value: chips.map(\.id))
+        .accessibilityLabel(department.name)
+        .accessibilityValue(chips.isEmpty
+            ? PolishPlural.ingredients(department.ingredientCount)
+            : "wykluczone: " + chips.map(\.title).joined(separator: ", "))
     }
 
     // MARK: Pasek „Wykluczone”
@@ -453,57 +565,34 @@ struct RecipeExcludeSearchSheet: View {
 
     @ViewBuilder
     private var results: some View {
-        if foldedQuery.count < 2 {
-            let popular = Array(index.allEntries
-                .flatMap { entry -> [PopularItem] in
-                    switch entry {
-                    case .item(let item):   return [PopularItem(item: item, parent: nil)]
-                    case .group(let group): return group.members.map { PopularItem(item: $0, parent: group) }
-                    }
-                }
-                .filter { !filters.excludedIngredients.contains($0.item.exclusion) }
-                .sorted { $0.item.recipeCount > $1.item.recipeCount }
-                .prefix(8))
+        let found = IngredientSearch.results(for: query, in: index.allEntries)
 
-            EditorialSheetSectionLabel(title: "Najczęściej w przepisach")
-                .padding(.top, 22)
-                .padding(.bottom, 2)
+        EditorialSheetSectionLabel(title: "Wyniki dla „\(query.trimmingCharacters(in: .whitespaces))”")
+            .padding(.top, 22)
+            .padding(.bottom, 2)
 
-            VStack(spacing: 0) {
-                ForEach(Array(popular.enumerated()), id: \.element.id) { offset, popularItem in
-                    itemRow(popularItem.item, parent: popularItem.parent, match: nil, isLast: offset == popular.count - 1)
-                }
-            }
+        if found.isEmpty {
+            Text("Żaden przepis nie ma takiego składnika.")
+                .font(.system(size: 13.5))
+                .foregroundStyle(Color.scMuted(scheme))
+                .padding(.horizontal, 6)
         } else {
-            let found = IngredientSearch.results(for: query, in: index.allEntries)
-
-            EditorialSheetSectionLabel(title: "Wyniki dla „\(query.trimmingCharacters(in: .whitespaces))”")
-                .padding(.top, 22)
-                .padding(.bottom, 2)
-
-            if found.isEmpty {
-                Text("Żaden przepis nie ma takiego składnika.")
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .padding(.horizontal, 6)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(found.enumerated()), id: \.element.id) { offset, result in
-                        let isLast = offset == found.count - 1
-                        switch result.kind {
-                        case .item(let item, let parent):
-                            itemRow(item, parent: parent, match: result.match, isLast: isLast)
-                        case .group(let group):
-                            RecipeFilterIngredientRow(
-                                title: group.title,
-                                subtitle: "\(group.department) · \(PolishPlural.kinds(group.members.count)) · \(PolishPlural.inRecipes(group.recipeCount))",
-                                state: filters.rowState(of: group.exclusion),
-                                isGroup: true,
-                                highlight: result.match.map { (offset: $0.offset, length: $0.length) },
-                                showsRule: !isLast,
-                                onToggle: { toggle(group.exclusion) { filters.toggle(group: group) } }
-                            )
-                        }
+            VStack(spacing: 0) {
+                ForEach(Array(found.enumerated()), id: \.element.id) { offset, result in
+                    let isLast = offset == found.count - 1
+                    switch result.kind {
+                    case .item(let item, let parent):
+                        itemRow(item, parent: parent, match: result.match, isLast: isLast)
+                    case .group(let group):
+                        RecipeFilterIngredientRow(
+                            title: group.title,
+                            subtitle: "\(group.department) · \(PolishPlural.kinds(group.members.count)) · \(PolishPlural.inRecipes(group.recipeCount))",
+                            state: filters.rowState(of: group.exclusion),
+                            isGroup: true,
+                            highlight: result.match.map { (offset: $0.offset, length: $0.length) },
+                            showsRule: !isLast,
+                            onToggle: { toggle(group.exclusion) { filters.toggle(group: group) } }
+                        )
                     }
                 }
             }
