@@ -15,27 +15,48 @@ import SwiftUI
 struct SCSheetCloseButton: View {
     var action: () -> Void
 
+    var body: some View {
+        SCSheetIconButton(systemName: "xmark", accessibilityLabel: "Zamknij", action: action)
+    }
+}
+
+/// Ten sam krążek co krzyżyk arkusza, z dowolnym glifem.
+///
+/// Dla akcji, które stoją OBOK krzyżyka i mają wyglądać jak on — np. serce
+/// w szczegółach posiłku. `tint` barwi sam glif (ulubione w terakocie);
+/// tło i obwódka zostają te same, żeby para przycisków czytała się jako
+/// jeden komplet.
+struct SCSheetIconButton: View {
+    let systemName: String
+    var tint: Color? = nil
+    let accessibilityLabel: String
+    let action: () -> Void
+
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "xmark")
+            Image(systemName: systemName)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color.scMuted(scheme))
+                .foregroundStyle(tint ?? Color.scMuted(scheme))
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(Color.scChipBg(scheme)))
                 .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.9))
-        .accessibilityLabel("Zamknij")
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
 #Preview("SCSheetCloseButton") {
     ZStack {
         SCPageBackground(scheme: .dark).ignoresSafeArea()
-        SCSheetCloseButton {}
+        HStack(spacing: 10) {
+            SCSheetIconButton(systemName: "heart.fill", tint: SCPalette.terracotta, accessibilityLabel: "Ulubione") {}
+            SCSheetCloseButton {}
+        }
     }
     .preferredColorScheme(.dark)
 }
