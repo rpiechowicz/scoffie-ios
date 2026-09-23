@@ -43,13 +43,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   gotowy). Nowa sytuacja = nowy `Kind` w resolverze + scenariusz tutaj. Widok (`AssistantEmptyState`)
   NIE liczy nic sam.
 - Powitanie (23.09.2026) — makieta Claude Design „Scoffie - Asystent Empty State v2” (projekt
-  `43b605d0-…`, `components/ae-*.jsx`), wariant A: znak, otwarcie 28 semibold, zdanie pomocy 17,
+  `43b605d0-…`, `components/ae-*.jsx`), wariant A: znak 24 pt (większy niż w makiecie), otwarcie 28 semibold, zdanie pomocy 17,
   kontekst bez słów (talerzyki pór / najbliższe danie / pasek bilansu), główna akcja „soft” na
   szerokość treści i `AssistantChip`-y alternatyw — JEDEN blok przyklejony nad polem wiadomości
   (wolne miejsce nad nim; gdy wyższy niż ekran, startuje od otwarcia). Ostatnia alternatywa to zawsze
   „Mam inny pomysł” = sam fokus pola (akcje i kontekst gasną, otwarcie zostaje), a przykład w polu
   (`briefing.placeholder`) zmienia się z sytuacją. Bez liczenia braków („0 z 4”) i dat w tekście.
-  Ruch: otwarcie i zdanie PISZĄ SIĘ (`Components/SCTypedText.swift` — nienapisana końcówka jest
+  Ruch: otwarcie (65 zn/s) i zdanie (170 zn/s) PISZĄ SIĘ (`Components/SCTypedText.swift` — nienapisana końcówka jest
   przezroczysta, więc układ nie skacze), potem kaskada kontekstu i akcji, liczby przez `SCCountingText`;
   gra od nowa przy wejściu na zakładkę i nowej sytuacji, a ta sama sytuacja z inną liczbą tylko roluje
   (`numericText`). Akcje o JEDNEJ porze proszą o dania „do wyboru”, więc kończą się arkuszem wyboru

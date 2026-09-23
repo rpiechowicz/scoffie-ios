@@ -62,12 +62,12 @@ private struct AssistantGreeting: View {
     @State private var revealed = false
 
     /// Tempo pisania: otwarcie spokojnie, zdanie pomocy szybciej.
-    private static let headlineRate: Double = 42
-    private static let supportRate: Double = 110
-    private static let lead: Double = 0.12
+    private static let headlineRate: Double = 65
+    private static let supportRate: Double = 170
+    private static let lead: Double = 0.08
 
     private var supportDelay: Double {
-        Self.lead + SCTypedText.duration(briefing.headline, rate: Self.headlineRate) + 0.08
+        Self.lead + SCTypedText.duration(briefing.headline, rate: Self.headlineRate) + 0.05
     }
 
     /// Kontekst i akcje wchodzą, gdy zdanie pomocy jest w dwóch trzecich.
@@ -79,10 +79,11 @@ private struct AssistantGreeting: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // `Kes size=20` z makiety to dysk 0,68 · 20.
+            // Znak większy niż w makiecie (Kes 20 → 14 pt): przy 28-punktowym
+            // otwarciu ginął — decyzja Rafała.
             SCMarkShape()
                 .fill(briefing.isQuiet ? AssistantLook.ink(scheme).opacity(0.3) : AssistantLook.terraFill(scheme))
-                .frame(width: 14, height: 14)
+                .frame(width: 24, height: 24)
                 .scaleEffect(revealed || reduceMotion ? 1 : 0.4)
                 .opacity(revealed ? 1 : 0)
                 .animation(revealed ? motion(.spring(duration: 0.5, bounce: 0.35)) : nil, value: revealed)
