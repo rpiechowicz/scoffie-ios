@@ -98,6 +98,8 @@ private struct WeekRail: View {
 private struct DayBlock: View {
     let day: PlanWeekCardDayDTO
     var muted: Bool = false
+    /// Dotknięcie dania otwiera je w arkuszu przeglądu propozycji.
+    var onOpen: ((PlanWeekCardSlotDTO) -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -119,13 +121,7 @@ private struct DayBlock: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(day.slots) { slot in
-                    AssistantMealRow(
-                        slot: slot.mealLabel,
-                        title: slot.title,
-                        imageUrl: slot.imageUrl,
-                        kcal: slot.kcalPerServing,
-                        muted: muted || !slot.isNew
-                    )
+                    ProposalMealButton(slot: slot, muted: muted, onOpen: onOpen)
                 }
             }
         }
@@ -235,9 +231,24 @@ struct AssistantPlanWeekCard: View {
     let onAskNew: () -> Void
     var onUndo: (() -> Void)? = nil
     var onOpenPlan: (() -> Void)? = nil
+    /// Zamiana jednego dania z arkusza przeglądu — zwykła wiadomość.
+    var onAsk: ((String) -> Void)? = nil
+    var onCompose: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.recipeCatalogStore) private var recipeCatalog
     @State private var selectedDayId: String?
+    @State private var presented: OptionsSheetPage?
+
+    /// Wszystkie dania tygodnia po kolei — strony arkusza przeglądu.
+    private var storyEntries: [(day: PlanWeekCardDayDTO, slot: PlanWeekCardSlotDTO)] {
+        card.days.flatMap { day in day.slots.map { (day: day, slot: $0) } }
+    }
+
+    private func open(_ slot: PlanWeekCardSlotDTO, in day: PlanWeekCardDayDTO) {
+        let index = storyEntries.firstIndex { $0.day.id == day.id && $0.slot.id == slot.id } ?? 0
+        presented = OptionsSheetPage(id: index)
+    }
 
     private var status: AssistantCardStatus { AssistantCardStatus(card.state) }
     private var muted: Bool { status.tone == .muted }
@@ -280,12 +291,12 @@ struct AssistantPlanWeekCard: View {
             }
 
             if let day = focusedDay {
-                DayBlock(day: day, muted: muted)
+                DayBlock(day: day, muted: muted) { open($0, in: day) }
             }
 
             if isExpanded {
                 ForEach(otherDays) { day in
-                    DayBlock(day: day, muted: muted)
+                    DayBlock(day: day, muted: muted) { open($0, in: day) }
                         .transition(.opacity)
                 }
             }
@@ -296,6 +307,12 @@ struct AssistantPlanWeekCard: View {
                     expanded: isExpanded
                 ) {
                     withAnimation(.easeInOut(duration: 0.22)) { isExpanded.toggle() }
+                }
+            }
+
+            if !storyEntries.isEmpty {
+                OptionsBrowseRow(title: "Przeglądaj dania", subtitle: browseSubtitle) {
+                    presented = OptionsSheetPage(id: 0)
                 }
             }
 
@@ -317,6 +334,31 @@ struct AssistantPlanWeekCard: View {
                 onOpenPlan: onOpenPlan
             )
         }
+        .sheet(item: $presented) { page in
+            AssistantOptionsStorySheet(
+                slotDetail: card.eyebrowDetail,
+                options: storyEntries.map { ProposalStory.item($0.slot, day: $0.day) },
+                initialPage: page.id,
+                mode: ProposalStory.mode(state: card.state, applyLabel: applyLabel, canSwap: onAsk != nil),
+                catalog: recipeCatalog,
+                onChoose: { option in
+                    presented = nil
+                    onAsk?(option.prompt)
+                },
+                onCompose: {
+                    presented = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
+                },
+                onApply: {
+                    presented = nil
+                    onApply(false)
+                }
+            )
+        }
+    }
+
+    private var browseSubtitle: String {
+        card.state.isPending ? "Zdjęcia, opis i zamiana jednego dania" : "Zdjęcia, opis i wartości odżywcze"
     }
 
     private var applyLabel: String {
@@ -335,11 +377,20 @@ struct AssistantPlanDayCard: View {
     let onAskNew: () -> Void
     var onUndo: (() -> Void)? = nil
     var onOpenPlan: (() -> Void)? = nil
+    /// Zamiana jednego dania z arkusza przeglądu — zwykła wiadomość.
+    var onAsk: ((String) -> Void)? = nil
+    var onCompose: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.recipeCatalogStore) private var recipeCatalog
+    @State private var presented: OptionsSheetPage?
 
     private var status: AssistantCardStatus { AssistantCardStatus(card.state) }
     private var muted: Bool { status.tone == .muted }
+
+    private var applyLabel: String {
+        card.actions.first { $0.kind == .apply }?.label ?? "Zapisz dzień"
+    }
 
     private var summaryItems: [String] {
         var items = ["\(card.slots.count) \(mealsWord(card.slots.count))", "\(card.summary.kcalTotal) kcal"]
@@ -363,19 +414,24 @@ struct AssistantPlanDayCard: View {
             )
 
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(card.slots) { slot in
-                    AssistantMealRow(
-                        slot: slot.mealLabel,
-                        title: slot.title,
-                        imageUrl: slot.imageUrl,
-                        kcal: slot.kcalPerServing,
-                        muted: muted || !slot.isNew
-                    )
+                ForEach(Array(card.slots.enumerated()), id: \.element.id) { index, slot in
+                    ProposalMealButton(slot: slot, muted: muted) { _ in
+                        presented = OptionsSheetPage(id: index)
+                    }
                 }
             }
             .padding(.horizontal, AssistantCardMetrics.inset)
             .padding(.top, 12)
             .padding(.bottom, 14)
+
+            if !card.slots.isEmpty {
+                OptionsBrowseRow(
+                    title: "Przeglądaj dania",
+                    subtitle: card.state.isPending ? "Zdjęcia, opis i zamiana jednego dania" : "Zdjęcia, opis i wartości odżywcze"
+                ) {
+                    presented = OptionsSheetPage(id: 0)
+                }
+            }
 
             if !card.removed.isEmpty {
                 RemovalsSection(removals: card.removed, showsDay: false)
@@ -385,7 +441,7 @@ struct AssistantPlanDayCard: View {
 
             AssistantProposalFooter(
                 state: card.state,
-                applyLabel: card.actions.first { $0.kind == .apply }?.label ?? "Zapisz dzień",
+                applyLabel: applyLabel,
                 reviseLabel: "Inny zestaw",
                 isBusy: isBusy,
                 onApply: onApply,
@@ -395,6 +451,90 @@ struct AssistantPlanDayCard: View {
                 onOpenPlan: onOpenPlan
             )
         }
+        .sheet(item: $presented) { page in
+            AssistantOptionsStorySheet(
+                slotDetail: card.eyebrowDetail,
+                options: card.slots.map { ProposalStory.item($0, day: nil) },
+                initialPage: page.id,
+                mode: ProposalStory.mode(state: card.state, applyLabel: applyLabel, canSwap: onAsk != nil),
+                catalog: recipeCatalog,
+                onChoose: { option in
+                    presented = nil
+                    onAsk?(option.prompt)
+                },
+                onCompose: {
+                    presented = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
+                },
+                onApply: {
+                    presented = nil
+                    onApply(false)
+                }
+            )
+        }
+    }
+}
+
+// MARK: - Przegląd dań propozycji
+
+/// Danie propozycji jako przycisk: dotknięcie otwiera je w arkuszu wyboru
+/// posiłku — tym samym, w którym wybiera się kolację z kilku (zdjęcie,
+/// opis, makro), tylko w trybie przeglądu.
+private struct ProposalMealButton: View {
+    let slot: PlanWeekCardSlotDTO
+    var muted: Bool = false
+    var onOpen: ((PlanWeekCardSlotDTO) -> Void)?
+
+    var body: some View {
+        let row = AssistantMealRow(
+            slot: slot.mealLabel,
+            title: slot.title,
+            imageUrl: slot.imageUrl,
+            kcal: slot.kcalPerServing,
+            muted: muted || !slot.isNew
+        )
+        if let onOpen {
+            Button { onOpen(slot) } label: {
+                row.contentShape(Rectangle())
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.985))
+            .accessibilityHint("Otwiera zdjęcie, opis i wartości odżywcze")
+        } else {
+            row
+        }
+    }
+}
+
+/// Dania propozycji dnia albo tygodnia jako strony arkusza wyboru posiłku.
+private enum ProposalStory {
+    /// Tag przy nazwie mówi porę (i dzień w tygodniu), a zdanie pod
+    /// przyciskiem „Zamień to danie” prosi o dania DO WYBORU — serwer
+    /// odpowiada kartą OPTIONS, więc zamiana też dzieje się w arkuszu.
+    static func item(_ slot: PlanWeekCardSlotDTO, day: PlanWeekCardDayDTO?) -> OptionsCardItemDTO {
+        let when = day.map { "\(slot.mealLabel.lowercased()), \($0.dayLabel.lowercased())" } ?? slot.mealLabel.lowercased()
+        return OptionsCardItemDTO(
+            recipeId: slot.recipeId,
+            title: slot.title,
+            kcalPerServing: slot.kcalPerServing,
+            prepTimeMinutes: slot.prepTimeMinutes,
+            imageUrl: slot.imageUrl,
+            description: nil,
+            proteinGrams: nil,
+            carbsGrams: nil,
+            fatGrams: nil,
+            ingredientCount: nil,
+            tag: day.map { "\(slot.mealLabel) · \($0.shortName)" } ?? slot.mealLabel,
+            prompt: "Zamień w tej propozycji \(when): \(slot.title). Pokaż 3 inne dania na tę porę do wyboru."
+        )
+    }
+
+    /// Zamiana i zapis tylko, dopóki propozycja czeka; potem sam podgląd.
+    static func mode(state: AgentCardStateDTO, applyLabel: String, canSwap: Bool) -> OptionsStoryMode {
+        guard state.isPending else { return .review(swapTitle: nil, applyTitle: nil) }
+        return .review(
+            swapTitle: canSwap ? "Zamień to danie" : nil,
+            applyTitle: state.canApply ? applyLabel : nil
+        )
     }
 }
 
@@ -877,7 +1017,9 @@ struct AssistantOptionsCard: View {
                 .padding(.top, 12)
                 .padding(.bottom, 14)
 
-                browseRow
+                OptionsBrowseRow(title: "Przeglądaj propozycje", subtitle: "Zdjęcia, opis i wartości odżywcze") {
+                    presented = OptionsSheetPage(id: 0)
+                }
             }
         }
         .sheet(item: $presented) { page in
@@ -885,8 +1027,7 @@ struct AssistantOptionsCard: View {
                 slotDetail: slotDetail,
                 options: card.options,
                 initialPage: page.id,
-                insertTitle: OptionsCopy.insertTitle(card.eyebrow),
-                morePrompt: morePrompt,
+                mode: .choose(insertTitle: OptionsCopy.insertTitle(card.eyebrow), morePrompt: morePrompt),
                 // Jawnie, nie przez środowisko: arkusz ma czytać TEN katalog,
                 // który ma ekran, a nie pusty domyślny.
                 catalog: recipeCatalog,
@@ -941,11 +1082,43 @@ struct AssistantOptionsCard: View {
         .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
 
-    /// `LRow` na tle `wash`: kafelek 36 ze znakiem, tytuł w terakocie, chevron.
-    private var browseRow: some View {
-        Button {
-            presented = OptionsSheetPage(id: 0)
-        } label: {
+    private func autoPresentIfFresh() async {
+        guard let id = autoPresentID, reply == nil, !card.options.isEmpty,
+              !Self.autoPresented.contains(id) else { return }
+        Self.autoPresented.insert(id)
+        // Najpierw karta wjeżdża pod tekstem, potem arkusz — nie oba naraz.
+        try? await Task.sleep(for: .milliseconds(450))
+        guard !Task.isCancelled else { return }
+        presented = OptionsSheetPage(id: autoPresentPage)
+    }
+}
+
+/// Strona arkusza do otwarcia: indeks dania albo `options.count` = „Coś innego”.
+private struct OptionsSheetPage: Identifiable {
+    let id: Int
+}
+
+/// Co arkusz robi z daniem.
+private enum OptionsStoryMode {
+    /// Wybór jednego z kilku dań (karta OPTIONS): „Wstaw na środę”,
+    /// na końcu „Pokaż 3 kolejne”.
+    case choose(insertTitle: String, morePrompt: String?)
+    /// Przegląd dań propozycji dnia albo tygodnia: „Zamień to danie”,
+    /// na końcu „Zapisz w planie”. `nil` = sam podgląd.
+    case review(swapTitle: String?, applyTitle: String?)
+}
+
+/// `LRow` na tle `wash`: kafelek 36 ze znakiem, tytuł w terakocie, chevron —
+/// wejście do arkusza wyboru posiłku z karty dań do wyboru i z propozycji.
+private struct OptionsBrowseRow: View {
+    let title: String
+    let subtitle: String
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Button(action: action) {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -956,12 +1129,12 @@ struct AssistantOptionsCard: View {
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Przeglądaj propozycje")
+                    Text(title)
                         .font(.system(size: 15, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(AssistantLook.terra(scheme))
                         .lineHeight(.exact(points: 20))
-                    Text("Zdjęcia, opis i wartości odżywcze")
+                    Text(subtitle)
                         .font(.system(size: 13))
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .lineHeight(.exact(points: 17))
@@ -984,21 +1157,6 @@ struct AssistantOptionsCard: View {
         .buttonStyle(PlanPressStyle(scale: 0.985))
         .accessibilityElement(children: .combine)
     }
-
-    private func autoPresentIfFresh() async {
-        guard let id = autoPresentID, reply == nil, !card.options.isEmpty,
-              !Self.autoPresented.contains(id) else { return }
-        Self.autoPresented.insert(id)
-        // Najpierw karta wjeżdża pod tekstem, potem arkusz — nie oba naraz.
-        try? await Task.sleep(for: .milliseconds(450))
-        guard !Task.isCancelled else { return }
-        presented = OptionsSheetPage(id: autoPresentPage)
-    }
-}
-
-/// Strona arkusza do otwarcia: indeks dania albo `options.count` = „Coś innego”.
-private struct OptionsSheetPage: Identifiable {
-    let id: Int
 }
 
 /// Teksty karty i arkusza — liczone z danych karty, nie z pamięci modelu.
@@ -1132,12 +1290,13 @@ private struct OptionsDishFacts: Equatable {
 private struct AssistantOptionsStorySheet: View {
     let slotDetail: String?
     let options: [OptionsCardItemDTO]
-    let insertTitle: String
-    let morePrompt: String?
+    let mode: OptionsStoryMode
     let catalog: RecipeCatalogStore
     let onChoose: (OptionsCardItemDTO) -> Void
     let onMore: (String) -> Void
     let onCompose: () -> Void
+    /// „Zapisz w planie” ze strony końcowej przeglądu propozycji.
+    var onApply: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -1166,21 +1325,21 @@ private struct AssistantOptionsStorySheet: View {
         slotDetail: String?,
         options: [OptionsCardItemDTO],
         initialPage: Int,
-        insertTitle: String,
-        morePrompt: String?,
+        mode: OptionsStoryMode,
         catalog: RecipeCatalogStore,
         onChoose: @escaping (OptionsCardItemDTO) -> Void,
-        onMore: @escaping (String) -> Void,
-        onCompose: @escaping () -> Void
+        onMore: @escaping (String) -> Void = { _ in },
+        onCompose: @escaping () -> Void,
+        onApply: (() -> Void)? = nil
     ) {
         self.slotDetail = slotDetail
         self.options = options
-        self.insertTitle = insertTitle
-        self.morePrompt = morePrompt
+        self.mode = mode
         self.catalog = catalog
         self.onChoose = onChoose
         self.onMore = onMore
         self.onCompose = onCompose
+        self.onApply = onApply
         let start = min(max(initialPage, 0), options.count)
         let startDish = min(start, max(options.count - 1, 0))
         _page = State(initialValue: start)
@@ -1190,6 +1349,38 @@ private struct AssistantOptionsStorySheet: View {
 
     private var endPage: Int { options.count }
     private var isEnd: Bool { page == endPage }
+
+    /// Przycisk pod daniem: „Wstaw na środę” przy wyborze, „Zamień to danie”
+    /// przy przeglądzie propozycji; `nil` = sam podgląd (propozycja już
+    /// zapisana albo nieaktualna).
+    private var dishActionTitle: String? {
+        switch mode {
+        case let .choose(insertTitle, _): return insertTitle
+        case let .review(swapTitle, _): return swapTitle
+        }
+    }
+
+    private var dishActionIcon: String {
+        switch mode {
+        case .choose: return "arrow.right"
+        case .review: return "arrow.triangle.2.circlepath"
+        }
+    }
+
+    private var morePrompt: String? {
+        if case let .choose(_, morePrompt) = mode { return morePrompt }
+        return nil
+    }
+
+    private var isReview: Bool {
+        if case .review = mode { return true }
+        return false
+    }
+
+    private var applyTitle: String? {
+        if case let .review(_, applyTitle) = mode { return applyTitle }
+        return nil
+    }
 
     /// Chrom (uchwyt, nagłówek, segmenty) jest biały tylko na zdjęciu.
     private var chromeOnPhoto: Bool {
@@ -1400,7 +1591,7 @@ private struct AssistantOptionsStorySheet: View {
             // „Coś innego” to nie kolejne danie, tylko wyjście — krótka pełna
             // pigułka zamiast kolejnego pełnego segmentu (i zamiast dawnych
             // kresek). Aktywny wskaźnik zwęża się do niej tym samym ruchem.
-            segmentButton(endPage, label: "Coś innego", width: Self.endSegmentWidth) {
+            segmentButton(endPage, label: isReview ? "Cały zestaw" : "Coś innego", width: Self.endSegmentWidth) {
                 Capsule(style: .continuous).fill(off)
             } active: {
                 Capsule(style: .continuous).fill(AssistantLook.terra(scheme))
@@ -1450,17 +1641,21 @@ private struct AssistantOptionsStorySheet: View {
 
             VStack(spacing: 0) {
                 info(allFacts)
-                entrance(
-                    5,
-                    AssistantPrimaryButton(
-                        action: AssistantCardAction(title: insertTitle, icon: "arrow.right") {
-                            if options.indices.contains(dish) { onChoose(options[dish]) }
-                        }
+                if let dishActionTitle {
+                    entrance(
+                        5,
+                        AssistantPrimaryButton(
+                            action: AssistantCardAction(title: dishActionTitle, icon: dishActionIcon) {
+                                if options.indices.contains(dish) { onChoose(options[dish]) }
+                            }
+                        )
                     )
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, 24)
-                .padding(.bottom, 6)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 24)
+                    .padding(.bottom, 6)
+                } else {
+                    Color.clear.frame(height: 30)
+                }
             }
         }
         .ignoresSafeArea(.container, edges: .top)
@@ -1643,8 +1838,9 @@ private struct AssistantOptionsStorySheet: View {
     }
 
     private var eyebrowText: String {
-        guard let slotDetail else { return "Do wyboru" }
-        return "Do wyboru · \(slotDetail)"
+        let lead = isReview ? "Propozycja" : "Do wyboru"
+        guard let slotDetail else { return lead }
+        return "\(lead) · \(slotDetail)"
     }
 
     // MARK: Strona końcowa
@@ -1664,21 +1860,19 @@ private struct AssistantOptionsStorySheet: View {
 
                 endStep(1, rise: 14) {
                     VStack(spacing: 0) {
-                        Text("Coś innego")
+                        Text(isReview ? "Cały zestaw" : "Coś innego")
                             .font(.system(size: 11, weight: .bold))
                             .tracking(0.9)
                             .textCase(.uppercase)
                             .foregroundStyle(AssistantLook.terra(scheme))
                             .lineHeight(.exact(points: 14))
-                        Text("Żadne nie pasuje?")
+                        Text(isReview ? "Wszystko pasuje?" : "Żadne nie pasuje?")
                             .font(.system(size: 32, weight: .bold))
                             .tracking(-0.9)
                             .foregroundStyle(AssistantLook.ink(scheme))
                             .lineHeight(.exact(points: 36))
                             .padding(.top, 10)
-                        Text(morePrompt == nil
-                             ? "Napisz, na co masz ochotę — poszukam w Twoich przepisach."
-                             : "Pokażę \(options.count) kolejne z Twoich przepisów — albo napisz, na co masz ochotę.")
+                        Text(endBody)
                             .font(.system(size: 15))
                             .foregroundStyle(AssistantLook.muted(scheme))
                             .lineHeight(.exact(points: 21))
@@ -1702,8 +1896,16 @@ private struct AssistantOptionsStorySheet: View {
                                 ) { onMore(morePrompt) }
                             )
                         }
+                        if let applyTitle, let onApply {
+                            AssistantPrimaryButton(
+                                action: AssistantCardAction(title: applyTitle, icon: "checkmark") { onApply() }
+                            )
+                        }
                         AssistantGhostButton(
-                            action: AssistantCardAction(title: "Napisz, na co masz ochotę", icon: "square.and.pencil") {
+                            action: AssistantCardAction(
+                                title: isReview ? "Napisz, co zmienić" : "Napisz, na co masz ochotę",
+                                icon: "square.and.pencil"
+                            ) {
                                 onCompose()
                             }
                         )
@@ -1720,6 +1922,17 @@ private struct AssistantOptionsStorySheet: View {
                 .opacity(isEnd ? 1 : 0)
                 .animation(motion(.easeInOut(duration: 0.35)), value: isEnd)
         )
+    }
+
+    private var endBody: String {
+        if isReview {
+            return applyTitle == nil
+                ? "Napisz, jeśli chcesz coś w nim zmienić."
+                : "Zapiszę propozycję w planie — albo napisz, co zmienić."
+        }
+        return morePrompt == nil
+            ? "Napisz, na co masz ochotę — poszukam w Twoich przepisach."
+            : "Pokażę \(options.count) kolejne z Twoich przepisów — albo napisz, na co masz ochotę."
     }
 
     /// Element strony końcowej: wchodzi z opóźnieniem wg `order`, wychodzi od

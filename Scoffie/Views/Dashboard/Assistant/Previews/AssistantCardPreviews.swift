@@ -92,26 +92,26 @@ private struct PreviewCanvas<Content: View>: View {
     }
 }
 
-#Preview("Briefingi — plan") {
+#Preview("Powitania — pory dnia") {
     PreviewCanvas {
-        ForEach([AssistantBriefing.Kind.weekEmpty, .todayEmpty, .tomorrowEmpty, .missingMeal], id: \.rawValue) { kind in
+        ForEach([AssistantBriefing.Kind.breakfastMissing, .todayEmpty, .cookSoon, .dinnerMissing, .tomorrowPartial, .lateNight], id: \.rawValue) { kind in
             AssistantEmptyState(briefing: AssistantPreviewFixtures.briefing(kind), onAction: { _ in })
         }
     }
 }
 
-#Preview("Briefingi — gotowe, bilans, nowe konto, pula") {
+#Preview("Powitania — tydzień, bilans, nowe konto, pula") {
     PreviewCanvas {
-        ForEach([AssistantBriefing.Kind.nextWeekEmpty, .balanceIssue, .weekReady, .dayReady, .newUser, .trialExhausted], id: \.rawValue) { kind in
+        ForEach([AssistantBriefing.Kind.weekEmpty, .nextWeekEmpty, .balanceIssue, .weekReady, .newUser, .trialExhausted], id: \.rawValue) { kind in
             AssistantEmptyState(briefing: AssistantPreviewFixtures.briefing(kind), onAction: { _ in })
         }
     }
 }
 
-#Preview("Briefing — ciemny") {
+#Preview("Powitanie — ciemny, pisanie") {
     PreviewCanvas(scheme: .dark) {
-        AssistantEmptyState(briefing: AssistantPreviewFixtures.briefing(.missingMeal), onAction: { _ in })
-        AssistantEmptyState(briefing: AssistantPreviewFixtures.briefing(.balanceIssue), onAction: { _ in })
+        AssistantEmptyState(briefing: AssistantPreviewFixtures.briefing(.dinnerMissing), onAction: { _ in })
+        AssistantEmptyState(briefing: AssistantPreviewFixtures.briefing(.dinnerMissing), composing: true, onAction: { _ in })
     }
 }
 
