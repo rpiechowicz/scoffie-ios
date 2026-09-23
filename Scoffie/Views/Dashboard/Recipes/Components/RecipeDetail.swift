@@ -219,12 +219,14 @@ struct RecipeDetailView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         // Serce i krzyżyk to ten sam krążek, którym zamyka się każdy inny
-        // arkusz (`SCSheetCloseButton`) — bez osobnego „szkła” na zdjęciu.
+        // arkusz (`SCSheetCloseButton`), w wariancie `onImage` — z kryjącym
+        // tłem, bo stoją na zdjęciu, a nie na tle arkusza.
         .overlay(alignment: .topLeading) {
             SCSheetIconButton(
                 systemName: recipe.favourite ? "heart.fill" : "heart",
                 tint: recipe.favourite ? SCPalette.terracotta : nil,
                 accessibilityLabel: recipe.favourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
+                onImage: true,
                 action: { onToggleFavorite?() }
             )
             .sensoryFeedback(.impact(weight: .light), trigger: recipe.favourite)
@@ -234,7 +236,7 @@ struct RecipeDetailView: View {
             .padding(.top, 16)
         }
         .overlay(alignment: .topTrailing) {
-            SCSheetCloseButton { onClose?() }
+            SCSheetCloseButton(onImage: true) { onClose?() }
                 .padding(.trailing, 20)
                 .padding(.top, 16)
         }
@@ -361,10 +363,7 @@ struct RecipeDetailView: View {
                 )
             }
 
-            DetailNutritionCard(
-                nutrition: recipe.nutrition(forServings: portions),
-                servings: servings
-            )
+            DetailNutritionCard(nutrition: recipe.nutrition(forServings: portions))
             .padding(.horizontal, 20)
         }
     }
@@ -1311,9 +1310,6 @@ private struct DetailServingsStepper: View {
 /// w środku koła.
 private struct DetailNutritionCard: View {
     let nutrition: Nutrition
-    let servings: Int
-
-    @Environment(\.colorScheme) private var scheme
 
     // Cel dnia — te same klucze i ta sama reguła, co Plan i Kalendarz.
     @AppStorage(RecipePersonalization.Keys.calorieGoal)
@@ -1365,44 +1361,20 @@ private struct DetailNutritionCard: View {
         ]
     }
 
-    /// Ile procent dziennego celu kalorii to te porcje.
-    private var sharePercent: Int {
-        Int((nutrition.kcal / Double(max(targets.kcal, 1)) * 100).rounded())
-    }
-
     var body: some View {
         let rows = rows
 
         DetailCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 18) {
-                    DetailGoalRings(progresses: rows.map { $0.progress ?? 0 }, colors: rows.map(\.color))
-                        .accessibilityHidden(true)
+            HStack(alignment: .center, spacing: 18) {
+                DetailGoalRings(progresses: rows.map { $0.progress ?? 0 }, colors: rows.map(\.color))
+                    .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(rows) { row in
-                            DetailGoalLegendRow(row: row)
-                        }
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(rows) { row in
+                        DetailGoalLegendRow(row: row)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                // „Porcja to 22% Twojego dziennego celu kalorii." — jedna
-                // liczba, którą z pierścieni trzeba by zgadywać. Procent liczy
-                // tym samym ruchem, co pierścienie.
-                HStack(spacing: 0) {
-                    Text(servings == 1 ? "Porcja to " : "\(PolishPlural.servings(servings)) to razem ")
-                    CountingNumber(
-                        target: sharePercent,
-                        loadAnimation: DetailNutritionMotion.reveal,
-                        changeAnimation: DetailNutritionMotion.change
-                    )
-                    Text("% Twojego dziennego celu kalorii.")
-                }
-                .scFont(12, weight: .regular, relativeTo: .caption)
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16)
         }
