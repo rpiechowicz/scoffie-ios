@@ -51,14 +51,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Repo leży w iCloud Desktop — pliki bywają „dataless”; gdy git/xcodebuild wisi przy 0 % CPU,
   zmaterializuj: `find Scoffie -type f -exec cat {} + > /dev/null`.
 - Gałęzie z `develop` po `git fetch --prune`, od razu `git push -u origin <gałąź>`; PR → `develop`
-  → `main` → TestFlight (po stronie Rafała). Commity po polsku, `Co-Authored-By: Claude <noreply@anthropic.com>`.
+  → `main` → TestFlight przez **Xcode Cloud** (po stronie Rafała). GitHub Actions NIE buduje iOS od 23.09.2026
+  (minuty macOS ×10 wyczerpywały limit) — jedyna kontrola kompilacji to Xcode Cloud albo Mac. Commity po polsku, `Co-Authored-By: Claude <noreply@anthropic.com>`.
 - **Sentry** (od 23.09.2026, projekt `scoffie/scoffie-ios`, region DE): `Models/Observability/CrashReporting.swift`,
   start w `ScoffieApp.init`, użytkownik (samo id) przez `CrashReporting.setUser` przy każdym przypisaniu
   `SessionStore.currentUserId`. Środowiska: `development` (DEBUG) / `testflight` / `production`. Bez zrzutów
   ekranu, hierarchii widoków i session replay (alergeny, kroki na ekranie); nagłówki śladu tylko do
   `api.scoffie.app`; 5xx zgłasza backend, nie telefon. dSYM wysyła faza „Upload dSYM to Sentry” przy
-  archiwum (Release) — w CI (`ios-testflight.yml`) z sekretem `SENTRY_AUTH_TOKEN` (token organizacji
-  `scoffie`, `sentry-cli` 3.8.0 przypięty), na Macu raz: `brew install getsentry/tools/sentry-cli && sentry-cli login`;
+  archiwum (Release) na Macu, a w Xcode Cloud `ci_scripts/ci_post_xcodebuild.sh` (sekret `SENTRY_AUTH_TOKEN`
+  w workflow, `sentry-cli` 3.8.0 przypięty sumą SHA-256); na Macu raz: `brew install getsentry/tools/sentry-cli && sentry-cli login`;
   bez tego build przechodzi z ostrzeżeniem, ale crashe są bez nazw funkcji.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)

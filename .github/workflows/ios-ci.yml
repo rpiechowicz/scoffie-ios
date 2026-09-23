@@ -1,5 +1,10 @@
 name: iOS CI
 
+# Tylko skaner sekretów (Linux). Build, podpis i TestFlight robi Xcode Cloud
+# (25 h/mies. w ramach Apple Developer Program) — od 23.09.2026 joby macOS
+# zniknęły stąd, bo minuta macOS liczy się w Actions dziesięciokrotnie
+# i wyczerpywała limit konta. Symbole do Sentry: `ci_scripts/`.
+
 on:
   pull_request:
   # Tylko `main`. Wcześniej był tu też `develop`, przez co KAŻDY pull request
@@ -37,90 +42,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_VERSION: 8.30.1
-
-  build:
-    runs-on: macos-latest
-    timeout-minutes: 30
-    # Token joba tylko do odczytu — build nie ma po co pisać do repo, a bez
-    # tego bloku job dziedziczy domyślne uprawnienia repozytorium.
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Select Xcode 26
-        run: |
-          # Keep CI aligned with the project's iOS 26 deployment target.
-          xcode26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
-          if [ -n "$xcode26" ]; then
-            echo "Using $xcode26"
-            sudo xcode-select -s "$xcode26/Contents/Developer"
-          else
-            echo "Xcode 26 not found, using default: $(xcode-select -p)"
-          fi
-          xcodebuild -version
-          xcodebuild -showsdks | grep iphonesimulator
-
-      # Runner macOS liczy się DZIESIĘCIOKROTNIE. Pobieranie zależności SPM od
-      # zera przy każdym biegu to około minuty realnego czasu, czyli dziesięć
-      # minut z rachunku — przy dwóch tysiącach minut miesięcznie w planie
-      # darmowym to nie jest drobiazg. Klucz na `Package.resolved`, więc cache
-      # unieważnia się dokładnie wtedy, gdy zmienia się wersja zależności.
-      - name: Cache zależności SPM
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/org.swift.swiftpm
-            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            spm-${{ runner.os }}-
-
-      - name: Resolve Swift packages
-        run: xcodebuild -resolvePackageDependencies -project "Scoffie.xcodeproj"
-
-      - name: Build app
-        run: |
-          set -o pipefail
-          # Avoid universal simulator binaries on arm64 runners.
-          # Xcode 26.3 on GitHub Actions fails while lipo-ing preview dylibs for x86_64 + arm64.
-          xcodebuild \
-            -project "Scoffie.xcodeproj" \
-            -scheme "Scoffie" \
-            -destination "generic/platform=iOS Simulator" \
-            -sdk iphonesimulator \
-            build \
-            ARCHS=arm64 \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=YES \
-            EXCLUDED_ARCHS=x86_64 \
-            2>&1 | tee "$RUNNER_TEMP/build.log"
-
-      - name: Błędy kompilatora
-        if: failure()
-        run: |
-          LOG="$RUNNER_TEMP/build.log"
-          [ -f "$LOG" ] || exit 0
-          echo "::group::Błędy kompilatora"
-          ERRORS=$(grep -nE "error:|fatal error:|Command .* failed" "$LOG" | head -50 || true)
-          if [ -n "$ERRORS" ]; then
-            echo "$ERRORS"
-          else
-            echo "Brak linii z 'error:' — problem jest poza kompilacją."
-          fi
-          echo "::endgroup::"
-          echo "::group::Ostatnie 80 linii logu"
-          tail -80 "$LOG"
-          echo "::endgroup::"
-
-      - name: Pełny log builda
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: build-log
-          path: ${{ runner.temp }}/build.log
-          retention-days: 7
