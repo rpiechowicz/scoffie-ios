@@ -233,20 +233,13 @@ struct ShoppingTodaySheet: View {
     // MARK: - Stopka
 
     private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
-
+        SCSheetFooter {
             SCSoftButton(
                 title: "Pokaż w liście zakupów",
                 leadingIcon: "list.bullet",
                 trailingIcon: nil,
                 action: onShowInList
             )
-            .padding(.horizontal, SCPageMetrics.horizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
         }
     }
 }

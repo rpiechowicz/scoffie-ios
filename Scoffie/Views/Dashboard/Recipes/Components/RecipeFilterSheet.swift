@@ -146,13 +146,14 @@ struct RecipeFilterSheet: View {
             } action: { _, isPast in
                 withAnimation(.easeInOut(duration: 0.2)) { isHeaderCompact = isPast }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                footer
-            }
+            // Wspólna stopka arkuszy (`scSheetFooter`): kryjąca płyta pod
+            // liczbami i „Pokaż”, przewijane sekcje giną w przejściu nad nią.
+            // Szklana kapsuła, która tu była, przepuszczała treść pod spód.
+            .scSheetFooter { footer }
 
             compactHeader
         }
-        .animation(.smooth(duration: 0.22), value: draft.isActive)
+        .animation(.smooth(duration: 0.22), value: draft.activeCount > 0)
         .sensoryFeedback(.selection, trigger: draft.diets)
         .sensoryFeedback(.selection, trigger: draft.traits)
         .sensoryFeedback(.impact(weight: .light), trigger: fitDraft)
@@ -185,7 +186,7 @@ struct RecipeFilterSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if draft.isActive {
+            if draft.activeCount > 0 {
                 RecipeFilterClearButton(action: clearAll)
                     .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
@@ -205,7 +206,7 @@ struct RecipeFilterSheet: View {
 
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
-                if draft.isActive {
+                if draft.activeCount > 0 {
                     RecipeFilterClearButton(compact: true, action: clearAll)
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
@@ -552,7 +553,7 @@ struct RecipeFilterSheet: View {
         let count = resultCount
         let byCategory = index.countsByCategory(draft, fit: fitDraft)
 
-        return RecipeFilterFloatingBar {
+        return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: "\(count)")
@@ -571,12 +572,15 @@ struct RecipeFilterSheet: View {
                 RecipeFilterCategorySplit(counts: byCategory, totals: index.totalsByCategory)
                     .padding(.top, 7)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.smooth(duration: 0.3), value: count)
+            .animation(.smooth(duration: 0.3), value: byCategory)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(footerAccessibilityLabel(count: count, byCategory: byCategory))
-        } trailing: {
+
             RecipeFilterFooterButton(title: "Pokaż", isEnabled: count > 0, action: apply)
         }
+        .padding(.leading, 4)
     }
 
     private func footerAccessibilityLabel(count: Int, byCategory: [RecipesCategory: Int]) -> String {
@@ -589,8 +593,14 @@ struct RecipeFilterSheet: View {
 
     // MARK: - Akcje
 
+    /// „Wyczyść” działa od razu — lista pod arkuszem jest czysta bez
+    /// stuknięcia „Pokaż”. Czyści filtry wszystkich przepisów (to piętro);
+    /// filtry kategorii zostają, mają własne „Wyczyść”.
     private func clearAll() {
-        withAnimation(.smooth(duration: 0.25)) { draft.reset() }
+        withAnimation(.smooth(duration: 0.25)) {
+            draft.resetGlobal()
+            filters = draft
+        }
     }
 
     private func apply() {

@@ -81,9 +81,7 @@ struct RecipeExcludeCategorySheet: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                footer
-            }
+            .scSheetFooter { footer }
         }
         .sensoryFeedback(.selection, trigger: filters.excludedIngredients)
     }
@@ -240,7 +238,7 @@ struct RecipeExcludeCategorySheet: View {
         let count = excludedHere.count
         let hidden = index.hiddenCount(by: filters.excludedIngredients, fit: fit)
 
-        return RecipeFilterFloatingBar {
+        return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: count == 0 ? "Nic nie wykluczasz" : PolishPlural.excluded(count))
                     .font(.system(size: 15, weight: .bold))
@@ -258,11 +256,13 @@ struct RecipeExcludeCategorySheet: View {
                     .contentTransition(.numericText(value: Double(hidden)))
                     .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.smooth(duration: 0.25), value: hidden)
             .accessibilityElement(children: .combine)
-        } trailing: {
+
             RecipeFilterFooterButton(title: "Gotowe", trailingIcon: nil) { dismiss() }
         }
+        .padding(.leading, 4)
     }
 }
 

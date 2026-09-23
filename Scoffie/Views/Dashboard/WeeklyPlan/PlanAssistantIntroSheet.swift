@@ -374,7 +374,7 @@ struct PlanAssistantIntroSheet: View {
     // MARK: - Stopka
 
     private var footer: some View {
-        VStack(spacing: 2) {
+        SCSheetFooter(horizontalPadding: 22) {
             // Ten sam przycisk, co w stopkach pozostałych arkuszy — terakota
             // w wariancie „soft”, bez gradientu i cienia.
             EditorialPrimaryActionButton(
@@ -397,10 +397,8 @@ struct PlanAssistantIntroSheet: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(PlanPressStyle(scale: 0.99))
+            .padding(.top, -8)
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
     }
 
     // MARK: - Wspólne
