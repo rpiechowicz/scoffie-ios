@@ -318,15 +318,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`fits(slot)`) — „Wszystkie pory” usunięte w rundzie 10 („nie chcę jeść obiadu na śniadanie”).
   „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad przyciskiem —
   tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
-- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, runda 10): nagłówek z ikoną i „N min · N kcal na
-  porcję”, tydzień jak `EditorialWeekBar` (podpis „TEN TYDZIEŃ · …” + strzałki 26 pt, liczby dni rolują),
-  pory = `scChoiceSurface(.tile)` w kolorze pory + `SCHeaderIconWell`, porcje rolują (`numericText`),
-  a w stopce nad przyciskiem JEDNO rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” albo
-  „dla całego domu”); przycisk: „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Runda 12:
-  BEZ przewijania — pory w 3 kolumnach jako pionowe kafelki (zajęta = kropka szałwii), porcje jednym
-  wierszem ze stepperem, bez podpisów-objaśnień; `ViewThatFits(in: .vertical)` przełącza na
-  `ScrollView` tylko, gdy formularz nie wejdzie (SE, duża czcionka). `EditorialPrimaryActionButton` roluje
-  tytuł (`numericText`) — działa tylko w animowanej transakcji.
+- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, napisany od zera w rundzie 13): trzy pytania bez
+  przewijania — KIEDY: przewijany pasek 28 dni od dziś (bez minionych dni i bez strzałek tygodnia,
+  kreska przed poniedziałkiem, „DZIŚ”, kropka szałwii = coś stoi); POSIŁEK: lista pór w jednej karcie
+  (kafelek pory, nazwa, po prawej danie, które już tam stoi, `SCRadioMark` w kolorze pory, pora spoza
+  przepisu przygaszona); DLA KOGO + porcje w jednej karcie (`PlanAudienceChips`, pod kreską „2 porcje”
+  + `SCStepper`). W stopce rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” / „dla całego
+  domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. `ViewThatFits(in:
+  .vertical)` przełącza na `ScrollView` tylko, gdy nie wejdzie (SE, duża czcionka).
+  `EditorialPrimaryActionButton` roluje tytuł (`numericText`) — działa tylko w animowanej transakcji.
 - Ten sam przepis w tej samej porze dla drugiej osoby = SUMA audytoriów, a nie nadpisanie
   (`PlanAudienceChips.merged(_:with:members:)`, runda 10): pozycja planu to para (pora, przepis), więc
   zapis „posiłek1 dla user2” przepisywał „posiłek1 dla user1” i user1 zostawał bez jedzenia. Suma
@@ -340,7 +340,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   i CEL tej osoby. Cele domowników przychodzą z serwera w `households:memberPreferences`
   (`targets: {calorieGoal, macros}` — policzone w `toMemberContext`, BEZ sylwetki) →
   `HouseholdMemberPreferences.targets`. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
-  kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka) — awatary 28 pt z obwódką w kolorze osoby,
+  kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka, runda 13: mniejsza — awatary 22 pt, wysokość 26, imię 12 pt) z obwódką w kolorze osoby,
   wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
   dzień („Twój dzień · 3 z 4 posiłków” / „Dzień: Ania · …”). Pełnoszerokościowe zakładki z rundy 11
   odpadły. Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
