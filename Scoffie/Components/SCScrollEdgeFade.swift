@@ -62,6 +62,10 @@ struct SCScrollEdgeFade: ViewModifier {
 
                     Color.black
                 }
+                // Maska układa się jak tło: w bezpiecznym obszarze. Przewijana
+                // treść schodzi pod pasek domowy, więc bez tego urywałaby się
+                // 34 pt nad krawędzią ekranu, zamiast przejeżdżać pod paskiem.
+                .ignoresSafeArea(edges: .bottom)
             }
     }
 }
