@@ -208,8 +208,8 @@ struct RecipePersonalizationSheet: View {
 
 // MARK: - Chip preferencji
 
-/// Plakietka preferencji — tylko do czytania. Celowo nie `RecipeFilterChip`,
-/// bo tamten jest przyciskiem i wyglądałby na klikalny.
+/// Plakietka preferencji — tylko do czytania, więc bez wyglądu przycisku
+/// (chipy w arkuszu filtrów są klikalne i nie mogą się z nią mylić).
 private struct PersonalizationChipLabel: View {
     let chip: RecipePersonalization.Chip
 

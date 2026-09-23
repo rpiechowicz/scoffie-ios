@@ -257,7 +257,15 @@ struct RecipesView: View {
             }
             .onDisappear { searchDebounceTask?.cancel() }
             .sheet(isPresented: $isFilterSheetPresented) {
-                RecipeFilterSheet(filters: $filters, recipes: personalizedRecipes)
+                // Pula PRZED dopasowaniem: przełącznik „Dopasowane do Ciebie”
+                // siedzi w arkuszu i liczby muszą się dać przeliczyć w obie
+                // strony.
+                RecipeFilterSheet(
+                    filters: $filters,
+                    isPersonalizationEnabled: $isPersonalizationEnabled,
+                    recipes: searchedRecipes,
+                    personalization: personalization
+                )
                     .presentationDetents([.large])
                     .dashboardLiquidSheet()
             }

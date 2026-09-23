@@ -1,6 +1,6 @@
 import Foundation
 
-/// Profil odżywczy przepisu — chipy „Wysokobiałkowe”, „Niskowęglowodanowe” itd.
+/// Profil odżywczy przepisu — progi, na których stoją kafelki „Cechy”
 /// w arkuszu filtrów.
 ///
 /// Progi są absolutne i liczone **na porcję** (`Recipe.nutritionPerServing`),
@@ -37,8 +37,8 @@ enum RecipeNutritionTag: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Opis progu pokazywany pod chipami, gdy tag jest zaznaczony — żeby
-    /// „wysokobiałkowe” nie było magiczną obietnicą bez liczby.
+    /// Opis progu — żeby „wysokobiałkowe” nie było magiczną obietnicą bez
+    /// liczby (VoiceOver czyta go przy kafelku).
     var thresholdDescription: String {
         switch self {
         case .highProtein: return "białko ≥ 20 g"
@@ -66,63 +66,256 @@ enum RecipeNutritionTag: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// Zestaw filtrów wybieranych w arkuszu „Filtry” na widoku Przepisów.
+// MARK: - Dieta
+
+/// Kafelki „Dieta” w arkuszu filtrów. Zaznaczone łączą się przez AND.
 ///
-/// Świadomie trzyma tylko najpopularniejsze kryteria — kategorię posiłku,
-/// trudność, czas przygotowania, kalorie na porcję i ulubione. Puste
-/// kolekcje / `nil` znaczą „bez ograniczeń”, więc domyślna instancja
-/// (`RecipeFilterOptions()`) niczego nie odsiewa.
+/// Filtr jest ostrzejszy niż profil z Ustawień: profil przepuszcza przepis
+/// bez składników (nie ma dowodu, że jest mięsny), a kafelek „Wege” go nie
+/// pokazuje — kto zaznacza dietę, prosi o przepisy, o których WIADOMO, że
+/// ją spełniają.
+enum RecipeDietFilter: String, CaseIterable, Identifiable {
+    case lactoseFree
+    case vegetarian
+    case vegan
+    case withFish
+    case glutenFree
+    case keto
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .lactoseFree: return "Bez laktozy"
+        case .vegetarian:  return "Wege"
+        case .vegan:       return "Wegańska"
+        case .withFish:    return "Z rybą"
+        case .glutenFree:  return "Bez glutenu"
+        case .keto:        return "Keto"
+        }
+    }
+
+    /// Kafelki, których nie ma po co zaznaczać, bo tę samą rzecz trzyma już
+    /// profil z Ustawień („Dopasowane do Ciebie”) — rysują się z kłódką.
+    static func lockedByProfile(_ personalization: RecipePersonalization) -> Set<RecipeDietFilter> {
+        var locked: Set<RecipeDietFilter> = []
+        switch personalization.diet {
+        case .vegetarian: locked.insert(.vegetarian)
+        case .vegan:      locked.insert(.vegan)
+        case .keto:       locked.insert(.keto)
+        default:          break
+        }
+        if personalization.avoidedAllergens.contains(.lactose) { locked.insert(.lactoseFree) }
+        if personalization.avoidedAllergens.contains(.gluten) { locked.insert(.glutenFree) }
+        return locked
+    }
+
+    @MainActor
+    func matches(_ recipe: Recipe) -> Bool {
+        let profile = recipe.dietProfile
+        switch self {
+        case .lactoseFree: return profile.hasIngredientData && profile.avoids([.lactose])
+        case .vegetarian:  return profile.hasIngredientData && profile.satisfies(.vegetarian, recipe: recipe)
+        case .vegan:       return profile.hasIngredientData && profile.satisfies(.vegan, recipe: recipe)
+        case .withFish:    return profile.containsFish
+        case .glutenFree:  return profile.hasIngredientData && profile.avoids([.gluten])
+        // Ten sam próg co „Ketogeniczna” w Ustawieniach — dwa miejsca
+        // w aplikacji nie mogą obiecywać czegoś innego pod tą samą nazwą.
+        case .keto:        return profile.satisfies(.keto, recipe: recipe)
+        }
+    }
+}
+
+// MARK: - Cechy
+
+/// Kafelki „Cechy” w arkuszu filtrów. Zaznaczone łączą się przez AND.
+///
+/// Makieta miała tu „Jedno naczynie”, „Do pudełka”, „Budżetowe” i „Na zimno”
+/// — katalog tych cech nie niesie, więc kafelek niczego by nie odsiał albo
+/// odsiał na zgadywanie. Stoją tu cechy, które da się policzyć z danych.
+/// „Niskowęglowodanowe” nie ma osobnego kafelka, bo to ten sam próg co
+/// „Keto” w Diecie.
+enum RecipeTraitFilter: String, CaseIterable, Identifiable {
+    case highProtein
+    case lowFat
+    case highFiber
+    case lowSalt
+    case favourites
+    case thermomix
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .highProtein: return RecipeNutritionTag.highProtein.title
+        case .lowFat:      return RecipeNutritionTag.lowFat.title
+        case .highFiber:   return RecipeNutritionTag.highFiber.title
+        case .lowSalt:     return RecipeNutritionTag.lowSalt.title
+        case .favourites:  return "Ulubione"
+        case .thermomix:   return "Thermomix"
+        }
+    }
+
+    /// Doprecyzowanie dla VoiceOver — na ekranie pod nazwą stoi liczba.
+    var accessibilityDetail: String? {
+        switch self {
+        case .highProtein: return RecipeNutritionTag.highProtein.thresholdDescription + " na porcję"
+        case .lowFat:      return RecipeNutritionTag.lowFat.thresholdDescription + " na porcję"
+        case .highFiber:   return RecipeNutritionTag.highFiber.thresholdDescription + " na porcję"
+        case .lowSalt:     return RecipeNutritionTag.lowSalt.thresholdDescription + " na porcję"
+        case .favourites:  return "przepisy z serduszkiem"
+        case .thermomix:   return "przepisy z odpowiednikiem w Cookidoo"
+        }
+    }
+
+    func matches(_ recipe: Recipe) -> Bool {
+        switch self {
+        case .highProtein: return RecipeNutritionTag.highProtein.matches(recipe)
+        case .lowFat:      return RecipeNutritionTag.lowFat.matches(recipe)
+        case .highFiber:   return RecipeNutritionTag.highFiber.matches(recipe)
+        case .lowSalt:     return RecipeNutritionTag.lowSalt.matches(recipe)
+        case .favourites:  return recipe.favourite
+        case .thermomix:   return recipe.isThermomix
+        }
+    }
+}
+
+// MARK: - Wykluczone składniki
+
+/// Wykluczony składnik albo cała grupa jego rodzajów.
+///
+/// Składnik to nazwa z katalogu backendu (`RecipeIngredient.name`, w katalogu
+/// już kanoniczna i unikalna). Grupa to wspólny pierwszy wyraz nazw w jednym
+/// dziale — „papryka czerwona”, „papryka żółta” → „Papryka”. Dział jest
+/// częścią grupy, bo „papryka” w Warzywach i „papryka słodka mielona”
+/// w Przyprawach to dla kogoś, kto nie znosi świeżej papryki, dwie różne
+/// rzeczy.
+///
+/// Klucz liczy się z samej nazwy i działu, bez katalogu — dzięki temu lista
+/// Przepisów odsiewa po nim tak samo jak arkusz, który zna cały katalog.
+struct IngredientExclusion: Hashable, Identifiable {
+    enum Kind: Hashable { case item, group }
+
+    let kind: Kind
+    /// Nazwa składnika albo rdzeń grupy — małymi literami.
+    let name: String
+    /// Dział grupy. Składnik go nie potrzebuje: nazwy w katalogu są unikalne.
+    let department: String?
+
+    var id: String {
+        switch kind {
+        case .item:  return "item:\(name)"
+        case .group: return "group:\(department ?? "")|\(name)"
+        }
+    }
+
+    var isGroup: Bool { kind == .group }
+
+    /// Nazwa na ekranie — z wielkiej litery, jak w szczególe przepisu.
+    var title: String { Self.capitalized(name) }
+
+    /// Etykieta chipa. Grupa dostaje dopisek, bo „Cebula” jako chip nie mówi,
+    /// czy wykluczona jest zwykła cebula, czy każda.
+    var chipTitle: String { isGroup ? "\(title) · wszystkie" : title }
+
+    static func item(_ rawName: String) -> IngredientExclusion {
+        IngredientExclusion(kind: .item, name: normalizedName(rawName), department: nil)
+    }
+
+    static func group(stem: String, department: String) -> IngredientExclusion {
+        IngredientExclusion(kind: .group, name: stem, department: department)
+    }
+
+    // MARK: Liczenie kluczy
+
+    /// Wyrazy, po których nazwa przestaje być „rodzajem” pierwszego wyrazu:
+    /// „filet z kurczaka” i „filet z indyka” to nie dwa rodzaje filetu.
+    private static let connectors: Set<Substring> = ["z", "ze", "w", "we", "do", "na", "bez", "od", "po"]
+
+    static func normalizedName(_ raw: String) -> String {
+        raw.lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    static func normalizedDepartment(_ raw: String?) -> String {
+        let trimmed = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? ProductConstants.Department.other : trimmed
+    }
+
+    /// Rdzeń grupy dla nazwy już znormalizowanej, albo `nil`, gdy nazwa do
+    /// żadnej grupy nie należy.
+    static func groupStem(ofNormalized name: String) -> String? {
+        let words = name.split(separator: " ")
+        guard let first = words.first, first.count >= 3 else { return nil }
+        if words.count >= 2, connectors.contains(words[1]) { return nil }
+        return String(first)
+    }
+
+    /// Klucze, po których dany składnik przepisu da się wykluczyć: on sam
+    /// i — jeśli ma — jego grupa.
+    static func keys(forIngredientNamed rawName: String, department rawDepartment: String?) -> [IngredientExclusion] {
+        let name = normalizedName(rawName)
+        guard !name.isEmpty else { return [] }
+        let item = IngredientExclusion(kind: .item, name: name, department: nil)
+        guard let stem = groupStem(ofNormalized: name) else { return [item] }
+        return [item, .group(stem: stem, department: normalizedDepartment(rawDepartment))]
+    }
+
+    static func capitalized(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        return first.uppercased() + text.dropFirst()
+    }
+}
+
+// MARK: - Zestaw filtrów
+
+/// Zestaw filtrów z arkusza „Filtry” na widoku Przepisów.
+///
+/// Puste kolekcje / `nil` znaczą „bez ograniczeń”, więc domyślna instancja
+/// (`RecipeFilterOptions()`) niczego nie odsiewa. Filtry działają w każdej
+/// kategorii naraz — kategorii jako filtra nie ma, bo Przepisy i tak stoją
+/// sekcjami po kategoriach, a stopka arkusza pokazuje, ile zostaje w każdej.
 struct RecipeFilterOptions: Equatable {
-    /// Kategorie posiłku. Pusty zbiór = wszystkie.
-    var categories: Set<RecipesCategory> = []
-
-    /// Poziomy trudności. Pusty zbiór = wszystkie.
-    var difficulties: Set<Difficulty> = []
-
-    /// Górny limit czasu przygotowania w minutach. `nil` = bez limitu.
+    /// Górny limit czasu przygotowania w minutach. `nil` = dowolny.
     var maxPrepTimeMinutes: Int?
 
     /// Górny limit kalorii na porcję. `nil` = bez limitu.
     var maxCaloriesPerServing: Int?
 
-    /// Profil odżywczy (wysokobiałkowe, niskowęglowodanowe, …). Zaznaczone
-    /// tagi łączą się przez AND — przepis musi spełnić każdy z nich.
-    var nutritionTags: Set<RecipeNutritionTag> = []
+    /// Poziom trudności. `nil` = dowolny.
+    var difficulty: Difficulty?
 
-    /// Pokazuj wyłącznie przepisy oznaczone jako ulubione.
-    var favouritesOnly: Bool = false
-
-    /// Pokazuj wyłącznie przepisy z odpowiednikiem w Cookidoo (Thermomix).
-    var thermomixOnly: Bool = false
+    var diets: Set<RecipeDietFilter> = []
+    var traits: Set<RecipeTraitFilter> = []
+    var excludedIngredients: Set<IngredientExclusion> = []
 
     // MARK: - Dostępne opcje
 
-    /// Kategorie realnie przypisywane przepisom (`.all` / `.favourite` to
-    /// pseudo-kategorie filtrujące, więc nie trafiają do chipów). Ta sama
-    /// lista co sekcje na Przepisach — chip ma odpowiadać sekcji, którą
-    /// użytkownik przed chwilą oglądał.
-    static let selectableCategories: [RecipesCategory] = RecipesCategory.catalogSections
+    /// Progi segmentu „Czas przygotowania” (obok „Dowolny”).
+    static let prepTimeChoices: [Int] = [15, 30, 45]
 
-    /// Progi czasu przygotowania pokazywane jako chipy „do X min”.
-    static let prepTimeChoices: [Int] = [15, 30, 60]
-
-    /// Progi kaloryczne pokazywane jako chipy „do X kcal”.
-    static let calorieChoices: [Int] = [300, 500, 800]
+    /// Linijka kalorii: od 0 do `calorieScaleMax` co `calorieStep`. Igła na
+    /// samym końcu skali znaczy „bez limitu” (napis „1000+”).
+    static let calorieScaleMax = 1000
+    static let calorieStep = 50
+    /// Najniższy limit, na jaki da się postawić igłę — „do 0 kcal” nie jest
+    /// filtrem, tylko pustą listą.
+    static let calorieMinimum = 100
 
     // MARK: - Stan
 
-    /// Liczba aktywnych grup filtrów — trafia na plakietkę przy przycisku
-    /// filtra w nagłówku (jedna grupa = jedna „kropka”, niezależnie od tego
-    /// ile chipów w niej zaznaczono).
+    /// Liczba aktywnych grup filtrów — plakietka przy przycisku filtra
+    /// w nagłówku Przepisów. Jedna sekcja arkusza = jedna grupa, niezależnie
+    /// od tego, ile kafelków w niej zaznaczono.
     var activeCount: Int {
         var count = 0
-        if !categories.isEmpty            { count += 1 }
-        if !difficulties.isEmpty          { count += 1 }
-        if maxPrepTimeMinutes != nil      { count += 1 }
-        if maxCaloriesPerServing != nil   { count += 1 }
-        if !nutritionTags.isEmpty         { count += 1 }
-        if favouritesOnly                 { count += 1 }
-        if thermomixOnly                  { count += 1 }
+        if maxPrepTimeMinutes != nil       { count += 1 }
+        if maxCaloriesPerServing != nil    { count += 1 }
+        if difficulty != nil               { count += 1 }
+        if !diets.isEmpty                  { count += 1 }
+        if !traits.isEmpty                 { count += 1 }
+        if !excludedIngredients.isEmpty    { count += 1 }
         return count
     }
 
@@ -130,77 +323,132 @@ struct RecipeFilterOptions: Equatable {
 
     // MARK: - Filtrowanie
 
+    @MainActor
     func matches(_ recipe: Recipe) -> Bool {
-        if favouritesOnly, !recipe.favourite { return false }
+        matches(RecipeFilterFactsCache.facts(for: recipe))
+    }
 
-        if thermomixOnly, !recipe.isThermomix { return false }
+    /// Jedyne miejsce z regułami filtra — liczy po nim i lista Przepisów,
+    /// i liczniki w arkuszu, więc „Pokaż 132” zawsze znaczy 132 na liście.
+    func matches(_ facts: RecipeFilterFacts) -> Bool {
+        if let maxPrepTimeMinutes, facts.prepTimeMinutes > maxPrepTimeMinutes { return false }
 
-        if !categories.isEmpty, !categories.contains(recipe.category) { return false }
+        // Backend nie zawsze dowozi makra — przepis bez policzonych kcal (0)
+        // zostaje na liście, zamiast zniknąć przez brak danych.
+        if let maxCaloriesPerServing, facts.kcalPerServing > 0,
+           facts.kcalPerServing > maxCaloriesPerServing { return false }
 
-        if !difficulties.isEmpty, !difficulties.contains(recipe.difficulty) { return false }
-
-        if let maxPrepTimeMinutes, recipe.prepTimeMinutes > maxPrepTimeMinutes { return false }
-
-        if let maxCaloriesPerServing {
-            // Backend nie zawsze dowozi makra — przepis bez policzonych kcal
-            // (0) zostaje na liście, zamiast zniknąć przez brak danych.
-            let kcal = recipe.nutritionPerServing.kcal
-            if kcal > 0, Int(kcal.rounded()) > maxCaloriesPerServing { return false }
-        }
-
-        for tag in nutritionTags where !tag.matches(recipe) { return false }
-
+        if let difficulty, facts.difficulty != difficulty { return false }
+        if !diets.isSubset(of: facts.diets) { return false }
+        if !traits.isSubset(of: facts.traits) { return false }
+        if !excludedIngredients.isDisjoint(with: facts.exclusionKeys) { return false }
         return true
     }
 
+    @MainActor
     func apply(to recipes: [Recipe]) -> [Recipe] {
         guard isActive else { return recipes }
-        return recipes.filter(matches(_:))
+        return recipes.filter { matches($0) }
     }
 
     mutating func reset() {
         self = RecipeFilterOptions()
     }
 
-    // MARK: - Mutacje pojedynczych chipów
+    // MARK: - Mutacje
 
-    mutating func toggle(category: RecipesCategory) {
-        if categories.contains(category) {
-            categories.remove(category)
-        } else {
-            categories.insert(category)
+    mutating func toggle(diet: RecipeDietFilter) {
+        if diets.contains(diet) { diets.remove(diet) } else { diets.insert(diet) }
+    }
+
+    mutating func toggle(trait: RecipeTraitFilter) {
+        if traits.contains(trait) { traits.remove(trait) } else { traits.insert(trait) }
+    }
+
+    /// Wyklucza albo przywraca. Przywrócenie jednego rodzaju z wykluczonej
+    /// grupy rozbija grupę na pozostałe rodzaje — „wszystkie papryki poza
+    /// czerwoną” — zamiast przywracać całą grupę naraz.
+    mutating func toggle(exclusion: IngredientExclusion, groupMembers: [IngredientExclusion] = [], parentGroup: IngredientExclusion? = nil) {
+        if excludedIngredients.contains(exclusion) {
+            excludedIngredients.remove(exclusion)
+            return
+        }
+        if let parentGroup, excludedIngredients.contains(parentGroup) {
+            excludedIngredients.remove(parentGroup)
+            for member in groupMembers where member != exclusion {
+                excludedIngredients.insert(member)
+            }
+            return
+        }
+        excludedIngredients.insert(exclusion)
+        // Grupa obejmuje już swoje rodzaje — pojedyncze wpisy pod nią tylko
+        // mnożyłyby chipy mówiące to samo.
+        if exclusion.isGroup {
+            for member in groupMembers { excludedIngredients.remove(member) }
         }
     }
+}
 
-    mutating func toggle(difficulty: Difficulty) {
-        if difficulties.contains(difficulty) {
-            difficulties.remove(difficulty)
-        } else {
-            difficulties.insert(difficulty)
+// MARK: - Fakty o przepisie
+
+/// Wszystko, o co pyta filtr, policzone raz na przepis. Arkusz przelicza
+/// kilkanaście liczników przy każdym stuknięciu (i przy każdym kroku igły
+/// kalorii), a lista Przepisów filtruje w kilku miejscach jednego `body` —
+/// bez tego każde z nich od nowa składałoby profil diety i klucze składników.
+struct RecipeFilterFacts {
+    let category: RecipesCategory
+    let prepTimeMinutes: Int
+    /// Zaokrąglone kcal na porcję; 0 = brak policzonych makr.
+    let kcalPerServing: Int
+    let difficulty: Difficulty
+    let diets: Set<RecipeDietFilter>
+    let traits: Set<RecipeTraitFilter>
+    let exclusionKeys: Set<IngredientExclusion>
+
+    @MainActor
+    init(_ recipe: Recipe) {
+        category = recipe.category
+        prepTimeMinutes = recipe.prepTimeMinutes
+        kcalPerServing = Int(recipe.nutritionPerServing.kcal.rounded())
+        difficulty = recipe.difficulty
+        diets = Set(RecipeDietFilter.allCases.filter { $0.matches(recipe) })
+        traits = Set(RecipeTraitFilter.allCases.filter { $0.matches(recipe) })
+        exclusionKeys = Set(recipe.ingredients.flatMap {
+            IngredientExclusion.keys(forIngredientNamed: $0.name, department: $0.department)
+        })
+    }
+}
+
+enum RecipeFilterFactsCache {
+    private static var storage: [UUID: (fingerprint: Int, facts: RecipeFilterFacts)] = [:]
+
+    @MainActor
+    static func facts(for recipe: Recipe) -> RecipeFilterFacts {
+        // Ulubione zmieniają się w trakcie sesji, a lista potrafi przyjść
+        // uboższa niż szczegóły — każde z pól, z których liczą się fakty,
+        // musi unieważniać wpis.
+        var hasher = Hasher()
+        hasher.combine(recipe.favourite)
+        hasher.combine(recipe.prepTimeMinutes)
+        hasher.combine(recipe.difficulty)
+        hasher.combine(recipe.servings)
+        hasher.combine(recipe.nutrition)
+        hasher.combine(recipe.sourceProvider)
+        hasher.combine(recipe.sourceRecipeId)
+        hasher.combine(recipe.dietTags)
+        hasher.combine(recipe.allergens)
+        hasher.combine(recipe.ingredients.count)
+        for ingredient in recipe.ingredients {
+            hasher.combine(ingredient.name)
+            hasher.combine(ingredient.department)
         }
-    }
+        let fingerprint = hasher.finalize()
 
-    mutating func toggle(nutritionTag tag: RecipeNutritionTag) {
-        if nutritionTags.contains(tag) {
-            nutritionTags.remove(tag)
-        } else {
-            nutritionTags.insert(tag)
+        if let cached = storage[recipe.id], cached.fingerprint == fingerprint {
+            return cached.facts
         }
-    }
-
-    /// Zaznaczone tagi w kolejności deklaracji enuma — `Set` nie ma własnej,
-    /// a podpis pod chipami nie może skakać przy każdym renderze.
-    var orderedNutritionTags: [RecipeNutritionTag] {
-        RecipeNutritionTag.allCases.filter { nutritionTags.contains($0) }
-    }
-
-    /// Chipy progowe działają jak radio z odznaczaniem — ponowny tap na
-    /// aktywny próg zdejmuje limit.
-    mutating func toggle(maxPrepTime minutes: Int) {
-        maxPrepTimeMinutes = (maxPrepTimeMinutes == minutes) ? nil : minutes
-    }
-
-    mutating func toggle(maxCalories kcal: Int) {
-        maxCaloriesPerServing = (maxCaloriesPerServing == kcal) ? nil : kcal
+        let facts = RecipeFilterFacts(recipe)
+        storage[recipe.id] = (fingerprint, facts)
+        return facts
     }
 }
