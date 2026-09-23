@@ -210,9 +210,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wyniki szukania są pogrupowane po działach.
 - Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
   (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): kryjąca płyta w kolorze tła
-  (`scPageBase`, czyli dół `SCPageBackground`) + 36 pt przejścia NAD nią, bez kreski i bez szkła.
-  Na przewijanej treści przez `safeAreaInset` (zero ręcznych „zapasów” pod treścią), pod listą
-  w `VStack` jako ostatnie dziecko. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
+  (`scPageBase`, czyli dół `SCPageBackground`) + cień krawędzi NAD nią, bez kreski i bez szkła.
+  Cień to `SCEdgeShade` (`Components/SCEdgeShade.swift`) — JEDEN na górę i dół: górny pasek
+  szczegółów posiłku (84 pt, przyciski stoją na nim) i jego lustro nad stopką (56 pt, zaczyna się
+  na krawędzi płyty, nie wchodzi na przycisk). Rafał: „bardzo mi się podoba shadow górny, zrób taki
+  sam od dołu”. Na przewijanej treści przez `.scSheetFooter` (`safeAreaInset`, cień WLICZONY
+  w wysokość — przewinięta do końca treść kończy się nad nim), pod listą w `VStack` jako ostatnie
+  dziecko — wtedy cień leży na liście i lista MUSI mieć na dole `.padding(.bottom,
+  SCEdgeShade.bottomHeight)`. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
   tylko nakładki na nią; kreator (`WelcomeFooter`) zostaje przy swoim układzie (kropki kroków).
 - Przypięty nagłówek nad przewijaną treścią arkusza = BEZ kreski: `.scScrollEdgeFade()` na
@@ -225,8 +230,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   z `alive`, potem `AgentUsageDTO.source == "SUBSCRIPTION"` + `product`). Liczba domowników
   (`PlansSheet.plan(forHousehold:)`) tylko PODPOWIADA („Polecany”, „polecamy We dwoje”) — nigdy nie
   pisze „Twój …”. Kiedyś „Twój dom” przy planie z liczby osób czytało się jak kupiony plan.
-- Alergeny (Ustawienia + kreator): `AllergenPicker` = siatka 3 × 5 krótkich pigułek w jednej karcie,
-  rzędy tematyczne; szczegóły (gdzie alergen się chowa) tylko w podpowiedzi VoiceOver.
+- Alergeny w Ustawieniach → „Dieta i alergeny”: sam wynik (`AllergenSummaryCard` — „Omijamy 3 alergeny ·
+  ukrywa 84 przepisy” + etykiety), wybór w osobnym arkuszu (`AllergenPickerSheet`: trzy grupy, ikona
+  i jedno zdanie przy każdym alergenie, pole wyboru). Trzy układy w samym arkuszu diety odpadły
+  (chmura, kafle z opisami, siatka pigułek — „dalej nie jest ładne UX”). Kreator powitalny zostaje
+  przy siatce 3 × 5 (`AllergenPicker`), bo tam wybór jest treścią kroku.
 - Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
   (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
   liczone z NAZWY dania i składników (katalog nie ma tagów), sprawdzone na 495 przepisach
@@ -236,8 +244,30 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   TYLKO filtry globalne, „Wyczyść” w każdym arkuszu czyści tylko swoje piętro (`resetGlobal`)
   i działa od razu, bez „Pokaż”.
 - Karuzela na Przepisach: karta 330 pt (nie 420 z makiety) — zdjęcia są kwadratowe i przy 420
-  `scaledToFill` skalował je do wysokości, przybliżając talerz.
-- Ustawienia → Gospodarstwo (23.09.2026, uproszczone tego samego dnia): nazwa w nagłówku
+  `scaledToFill` skalował je do wysokości, przybliżając talerz. Kolejność kart jest ZAMROŻONA
+  (`featuredOrder`) między ułożeniami (wyszukiwanie, filtry, dopasowanie, doba, katalog): ranking
+  stawia ulubione na przodzie i polubienie przestawiało karty pod palcem — następne stuknięcie
+  otwierało inny przepis. Serce na karcie to osobny przycisk NAD kartą (nie obrazek w niej).
+- Serce ulubionych = `RecipeFavouriteButton` (szczegóły posiłku i karuzela): stan LOKALNY, zapis do
+  katalogu 650 ms po ostatnim stuknięciu, już po wyskoku serca — natychmiastowy zapis przeliczał
+  pod arkuszem całą listę Przepisów w trakcie animacji (przycinało się na Macu). Zapis to WARTOŚĆ
+  (`RecipeCatalogStore.setFavourite(recipeId:to:)`, no-op przy zgodnym stanie), nie przełączenie —
+  przełącznik liczony od nieaktualnej kopii przestawiał serce w złą stronę. Arkusz szczegółów dostaje
+  ŻYWY przepis z katalogu (`recipes.first { $0.id == … } ?? kopia`) i nikt nie podmienia po zapisie
+  `selectedRecipe` / `detailTarget` — przypisanie otwierało zamknięty arkusz albo wpisywało stary
+  przepis do nowego.
+- Wjazd szczegółów posiłku jak wybór posiłku u Asystenta: `hasAppeared` w `.task` po 80 ms (klatka
+  oddechu — w `onAppear` padało w klatce wstawienia i nic nie grało), zdjęcie osiada z 1,12, sekcje
+  kaskadą (`smooth 0,55`, opóźnienie 0,10 + 0,05·n), serce i krzyżyk wchodzą z treścią; arkusz ma
+  rogi 40 pt (`dashboardLiquidSheet(cornerRadius: 40)`) we wszystkich czterech miejscach otwarcia.
+- Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: ikona w tincie akcentu, eyebrow,
+  tytuł, zdanie o zasięgu i „Aktywne: czas, kalorie” (gdy coś włączone). Osobny wiersz zasięgu
+  pod nagłówkiem zniknął.
+- Ustawienia → Gospodarstwo (23.09.2026, trzy rundy tego samego dnia — „za dużo tekstu”, potem
+  „znów pusto i smutno”): nagłówek z ikoną domu, nazwą, ołówkiem i jedną linijką „3 osoby · wspólny
+  plan i lista zakupów”; domownicy z kolorowymi etykietami (rola z koroną, dieta z ikoną diety,
+  „bez: …” w terakocie) zamiast szarej linijki; zaproszenie jako osobna karta z jednym przyciskiem
+  (link jednorazowy, 7 dni). Wcześniej: nazwa w nagłówku
   z ołówkiem obok krzyżyka (`EditorialSheetHeader` ma opcjonalne `accessory`; zmienia właściciel
   przez `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
   `households:findById`), domownicy z rolą i — jeśli są — dietą i alergenami

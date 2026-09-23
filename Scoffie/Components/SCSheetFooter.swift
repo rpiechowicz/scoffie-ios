@@ -5,11 +5,11 @@ import SwiftUI
 /// Stopka z przyciskami na dole arkusza — JEDNA w całej aplikacji.
 ///
 /// Wzór to dolny pasek szczegółów posiłku: pod przyciskami kryjąca płyta
-/// w kolorze tła arkusza, a nad nią 36 pt miękkiego przejścia, w którym
-/// przewijana treść ginie. Bez twardej kreski nad przyciskiem i bez szkła:
-/// szkło przepuszczało przewijane wiersze pod liczbami i przyciskiem
-/// (filtry przepisów), a kreska z półprzezroczystym tłem rysowała granicę
-/// w innym miejscu na każdym arkuszu.
+/// w kolorze tła arkusza, a nad nią cień krawędzi (`SCEdgeShade`, lustro
+/// górnego paska szczegółów), w którym przewijana treść gaśnie. Bez twardej
+/// kreski nad przyciskiem i bez szkła: szkło przepuszczało przewijane wiersze
+/// pod liczbami i przyciskiem (filtry przepisów), a kreska z półprzezroczystym
+/// tłem rysowała granicę w innym miejscu na każdym arkuszu.
 ///
 /// Dawniej ten sam pomysł żył w kilku kopiach: `AssistantStickyFooter`
 /// (szczegóły posiłku, wprowadzenie asystenta), `AssistantSheetFooter`
@@ -20,52 +20,57 @@ import SwiftUI
 /// kropki kroków i stoi na kanwie, ale działa na tej samej zasadzie.
 ///
 /// Dwa sposoby użycia:
-/// - `.scSheetFooter { … }` na przewijanej treści — przez `safeAreaInset`,
-///   więc treść kończy się nad stopką sama, bez ręcznych „zapasów” na dole;
-/// - `SCSheetFooter { … }` jako ostatnie dziecko `VStack` pod listą.
+/// - `.scSheetFooter { … }` na przewijanej treści — przez `safeAreaInset`
+///   i z cieniem WLICZONYM w wysokość stopki: przewinięta do końca treść
+///   kończy się nad cieniem, a nie w nim, bez ręcznych „zapasów” na dole;
+/// - `SCSheetFooter { … }` jako ostatnie dziecko `VStack` pod listą — cień
+///   wystaje wtedy nad stopkę i leży na liście, więc lista musi mieć na dole
+///   zapas `SCEdgeShade.bottomHeight`.
 struct SCSheetFooter<Content: View>: View {
     /// Kolor tła arkusza pod stopką. Musi być DOKŁADNIE ten sam, co dół tła
     /// arkusza — inaczej nad przyciskiem wraca twarda linia. Domyślnie
     /// `scPageBase`, czyli dół `SCPageBackground`.
     var base: Color? = nil
     var horizontalPadding: CGFloat = SCPageMetrics.horizontal
+    /// Czy miejsce na cień wchodzi w wysokość stopki (`safeAreaInset`).
+    var reservesShade: Bool = false
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        VStack(spacing: 10) { content() }
-            .padding(.horizontal, horizontalPadding)
-            .padding(.top, 12)
-            .padding(.bottom, 12)
-            .frame(maxWidth: .infinity)
-            .background { SCFooterScrim(base: base) }
+        VStack(spacing: 0) {
+            if reservesShade {
+                // Przezroczysty i nieklikalny — dotyk trafia w treść pod nim.
+                Color.clear
+                    .frame(height: SCEdgeShade.bottomHeight)
+                    .allowsHitTesting(false)
+            }
+
+            VStack(spacing: 10) { content() }
+                .padding(.horizontal, horizontalPadding)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
+                .frame(maxWidth: .infinity)
+                .background { SCFooterScrim(base: base) }
+        }
     }
 }
 
-/// Tło stopki: kryjąca płyta przez strefę wskaźnika home i przejście NAD
-/// stopką (ujemny offset), więc przejście nie zjada miejsca na przyciski,
-/// a treść i tak w nim łagodnie ginie.
+/// Tło stopki: kryjąca płyta przez strefę wskaźnika home i cień krawędzi NAD
+/// stopką (ujemny offset), więc cień nie zjada miejsca na przyciski i nie
+/// wchodzi na nie, a treść i tak w nim łagodnie ginie.
 struct SCFooterScrim: View {
     var base: Color? = nil
-    /// Wysokość przejścia nad stopką.
-    var fade: CGFloat = 36
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let base = base ?? Color.scPageBase(scheme)
+        let shade = SCEdgeShade.bottomHeight
         VStack(spacing: 0) {
-            LinearGradient(
-                stops: [
-                    .init(color: base.opacity(0), location: 0),
-                    .init(color: base.opacity(0.7), location: 0.55),
-                    .init(color: base, location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: fade)
-            .offset(y: -fade)
-            .padding(.bottom, -fade)
+            SCEdgeShade(edge: .bottom, base: base)
+                .frame(height: shade)
+                .offset(y: -shade)
+                .padding(.bottom, -shade)
 
             base
         }
@@ -76,7 +81,8 @@ struct SCFooterScrim: View {
 
 extension View {
     /// Przypina stopkę do dołu przewijanej treści arkusza (`safeAreaInset`):
-    /// treść kończy się nad nią, a przewijane wiersze giną w przejściu.
+    /// treść kończy się nad nią i nad jej cieniem, a przewijane wiersze giną
+    /// w cieniu.
     ///
     /// Przyciski w środku biorą się z komponentów aplikacji: pełna szerokość
     /// to `EditorialPrimaryActionButton`, obok liczb — `RecipeFilterFooterButton`.
@@ -86,7 +92,12 @@ extension View {
         @ViewBuilder _ footer: @escaping () -> Footer
     ) -> some View {
         safeAreaInset(edge: .bottom, spacing: 0) {
-            SCSheetFooter(base: base, horizontalPadding: horizontalPadding, content: footer)
+            SCSheetFooter(
+                base: base,
+                horizontalPadding: horizontalPadding,
+                reservesShade: true,
+                content: footer
+            )
         }
     }
 }

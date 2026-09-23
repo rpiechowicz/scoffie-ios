@@ -191,7 +191,8 @@ struct AddToPlanSheet: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 22)
-                    .padding(.bottom, 24)
+                    // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
+                    .padding(.bottom, SCEdgeShade.bottomHeight)
                 }
                 .scrollIndicators(.hidden)
                 .disabled(isSaving)

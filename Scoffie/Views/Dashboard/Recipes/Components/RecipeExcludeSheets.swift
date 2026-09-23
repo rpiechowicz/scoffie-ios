@@ -74,7 +74,7 @@ struct RecipeExcludeCategorySheet: View {
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 8)
                     .containerRelativeFrame(.horizontal)
                     .animation(.smooth(duration: 0.25), value: filters.excludedIngredients)
                 }

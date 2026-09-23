@@ -80,15 +80,12 @@ struct RecipeCategoryFilterSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        scopeRow
-                            .padding(.top, 6)
-
-                        ForEach(facets) { facet in
-                            facetSection(facet)
+                        ForEach(Array(facets.enumerated()), id: \.element.id) { index, facet in
+                            facetSection(facet, top: index == 0 ? 8 : 24)
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 8)
                     .containerRelativeFrame(.horizontal)
                 }
                 .scrollIndicators(.hidden)
@@ -103,65 +100,33 @@ struct RecipeCategoryFilterSheet: View {
     // MARK: - Nagłówek
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("FILTRY KATEGORII")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(accent)
-
-                Text(RecipesConstants.displayName(for: category))
-                    .font(.system(size: 24, weight: .heavy))
-                    .tracking(-0.4)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if draft.isActive {
-                RecipeFilterClearButton(action: clearAll)
-                    .transition(.scale(scale: 0.85).combined(with: .opacity))
-            }
-
-            SCSheetCloseButton { dismiss() }
-        }
+        RecipeFilterHeader(
+            icon: RecipesConstants.icon(for: category),
+            eyebrow: "Filtry kategorii",
+            title: RecipesConstants.displayName(for: category),
+            scope: "Tylko w tej kategorii — razem z filtrami wszystkich przepisów",
+            activeSummary: activeSummary,
+            accent: accent,
+            canClear: draft.isActive,
+            onClear: { clearAll() },
+            onClose: { dismiss() }
+        )
     }
 
-    /// Zasięg: te filtry działają tylko tutaj i dokładają się do filtrów
-    /// wszystkich przepisów — ten sam wiersz co „Wszystkie przepisy”
-    /// w arkuszu „Filtry”, w kolorze kategorii.
-    private var scopeRow: some View {
-        HStack(spacing: 11) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(accent.opacity(scheme == .dark ? 0.18 : 0.14))
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: RecipesConstants.icon(for: category))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(accent)
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Tylko w tej kategorii")
-                    .font(.system(size: 16.5, weight: .bold))
-                    .tracking(-0.35)
-                    .foregroundStyle(Color.scLabel(scheme))
-                Text("Działają razem z filtrami wszystkich przepisów")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineLimit(2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
+    /// Które aspekty zawężają teraz kategorię — „Aktywne: smak, rodzaj dania”.
+    private var activeSummary: String? {
+        let names = facets
+            .filter { !(draft.picks[$0.kind]?.isEmpty ?? true) }
+            .map { $0.title.lowercased() }
+        return names.isEmpty ? nil : "Aktywne: " + names.joined(separator: ", ")
     }
 
     // MARK: - Sekcje
 
-    private func facetSection(_ facet: RecipeFacet) -> some View {
+    private func facetSection(_ facet: RecipeFacet, top: CGFloat) -> some View {
         let picked = draft.picks[facet.kind]?.count ?? 0
 
-        return RecipeFilterSection(title: facet.title) {
+        return RecipeFilterSection(title: facet.title, top: top) {
             if picked > 1 {
                 // Dwie opcje w jednym rzędzie poszerzają wynik — mówimy to,
                 // zanim ktoś zdziwi się, że liczba urosła.

@@ -78,11 +78,11 @@ struct AssistantHowItWorksView: View {
                         onboardingCard(card)
                             .padding(.horizontal, SCPageMetrics.horizontal)
                             .padding(.top, 8)
-                            // Zapas na gradient stopki (36 pt): bez niego
+                            // Zapas na cień stopki (`SCEdgeShade`): bez niego
                             // dolny przycisk miniatury albo odnośnik „Zobacz
                             // wszystko" siadały pod nim, gdy treść mieściła
                             // się w sam raz.
-                            .padding(.bottom, 44)
+                            .padding(.bottom, SCEdgeShade.bottomHeight + 8)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .scrollIndicators(.hidden)

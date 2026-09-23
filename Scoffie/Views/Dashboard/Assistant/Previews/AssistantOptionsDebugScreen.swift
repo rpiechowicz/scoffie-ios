@@ -112,7 +112,7 @@ struct AssistantOptionsDebugScreen: View {
                 .sheet(isPresented: .constant(true)) {
                     RecipeDetailView(
                         recipe: Self.detailRecipe,
-                        onToggleFavorite: {},
+                        onSetFavourite: { _ in },
                         onClose: {},
                         initialServings: 1,
                         context: mode == "detail-planned" ? .planned(day: Date(), slot: .breakfast) : .catalog,

@@ -149,7 +149,8 @@ struct AssistantConsentGateView: View {
                     }
                     .padding(.horizontal, SCPageMetrics.horizontal)
                     .padding(.top, 6)
-                    .padding(.bottom, 16)
+                    // Zapas na cień stopki (`SCEdgeShade`), który leży na treści.
+                    .padding(.bottom, SCEdgeShade.bottomHeight)
                 }
                 .scrollIndicators(.hidden)
             }
