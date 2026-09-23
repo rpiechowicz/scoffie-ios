@@ -52,7 +52,6 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zmaterializuj: `find Scoffie -type f -exec cat {} + > /dev/null`.
 - Gałęzie z `develop` po `git fetch --prune`, od razu `git push -u origin <gałąź>`; PR → `develop`
   → `main` → TestFlight (po stronie Rafała). Commity po polsku, `Co-Authored-By: Claude <noreply@anthropic.com>`.
-
 - **Sentry** (od 23.09.2026, projekt `scoffie/scoffie-ios`, region DE): `Models/Observability/CrashReporting.swift`,
   start w `ScoffieApp.init`, użytkownik (samo id) przez `CrashReporting.setUser` przy każdym przypisaniu
   `SessionStore.currentUserId`. Środowiska: `development` (DEBUG) / `testflight` / `production`. Bez zrzutów
