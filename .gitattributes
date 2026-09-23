@@ -1,0 +1,4 @@
+# Repo jest w LF. Narzędzia na Windowsie potrafią zapisać CRLF — git
+# znormalizuje je przy commicie, zamiast wpuścić diff całego pliku.
+*.swift text eol=lf
+*.md text eol=lf
