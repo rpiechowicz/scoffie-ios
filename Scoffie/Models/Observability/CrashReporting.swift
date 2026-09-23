@@ -83,16 +83,14 @@ nonisolated enum CrashReporting {
     }
 
     private static func scrubBreadcrumb(_ crumb: Breadcrumb) -> Breadcrumb? {
-        if var data = crumb.data {
-            for key in ["url", "http.query", "http.fragment"] {
-                guard let value = data[key] as? String else { continue }
-                if key == "url" {
-                    data[key] = stripQuery(value)
-                } else {
-                    data.removeValue(forKey: key)
-                }
-            }
-            crumb.data = data
+        // `setData(value:key:)`, nie przypisanie całego `data` — setter jest
+        // przestarzały (sentry-cocoa 9.29). `nil` usuwa klucz.
+        guard let data = crumb.data else { return crumb }
+        if let url = data["url"] as? String {
+            crumb.setData(value: stripQuery(url), key: "url")
+        }
+        for key in ["http.query", "http.fragment"] where data[key] != nil {
+            crumb.setData(value: nil, key: key)
         }
         return crumb
     }
