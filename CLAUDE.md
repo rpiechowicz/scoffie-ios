@@ -53,6 +53,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Gałęzie z `develop` po `git fetch --prune`, od razu `git push -u origin <gałąź>`; PR → `develop`
   → `main` → TestFlight (po stronie Rafała). Commity po polsku, `Co-Authored-By: Claude <noreply@anthropic.com>`.
 
+- **Sentry** (od 23.09.2026, projekt `scoffie/scoffie-ios`, region DE): `Models/Observability/CrashReporting.swift`,
+  start w `ScoffieApp.init`, użytkownik (samo id) przez `CrashReporting.setUser` przy każdym przypisaniu
+  `SessionStore.currentUserId`. Środowiska: `development` (DEBUG) / `testflight` / `production`. Bez zrzutów
+  ekranu, hierarchii widoków i session replay (alergeny, kroki na ekranie); nagłówki śladu tylko do
+  `api.scoffie.app`; 5xx zgłasza backend, nie telefon. dSYM wysyła faza „Upload dSYM to Sentry” przy
+  archiwum (Release) — na Macu raz: `brew install getsentry/tools/sentry-cli && sentry-cli login`;
+  bez tego build przechodzi z ostrzeżeniem, ale crashe są bez nazw funkcji.
+
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - Błędy: `WsEnvelope` (`ok, data, error, message, code, status, details?, requestId`) i REST
   `{code, message, details?, requestId}`; `envelope.failure(fallback:)` → `RecipeDataError.server`;

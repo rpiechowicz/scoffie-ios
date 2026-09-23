@@ -469,6 +469,7 @@ final class SessionStore {
             bootstrapSession(userId: decoded.user.id, householdId: household.id, householdName: household.name)
         } else {
             currentUserId = decoded.user.id
+            CrashReporting.setUser(id: currentUserId)
             currentHouseholdId = nil
             currentHouseholdName = nil
         }
@@ -517,6 +518,7 @@ final class SessionStore {
         isAuthenticated = false
         authError = nil
         currentUserId = nil
+        CrashReporting.setUser(id: currentUserId)
         currentHouseholdId = nil
         currentHouseholdName = nil
         startupPhase = .idle
@@ -655,6 +657,7 @@ final class SessionStore {
 
         syncPersistedSessionSnapshot(snapshot)
         currentUserId = snapshot.userId
+        CrashReporting.setUser(id: currentUserId)
         let householdId = snapshot.householdId
         let householdName = (snapshot.householdName?.isEmpty == false) ? snapshot.householdName : nil
         // Wygasły access token: socket łączyłby się od razu martwym tokenem
@@ -706,6 +709,7 @@ final class SessionStore {
     private func bootstrapSession(userId: String, householdId: String, householdName: String? = nil) {
         let householdChanged = currentHouseholdId != householdId
         currentUserId = userId
+        CrashReporting.setUser(id: currentUserId)
         currentHouseholdId = householdId
         currentHouseholdName = householdName
         // Nowy rebootstrap (logowanie / switch household) — startup musi przejść ponownie.

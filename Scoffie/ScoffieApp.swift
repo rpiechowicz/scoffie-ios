@@ -270,6 +270,11 @@ struct ScoffieApp: App {
     private var appTheme: AppTheme { AppTheme(rawValue: themeRawValue) ?? .system }
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // Pierwsze, zanim cokolwiek zdąży się wywrócić — patrz `CrashReporting`.
+        CrashReporting.start()
+    }
+
     /// Klucz dla `.task(id:)` uruchamiającego smart startup loader.
     /// Zmiana klucza (logowanie, restore, switch householdu) re-odpala warmup;
     /// dla tego samego kontekstu Swift nie powtarza taska.
