@@ -8,10 +8,15 @@ import SwiftUI
 // dalszym ekranu Zakupów i mają czytać się jak on — dużym tytułem, z eyebrow
 // w osobnym wierszu pod spodem. Krzyżyk jest ten sam (`SCSheetCloseButton`),
 // bo zamykanie arkusza nie ma prawa zależeć od tego, skąd się przyszło.
-struct EditorialSheetHeader: View {
+//
+// Opcjonalna akcja (`accessory`) stoi obok krzyżyka — np. ołówek do nazwy
+// gospodarstwa. Bez niej wywołanie zostaje takie jak było:
+// `EditorialSheetHeader(eyebrow:title:) { zamknij }`.
+struct EditorialSheetHeader<Accessory: View>: View {
     let eyebrow: String
     let title: String
     var onClose: () -> Void
+    @ViewBuilder var accessory: () -> Accessory
 
     @Environment(\.colorScheme) private var scheme
 
@@ -34,8 +39,17 @@ struct EditorialSheetHeader: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            SCSheetCloseButton(action: onClose)
+            HStack(spacing: 8) {
+                accessory()
+                SCSheetCloseButton(action: onClose)
+            }
         }
+    }
+}
+
+extension EditorialSheetHeader where Accessory == EmptyView {
+    init(eyebrow: String, title: String, onClose: @escaping () -> Void) {
+        self.init(eyebrow: eyebrow, title: title, onClose: onClose, accessory: { EmptyView() })
     }
 }
 

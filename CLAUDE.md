@@ -200,6 +200,16 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w `VStack` jako ostatnie dziecko. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
   tylko nakładki na nią; kreator (`WelcomeFooter`) zostaje przy swoim układzie (kropki kroków).
+- Przypięty nagłówek nad przewijaną treścią arkusza = BEZ kreski: `.scScrollEdgeFade()` na
+  `ScrollView` (`Components/SCScrollEdgeFade.swift`) — górny brzeg treści gaśnie (maska, więc działa
+  na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Nakładany
+  nagłówek (zwinięty w „Filtrach”) podaje `covered:` i `isVisible:`. Wzór: szczegóły posiłku.
+- Plany asystenta: to, co dom MA, bierze się WYŁĄCZNIE z serwera (`BillingStateDTO.subscriptions`
+  z `alive`, potem `AgentUsageDTO.source == "SUBSCRIPTION"` + `product`). Liczba domowników
+  (`PlansSheet.plan(forHousehold:)`) tylko PODPOWIADA („Polecany”, „polecamy We dwoje”) — nigdy nie
+  pisze „Twój …”. Kiedyś „Twój dom” przy planie z liczby osób czytało się jak kupiony plan.
+- Alergeny (Ustawienia + kreator): `AllergenPicker` = siatka 3 × 5 krótkich pigułek w jednej karcie,
+  rzędy tematyczne; szczegóły (gdzie alergen się chowa) tylko w podpowiedzi VoiceOver.
 - Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
   (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
   liczone z NAZWY dania i składników (katalog nie ma tagów), sprawdzone na 495 przepisach
@@ -210,11 +220,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   i działa od razu, bez „Pokaż”.
 - Karuzela na Przepisach: karta 330 pt (nie 420 z makiety) — zdjęcia są kwadratowe i przy 420
   `scaledToFill` skalował je do wysokości, przybliżając talerz.
-- Ustawienia → Gospodarstwo (23.09.2026): karta domu (nazwa — zmienia właściciel przez
-  `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
-  `households:findById`), domownicy z rolą i tym, czego nie jedzą (`households:memberPreferences`
-  — serwer celowo NIE wysyła tam wzrostu ani wagi; cel kcal nie jest pokazywany), zaproszenie jako
-  wiersz listy (link 7 dni), „Wspólne dla domowników”, „Opuść” na dole. „Czego nie jem” (wykluczone
+- Ustawienia → Gospodarstwo (23.09.2026, uproszczone tego samego dnia): nazwa w nagłówku
+  z ołówkiem obok krzyżyka (`EditorialSheetHeader` ma opcjonalne `accessory`; zmienia właściciel
+  przez `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
+  `households:findById`), domownicy z rolą i — jeśli są — dietą i alergenami
+  (`households:memberPreferences` — serwer celowo NIE wysyła tam wzrostu ani wagi; cel kcal nie jest
+  pokazywany), zaproszenie jako wiersz listy (link 7 dni), „Opuść” na dole. NIC więcej — Rafał:
+  „tylko najważniejsze rzeczy”, bez powtarzania nazwy, liczników i objaśnień. „Czego nie jem” (wykluczone
   składniki + limit czasu na danie) USUNIĘTE: walidator planu i prompt dalej czytają te kolumny,
   więc każdy zapis diety wysyła `excludedIngredientIds: []` + `maxPrepTimeMinutes: null`,
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności

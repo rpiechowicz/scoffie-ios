@@ -107,9 +107,9 @@ struct PlanAccessSheet: View {
                 HStack(alignment: .center, spacing: 10) {
                     badge(for: usage)
                     if usage.isTrial {
-                        // Próba nie odnawia się — to jedyna rzecz, którą
-                        // trzeba wiedzieć obok plakietki.
-                        Text("jednorazowo, bez odnowienia")
+                        // Próba to NIE plan — mówimy to wprost, obok
+                        // plakietki, i że się nie odnawia.
+                        Text("bez planu, jednorazowo")
                             .font(.system(size: 14))
                             .foregroundStyle(AssistantLook.muted(scheme))
                             .lineLimit(1)
@@ -285,7 +285,13 @@ struct PlanAccessSheet: View {
         .accessibilityHint("Otwiera wybór planu")
     }
 
+    /// Podpowiedź planu z liczby domowników — „polecamy”, nigdy „masz”.
     private var plansEntrySubtitle: String {
+        let people = sessionStore.householdMembers.count
+        if let plan = PlansSheet.plan(forHousehold: people) {
+            let price = subscriptions.product(for: plan)?.displayPrice ?? plan.fallbackPrice
+            return "Dla \(people) \(people == 1 ? "osoby" : "osób") polecamy \(plan.name) · \(price) / mies."
+        }
         let solo = SubscriptionCatalog.solo
         let from = subscriptions.product(for: solo)?.displayPrice ?? solo.fallbackPrice
         let names = SubscriptionCatalog.all.map(\.name).joined(separator: ", ")

@@ -146,15 +146,13 @@ struct WelcomeStep3PreferencesView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     WelcomeFieldCaption(text: "Alergeny i nietolerancje")
-                    Text("Dania z nimi znikną z przepisów, a asystent ich nie zaproponuje. Zmienisz to później w Ustawieniach.")
+                    Text("Dania z nimi znikną z przepisów. Zmienisz to w Ustawieniach.")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Color.scMuted(colorScheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 6)
 
-                    // Kafelki w grupach — ten sam komponent co w Ustawieniach.
-                    // Bez karty dookoła: kafelki same są kartami, a karta pod
-                    // nimi dawała dwie warstwy tego samego tła.
+                    // Ten sam wybór co w Ustawieniach — siatka niesie własną kartę.
                     AllergenPicker(selected: allergens) { candidate in
                         withAnimation(.smooth(duration: 0.18)) {
                             toggleAllergen(candidate)
