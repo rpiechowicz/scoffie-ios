@@ -15,19 +15,25 @@ import SwiftUI
 // „Wyczyść” działa od razu, jak w arkuszu „Filtry”.
 //
 // Ten sam arkusz otwiera wybór przepisu do planu (`slot`): wtedy świeci
-// kolorem i ikoną pory, a aspekt „Pora w planie” znika — pora jest już
-// wybrana. Te same opcje stoją w obu listach jako pigułki pod szukaniem
-// (`RecipeFacetPillBar`); tu mają zdjęcie dania i liczbę przepisów.
+// kolorem i ikoną pory, aspekt „Pora w planie” znika (pora jest już
+// wybrana), a na górze staje kafelek „Ulubione” — w wyborze do planu to on
+// zastąpił pigułkę pod szukaniem. Pigułek w listach nie ma od rundy 10
+// (Rafał: „od tego mamy filtry”), więc wszystko, czym zawęża się listę,
+// mieszka tutaj.
 struct RecipeCategoryFilterSheet: View {
     let category: RecipesCategory
     @Binding var filter: RecipeCategoryFilter
     /// Pora z planu, gdy arkusz otwiera wybór przepisu do planu.
     let slot: MealSlot?
+    /// „Tylko ulubione” wyboru do planu. `nil` = bez kafelka (lista
+    /// kategorii — tam ulubione ma arkusz „Filtry”).
+    private let favouritesOnly: Binding<Bool>?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var draft: RecipeCategoryFilter
+    @State private var draftFavourites: Bool
     @State private var valuesBox: ValuesBox
 
     /// Przepisy tej kategorii po dopasowaniu i filtrach wszystkich przepisów,
@@ -38,13 +44,16 @@ struct RecipeCategoryFilterSheet: View {
         category: RecipesCategory,
         recipes: [Recipe],
         filter: Binding<RecipeCategoryFilter>,
-        slot: MealSlot? = nil
+        slot: MealSlot? = nil,
+        favouritesOnly: Binding<Bool>? = nil
     ) {
         self.category = category
         self.recipes = recipes
         self.slot = slot
+        self.favouritesOnly = favouritesOnly
         self._filter = filter
         self._draft = State(initialValue: filter.wrappedValue)
+        self._draftFavourites = State(initialValue: favouritesOnly?.wrappedValue ?? false)
         self._valuesBox = State(initialValue: ValuesBox())
     }
 
@@ -71,13 +80,22 @@ struct RecipeCategoryFilterSheet: View {
         return covers
     }
 
-    private func count(_ filter: RecipeCategoryFilter) -> Int {
-        values.reduce(into: 0) { total, recipe in
-            if filter.matches(recipe) { total += 1 }
+    /// Ile przepisów puli przejdzie przez wybór — z „Ulubionymi” albo bez.
+    private func count(_ filter: RecipeCategoryFilter, favourites: Bool) -> Int {
+        var total = 0
+        // `zip`, nie indeks: wartości są policzone raz na otwarcie, a lista
+        // przepisów przychodzi na nowo z każdym przerysowaniem rodzica —
+        // przeładowany w tle katalog bywa krótszy i indeks wypadłby poza nią.
+        for (recipe, recipeValues) in zip(recipes, values) where filter.matches(recipeValues) {
+            if !favourites || recipe.favourite { total += 1 }
         }
+        return total
     }
 
-    private var resultCount: Int { count(draft) }
+    private var resultCount: Int { count(draft, favourites: draftFavourites) }
+
+    /// Czy cokolwiek jest zaznaczone — aspekty albo „Ulubione”.
+    private var isDraftActive: Bool { draft.isActive || draftFavourites }
 
     // MARK: - Body
 
@@ -95,8 +113,12 @@ struct RecipeCategoryFilterSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        if favouritesOnly != nil {
+                            favouritesSection
+                        }
+
                         ForEach(Array(facets.enumerated()), id: \.element.id) { index, facet in
-                            facetSection(facet, top: index == 0 ? 8 : 24)
+                            facetSection(facet, top: index == 0 && favouritesOnly == nil ? 8 : 24)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -108,8 +130,9 @@ struct RecipeCategoryFilterSheet: View {
                 .scSheetFooter { footer }
             }
         }
-        .animation(.smooth(duration: 0.22), value: draft.isActive)
+        .animation(.smooth(duration: 0.22), value: isDraftActive)
         .sensoryFeedback(.selection, trigger: draft)
+        .sensoryFeedback(.selection, trigger: draftFavourites)
     }
 
     // MARK: - Nagłówek
@@ -121,7 +144,7 @@ struct RecipeCategoryFilterSheet: View {
             title: slot?.title ?? RecipesConstants.displayName(for: category),
             scope: scopeLine,
             accent: accent,
-            canClear: draft.isActive,
+            canClear: isDraftActive,
             onClear: { clearAll() },
             onClose: { dismiss() }
         )
@@ -135,6 +158,32 @@ struct RecipeCategoryFilterSheet: View {
     }
 
     // MARK: - Sekcje
+
+    /// „Ulubione” w wyborze do planu — jeden kafelek, jak opcje aspektów:
+    /// zdjęcie ulubionego dania i liczba tego, co zostanie po zaznaczeniu.
+    private var favouritesSection: some View {
+        RecipeFilterSection(title: "Twoje przepisy", top: 8) {
+            RecipeFilterTileGrid(items: [FavouritesOption()]) { _ in
+                RecipeFilterOptionTile(
+                    title: "Ulubione",
+                    count: count(draft, favourites: true),
+                    mark: draftFavourites ? .on : .off,
+                    accent: SCPalette.terracotta,
+                    cover: recipes.first { $0.favourite && $0.imageURL != nil },
+                    icon: "heart.fill",
+                    accessibilityDetail: "przepisy z serduszkiem"
+                ) {
+                    withAnimation(.smooth(duration: 0.18)) { draftFavourites.toggle() }
+                }
+            }
+        }
+    }
+
+    /// Jedyna pozycja siatki „Twoje przepisy” — siatka chce `Identifiable`,
+    /// a ta sama siatka trzyma kafelek w pół szerokości, jak wszystkie inne.
+    private struct FavouritesOption: Identifiable {
+        let id = "favourites"
+    }
 
     private func facetSection(_ facet: RecipeFacet, top: CGFloat) -> some View {
         let picked = draft.picks[facet.kind]?.count ?? 0
@@ -150,7 +199,7 @@ struct RecipeCategoryFilterSheet: View {
             RecipeFilterTileGrid(items: facet.options) { option in
                 RecipeFilterOptionTile(
                     title: option.title,
-                    count: count(draft.adding(option.id, in: facet.kind)),
+                    count: count(draft.adding(option.id, in: facet.kind), favourites: draftFavourites),
                     mark: draft.contains(option.id, in: facet.kind) ? .on : .off,
                     accent: accent,
                     cover: covers.cover(for: option.id, in: facet.kind),
@@ -224,12 +273,15 @@ struct RecipeCategoryFilterSheet: View {
     private func clearAll() {
         withAnimation(.smooth(duration: 0.25)) {
             draft = RecipeCategoryFilter()
+            draftFavourites = false
             filter = draft
+            favouritesOnly?.wrappedValue = false
         }
     }
 
     private func apply() {
         filter = draft
+        favouritesOnly?.wrappedValue = draftFavourites
         dismiss()
     }
 

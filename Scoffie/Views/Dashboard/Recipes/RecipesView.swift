@@ -771,8 +771,8 @@ struct EditorialRecipesPageDots: View {
 
 // Arkusz z całą kategorią (chevron przy sekcji). Stoi na tych samych
 // klockach, co wybór przepisu do planu (`RecipeListKit.swift`): nagłówek
-// z kafelkiem kategorii i liczbą przepisów, szukanie, pigułki filtrów
-// kategorii, notka o zawężeniu, wiersze `EditorialRecipeRow`. Wcześniej miał
+// z kafelkiem kategorii i liczbą przepisów, szukanie, karta kontekstu,
+// wiersze `EditorialRecipeRow`; filtry kategorii pod przyciskiem w nagłówku. Wcześniej miał
 // własny nagłówek z kolorowym pionem i poświatą, niższe pole szukania bez
 // krzyżyka i podpowiedź „Szukaj w śniadania”.
 private struct RecipeCategorySheetView: View {
@@ -804,7 +804,6 @@ private struct RecipeCategorySheetView: View {
     @State private var isFilterSheetPresented = false
 
     private var accent: Color { RecipeAccent.accent(for: category) }
-    private var facets: [RecipeFacet] { RecipeCategoryFacets.facets(for: category) }
     private var hasActiveFilters: Bool { !filterLabels.isEmpty }
 
     private var trimmedSearch: String {
@@ -836,8 +835,10 @@ private struct RecipeCategorySheetView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Przypięta góra: nagłówek, szukanie, pigułki. Uchwyt rysuje
+                // Przypięta góra: nagłówek i szukanie. Uchwyt rysuje
                 // `presentationDragIndicator` z `dashboardLiquidSheet()`.
+                // Filtry kategorii tylko pod przyciskiem w nagłówku — pigułki
+                // pod szukaniem zniknęły w rundzie 10 („od tego mamy filtry”).
                 RecipeListSheetTop(
                     searchPrompt: RecipesConstants.searchPrompt(for: category),
                     searchText: $searchText
@@ -854,8 +855,6 @@ private struct RecipeCategorySheetView: View {
                             isFilterSheetPresented = true
                         }
                     }
-                } pills: {
-                    RecipeFacetPillBar(facets: facets, filter: $categoryFilter, accent: accent)
                 }
 
                 ScrollView {
@@ -915,7 +914,7 @@ private struct RecipeCategorySheetView: View {
         }
     }
 
-    /// „132 przepisy”, a gdy pigułki albo szukanie zawężają — „24 z 132
+    /// „132 przepisy”, a gdy filtry kategorii albo szukanie zawężają — „24 z 132
     /// przepisów” (po „z” dopełniacz).
     private func countLine(shown: Int) -> String {
         let total = pool.count
@@ -938,23 +937,33 @@ private struct RecipeCategorySheetView: View {
 
     // MARK: - Pusty stan
 
+    /// Co opróżniło listę i jak to zdjąć — ten sam układ, co w wyborze
+    /// przepisu do planu (`RecipeListEmptyState`).
     private var emptyState: some View {
         var actions: [RecipeListEmptyState.Action] = []
         if categoryFilter.isActive {
-            actions.append(.init(title: "Wyczyść filtry kategorii", tint: accent) {
+            actions.append(.init(title: "Wyczyść filtry kategorii") {
                 withAnimation(.smooth(duration: 0.2)) { categoryFilter = RecipeCategoryFilter() }
             })
         }
         if hasActiveFilters {
-            actions.append(.init(title: "Wyczyść filtry", run: onClearFilters))
+            actions.append(.init(title: "Wyczyść filtry z Przepisów", run: onClearFilters))
         }
 
-        let isSearching = !trimmedSearch.isEmpty
+        if !trimmedSearch.isEmpty {
+            return RecipeListEmptyState(
+                icon: "magnifyingglass",
+                accent: accent,
+                title: "Brak wyników",
+                message: "Nic w tej kategorii nie pasuje do frazy. Spróbuj innej.",
+                actions: actions
+            )
+        }
         return RecipeListEmptyState(
-            title: "Brak wyników",
-            message: isSearching
-                ? "Spróbuj innej frazy wyszukiwania."
-                : "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoje preferencje.",
+            icon: "line.3.horizontal.decrease",
+            accent: accent,
+            title: "Nic nie pasuje",
+            message: "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoją dietę.",
             actions: actions
         )
     }
