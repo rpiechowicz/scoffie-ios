@@ -864,8 +864,14 @@ struct AssistantView: View {
         }
     }
 
+    /// Odstęp między wiadomościami. Odpowiedź z kartą pod pytaniem i kolejne
+    /// pytanie pod kartą stały po 14 pt — wszystko zlewało się w jeden słup.
+    /// Ta sama wartość w historii i w slocie ostatniej tury, inaczej slot
+    /// przeskoczyłby przy przejściu do historii.
+    static let messageGap: CGFloat = 22
+
     private var messageStack: some View {
-        LazyVStack(alignment: .leading, spacing: 14) {
+        LazyVStack(alignment: .leading, spacing: Self.messageGap) {
             if store.isLoadingHistory && store.messages.isEmpty {
                 ChatSkeleton()
             }
@@ -1532,11 +1538,11 @@ struct AssistantView: View {
     /// w `followTurn` przełączają obie strony w jednej transakcji: wiersz
     /// osiada w miejscu, szkic przenika w odpowiedź, treść wyrasta pod nim.
     private var turnSlot: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Self.messageGap) {
             if slotStart < store.messages.count {
                 bubble(at: slotStart, store.messages[slotStart])
             }
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 // JEDEN wiersz na całe życie tury: ten sam widok w tym samym
                 // miejscu drzewa od pierwszej klatki do końca życia odpowiedzi
                 // w slocie. Domknięcie tury nie podmienia go na inny widok,
@@ -1577,7 +1583,7 @@ struct AssistantView: View {
                         // w nieanimowanej transakcji.
                         .transition(.opacity)
                     } else {
-                        VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: Self.messageGap) {
                             ForEach(Array(store.messages.enumerated().dropFirst(slotStart + 1)), id: \.element.id) { index, message in
                                 bubble(at: index, message)
                             }
@@ -1827,12 +1833,14 @@ private struct MessageBubble: View {
     /// Pełna szerokość daje treści (a wkrótce kartom) miejsce, którego dymek
     /// nie ma jak dać; rozmowę czyta się po stronie ekranu, nie po ramce.
     private var assistantCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // 20 pt między tekstem a kartą: karta to osobna rzecz do obejrzenia,
+        // nie dalszy ciąg akapitu.
+        VStack(alignment: .leading, spacing: 20) {
             // `LAsstMsg` + `LThought`: znak marki obok treści, a POD nią
             // „Myślałem 42 s” wcięte pod tekst. Karta pytania NIESIE treść
             // wypowiedzi, więc obok niej nie ma `text`.
             if !message.text.isEmpty, message.card?.replacesText != true {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 10) {
                     // Świeża odpowiedź: znak przy niej raz podskakuje.
                     AssistantVoice(greets: message.revealFrom != nil) {
                         if let from = message.revealFrom {

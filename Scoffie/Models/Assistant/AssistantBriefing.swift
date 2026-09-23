@@ -19,6 +19,12 @@ import Foundation
 // („0 z 4”), bez dat i bez ponaglania. Stan dnia mówią talerzyki (zdjęcie
 // albo pusty krążek), nie liczby.
 //
+// Każde zdanie wysyłane z powitania jest KOMPLETNE: mówi, na kiedy (dziś,
+// jutro, ten tydzień), na jaką porę i czego chcemy — asystent nie ma
+// o co dopytywać, więc jedno dotknięcie = jedna tura. „Chcę zamienić jeden
+// dzisiejszy posiłek” kończyło się pytaniem „który?”; teraz powitanie samo
+// wskazuje danie, bo zna plan.
+//
 // Akcje, które dotyczą JEDNEJ pory („Pokaż 3 pomysły”), proszą wprost
 // o dania „do wyboru” — serwer odpowiada wtedy kartą OPTIONS, czyli
 // arkuszem wyboru posiłku ze zdjęciem, opisem i makro. Plan dnia albo
@@ -327,7 +333,7 @@ enum AssistantBriefingResolver {
                 headline: name.map { "Cześć, \($0). Od czego zaczniemy?" } ?? "Cześć, od czego zaczniemy?",
                 supporting: "Mogę ułożyć plan na kilka dni albo podsunąć jeden przepis na dziś.",
                 visual: .plain,
-                primary: .ask("Zaproponuj 3 dni", "Zaproponuj plan na 3 dni pod nasze cele"),
+                primary: .ask("Zaproponuj 3 dni", "Zaproponuj plan na 3 dni \(hour >= 17 ? "od jutra" : "od dziś") pod nasze cele"),
                 alternatives: [.ask("Co potrafisz?", "Co potrafisz?"), .compose],
                 placeholder: "Np. tydzień obiadów bez mięsa"
             )
@@ -335,16 +341,23 @@ enum AssistantBriefingResolver {
 
         // 3. Późna pora (22:00–4:59) — nie gotujemy, najwyżej myślimy o jutrze.
         if hour >= 22 || hour < 5 {
-            // Po północy „jutro” to już dzisiejszy dzień.
+            // Po północy „jutro” to już dzisiejszy dzień — i tak mówi zdanie
+            // do asystenta, bo on liczy dni od daty z telefonu.
             let next = hour < 5 ? today : tomorrow
-            let light = AssistantBriefing.Action.ask("Coś lekkiego na teraz", "Pokaż 3 lekkie przekąski na wieczór do wyboru")
+            let nextWord = hour < 5 ? "dziś" : "jutro"
+            let light = AssistantBriefing.Action.ask(
+                "Coś lekkiego na teraz",
+                hour < 5
+                    ? "Pokaż 3 lekkie przekąski na dziś, na teraz, bez gotowania, do wyboru"
+                    : "Pokaż 3 lekkie przekąski na dziś wieczór, bez gotowania, do wyboru"
+            )
             if let next, !next.isPlanned {
                 return AssistantBriefing(
                     kind: .lateNight,
                     headline: "Późno już. Ułożymy jutro na spokojnie?",
                     supporting: "Rano będzie wiadomo, co przygotować — bez myślenia przed kawą.",
                     visual: .plates(plates(next, focus: nil)),
-                    primary: .ask("Ułóż jutro", "Zaproponuj cały dzień na jutro"),
+                    primary: .ask("Ułóż jutro", "Zaproponuj cały dzień na \(nextWord)"),
                     alternatives: [light, .compose],
                     placeholder: "Np. coś lekkiego bez gotowania"
                 )
@@ -355,7 +368,7 @@ enum AssistantBriefingResolver {
                 supporting: "Jeśli coś Cię jeszcze kusi, podsunę lekką przekąskę.",
                 visual: next.map { AssistantBriefing.Visual.plates(plates($0, focus: nil)) } ?? AssistantBriefing.Visual.plain,
                 primary: light,
-                alternatives: [.ask("Zakupy na jutro", "Co muszę kupić na jutro?"), .compose],
+                alternatives: [.ask("Zakupy na jutro", "Co muszę kupić na \(nextWord)?"), .compose],
                 placeholder: "Np. coś lekkiego bez gotowania"
             )
         }
@@ -374,7 +387,7 @@ enum AssistantBriefingResolver {
                 alternatives: [
                     evening
                         ? AssistantBriefing.Action.ask("Tylko jutro", "Zaproponuj cały dzień na jutro")
-                        : AssistantBriefing.Action.ask("Tylko dziś", "Zaproponuj cały dzisiejszy dzień"),
+                        : AssistantBriefing.Action.ask("Tylko dziś", "Zaproponuj cały dzień na dziś"),
                     .compose,
                 ],
                 placeholder: "Np. obiady do 30 minut przez cały tydzień"
@@ -389,7 +402,7 @@ enum AssistantBriefingResolver {
                 headline: "Dziś jeszcze nic nie ma w planie.",
                 supporting: "Ułożę cały dzień albo pokażę pomysły na \(next.accusative).",
                 visual: .plates(plates(today, focus: next)),
-                primary: .ask("Ułóż dzisiejszy dzień", "Zaproponuj cały dzisiejszy dzień"),
+                primary: .ask("Ułóż dzisiejszy dzień", "Zaproponuj cały dzień na dziś"),
                 alternatives: [ideas(for: next, day: "dziś", title: "Pomysły na \(next.accusative)"), .compose],
                 placeholder: placeholder(for: next)
             )
@@ -411,7 +424,7 @@ enum AssistantBriefingResolver {
                 )),
                 primary: .ask("Jak to ugotować?", "Jak ugotować \(soon.title)? Rozpisz kroki."),
                 alternatives: [
-                    .ask("Coś szybszego", "Pokaż 3 szybsze zamienniki na dzisiejszy \(soon.slot.nominative) (\(soon.title)) do wyboru"),
+                    .ask("Coś szybszego", "Zamień \(soon.slot.accusative) na dziś (\(soon.title)) na coś szybszego: pokaż 3 dania do wyboru"),
                     .compose,
                 ],
                 placeholder: "Np. czym zastąpić składnik, którego nie mam"
@@ -476,9 +489,11 @@ enum AssistantBriefingResolver {
                 headline: "W tym tygodniu brakuje Ci \(balance.macroGenitive).",
                 supporting: "Podmienię jeden posiłek albo dołożę coś, co domknie cel.",
                 visual: .balance(current: balance.averagePerDay, target: balance.target, unit: balance.unit),
-                primary: .ask("Pokaż, co poprawić", "Czego brakuje w planie, żeby domknąć \(balance.macroAccusative)?"),
+                primary: .ask("Pokaż, co poprawić", "Czego brakuje w planie na ten tydzień, żeby domknąć \(balance.macroAccusative)?"),
                 alternatives: [
-                    .ask("Podmień 1 posiłek", "Pokaż 3 dania z większą ilością \(balance.macroGenitive) do wyboru, żeby podmienić jeden posiłek w tym tygodniu"),
+                    // Który posiłek — wybiera asystent, z bilansu; pytanie
+                    // „który?” kosztowałoby drugą turę.
+                    .ask("Podmień 1 posiłek", "Znajdź w planie na ten tydzień posiłek z najmniejszą ilością \(balance.macroGenitive) i pokaż 3 zamienniki z większą ilością \(balance.macroGenitive) do wyboru"),
                     .compose,
                 ],
                 placeholder: "Np. więcej \(balance.macroGenitive) w śniadaniach"
@@ -493,7 +508,7 @@ enum AssistantBriefingResolver {
                 supporting: "Zbiorę listę zakupów albo podsunę coś nowego na odmianę.",
                 visual: .plates(plates(today, focus: nil)),
                 primary: .ask("Lista zakupów", "Co muszę kupić na ten tydzień?"),
-                alternatives: [.ask("Coś nowego na weekend", "Pokaż 3 nowe pomysły na weekendowy obiad do wyboru"), .compose],
+                alternatives: [.ask("Coś nowego na weekend", "Pokaż 3 nowe pomysły na obiad na sobotę do wyboru"), .compose],
                 placeholder: "Np. zamień piątkową kolację na rybę"
             )
         }
@@ -505,8 +520,8 @@ enum AssistantBriefingResolver {
                 headline: "Masz ochotę ugotować coś większego?",
                 supporting: "Wybiorę coś dla całego domu z Waszych przepisów.",
                 visual: .plates(plates(today, focus: nil)),
-                primary: .ask("Pokaż 3 pomysły", "Pokaż 3 pomysły na weekendowy obiad dla całego domu do wyboru"),
-                alternatives: [.ask("Coś do godziny", "Pokaż 3 weekendowe obiady do godziny gotowania do wyboru"), .compose],
+                primary: .ask("Pokaż 3 pomysły", "Pokaż 3 pomysły na obiad na dziś dla całego domu do wyboru"),
+                alternatives: [.ask("Coś do godziny", "Pokaż 3 obiady na dziś do godziny gotowania do wyboru"), .compose],
                 placeholder: "Np. coś na obiad z rodziną, bez ryby"
             )
         }
@@ -519,19 +534,26 @@ enum AssistantBriefingResolver {
                 supporting: "Zbiorę zakupy na jutro albo podmienię jedno danie.",
                 visual: .plates(plates(tomorrow, focus: nil)),
                 primary: .ask("Zakupy na jutro", "Co muszę kupić na jutro?"),
-                alternatives: [.ask("Zamień posiłek", "Chcę zamienić jeden jutrzejszy posiłek"), .compose],
+                alternatives: [swapAction(mainMeal(tomorrow), day: "jutro"), .compose],
                 placeholder: "Np. zamień jutrzejszy obiad na coś szybszego"
             )
         }
 
         // 14. Dzień gotowy — stan spokojny, pomoc przy drobnych zmianach.
         let readyDay = today ?? tomorrow
+        // Zamiana wskazuje danie z góry: najbliższe, którego pora jeszcze
+        // nie minęła, a gdy wszystkie minęły — ostatnie z dnia.
+        let swapMeal = today.flatMap { day in
+            day.meals.sorted { $0.slot < $1.slot }.first { time($0.slot) > minuteOfDay }
+                ?? day.meals.max { $0.slot < $1.slot }
+        }
         return AssistantBriefing(
             kind: .dayReady,
             headline: hour < 11 ? "Dzień jest ułożony." : "Na dziś wszystko jest w planie.",
             supporting: "Jeśli masz ochotę na odmianę, podmienię jeden posiłek.",
             visual: readyDay.map { AssistantBriefing.Visual.plates(plates($0, focus: nil)) } ?? AssistantBriefing.Visual.plain,
-            primary: .ask("Zamień posiłek", "Chcę zamienić jeden dzisiejszy posiłek"),
+            primary: swapMeal.map { swapAction($0, day: "dziś") }
+                ?? ideas(for: .dinner, day: "dziś", title: "Pomysły na kolację"),
             alternatives: [.ask("Sprawdź bilans", "Jak wychodzi mój bilans w tym tygodniu?"), .compose],
             placeholder: "Np. zamień kolację na coś lżejszego"
         )
@@ -580,6 +602,21 @@ enum AssistantBriefingResolver {
     /// odpowiada arkuszem wyboru posiłku.
     static func ideas(for slot: AssistantBriefingSlot, day: String, title: String = "Pokaż 3 pomysły") -> AssistantBriefing.Action {
         .ask(title, "Pokaż 3 pomysły na \(slot.accusative) na \(day) do wyboru")
+    }
+
+    /// „Zamień obiad” — z nazwą dania i dniem w zdaniu, żeby asystent nie
+    /// pytał, który posiłek. Odpowiedź to dania DO WYBORU na tę porę.
+    static func swapAction(_ meal: AssistantBriefingDay.Meal, day: String) -> AssistantBriefing.Action {
+        .ask(
+            "Zamień \(meal.slot.accusative)",
+            "Zamień \(meal.slot.accusative) na \(day) (\(meal.title)): pokaż 3 inne dania do wyboru"
+        )
+    }
+
+    /// Danie dnia, które najczęściej się zamienia: obiad, potem kolacja,
+    /// potem pierwsze z planu. Wołane tylko dla dnia z planem.
+    static func mainMeal(_ day: AssistantBriefingDay) -> AssistantBriefingDay.Meal {
+        day.meal(.lunch) ?? day.meal(.dinner) ?? day.meals.sorted { $0.slot < $1.slot }[0]
     }
 
     /// Przykład w polu — pasuje do pory, o której mowa.
