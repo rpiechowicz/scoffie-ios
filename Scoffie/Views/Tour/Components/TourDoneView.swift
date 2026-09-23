@@ -5,12 +5,20 @@ import SwiftUI
 ///
 /// Każdy wiersz to para: co podajesz → po co nam to. Kreator pyta o wzrost,
 /// wagę i alergeny zaraz po pierwszym uruchomieniu, więc powód musi paść
-/// zanim padnie pytanie, a nie w polityce prywatności.
+/// zanim padnie pytanie, a nie w polityce prywatności. Od 23.09.2026 powód
+/// mieści się w kilku słowach — dawne podpisy szły na dwie–trzy linie.
 ///
-/// Przyciski są w `TourFooter` — stopkę składa `FeatureTourView`
+/// Przyciski są w stopce (`SCStepFooter`), którą składa `FeatureTourView`
 /// poza animowaną treścią.
 struct TourDoneView: View {
     @Environment(\.colorScheme) private var scheme
+
+    private let features: [SCStepFeature] = [
+        SCStepFeature(icon: "figure.walk", accent: SCPalette.terracotta, title: "Wzrost, waga, wiek i aktywność", subtitle: "Z nich liczymy dzienny cel"),
+        SCStepFeature(icon: "leaf.fill", accent: SCPalette.sage, title: "Dieta i alergeny", subtitle: "Dania z alergenem znikają z planu i zakupów"),
+        SCStepFeature(icon: "clock.fill", accent: SCPalette.indigo, title: "Posiłki w ciągu dnia", subtitle: "Tyle dań dostanie każdy dzień"),
+        SCStepFeature(icon: "house.fill", accent: SCPalette.terracottaDeep, title: "Gospodarstwo", subtitle: "Wspólny plan i lista zakupów"),
+    ]
 
     var body: some View {
         TourPage {
@@ -25,69 +33,23 @@ struct TourDoneView: View {
                         .foregroundStyle(Color.scLabel(scheme))
                         .fontWeight(.semibold)
                 )
-                .padding(.bottom, 14)
+                .padding(.bottom, 18)
 
-                Text("Znasz już nas.\nTeraz my poznajmy Ciebie.")
-                    .font(.system(size: 28, weight: .bold))
-                    .tracking(-0.5)
-                    .lineSpacing(3)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 8)
+                SCStepHeader(title: "Znasz już nas.\nTeraz my poznajmy Ciebie.")
+                    .padding(.bottom, 22)
 
-                Text("Kilka pytań — każde ma konkretny powód:")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .padding(.bottom, 12)
+                SCStepFeatureCard(features: features)
+                    .padding(.bottom, 14)
 
-                VStack(spacing: 0) {
-                    TourFeatureRow(
-                        icon: "slider.horizontal.3",
-                        tint: SCPalette.terracotta,
-                        title: "Wzrost, waga, wiek i aktywność",
-                        subtitle: "Liczymy dzienne zapotrzebowanie i rozkładamy je na posiłki",
-                        alignsTop: true
-                    )
-                    TourFeatureRow(
-                        icon: "leaf",
-                        tint: SCPalette.sage,
-                        title: "Alergeny",
-                        subtitle: "Przepisy z tymi składnikami nie pokażą się nigdzie — ani w planie, ani na liście zakupów",
-                        alignsTop: true
-                    )
-                    TourFeatureRow(
-                        icon: "fork.knife",
-                        tint: SCPalette.indigo,
-                        title: "Dieta i cel kaloryczny",
-                        subtitle: "Zawężamy katalog i pilnujemy, żeby dzień się spinał: wege, bez laktozy, bez wieprzowiny",
-                        alignsTop: true
-                    )
-                    TourFeatureRow(
-                        icon: "clock",
-                        tint: SCPalette.butter,
-                        title: "Posiłki i ich pory",
-                        subtitle: "Dobieramy liczbę dań i takie przepisy, które zdążycie ugotować",
-                        alignsTop: true
-                    )
-                    TourFeatureRow(
-                        icon: "house",
-                        tint: SCPalette.terracottaDeep,
-                        title: "Gospodarstwo",
-                        subtitle: "Plan i lista zakupów są wspólne — zaprosisz do nich domowników",
-                        isLast: true,
-                        alignsTop: true
-                    )
-                }
-                .padding(.bottom, 14)
-
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "lock")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Dane zostają na Twoim koncie — zmienisz je w każdej chwili w Ustawieniach.")
-                        .font(.system(size: 12))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10.5, weight: .semibold))
+                    Text("Zmienisz to w każdej chwili w Ustawieniach.")
+                        .font(.system(size: 12.5))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(Color.scMuted(scheme))
+                .foregroundStyle(Color.scFaint(scheme))
+                .padding(.horizontal, 6)
             }
             .padding(.horizontal, TourLayout.horizontal)
         }
@@ -96,10 +58,10 @@ struct TourDoneView: View {
 
 #Preview("Dark") {
     ZStack {
-        TourBackground(scheme: .dark)
+        SCPageBackground(scheme: .dark).ignoresSafeArea()
         VStack(spacing: 0) {
             TourDoneView()
-            TourFooter(kind: .done, onBack: {}, onPrimary: {}, onSkip: {})
+            SCStepFooter(slot: .empty, showsBack: true, onBack: {}, primaryTitle: "Opowiedz nam o sobie", onPrimary: {})
         }
     }
     .preferredColorScheme(.dark)
@@ -107,10 +69,10 @@ struct TourDoneView: View {
 
 #Preview("Light") {
     ZStack {
-        TourBackground(scheme: .light)
+        SCPageBackground(scheme: .light).ignoresSafeArea()
         VStack(spacing: 0) {
             TourDoneView()
-            TourFooter(kind: .done, onBack: {}, onPrimary: {}, onSkip: {})
+            SCStepFooter(slot: .empty, showsBack: true, onBack: {}, primaryTitle: "Opowiedz nam o sobie", onPrimary: {})
         }
     }
     .preferredColorScheme(.light)

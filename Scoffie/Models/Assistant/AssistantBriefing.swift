@@ -243,6 +243,10 @@ struct AssistantBriefing: Equatable {
             case compose
             case openPlans
             case openHistory
+            /// Zakładka Plan — to, co działa bez asystenta (wykorzystana pula).
+            case openPlan
+            /// Lista zakupów (arkusz w Planie) — też bez asystenta.
+            case openShopping
         }
 
         let title: String
@@ -304,7 +308,13 @@ enum AssistantBriefingResolver {
                 supporting: "Rozmowy i zapisany plan zostają. Pełny asystent jest w planach.",
                 visual: .plain,
                 primary: AssistantBriefing.Action(title: "Zobacz plany", kind: .openPlans),
-                alternatives: [AssistantBriefing.Action(title: "Historia rozmów", kind: .openHistory)],
+                // Bez asystenta aplikacja działa dalej — plan i zakupy są pod
+                // ręką, zamiast jedynego wyjścia „kup”.
+                alternatives: [
+                    AssistantBriefing.Action(title: "Plan tygodnia", kind: .openPlan),
+                    AssistantBriefing.Action(title: "Lista zakupów", kind: .openShopping),
+                    AssistantBriefing.Action(title: "Historia rozmów", kind: .openHistory),
+                ],
                 placeholder: ""
             )
         }

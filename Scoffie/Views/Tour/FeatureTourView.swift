@@ -10,12 +10,17 @@ import SwiftUI
 ///
 /// Fazy: 0 = powitanie, 1…5 = funkcje, 6 = zaproszenie do kreatora.
 /// Przejścia jak w `WelcomeView` — treść wjeżdża z krawędzi zgodnej
-/// z kierunkiem ruchu, poprzednia wyjeżdża w przeciwną. Stopka (stepper
+/// z kierunkiem ruchu, poprzednia wyjeżdża w przeciwną. Stopka (pasek kroków
 /// i przyciski) stoi pod treścią, poza animowanym obszarem, i jest JEDNĄ
-/// instancją na wszystkie fazy (`TourFooter`): wcześniej jechała razem
-/// z treścią, a potem — już osobno — miała trzy odmiany o różnej
-/// wysokości, więc przycisk główny podskakiwał przy wejściu w kroki
-/// i przy wyjściu z nich.
+/// instancją na wszystkie fazy: wcześniej jechała razem z treścią, a potem
+/// — już osobno — miała trzy odmiany o różnej wysokości, więc przycisk
+/// główny podskakiwał przy wejściu w kroki i przy wyjściu z nich.
+///
+/// Od 23.09.2026 to wspólna stopka przepływów (`SCStepFooter`: płyta
+/// `SCSheetFooter` z cieniem krawędzi, pasek `SCStepProgress`, krążek
+/// „Wstecz”) na tle `SCPageBackground` — ta sama, co w kreatorze
+/// i we wprowadzeniu asystenta, więc przejście przewodnik → kreator nie
+/// zmienia ani tła, ani miejsca przycisku.
 struct FeatureTourView: View {
     /// Wywoływane, gdy przewodnik ma zejść z drogi — po ostatnim kroku
     /// albo po „Pomiń".
@@ -30,19 +35,28 @@ struct FeatureTourView: View {
 
     private var lastPhase: Int { steps.count + 1 }
 
-    private var footerKind: TourFooter.Kind {
+    private var isDone: Bool { phase >= lastPhase }
+
+    private var footerSlot: SCStepFooter.Slot {
         if phase <= 0 {
-            return .intro
+            return .link("Pomiń i przejdź do konfiguracji")
         }
-        if phase >= lastPhase {
-            return .done
+        if isDone {
+            return .empty
         }
-        return .step(index: phase - 1, total: steps.count)
+        return .progress(step: phase, total: steps.count)
+    }
+
+    private var primaryTitle: String {
+        if phase <= 0 { return "Poznaj aplikację" }
+        if isDone { return "Opowiedz nam o sobie" }
+        return phase == steps.count ? "Poznajmy się" : "Dalej"
     }
 
     var body: some View {
         ZStack {
-            TourBackground(scheme: colorScheme)
+            SCPageBackground(scheme: colorScheme)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 ZStack {
@@ -50,13 +64,24 @@ struct FeatureTourView: View {
                         .id(phase)
                         .transition(asymmetricSlide())
                 }
+                .frame(maxHeight: .infinity)
                 .animation(.easeInOut(duration: 0.34), value: phase)
 
-                TourFooter(
-                    kind: footerKind,
-                    onBack: goBack,
-                    onPrimary: phase >= lastPhase ? onFinish : advance,
-                    onSkip: onFinish
+                // Ostatnie dziecko `VStack`: cień stopki leży na treści,
+                // a strony mają pod spodem zapas `TourLayout.bottom`.
+                SCStepFooter(
+                    slot: footerSlot,
+                    onSlotTap: { onFinish() },
+                    showsBack: phase > 0,
+                    onBack: { goBack() },
+                    primaryTitle: primaryTitle,
+                    onPrimary: {
+                        if isDone {
+                            onFinish()
+                        } else {
+                            advance()
+                        }
+                    }
                 )
             }
         }

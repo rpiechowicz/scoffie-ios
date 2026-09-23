@@ -6,15 +6,17 @@ import SwiftUI
 // Anatomia karty: 1 eyebrow (typ) · 2 tytuł · 3 podtytuł · 4 treść ·
 // 5 podsumowanie · 6 akcje · 7 stan (plakietka). Promienie: karta 24 /
 // lista 20 / wnętrze 16 / miniatura 11 / pigułka 99. Padding poziomy 18.
-// Separator: włoskowaty. Stopka 12/14/14 z przyciskami 48.
+// Separator: włoskowaty. Stopka 12/14/14 z przyciskami 42 (pole dotyku 44).
 //
 // Reguła akcji: główna = pigułka „soft” (tint terakoty, obwódka i tekst
 // w tym samym kolorze — `scSoftCapsule`, jak w reszcie aplikacji), ZAWSZE
-// terakota; poboczna = neutralna pigułka na tle kafla. Makieta ma tu pełne
-// wypełnienie — świadomie odchodzimy od niej na rzecz stylu aplikacji.
-// Jedna akcja → pełna szerokość; dwie → poboczna po
-// lewej (1), główna po prawej (1,4). Nawigacja informacyjna → wiersz
-// z chevronem. Cofnij po zapisie = poboczna w karcie, nigdy toast.
+// terakota; poboczna = neutralna pigułka o ton ciemniejsza od karty. Makieta
+// ma tu pełne wypełnienie — świadomie odchodzimy od niej na rzecz stylu
+// aplikacji. Jedna akcja → pełna szerokość; dwie → RÓWNE połówki, poboczna
+// po lewej, główna po prawej, a gdy któraś nie mieści się w połówce — jedna
+// pod drugą, główna na dole (`AssistantActionPair`). Główna stoi więc zawsze
+// na końcu. Nawigacja informacyjna → wiersz z chevronem. Cofnij po zapisie
+// = poboczna w karcie, nigdy toast.
 // Stan → kolor: propozycja terakota, planowanie indygo, zapisane szałwia,
 // nieaktualna / przerwane wyciszona neutralność, nigdy czerwień.
 
@@ -112,7 +114,8 @@ enum AssistantCardMetrics {
     static let headTop: CGFloat = 16
     /// Odstęp między sekcjami karty.
     static let section: CGFloat = 14
-    static let ctaHeight: CGFloat = 48
+    /// Wysokość przycisku w stopce karty (`AssistantButtonSize.compact`).
+    static let ctaHeight: CGFloat = 42
     /// Wcięcie paska akcji — mniejsze niż treści, żeby przyciski były szersze.
     static let footerInset: CGFloat = 14
     /// Promień kafli WEWNĄTRZ karty (wnętrze 16, miniatura 11).
@@ -640,35 +643,126 @@ struct AssistantCardAction {
     let action: () -> Void
 }
 
-/// Dwie kolumny w stosunku wag — „poboczna 1 : główna 1,4” z makiety.
-struct AssistantWeightedRow: Layout {
-    var weights: [CGFloat]
+/// Dwa rozmiary JEDNEGO przycisku asystenta.
+///
+/// Wcześniej każdy przycisk miał 48 pt i tekst 15,5 — w stopce karty para
+/// takich pigułek była cięższa od samej treści karty („za duże”). Teraz:
+/// w karcie w rozmowie `compact` (42 pt rysowane, pole dotyku 44 przez
+/// `scTapHeight`, tekst 14), a samodzielne CTA — arkusz wyboru posiłku,
+/// stopki arkuszy, karta planów — `regular` (46 pt, tekst 15), czyli tyle,
+/// ile `EditorialPrimaryActionButton` w arkuszach Ustawień.
+enum AssistantButtonSize: Equatable {
+    case compact
+    case regular
+
+    var height: CGFloat {
+        switch self {
+        case .compact: return AssistantCardMetrics.ctaHeight
+        case .regular: return 46
+        }
+    }
+
+    var fontSize: CGFloat {
+        switch self {
+        case .compact: return 14
+        case .regular: return 15
+        }
+    }
+
+    var iconSize: CGFloat {
+        switch self {
+        case .compact: return 12
+        case .regular: return 13
+        }
+    }
+
+    var horizontalPadding: CGFloat {
+        switch self {
+        case .compact: return 14
+        case .regular: return 18
+        }
+    }
+
+    /// Ściśnięcie pod palcem — mniejszy przycisk ściska się odrobinę mocniej,
+    /// żeby reakcja była tak samo widoczna.
+    var pressScale: CGFloat {
+        switch self {
+        case .compact: return 0.96
+        case .regular: return 0.97
+        }
+    }
+}
+
+/// Para akcji karty: [poboczna, główna] (albo jedna z nich).
+///
+/// Obok siebie w RÓWNYCH połówkach, gdy obie mieszczą się w połówce bez
+/// ściskania tekstu — para czyta się jako wybór „albo–albo”, a kolor mówi,
+/// która jest główna. Gdy któraś się nie mieści (długa etykieta z serwera,
+/// „Napisz, na co masz ochotę”), obie stają jedna pod drugą na pełną
+/// szerokość, główna NA DOLE — tam, gdzie stoi pojedyncza akcja, więc
+/// w arkuszu wyboru posiłku główna nie skacze między stronami. Zamiast
+/// dawnych wag 1 : 1,4, przy których dłuższa poboczna zjeżdżała skalą albo
+/// urywała się wielokropkiem.
+struct AssistantActionPair: Layout {
     var spacing: CGFloat = 8
 
+    /// Obie akcje mieszczą się w połówce szerokości w swoim naturalnym rozmiarze.
+    private func fitsSideBySide(width: CGFloat, subviews: Subviews) -> Bool {
+        guard subviews.count == 2 else { return false }
+        let half = max(0, (width - spacing) / 2)
+        return subviews.allSatisfy { $0.sizeThatFits(.unspecified).width <= half }
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-        // Propozycja bywa `nil` albo nieskończona (sonda „ile chcesz”) —
-        // wtedy oddajemy sumę szerokości własnych, NIGDY nieskończoność:
-        // nieskończony wymiar ramki wywraca aplikację.
-        if let width = proposal.width, width.isFinite {
+        guard !subviews.isEmpty else { return .zero }
+        // Sonda bez szerokości — obok siebie w szerokościach własnych, NIGDY
+        // nieskończoność (nieskończony wymiar ramki wywraca aplikację).
+        guard let width = proposal.width, width.isFinite else {
+            let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+            let widest = sizes.map(\.width).max() ?? 0
+            let count = CGFloat(sizes.count)
+            return CGSize(
+                width: widest * count + spacing * (count - 1),
+                height: sizes.map(\.height).max() ?? 0
+            )
+        }
+        if fitsSideBySide(width: width, subviews: subviews) {
+            let half = max(0, (width - spacing) / 2)
+            let height = subviews
+                .map { $0.sizeThatFits(ProposedViewSize(width: half, height: nil)).height }
+                .max() ?? 0
             return CGSize(width: width, height: height)
         }
-        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }.reduce(0, +)
-        return CGSize(width: ideal + spacing * CGFloat(max(0, subviews.count - 1)), height: height)
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        return CGSize(
+            width: width,
+            height: heights.reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1))
+        )
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let total = weights.prefix(subviews.count).reduce(0, +)
-        let free = max(0, bounds.width - spacing * CGFloat(max(0, subviews.count - 1)))
-        var x = bounds.minX
-        for (index, subview) in subviews.enumerated() {
-            let weight = index < weights.count ? weights[index] : 1
-            let width = total > 0 ? free * weight / total : free / CGFloat(subviews.count)
+        if fitsSideBySide(width: bounds.width, subviews: subviews) {
+            let half = max(0, (bounds.width - spacing) / 2)
+            var x = bounds.minX
+            for subview in subviews {
+                subview.place(
+                    at: CGPoint(x: x, y: bounds.minY),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: half, height: bounds.height)
+                )
+                x += half + spacing
+            }
+            return
+        }
+        var y = bounds.minY
+        for subview in subviews {
+            let height = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
             subview.place(
-                at: CGPoint(x: x, y: bounds.minY),
-                proposal: ProposedViewSize(width: width, height: bounds.height)
+                at: CGPoint(x: bounds.minX, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: height)
             )
-            x += width + spacing
+            y += height + spacing
         }
     }
 }
@@ -714,12 +808,24 @@ struct AssistantEqualColumns: Layout {
     }
 }
 
-/// Pasek akcji karty. Główna = „soft” terakota (ikona po prawej tylko, gdy
-/// podana); poboczna = neutralna pigułka. Nawigacja = wiersz z chevronem.
+/// Pasek akcji karty. Główna = „soft” terakota, poboczna = neutralna
+/// pigułka, obie w rozmiarze `compact`, ułożone przez `AssistantActionPair`.
+/// Nawigacja = wiersz z chevronem.
+///
+/// Kręciołek pracy stoi na przycisku, który STUKNIĘTO („Cofnij” kręci się
+/// na „Cofnij”, a nie na „Otwórz plan” obok); druga akcja w tym czasie
+/// przygasa. Gdy praca przyszła z innego miejsca (zapis z arkusza wyboru
+/// posiłku), kręci się główna.
 struct AssistantCardActions: View {
     enum Style: Equatable {
         case buttons
         case navigation
+    }
+
+    /// Który przycisk stuknięto — tylko po to, żeby wiedzieć, gdzie postawić
+    /// kręciołek. Stan widoku, nie logika akcji.
+    private enum Slot: Equatable {
+        case primary, secondary
     }
 
     let primary: AssistantCardAction?
@@ -733,6 +839,9 @@ struct AssistantCardActions: View {
     var filledPrimary: Bool = true
 
     @Environment(\.colorScheme) private var scheme
+    @State private var tapped: Slot?
+    /// Lustro `isBusy` czytane z zadania, które sprząta `tapped`.
+    @State private var busyNow = false
 
     init(
         primary: AssistantCardAction? = nil,
@@ -752,6 +861,14 @@ struct AssistantCardActions: View {
         self.filledPrimary = filledPrimary
     }
 
+    /// Przycisk z kręciołkiem: stuknięty, a bez stuknięcia — główny (albo
+    /// jedyny, gdy głównego nie ma).
+    private var busySlot: Slot? {
+        guard isBusy else { return nil }
+        if let tapped { return tapped }
+        return primary != nil ? .primary : .secondary
+    }
+
     var body: some View {
         Group {
             switch style {
@@ -763,22 +880,51 @@ struct AssistantCardActions: View {
         .overlay(alignment: .top) {
             if showsRule { AssistantCardRule() }
         }
+        .onChange(of: isBusy, initial: true) { _, busy in
+            busyNow = busy
+            if !busy { tapped = nil }
+        }
+        // Stuknięcie, po którym praca nie ruszyła (nawigacja, wiadomość do
+        // asystenta), nie może zostawić znacznika na później — inaczej
+        // następny zapis kręciłby się na tamtym przycisku.
+        .task(id: tapped) {
+            guard tapped != nil else { return }
+            try? await Task.sleep(for: .milliseconds(900))
+            guard !Task.isCancelled, !busyNow else { return }
+            tapped = nil
+        }
+    }
+
+    private func marked(_ action: AssistantCardAction, as slot: Slot) -> AssistantCardAction {
+        AssistantCardAction(title: action.title, icon: action.icon) {
+            tapped = slot
+            action.action()
+        }
     }
 
     @ViewBuilder
     private var buttons: some View {
-        Group {
-            if let primary, let secondary {
-                AssistantWeightedRow(weights: [1, 1.4], spacing: 8) {
-                    AssistantGhostButton(action: secondary, isBusy: isBusy)
-                    AssistantPrimaryButton(action: primary, isBusy: isBusy)
-                }
-            } else if let primary {
-                AssistantPrimaryButton(action: primary, isBusy: isBusy)
-            } else if let secondary {
-                AssistantGhostButton(action: secondary, isBusy: isBusy)
+        AssistantActionPair(spacing: 8) {
+            if let secondary {
+                AssistantGhostButton(
+                    action: marked(secondary, as: .secondary),
+                    isBusy: busySlot == .secondary,
+                    size: .compact
+                )
+                .disabled(isBusy)
+                .opacity(isBusy && busySlot != .secondary ? 0.5 : 1)
+            }
+            if let primary {
+                AssistantPrimaryButton(
+                    action: marked(primary, as: .primary),
+                    isBusy: busySlot == .primary,
+                    size: .compact
+                )
+                .disabled(isBusy)
+                .opacity(isBusy && busySlot != .primary ? 0.5 : 1)
             }
         }
+        .animation(.smooth(duration: 0.2), value: isBusy)
         .padding(.top, 12)
         .padding(.horizontal, AssistantCardMetrics.footerInset)
         .padding(.bottom, AssistantCardMetrics.footerInset)
@@ -810,75 +956,129 @@ struct AssistantCardActions: View {
     }
 }
 
-/// Główna akcja: pigułka 48 w wariancie „soft” (`scSoftCapsule`) — tint
-/// i obwódka terakoty, tekst 15,5/600 w tym samym kolorze, ikona po prawej.
-struct AssistantPrimaryButton: View {
-    let action: AssistantCardAction
-    var isBusy: Bool = false
-    var height: CGFloat = AssistantCardMetrics.ctaHeight
+/// Wnętrze przycisku asystenta: tytuł i glif. Glif „dalej” (strzałka
+/// w prawo, chevron) stoi PO tytule, każdy inny (cofnij, odśwież, ptaszek,
+/// ołówek) PRZED nim — ta sama reguła w głównej i pobocznej.
+///
+/// Stan pracy nie zmienia szerokości: kręciołek zajmuje miejsce glifu,
+/// a bez glifu staje zamiast tytułu. Inaczej para przeskakiwałaby
+/// z połówek w stos w chwili stuknięcia.
+private struct AssistantButtonLabel: View {
+    let title: String
+    let icon: String?
+    let isBusy: Bool
+    let size: AssistantButtonSize
+    let tint: Color
 
-    @Environment(\.colorScheme) private var scheme
+    private var trailsIcon: Bool {
+        guard let icon else { return false }
+        return icon.hasPrefix("arrow.right") || icon.hasPrefix("chevron.right") || icon == "arrow.up.right"
+    }
+
+    private var glyphSide: CGFloat { size.iconSize + 4 }
 
     var body: some View {
-        Button(action: action.action) {
-            HStack(spacing: 7) {
-                if isBusy {
-                    ProgressView().controlSize(.small).tint(AssistantLook.terra(scheme))
-                }
-                Text(action.title)
-                    .font(.system(size: 15.5, weight: .semibold))
-                    .tracking(-0.3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                if !isBusy, let icon = action.icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .bold))
-                }
-            }
-            .foregroundStyle(AssistantLook.terra(scheme))
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .scSoftCapsule(AssistantLook.terra(scheme))
-            .contentShape(Capsule())
+        HStack(spacing: 6) {
+            if !trailsIcon { glyph }
+            Text(title)
+                .font(.system(size: size.fontSize, weight: .semibold))
+                .tracking(-0.2)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                // Tytuł zmieniony w animowanej transakcji roluje się literami
+                // (jak w `EditorialPrimaryActionButton`), zamiast podmienić się
+                // w jednej klatce.
+                .contentTransition(.numericText())
+                .opacity(isBusy && icon == nil ? 0 : 1)
+            if trailsIcon { glyph }
         }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
-        .disabled(isBusy)
+        .overlay {
+            if isBusy && icon == nil { spinner }
+        }
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        if let icon {
+            ZStack {
+                Image(systemName: icon)
+                    .font(.system(size: size.iconSize, weight: .bold))
+                    .opacity(isBusy ? 0 : 1)
+                if isBusy { spinner }
+            }
+            .frame(width: glyphSide, height: glyphSide)
+        }
+    }
+
+    private var spinner: some View {
+        ProgressView()
+            .controlSize(.small)
+            .tint(tint)
+            .scaleEffect(0.8)
+            .frame(width: glyphSide, height: glyphSide)
+            .transition(.opacity)
     }
 }
 
-/// Poboczna akcja: neutralny towarzysz „soft” (jak `SCSoftIconButton`) —
-/// tło i obwódka kafla, tekst w kolorze treści, ikona po lewej.
+/// Główna akcja: pigułka „soft” (`scSoftCapsule`) — tint i obwódka terakoty,
+/// tekst w tym samym kolorze. `size: .compact` w stopce karty, `.regular`
+/// (domyślny) jako samodzielne CTA.
+struct AssistantPrimaryButton: View {
+    let action: AssistantCardAction
+    var isBusy: Bool = false
+    var size: AssistantButtonSize = .regular
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var tint: Color { AssistantLook.terra(scheme) }
+
+    var body: some View {
+        Button(action: action.action) {
+            AssistantButtonLabel(title: action.title, icon: action.icon, isBusy: isBusy, size: size, tint: tint)
+                .foregroundStyle(tint)
+                .padding(.horizontal, size.horizontalPadding)
+                .frame(maxWidth: .infinity)
+                .frame(height: size.height)
+                .scSoftCapsule(tint)
+                .scTapHeight(44, drawn: size.height)
+        }
+        .buttonStyle(PlanPressStyle(scale: size.pressScale))
+        .disabled(isBusy)
+        .animation(.smooth(duration: 0.2), value: isBusy)
+    }
+}
+
+/// Poboczna akcja: neutralny towarzysz „soft” — tło o ton ciemniejsze od
+/// karty (`field`, jak „Odrzuć” przy zaproszeniu w Ustawieniach) i cienka
+/// obwódka kafla, tekst w kolorze treści. Na tle samej karty (`scTileBg`)
+/// był tylko obrysem i ginął obok terakotowej.
 struct AssistantGhostButton: View {
     let action: AssistantCardAction
     var isBusy: Bool = false
-    var height: CGFloat = AssistantCardMetrics.ctaHeight
+    var size: AssistantButtonSize = .regular
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Button(action: action.action) {
-            HStack(spacing: 7) {
-                if let icon = action.icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                Text(action.title)
-                    .font(.system(size: 15.5, weight: .semibold))
-                    .tracking(-0.3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
+            AssistantButtonLabel(
+                title: action.title,
+                icon: action.icon,
+                isBusy: isBusy,
+                size: size,
+                tint: AssistantLook.muted(scheme)
+            )
             .foregroundStyle(AssistantLook.ink(scheme))
-            .padding(.horizontal, 16)
+            .padding(.horizontal, size.horizontalPadding)
             .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .background(Capsule(style: .continuous).fill(Color.scTileBg(scheme)))
-            .overlay(Capsule(style: .continuous).strokeBorder(Color.scTileStroke(scheme), lineWidth: 1.2))
-            .contentShape(Capsule())
+            .frame(height: size.height)
+            .background(Capsule(style: .continuous).fill(AssistantLook.field(scheme)))
+            .overlay(Capsule(style: .continuous).strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1.2))
+            .scTapHeight(44, drawn: size.height)
         }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .buttonStyle(PlanPressStyle(scale: size.pressScale))
         .disabled(isBusy)
+        .animation(.smooth(duration: 0.2), value: isBusy)
     }
 }
 
@@ -951,8 +1151,13 @@ struct AssistantProposalFooter: View {
             )
         case .applied where state.canUndo:
             if let onUndo {
+                // Bez `onOpenPlan` zostaje samo „Cofnij” — dawniej „Otwórz plan”
+                // dostawało wtedy cofnięcie jako zapas i robiło coś innego,
+                // niż mówił napis.
                 AssistantCardActions(
-                    primary: AssistantCardAction(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan ?? onUndo),
+                    primary: onOpenPlan.map { open in
+                        AssistantCardAction(title: "Otwórz plan", icon: "arrow.right", action: open)
+                    },
                     secondary: AssistantCardAction(title: "Cofnij", icon: "arrow.uturn.backward", action: onUndo),
                     tone: .sage,
                     isBusy: isBusy
@@ -995,8 +1200,12 @@ struct AssistantProposalFooter: View {
 
 // MARK: - Szybkie odpowiedzi
 
-/// Pigułki 40 pt, 15/600 — szybka odpowiedź albo sugestia (nie przycisk
-/// tekstowy). `tone: terra` = wyróżniona.
+/// Pigułka szybkiej odpowiedzi albo sugestii (nie przycisk tekstowy):
+/// 38 pt rysowane, pole dotyku 44, 14,5/600. Neutralna ma strój pobocznej
+/// akcji (`AssistantGhostButton`: pole o ton od karty + obwódka kafla),
+/// wyróżniona (wybrana odpowiedź) — strój głównej, „soft” terakota. Dawne
+/// 40 pt z tekstem 15 i obwódką 1,5 stało w karcie pytania ciężej niż
+/// samo pytanie.
 struct AssistantChip: View {
     let title: String
     var icon: String? = nil
@@ -1006,26 +1215,40 @@ struct AssistantChip: View {
 
     @Environment(\.colorScheme) private var scheme
 
+    private static let height: CGFloat = 38
+
+    private var shape: Capsule { Capsule(style: .continuous) }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 Text(title)
                     .lineLimit(1)
             }
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: 14.5, weight: .semibold))
             .tracking(-0.2)
             .foregroundStyle(highlighted ? AssistantLook.terra(scheme) : AssistantLook.ink(scheme))
-            .padding(.horizontal, 16)
-            .frame(height: 40)
-            .background(Capsule().fill(highlighted ? AssistantLook.terraTint(scheme) : AssistantLook.field(scheme).opacity(0.85)))
-            .overlay(Capsule().stroke(highlighted ? Color.clear : AssistantLook.ink(scheme).opacity(0.14), lineWidth: 1.5))
+            .padding(.horizontal, 15)
+            .frame(height: Self.height)
+            .background {
+                if highlighted {
+                    shape.fill(Color.clear).scSoftCapsule(AssistantLook.terra(scheme))
+                } else {
+                    shape
+                        .fill(AssistantLook.field(scheme))
+                        .overlay(shape.strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1.2))
+                }
+            }
             .opacity(dimmed ? 0.45 : 1)
+            .scTapHeight(44, drawn: Self.height)
         }
-        .buttonStyle(PlanPressStyle(scale: 0.97))
+        .buttonStyle(PlanPressStyle(scale: 0.96))
+        .animation(.smooth(duration: 0.2), value: highlighted)
+        .animation(.smooth(duration: 0.2), value: dimmed)
     }
 }
 
@@ -1088,6 +1311,55 @@ struct AssistantQuickReplies: View {
                 )
                 .padding(.top, 16)
             }
+        }
+        .padding(20)
+    }
+    .background(SCPageBackground(scheme: .light).ignoresSafeArea())
+}
+
+#Preview("Przyciski — pary, stos, praca") {
+    ScrollView {
+        VStack(spacing: 16) {
+            // Para w połówkach.
+            AssistantCard {
+                AssistantCardHead(eyebrow: "Propozycja", title: "Plan dnia", status: .pending)
+                AssistantCardActions(
+                    primary: AssistantCardAction(title: "Zapisz dzień") {},
+                    secondary: AssistantCardAction(title: "Inny zestaw") {}
+                )
+                .padding(.top, 16)
+            }
+            // Za długie na połówki — stos, główna na dole.
+            AssistantCard {
+                AssistantCardHead(eyebrow: "Propozycja", title: "Plan tygodnia", status: .pending)
+                AssistantCardActions(
+                    primary: AssistantCardAction(title: "Zapisz cały tydzień w planie") {},
+                    secondary: AssistantCardAction(title: "Zmień coś w propozycji") {}
+                )
+                .padding(.top, 16)
+            }
+            // Praca: kręciołek w miejscu glifu, druga akcja przygasa.
+            AssistantCard(tone: .sage) {
+                AssistantCardHead(eyebrow: "Propozycja", mark: true, title: "Zapisane", status: .applied)
+                AssistantCardActions(
+                    primary: AssistantCardAction(title: "Otwórz plan", icon: "arrow.right") {},
+                    secondary: AssistantCardAction(title: "Cofnij", icon: "arrow.uturn.backward") {},
+                    tone: .sage,
+                    isBusy: true
+                )
+                .padding(.top, 16)
+            }
+            // Sama poboczna (wynik tury) i szybkie odpowiedzi.
+            AssistantCard {
+                AssistantQuickReplies(items: ["Tylko obiady", "Na jutro", "Dla dwóch"]) { _ in }
+                    .padding(AssistantCardMetrics.inset)
+                AssistantCardActions(
+                    secondary: AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise") {}
+                )
+            }
+            // Samodzielne CTA (arkusze).
+            AssistantPrimaryButton(action: AssistantCardAction(title: "Wstaw na środę", icon: "arrow.right") {})
+            AssistantGhostButton(action: AssistantCardAction(title: "Napisz, na co masz ochotę", icon: "square.and.pencil") {})
         }
         .padding(20)
     }

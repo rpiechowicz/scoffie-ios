@@ -16,12 +16,24 @@ import SwiftUI
 // asystenta), potem kaskadą wchodzą kontekst i akcje, a liczby liczą się
 // od zera. Całość gra od nowa przy każdym wejściu na zakładkę i przy nowej
 // sytuacji; ta sama sytuacja ze zmienioną liczbą („Za 39 minut obiad”)
-// tylko roluje cyfry. Fokus pola („Mam inny pomysł”) zdejmuje akcje
-// i kontekst — otwarcie zostaje nad polem jako temat rozmowy.
+// tylko roluje cyfry. Pisanie („Mam inny pomysł”, fokus pola) zdejmuje
+// akcje i kontekst — otwarcie zostaje nad polem jako temat rozmowy.
+//
+// Znak nad otwarciem jest ŻYWY (`SCLivingMark`): oddycha i co kilka oddechów
+// coś robi, pochyla się ku polu, gdy ktoś pisze, skinie przy pierwszej
+// literze, a przy wykorzystanej puli drzemie.
 struct AssistantEmptyState: View {
     let briefing: AssistantBriefing
-    /// Pole wiadomości ma fokus.
+    /// Tryb pisania: akcje i kontekst zgaszone. Przełącza go ekran RAZEM
+    /// z klawiaturą, w jej animacji (`AssistantView.greetingComposing`) —
+    /// nie sam fokus, patrz tam.
     var composing: Bool = false
+    /// Podbicie = pierwsza litera w polu (znak skinie).
+    var nudge: Int = 0
+    /// Liczby puli — kontekst powitania, gdy pula jest wykorzystana.
+    var quota: AssistantQuotaFacts? = nil
+    /// Asystent odpoczywa (wyczerpana pula miesięczna) — znak drzemie.
+    var sleeping: Bool = false
     let onAction: (AssistantBriefing.Action) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,6 +47,9 @@ struct AssistantEmptyState: View {
             AssistantGreeting(
                 briefing: briefing,
                 composing: composing,
+                nudge: nudge,
+                quota: quota,
+                sleeping: sleeping,
                 playKey: play,
                 onAction: onAction
             )
@@ -54,6 +69,9 @@ struct AssistantEmptyState: View {
 private struct AssistantGreeting: View {
     let briefing: AssistantBriefing
     let composing: Bool
+    let nudge: Int
+    let quota: AssistantQuotaFacts?
+    let sleeping: Bool
     let playKey: Int
     let onAction: (AssistantBriefing.Action) -> Void
 
@@ -75,15 +93,33 @@ private struct AssistantGreeting: View {
         supportDelay + SCTypedText.duration(briefing.supporting, rate: Self.supportRate) * 0.66
     }
 
-    private var hasVisual: Bool { briefing.visual != .plain }
+    /// Pula wykorzystana: zamiast talerzyków — kreseczki puli (co poszło,
+    /// kiedy wraca albo co daje plan).
+    private var quotaContext: AssistantQuotaFacts? {
+        briefing.kind == .trialExhausted ? quota : nil
+    }
+
+    private var hasVisual: Bool { briefing.visual != .plain || quotaContext != nil }
+
+    /// Nastrój znaku: drzemie przy wykorzystanej puli, nasłuchuje przy
+    /// pisaniu, poza tym spokojnie oddycha.
+    private var markMood: SCLivingMark.Mood {
+        if briefing.isQuiet || sleeping { return .sleeping }
+        return composing ? .attentive : .idle
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Znak większy niż w makiecie (Kes 20 → 14 pt): przy 28-punktowym
-            // otwarciu ginął — decyzja Rafała.
-            SCMarkShape()
-                .fill(briefing.isQuiet ? AssistantLook.ink(scheme).opacity(0.3) : AssistantLook.terraFill(scheme))
-                .frame(width: 24, height: 24)
+            // otwarciu ginął — decyzja Rafała. Wejście (sprężyna od 0,4)
+            // stoi NAD żywym znakiem, więc oddech gra już w trakcie wejścia.
+            SCLivingMark(
+                mood: markMood,
+                color: briefing.isQuiet ? AssistantLook.ink(scheme).opacity(0.3) : AssistantLook.terraFill(scheme),
+                size: 24,
+                nudge: nudge,
+                glows: !briefing.isQuiet
+            )
                 .scaleEffect(revealed || reduceMotion ? 1 : 0.4)
                 .opacity(revealed ? 1 : 0)
                 .animation(revealed ? motion(.spring(duration: 0.5, bounce: 0.35)) : nil, value: revealed)
@@ -111,7 +147,11 @@ private struct AssistantGreeting: View {
 
             if !composing {
                 VStack(alignment: .leading, spacing: 0) {
-                    if hasVisual {
+                    if let quotaContext {
+                        AssistantQuotaPanel(facts: quotaContext, revealed: revealed, delay: restDelay + 0.1)
+                            .padding(.top, 18)
+                            .modifier(GreetingStep(revealed: revealed, delay: restDelay, reduceMotion: reduceMotion))
+                    } else if hasVisual {
                         GreetingVisual(visual: briefing.visual, revealed: revealed, delay: restDelay)
                             .padding(.top, 18)
                             .modifier(GreetingStep(revealed: revealed, delay: restDelay, reduceMotion: reduceMotion))
@@ -139,12 +179,15 @@ private struct AssistantGreeting: View {
                         .padding(.top, 12)
                     }
                 }
-                // Fokus pola: akcje gasną w 150 ms, powrót bez pisania od nowa.
+                // Pisanie: akcje gasną w 150 ms, powrót bez pisania od nowa.
                 .transition(.opacity.animation(.easeOut(duration: 0.15)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: composing)
+        // BEZ `.animation(value: composing)`: zwinięcie bloku jedzie
+        // w transakcji, w której ekran przełącza `composing` — w krzywej
+        // klawiatury. Własna animacja tutaj (była `.smooth(0.3)`) nadpisywała
+        // ją w tym poddrzewie i blok zjeżdżał innym tempem niż pole.
         .task(id: playKey) {
             var reset = Transaction()
             reset.disablesAnimations = true
@@ -166,6 +209,8 @@ private struct AssistantGreeting: View {
         switch action.kind {
         case .compose: return "square.and.pencil"
         case .openHistory: return "clock"
+        case .openPlan: return MenuConstans.Plan.icon
+        case .openShopping: return "basket"
         case .ask, .openPlans: return nil
         }
     }

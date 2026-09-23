@@ -18,19 +18,18 @@ struct WelcomeStep4MealsView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                WelcomeStepHeader(
+                SCStepHeader(
                     icon: "clock.fill",
-                    accent: SCPalette.terracotta,
                     eyebrow: "Rytm dnia",
                     title: "Ile posiłków jecie?",
-                    subtitle: "Tyle miejsc dostanie każdy dzień w planie — i tyle dań policzymy do dziennego celu."
+                    subtitle: "Tyle miejsc dostanie każdy dzień w planie."
                 )
 
-                coreRuleCard
+                WelcomeSection(title: "Zawsze w planie") {
+                    coreRuleCard
+                }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    WelcomeFieldCaption(text: "Dodatkowe posiłki")
-
+                WelcomeSection(title: "Dodatkowe posiłki") {
                     VStack(spacing: 10) {
                         ForEach(MealSlot.optionalSlots) { slot in
                             optionalCard(slot)
@@ -38,7 +37,9 @@ struct WelcomeStep4MealsView: View {
                     }
                 }
 
-                scheduleCard
+                WelcomeSection(title: "Pory posiłków") {
+                    dayCard
+                }
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
             .padding(.top, WelcomeLayout.topInset)
@@ -51,7 +52,7 @@ struct WelcomeStep4MealsView: View {
     /// Śniadania, obiadu i kolacji nie da się wyłączyć — ta sama reguła stoi
     /// w backendzie (`normalizeEnabledMealTypes`). Trzy karty, w które nic
     /// się nie klika, byłyby zaproszeniem do stukania, więc schodzą do
-    /// jednego wiersza reguły. Identycznie jak w Ustawieniach.
+    /// jednego wiersza. Identycznie jak w Ustawieniach.
     private var coreRuleCard: some View {
         HStack(spacing: 12) {
             HStack(spacing: 5) {
@@ -59,25 +60,18 @@ struct WelcomeStep4MealsView: View {
                     EditorialSettingsTileIcon(
                         icon: slot.icon,
                         color: slot.cozyAccent,
-                        size: 26,
+                        size: 28,
                         radius: 8
                     )
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(MealSlot.core.map(\.title).joined(separator: " · "))
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(colorScheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-
-                Text("Zawsze w planie — na nich stoi lista zakupów.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.scFaint(colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(MealSlot.core.map(\.title).joined(separator: " · "))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.scLabel(colorScheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
         .welcomeCard()
@@ -90,7 +84,7 @@ struct WelcomeStep4MealsView: View {
         let isEnabled = mealSlots.isEnabled(slot)
 
         return Button {
-            withAnimation(.smooth(duration: 0.20)) {
+            withAnimation(.smooth(duration: 0.24)) {
                 mealSlots = mealSlots.toggling(slot)
             }
         } label: {
@@ -98,15 +92,14 @@ struct WelcomeStep4MealsView: View {
                 EditorialSettingsTileIcon(
                     icon: slot.icon,
                     color: slot.cozyAccent,
-                    size: 44,
-                    radius: 12
+                    size: 40,
+                    radius: 11
                 )
                 .opacity(isEnabled ? 1 : 0.45)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(slot.title)
-                        .font(.system(size: 17, weight: .heavy))
-                        .tracking(-0.3)
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(isEnabled ? Color.scLabel(colorScheme) : Color.scMuted(colorScheme))
 
                     Text(slot.settingsSubtitle)
@@ -125,7 +118,7 @@ struct WelcomeStep4MealsView: View {
                 SCCheckbox(on: isEnabled, accent: SCPalette.terracotta)
             }
             .padding(14)
-            .frame(minHeight: 84)
+            .frame(minHeight: 76)
             // Włączona karta jak zaznaczony `SCChoiceTile`: tint i obwódka
             // akcentu.
             .scChoiceSurface(
@@ -142,42 +135,48 @@ struct WelcomeStep4MealsView: View {
         .accessibilityHint(isEnabled ? "Stuknij, aby wyłączyć" : "Stuknij, aby włączyć")
     }
 
-    // MARK: - Podgląd godzin
+    // MARK: - Dzień w pigułce
 
+    /// Włączone posiłki na osi dnia — ikona w kolorze pory, godzina i nazwa.
+    /// Włączenie podwieczorku wstawia go w jego miejsce dnia, a nie tylko
+    /// dopisuje nazwę do zdania: dom widzi, jak będzie wyglądał każdy dzień
+    /// w planie.
+    ///
     /// Godziny są tu do przeczytania, nie do ustawienia. Pięć pickerów
     /// w kreatorze to pięć decyzji, których nikt na tym etapie nie umie
-    /// podjąć — a domyślne pory i tak trafiają w większość domów. Wiersz
-    /// mówi wprost, gdzie się je zmienia.
-    private var scheduleCard: some View {
+    /// podjąć — a domyślne pory i tak trafiają w większość domów. Zmienia
+    /// się je w Ustawieniach → „Posiłki w planie”.
+    private var dayCard: some View {
         let schedule = MealSlotSchedule.default
-        let summary = mealSlots.enabled
-            .compactMap { slot -> String? in
-                guard let time = schedule.time(for: slot) else { return nil }
-                return "\(slot.shortTitle) \(time)"
+
+        return HStack(alignment: .top, spacing: 4) {
+            ForEach(mealSlots.enabled) { slot in
+                VStack(spacing: 6) {
+                    Image(systemName: slot.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(slot.cozyAccent)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(slot.cozyAccent.opacity(colorScheme == .dark ? 0.16 : 0.12)))
+
+                    Text(schedule.time(for: slot) ?? "—")
+                        .font(.system(size: 13.5, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scLabel(colorScheme))
+
+                    Text(slot.shortTitle)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(Color.scFaint(colorScheme))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
             }
-            .joined(separator: " · ")
-
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "clock")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(SCPalette.indigo)
-                Text("Domyślne pory")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(colorScheme))
-            }
-
-            Text(summary)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.scMuted(colorScheme))
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Zmienisz je w Ustawieniach → Pory posiłków.")
-                .font(.system(size: 11.5))
-                .foregroundStyle(Color.scFaint(colorScheme))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
         .welcomeCard()
     }
 }
@@ -185,7 +184,7 @@ struct WelcomeStep4MealsView: View {
 #Preview("Dark") {
     MealsStepPreview(configuration: .default) { slots in
         ZStack {
-            SCPalette.canvasDark.ignoresSafeArea()
+            SCPageBackground(scheme: .dark).ignoresSafeArea()
             WelcomeStep4MealsView(mealSlots: slots)
         }
         .preferredColorScheme(.dark)
@@ -195,7 +194,7 @@ struct WelcomeStep4MealsView: View {
 #Preview("Light") {
     MealsStepPreview(configuration: MealSlotConfiguration(enabled: MealSlot.allCases)) { slots in
         ZStack {
-            SCPalette.canvasLight.ignoresSafeArea()
+            SCPageBackground(scheme: .light).ignoresSafeArea()
             WelcomeStep4MealsView(mealSlots: slots)
         }
         .preferredColorScheme(.light)
