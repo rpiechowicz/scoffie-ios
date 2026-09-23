@@ -3,21 +3,26 @@ import SwiftUI
 // Wykluczanie składników — dwa arkusze nad arkuszem „Filtry”, oba piszą do
 // jego kopii roboczej:
 //
-// - `RecipeExcludeSheet` — kafelek „Wyklucz składniki” w Filtrach: pasek
-//   „Wykluczone”, szukanie w miejscu (wyniki od drugiej litery, grupa zaraz
-//   pod trafieniem, „Cofnij” nad klawiaturą) i działy sklepu.
-//   Źródło: `FFSearch` + lista kategorii z `FFSheet` w `filtry-final.jsx`.
-//   W makiecie działy stały w samych Filtrach — rozciągały arkusz na kilka
-//   ekranów przewijania, więc mają własny arkusz (decyzja Rafała 23.09.2026).
-// - `RecipeExcludeCategorySheet` — stuknięty dział („Warzywa”): na górze
-//   wykluczone z „Przywróć”, pod nimi reszta od najczęstszych w przepisach.
-//   Źródło: `FFCategory`.
+// - `RecipeExcludeSheet` — kafelek „Wyklucz składniki” w Filtrach: pole
+//   szukania (wyniki od drugiej litery, pogrupowane po działach, „Cofnij”
+//   nad klawiaturą), karta „Wykluczone” i działy sklepu z ich ikonami.
+// - `RecipeExcludeCategorySheet` — stuknięty dział („Warzywa”): składniki
+//   jako chmura pigułek od najczęstszych w przepisach.
 //
-// Odejście od makiety: makieta ma w arkuszu działu strzałkę „wstecz”.
-// W aplikacji arkusz się ZAMYKA, a nie cofa (`SCSheetCloseButton`), więc
-// stoi krzyżyk — tak samo jak na każdym innym arkuszu nałożonym na arkusz.
+// Oba nagłówki stoją przypięte nad przewijaną treścią (`scScrollEdgeFade`).
+//
+// Makieta (`FFSearch`, `FFCategory` w `filtry-final.jsx`) miała listę
+// wierszy z przyciskiem „Wyklucz” przy każdym składniku. W dziale „Warzywa”
+// to 49 wierszy po 56 pt i 49 terakotowych przycisków jeden pod drugim —
+// Rafał (23.09.2026): „lista jest do zmiany, daj lepszy widok”. Pigułka
+// niesie stan sama (terakota = wykluczony), dział mieści się na półtora
+// ekranu, a działy mają te same ikony i barwy co alejki Zakupów.
+//
+// Odejście od makiety: w arkuszu działu stoi krzyżyk, a nie strzałka
+// „wstecz” — arkusz się ZAMYKA (`SCSheetCloseButton`), jak każdy arkusz
+// nałożony na arkusz.
 
-// MARK: - Kategoria
+// MARK: - Dział
 
 struct RecipeExcludeCategorySheet: View {
     let department: IngredientDepartment
@@ -45,142 +50,152 @@ struct RecipeExcludeCategorySheet: View {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    EditorialSheetHeader(eyebrow: "Wyklucz składniki", title: department.name) {
-                        dismiss()
-                    }
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
 
-                    Text(verbatim: summary)
-                        .font(.system(size: 13))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .contentTransition(.numericText())
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        RecipeFilterSearchField(
+                            prompt: department.searchPrompt,
+                            text: $query,
+                            focus: $isSearchFocused,
+                            isActive: isSearchFocused
+                        )
                         .padding(.top, 6)
 
-                    RecipeFilterSearchField(
-                        prompt: department.searchPrompt,
-                        text: $query,
-                        focus: $isSearchFocused,
-                        isActive: isSearchFocused
-                    )
-                    .padding(.top, 16)
-
-                    if foldedQuery.isEmpty {
-                        browseList
-                    } else {
-                        searchList
+                        if foldedQuery.isEmpty {
+                            sectionLabel("Najczęściej w przepisach")
+                            cloud
+                        } else {
+                            searchCloud
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+                    .containerRelativeFrame(.horizontal)
+                    .animation(.smooth(duration: 0.25), value: filters.excludedIngredients)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 24)
-                .containerRelativeFrame(.horizontal)
-                .animation(.smooth(duration: 0.25), value: filters.excludedIngredients)
-                .animation(.smooth(duration: 0.25), value: expandedGroups)
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .scScrollEdgeFade()
+                .scSheetFooter { footer }
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            .scSheetFooter { footer }
         }
         .sensoryFeedback(.selection, trigger: filters.excludedIngredients)
     }
 
-    private var summary: String {
-        let count = excludedHere.count
-        let excluded = count == 0 ? "Nic nie wykluczone" : PolishPlural.excluded(count)
-        return "\(excluded) · \(PolishPlural.ingredients(department.ingredientCount))"
-    }
+    // MARK: Nagłówek
 
-    // MARK: Przeglądanie
+    /// Jak `EditorialSheetHeader`, tylko przy nazwie działu stoi jego ikona
+    /// — ta sama, co przy alejce na Zakupach.
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("WYKLUCZ SKŁADNIKI")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(SCPalette.terracotta)
+                    .lineLimit(1)
 
-    @ViewBuilder
-    private var browseList: some View {
-        let excluded = excludedHere
-        let available = department.entries.filter { !filters.excludedIngredients.contains($0.exclusion) }
-
-        if !excluded.isEmpty {
-            sectionLabel("Wykluczone")
-            VStack(spacing: 0) {
-                ForEach(Array(excluded.enumerated()), id: \.element.id) { offset, exclusion in
-                    excludedRow(exclusion, isLast: offset == excluded.count - 1)
+                HStack(spacing: 10) {
+                    RecipeExclusionDepartmentIcon(department: department.name, size: 30)
+                    Text(department.name)
+                        .font(.system(size: 24, weight: .heavy))
+                        .tracking(-0.4)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
                 }
             }
-            .transition(.opacity)
-        }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
-        if !available.isEmpty {
-            sectionLabel("Najczęściej w przepisach")
-            VStack(spacing: 0) {
-                ForEach(Array(available.enumerated()), id: \.element.id) { offset, entry in
-                    entryRows(entry, isLast: offset == available.count - 1)
+            SCSheetCloseButton { dismiss() }
+        }
+    }
+
+    private func sectionLabel(_ title: String) -> some View {
+        EditorialSheetSectionLabel(title: title)
+            .padding(.top, 22)
+            .padding(.bottom, 4)
+    }
+
+    // MARK: Chmura działu
+
+    /// Wszystkie składniki działu w kolejności częstości. Kolejność się nie
+    /// zmienia po stuknięciu — wykluczony składnik zostaje w miejscu, tylko
+    /// zmienia kolor, więc pomyłkę cofa się tym samym ruchem.
+    private var cloud: some View {
+        RecipeExclusionFlow(spacing: 8) {
+            ForEach(department.entries) { entry in
+                switch entry {
+                case .item(let item):
+                    RecipeExclusionPill(
+                        title: item.title,
+                        state: filters.exclusionState(of: item.exclusion)
+                    ) {
+                        filters.toggle(item: item, in: nil)
+                    }
+                case .group(let group):
+                    groupPill(group)
+                    if expandedGroups.contains(group.id) {
+                        kindsPanel(group)
+                    }
                 }
             }
         }
     }
 
-    @ViewBuilder
-    private func excludedRow(_ exclusion: IngredientExclusion, isLast: Bool) -> some View {
-        let found = department.lookup(exclusion)
-        if let group = found.group {
-            groupRows(group, isLast: isLast)
-        } else if let item = found.item {
-            itemRow(item, parent: found.parent, isLast: isLast)
-        }
-    }
-
-    @ViewBuilder
-    private func entryRows(_ entry: IngredientEntry, isLast: Bool) -> some View {
-        switch entry {
-        case .item(let item):
-            itemRow(item, parent: nil, isLast: isLast)
-        case .group(let group):
-            groupRows(group, isLast: isLast)
-        }
-    }
-
-    /// Grupa i — po rozwinięciu — jej rodzaje, wcięte pod nią.
-    @ViewBuilder
-    private func groupRows(_ group: IngredientGroup, isLast: Bool) -> some View {
+    /// Grupa rozwija rodzaje, a nie wyklucza — „Papryka” to i czerwona,
+    /// i słodka mielona, więc decyzja „całą” ma być świadoma („Wszystkie”
+    /// w panelu).
+    private func groupPill(_ group: IngredientGroup) -> some View {
         let isExpanded = expandedGroups.contains(group.id)
-        let state = filters.rowState(of: group.exclusion)
 
-        RecipeFilterIngredientRow(
+        return RecipeExclusionPill(
             title: group.title,
-            subtitle: "\(PolishPlural.kinds(group.members.count)) · \(PolishPlural.inRecipes(group.recipeCount))",
-            state: state,
-            isGroup: true,
-            expandTitle: state == .available ? "Rodzaje" : "Wybierz rodzaje",
-            isExpanded: isExpanded,
-            showsRule: !isLast || isExpanded,
-            onToggle: { filters.toggle(group: group) },
-            onExpand: { toggleExpanded(group) }
-        )
-
-        if isExpanded {
-            ForEach(Array(group.members.enumerated()), id: \.element.id) { offset, member in
-                RecipeFilterIngredientRow(
-                    title: member.title,
-                    subtitle: PolishPlural.inRecipes(member.recipeCount),
-                    state: filters.rowState(of: member.exclusion, parent: group),
-                    indent: 16,
-                    showsRule: !(isLast && offset == group.members.count - 1),
-                    onToggle: { filters.toggle(item: member, in: group) }
-                )
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+            state: filters.exclusionState(of: group.exclusion),
+            disclosure: isExpanded ? .expanded : .collapsed,
+            excludedKinds: filters.excludedKinds(of: group)
+        ) {
+            isSearchFocused = false
+            withAnimation(.smooth(duration: 0.28)) { toggleExpanded(group) }
         }
     }
 
-    private func itemRow(_ item: IngredientItem, parent: IngredientGroup?, isLast: Bool, highlight: IngredientSearch.Match? = nil) -> some View {
-        RecipeFilterIngredientRow(
-            title: item.title,
-            subtitle: PolishPlural.inRecipes(item.recipeCount),
-            state: filters.rowState(of: item.exclusion, parent: parent),
-            highlight: highlight.map { (offset: $0.offset, length: $0.length) },
-            showsRule: !isLast,
-            onToggle: { filters.toggle(item: item, in: parent) }
+    /// Rodzaje grupy pod jej pigułką, na całą szerokość chmury.
+    private func kindsPanel(_ group: IngredientGroup) -> some View {
+        AllergenChipFlow(spacing: 7) {
+            RecipeExclusionPill(
+                title: "Wszystkie",
+                state: filters.exclusionState(of: group.exclusion),
+                compact: true
+            ) {
+                filters.toggle(group: group)
+            }
+
+            ForEach(group.members) { member in
+                RecipeExclusionPill(
+                    title: member.title,
+                    state: filters.exclusionState(of: member.exclusion, parent: group),
+                    compact: true
+                ) {
+                    filters.toggle(item: member, in: group)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.scChipBg(scheme))
         )
+        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+        .recipeExclusionFullWidth()
     }
 
     private func toggleExpanded(_ group: IngredientGroup) {
@@ -194,7 +209,7 @@ struct RecipeExcludeCategorySheet: View {
     // MARK: Szukanie w dziale
 
     @ViewBuilder
-    private var searchList: some View {
+    private var searchCloud: some View {
         let results = IngredientSearch.results(for: query, in: department.entries)
 
         sectionLabel("Wyniki")
@@ -204,32 +219,19 @@ struct RecipeExcludeCategorySheet: View {
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.horizontal, 6)
         } else {
-            VStack(spacing: 0) {
-                ForEach(Array(results.enumerated()), id: \.element.id) { offset, result in
-                    let isLast = offset == results.count - 1
-                    switch result.kind {
-                    case .item(let item, let parent):
-                        itemRow(item, parent: parent, isLast: isLast, highlight: result.match)
-                    case .group(let group):
-                        RecipeFilterIngredientRow(
-                            title: group.title,
-                            subtitle: "\(PolishPlural.kinds(group.members.count)) · \(PolishPlural.inRecipes(group.recipeCount))",
-                            state: filters.rowState(of: group.exclusion),
-                            isGroup: true,
-                            highlight: result.match.map { (offset: $0.offset, length: $0.length) },
-                            showsRule: !isLast,
-                            onToggle: { filters.toggle(group: group) }
-                        )
+            RecipeExclusionFlow(spacing: 8) {
+                ForEach(results) { result in
+                    RecipeExclusionResultPill(result: result, filters: filters) {
+                        switch result.kind {
+                        case .item(let item, let parent):
+                            filters.toggle(item: item, in: parent)
+                        case .group(let group):
+                            filters.toggle(group: group)
+                        }
                     }
                 }
             }
         }
-    }
-
-    private func sectionLabel(_ title: String) -> some View {
-        EditorialSheetSectionLabel(title: title)
-            .padding(.top, 22)
-            .padding(.bottom, 2)
     }
 
     // MARK: Stopka
@@ -270,16 +272,18 @@ struct RecipeExcludeCategorySheet: View {
 
 /// Arkusz „Wyklucz składniki” — otwierany kafelkiem z arkusza „Filtry”.
 ///
-/// Od góry: pasek „Wykluczone” (chipy, stuknięcie przywraca), pole
-/// szukania, pod nim działy sklepu. Od drugiej litery w polu działy ustępują
-/// wynikom — szukanie jest tutaj, w miejscu, a nie w kolejnym arkuszu.
-/// Po „Wyklucz” chip dochodzi do paska, a nad klawiaturą (albo dołem
-/// arkusza) stoi „Cofnij”. Dział otwiera `RecipeExcludeCategorySheet`.
+/// Od góry: pole szukania, karta „Wykluczone” (chipy, stuknięcie przywraca)
+/// i działy sklepu. Od drugiej litery w polu karta i działy ustępują wynikom —
+/// pigułkom pogrupowanym po działach; szukanie jest tutaj, w miejscu, a nie
+/// w kolejnym arkuszu. Wykluczenie z wyników potwierdza „Cofnij” nad
+/// klawiaturą (albo dołem arkusza); nowy chip czeka w karcie podświetlony
+/// jeszcze przez chwilę po wyjściu z szukania. Dział otwiera
+/// `RecipeExcludeCategorySheet`.
 struct RecipeExcludeSheet: View {
     let index: RecipeFilterIndex
     @Binding var filters: RecipeFilterOptions
     let fit: Bool
-    /// Alergeny i dieta z profilu — w pasku „Wykluczone” z kłódką.
+    /// Alergeny i dieta z profilu — w karcie „Wykluczone” z kłódką.
     let profileChips: [RecipeFilterChipLine.Chip]
 
     @Environment(\.dismiss) private var dismiss
@@ -288,8 +292,8 @@ struct RecipeExcludeSheet: View {
     @State private var query = ""
     @FocusState private var isFocused: Bool
     @State private var openDepartment: IngredientDepartment?
-    /// Kolejność chipów w pasku: stare po kolei, nowe na końcu — `Set` nie
-    /// ma własnej, a chip dochodzący do paska nie może wskoczyć w środek.
+    /// Kolejność chipów w karcie: stare po kolei, nowe na końcu — `Set` nie
+    /// ma własnej, a chip dochodzący do karty nie może wskoczyć w środek.
     @State private var chipOrder: [IngredientExclusion] = []
     @State private var freshChip: IngredientExclusion?
     @State private var undo: Undo?
@@ -301,7 +305,7 @@ struct RecipeExcludeSheet: View {
         let previous: Set<IngredientExclusion>
     }
 
-    /// Ile chipów widać, zanim pasek zwinie resztę w „+N więcej”.
+    /// Ile chipów widać, zanim karta zwinie resztę w „+N więcej”.
     private static let collapsedChipLimit = 5
 
     private var foldedQuery: String {
@@ -310,45 +314,60 @@ struct RecipeExcludeSheet: View {
 
     private var isSearching: Bool { foldedQuery.count >= 2 }
 
+    /// Karta „Wykluczone” stoi tylko wtedy, gdy jest co w niej pokazać —
+    /// pusta mówiła tylko to, co mówi już pole szukania.
+    private var showsStrip: Bool {
+        !filters.excludedIngredients.isEmpty || !profileChips.isEmpty
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    EditorialSheetHeader(eyebrow: "Filtry", title: "Wyklucz składniki") {
-                        dismiss()
-                    }
-
-                    strip
-                        .padding(.top, 18)
-
-                    RecipeFilterSearchField(
-                        prompt: "Szukaj składnika, np. papryka",
-                        text: $query,
-                        focus: $isFocused,
-                        isActive: isFocused
-                    )
-                    .padding(.top, 14)
-
-                    if isSearching {
-                        results
-                            .transition(.opacity)
-                    } else {
-                        departments
-                            .transition(.opacity)
-                    }
+            VStack(spacing: 0) {
+                EditorialSheetHeader(eyebrow: "Filtry", title: "Wyklucz składniki") {
+                    dismiss()
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
-                .padding(.bottom, 24)
-                .containerRelativeFrame(.horizontal)
-                .animation(.smooth(duration: 0.25), value: filters.excludedIngredients)
-                .animation(.smooth(duration: 0.2), value: isSearching)
+                .padding(.bottom, 12)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        RecipeFilterSearchField(
+                            prompt: "Szukaj składnika, np. papryka",
+                            text: $query,
+                            focus: $isFocused,
+                            isActive: isFocused
+                        )
+                        .padding(.top, 6)
+
+                        if isSearching {
+                            results
+                                .transition(.opacity)
+                        } else {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if showsStrip {
+                                    strip
+                                        .padding(.top, 14)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                                }
+                                departments
+                            }
+                            .transition(.opacity)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+                    .containerRelativeFrame(.horizontal)
+                    .animation(.smooth(duration: 0.25), value: filters.excludedIngredients)
+                    .animation(.smooth(duration: 0.2), value: isSearching)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .scScrollEdgeFade()
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
         }
         // Nad klawiaturą — bezpieczny obszar arkusza kończy się na niej.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -377,9 +396,9 @@ struct RecipeExcludeSheet: View {
         let list = index.departments
 
         return VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: "Przeglądaj kategorie")
+            EditorialSheetSectionLabel(title: "Działy")
                 .padding(.top, 22)
-                .padding(.bottom, 2)
+                .padding(.bottom, 4)
 
             VStack(spacing: 0) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { offset, department in
@@ -406,38 +425,38 @@ struct RecipeExcludeSheet: View {
         }
     }
 
+    /// Dział: ikona i barwa alejki z Zakupów, nazwa, pod nią liczba składników
+    /// albo — gdy coś tu wykluczono — ich nazwy w terakocie.
     private func departmentRow(_ department: IngredientDepartment, showsRule: Bool) -> some View {
         let excluded = department.excluded(in: filters.excludedIngredients)
-        let chips = excluded.map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.chipTitle) }
+        let subtitle = excluded.isEmpty
+            ? PolishPlural.ingredients(department.ingredientCount)
+            : excluded.map(\.chipTitle).joined(separator: ", ")
 
         return Button {
             isFocused = false
             openDepartment = department
         } label: {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                RecipeExclusionDepartmentIcon(department: department.name)
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text(department.name)
-                        .font(.system(size: 15, weight: .medium))
-                        .tracking(-0.25)
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
-                    if chips.isEmpty {
-                        Text(PolishPlural.ingredients(department.ingredientCount))
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.scFaint(scheme))
-                            .padding(.top, 3)
-                            .transition(.opacity)
-                    } else {
-                        RecipeFilterChipLine(chips: chips)
-                            .padding(.top, 7)
-                            .transition(.opacity)
-                    }
+                    Text(subtitle)
+                        .font(.system(size: 12.5, weight: excluded.isEmpty ? .regular : .medium))
+                        .foregroundStyle(excluded.isEmpty ? Color.scMuted(scheme) : SCPalette.terracotta)
+                        .lineLimit(1)
+                        .contentTransition(.opacity)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if !chips.isEmpty {
-                    RecipeFilterCountBadge(count: chips.count)
+                if !excluded.isEmpty {
+                    RecipeFilterCountBadge(count: excluded.count)
                         .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
 
@@ -445,9 +464,9 @@ struct RecipeExcludeSheet: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
             }
-            .padding(.vertical, 12)
-            .padding(.leading, 14)
-            .padding(.trailing, 12)
+            .padding(.vertical, 11)
+            .padding(.leading, 12)
+            .padding(.trailing, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
@@ -456,17 +475,17 @@ struct RecipeExcludeSheet: View {
                 Rectangle()
                     .fill(Color.scRule(scheme))
                     .frame(height: 1)
-                    .padding(.leading, 14)
+                    .padding(.leading, 12 + 34 + 12)
             }
         }
-        .animation(.smooth(duration: 0.22), value: chips.map(\.id))
+        .animation(.smooth(duration: 0.22), value: excluded)
         .accessibilityLabel(department.name)
-        .accessibilityValue(chips.isEmpty
+        .accessibilityValue(excluded.isEmpty
             ? PolishPlural.ingredients(department.ingredientCount)
-            : "wykluczone: " + chips.map(\.title).joined(separator: ", "))
+            : "wykluczone: " + excluded.map(\.chipTitle).joined(separator: ", "))
     }
 
-    // MARK: Pasek „Wykluczone”
+    // MARK: Karta „Wykluczone”
 
     private var orderedExclusions: [IngredientExclusion] {
         let current = filters.excludedIngredients
@@ -494,10 +513,7 @@ struct RecipeExcludeSheet: View {
                     .tracking(-0.25)
                     .foregroundStyle(Color.scLabel(scheme))
 
-                if total > 0 {
-                    RecipeFilterCountBadge(count: total)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
+                RecipeFilterCountBadge(count: total)
 
                 Spacer(minLength: 8)
 
@@ -513,37 +529,30 @@ struct RecipeExcludeSheet: View {
                 }
             }
 
-            if total == 0 {
-                Text("Nic jeszcze nie wykluczasz. Wpisz składnik, którego nie jesz.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                AllergenChipFlow(spacing: 6) {
-                    ForEach(visibleProfile) { chip in
-                        RecipeFilterExclusionChip(title: chip.title, locked: true)
-                            .accessibilityLabel("\(chip.title), z Twojego profilu")
-                    }
-                    ForEach(visibleExclusions) { exclusion in
-                        Button {
-                            withAnimation(.smooth(duration: 0.25)) {
-                                _ = filters.excludedIngredients.remove(exclusion)
-                            }
-                        } label: {
-                            RecipeFilterExclusionChip(title: exclusion.chipTitle, fresh: exclusion == freshChip)
+            AllergenChipFlow(spacing: 6) {
+                ForEach(visibleProfile) { chip in
+                    RecipeFilterExclusionChip(title: chip.title, locked: true)
+                        .accessibilityLabel("\(chip.title), z Twojego profilu")
+                }
+                ForEach(visibleExclusions) { exclusion in
+                    Button {
+                        withAnimation(.smooth(duration: 0.25)) {
+                            _ = filters.excludedIngredients.remove(exclusion)
                         }
-                        .buttonStyle(PlanPressStyle(scale: 0.94))
-                        .transition(.scale(scale: 0.6).combined(with: .opacity))
-                        .accessibilityLabel("Przywróć \(exclusion.chipTitle)")
+                    } label: {
+                        RecipeFilterExclusionChip(title: exclusion.chipTitle, fresh: exclusion == freshChip)
                     }
-                    if rest > 0 {
-                        Button {
-                            withAnimation(.smooth(duration: 0.25)) { showsAllChips = true }
-                        } label: {
-                            RecipeFilterMoreChip(label: "+\(rest) więcej")
-                        }
-                        .buttonStyle(PlanPressStyle(scale: 0.94))
+                    .buttonStyle(PlanPressStyle(scale: 0.94))
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .accessibilityLabel("Przywróć \(exclusion.chipTitle)")
+                }
+                if rest > 0 {
+                    Button {
+                        withAnimation(.smooth(duration: 0.25)) { showsAllChips = true }
+                    } label: {
+                        RecipeFilterMoreChip(label: "+\(rest) więcej")
                     }
+                    .buttonStyle(PlanPressStyle(scale: 0.94))
                 }
             }
         }
@@ -563,56 +572,72 @@ struct RecipeExcludeSheet: View {
 
     // MARK: Wyniki
 
+    private struct ResultSection: Identifiable {
+        let department: String
+        var results: [IngredientSearchResult]
+
+        var id: String { department }
+    }
+
+    /// Trafienia pogrupowane po działach: dział z najlepszym trafieniem
+    /// pierwszy, w dziale kolejność trafień. „Papryka” w Warzywach i w
+    /// Przyprawach to dla kogoś, kto nie je świeżej papryki, dwie różne
+    /// rzeczy — nagłówek działu mówi, która jest która.
+    private static func sections(of results: [IngredientSearchResult]) -> [ResultSection] {
+        var sections: [ResultSection] = []
+        for result in results {
+            let department: String
+            switch result.kind {
+            case .item(let item, _):
+                department = item.department
+            case .group(let group):
+                department = group.department
+            }
+            if let position = sections.firstIndex(where: { $0.department == department }) {
+                sections[position].results.append(result)
+            } else {
+                sections.append(ResultSection(department: department, results: [result]))
+            }
+        }
+        return sections
+    }
+
     @ViewBuilder
     private var results: some View {
-        let found = IngredientSearch.results(for: query, in: index.allEntries)
+        let sections = Self.sections(of: IngredientSearch.results(for: query, in: index.allEntries))
 
-        EditorialSheetSectionLabel(title: "Wyniki dla „\(query.trimmingCharacters(in: .whitespaces))”")
-            .padding(.top, 22)
-            .padding(.bottom, 2)
-
-        if found.isEmpty {
+        if sections.isEmpty {
             Text("Żaden przepis nie ma takiego składnika.")
                 .font(.system(size: 13.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.horizontal, 6)
+                .padding(.top, 22)
         } else {
-            VStack(spacing: 0) {
-                ForEach(Array(found.enumerated()), id: \.element.id) { offset, result in
-                    let isLast = offset == found.count - 1
-                    switch result.kind {
-                    case .item(let item, let parent):
-                        itemRow(item, parent: parent, match: result.match, isLast: isLast)
-                    case .group(let group):
-                        RecipeFilterIngredientRow(
-                            title: group.title,
-                            subtitle: "\(group.department) · \(PolishPlural.kinds(group.members.count)) · \(PolishPlural.inRecipes(group.recipeCount))",
-                            state: filters.rowState(of: group.exclusion),
-                            isGroup: true,
-                            highlight: result.match.map { (offset: $0.offset, length: $0.length) },
-                            showsRule: !isLast,
-                            onToggle: { toggle(group.exclusion) { filters.toggle(group: group) } }
-                        )
+            ForEach(sections) { section in
+                VStack(alignment: .leading, spacing: 10) {
+                    RecipeExclusionDepartmentLabel(department: section.department)
+
+                    RecipeExclusionFlow(spacing: 8) {
+                        ForEach(section.results) { result in
+                            RecipeExclusionResultPill(result: result, filters: filters) {
+                                switch result.kind {
+                                case .item(let item, let parent):
+                                    toggle(item.exclusion) { filters.toggle(item: item, in: parent) }
+                                case .group(let group):
+                                    toggle(group.exclusion) { filters.toggle(group: group) }
+                                }
+                            }
+                        }
                     }
                 }
+                .padding(.top, 20)
             }
         }
     }
 
-    private func itemRow(_ item: IngredientItem, parent: IngredientGroup?, match: IngredientSearch.Match?, isLast: Bool) -> some View {
-        RecipeFilterIngredientRow(
-            title: item.title,
-            subtitle: "\(item.department) · \(PolishPlural.inRecipes(item.recipeCount))",
-            state: filters.rowState(of: item.exclusion, parent: parent),
-            highlight: match.map { (offset: $0.offset, length: $0.length) },
-            showsRule: !isLast,
-            onToggle: { toggle(item.exclusion) { filters.toggle(item: item, in: parent) } }
-        )
-    }
-
     // MARK: Wykluczanie i „Cofnij”
 
-    /// Przełącza i — jeśli coś właśnie wykluczono — zapala chip w pasku
+    /// Przełącza i — jeśli coś właśnie wykluczono — zapala chip w karcie
     /// i pokazuje „Cofnij” nad klawiaturą.
     private func toggle(_ exclusion: IngredientExclusion, change: () -> Void) {
         let before = filters.excludedIngredients
@@ -692,5 +717,39 @@ struct RecipeExcludeSheet: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Trafienie szukania
+
+/// Trafienie szukania jako pigułka: składnik albo cała grupa
+/// („Papryka · wszystkie”). Co zrobić po stuknięciu, decyduje arkusz —
+/// arkusz „Wyklucz składniki” dokłada do tego „Cofnij”.
+struct RecipeExclusionResultPill: View {
+    let result: IngredientSearchResult
+    let filters: RecipeFilterOptions
+    let onToggle: () -> Void
+
+    private var highlight: (offset: Int, length: Int)? {
+        result.match.map { (offset: $0.offset, length: $0.length) }
+    }
+
+    var body: some View {
+        switch result.kind {
+        case .item(let item, let parent):
+            RecipeExclusionPill(
+                title: item.title,
+                state: filters.exclusionState(of: item.exclusion, parent: parent),
+                highlight: highlight,
+                action: onToggle
+            )
+        case .group(let group):
+            RecipeExclusionPill(
+                title: group.exclusion.chipTitle,
+                state: filters.exclusionState(of: group.exclusion),
+                highlight: highlight,
+                action: onToggle
+            )
+        }
     }
 }

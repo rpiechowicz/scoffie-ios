@@ -1,15 +1,15 @@
 import SwiftUI
 
-// Klocki arkusza „Filtry” i jego dwóch arkuszy-dzieci (kategoria składników,
-// szukanie składnika). Źródło: Claude Design, projekt 43b605d0-…,
-// „Scoffie - Przepisy v3 - Filtry.html” → `components/filtry-final.jsx`
-// (+ `rf-kit.jsx`, `rf2-kit.jsx`).
+// Klocki arkusza „Filtry”, filtrów kategorii i arkuszy wykluczania składników.
+// Źródło: Claude Design, projekt 43b605d0-…, „Scoffie - Przepisy v3 -
+// Filtry.html” → `components/filtry-final.jsx` (+ `rf-kit.jsx`, `rf2-kit.jsx`),
+// dalej przerobione po uwagach Rafała (23.09.2026): wykres kalorii bez
+// osobnego suwaka, kafelki ze zdjęciem dania, składniki jako pigułki.
 //
-// Makieta jest wzorem układu, a nie stylu kontrolek: pola wyboru to
-// `SCCheckbox`, akcja główna to wariant „soft” (`scSoftCapsule`), krzyżyk to
-// `SCSheetCloseButton`, stopka to wspólna stopka arkuszy (`scSheetFooter`),
-// a kafelek wyboru — `SCChoiceTile`. Gdzie makieta rysuje inaczej niż
-// komponent aplikacji, wygrywa komponent.
+// Makieta jest wzorem układu, a nie stylu kontrolek: akcja główna to wariant
+// „soft” (`scSoftCapsule`), krzyżyk to `SCSheetCloseButton`, stopka to wspólna
+// stopka arkuszy (`scSheetFooter`), a kafelek wyboru — `SCChoiceTile`. Gdzie
+// makieta rysuje inaczej niż komponent aplikacji, wygrywa komponent.
 
 // MARK: - Sekcja
 
@@ -136,22 +136,29 @@ struct RecipeFilterMenuTile<Value: Hashable>: View {
     }
 }
 
-// MARK: - Kafelek opcji (Dieta, Cechy)
+// MARK: - Kafelek opcji (Dieta, Cechy, filtry kategorii)
 
-/// Kafelek 2 × 3: pole wyboru, nazwa, pod nią ile przepisów zostanie po
-/// zaznaczeniu. Kafelek z profilu stoi z kłódką i nie da się go odznaczyć —
-/// to robi przełącznik „Dopasowane do Ciebie” albo Ustawienia.
+/// Kafelek 2 × 3: zdjęcie dania z tą cechą, nazwa, pod nią ile przepisów
+/// zostanie po zaznaczeniu. Kafelek z profilu stoi z kłódką i nie da się go
+/// odznaczyć — to robi przełącznik „Dopasowane do Ciebie” albo Ustawienia.
 ///
-/// Rysunek jest wspólny z alergenami (`SCChoiceTile`); tu dochodzi tylko
-/// liczba przepisów i gaśnięcie kafelka, po którym nic by nie zostało.
+/// Rysunek jest wspólny (`SCChoiceTile`); tu dochodzi zdjęcie, liczba
+/// przepisów i gaśnięcie kafelka, po którym nic by nie zostało.
 struct RecipeFilterOptionTile: View {
     let title: String
     /// Ile zostanie po zaznaczeniu; `nil` = nie pokazuj (kafelek z profilu).
     let count: Int?
     let mark: SCChoiceMark
     var accent: Color = SCPalette.terracotta
+    /// Przepis, którego zdjęcie stoi w kafelku — przykład dania z tą cechą
+    /// (`RecipeFilterCovers`). `nil` = glif.
+    var cover: Recipe? = nil
+    /// Glif, gdy nie ma zdjęcia.
+    var icon: String = "fork.knife"
     var accessibilityDetail: String?
     let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
 
     /// Nic by nie zostało — kafelek gaśnie, ale zostaje na miejscu, żeby
     /// siatka nie przeskakiwała przy każdym stuknięciu obok.
@@ -166,11 +173,16 @@ struct RecipeFilterOptionTile: View {
             accessibilityValue: accessibilityValue,
             action: action
         ) {
+            RecipeFilterCoverThumb(recipe: cover, icon: icon, accent: accent)
+        } detail: {
             if let count {
-                Text(verbatim: PolishPlural.recipes(count))
+                (Text(verbatim: "\(count)")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    + Text(verbatim: " \(PolishPlural.recipesNoun(count))"))
                     .contentTransition(.numericText(value: Double(count)))
             } else {
-                Text("Z Twojego profilu")
+                Text("Z profilu")
             }
         }
         .animation(.easeOut(duration: 0.3), value: count)
@@ -185,28 +197,112 @@ struct RecipeFilterOptionTile: View {
     }
 }
 
-// MARK: - Kalorie: histogram z uchwytem
+/// Miniatura kafelka: zdjęcie przepisu przybliżone do samego dania, a bez
+/// zdjęcia glif w tincie akcentu.
+struct RecipeFilterCoverThumb: View {
+    let recipe: Recipe?
+    let icon: String
+    let accent: Color
 
-/// Limit kalorii na porcję jako suwak nad rozkładem przepisów.
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if let url = recipe?.imageURL {
+            CachedAsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        // Zdjęcia katalogu mają talerz na środku i blat
+                        // dookoła. W 38 pt blat zjadał pół miniatury, a danie
+                        // robiło się kropką — przybliżenie zostawia samo danie.
+                        .scaleEffect(1.45)
+                default:
+                    placeholder
+                }
+            }
+        } else {
+            placeholder
+        }
+    }
+
+    private var placeholder: some View {
+        ZStack {
+            accent.opacity(scheme == .dark ? 0.16 : 0.12)
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(accent)
+        }
+    }
+}
+
+/// Kafelki po dwa w wierszu, równej szerokości i równej wysokości.
+///
+/// `LazyVGrid` ustawia komórki na środku wiersza, a kafelek z nazwą w dwóch
+/// liniach („Bogate w błonnik”) jest wyższy od sąsiada („Mało soli”) — obok
+/// siebie stały dwa różne kafelki. Tu wiersz to `HStack` o wysokości
+/// wyższego kafelka (`fixedSize` w pionie), a niższy się do niej rozciąga
+/// (`maxHeight: .infinity` w `SCChoiceTile`). Leniwość nie jest potrzebna:
+/// sekcja ma najwyżej kilka kafelków.
+struct RecipeFilterTileGrid<Item: Identifiable, Tile: View>: View {
+    let items: [Item]
+    @ViewBuilder var tile: (Item) -> Tile
+
+    private var rows: [[Item]] {
+        stride(from: 0, to: items.count, by: 2).map { start in
+            Array(items[start..<min(start + 2, items.count)])
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(row) { item in
+                        tile(item)
+                    }
+                    // Nieparzysta liczba: ostatni kafelek zostaje w lewej
+                    // połowie, a nie rozciąga się na cały wiersz.
+                    if row.count == 1 {
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+// MARK: - Kalorie: wykres, który jest suwakiem
+
+/// Limit kalorii na porcję jako wykres rozkładu przepisów, który sam jest
+/// suwakiem — bez osobnego toru z wypełnieniem pod spodem.
 ///
 /// Słupki to przedziały po 50 kcal: wysokość = ile przepisów ma taką
-/// kaloryczność przy WSZYSTKICH pozostałych filtrach, kolor = czy zmieści
-/// się pod limitem. Widać, co kosztuje przesunięcie uchwytu o krok —
-/// „do 500” odcina górę rozkładu, a nie abstrakcyjną liczbę. Ostatni słupek
-/// to „1000+”; uchwyt na samym końcu = bez limitu.
+/// kaloryczność przy WSZYSTKICH pozostałych filtrach, kolor = czy mieści się
+/// pod limitem. Pionowa kreska z gałką na osi to granica: palec prowadzi ją
+/// po całym wykresie, stuknięcie stawia ją w miejscu palca. Ostatni słupek
+/// to „1000+”; kreska za nim = bez limitu.
 ///
-/// Cel z profilu stoi NA wykresie: szałwiowe pasmo za słupkami z podpisem
-/// „cel” i ten sam odcinek na torze, a pod osią legenda z liczbami
-/// i skrótem „Do celu”, który stawia uchwyt na górnej granicy celu.
+/// Wcześniej pod wykresem był osobny suwak (tor z terakotowym wypełnieniem
+/// i białą gałką), a cel siedział w trzech miejscach naraz: pasmo za
+/// słupkami, odcinek toru i linijka legendy. Rafał (23.09): „możesz
+/// zrezygnować z tego Progressu, zrób to ładniej”. Teraz cel to szałwiowy
+/// odcinek NA osi z podpisem „500 · Twój cel · 800”, a nad nim ledwie widoczna
+/// poświata — kreska limitu nigdy nie przecina napisu.
+///
+/// Liczba na górze karty to sam limit; krzyżyk obok niej go zdejmuje,
+/// a „Do celu” stawia go na górnej granicy celu.
 ///
 /// Gest idzie OBOK przewijania (`simultaneousGesture`): pionowy ruch palca
-/// przewija arkusz, poziomy prowadzi uchwyt. Kierunek rozstrzyga się raz,
-/// po pierwszych punktach ruchu; stuknięcie stawia uchwyt w miejscu palca.
-///
-/// W trakcie przeciągania uchwyt idzie za palcem bez animacji, ale sama
-/// zmiana wartości NIE wyłącza animacji w transakcji — dzięki temu liczby
-/// przepisów w stopce i na kafelkach rolują się razem z ruchem palca.
-struct RecipeFilterKcalSlider: View {
+/// przewija arkusz, poziomy prowadzi kreskę. Kierunek rozstrzyga się raz, po
+/// pierwszych punktach ruchu. W trakcie ruchu kreska idzie za palcem bez
+/// animacji, ale zmiana wartości NIE wyłącza animacji w transakcji — liczby
+/// w stopce, na kafelkach i na górze karty rolują się razem z palcem.
+struct RecipeFilterKcalChart: View {
     @Binding var value: Int?
     /// Liczba przepisów w każdym przedziale (`RecipeFilterIndex.kcalHistogram`).
     let histogram: [Int]
@@ -216,21 +312,33 @@ struct RecipeFilterKcalSlider: View {
     @Environment(\.colorScheme) private var scheme
     @State private var axis: Axis? = nil
     @State private var isDragging = false
+    /// Czy palec jest na wykresie. `GestureState` wraca do `false` także
+    /// wtedy, gdy gest zostanie przerwany (przewijanie przejęło palec) —
+    /// `onEnded` wtedy nie przychodzi i bez tego `axis` zostawałby na
+    /// następny ruch, a gałka powiększona.
+    @GestureState private var isTouching = false
 
     private let step = RecipeFilterOptions.calorieStep
     private let limitMax = RecipeFilterOptions.calorieScaleMax
     /// Skala sięga o jeden przedział dalej niż największy limit — tam stoi
-    /// słupek „1000+” i tam parkuje uchwyt „bez limitu”.
+    /// słupek „1000+” i tam parkuje kreska „bez limitu”.
     private var scaleEnd: Int { limitMax + step }
 
-    /// Pas słupków z miejscem na podpis „cel” nad najwyższym słupkiem.
-    private static let barsHeight: CGFloat = 62
-    private static let barsMax: CGFloat = 46
-    private static let thumb: CGFloat = 26
-    private static let barSpacing: CGFloat = 3
+    private static let chartHeight: CGFloat = 96
+    private static let barsMax: CGFloat = 74
+    private static let barGap: CGFloat = 3
+    /// Gałka na osi: białe koło 16 pt w terakotowym pierścieniu 3 pt.
+    private static let knob: CGFloat = 22
+    /// Podpisy osi: odstęp od osi (gałka wystaje pod nią 11 pt) i wysokość.
+    private static let axisGap: CGFloat = 10
+    private static let axisHeight: CGFloat = 16
+    /// Wykres z podpisami — cała ta wysokość łapie palec, więc gałkę da się
+    /// chwycić także za dolną połowę, która wystaje pod oś.
+    private static var totalHeight: CGFloat { chartHeight + axisGap + axisHeight }
 
     private var thumbValue: Int { value ?? scaleEnd }
-    private var inset: CGFloat { Self.thumb / 2 }
+    /// Margines skali po bokach — gałka na skraju nie wychodzi poza kartę.
+    private var inset: CGFloat { 8 }
 
     /// Pole celu przycięte do skali — cel „do 1200” kończy się na „1000+”.
     private var visibleZone: ClosedRange<Int>? {
@@ -238,49 +346,167 @@ struct RecipeFilterKcalSlider: View {
         return max(0, goalZone.lowerBound)...min(scaleEnd, goalZone.upperBound)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            GeometryReader { proxy in
-                let width = proxy.size.width
-                VStack(spacing: 0) {
-                    bars(width: width)
-                        .frame(height: Self.barsHeight)
-                    track(width: width)
-                        .frame(height: Self.thumb + 8)
-                }
-                .contentShape(Rectangle())
-                .simultaneousGesture(drag(width: width))
-            }
-            .frame(height: Self.barsHeight + Self.thumb + 8)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Kalorie na porcję")
-            .accessibilityValue(value.map { "do \($0) kilokalorii" } ?? "bez limitu")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment:
-                    let next = thumbValue + step
-                    value = next > limitMax ? nil : next
-                case .decrement:
-                    value = max(RecipeFilterOptions.calorieMinimum, min(thumbValue, scaleEnd) - step)
-                @unknown default:
-                    break
-                }
-            }
-
-            axisLabels
-                .frame(height: 16)
-                .padding(.top, 2)
-
-            if let goalZone {
-                goalLegend(goalZone)
-                    .padding(.top, 12)
-                    .transition(.opacity)
-            }
-        }
-        .sensoryFeedback(.selection, trigger: value)
+    /// Gdzie „Do celu” stawia limit: górna granica celu, najwyżej 1000.
+    private var goalTarget: Int? {
+        guard let goalZone else { return nil }
+        return min(goalZone.upperBound, limitMax)
     }
 
-    // MARK: Rysunek
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            topRow
+
+            chart
+                .padding(.top, 14)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 13)
+        .padding(.bottom, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
+        )
+        .sensoryFeedback(.selection, trigger: value)
+        .onChange(of: isTouching) { _, touching in
+            guard !touching else { return }
+            axis = nil
+            isDragging = false
+        }
+    }
+
+    // MARK: Góra karty
+
+    /// Limit dużą liczbą, obok krzyżyk, który go zdejmuje; po prawej „Do celu”,
+    /// gdy jest cel i limit na nim nie stoi.
+    private var topRow: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ZStack(alignment: .leading) {
+                if let value {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        // Wartość czyta VoiceOver z wykresu — tu byłaby drugi raz.
+                        Group {
+                            Text("do")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.scMuted(scheme))
+                            Text(verbatim: "\(value)")
+                                .font(.system(size: 26, weight: .heavy))
+                                .tracking(-0.6)
+                                .monospacedDigit()
+                                .foregroundStyle(Color.scLabel(scheme))
+                                .contentTransition(.numericText(value: Double(value)))
+                            Text("kcal")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.scMuted(scheme))
+                        }
+                        .accessibilityHidden(true)
+
+                        clearButton
+                            .alignmentGuide(.firstTextBaseline) { dimensions in
+                                dimensions[VerticalAlignment.center] + 5
+                            }
+                    }
+                    .transition(.opacity)
+                } else {
+                    Text("Bez limitu")
+                        .font(.system(size: 22, weight: .heavy))
+                        .tracking(-0.5)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let target = goalTarget, value != target {
+                goalChip(target: target)
+            }
+        }
+        .frame(minHeight: 32)
+        // Także w trakcie ruchu palca — cyfry limitu rolują się z kreską.
+        .animation(.smooth(duration: 0.2), value: value)
+    }
+
+    /// Zdejmuje limit jednym stuknięciem — bez przeciągania kreski za
+    /// „1000+”. Krzyżyk jak w polu szukania: czyści to, obok czego stoi.
+    private var clearButton: some View {
+        Button {
+            set(nil)
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.scFaint(scheme))
+                .frame(width: 30, height: 30)
+                .contentShape(Circle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.9))
+        .accessibilityLabel("Zdejmij limit kalorii")
+    }
+
+    private func goalChip(target: Int) -> some View {
+        Button {
+            set(target)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "scope")
+                    .font(.system(size: 11.5, weight: .bold))
+                Text("Do celu")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(-0.1)
+            }
+            .foregroundStyle(SCPalette.sage)
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .scSoftCapsule(SCPalette.sage)
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        .accessibilityLabel("Ustaw limit na \(target) kilokalorii, górną granicę Twojego celu")
+    }
+
+    private func set(_ newValue: Int?) {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { value = newValue }
+    }
+
+    // MARK: Wykres
+
+    private var chart: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            ZStack(alignment: .topLeading) {
+                if let zone = visibleZone {
+                    goalWash(zone: zone, width: width)
+                }
+                bars(width: width)
+                baseline(width: width)
+                axisLabels(width: width)
+                    .offset(y: Self.chartHeight + Self.axisGap)
+                marker(width: width)
+            }
+            .frame(width: width, height: Self.totalHeight, alignment: .topLeading)
+            .contentShape(Rectangle())
+            .simultaneousGesture(drag(width: width))
+        }
+        .frame(height: Self.totalHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Kalorie na porcję")
+        .accessibilityValue(value.map { "do \($0) kilokalorii" } ?? "bez limitu")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                let next = thumbValue + step
+                value = next > limitMax ? nil : next
+            case .decrement:
+                value = max(RecipeFilterOptions.calorieMinimum, min(thumbValue, scaleEnd) - step)
+            @unknown default:
+                break
+            }
+        }
+    }
 
     private func x(_ kcal: Int, width: CGFloat) -> CGFloat {
         let usable = max(1, width - 2 * inset)
@@ -296,173 +522,182 @@ struct RecipeFilterKcalSlider: View {
 
     private func barColor(included: Bool, empty: Bool) -> Color {
         if included {
-            return SCPalette.terracotta.opacity(empty ? 0.25 : (scheme == .dark ? 0.62 : 0.55))
+            return SCPalette.terracotta.opacity(empty ? 0.3 : 0.9)
         }
         return Color.scLabel(scheme).opacity(empty ? 0.06 : 0.11)
     }
 
+    private func barHeight(_ recipes: Int, peak: Int) -> CGFloat {
+        recipes == 0 ? 2 : max(4, Self.barsMax * CGFloat(recipes) / CGFloat(peak))
+    }
+
+    /// Słupki stoją dokładnie na swoich przedziałach skali (a nie w `HStack`
+    /// z odstępem), więc kreska limitu trafia zawsze w szczelinę między nimi.
     private func bars(width: CGFloat) -> some View {
         let peak = max(histogram.max() ?? 0, 1)
-        let usable = max(1, width - 2 * inset)
-        let count = max(histogram.count, 1)
-        let barWidth = max(2, (usable - Self.barSpacing * CGFloat(count - 1)) / CGFloat(count))
 
         return ZStack(alignment: .bottomLeading) {
-            if let zone = visibleZone {
-                goalBand(zone: zone, width: width)
-            }
-
-            HStack(alignment: .bottom, spacing: Self.barSpacing) {
-                ForEach(Array(histogram.enumerated()), id: \.offset) { index, recipes in
-                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                        .fill(barColor(included: isIncluded(bucket: index), empty: recipes == 0))
-                        .frame(
-                            width: barWidth,
-                            height: recipes == 0 ? 2 : max(4, Self.barsMax * CGFloat(recipes) / CGFloat(peak))
-                        )
-                }
-            }
-            .frame(width: usable, height: Self.barsHeight, alignment: .bottomLeading)
-            .padding(.horizontal, inset)
-            .animation(.smooth(duration: 0.35), value: histogram)
-            .animation(isDragging ? nil : .smooth(duration: 0.2), value: value)
-        }
-        .frame(width: width, height: Self.barsHeight, alignment: .bottomLeading)
-    }
-
-    /// Pasmo celu za słupkami, z podpisem u góry — cel widać tam, gdzie
-    /// patrzy się na rozkład, a nie w osobnej linijce pod osią.
-    private func goalBand(zone: ClosedRange<Int>, width: CGFloat) -> some View {
-        let start = x(zone.lowerBound, width: width)
-        let end = x(zone.upperBound, width: width)
-        let bandWidth = max(0, end - start)
-
-        return RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(SCPalette.sage.opacity(scheme == .dark ? 0.16 : 0.12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(SCPalette.sage.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            )
-            .overlay(alignment: .top) {
-                if bandWidth >= 40 {
-                    Text("cel")
-                        .font(.system(size: 9.5, weight: .heavy))
-                        .tracking(0.8)
-                        .textCase(.uppercase)
-                        .foregroundStyle(SCPalette.sage)
-                        .padding(.top, 3)
-                }
-            }
-            .frame(width: bandWidth, height: Self.barsHeight)
-            .offset(x: start)
-            .accessibilityHidden(true)
-    }
-
-    private func track(width: CGFloat) -> some View {
-        let thumbX = x(thumbValue, width: width)
-        let zoneStart = visibleZone.map { x($0.lowerBound, width: width) } ?? 0
-        let zoneEnd = visibleZone.map { x($0.upperBound, width: width) } ?? 0
-
-        return ZStack(alignment: .leading) {
-            Capsule(style: .continuous)
-                .fill(Color.scBarTrack(scheme))
-                .frame(width: max(0, width - 2 * inset), height: 4)
-                .offset(x: inset)
-
-            if visibleZone != nil {
-                Capsule(style: .continuous)
-                    .fill(SCPalette.sage.opacity(0.75))
-                    .frame(width: max(0, zoneEnd - zoneStart), height: 4)
-                    .offset(x: zoneStart)
-            }
-
-            Capsule(style: .continuous)
-                .fill(SCPalette.terracotta)
-                .frame(width: max(0, thumbX - inset), height: 4)
-                .offset(x: inset)
-
-            Circle()
-                .fill(.white)
-                .frame(width: Self.thumb, height: Self.thumb)
-                .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.2), radius: 5, x: 0, y: 2)
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
-                .scaleEffect(isDragging ? 1.14 : 1)
-                .offset(x: thumbX - Self.thumb / 2)
-                .animation(.spring(response: 0.26, dampingFraction: 0.7), value: isDragging)
-        }
-        .frame(width: width, height: Self.thumb + 8)
-        // Za palcem bez sprężyny — animacja by się za nim wlokła. Wyłączona
-        // tylko TU (uchwyt i wypełnienie toru), a nie dla całej zmiany, żeby
-        // liczby przepisów wokół dalej rolowały się w trakcie ruchu.
-        .animation(isDragging ? nil : .spring(response: 0.34, dampingFraction: 0.82), value: thumbValue)
-    }
-
-    private var axisLabels: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            ZStack(alignment: .topLeading) {
-                Text(verbatim: "0")
-                    .fixedSize()
-                    .position(x: inset, y: 8)
-                Text(verbatim: "500")
-                    .fixedSize()
-                    .position(x: x(500, width: width), y: 8)
-                Text(verbatim: "\(limitMax)+")
-                    .fixedSize()
-                    .position(x: width - inset - 4, y: 8)
+            ForEach(Array(histogram.enumerated()), id: \.offset) { index, recipes in
+                let start = x(index * step, width: width) + Self.barGap / 2
+                let end = x((index + 1) * step, width: width) - Self.barGap / 2
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 3,
+                    bottomLeadingRadius: 1,
+                    bottomTrailingRadius: 1,
+                    topTrailingRadius: 3,
+                    style: .continuous
+                )
+                .fill(barColor(included: isIncluded(bucket: index), empty: recipes == 0))
+                .frame(width: max(1, end - start), height: barHeight(recipes, peak: peak))
+                .offset(x: start)
             }
         }
-        .font(.system(size: 11.5))
-        .monospacedDigit()
-        .foregroundStyle(Color.scFaint(scheme))
+        .frame(width: width, height: Self.chartHeight, alignment: .bottomLeading)
+        .animation(.smooth(duration: 0.35), value: histogram)
+        .animation(isDragging ? nil : .smooth(duration: 0.2), value: value)
         .accessibilityHidden(true)
     }
 
-    /// Legenda celu pod osią: ile kcal na posiłek i skrót, który stawia
-    /// uchwyt na górnej granicy celu. Znika, gdy uchwyt już tam stoi.
-    private func goalLegend(_ zone: ClosedRange<Int>) -> some View {
-        let target = min(zone.upperBound, limitMax)
-        let isAtTarget = value == target
+    /// Ledwie widoczna poświata nad odcinkiem celu — mówi „tu”, ale nie
+    /// zasłania słupków i nie niesie napisu, który przecinałaby kreska.
+    private func goalWash(zone: ClosedRange<Int>, width: CGFloat) -> some View {
+        let start = x(zone.lowerBound, width: width)
+        let end = x(zone.upperBound, width: width)
 
-        return HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(SCPalette.sage.opacity(scheme == .dark ? 0.32 : 0.24))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(SCPalette.sage.opacity(0.5), lineWidth: 1)
-                )
-                .frame(width: 14, height: 10)
+        return LinearGradient(
+            colors: [SCPalette.sage.opacity(0), SCPalette.sage.opacity(scheme == .dark ? 0.12 : 0.10)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(width: max(0, end - start), height: Self.chartHeight)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 6,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 6,
+                style: .continuous
+            )
+        )
+        .offset(x: start)
+        .accessibilityHidden(true)
+    }
 
-            (Text("Twój cel na posiłek ")
-                + Text(verbatim: "\(zone.lowerBound)–\(zone.upperBound) kcal")
-                    .fontWeight(.semibold)
-                    .foregroundStyle(SCPalette.sage))
-                .font(.system(size: 12.5))
-                .monospacedDigit()
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+    /// Oś: włoskowa linia na całą szerokość, na niej szałwiowy odcinek celu.
+    private func baseline(width: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            Rectangle()
+                .fill(Color.scRule(scheme))
+                .frame(width: width, height: 1)
 
-            Spacer(minLength: 6)
-
-            Button {
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { value = target }
-            } label: {
-                Text("Do celu")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(SCPalette.sage)
-                    .padding(.horizontal, 11)
-                    .frame(height: 28)
-                    .scSoftCapsule(SCPalette.sage)
-                    .contentShape(Capsule(style: .continuous))
+            if let zone = visibleZone {
+                let start = x(zone.lowerBound, width: width)
+                let end = x(zone.upperBound, width: width)
+                Capsule(style: .continuous)
+                    .fill(SCPalette.sage)
+                    .frame(width: max(4, end - start), height: 4)
+                    .offset(x: start)
             }
-            .buttonStyle(PlanPressStyle(scale: 0.94))
-            .opacity(isAtTarget ? 0 : 1)
-            .disabled(isAtTarget)
-            .animation(.smooth(duration: 0.2), value: isAtTarget)
-            .accessibilityLabel("Ustaw limit na \(target) kilokalorii")
         }
-        .padding(.horizontal, 2)
+        .frame(width: width, height: 4)
+        .offset(y: Self.chartHeight - 2)
+        .accessibilityHidden(true)
+    }
+
+    private func marker(width: CGFloat) -> some View {
+        let markerX = x(thumbValue, width: width)
+        let knob = Self.knob
+
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill(SCPalette.terracotta)
+                .frame(width: 2, height: Self.chartHeight)
+                .offset(x: markerX - 1)
+
+            Circle()
+                .fill(SCPalette.terracotta)
+                .frame(width: knob, height: knob)
+                .overlay(Circle().fill(Color.white).padding(3))
+                .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.2), radius: 4, x: 0, y: 2)
+                .scaleEffect(isDragging ? 1.2 : 1)
+                .animation(.spring(response: 0.26, dampingFraction: 0.7), value: isDragging)
+                .offset(x: markerX - knob / 2, y: Self.chartHeight - knob / 2)
+        }
+        .frame(width: width, height: Self.chartHeight, alignment: .topLeading)
+        // Za palcem bez sprężyny — animacja by się za nim wlokła. Wyłączona
+        // tylko TU, a nie dla całej zmiany, żeby liczby przepisów wokół dalej
+        // rolowały się w trakcie ruchu.
+        .animation(isDragging ? nil : .spring(response: 0.34, dampingFraction: 0.82), value: thumbValue)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    // MARK: Podpisy osi
+
+    private struct AxisMark: Identifiable {
+        let id: String
+        let x: CGFloat
+        let text: String
+        var isGoal = false
+
+        /// Szerokość napisu z grubsza (11 pt, cyfry o stałej szerokości) —
+        /// tyle, żeby dwa podpisy nie weszły na siebie.
+        var approximateWidth: CGFloat { CGFloat(text.count) * 6.6 }
+    }
+
+    /// Bez celu: 0 · 250 · 500 · 750 · 1000+. Z celem: najpierw jego granice
+    /// w szałwii i „Twój cel” między nimi, potem skrajne liczby — każdy
+    /// podpis tylko tam, gdzie nie wchodzi na już postawiony (cel 950–1100
+    /// zostawia samo „950”, a nie „950” wklejone w „1000+”).
+    private func axisMarks(width: CGFloat) -> [AxisMark] {
+        let endX = width - inset - 6
+        let maxText = "\(limitMax)+"
+        guard let zone = visibleZone else {
+            return [
+                AxisMark(id: "0", x: inset, text: "0"),
+                AxisMark(id: "250", x: x(250, width: width), text: "250"),
+                AxisMark(id: "500", x: x(500, width: width), text: "500"),
+                AxisMark(id: "750", x: x(750, width: width), text: "750"),
+                AxisMark(id: "max", x: endX, text: maxText)
+            ]
+        }
+
+        let lower = x(zone.lowerBound, width: width)
+        let reachesEnd = zone.upperBound >= scaleEnd
+        let upper = reachesEnd ? endX : x(zone.upperBound, width: width)
+
+        var marks: [AxisMark] = []
+        func place(_ mark: AxisMark) {
+            let fits = marks.allSatisfy { placed in
+                abs(placed.x - mark.x) >= (placed.approximateWidth + mark.approximateWidth) / 2 + 6
+            }
+            if fits { marks.append(mark) }
+        }
+
+        place(AxisMark(id: "lower", x: lower, text: "\(zone.lowerBound)", isGoal: true))
+        place(AxisMark(id: "upper", x: upper, text: reachesEnd ? maxText : "\(zone.upperBound)", isGoal: true))
+        place(AxisMark(id: "goal", x: (lower + upper) / 2, text: "Twój cel", isGoal: true))
+        if !marks.contains(where: { $0.id == "goal" }) {
+            place(AxisMark(id: "goal", x: (lower + upper) / 2, text: "cel", isGoal: true))
+        }
+        place(AxisMark(id: "0", x: inset, text: "0"))
+        place(AxisMark(id: "max", x: endX, text: maxText))
+        return marks
+    }
+
+    private func axisLabels(width: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(axisMarks(width: width)) { mark in
+                Text(verbatim: mark.text)
+                    .font(.system(size: 11, weight: mark.isGoal ? .semibold : .regular))
+                    .monospacedDigit()
+                    .foregroundStyle(mark.isGoal ? SCPalette.sage : Color.scFaint(scheme))
+                    .fixedSize()
+                    .position(x: mark.x, y: Self.axisHeight / 2)
+            }
+        }
+        .frame(width: width, height: Self.axisHeight, alignment: .topLeading)
+        .accessibilityHidden(true)
     }
 
     // MARK: Gest
@@ -477,6 +712,9 @@ struct RecipeFilterKcalSlider: View {
 
     private func drag(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
+            .updating($isTouching) { _, touching, _ in
+                touching = true
+            }
             .onChanged { gesture in
                 if axis == nil {
                     let moved = hypot(gesture.translation.width, gesture.translation.height)
@@ -495,8 +733,11 @@ struct RecipeFilterKcalSlider: View {
                     axis = nil
                     isDragging = false
                 }
-                // Stuknięcie: uchwyt dojeżdża do palca.
-                guard axis == nil else { return }
+                // Stuknięcie (palec prawie się nie ruszył): kreska dojeżdża do
+                // palca. Liczone z przesunięcia, a nie z `axis` — ten mógł już
+                // wyzerować przerwany gest.
+                let moved = hypot(gesture.translation.width, gesture.translation.height)
+                guard moved <= 6 else { return }
                 let next = snappedValue(at: gesture.location.x, width: width)
                 guard next != value else { return }
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { value = next }
@@ -541,21 +782,20 @@ struct RecipeFilterFooterButton: View {
 
 /// „Wyczyść” obok krzyżyka — pojawia się dopiero, gdy jest co czyścić.
 struct RecipeFilterClearButton: View {
-    var compact: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: compact ? 11 : 12, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                 Text("Wyczyść")
-                    .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .tracking(-0.2)
             }
             .foregroundStyle(SCPalette.terracotta)
-            .padding(.horizontal, compact ? 11 : 13)
-            .frame(height: compact ? 32 : 36)
+            .padding(.horizontal, 13)
+            .frame(height: 36)
             .scSoftCapsule()
             .contentShape(Capsule(style: .continuous))
         }
@@ -778,106 +1018,130 @@ struct RecipeFilterSearchField: View {
     }
 }
 
-// MARK: - Wiersz składnika
+// MARK: - Składnik jako pigułka
 
-/// Składnik albo grupa w arkuszu kategorii i w wynikach szukania.
-/// Wykluczony: ikona zakazu i nazwa w terakocie, po prawej „Przywróć”.
-/// Reszta: po prawej „Wyklucz”.
-struct RecipeFilterIngredientRow: View {
-    enum RowState: Equatable {
-        case available
-        case excluded
-        /// Wykluczony razem z całą grupą — „Przywróć” wyjmuje go z grupy.
-        case excludedByGroup
+/// Stan składnika w wykluczeniach.
+enum IngredientExclusionState: Equatable {
+    case available
+    case excluded
+    /// Wykluczony razem z całą grupą — stuknięcie wyjmuje go z grupy.
+    case excludedByGroup
+}
+
+/// Składnik do stuknięcia — w dziale, w rodzajach grupy i w wynikach
+/// szukania. Wykluczony: terakota z ikoną zakazu; wykluczony razem z grupą:
+/// przerywana obwódka (jest wykluczony, ale nie z osobna).
+///
+/// Zastąpiła wiersz z przyciskiem „Wyklucz” przy każdym składniku: w dziale
+/// „Warzywa” było 49 takich wierszy po 56 pt i 49 terakotowych przycisków
+/// jeden pod drugim. Chmura pigułek mieści ten sam dział na półtora ekranu,
+/// a stan widać po samej pigułce.
+///
+/// Grupa („Papryka”) ma strzałkę: stuknięcie rozwija jej rodzaje
+/// (`disclosure`), a nie wyklucza — całą grupę wyklucza pigułka
+/// „Wszystkie” w rozwiniętym panelu.
+struct RecipeExclusionPill: View {
+    enum Disclosure: Equatable {
+        case collapsed
+        case expanded
     }
 
     let title: String
-    let subtitle: String
-    let state: RowState
-    var isGroup: Bool = false
+    let state: IngredientExclusionState
     /// Dopasowanie do pogrubienia (znak startu i długość).
     var highlight: (offset: Int, length: Int)? = nil
-    /// Wcięcie rodzaju pod grupą.
-    var indent: CGFloat = 0
-    /// Rozwinięcie rodzajów grupy — `nil` = wiersz bez linku.
-    var expandTitle: String? = nil
-    var isExpanded: Bool = false
-    var showsRule: Bool = true
-    let onToggle: () -> Void
-    var onExpand: (() -> Void)? = nil
+    /// Pigułka grupy — `nil` dla zwykłego składnika.
+    var disclosure: Disclosure? = nil
+    /// Ile rodzajów grupy wykluczono z osobna — plakietka przy nazwie.
+    var excludedKinds: Int = 0
+    /// Mniejsza — w panelu rodzajów grupy.
+    var compact: Bool = false
+    let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     private var isExcluded: Bool { state != .available }
 
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    if isExcluded {
-                        Image(systemName: "nosign")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(state == .excluded ? SCPalette.terracotta : Color.scFaint(scheme))
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
-                    }
-                    titleText
-                        .font(.system(size: 15.5, weight: isExcluded ? .semibold : .medium))
-                        .tracking(-0.3)
-                        .foregroundStyle(state == .excluded ? SCPalette.terracotta : Color.scLabel(scheme))
-                        .lineLimit(1)
+    private var foreground: Color {
+        switch state {
+        case .available:       return Color.scLabel(scheme)
+        case .excluded:        return SCPalette.terracotta
+        case .excludedByGroup: return SCPalette.terracotta.opacity(0.85)
+        }
+    }
 
-                    if isGroup {
-                        Text("Grupa")
-                            .font(.system(size: 10, weight: .bold))
-                            .tracking(0.5)
-                            .textCase(.uppercase)
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .padding(.horizontal, 7)
-                            .frame(height: 19)
-                            .background(Capsule(style: .continuous).fill(Color.scChipBg(scheme)))
-                            .fixedSize()
-                    }
+    private var fill: Color {
+        switch state {
+        case .excluded:
+            return SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)
+        case .excludedByGroup:
+            return SCPalette.terracotta.opacity(scheme == .dark ? 0.08 : 0.05)
+        case .available:
+            if disclosure == .expanded { return Color.scChipBg(scheme) }
+            // W panelu rodzajów (tło `scChipBg`) pigułka stoi na kolorze
+            // strony — inaczej zlewałaby się z panelem.
+            return compact ? Color.scPageBase(scheme) : Color.scTileBg(scheme)
+        }
+    }
+
+    private var stroke: Color {
+        switch state {
+        case .excluded:        return SCPalette.terracotta.opacity(0.45)
+        case .excludedByGroup: return SCPalette.terracotta.opacity(0.35)
+        case .available:       return disclosure == .expanded ? Color.scRule(scheme) : Color.scTileStroke(scheme)
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isExcluded {
+                    Image(systemName: "nosign")
+                        .font(.system(size: compact ? 11 : 12, weight: .bold))
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
 
-                Text(subtitle)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.scMuted(scheme))
+                titleText
+                    .font(.system(size: compact ? 13.5 : 14.5, weight: isExcluded ? .semibold : .medium))
+                    .tracking(-0.2)
                     .lineLimit(1)
 
-                if let expandTitle, let onExpand {
-                    Button(action: onExpand) {
-                        HStack(spacing: 3) {
-                            Text(expandTitle)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                                .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        }
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .padding(.vertical, 4)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 1)
-                    .accessibilityHint(isExpanded ? "Zwija rodzaje" : "Rozwija rodzaje")
+                if excludedKinds > 0 && !isExcluded {
+                    RecipeFilterCountBadge(count: excludedKinds)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+
+                if let disclosure {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(isExcluded ? SCPalette.terracotta.opacity(0.8) : Color.scFaint(scheme))
+                        .rotationEffect(.degrees(disclosure == .expanded ? 180 : 0))
+                        .padding(.trailing, -2)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            actionButton
+            .foregroundStyle(foreground)
+            .padding(.horizontal, compact ? 12 : 14)
+            .frame(height: compact ? 32 : 36)
+            .background(Capsule(style: .continuous).fill(fill))
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(
+                        stroke,
+                        style: StrokeStyle(
+                            lineWidth: state == .excluded ? 1.2 : 1,
+                            dash: state == .excludedByGroup ? [3, 3] : []
+                        )
+                    )
+            )
+            .contentShape(Capsule(style: .continuous))
         }
-        .padding(.vertical, 8)
-        .padding(.leading, indent)
-        .frame(minHeight: 56)
-        .overlay(alignment: .bottom) {
-            if showsRule {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, indent)
-            }
-        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
         .animation(.smooth(duration: 0.2), value: state)
+        .animation(.smooth(duration: 0.25), value: disclosure)
+        .accessibilityLabel(title)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint(accessibilityHint)
+        .accessibilityAddTraits(isExcluded ? [.isButton, .isSelected] : .isButton)
     }
 
     private var titleText: Text {
@@ -886,47 +1150,163 @@ struct RecipeFilterIngredientRow: View {
         }
         let start = title.index(title.startIndex, offsetBy: highlight.offset)
         let end = title.index(start, offsetBy: highlight.length)
-        return Text(title[..<start]) + Text(title[start..<end]).fontWeight(.bold) + Text(title[end...])
+        return Text(title[..<start]) + Text(title[start..<end]).fontWeight(.heavy) + Text(title[end...])
     }
 
-    private var actionButton: some View {
-        Button(action: onToggle) {
-            HStack(spacing: 5) {
-                if !isExcluded {
-                    Image(systemName: "nosign")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                Text(isExcluded ? "Przywróć" : "Wyklucz")
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(-0.1)
-            }
-            .foregroundStyle(isExcluded ? Color.scLabel(scheme) : SCPalette.terracotta)
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .background {
-                if isExcluded {
-                    Capsule(style: .continuous).fill(Color.scChipBg(scheme))
-                        .overlay(Capsule(style: .continuous).strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
-                } else {
-                    Color.clear.scSoftCapsule()
-                }
-            }
-            .contentShape(Capsule(style: .continuous))
-            .contentTransition(.opacity)
+    private var accessibilityValue: String {
+        switch state {
+        case .excluded:        return "wykluczone"
+        case .excludedByGroup: return "wykluczone razem z całą grupą"
+        case .available:       return excludedKinds > 0 ? "wykluczone rodzaje: \(excludedKinds)" : ""
         }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
-        .accessibilityLabel("\(isExcluded ? "Przywróć" : "Wyklucz") \(title)")
+    }
+
+    private var accessibilityHint: String {
+        if let disclosure {
+            return disclosure == .expanded ? "Zwija rodzaje" : "Rozwija rodzaje"
+        }
+        return isExcluded ? "Przywraca składnik" : "Wyklucza składnik"
+    }
+}
+
+/// Chmura pigułek składników. Zawija jak `AllergenChipFlow`, ale widok
+/// oznaczony `recipeExclusionFullWidth()` (rozwinięte rodzaje grupy) bierze
+/// cały wiersz: kończy wiersz przed sobą i zaczyna nowy za sobą.
+///
+/// Jeden `Layout` zamiast dwóch chmur rozciętych panelem: pigułki zachowują
+/// tożsamość i przy rozwijaniu grupy PRZESUWAJĄ się na nowe miejsca, a nie
+/// znikają w jednej chmurze, żeby pojawić się w drugiej.
+struct RecipeExclusionFlow: Layout {
+    var spacing: CGFloat = 8
+
+    fileprivate struct FullWidthKey: LayoutValueKey {
+        static let defaultValue = false
+    }
+
+    private struct Placement {
+        let index: Int
+        let origin: CGPoint
+        let size: CGSize
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 320
+        let placements = arrange(width: width, subviews: subviews)
+        let height = placements.map { $0.origin.y + $0.size.height }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for placement in arrange(width: bounds.width, subviews: subviews) {
+            subviews[placement.index].place(
+                at: CGPoint(x: bounds.minX + placement.origin.x, y: bounds.minY + placement.origin.y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(placement.size)
+            )
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Placement] {
+        var placements: [Placement] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for (index, subview) in subviews.enumerated() {
+            if subview[FullWidthKey.self] {
+                // Zamknij bieżący wiersz, połóż panel na całą szerokość
+                // i zacznij kolejny wiersz pod nim.
+                if x > 0 {
+                    y += rowHeight + spacing
+                }
+                let height = subview.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+                placements.append(Placement(index: index, origin: CGPoint(x: 0, y: y), size: CGSize(width: width, height: height)))
+                y += height + spacing
+                x = 0
+                rowHeight = 0
+                continue
+            }
+
+            let ideal = subview.sizeThatFits(.unspecified)
+            let size = CGSize(width: min(ideal.width, width), height: ideal.height)
+            if x > 0, x + size.width > width {
+                y += rowHeight + spacing
+                x = 0
+                rowHeight = 0
+            }
+            placements.append(Placement(index: index, origin: CGPoint(x: x, y: y), size: size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return placements
+    }
+}
+
+extension View {
+    /// W `RecipeExclusionFlow`: ten widok zajmuje cały wiersz.
+    func recipeExclusionFullWidth() -> some View {
+        layoutValue(key: RecipeExclusionFlow.FullWidthKey.self, value: true)
+    }
+}
+
+/// Ikona działu w tincie jego barwy — te same glify i barwy co alejki
+/// Zakupów (`ProductConstants`), więc „Warzywa” wyglądają tak samo w obu
+/// miejscach.
+struct RecipeExclusionDepartmentIcon: View {
+    let department: String
+    var size: CGFloat = 34
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let accent = ProductConstants.departmentColor(for: department)
+        RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+            .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: ProductConstants.departmentIcon(for: department))
+                    .font(.system(size: size * 0.44, weight: .semibold))
+                    .foregroundStyle(accent)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+/// Nazwa działu nad pigułkami w wynikach szukania — ikona i wersaliki
+/// w barwie działu.
+struct RecipeExclusionDepartmentLabel: View {
+    let department: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: ProductConstants.departmentIcon(for: department))
+                .font(.system(size: 11, weight: .bold))
+            Text(department.uppercased())
+                .font(.system(size: 10.5, weight: .bold))
+                .tracking(1.2)
+                .lineLimit(1)
+        }
+        .foregroundStyle(ProductConstants.departmentColor(for: department))
+        .padding(.horizontal, 6)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
 // MARK: - Przełączanie wykluczeń
 
 extension RecipeFilterOptions {
-    /// Stan wiersza składnika: wykluczony sam, razem z grupą albo dostępny.
-    func rowState(of exclusion: IngredientExclusion, parent: IngredientGroup? = nil) -> RecipeFilterIngredientRow.RowState {
+    /// Stan składnika: wykluczony sam, razem z grupą albo dostępny.
+    func exclusionState(of exclusion: IngredientExclusion, parent: IngredientGroup? = nil) -> IngredientExclusionState {
         if excludedIngredients.contains(exclusion) { return .excluded }
         if let parent, excludedIngredients.contains(parent.exclusion) { return .excludedByGroup }
         return .available
+    }
+
+    /// Ile rodzajów grupy wykluczono z osobna. Cała grupa wykluczona = 0,
+    /// bo wtedy pigułka grupy sama stoi w terakocie.
+    func excludedKinds(of group: IngredientGroup) -> Int {
+        guard !excludedIngredients.contains(group.exclusion) else { return 0 }
+        return group.members.reduce(0) { $0 + (excludedIngredients.contains($1.exclusion) ? 1 : 0) }
     }
 
     mutating func toggle(item: IngredientItem, in parent: IngredientGroup?) {

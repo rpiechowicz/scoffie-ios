@@ -384,22 +384,6 @@ extension IngredientDepartment {
         }
         return result
     }
-
-    /// Składnik albo grupa po kluczu — do wiersza „Wykluczone”.
-    func lookup(_ exclusion: IngredientExclusion) -> (item: IngredientItem?, group: IngredientGroup?, parent: IngredientGroup?) {
-        for entry in entries {
-            switch entry {
-            case .item(let item):
-                if item.exclusion == exclusion { return (item, nil, nil) }
-            case .group(let group):
-                if group.exclusion == exclusion { return (nil, group, nil) }
-                if let member = group.members.first(where: { $0.exclusion == exclusion }) {
-                    return (member, nil, group)
-                }
-            }
-        }
-        return (nil, nil, nil)
-    }
 }
 
 // MARK: - Wyniki szukania
