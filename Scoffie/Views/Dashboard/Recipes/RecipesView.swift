@@ -30,6 +30,15 @@ struct RecipesView: View {
     @State private var selectedRecipe: Recipe?
     @State private var categorySheetSelection: RecipesCategory?
     @State private var featuredSelectionId: UUID?
+    /// Kolejność kart karuzeli zamrożona od ostatniego ułożenia.
+    ///
+    /// Ranking karuzeli stawia ulubione na przodzie, więc polubienie przepisu
+    /// przestawiało karty — pod palcem stawała inna karta i następne stuknięcie
+    /// otwierało inny przepis niż ten, który był przed chwilą na ekranie
+    /// (Rafał, 23.09.2026). Karuzela układa się od nowa tylko przy zmianie
+    /// wyszukiwania, filtrów, dopasowania, doby albo katalogu — patrz
+    /// `resyncFeaturedSelectionIfNeeded`. `nil` = jeszcze nie ułożona.
+    @State private var featuredOrder: [UUID]?
     @State private var filters = RecipeFilterOptions()
     @State private var isFilterSheetPresented = false
 
@@ -138,15 +147,28 @@ struct RecipesView: View {
         mealSections.contains { !$0.recipes.isEmpty }
     }
 
+    /// Karty karuzeli: zamrożona kolejność (`featuredOrder`) z bieżącymi
+    /// danymi przepisów. Przepis, który zniknął z listy (np. odlubiony przy
+    /// filtrze „Ulubione”), znika też z karuzeli.
+    private var featuredRecipes: [Recipe] {
+        let visible = visibleRecipes
+        if let order = featuredOrder {
+            let byId = Dictionary(visible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let frozen = order.compactMap { byId[$0] }
+            if !frozen.isEmpty { return frozen }
+        }
+        return rankedFeaturedRecipes(from: visible)
+    }
+
     /// Top-N najlepszych kandydatów do karuzeli featured. Ulubione wygrywają,
     /// potem krótszy `prepTime`, potem większy `servings`, potem alfabetycznie.
-    private var featuredRecipes: [Recipe] {
+    private func rankedFeaturedRecipes(from visible: [Recipe]) -> [Recipe] {
         // Gdy cel porządkuje katalog, `visibleRecipes` są już ułożone od
         // najlepiej dopasowanych — drugie sortowanie po `prepTime` tylko by to
         // zepsuło. Bez celu zostaje dotychczasowa heurystyka.
         let ranked = (personalization.isEnabled && personalization.ranksCatalog)
-            ? visibleRecipes
-            : visibleRecipes.sorted(by: isFeaturedRecipePreferred(_:_:))
+            ? visible
+            : visible.sorted(by: isFeaturedRecipePreferred(_:_:))
 
         // Przy aktywnym wyszukiwaniu albo filtrach karuzela ma pokazać
         // najlepsze trafienia, a nie codzienną propozycję — użytkownik czegoś
@@ -231,6 +253,13 @@ struct RecipesView: View {
             .onChange(of: filters) { _, _ in
                 resyncFeaturedSelectionIfNeeded()
             }
+            // Karta zniknęła z zamrożonej karuzeli (np. odlubiona przy filtrze
+            // „Ulubione”) — zaznaczenie przechodzi na pierwszą, bez układania
+            // kart od nowa.
+            .onChange(of: featuredRecipes.map(\.id)) { _, ids in
+                if let current = featuredSelectionId, ids.contains(current) { return }
+                featuredSelectionId = ids.first
+            }
             .onChange(of: personalization) { _, _ in
                 resyncFeaturedSelectionIfNeeded()
             }
@@ -256,12 +285,13 @@ struct RecipesView: View {
             }
             .sheet(item: $selectedRecipe) { selected in
                 RecipeDetailView(
-                    recipe: selected,
-                    onToggleFavorite: {
-                        Task {
-                            await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
-                            selectedRecipe = recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
-                        }
+                    // Żywy przepis z katalogu, nie kopia z chwili otwarcia —
+                    // serce nadąża za zapisem z karuzeli, a zapis z arkusza
+                    // nie musi niczego podmieniać w `selectedRecipe`
+                    // (przypisanie otwierało zamknięty już arkusz).
+                    recipe: recipeCatalogStore.recipes.first(where: { $0.id == selected.id }) ?? selected,
+                    onSetFavourite: { value in
+                        Task { await recipeCatalogStore.setFavourite(recipeId: selected.id, to: value) }
                     },
                     onClose: { selectedRecipe = nil },
                     // Katalog nie zna żadnego slotu, więc szczegół otwiera się
@@ -269,7 +299,7 @@ struct RecipesView: View {
                     onAddedToPlan: { _, _ in selectedRecipe = nil }
                 )
                 .presentationDetents([.large])
-                .dashboardLiquidSheet()
+                .dashboardLiquidSheet(cornerRadius: 40)
             }
             .sheet(item: $categorySheetSelection) { category in
                 let inCategory = personalization.apply(
@@ -411,6 +441,16 @@ struct RecipesView: View {
                                 .frame(height: EditorialRecipeStoryCard.cardHeight)
                         }
                         .buttonStyle(.plain)
+                        // Serce NAD przyciskiem karty, a nie w nim: stuknięcie
+                        // przełącza ulubione i nie otwiera szczegółów. Wcześniej
+                        // było samym obrazkiem — trafiało w kartę.
+                        .overlay(alignment: .topTrailing) {
+                            RecipeFavouriteButton(isFavourite: recipe.favourite, style: .photo) { value in
+                                Task { await recipeCatalogStore.setFavourite(recipeId: recipe.id, to: value) }
+                            }
+                            .padding(.top, 8)
+                            .padding(.trailing, 8)
+                        }
                         .padding(.horizontal, pageHorizontalPadding)
                         .frame(width: pageWidth)
                         .task {
@@ -713,6 +753,7 @@ struct RecipesView: View {
     /// jest bindingiem `.scrollPosition`, więc sam zapis wystarcza — dopóki
     /// wybrany przepis nadal jest na liście, zostawiamy pozycję nietkniętą.
     private func resyncFeaturedSelectionIfNeeded() {
+        featuredOrder = rankedFeaturedRecipes(from: visibleRecipes).map(\.id)
         let ids = featuredRecipes.map(\.id)
         if let current = featuredSelectionId, ids.contains(current) { return }
         featuredSelectionId = ids.first
@@ -848,18 +889,16 @@ private struct RecipeCategorySheetView: View {
         // zamiast wyrzucać użytkownika na sam ekran Przepisów.
         .sheet(item: $selectedRecipe) { selected in
             RecipeDetailView(
-                recipe: selected,
-                onToggleFavorite: {
-                    Task {
-                        await recipeCatalogStore.toggleFavorite(recipeId: selected.id)
-                        selectedRecipe = recipeCatalogStore.recipes.first(where: { $0.id == selected.id })
-                    }
+                // Jak na Przepisach: żywy przepis z katalogu i zapis wartości.
+                recipe: recipeCatalogStore.recipes.first(where: { $0.id == selected.id }) ?? selected,
+                onSetFavourite: { value in
+                    Task { await recipeCatalogStore.setFavourite(recipeId: selected.id, to: value) }
                 },
                 onClose: { selectedRecipe = nil },
                 onAddedToPlan: { _, _ in selectedRecipe = nil }
             )
             .presentationDetents([.large])
-            .dashboardLiquidSheet()
+            .dashboardLiquidSheet(cornerRadius: 40)
         }
         .sheet(isPresented: $isFilterSheetPresented) {
             RecipeCategoryFilterSheet(category: category, recipes: pool, filter: $categoryFilter)

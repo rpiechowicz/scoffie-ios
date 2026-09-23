@@ -7,7 +7,9 @@ import SwiftUI
 //   tint gradient placeholder with the category glyph at 84pt.
 //   Top scrim — `linear-gradient(180deg, rgba(0,0,0,0.28) 0%, transparent
 //   32%, transparent 50%, rgba(0,0,0,0.78) 100%)`.
-//   Heart chip — pinned top-trailing at 14pt inset, 32pt circle.
+//   Heart chip — pinned top-trailing at 14pt inset, 32pt circle. Rysuje go
+//   karuzela (`RecipesView`) jako osobny przycisk NAD kartą — w karcie był
+//   samym obrazkiem i stuknięcie w niego otwierało szczegóły.
 //   Title — 22pt 700, tracking -0.4, line-height 26pt, up to 3 lines,
 //   `text-shadow: 0 2px 12px rgba(0,0,0,0.6)`.
 //   Glass chips — clock + flame meta, bottom-leading inset 16pt.
@@ -60,7 +62,6 @@ struct EditorialRecipeStoryCard: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         )
-        .overlay(alignment: .topTrailing) { heartChip }
         // Bez cienia pod kartą. Karuzela to poziomy `ScrollView`, który
         // przycina wszystko poza swoimi granicami — cień urywał się równo
         // z krawędzią sekcji zamiast zanikać, więc na dole karty rysowała
@@ -145,26 +146,6 @@ struct EditorialRecipeStoryCard: View {
                 .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: - Heart
-
-    private var heartChip: some View {
-        let liked = recipe.favourite
-        return ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .overlay(Circle().fill(Color.black.opacity(0.40)))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
-
-            Image(systemName: liked ? "heart.fill" : "heart")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(liked ? SCPalette.terracotta : Color.white.opacity(0.95))
-        }
-        .frame(width: 32, height: 32)
-        .padding(.top, 14)
-        .padding(.trailing, 14)
-        .accessibilityHidden(true)
     }
 
     // MARK: - Bottom content (title + glass chips)

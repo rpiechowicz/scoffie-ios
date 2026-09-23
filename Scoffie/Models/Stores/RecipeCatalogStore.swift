@@ -211,6 +211,19 @@ final class RecipeCatalogStore {
         }
     }
 
+    /// Ustawia ulubione na podaną wartość — nic nie robi, gdy przepis już ją ma.
+    ///
+    /// Serce zapisuje się z opóźnieniem, po animacji (`RecipeFavouriteButton`).
+    /// Przełącznik liczony od kopii przepisu sprzed chwili potrafił wtedy
+    /// przestawić stan w złą stronę — np. karuzela zdążyła zapisać, a arkusz
+    /// szczegółów miał starszą kopię. Docelowa wartość jest odporna na to, kto
+    /// zapisał pierwszy.
+    func setFavourite(recipeId: UUID, to value: Bool) async {
+        guard let index = recipes.firstIndex(where: { $0.id == recipeId }),
+              recipes[index].favourite != value else { return }
+        await toggleFavorite(recipeId: recipeId)
+    }
+
     func toggleFavorite(recipeId: UUID) async {
         guard let index = recipes.firstIndex(where: { $0.id == recipeId }) else { return }
         let previous = recipes[index].favourite

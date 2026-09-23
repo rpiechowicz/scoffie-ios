@@ -144,10 +144,8 @@ struct RecipeFilterSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        scopeRow
-                            .padding(.top, 6)
                         fitRow
-                            .padding(.top, 14)
+                            .padding(.top, 6)
                         timeAndDifficultySection
                         caloriesSection
                         dietSection
@@ -155,7 +153,7 @@ struct RecipeFilterSheet: View {
                         excludeSection
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 28)
+                    .padding(.bottom, 8)
                     .containerRelativeFrame(.horizontal)
                 }
                 .scrollIndicators(.hidden)
@@ -185,55 +183,31 @@ struct RecipeFilterSheet: View {
     // MARK: - Nagłówek
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("PRZEPISY")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(SCPalette.terracotta)
-
-                Text("Filtry")
-                    .font(.system(size: 24, weight: .heavy))
-                    .tracking(-0.4)
-                    .foregroundStyle(Color.scLabel(scheme))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if draft.activeCount > 0 {
-                RecipeFilterClearButton(action: clearAll)
-                    .transition(.scale(scale: 0.85).combined(with: .opacity))
-            }
-
-            SCSheetCloseButton { dismiss() }
-        }
+        RecipeFilterHeader(
+            icon: "slider.horizontal.3",
+            eyebrow: "Przepisy",
+            title: "Filtry",
+            scope: "Działają we wszystkich kategoriach",
+            activeSummary: activeSummary,
+            canClear: draft.activeCount > 0,
+            onClear: { clearAll() },
+            onClose: { dismiss() }
+        )
     }
 
-    // MARK: - Zasięg i dopasowanie
-
-    private var scopeRow: some View {
-        HStack(spacing: 11) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12))
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: "square.grid.2x2.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Wszystkie przepisy")
-                    .font(.system(size: 16.5, weight: .bold))
-                    .tracking(-0.35)
-                    .foregroundStyle(Color.scLabel(scheme))
-                Text("Działają w każdej kategorii")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
+    /// Co z tego arkusza zawęża teraz listę — „Aktywne: czas, kalorie, dieta”.
+    private var activeSummary: String? {
+        var parts: [String] = []
+        if draft.maxPrepTimeMinutes != nil { parts.append("czas") }
+        if draft.difficulty != nil { parts.append("trudność") }
+        if draft.maxCaloriesPerServing != nil { parts.append("kalorie") }
+        if !draft.diets.isEmpty { parts.append("dieta") }
+        if !draft.traits.isEmpty { parts.append("cechy") }
+        if !draft.excludedIngredients.isEmpty { parts.append("wykluczenia") }
+        return parts.isEmpty ? nil : "Aktywne: " + parts.joined(separator: ", ")
     }
+
+    // MARK: - Dopasowanie
 
     /// Co dopasowanie bierze pod uwagę — „Wegetariańska · bez: gluten,
     /// orzechy · cel: schudnąć”. Przejęte z arkusza, który otwierała różdżka

@@ -56,6 +56,95 @@ extension RecipeFilterSection where Trailing == EmptyView {
     }
 }
 
+// MARK: - Nagłówek arkusza filtrów
+
+/// Nagłówek „Filtrów” i filtrów kategorii: ikona w tincie akcentu, eyebrow,
+/// tytuł, pod spodem zasięg i — gdy coś jest włączone — co zawęża listę.
+/// „Wyczyść” i krzyżyk po prawej.
+///
+/// Zasięg stał dotąd osobnym wierszem pod nagłówkiem („Wszystkie przepisy ·
+/// Działają w każdej kategorii”), a nagłówek był samym słowem „Filtry” —
+/// Rafał (23.09.2026): „dodaj ciut więcej tekstu i ulepsz to wizualnie, ale
+/// nie przesadzaj”. Teraz jedno zdanie o zasięgu i jedna linijka o tym, co
+/// działa, stoją w przypiętym nagłówku, a wiersz zasięgu zniknął z treści.
+struct RecipeFilterHeader: View {
+    let icon: String
+    let eyebrow: String
+    let title: String
+    /// Gdzie filtry działają — jedno zdanie.
+    let scope: String
+    /// „Aktywne: czas, kalorie” — `nil`, gdy nic nie jest włączone.
+    let activeSummary: String?
+    var accent: Color = SCPalette.terracotta
+    let canClear: Bool
+    let onClear: () -> Void
+    let onClose: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                HStack(spacing: 11) {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Image(systemName: icon)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(accent)
+                        )
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(eyebrow.uppercased())
+                            .font(.system(size: 10.5, weight: .bold))
+                            .tracking(1.4)
+                            .foregroundStyle(accent)
+                            .lineLimit(1)
+
+                        Text(title)
+                            .font(.system(size: 24, weight: .heavy))
+                            .tracking(-0.4)
+                            .foregroundStyle(Color.scLabel(scheme))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+
+                if canClear {
+                    RecipeFilterClearButton(action: onClear)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+
+                SCSheetCloseButton(action: onClose)
+            }
+
+            Text(scope)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.scMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+
+            if let activeSummary {
+                Text(activeSummary)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .contentTransition(.opacity)
+                    .padding(.top, 2)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.smooth(duration: 0.22), value: activeSummary)
+        .animation(.smooth(duration: 0.22), value: canClear)
+    }
+}
+
 // MARK: - Kafelek z menu (czas, trudność)
 
 /// Kafelek z bieżącą wartością, który po stuknięciu otwiera systemowe menu

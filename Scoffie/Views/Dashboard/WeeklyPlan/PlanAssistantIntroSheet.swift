@@ -74,7 +74,8 @@ struct PlanAssistantIntroSheet: View {
                             .stagger(appeared, step: 6)
                     }
                     .padding(.horizontal, 22)
-                    .padding(.bottom, 24)
+                    // Zapas na cień stopki (`SCEdgeShade`), który leży na treści.
+                    .padding(.bottom, SCEdgeShade.bottomHeight)
                 }
                 .scrollIndicators(.hidden)
 

@@ -41,7 +41,9 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 4)
             }
-            .padding(.bottom, 24)
+            // Stopka rezerwuje miejsce na swój cień sama (`scSheetFooter`),
+            // więc przy stopce wystarczy krótki oddech.
+            .padding(.bottom, Footer.self == EmptyView.self ? 24 : 8)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)

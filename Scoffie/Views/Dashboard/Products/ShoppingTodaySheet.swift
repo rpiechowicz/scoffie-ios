@@ -111,7 +111,9 @@ struct ShoppingTodaySheet: View {
                 }
             }
             .padding(.horizontal, SCPageMetrics.horizontal)
-            .padding(.bottom, 8)
+            // Stopka stoi pod listą, a jej cień leży na liście — ostatnie
+            // danie musi dać się wyciągnąć ponad niego.
+            .padding(.bottom, SCEdgeShade.bottomHeight)
         }
         .scrollIndicators(.hidden)
         // Zamiast kreski pod nagłówkiem — treść gaśnie, gdy pod niego wjeżdża.

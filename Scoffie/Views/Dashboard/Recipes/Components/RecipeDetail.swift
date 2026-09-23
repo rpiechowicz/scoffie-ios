@@ -44,7 +44,8 @@ struct RecipeDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let recipe: Recipe
-    var onToggleFavorite: (() -> Void)?
+    /// Zapis ulubionych — z docelową wartością (`nil` = serce ukryte).
+    var onSetFavourite: ((Bool) -> Void)?
     var onClose: (() -> Void)?
 
     /// Liczba porcji, od której startuje stepper. Katalog otwiera się na
@@ -112,25 +113,13 @@ struct RecipeDetailView: View {
     /// przyciskami i u góry arkusza potrzebne jest wygaszenie.
     @State private var isPastPhoto = false
 
-    /// Serce w szczegółach — stan LOKALNY, zmieniany od razu po stuknięciu.
-    ///
-    /// Dotąd serce czytało `recipe.favourite`, a ten zmieniał się dopiero,
-    /// gdy rodzic w `Task` podmienił cały przepis — bez animacji w
-    /// transakcji. Kolor wskakiwał natychmiast, a symbol próbował przejść
-    /// swoim efektem, więc serce szarpało. Teraz stuknięcie animuje serce
-    /// tu i teraz, a zmiana z góry (np. cofnięcie po błędzie serwera)
-    /// tylko je wyrównuje.
-    @State private var isFavourite: Bool
-    /// Serca unoszące się po dodaniu do ulubionych — każde żyje ~0,9 s.
-    @State private var heartBursts: [UUID] = []
-
     /// Jawny `init` zamiast memberwise'owego, bo `@State` z porcjami trzeba
     /// zasiać `initialServings`. Kolejność i domyślne wartości są dobrane tak,
-    /// żeby dotychczasowe wywołania `RecipeDetailView(recipe:onToggleFavorite:onClose:)`
+    /// żeby dotychczasowe wywołania `RecipeDetailView(recipe:onSetFavourite:onClose:)`
     /// kompilowały się bez zmian.
     init(
         recipe: Recipe,
-        onToggleFavorite: (() -> Void)? = nil,
+        onSetFavourite: ((Bool) -> Void)? = nil,
         onClose: (() -> Void)? = nil,
         initialServings: Int = 1,
         context: RecipeDetailContext = .catalog,
@@ -138,7 +127,7 @@ struct RecipeDetailView: View {
         onAddedToPlan: ((Date, MealSlot) -> Void)? = nil
     ) {
         self.recipe = recipe
-        self.onToggleFavorite = onToggleFavorite
+        self.onSetFavourite = onSetFavourite
         self.onClose = onClose
         self.context = context
         self.onSaveServings = onSaveServings
@@ -151,7 +140,6 @@ struct RecipeDetailView: View {
         let seed = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, initialServings))
         self.initialServings = seed
         _servings = State(initialValue: seed)
-        _isFavourite = State(initialValue: recipe.favourite)
     }
 
     /// Porcje jako `Double`, bo skalowanie makr i składników liczy się
@@ -167,7 +155,7 @@ struct RecipeDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    DetailHeroPhoto(url: recipe.imageURL)
+                    DetailHeroPhoto(url: recipe.imageURL, isRevealed: hasAppeared)
 
                     header
                         .padding(.horizontal, 20)
@@ -190,10 +178,10 @@ struct RecipeDetailView: View {
                             .detailReveal(hasAppeared, order: 3)
                     }
 
-                    // Zapas pod dolny pasek: 28 pt przejścia + przycisk 54 pt
-                    // + margines, do tego bezpieczny obszar. Bez tej przerwy
-                    // stopka składników chowa się pod przyciskiem.
-                    Color.clear.frame(height: 96)
+                    // Zapas pod dolny pasek: przycisk z marginesami (~72 pt)
+                    // i cień nad nim (`SCEdgeShade.bottomHeight`) — przewinięta
+                    // do końca treść kończy się NAD cieniem, nie w nim.
+                    Color.clear.frame(height: 72 + SCEdgeShade.bottomHeight)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -216,65 +204,45 @@ struct RecipeDetailView: View {
                 withAnimation(.easeInOut(duration: 0.22)) { isPastPhoto = isPast }
             }
         }
+        // Cień krawędzi — wzór dla całej aplikacji (`SCEdgeShade`): ten sam,
+        // lustrzany, stoi nad stopką każdego arkusza.
         .overlay(alignment: .top) {
-            LinearGradient(
-                stops: [
-                    .init(color: look.background, location: 0),
-                    .init(color: look.background.opacity(0.85), location: 0.55),
-                    .init(color: look.background.opacity(0), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 84)
-            .opacity(isPastPhoto ? 1 : 0)
-            .allowsHitTesting(false)
+            SCEdgeShade(edge: .top, base: look.background)
+                .frame(height: SCEdgeShade.topHeight)
+                .opacity(isPastPhoto ? 1 : 0)
         }
         .toolbar(.hidden, for: .navigationBar)
         // Serce i krzyżyk to ten sam krążek, którym zamyka się każdy inny
         // arkusz (`SCSheetCloseButton`), w wariancie `onImage` — z kryjącym
         // tłem, bo stoją na zdjęciu, a nie na tle arkusza.
         .overlay(alignment: .topLeading) {
-            SCSheetIconButton(
-                systemName: isFavourite ? "heart.fill" : "heart",
-                tint: isFavourite ? SCPalette.terracotta : nil,
-                accessibilityLabel: isFavourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
-                onImage: true,
-                action: { toggleFavourite() }
-            )
-            // Dodane do ulubionych: małe serce unosi się nad przyciskiem
-            // i gaśnie. Nakładka nie łapie dotyku.
-            .overlay {
-                ZStack {
-                    ForEach(heartBursts, id: \.self) { _ in
-                        FloatingHeart()
-                    }
-                }
-                .allowsHitTesting(false)
+            // Stan serca żyje w przycisku — stuknięcie przerysowuje sam
+            // przycisk, a zapis do katalogu idzie dopiero po animacji.
+            RecipeFavouriteButton(isFavourite: recipe.favourite) { value in
+                onSetFavourite?(value)
             }
-            .sensoryFeedback(.impact(weight: .light), trigger: isFavourite)
-            .opacity(onToggleFavorite == nil ? 0 : 1)
-            .disabled(onToggleFavorite == nil)
+            .opacity(onSetFavourite == nil ? 0 : 1)
+            .disabled(onSetFavourite == nil)
             .padding(.leading, 20)
             .padding(.top, 16)
-        }
-        // Zmiana z góry (rodzic podał przepis z innym stanem ulubionych)
-        // wyrównuje serce — bez drugiej animacji, gdy stan już się zgadza.
-        .onChange(of: recipe.favourite) { _, value in
-            guard value != isFavourite else { return }
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) { isFavourite = value }
+            .detailChrome(hasAppeared)
         }
         .overlay(alignment: .topTrailing) {
             SCSheetCloseButton(onImage: true) { onClose?() }
                 .padding(.trailing, 20)
                 .padding(.top, 16)
+                .detailChrome(hasAppeared)
         }
         .overlay(alignment: .bottom) {
             primaryActionBar
         }
-        .onAppear {
-            applyDebugLaunchOptions()
+        .onAppear { applyDebugLaunchOptions() }
+        // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
+        // wjeżdżać, dopiero potem treść. Ustawione w `onAppear` padało w tej
+        // samej klatce co wstawienie widoku i wjazd sekcji w ogóle nie grał.
+        .task {
             guard !hasAppeared else { return }
+            try? await Task.sleep(for: .milliseconds(80))
             hasAppeared = true
         }
         .sheet(isPresented: $isAddToPlanPresented) {
@@ -697,27 +665,6 @@ struct RecipeDetailView: View {
         return formatter
     }()
 
-    // MARK: - Ulubione
-
-    /// Serce zmienia się od razu i z animacją; zapis idzie przez rodzica
-    /// (`onToggleFavorite`), który aktualizuje katalog optymistycznie.
-    private func toggleFavourite() {
-        guard let onToggleFavorite else { return }
-        let next = !isFavourite
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) {
-            isFavourite = next
-        }
-        if next {
-            let burst = UUID()
-            heartBursts.append(burst)
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(950))
-                heartBursts.removeAll { $0 == burst }
-            }
-        }
-        onToggleFavorite()
-    }
-
     // MARK: - Dolny pasek akcji
 
     /// Dolny pasek: jeden przycisk (albo dwa przy przepisie thermomixowym
@@ -1040,6 +987,9 @@ private struct DetailBackground: View {
 /// oba efekty to `visualEffect`, więc nie przeliczają układu co klatkę.
 private struct DetailHeroPhoto: View {
     let url: URL?
+    /// Wjazd arkusza: zdjęcie startuje lekko przybliżone i osiada — ten sam
+    /// ruch co zdjęcie w wyborze posiłku u Asystenta.
+    var isRevealed: Bool = true
 
     // `nonisolated`, bo czyta ją domknięcie `onScrollGeometryChange` ekranu.
     nonisolated static let height: CGFloat = 340
@@ -1115,6 +1065,8 @@ private struct DetailHeroPhoto: View {
                 EditorialShimmerBlock()
             }
         }
+        .scaleEffect(isRevealed || reduceMotion ? 1 : 1.12)
+        .animation(.easeOut(duration: 1.1), value: isRevealed)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
     }
@@ -1633,6 +1585,12 @@ private struct DetailIngredientRow: View {
 
 // MARK: - Wjazd sekcji
 
+/// Sekcja wjeżdża z dołu i rozjaśnia się — kaskadą, w tych samych liczbach
+/// co treść arkusza wyboru posiłku u Asystenta (`AssistantOptionsStorySheet`).
+///
+/// `geometryGroup()`: blok podjeżdża jako JEDNA całość. Bez tego elementy
+/// z własną animacją w środku (pierścienie makro, liczące cyfry) jechałyby
+/// każdy swoim tempem i przez chwilę stały na różnych wysokościach.
 private struct DetailReveal: ViewModifier {
     let isVisible: Bool
     let order: Int
@@ -1641,12 +1599,30 @@ private struct DetailReveal: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .geometryGroup()
             .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible || reduceMotion ? 0 : 16)
+            .offset(y: isVisible || reduceMotion ? 0 : 14)
             .animation(
-                .spring(response: 0.55, dampingFraction: 0.88).delay(0.06 + Double(order) * 0.06),
+                reduceMotion
+                    ? .easeInOut(duration: 0.2)
+                    : .smooth(duration: 0.55).delay(0.10 + Double(order) * 0.05),
                 value: isVisible
             )
+    }
+}
+
+/// Przyciski na zdjęciu (serce, krzyżyk) pojawiają się razem z treścią,
+/// a nie wiszą nad pustym kadrem, zanim zdjęcie osiądzie.
+private struct DetailChrome: ViewModifier {
+    let isVisible: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .scaleEffect(isVisible || reduceMotion ? 1 : 0.85)
+            .animation(.easeOut(duration: 0.35).delay(0.05), value: isVisible)
     }
 }
 
@@ -1654,6 +1630,10 @@ private extension View {
     /// Sekcje wchodzą po kolei — góra pierwsza, składniki ostatnie.
     func detailReveal(_ isVisible: Bool, order: Int) -> some View {
         modifier(DetailReveal(isVisible: isVisible, order: order))
+    }
+
+    func detailChrome(_ isVisible: Bool) -> some View {
+        modifier(DetailChrome(isVisible: isVisible))
     }
 }
 
@@ -1749,12 +1729,12 @@ private enum RecipeDetailFormat {
 #if DEBUG
 
 #Preview("Szczegóły v2 — Dark") {
-    RecipeDetailView(recipe: RecipesMock.chickenBowl, onToggleFavorite: {})
+    RecipeDetailView(recipe: RecipesMock.chickenBowl, onSetFavourite: { _ in })
         .preferredColorScheme(.dark)
 }
 
 #Preview("Szczegóły v2 — Light") {
-    RecipeDetailView(recipe: RecipesMock.chickenBowl, onToggleFavorite: {})
+    RecipeDetailView(recipe: RecipesMock.chickenBowl, onSetFavourite: { _ in })
         .preferredColorScheme(.light)
 }
 
@@ -1764,7 +1744,7 @@ private enum RecipeDetailFormat {
 #Preview("Szczegóły v2 — z planu, dark") {
     RecipeDetailView(
         recipe: RecipesMock.chickenBowl,
-        onToggleFavorite: {},
+        onSetFavourite: { _ in },
         initialServings: 2,
         context: .planned(day: Date(), slot: .lunch),
         onSaveServings: { _ in }
@@ -1773,42 +1753,3 @@ private enum RecipeDetailFormat {
 }
 
 #endif
-
-// MARK: - Unoszące się serce
-
-/// Małe serce, które po dodaniu do ulubionych wyskakuje z przycisku w górę,
-/// rośnie i gaśnie.
-///
-/// Nad przyciskiem jest tylko 16 pt do krawędzi arkusza, a arkusz przycina
-/// wszystko, co za nią wyjdzie. Środek przycisku stoi 34 pt od krawędzi,
-/// więc serce wznosi się o 20 pt i gaśnie, zanim jej dotknie — przy 52 pt
-/// wjeżdżało pod krawędź w połowie krycia i wyglądało na ucięte.
-///
-/// Każda cecha ma własną krzywą: skok sprężyną, wznoszenie z wyhamowaniem,
-/// gaśnięcie dopiero po chwili. Przy jednej wspólnej krzywej serce bladło,
-/// zanim zdążyło wyjść spod glifu przycisku.
-///
-/// Ruch rusza klatkę PO wstawieniu widoku — zmiana stanu w tej samej
-/// klatce, w której widok powstaje, nie ma czego interpolować (patrz
-/// `PlanAssistantIntroSheet`: „Jedna klatka opóźnienia”).
-private struct FloatingHeart: View {
-    @State private var isFlying = false
-
-    var body: some View {
-        Image(systemName: "heart.fill")
-            .font(.system(size: 14, weight: .bold))
-            .foregroundStyle(SCPalette.terracotta)
-            .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
-            .scaleEffect(isFlying ? 1.45 : 0.6)
-            .animation(.spring(response: 0.34, dampingFraction: 0.62), value: isFlying)
-            .offset(y: isFlying ? -20 : 0)
-            .animation(.easeOut(duration: 0.6), value: isFlying)
-            .opacity(isFlying ? 0 : 1)
-            .animation(.easeIn(duration: 0.42).delay(0.18), value: isFlying)
-            .task {
-                try? await Task.sleep(for: .milliseconds(16))
-                isFlying = true
-            }
-            .accessibilityHidden(true)
-    }
-}

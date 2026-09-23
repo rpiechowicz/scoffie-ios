@@ -489,19 +489,13 @@ struct WeeklyPlanView: View {
             }
             .sheet(item: $detailTarget) { target in
                 RecipeDetailView(
-                    recipe: target.recipe,
-                    onToggleFavorite: {
-                        Task { @MainActor in
-                            await recipeCatalogStore.toggleFavorite(recipeId: target.recipe.id)
-                            let refreshed = await recipeCatalogStore.loadRecipeDetail(recipeId: target.recipe.id)
-                                ?? recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id })
-                                ?? target.recipe
-                            // Podmieniamy sam przepis, nie cały cel — `id`
-                            // zostaje ten sam, więc arkusz się nie przeładowuje
-                            // i liczba porcji wybrana stepperem przeżywa
-                            // kliknięcie w serduszko.
-                            detailTarget?.recipe = refreshed
-                        }
+                    // Żywy przepis z katalogu: serce nadąża za zapisem, a cel
+                    // (`detailTarget`) nie jest podmieniany po zapisie — przy
+                    // zamkniętym i otwartym w międzyczasie innym posiłku
+                    // podmiana wpisywała stary przepis do nowego arkusza.
+                    recipe: recipeCatalogStore.recipes.first(where: { $0.id == target.recipe.id }) ?? target.recipe,
+                    onSetFavourite: { value in
+                        Task { await recipeCatalogStore.setFavourite(recipeId: target.recipe.id, to: value) }
                     },
                     onClose: { detailTarget = nil },
                     // Stepper startuje od liczby, którą pokazuje wiersz planu.
@@ -516,7 +510,7 @@ struct WeeklyPlanView: View {
                     }
                 )
                 .presentationDetents([.large])
-                .dashboardLiquidSheet()
+                .dashboardLiquidSheet(cornerRadius: 40)
             }
         }
     }
