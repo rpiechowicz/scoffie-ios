@@ -72,11 +72,16 @@ struct AssistantSurfaceCard<Content: View>: View {
 /// Stopka przyklejona do dołu: treść chowa się pod miękkim gradientem tła,
 /// jak w kreatorze „Poznajmy się". Wewnątrz przyciski w stylu `SCSoftButton`.
 struct AssistantStickyFooter<Content: View>: View {
+    /// Kolor tła ekranu pod stopką. Musi być DOKŁADNIE ten sam, co tło
+    /// arkusza — inaczej nad przyciskiem wraca twarda linia. Domyślnie
+    /// `scPageBase`; szczegóły posiłku mają własne, cieplejsze tło.
+    var base: Color? = nil
     @ViewBuilder var content: () -> Content
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        let base = base ?? Color.scPageBase(scheme)
         VStack(spacing: 10) { content() }
             .padding(.horizontal, SCPageMetrics.horizontal)
             .padding(.top, 12)
@@ -88,14 +93,14 @@ struct AssistantStickyFooter<Content: View>: View {
                     // zaczyna się NAD stopką (ujemny offset), więc nie zjada
                     // miejsca, a treść i tak ginie pod nim łagodnie.
                     LinearGradient(
-                        colors: [Color.scPageBase(scheme).opacity(0), Color.scPageBase(scheme)],
+                        colors: [base.opacity(0), base],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                     .frame(height: 36)
                     .offset(y: -36)
                     .padding(.bottom, -36)
-                    Color.scPageBase(scheme)
+                    base
                 }
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)

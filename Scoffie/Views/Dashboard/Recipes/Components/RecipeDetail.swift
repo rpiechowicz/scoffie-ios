@@ -5,7 +5,7 @@ import SwiftUI
 // z tagami, `NutriZDonutThick`, `StepsList`, `IngrCheckGrouped`, `MealDetail`
 // z `nutriStepper`).
 //
-// Od góry: zdjęcie 220 pt wtapiające się w tło arkusza, wiersz tagów
+// Od góry: zdjęcie 340 pt wtapiające się w tło arkusza, wiersz tagów
 // (kategoria · „pasuje też na” przerywaną obwódką · czas), duży tytuł z lede,
 // a pod nim trzy sekcje z akcentowym pręcikiem:
 //   • „Wartości odżywcze” (terakota) — stepper porcji siedzi W NAGŁÓWKU tej
@@ -196,7 +196,9 @@ struct RecipeDetailView: View {
             // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
             // progu, a nie w każdej klatce przewijania.
             .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top > 150
+                // Próg liczony od wysokości zdjęcia: wygaszenie wchodzi,
+                // gdy nad przyciskami zostaje już tylko jego dolny skrawek.
+                geometry.contentOffset.y + geometry.contentInsets.top > DetailHeroPhoto.height - 70
             } action: { _, isPast in
                 withAnimation(.easeInOut(duration: 0.22)) { isPastPhoto = isPast }
             }
@@ -216,26 +218,25 @@ struct RecipeDetailView: View {
             .allowsHitTesting(false)
         }
         .toolbar(.hidden, for: .navigationBar)
+        // Serce i krzyżyk to ten sam krążek, którym zamyka się każdy inny
+        // arkusz (`SCSheetCloseButton`) — bez osobnego „szkła” na zdjęciu.
         .overlay(alignment: .topLeading) {
-            DetailRoundButton(
+            SCSheetIconButton(
                 systemName: recipe.favourite ? "heart.fill" : "heart",
                 tint: recipe.favourite ? SCPalette.terracotta : nil,
                 accessibilityLabel: recipe.favourite ? "Usuń z ulubionych" : "Dodaj do ulubionych",
                 action: { onToggleFavorite?() }
             )
+            .sensoryFeedback(.impact(weight: .light), trigger: recipe.favourite)
             .opacity(onToggleFavorite == nil ? 0 : 1)
             .disabled(onToggleFavorite == nil)
-            .padding(.leading, 16)
-            .padding(.top, 14)
+            .padding(.leading, 20)
+            .padding(.top, 16)
         }
         .overlay(alignment: .topTrailing) {
-            DetailRoundButton(
-                systemName: "xmark",
-                accessibilityLabel: "Zamknij",
-                action: { onClose?() }
-            )
-            .padding(.trailing, 16)
-            .padding(.top, 14)
+            SCSheetCloseButton { onClose?() }
+                .padding(.trailing, 20)
+                .padding(.top, 16)
         }
         .overlay(alignment: .bottom) {
             primaryActionBar
@@ -670,10 +671,12 @@ struct RecipeDetailView: View {
 
     // MARK: - Dolny pasek akcji
 
-    /// Dolny pasek: przejście z przezroczystości w tło arkusza, na nim jeden
-    /// przycisk (albo dwa przy przepisie thermomixowym z połączonym Cookidoo).
+    /// Dolny pasek: jeden przycisk (albo dwa przy przepisie thermomixowym
+    /// z połączonym Cookidoo) na stopce, pod którą treść ginie w miękkim
+    /// gradiencie tła — ta sama stopka co w arkuszach asystenta
+    /// (`AssistantStickyFooter`), zamiast twardej linii nad przyciskiem.
     private var primaryActionBar: some View {
-        VStack(spacing: 10) {
+        AssistantStickyFooter(base: look.background) {
             thermomixFeedback
 
             if showsThermomixSplit {
@@ -685,21 +688,6 @@ struct RecipeDetailView: View {
                 planActionButton(title: primaryActionTitle)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(
-            // Kryjące tło z linią u góry — jak na każdym innym arkuszu;
-            // przy półprzezroczystym treść prześwitywała pod przyciskami.
-            Rectangle()
-                .fill(look.background)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
@@ -994,7 +982,9 @@ private struct DetailBackground: View {
 
 // MARK: - Zdjęcie
 
-/// Zdjęcie 220 pt od krawędzi do krawędzi, wtapiające się w tło.
+/// Zdjęcie 340 pt od krawędzi do krawędzi, wtapiające się w tło. Przy 220 pt
+/// danie ginęło pod tytułem — teraz zajmuje mniej więcej kwadrat szerokości
+/// telefonu, a tytuł i tagi wchodzą tuż pod nim.
 ///
 /// Przy przeciągnięciu w dół rośnie od dolnej krawędzi (zamiast odsłaniać
 /// pustkę nad sobą), a przy przewijaniu w górę jedzie wolniej od treści —
@@ -1002,7 +992,8 @@ private struct DetailBackground: View {
 private struct DetailHeroPhoto: View {
     let url: URL?
 
-    private static let height: CGFloat = 220
+    // `nonisolated`, bo czyta ją domknięcie `onScrollGeometryChange` ekranu.
+    nonisolated static let height: CGFloat = 340
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1077,50 +1068,6 @@ private struct DetailHeroPhoto: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
-    }
-}
-
-// MARK: - Przyciski na zdjęciu
-
-/// Okrągły przycisk 44 pt na zdjęciu — szkło z ciemnym (albo kremowym)
-/// podbiciem, obwódka i miękki cień, żeby czytał się na każdym kadrze.
-private struct DetailRoundButton: View {
-    let systemName: String
-    var tint: Color?
-    let accessibilityLabel: String
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let isDark = scheme == .dark
-        let glass: Color = isDark
-            ? Color(red: 20 / 255, green: 14 / 255, blue: 10 / 255).opacity(0.60)
-            : Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255).opacity(0.82)
-
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(tint ?? Color.scLabel(scheme))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 44, height: 44)
-                .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Circle().fill(tint.map { $0.opacity(isDark ? 0.28 : 0.20) } ?? glass))
-                }
-                .overlay(
-                    Circle().strokeBorder(
-                        tint.map { $0.opacity(0.55) }
-                            ?? (isDark ? SCPalette.labelDark.opacity(0.16) : SCPalette.labelLight.opacity(0.12)),
-                        lineWidth: 1
-                    )
-                )
-                .shadow(color: .black.opacity(isDark ? 0.35 : 0.14), radius: 8, x: 0, y: 3)
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.9))
-        .sensoryFeedback(.impact(weight: .light), trigger: systemName)
-        .accessibilityLabel(accessibilityLabel)
     }
 }
 
