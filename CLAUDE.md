@@ -176,13 +176,23 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `RecipeFilterKit.swift` + arkusze-dzieci `RecipeExcludeSheets.swift`. Po uwagach Rafała (23.09):
   wykluczanie to JEDEN kafelek w Filtrach, a szukanie + działy mieszkają w `RecipeExcludeSheet`
   (dział → `RecipeExcludeCategorySheet`); czas i trudność to dwa kafelki z menu w jednym rzędzie;
-  kalorie to histogram przepisów (`RecipeFilterIndex.kcalHistogram`, przy pozostałych filtrach,
-  bez samego limitu) z uchwytem; aktywny przycisk filtrów na Przepisach = wariant „podświetlony”
+  kalorie to WYKRES, KTÓRY JEST SUWAKIEM (`RecipeFilterKcalChart`): słupki rozkładu
+  (`RecipeFilterIndex.kcalHistogram`, przy pozostałych filtrach, bez samego limitu) stoją dokładnie
+  na przedziałach skali, limit to pionowa kreska z gałką na osi, którą prowadzi się po całym wykresie;
+  osobnego toru z wypełnieniem nie ma (Rafał: „zrezygnuj z tego Progressu”). Limit stoi dużą liczbą
+  na górze karty, obok krzyżyk, który go zdejmuje, i „Do celu”; cel = szałwiowy odcinek NA osi z podpisem
+  „500 · Twój cel · 800” — nigdy napis nad słupkami, bo przecinała go kreska. Aktywny przycisk
+  filtrów na Przepisach = wariant „podświetlony”
   (`SCCircleIconLabel(highlighted:)`), nie pełna terakota. Przełącznik „Dopasowane do Ciebie” jest
   TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
   i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
-  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`) jest wspólny dla
-  Diety/Cech w filtrach i alergenów (`AllergenPicker`: Ustawienia + kreator).
+  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`) = miniatura ZDJĘCIA
+  DANIA z tą cechą + nazwa + liczba przepisów; zaznaczenie = tint, obwódka wokół miniatury i znaczek
+  z ptaszkiem (nie samo pole wyboru — „smutne”, Rafał 23.09). Zdjęcia dobiera `RecipeFilterCovers`
+  / `RecipeFacetCovers` raz na otwarcie, z puli przed filtrami, każdy przepis na jednym kafelku;
+  bez zdjęcia glif — i najpierw dania, których profil NIE ukrywa (kafelek nie pokaże dania z alergenem
+  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii; siatka to `RecipeFilterTileGrid` (wiersze
+  `HStack` z `fixedSize` w pionie), bo `LazyVGrid` stawiał obok siebie kafelki różnej wysokości.
   Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
   tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
   per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie
@@ -192,7 +202,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   drugiego wyrazu (`IngredientExclusion.groupStem`). Odejścia od makiety: cechy „Jedno naczynie /
   Do pudełka / Budżetowe / Na zimno” zastąpione policzalnymi (katalog ich nie niesie),
   „Mięso i ryby / Zioła” to prawdziwe działy sklepu, kategoria składników ma krzyżyk zamiast
-  „wstecz”, przyciski „soft”, szukanie kończy „Gotowe” zamiast „Anuluj”.
+  „wstecz”, przyciski „soft”, szukanie kończy „Gotowe” zamiast „Anuluj”, a składniki to CHMURA
+  PIGUŁEK (`RecipeExclusionPill` w `RecipeExclusionFlow`), nie wiersze z „Wyklucz” przy każdym —
+  terakota = wykluczony, przerywana obwódka = wykluczony z całą grupą. Grupa („Papryka”) ma
+  strzałkę i ROZWIJA rodzaje w panelu na całą szerokość chmury (tam „Wszystkie”); sama nie
+  wyklucza. Działy mają ikony i barwy alejek Zakupów (`ProductConstants.departmentIcon/Color`),
+  wyniki szukania są pogrupowane po działach.
 - Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
   (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): kryjąca płyta w kolorze tła
   (`scPageBase`, czyli dół `SCPageBackground`) + 36 pt przejścia NAD nią, bez kreski i bez szkła.
@@ -202,8 +217,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   tylko nakładki na nią; kreator (`WelcomeFooter`) zostaje przy swoim układzie (kropki kroków).
 - Przypięty nagłówek nad przewijaną treścią arkusza = BEZ kreski: `.scScrollEdgeFade()` na
   `ScrollView` (`Components/SCScrollEdgeFade.swift`) — górny brzeg treści gaśnie (maska, więc działa
-  na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Nakładany
-  nagłówek (zwinięty w „Filtrach”) podaje `covered:` i `isVisible:`. Wzór: szczegóły posiłku.
+  na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Wzór:
+  szczegóły posiłku. Nagłówek stoi NAD `ScrollView` w `VStack` — nie przewija się i nie zwija
+  (zwijany „Filtrów”, z tytułem przeskakującym na środek, zniknął 23.09 na prośbę Rafała). Tak stoją
+  też filtry kategorii i oba arkusze wykluczania. Maska sięga pod pasek domowy (`ignoresSafeArea`).
 - Plany asystenta: to, co dom MA, bierze się WYŁĄCZNIE z serwera (`BillingStateDTO.subscriptions`
   z `alive`, potem `AgentUsageDTO.source == "SUBSCRIPTION"` + `product`). Liczba domowników
   (`PlansSheet.plan(forHousehold:)`) tylko PODPOWIADA („Polecany”, „polecamy We dwoje”) — nigdy nie

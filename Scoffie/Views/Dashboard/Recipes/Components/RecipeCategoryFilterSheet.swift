@@ -5,11 +5,11 @@ import SwiftUI
 // i desery). Makieta nazywała to „piętrem” kategorii nad piętrem
 // „Wszystkie przepisy” (`RF2FloorB` w `components/rf2-kit.jsx`).
 //
-// Układ celowo jak w arkuszu „Filtry”: nagłówek z „Wyczyść” obok krzyżyka,
-// wiersz zasięgu, sekcje kafelków 2 × N z liczbą przepisów po zaznaczeniu,
-// stopka z liczbą i „Pokaż”. Kto zna jeden arkusz, obsłuży drugi. Różni się
-// kolor — kafelki świecą akcentem kategorii (śniadania masłem, obiady
-// szałwią…), tak jak jej sekcja na Przepisach.
+// Układ celowo jak w arkuszu „Filtry”: przypięty nagłówek z „Wyczyść” obok
+// krzyżyka, wiersz zasięgu, sekcje kafelków 2 × N ze zdjęciem dania i liczbą
+// przepisów po zaznaczeniu, stopka z liczbą i „Pokaż”. Kto zna jeden arkusz,
+// obsłuży drugi. Różni się kolor — kafelki świecą akcentem kategorii
+// (śniadania masłem, obiady szałwią…), tak jak jej sekcja na Przepisach.
 //
 // Zmiany idą na kopię roboczą — „Pokaż” zapisuje, zamknięcie gestem nie.
 // „Wyczyść” działa od razu, jak w arkuszu „Filtry”.
@@ -48,6 +48,14 @@ struct RecipeCategoryFilterSheet: View {
         return values
     }
 
+    /// Zdjęcia kafelków — przykład dania dla każdej opcji, raz na otwarcie.
+    private var covers: RecipeFacetCovers {
+        if let covers = valuesBox.covers { return covers }
+        let covers = RecipeFacetCovers(facets: facets, recipes: recipes, values: values)
+        valuesBox.covers = covers
+        return covers
+    }
+
     private func count(_ filter: RecipeCategoryFilter) -> Int {
         values.reduce(into: 0) { total, recipe in
             if filter.matches(recipe) { total += 1 }
@@ -63,23 +71,30 @@ struct RecipeCategoryFilterSheet: View {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    header
-                    scopeRow
-                        .padding(.top, 20)
+            VStack(spacing: 0) {
+                // Przypięty — tak samo jak w „Filtrach”.
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
 
-                    ForEach(facets) { facet in
-                        facetSection(facet)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        scopeRow
+                            .padding(.top, 6)
+
+                        ForEach(facets) { facet in
+                            facetSection(facet)
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+                    .containerRelativeFrame(.horizontal)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 24)
-                .containerRelativeFrame(.horizontal)
+                .scrollIndicators(.hidden)
+                .scScrollEdgeFade()
+                .scSheetFooter { footer }
             }
-            .scrollIndicators(.hidden)
-            .scSheetFooter { footer }
         }
         .animation(.smooth(duration: 0.22), value: draft.isActive)
         .sensoryFeedback(.selection, trigger: draft)
@@ -143,11 +158,6 @@ struct RecipeCategoryFilterSheet: View {
 
     // MARK: - Sekcje
 
-    private let gridColumns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
-
     private func facetSection(_ facet: RecipeFacet) -> some View {
         let picked = draft.picks[facet.kind]?.count ?? 0
 
@@ -159,17 +169,17 @@ struct RecipeCategoryFilterSheet: View {
                     .transition(.opacity)
             }
         } content: {
-            LazyVGrid(columns: gridColumns, spacing: 8) {
-                ForEach(facet.options) { option in
-                    RecipeFilterOptionTile(
-                        title: option.title,
-                        count: count(draft.adding(option.id, in: facet.kind)),
-                        mark: draft.contains(option.id, in: facet.kind) ? .on : .off,
-                        accent: accent
-                    ) {
-                        withAnimation(.smooth(duration: 0.18)) {
-                            draft.toggle(option.id, in: facet.kind)
-                        }
+            RecipeFilterTileGrid(items: facet.options) { option in
+                RecipeFilterOptionTile(
+                    title: option.title,
+                    count: count(draft.adding(option.id, in: facet.kind)),
+                    mark: draft.contains(option.id, in: facet.kind) ? .on : .off,
+                    accent: accent,
+                    cover: covers.cover(for: option.id, in: facet.kind),
+                    icon: RecipesConstants.icon(for: category)
+                ) {
+                    withAnimation(.smooth(duration: 0.18)) {
+                        draft.toggle(option.id, in: facet.kind)
                     }
                 }
             }
@@ -240,9 +250,10 @@ struct RecipeCategoryFilterSheet: View {
         dismiss()
     }
 
-    /// Pudełko na wartości aspektów — klasa, żeby zapamiętanie wyniku
-    /// w trakcie `body` nie było zmianą stanu.
+    /// Pudełko na wartości aspektów i zdjęcia — klasa, żeby zapamiętanie
+    /// wyniku w trakcie `body` nie było zmianą stanu.
     private final class ValuesBox {
         var values: [[RecipeFacetKind: Set<String>]]?
+        var covers: RecipeFacetCovers?
     }
 }

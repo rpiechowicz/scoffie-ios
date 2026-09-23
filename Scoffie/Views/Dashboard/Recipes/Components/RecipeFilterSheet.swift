@@ -4,11 +4,13 @@ import SwiftUI
 // Źródło: Claude Design, „Scoffie - Przepisy v3 - Filtry.html”, sekcja
 // „Filtry · wersja finalna” (`FFSheet` w `components/filtry-final.jsx`).
 //
-// Od góry: zasięg („Wszystkie przepisy — działają w każdej kategorii”),
-// dopasowanie do profilu, czas, kalorie (linijka z igłą), dieta i cechy
-// (kafelki 2 × 3 z liczbą przepisów), trudność, wykluczanie składników
-// (szukanie + działy sklepu). Na dole pływa szklana kapsuła: ile zostaje
-// łącznie i w każdej kategorii, i „Pokaż”.
+// Nagłówek stoi przypięty nad przewijaną treścią (jak w każdym arkuszu,
+// `scScrollEdgeFade`). Pod nim: zasięg („Wszystkie przepisy — działają
+// w każdej kategorii”), dopasowanie do profilu, czas i trudność, kalorie
+// (wykres rozkładu, który sam jest suwakiem), dieta i cechy (kafelki 2 × 3
+// ze zdjęciem dania i liczbą przepisów), wykluczanie składników (osobny
+// arkusz). Na dole wspólna stopka: ile zostaje łącznie i w każdej kategorii,
+// i „Pokaż”.
 //
 // Zmiany idą na kopię roboczą (`draft`, `fitDraft`) — dopiero „Pokaż”
 // zapisuje je do Przepisów. Zamknięcie arkusza gestem nie zostawia listy
@@ -30,7 +32,6 @@ struct RecipeFilterSheet: View {
     @State private var draft: RecipeFilterOptions
     @State private var fitDraft: Bool
     @State private var indexBox: IndexBox
-    @State private var isHeaderCompact = false
     @State private var isExcludePresented = false
 
     /// Przepisy po wyszukiwarce Przepisów, ale PRZED dopasowaniem i filtrami.
@@ -60,6 +61,18 @@ struct RecipeFilterSheet: View {
         let index = RecipeFilterIndex(recipes: recipes, personalization: personalization)
         indexBox.index = index
         return index
+    }
+
+    /// Zdjęcia kafelków Diety i Cech — tak samo leniwie i raz na otwarcie.
+    /// Dania ukryte przez profil (np. z alergenem z Ustawień) biorą się
+    /// dopiero, gdy nic innego nie pasuje — niezależnie od przełącznika
+    /// „Dopasowane do Ciebie”, żeby zdjęcie nie zmieniało się z nim.
+    private var covers: RecipeFilterCovers {
+        if let covers = indexBox.covers { return covers }
+        let entries = index.entries
+        let covers = RecipeFilterCovers(recipes: recipes) { entries[$0].hiddenByProfile }
+        indexBox.covers = covers
+        return covers
     }
 
     // MARK: - Stan pochodny
@@ -120,41 +133,38 @@ struct RecipeFilterSheet: View {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    header
-                    scopeRow
-                        .padding(.top, 20)
-                    fitRow
-                        .padding(.top, 14)
-                    timeAndDifficultySection
-                    caloriesSection
-                    dietSection
-                    traitsSection
-                    excludeSection
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
-                .containerRelativeFrame(.horizontal)
-            }
-            .scrollIndicators(.hidden)
-            // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
-            // progu, a nie w każdej klatce przewijania.
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top > 52
-            } action: { _, isPast in
-                withAnimation(.easeInOut(duration: 0.2)) { isHeaderCompact = isPast }
-            }
-            // Pod zwiniętym nagłówkiem treść się chowa i gaśnie (wspólny
-            // „cień w dół”), zamiast przejeżdżać pod paskiem z kreską.
-            .scScrollEdgeFade(covered: Self.compactHeaderHeight, isVisible: isHeaderCompact)
-            // Wspólna stopka arkuszy (`scSheetFooter`): kryjąca płyta pod
-            // liczbami i „Pokaż”, przewijane sekcje giną w przejściu nad nią.
-            // Szklana kapsuła, która tu była, przepuszczała treść pod spód.
-            .scSheetFooter { footer }
+            VStack(spacing: 0) {
+                // Przypięty i taki sam przez cały czas. Był zwijany do samego
+                // tytułu na środku — przy przewijaniu „Filtry” przeskakiwały
+                // z lewej na środek, a Rafał chciał ich tam, gdzie zawsze.
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
 
-            compactHeader
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        scopeRow
+                            .padding(.top, 6)
+                        fitRow
+                            .padding(.top, 14)
+                        timeAndDifficultySection
+                        caloriesSection
+                        dietSection
+                        traitsSection
+                        excludeSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 28)
+                    .containerRelativeFrame(.horizontal)
+                }
+                .scrollIndicators(.hidden)
+                // Treść gaśnie, gdy wjeżdża pod nagłówek — wspólny „cień w dół”.
+                .scScrollEdgeFade()
+                // Wspólna stopka arkuszy (`scSheetFooter`): kryjąca płyta pod
+                // liczbami i „Pokaż”, przewijane sekcje giną w przejściu nad nią.
+                .scSheetFooter { footer }
+            }
         }
         .animation(.smooth(duration: 0.22), value: draft.activeCount > 0)
         .sensoryFeedback(.selection, trigger: draft.diets)
@@ -196,39 +206,6 @@ struct RecipeFilterSheet: View {
 
             SCSheetCloseButton { dismiss() }
         }
-    }
-
-    /// Wysokość zwiniętego nagłówka — tyle treści maska chowa pod nim.
-    private static let compactHeaderHeight: CGFloat = 58
-
-    /// Po przewinięciu: sam tytuł na środku, „Wyczyść” i krzyżyk po prawej —
-    /// żeby zamknąć albo wyczyścić, nie trzeba wracać na górę. Bez własnego
-    /// tła i kreski: stoi na tle arkusza, a treść pod nim gaśnie
-    /// (`scScrollEdgeFade`).
-    private var compactHeader: some View {
-        ZStack {
-            Text("Filtry")
-                .font(.system(size: 16, weight: .bold))
-                .tracking(-0.3)
-                .foregroundStyle(Color.scLabel(scheme))
-
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                if draft.activeCount > 0 {
-                    RecipeFilterClearButton(compact: true, action: clearAll)
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                }
-                SCSheetCloseButton { dismiss() }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity)
-        .frame(height: Self.compactHeaderHeight, alignment: .top)
-        .opacity(isHeaderCompact ? 1 : 0)
-        .allowsHitTesting(isHeaderCompact)
-        .accessibilityHidden(!isHeaderCompact)
     }
 
     // MARK: - Zasięg i dopasowanie
@@ -376,15 +353,11 @@ struct RecipeFilterSheet: View {
         }
     }
 
+    /// Limit stoi dużą liczbą na górze karty wykresu — etykieta sekcji go
+    /// nie powtarza.
     private var caloriesSection: some View {
         RecipeFilterSection(title: "Kalorie na porcję") {
-            if let kcal = draft.maxCaloriesPerServing {
-                accentValue("do \(kcal) kcal", number: kcal)
-            } else {
-                Text("bez limitu")
-            }
-        } content: {
-            RecipeFilterKcalSlider(
+            RecipeFilterKcalChart(
                 value: $draft.maxCaloriesPerServing,
                 histogram: index.kcalHistogram(draft, fit: fitDraft),
                 goalZone: goalZone
@@ -392,36 +365,22 @@ struct RecipeFilterSheet: View {
         }
     }
 
-    private func accentValue(_ text: String, number: Int) -> some View {
-        Text(verbatim: text)
-            .fontWeight(.semibold)
-            .monospacedDigit()
-            .foregroundStyle(SCPalette.terracotta)
-            .contentTransition(.numericText(value: Double(number)))
-            .animation(.easeOut(duration: 0.2), value: number)
-    }
-
     // MARK: - Dieta i cechy
-
-    private let gridColumns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
 
     private var dietSection: some View {
         let locked = lockedDiets
         return RecipeFilterSection(title: "Dieta") {
             VStack(alignment: .leading, spacing: 10) {
-                LazyVGrid(columns: gridColumns, spacing: 8) {
-                    ForEach(RecipeDietFilter.allCases) { diet in
-                        let isLocked = locked.contains(diet)
-                        RecipeFilterOptionTile(
-                            title: diet.title,
-                            count: isLocked ? nil : index.count(adding: diet, to: draft, fit: fitDraft),
-                            mark: isLocked ? .locked : (draft.diets.contains(diet) ? .on : .off)
-                        ) {
-                            withAnimation(.smooth(duration: 0.18)) { draft.toggle(diet: diet) }
-                        }
+                RecipeFilterTileGrid(items: RecipeDietFilter.allCases) { diet in
+                    let isLocked = locked.contains(diet)
+                    RecipeFilterOptionTile(
+                        title: diet.title,
+                        count: isLocked ? nil : index.count(adding: diet, to: draft, fit: fitDraft),
+                        mark: isLocked ? .locked : (draft.diets.contains(diet) ? .on : .off),
+                        cover: covers.diets[diet],
+                        icon: diet.tileIcon
+                    ) {
+                        withAnimation(.smooth(duration: 0.18)) { draft.toggle(diet: diet) }
                     }
                 }
 
@@ -442,16 +401,16 @@ struct RecipeFilterSheet: View {
 
     private var traitsSection: some View {
         RecipeFilterSection(title: "Cechy") {
-            LazyVGrid(columns: gridColumns, spacing: 8) {
-                ForEach(RecipeTraitFilter.allCases) { trait in
-                    RecipeFilterOptionTile(
-                        title: trait.title,
-                        count: index.count(adding: trait, to: draft, fit: fitDraft),
-                        mark: draft.traits.contains(trait) ? .on : .off,
-                        accessibilityDetail: trait.accessibilityDetail
-                    ) {
-                        withAnimation(.smooth(duration: 0.18)) { draft.toggle(trait: trait) }
-                    }
+            RecipeFilterTileGrid(items: RecipeTraitFilter.allCases) { trait in
+                RecipeFilterOptionTile(
+                    title: trait.title,
+                    count: index.count(adding: trait, to: draft, fit: fitDraft),
+                    mark: draft.traits.contains(trait) ? .on : .off,
+                    cover: covers.traits[trait],
+                    icon: trait.tileIcon,
+                    accessibilityDetail: trait.accessibilityDetail
+                ) {
+                    withAnimation(.smooth(duration: 0.18)) { draft.toggle(trait: trait) }
                 }
             }
         }
@@ -613,6 +572,7 @@ struct RecipeFilterSheet: View {
     /// nie było zmianą stanu, która przerysowuje widok.
     private final class IndexBox {
         var index: RecipeFilterIndex?
+        var covers: RecipeFilterCovers?
     }
 }
 
@@ -670,19 +630,7 @@ private struct RecipeFilterCategorySplit: View {
     }
 }
 
-// MARK: - Wspólne z arkuszem dopasowania
-
-/// Zawijający rząd chipów — ten sam `Layout` co chmura alergenów.
-struct RecipeFilterChipFlow<Content: View>: View {
-    var spacing: CGFloat = 8
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        AllergenChipFlow(spacing: spacing) {
-            content()
-        }
-    }
-}
+// MARK: - Przełącznik
 
 /// Mały switch-look bez `Toggle` — cały wiersz jest przyciskiem, więc
 /// natywny toggle łapałby gest jako drugi target.
@@ -704,5 +652,34 @@ struct RecipeFilterToggleIndicator: View {
                     .padding(.horizontal, 3)
             }
             .animation(.smooth(duration: 0.18), value: isOn)
+    }
+}
+
+// MARK: - Glify kafelków
+
+/// Glif na kafelku, gdy żaden przepis z tą cechą nie ma zdjęcia.
+private extension RecipeDietFilter {
+    var tileIcon: String {
+        switch self {
+        case .lactoseFree: return "cup.and.saucer.fill"
+        case .vegetarian:  return "leaf.fill"
+        case .vegan:       return "carrot.fill"
+        case .withFish:    return "fish.fill"
+        case .glutenFree:  return "laurel.leading"
+        case .keto:        return "flame.fill"
+        }
+    }
+}
+
+private extension RecipeTraitFilter {
+    var tileIcon: String {
+        switch self {
+        case .highProtein: return "dumbbell.fill"
+        case .lowFat:      return "drop.fill"
+        case .highFiber:   return "leaf"
+        case .lowSalt:     return "aqi.low"
+        case .favourites:  return "heart.fill"
+        case .thermomix:   return "cooktop.fill"
+        }
     }
 }
