@@ -24,9 +24,9 @@ struct AssistantOptionsDebugScreen: View {
 
     private static let json = #"""
     {"kind": "OPTIONS", "v": 1, "eyebrow": "Śniadanie · środa", "title": "Śniadanie na dziś", "options": [
-      {"recipeId": "d0d09af3-1821-47be-be95-63a208fc47bd", "title": "Jogurt naturalny z musli, truskawkami i borówkami", "kcalPerServing": 316, "prepTimeMinutes": 6, "imageUrl": "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/d0d09af3-1821-47be-be95-63a208fc47bd.png", "description": "Szybkie śniadanie na zimno z jogurtem naturalnym, chrupiącym musli, truskawkami i borówkami. Lekkie, ale dobrze sycące na poranek.", "proteinGrams": 10, "carbsGrams": 40, "fatGrams": 12, "ingredientCount": 4, "tag": "Najszybsze", "prompt": "Wybieram: Jogurt naturalny z musli, truskawkami i borówkami"},
-      {"recipeId": "1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80", "title": "Omlet ze szpinakiem i fetą", "kcalPerServing": 450, "prepTimeMinutes": 15, "imageUrl": "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.png", "description": "Puszysty omlet z dwóch jaj ze świeżym szpinakiem i fetą, smażony na maśle.", "proteinGrams": 26, "carbsGrams": 6, "fatGrams": 30, "ingredientCount": 6, "tag": "Najwięcej białka", "prompt": "Wybieram: Omlet ze szpinakiem i fetą"},
-      {"recipeId": "386586d2-b4f8-41f0-9641-cce2b7c20dd7", "title": "Skyr z granolą i malinami", "kcalPerServing": 336, "prepTimeMinutes": 5, "imageUrl": "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/386586d2-b4f8-41f0-9641-cce2b7c20dd7.png", "tag": null, "prompt": "Wybieram: Skyr z granolą i malinami"}
+      {"recipeId": "d0d09af3-1821-47be-be95-63a208fc47bd", "title": "Jogurt naturalny z musli, truskawkami i borówkami", "kcalPerServing": 316, "prepTimeMinutes": 6, "imageUrl": "https://img.scoffie.app/recipe-images/d0d09af3-1821-47be-be95-63a208fc47bd.webp", "description": "Szybkie śniadanie na zimno z jogurtem naturalnym, chrupiącym musli, truskawkami i borówkami. Lekkie, ale dobrze sycące na poranek.", "proteinGrams": 10, "carbsGrams": 40, "fatGrams": 12, "ingredientCount": 4, "tag": "Najszybsze", "prompt": "Wybieram: Jogurt naturalny z musli, truskawkami i borówkami"},
+      {"recipeId": "1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80", "title": "Omlet ze szpinakiem i fetą", "kcalPerServing": 450, "prepTimeMinutes": 15, "imageUrl": "https://img.scoffie.app/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.webp", "description": "Puszysty omlet z dwóch jaj ze świeżym szpinakiem i fetą, smażony na maśle.", "proteinGrams": 26, "carbsGrams": 6, "fatGrams": 30, "ingredientCount": 6, "tag": "Najwięcej białka", "prompt": "Wybieram: Omlet ze szpinakiem i fetą"},
+      {"recipeId": "386586d2-b4f8-41f0-9641-cce2b7c20dd7", "title": "Skyr z granolą i malinami", "kcalPerServing": 336, "prepTimeMinutes": 5, "imageUrl": "https://img.scoffie.app/recipe-images/386586d2-b4f8-41f0-9641-cce2b7c20dd7.webp", "tag": null, "prompt": "Wybieram: Skyr z granolą i malinami"}
     ], "actions": [{"type": "ASK", "proposalId": null, "label": "Coś innego", "style": "SECONDARY", "prompt": "Żadne z tych mi nie pasuje. Zaproponuj coś innego."}]}
     """#
 
@@ -49,7 +49,7 @@ struct AssistantOptionsDebugScreen: View {
         suitableSlots: [.breakfast, .secondBreakfast],
         servings: 2,
         prepTimeMinutes: 12,
-        imageURL: URL(string: "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/9e845247-f630-4dcc-9bab-3656828cac29.png"),
+        imageURL: URL(string: "https://img.scoffie.app/recipe-images/9e845247-f630-4dcc-9bab-3656828cac29.webp"),
         ingredients: [
             Ingredient(name: "Płatki owsiane", amount: 100, unit: .gram, department: "Zboża i makarony"),
             Ingredient(name: "Mleko", amount: 400, unit: .milliliter, department: "Nabiał"),
@@ -143,7 +143,7 @@ struct AssistantOptionsDebugScreen: View {
                     item: CalendarPlateItem(
                         id: "debug-plate", slot: .lunch, status: .next, time: "14:00",
                         title: "Omlet ze szpinakiem i fetą",
-                        imageURL: URL(string: "https://pub-d6de57d50783403ab7f168d38802a1a6.r2.dev/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.png"),
+                        imageURL: URL(string: "https://img.scoffie.app/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.webp"),
                         kcal: 450, prepMinutes: 60, cookFrom: "13:00",
                         servingsNote: nil, minutesAway: 45, isMissed: false
                     ),
