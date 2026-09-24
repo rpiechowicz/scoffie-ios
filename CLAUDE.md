@@ -447,6 +447,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
   podświetlone kółko z iskierkami; karta pustego tygodnia w `PlanDayTimeline` = kafelek, „ASYSTENT”,
   tytuł, jedno zdanie i `EditorialPrimaryActionButton` (runda 9, „przerób na aktualne standardy”).
+- Puste stany Zakupów (`ProductsView`, 24.09.2026 — „design jest stary, uspójnij”) stoją na `RecipeListEmptyState` (ma teraz opcjonalny `eyebrow`): tydzień bez planu = „LISTA ZAKUPÓW · Tydzień bez planu” + „Ułóż z Asystentem” (przełącza zakładkę i zamyka arkusz) i „Wróć do Planu”; plan jest, lista pusta = „Lista jest pusta” bez akcji; „Na dziś” bez produktów i otwarta rewizja bez nowych = ptaszek w szałwii („Na dziś masz wszystko” + „Pokaż całą listę”); pusta historia — ten sam klocek. Karta z koszykiem 78 pt i dwoma szarymi chipami usunięta.
 - Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
   Przełożenie dania (stuknięcie talerzyka) ROLUJE cyfry i tekst (`.numericText()`): wielki wiersz
