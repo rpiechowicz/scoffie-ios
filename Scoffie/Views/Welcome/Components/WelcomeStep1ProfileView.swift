@@ -2,6 +2,14 @@ import SwiftUI
 
 // Kreator, krok 1 — profil: imię, rok urodzenia, wzrost, waga, płeć.
 //
+// Od 24.09.2026 (Rafał: „tak smutno wygląda… żeby wyglądało jak reszta”)
+// w układzie Ustawień → „Twoje dane” (`ProfileDetailsSheet`), które pytają
+// o dokładnie to samo: karta „Profil” z awatarem i imieniem edytowanym
+// w miejscu, karta „Sylwetka” z płcią, rokiem (wiek w terakocie), wzrostem
+// i wagą w jednym miejscu, a pod nimi na żywo BMI i kalorie na utrzymanie
+// wagi (`BodyMetricsSummaryRow`) — widać od razu, do czego te liczby służą.
+// Dawniej pięć osobnych pól luzem na tle.
+//
 // Pola trzymają lokalny `@State` rodzica, więc wpisuje się swobodnie; zapis
 // na serwer robi `WelcomeView` przy „Dalej”. Rok urodzenia to poziome koło
 // (`YearWheelPicker`), to samo co w Ustawieniach → „Twoje dane”.
@@ -11,8 +19,12 @@ struct WelcomeStep1ProfileView: View {
     @Binding var heightCm: Int
     @Binding var weightKg: Double
     @Binding var sex: Sex?
+    /// Treningi z kroku 2 (do tej chwili wartość domyślna) — tylko do
+    /// podglądu kalorii na utrzymanie wagi.
+    var activity: ActivityLevel = .light
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sessionStore) private var sessionStore
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -22,6 +34,18 @@ struct WelcomeStep1ProfileView: View {
     }
 
     private let yearRange: ClosedRange<Int> = 1900...Calendar.current.component(.year, from: Date())
+
+    private var currentYear: Int { Calendar.current.component(.year, from: Date()) }
+
+    private var metrics: BodyMetrics? {
+        BodyMetrics(
+            heightCm: heightCm,
+            weightKg: weightKg,
+            yearOfBirth: yearOfBirth,
+            activityRaw: activity.rawValue,
+            sexRaw: sex?.rawValue ?? ""
+        )
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -33,69 +57,12 @@ struct WelcomeStep1ProfileView: View {
                     subtitle: "Z tych danych policzymy Twój dzienny cel."
                 )
 
-                WelcomeSection(title: "Imię") {
-                    HStack(spacing: 12) {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.scFaint(colorScheme))
-                        TextField("Jak masz na imię?", text: $name)
-                            .textInputAutocapitalization(.words)
-                            .autocorrectionDisabled()
-                            .onChange(of: name) { _, newValue in
-                                // Limit serwera (`UpdateProfileDto`, 64).
-                                if newValue.count > SessionStore.displayNameMaxLength {
-                                    name = String(newValue.prefix(SessionStore.displayNameMaxLength))
-                                }
-                            }
-                            .focused($focusedField, equals: .name)
-                            .submitLabel(.next)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.scLabel(colorScheme))
-                            .onSubmit { focusedField = .height }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 13)
-                    .welcomeCard()
+                WelcomeSection(title: "Profil") {
+                    profileCard
                 }
 
-                WelcomeSection(title: "Rok urodzenia") {
-                    YearWheelPicker(year: $yearOfBirth, range: yearRange)
-                }
-
-                HStack(alignment: .top, spacing: 10) {
-                    WelcomeSection(title: "Wzrost") {
-                        measureField(unit: "cm") {
-                            TextField("178", value: $heightCm, format: .number)
-                                .keyboardType(.numberPad)
-                                .focused($focusedField, equals: .height)
-                        }
-                    }
-
-                    WelcomeSection(title: "Waga") {
-                        measureField(unit: "kg") {
-                            // Jedno miejsce po przecinku — 83,5 kg to
-                            // normalny odczyt z wagi łazienkowej.
-                            TextField("74", value: $weightKg, format: .number.precision(.fractionLength(0...1)))
-                                .keyboardType(.decimalPad)
-                                .focused($focusedField, equals: .weight)
-                        }
-                    }
-                }
-
-                WelcomeSection(title: "Płeć") {
-                    HStack(spacing: 8) {
-                        ForEach(Sex.allCases) { candidate in
-                            SexChip(
-                                candidate: candidate,
-                                isSelected: sex == candidate,
-                                onTap: {
-                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                        sex = (sex == candidate) ? nil : candidate
-                                    }
-                                }
-                            )
-                        }
-                    }
+                WelcomeSection(title: "Sylwetka") {
+                    bodyCard
                 }
 
                 // Jedna linijka zamiast akapitu — tyle, ile trzeba wiedzieć,
@@ -118,7 +85,142 @@ struct WelcomeStep1ProfileView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
-    /// Pole liczby z jednostką — wzrost i waga w jednym kroju.
+    // MARK: - Profil
+
+    /// Awatar i imię jak w „Twoich danych”: imię jest nagłówkiem karty,
+    /// edytowalnym w miejscu — ołówek i kreska zapalają się w terakocie przy
+    /// edycji.
+    private var profileCard: some View {
+        let isEditing = focusedField == .name
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return HStack(alignment: .center, spacing: 14) {
+            ProfileAvatar(
+                avatarUrl: nil,
+                displayName: trimmed.isEmpty ? "?" : trimmed,
+                size: 56,
+                seed: sessionStore.currentUserId ?? trimmed
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    TextField("Jak masz na imię?", text: $name)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .onChange(of: name) { _, newValue in
+                            // Limit serwera (`UpdateProfileDto`, 64).
+                            if newValue.count > SessionStore.displayNameMaxLength {
+                                name = String(newValue.prefix(SessionStore.displayNameMaxLength))
+                            }
+                        }
+                        .focused($focusedField, equals: .name)
+                        .submitLabel(.next)
+                        .font(.system(size: 19, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(Color.scLabel(colorScheme))
+                        .onSubmit { focusedField = .height }
+
+                    Image(systemName: "pencil")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(isEditing ? SCPalette.terracotta : Color.scFaint(colorScheme))
+                }
+
+                Rectangle()
+                    .fill(isEditing ? SCPalette.terracotta : Color.scRule(colorScheme))
+                    .frame(height: isEditing ? 1.5 : 1)
+
+                Text("Tak zobaczą Cię domownicy w planie")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.scMuted(colorScheme))
+                    .padding(.top, 3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.smooth(duration: 0.18), value: isEditing)
+        }
+        .padding(16)
+        .welcomeCard()
+        .contentShape(Rectangle())
+        .onTapGesture { focusedField = .name }
+    }
+
+    // MARK: - Sylwetka
+
+    /// Jedna karta jak „Sylwetka” w Ustawieniach: płeć, rok, wzrost i waga,
+    /// a pod nimi wynik — BMI i kalorie na utrzymanie wagi.
+    private var bodyCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                fieldCaption("Płeć")
+                HStack(spacing: 8) {
+                    ForEach(Sex.allCases) { candidate in
+                        SexChip(
+                            candidate: candidate,
+                            isSelected: sex == candidate,
+                            onTap: {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    sex = (sex == candidate) ? nil : candidate
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    fieldCaption("Rok urodzenia")
+                    Spacer(minLength: 8)
+                    Text(BodyMetricsSummaryRow.ageLabel(max(currentYear - yearOfBirth, 0)))
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(SCPalette.terracotta)
+                        .contentTransition(.numericText())
+                        .animation(.smooth(duration: 0.2), value: yearOfBirth)
+                }
+                YearWheelPicker(year: $yearOfBirth, range: yearRange, surface: Color.scChipBg(colorScheme))
+            }
+
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    fieldCaption("Wzrost")
+                    measureField(unit: "cm") {
+                        TextField("178", value: $heightCm, format: .number)
+                            .keyboardType(.numberPad)
+                            .focused($focusedField, equals: .height)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    fieldCaption("Waga")
+                    measureField(unit: "kg") {
+                        // Jedno miejsce po przecinku — 83,5 kg to
+                        // normalny odczyt z wagi łazienkowej.
+                        TextField("74", value: $weightKg, format: .number.precision(.fractionLength(0...1)))
+                            .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .weight)
+                    }
+                }
+            }
+
+            if let metrics {
+                BodyMetricsSummaryRow(metrics: metrics)
+                    .animation(.smooth(duration: 0.2), value: metrics.maintenanceCalories)
+            }
+        }
+        .padding(18)
+        .welcomeCard()
+    }
+
+    /// Podpis pola w karcie — krój etykiety sekcji bez jej marginesów, jak
+    /// w „Twoich danych”.
+    private func fieldCaption(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 10.5, weight: .bold))
+            .tracking(1.4)
+            .foregroundStyle(Color.scFaint(colorScheme))
+    }
+
+    /// Pole liczby z jednostką — wzrost i waga w jednym kroju, na wklęsłej
+    /// powierzchni wewnątrz karty (`scChipBg`), jak w Ustawieniach.
     private func measureField<Input: View>(unit: String, @ViewBuilder input: () -> Input) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             input()
@@ -126,12 +228,19 @@ struct WelcomeStep1ProfileView: View {
                 .foregroundStyle(Color.scLabel(colorScheme))
                 .monospacedDigit()
             Text(unit)
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.scMuted(colorScheme))
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .welcomeCard()
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.scChipBg(colorScheme))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.scTileStroke(colorScheme), lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -151,18 +260,20 @@ private struct SexChip: View {
                 Image(systemName: candidate.icon)
                     .font(.system(size: 13, weight: .semibold))
                 Text(candidate.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
             }
             .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
+            .padding(.vertical, 11)
             // Ten sam chip co w „Twoich danych” w Ustawieniach — wybór
             // w wariancie „soft”, nie pełna terakota z białym napisem.
             // Niewybrany na tle karty (`scTileBg`), bo stoi wprost na stronie.
+            // Wewnątrz karty „Sylwetka”, więc niewybrany na wklęsłej
+            // powierzchni (`scChipBg`), jak pola wzrostu i wagi obok.
             .scChoiceSurface(
-                RoundedRectangle(cornerRadius: 14, style: .continuous),
+                RoundedRectangle(cornerRadius: 12, style: .continuous),
                 isOn: isSelected,
-                offFill: Color.scTileBg(colorScheme)
+                offFill: Color.scChipBg(colorScheme)
             )
         }
         .buttonStyle(.plain)

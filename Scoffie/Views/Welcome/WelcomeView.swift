@@ -380,7 +380,8 @@ struct WelcomeView: View {
                 yearOfBirth: $yearOfBirth,
                 heightCm: $heightCm,
                 weightKg: $weightKg,
-                sex: $sex
+                sex: $sex,
+                activity: activity
             )
         case 2:
             WelcomeStep2GoalView(goal: $goal, activity: $activity)

@@ -535,6 +535,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `TourCompletion`). Strony przewodnika dostają `padding(.bottom, footerHeight)`, bo stopka kreatora jest
   nakładką (pola nad klawiaturą). „Wstecz” w jednej linii z „Dalej”, po lewej
   (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie; asystent zostaje przy `.progressRow`.
+  Krok 1 kreatora = układ Ustawień → „Twoje dane”: karta „Profil” (awatar + imię w miejscu, ołówek)
+  i karta „Sylwetka” (płeć, rok z wiekiem, wzrost, waga na `scChipBg`) z `BodyMetricsSummaryRow` (BMI
+  + kcal na utrzymanie, wspólny z `ProfileDetailsSheet`) — Rafał: „tak smutno wygląda”.
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
   treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
