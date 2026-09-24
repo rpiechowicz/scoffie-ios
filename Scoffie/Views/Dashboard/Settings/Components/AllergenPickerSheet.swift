@@ -147,27 +147,13 @@ struct AllergenSummaryCard: View {
     }
 }
 
-/// Alergen na karcie: ikona i krótka nazwa w terakocie.
+/// Alergen na karcie: ikona i krótka nazwa w terakocie — wspólna etykieta
+/// aplikacji (`SCTag`).
 private struct AllergenTag: View {
     let allergen: Allergen
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: allergen.pickerIcon)
-                .font(.system(size: 10.5, weight: .bold))
-            Text(allergen.pickerTitle)
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(-0.2)
-                .lineLimit(1)
-        }
-        .foregroundStyle(SCPalette.terracotta)
-        .padding(.horizontal, 10)
-        .frame(height: 28)
-        .background(Capsule(style: .continuous).fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.10)))
-        .overlay(Capsule(style: .continuous).strokeBorder(SCPalette.terracotta.opacity(0.35), lineWidth: 1))
-        .fixedSize()
+        SCTag(title: allergen.pickerTitle, icon: allergen.pickerIcon)
     }
 }
 

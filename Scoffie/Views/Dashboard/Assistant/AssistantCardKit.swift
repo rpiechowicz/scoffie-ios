@@ -576,6 +576,10 @@ struct AssistantMealRow: View {
     var size: CGFloat = 36
     var muted: Bool = false
     var titleWeight: Font.Weight = .medium
+    /// Krzywa, którą kalorie liczą się od zera przy wejściu wiersza — gdy
+    /// wiersz wchodzi kaskadą (wprowadzenie Asystenta), liczenie rusza razem
+    /// z nim, a nie w ukryciu. `nil` = domyślna `CountingNumber`.
+    var kcalAnimation: Animation? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -604,7 +608,7 @@ struct AssistantMealRow: View {
 
             if kcal > 0 {
                 HStack(spacing: 3) {
-                    CountingNumber(target: kcal)
+                    CountingNumber(target: kcal, loadAnimation: kcalAnimation)
                     Text("kcal")
                 }
                 .font(.system(size: 13, weight: .semibold))

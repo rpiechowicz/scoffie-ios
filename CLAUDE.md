@@ -351,13 +351,19 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   od razu rozmowa — BEZ fokusu pola (dawne `startConversation` wysuwało klawiaturę po 0,35 s; nie wracać).
   Na czas wprowadzenia zakładka NIE ma nagłówka „Asystent” (strona od góry jak w przewodniku). Strony w
   `AssistantIntroPages.swift` (wspólne z arkuszem menu „Jak działa Asystent” = `AssistantHowItWorksView`):
-  powitanie = żywy znak 48 (`SCLivingMark` lively, podskok po tytule), „Cześć! Jestem Twoim Asystentem” (Asystent
-  mówi w 1. osobie), na dole pole wiadomości, w którym przykłady piszą się same; Planowanie i Ty decydujesz =
-  SCENKA na górze (jak zdjęcie kroku przewodnika, wysokość z ZMIERZONEGO tekstu, 172–214 pt) + `SCStepHeader`
-  + 3 punkty. Scenki na PRAWDZIWYCH daniach z katalogu odsianych dietą i alergenami z Ustawień
-  (`AssistantIntroDish.pool` → `RecipePersonalization.excludes`): „Coś lekkiego na kolację” pisze się w dymku,
-  trzy kafle wchodzą kaskadą, kcal liczą się od zera; propozycja obiadu „na jutro” → przycisk sam roluje
-  „Dodaj do planu” → „Jest w planie” + „Cofnij”. Jedna `SCStepFooter` (`.besidePrimary`), powitanie ma
+  powitanie = JEDEN zwarty blok na środku wolnego miejsca (v3, Rafał: „dużo wolnej przestrzeni”): żywy znak 52
+  (`SCLivingMark` lively, podskok po tytule) z oddechem 38 pt nad sobą — poświata i podskok muszą zmieścić się
+  pod górną krawędzią przewijanej strony (v2: „od góry za bardzo przycięte”), „Cześć! Jestem Twoim Asystentem”
+  (Asystent mówi w 1. osobie), pole wiadomości w stroju prawdziwego (kapsuła 50 + krążek „soft”), w którym
+  przykłady piszą się same, i etykiety. Planowanie i Ty decydujesz = SCENKA z PRAWDZIWYCH klocków rozmowy
+  (bez ramki wokół — karta w karcie ściska) + `SCStepHeader` + etykiety `SCTag` (Components/, wspólne
+  z alergenami w Ustawieniach) zamiast karty punktów. Scenki na PRAWDZIWYCH daniach z katalogu odsianych dietą
+  i alergenami z Ustawień (`AssistantIntroDish.pool` → `RecipePersonalization.excludes`): dymek jak
+  `AssistantUserBubble` pisze „Coś lekkiego na kolację”, karta „Do wyboru · kolacja” (`AssistantCard`,
+  `AssistantCardHead`, `AssistantMealRow`) — kcal liczą się od zera, potem wybór (ptaszek, reszta przygasa);
+  karta propozycji dnia [Inny zestaw][Zapisz dzień] → kręciołek → szałwia, „Zapisane”, [Cofnij][Otwórz plan]
+  (`AssistantCardActions`, tytuły rolują). Karta stoi w układzie od pierwszej klatki (opacity), a kcal wchodzą
+  przez `kcal: shown ? … : 0` — wtedy liczą się NA OCZACH. Jedna `SCStepFooter` (`.besidePrimary`), powitanie ma
   „Pomiń wprowadzenie” (→ zgoda), pasek 3 odcinki. Każdy punkt sprawdzony w backendzie (komentarz na górze
   pliku): alergeny = `collectPlanViolations` sprawdza KAŻDEGO domownika; cofnięcie = okno
   `AI_PROPOSAL_UNDO_WINDOW_MS` (domyślnie 1 h — NIE pisać „w ciągu doby”). Menu ⋯ „Co potrafi Asystent” bez karty
