@@ -121,8 +121,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   to `@Environment(\.scTabIsActive)` + `onChange(of:initial:)`; ciągłe animacje (`TimelineView`)
   mają na niewybranej zakładce stać. Pasek ma JEDEN gest na całość: pigułka idzie za palcem
   (stuknięcie i przeciąganie w bok jak w iOS 26), zakładka zmienia się po puszczeniu, w transakcji
-  z `disablesAnimations`. Nie dokładać przycisków, `matchedGeometryEffect`, haptyki ani fade'ów
-  przy wejściu na zakładkę. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
+  z `disablesAnimations`. Nie dokładać przycisków, `matchedGeometryEffect` ani haptyki. Wejście na
+  zakładkę (od 24.09.2026, prośba Rafała) = JEDEN modyfikator `scTabEntrance` (`Components/SCTabEntrance.swift`):
+  krycie 0 → 1 i 8 pt z dołu, 0,28 s, tylko przy zmianie na aktywną (nie pod loaderem), bez Asystenta
+  (ma własne powitanie), stoi przy Reduce Motion; pod zakładkami leży `SCPageBackground`. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
   główny `ScrollView` zakładki melduje kierunek przez `scTracksTabBarCompaction()`; rezerwa
   miejsca pod treścią (`scReservesTabBarSpace()`, WEWNĄTRZ `NavigationStack`) jest stała i schodzi
   do zera przy klawiaturze.
@@ -198,6 +200,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   oddech 3,4 s o 10 % z unoszeniem, kołysanie ±5°, poświata do pełnej, zachowania co 5 s od 1,6 s
   (rozejrzenie · podskok · mrugnięcie · obrót), znak 26 pt. Ślad kroków w linii myślenia rośnie TYLKO w dół:
   bez kroków `transient`, każde zdanie raz, w miejscu pierwszego pojawienia, id = zdanie.
+- Pusta pula jest znana PRZED kliknięciem (24.09.2026): `AgentStore.loadUsage` sam zakłada blokadę `.quota`,
+  gdy `messages.remaining <= 0` (koniec: `resetsAt` / na próbie do planu), i zdejmuje ją, gdy pula ma zapas;
+  wejście na zakładkę odświeża pulę (`refreshUsageIfStale`, 60 s), a `send` przy nieznanej puli pyta o nią,
+  ZANIM wstawi dymek pytania — inaczej akcja powitania skakała w rozmowę i wracała z 429.
 - Wykorzystana pula = `AssistantQuotaKit.swift`: `AssistantQuotaFacts` (liczby z `AgentUsageDTO`, plan
   tylko jako „Polecamy”), `AssistantQuotaPanel` w powitaniu `trialExhausted` (paski wiadomości/zapisów,
   alternatywy Plan tygodnia · Lista zakupów · Historia rozmów) i `AssistantQuotaSpentCard` zamiast pola

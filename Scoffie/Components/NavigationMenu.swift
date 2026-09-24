@@ -31,6 +31,7 @@ extension EnvironmentValues {
 
 struct NavigationMenu: View {
     @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.colorScheme) private var colorScheme
     /// Stan własnego paska (zwinięty / klawiatura). Żyje tu, bo menu jest
     /// jedynym miejscem, które przeżywa przełączanie zakładek.
     @State private var chrome = SCTabBarChrome()
@@ -55,6 +56,9 @@ struct NavigationMenu: View {
                 if mounted.contains(tab) || tab == session.dashboardTab {
                     let isActive = tab == session.dashboardTab
                     page(tab)
+                        // Asystent rysuje przy wejściu własne powitanie —
+                        // drugie wejście nad nim byłoby podwójnym ruchem.
+                        .scTabEntrance(isActive: isActive && tab != .assistant)
                         .environment(\.scTabIsActive, isActive)
                         .opacity(isActive ? 1 : 0)
                         .allowsHitTesting(isActive)
@@ -63,6 +67,9 @@ struct NavigationMenu: View {
                 }
             }
         }
+        // Tło strony POD zakładkami: wchodząca zakładka wyłania się z tego
+        // samego tła, które ma sama, a nie z gołego okna.
+        .background(SCPageBackground(scheme: colorScheme).ignoresSafeArea())
         .tint(SCPalette.terracotta)
         .overlay(alignment: .bottom) {
             SCFloatingTabBar(items: items, selection: $session.dashboardTab, isCompact: chrome.isCompact)
