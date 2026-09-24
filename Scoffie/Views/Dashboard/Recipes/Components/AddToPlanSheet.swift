@@ -634,14 +634,40 @@ struct AddToPlanSheet: View {
 
     // MARK: - Posiłek
 
-    /// Pory jako kafle w siatce 2 × N — ten sam rytm, co kafelki filtrów
-    /// (`SCChoiceTile`): ikona obok nazwy, jedna linia. Przy trzech w rzędzie
-    /// „Podwieczorek” nie mieścił się obok ikony.
+    /// Układ kafli pór zależy od tego, ile pór ma użytkownik:
+    /// 1–2 → poziome kafle (ikona obok nazwy) w jednym rzędzie,
+    /// 3 → trzy pionowe kafle obok siebie, 4 → 2 × 2 poziome,
+    /// 5–6 → siatka 3 kolumn pionowych. Pionowy kafel stawia nazwę pod ikoną,
+    /// więc „Podwieczorek” mieści się też w jednej trzeciej szerokości.
+    private enum SlotTileLayout {
+        case wide(columns: Int)
+        case compact(columns: Int)
+
+        init(count: Int) {
+            switch count {
+            case ...2: self = .wide(columns: max(1, count))
+            case 4: self = .wide(columns: 2)
+            default: self = .compact(columns: 3)
+            }
+        }
+
+        var columns: Int {
+            switch self {
+            case .wide(let columns), .compact(let columns): columns
+            }
+        }
+
+        var isCompact: Bool {
+            if case .compact = self { return true }
+            return false
+        }
+    }
+
     private func slotSection(_ slots: [MealSlot]) -> some View {
-        let columnCount = min(2, max(1, slots.count))
+        let layout = SlotTileLayout(count: slots.count)
         let columns = Array(
             repeating: GridItem(.flexible(), spacing: 8, alignment: .top),
-            count: columnCount
+            count: layout.columns
         )
 
         return VStack(alignment: .leading, spacing: 4) {
@@ -649,7 +675,7 @@ struct AddToPlanSheet: View {
 
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(slots) { slot in
-                    slotTile(slot)
+                    slotTile(slot, compact: layout.isCompact)
                 }
             }
         }
@@ -660,7 +686,7 @@ struct AddToPlanSheet: View {
     /// przyciskiem, a nazwę wypieranego dania mówi stopka („zamiast: …”).
     /// Wybrany kafel: tint i obwódka w kolorze pory. Pora, pod którą przepis
     /// nie jest oznaczony, jest przygaszona, ale da się ją wybrać.
-    private func slotTile(_ slot: MealSlot) -> some View {
+    private func slotTile(_ slot: MealSlot, compact: Bool) -> some View {
         let isSelected = slot == selectedSlot
         let fits = recipe.fits(slot)
         let taken = occupant(of: slot)
@@ -672,33 +698,14 @@ struct AddToPlanSheet: View {
                 selectedSlot = slot
             }
         } label: {
-            HStack(spacing: 10) {
-                SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 34)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(slot.title)
-                        .font(.system(size: 15, weight: isSelected ? .bold : .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(isSelected ? slot.cozyAccent : Color.scLabel(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-
-                    if let time {
-                        Text(time)
-                            .font(.system(size: 11.5, weight: .medium))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .lineLimit(1)
-                    }
+            Group {
+                if compact {
+                    compactSlotContent(slot, time: time, isSelected: isSelected)
+                } else {
+                    wideSlotContent(slot, time: time, isSelected: isSelected, isTaken: taken != nil)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .opacity(fits ? 1 : 0.5)
-            .padding(.leading, 8)
-            // Miejsce na miniaturę w rogu — długa nazwa pory jej nie przykryje.
-            .padding(.trailing, taken == nil ? 8 : 30)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
             .scChoiceSurface(
                 shape,
                 isOn: isSelected,
@@ -724,6 +731,70 @@ struct AddToPlanSheet: View {
         .buttonStyle(PlanPressStyle(scale: 0.97))
         .accessibilityLabel(slotAccessibilityLabel(slot, fits: fits, takenBy: taken?.recipe.name))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Poziomy kafel (1, 2 albo 4 pory): ikona obok nazwy i godziny.
+    private func wideSlotContent(
+        _ slot: MealSlot,
+        time: String?,
+        isSelected: Bool,
+        isTaken: Bool
+    ) -> some View {
+        HStack(spacing: 10) {
+            SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 34)
+
+            VStack(alignment: .leading, spacing: 1) {
+                slotTitle(slot, size: 15, isSelected: isSelected)
+
+                if let time {
+                    slotTime(time)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 8)
+        // Miejsce na miniaturę w rogu — długa nazwa pory jej nie przykryje.
+        .padding(.trailing, isTaken ? 30 : 8)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+    }
+
+    /// Pionowy kafel (3, 5 albo 6 pór): ikona nad nazwą i godziną, wyśrodkowane.
+    /// Miniatura zajętej pory siedzi w rogu nad ikoną, więc nie potrzebuje
+    /// osobnego miejsca w tekście.
+    private func compactSlotContent(_ slot: MealSlot, time: String?, isSelected: Bool) -> some View {
+        VStack(spacing: 6) {
+            SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 32)
+
+            VStack(spacing: 1) {
+                slotTitle(slot, size: 13.5, isSelected: isSelected)
+
+                if let time {
+                    slotTime(time)
+                }
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, minHeight: 88)
+    }
+
+    private func slotTitle(_ slot: MealSlot, size: CGFloat, isSelected: Bool) -> some View {
+        Text(slot.title)
+            .font(.system(size: size, weight: isSelected ? .bold : .semibold))
+            .tracking(-0.2)
+            .foregroundStyle(isSelected ? slot.cozyAccent : Color.scLabel(scheme))
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+    }
+
+    private func slotTime(_ time: String) -> some View {
+        Text(time)
+            .font(.system(size: 11.5, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(Color.scMuted(scheme))
+            .lineLimit(1)
     }
 
     private func slotAccessibilityLabel(_ slot: MealSlot, fits: Bool, takenBy: String?) -> String {

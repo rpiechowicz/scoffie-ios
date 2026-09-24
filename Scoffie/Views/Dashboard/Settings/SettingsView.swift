@@ -3128,6 +3128,14 @@ private struct CalorieGoalEditor: View {
                     .foregroundStyle(SCPalette.terracotta)
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(shown)))
+                    // Roluje też pod palcem. Animacja siedzi na SAMEJ liczbie
+                    // i jest krótka, więc kolejny krok przejmuje ją w locie
+                    // zamiast czekać na koniec; zapis do @AppStorage i tak idzie
+                    // dopiero po puszczeniu (to on dławił suwak, nie rolowanie).
+                    .animation(
+                        isEditing ? .snappy(duration: 0.14) : .smooth(duration: 0.22),
+                        value: shown
+                    )
 
                 Text("kcal / dzień")
                     .font(.system(size: 13, weight: .semibold))
@@ -3135,10 +3143,6 @@ private struct CalorieGoalEditor: View {
                     .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Pod palcem liczba zmienia się od razu — rolowanie co krok
-            // nie nadążało za ruchem. Roluje, gdy wartość przychodzi
-            // z zewnątrz („Ustaw”, „Wyczyść preferencje”).
-            .animation(isEditing ? nil : .smooth(duration: 0.18), value: shown)
 
             VStack(spacing: 6) {
                 Slider(
