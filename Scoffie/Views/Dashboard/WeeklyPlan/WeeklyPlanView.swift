@@ -592,8 +592,7 @@ struct WeeklyPlanView: View {
                         saveServings(newValue, for: target)
                     }
                 )
-                .presentationDetents([.large])
-                .dashboardLiquidSheet(cornerRadius: 40)
+                .recipeDetailSheet()
             }
         }
     }

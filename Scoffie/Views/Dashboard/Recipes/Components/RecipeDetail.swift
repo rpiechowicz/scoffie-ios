@@ -967,6 +967,24 @@ private struct DetailBackground: View {
     }
 }
 
+extension View {
+    /// Arkusz szczegółów posiłku — jeden dla wszystkich czterech miejsc
+    /// otwarcia (Przepisy, lista kategorii, Plan, Kalendarz).
+    ///
+    /// Tło prezentacji to TO SAMO tło co pod treścią, a nie `.clear`
+    /// z `dashboardLiquidSheet`. W pierwszych klatkach wjazdu treść arkusza
+    /// dostaje ostateczny rozmiar i dolny margines bezpieczny o klatkę za
+    /// kontenerem — przy przezroczystym tle przez tę szczelinę prześwitywał
+    /// jasny ekran pod spodem: cienka biała kreska przez całą szerokość na
+    /// dole arkusza. Kryjące tło w kolorze strony zasłania ją u źródła.
+    func recipeDetailSheet() -> some View {
+        presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(40)
+            .presentationBackground { DetailBackground() }
+    }
+}
+
 // MARK: - Zdjęcie
 
 /// Zdjęcie 340 pt od krawędzi do krawędzi, wtapiające się w tło. Przy 220 pt

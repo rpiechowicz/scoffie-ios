@@ -361,7 +361,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Wjazd szczegółów posiłku jak wybór posiłku u Asystenta: `hasAppeared` w `.task` po 80 ms (klatka
   oddechu — w `onAppear` padało w klatce wstawienia i nic nie grało), zdjęcie osiada z 1,12, sekcje
   kaskadą (`smooth 0,55`, opóźnienie 0,10 + 0,05·n), serce i krzyżyk wchodzą z treścią; arkusz ma
-  rogi 40 pt (`dashboardLiquidSheet(cornerRadius: 40)`) we wszystkich czterech miejscach otwarcia.
+  rogi 40 pt i KRYJĄCE tło prezentacji (`recipeDetailSheet()` w `RecipeDetail.swift`) we wszystkich czterech miejscach otwarcia — przy `.clear` na pierwszych klatkach wjazdu prześwitywała na dole biała kreska ekranu pod spodem (24.09.2026).
 - Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: `EditorialSheetHeader` z kafelkiem,
   zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka. Linijka „Aktywne: …” pod spodem
   zniknęła w rundzie 9 („niepotrzebne”) — co działa, widać na kafelkach. „Wyczyść” obok krzyżyka
