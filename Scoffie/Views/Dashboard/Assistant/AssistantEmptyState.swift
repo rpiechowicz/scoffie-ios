@@ -128,9 +128,10 @@ private struct AssistantGreeting: View {
             SCLivingMark(
                 mood: markMood,
                 color: briefing.isQuiet ? AssistantLook.ink(scheme).opacity(0.3) : AssistantLook.terraFill(scheme),
-                size: 24,
+                size: 26,
                 nudge: nudge,
-                glows: !briefing.isQuiet
+                glows: !briefing.isQuiet,
+                lively: true
             )
                 .scaleEffect(revealed || reduceMotion ? 1 : 0.4)
                 .opacity(revealed ? 1 : 0)
@@ -157,7 +158,15 @@ private struct AssistantGreeting: View {
                 .frame(maxWidth: 340, alignment: .leading)
                 .padding(.top, 8)
 
-            if !composing {
+            // Akcje i kontekst NIE wypadają z układu przy pisaniu (24.09.2026,
+            // Rafał: „przyciski się chowają, a tytuł przeskakuje”): wyjęcie
+            // widoku zmieniało wysokość bloku w jednej klatce, a wstawienie
+            // przy chowaniu klawiatury rysowało przyciski od razu na miejscu
+            // docelowym — nad polem, które jeszcze zjeżdżało. Teraz blok
+            // ZWIJA się do zera (i rozwija) w krzywej klawiatury, razem
+            // z polem, a krycie gaśnie osobno, szybciej — otwarcie jedzie
+            // jednym ciągłym ruchem.
+            GreetingCollapse(collapsed: composing) {
                 VStack(alignment: .leading, spacing: 0) {
                     if let quotaContext {
                         AssistantQuotaPanel(facts: quotaContext, revealed: revealed, delay: restDelay + 0.1)
@@ -191,8 +200,6 @@ private struct AssistantGreeting: View {
                         .padding(.top, 12)
                     }
                 }
-                // Pisanie: akcje gasną w 150 ms, powrót bez pisania od nowa.
-                .transition(.opacity.animation(.easeOut(duration: 0.15)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -225,6 +232,32 @@ private struct AssistantGreeting: View {
         case .openShopping: return "basket"
         case .ask, .openPlans: return nil
         }
+    }
+}
+
+/// Zwijany dół powitania: wysokość mierzona i animowana do zera w tej
+/// transakcji, która przełącza `collapsed` (krzywa klawiatury z ekranu),
+/// krycie gaśnie szybciej i we własnej animacji (`animation(_:body:)`, żeby
+/// nie nadpisać ruchu układu). Zwinięty nie łapie dotyku i znika z VoiceOver.
+private struct GreetingCollapse<Content: View>: View {
+    let collapsed: Bool
+    @ViewBuilder let content: Content
+
+    @State private var height: CGFloat = 0
+
+    var body: some View {
+        content
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+            .frame(height: collapsed ? 0 : (height > 0 ? height : nil), alignment: .top)
+            // Przycięcie tylko przy zwijaniu — rozwinięty blok ma zapas na
+            // cień i wciśnięcie przycisków.
+            .clipShape(Rectangle().inset(by: collapsed ? 0 : -24))
+            .animation(.easeOut(duration: collapsed ? 0.14 : 0.32)) {
+                $0.opacity(collapsed ? 0 : 1)
+            }
+            .allowsHitTesting(!collapsed)
+            .accessibilityHidden(collapsed)
     }
 }
 

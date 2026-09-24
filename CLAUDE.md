@@ -64,6 +64,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a strona końcowa idzie za STANEM propozycji (`OptionsStoryMode.review(…, status:)`, `ProposalEndCopy`): „Wszystko
   pasuje?” z listą zestawu i zgodą w SZAŁWII (`ProposalAcceptButton`), zapis NIE zamyka arkusza — „Wstawiam do planu…”
   przechodzi w „Jest w planie” + „Otwórz plan”; cofnięta / nieaktualna / wygasła mają własne słowa.
+  Runda 15 (24.09.2026): na dole strony końcowej JEDEN przycisk (zapis → „Otwórz plan” → przy stanie bez zapisu
+  „Napisz, co zmienić”), lista zestawu (`ProposalRecap`) = miniatura dania, pora z ikoną w kolorze pory, nazwa, kcal
+  (tydzień: wiersz na dzień z trzema krążkami zdjęć), nad nią dzień i suma kcal; pod listą cichy odnośnik
+  „Zaproponuj inne dania” (`ProposalRegenerateLink`, wysyła prośbę o nowy zestaw). Świeża propozycja dnia/tygodnia
+  (PENDING, przyszła na żywo) otwiera ten arkusz SAMA, raz na wiadomość (`ProposalAutoPresent`), jak karta OPTIONS.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
@@ -181,12 +186,18 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   krzywą (`AssistantView.greetingComposing`, `keyboardMoved`), nie fokus — fokus przychodził klatkę przed
   klawiaturą i powitanie skakało w dół i w górę. Nie przywracać `.animation(value: composing)`
   w `AssistantGreeting`. Puste pole ma JEDNĄ linię (`lineLimit(draft.isEmpty ? 1...1 : 1...8)`), bo
-  dwuwierszowy przykład zwijał się przy pierwszej literze i ciągnął powitanie.
+  dwuwierszowy przykład zwijał się przy pierwszej literze i ciągnął powitanie. Runda 15: akcje i kontekst NIE
+  wypadają z układu — `GreetingCollapse` zwija zmierzoną wysokość do zera w krzywej klawiatury (krycie osobno,
+  szybciej), a schowanie klawiatury rozwija powitanie w TYM SAMYM ruchu (`keyboardMoved(hiding:)`), nie po fokusie.
+  Krzywa klawiatury jest jedna: `SCTabBarChrome.keyboardCurve` — także dla rezerwy pod dolnym menu (była `easeOut 0,25`).
 - Żywy znak = `SCLivingMark` (`Components/`): nastroje idle (oddech 4,2 s + co 8 s rozejrzenie / mrugnięcie
   / pauza / obrót) · attentive · thinking (2,4 s obrót / 1,8 s oddech — liczby „Oddechu łuku”) · sleeping ·
   still, reakcje `cheer`/`nudge` (`keyframeAnimator`); staje przy nieaktywnej zakładce i przy Reduce Motion.
   Powitanie, kompaktowy nagłówek, jednorazowe podskoczenie przy świeżej odpowiedzi, karta puli. Drugiego
-  kręcącego się znaku w linii myślenia NIE dokładać.
+  kręcącego się znaku w linii myślenia NIE dokładać. Powitanie ma `lively: true` (runda 15, „ledwo zauważalna”):
+  oddech 3,4 s o 10 % z unoszeniem, kołysanie ±5°, poświata do pełnej, zachowania co 5 s od 1,6 s
+  (rozejrzenie · podskok · mrugnięcie · obrót), znak 26 pt. Ślad kroków w linii myślenia rośnie TYLKO w dół:
+  bez kroków `transient`, każde zdanie raz, w miejscu pierwszego pojawienia, id = zdanie.
 - Wykorzystana pula = `AssistantQuotaKit.swift`: `AssistantQuotaFacts` (liczby z `AgentUsageDTO`, plan
   tylko jako „Polecamy”), `AssistantQuotaPanel` w powitaniu `trialExhausted` (paski wiadomości/zapisów,
   alternatywy Plan tygodnia · Lista zakupów · Historia rozmów) i `AssistantQuotaSpentCard` zamiast pola

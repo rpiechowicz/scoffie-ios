@@ -85,11 +85,18 @@ struct NavigationMenu: View {
         // pasek. Rezerwa pod menu schodziła wtedy do zera i pole asystenta
         // lądowało POD paskiem zakładek, którego nic nie zasłaniało.
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            chrome.keyboardDuration = Self.animationDuration(of: note)
             chrome.isKeyboardVisible = Self.keyboardCoversTabBar(note)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
+            chrome.keyboardDuration = Self.animationDuration(of: note)
             chrome.isKeyboardVisible = false
         }
+    }
+
+    /// Czas ruchu klawiatury z powiadomienia.
+    private static func animationDuration(of note: Notification) -> Double {
+        (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
     }
 
     /// Czy klawiatura po zmianie ramki zasłoni dolne menu.

@@ -46,6 +46,12 @@ struct SCLivingMark: View {
     var nudge: Int = 0
     /// Miękka poświata pod znakiem; w wierszu tekstu (≤ 18 pt) to szum.
     var glows: Bool = true
+    /// Wyraźniejsze życie w spokoju — znak, który jest treścią ekranu
+    /// (powitanie Asystenta), a nie ozdobą przy słowie. Głębszy oddech
+    /// z unoszeniem, powolne kołysanie, mocniej pulsująca poświata
+    /// i zachowania co 5 s zamiast co 8 (pierwsze już po 1,6 s). Rafał
+    /// 24.09.2026: „ledwo zauważalna, czy w ogóle się porusza”.
+    var lively: Bool = false
 
     @Environment(\.scTabIsActive) private var isActiveTab
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -84,6 +90,7 @@ struct SCLivingMark: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { context in
             let now: Pose = (reduceMotion || mood == .still) ? Pose() : pose(for: mood, at: context.date)
+            let halo: CGFloat = lively ? 2.4 : 1.9
             SCMarkShape()
                 .fill(color)
                 .frame(width: size, height: size)
@@ -95,13 +102,13 @@ struct SCLivingMark: View {
                         Circle()
                             .fill(
                                 RadialGradient(
-                                    colors: [color.opacity(0.24 * now.glow), color.opacity(0)],
+                                    colors: [color.opacity((lively ? 0.34 : 0.24) * now.glow), color.opacity(0)],
                                     center: .center,
                                     startRadius: 0,
-                                    endRadius: size * 0.95
+                                    endRadius: size * halo / 2
                                 )
                             )
-                            .frame(width: size * 1.9, height: size * 1.9)
+                            .frame(width: size * halo, height: size * halo)
                             .allowsHitTesting(false)
                     }
                 }
@@ -167,7 +174,7 @@ struct SCLivingMark: View {
 
     /// Poza nastroju `mood` w chwili `date`, z przejściem od zamrożonej pozy.
     private func pose(for mood: Mood, at date: Date) -> Pose {
-        let target = Self.pose(mood, t: max(0, date.timeIntervalSince(epoch)))
+        let target = Self.pose(mood, t: max(0, date.timeIntervalSince(epoch)), lively: lively)
         guard let handoff else { return target }
         let progress = date.timeIntervalSince(handoff.at) / Self.handoffDuration
         guard progress < 1 else { return target }
@@ -176,10 +183,10 @@ struct SCLivingMark: View {
         return Self.mix(handoff.pose, target, weight, forward: handoff.forward)
     }
 
-    private static func pose(_ mood: Mood, t: TimeInterval) -> Pose {
+    private static func pose(_ mood: Mood, t: TimeInterval, lively: Bool) -> Pose {
         switch mood {
         case .still: return Pose()
-        case .idle: return idle(t)
+        case .idle: return lively ? livelyIdle(t) : idle(t)
         case .attentive: return attentive(t)
         case .thinking: return thinking(t)
         case .sleeping: return sleeping(t)
@@ -231,6 +238,65 @@ struct SCLivingMark: View {
             }
         default:
             break
+        }
+        return pose
+    }
+
+    /// Spokój „na scenie” (`lively`): oddech 3,4 s o 10 % z unoszeniem
+    /// o 5 % rozmiaru, kołysanie ±5° w wolniejszym rytmie (5,8 s — nie
+    /// zgrywa się z oddechem, więc ruch nie wygląda na pętlę), poświata od
+    /// 0,35 do pełnej. Co 5 s (od 1,6 s) jedno zachowanie, po kolei:
+    /// rozejrzenie, podskok, mrugnięcie, obrót.
+    private static func livelyIdle(_ t: TimeInterval) -> Pose {
+        let b = breath(t, period: 3.4)
+        var pose = Pose(
+            scale: 1 + 0.1 * b,
+            angle: 5 * sin(2 * .pi * t / 5.8),
+            lift: -0.05 * b,
+            glow: 0.35 + 0.65 * b
+        )
+        let cycle = 5.0
+        let index = Int(t / cycle)
+        let u = t - Double(index) * cycle - 1.6
+        switch index % 4 {
+        case 0:
+            // Rozejrzenie: wyraźne zerknięcie w prawo i w lewo.
+            let duration = 1.8
+            if u >= 0, u < duration {
+                let p = u / duration
+                pose.angle += 22 * sin(2 * .pi * p) * sin(.pi * p)
+                pose.lift -= 0.04 * sin(.pi * p)
+            }
+        case 1:
+            // Podskok: przysiad, skok o ćwierć rozmiaru, miękkie lądowanie.
+            let duration = 0.9
+            if u >= 0, u < duration {
+                let p = u / duration
+                if p < 0.2 {
+                    let q = p / 0.2
+                    pose.squash *= 1 - 0.14 * sin(.pi * q)
+                } else {
+                    let q = (p - 0.2) / 0.8
+                    pose.lift -= 0.25 * sin(.pi * q) * (1 - 0.25 * q)
+                    pose.squash *= 1 + 0.06 * sin(.pi * q)
+                }
+            }
+        case 2:
+            // Mrugnięcie — dwa szybkie przymknięcia w pionie.
+            let duration = 0.55
+            if u >= 0, u < duration {
+                let s = sin(2 * .pi * u / duration)
+                pose.squash = 1 - 0.32 * s * s
+            }
+        default:
+            // Pełny obrót z przysiadem w połowie; 360° = spoczynek.
+            let duration = 1.3
+            if u >= 0, u < duration {
+                let p = u / duration
+                pose.angle += 360 * easeInOut(p)
+                pose.scale *= 1 - 0.1 * sin(.pi * p)
+                pose.glow = min(1, pose.glow + 0.4 * sin(.pi * p))
+            }
         }
         return pose
     }
