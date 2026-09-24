@@ -34,6 +34,24 @@ struct StartupLoaderView: View {
     /// Jedyne źródło prawdy dla minimalnego czasu wyświetlania loadera.
     static let waveCompletionSeconds: Double = LoaderMotion.waveEnd
 
+    /// Jeden obrót znaku = jedna fala dni (poniedziałek → niedziela).
+    static let turnSeconds: Double = LoaderMotion.waveEnd
+
+    /// Ile brakuje do domknięcia bieżącego obrotu znaku. Loader schodzi
+    /// ZAWSZE na pełnym obrocie (`ScoffieApp`): start gotowy w półtora
+    /// obrotu = loader stoi do końca drugiego.
+    static func remainingToFullTurn(since start: Date, now: Date = .init()) -> Double {
+        let elapsed = max(0, now.timeIntervalSince(start))
+        let into = elapsed.truncatingRemainder(dividingBy: turnSeconds)
+        // Tuż po domknięciu (albo przed pierwszym ruchem) nie ma na co czekać.
+        if into < 0.05 { return elapsed < 0.05 ? turnSeconds - into : 0 }
+        return turnSeconds - into
+    }
+
+    init(startDate: Date = .init()) {
+        _startDate = State(initialValue: startDate)
+    }
+
     private static let dayInitials = ["P", "W", "Ś", "C", "P", "S", "N"]
     private static let logoSize: CGFloat = 84
     private static let statusMessages = [
@@ -66,6 +84,7 @@ struct StartupLoaderView: View {
             SCScoffieMark(size: Self.logoSize)
                 .shadow(color: shadowColor, radius: 16, x: 0, y: 10)
                 .scaleEffect(motion.logoScale)
+                .rotationEffect(motion.logoRotation)
                 .opacity(motion.logoOpacity)
                 .padding(.bottom, 30)
 
@@ -374,6 +393,16 @@ private struct LoaderMotion {
         // (1 − cos) odpowiada CSS ease-in-out bez state'a.
         let breathe = reduceMotion ? 0 : 0.014 * (1 - cos(2 * .pi * elapsed / 2.6)) / 2
         return CGFloat(entrance + breathe)
+    }
+
+    /// Obrót znaku: każdy obrót trwa jedną falę dni i jedzie ease-in-out,
+    /// więc między obrotami znak na chwilę staje — i właśnie na takim
+    /// postoju loader schodzi (`remainingToFullTurn`).
+    var logoRotation: Angle {
+        if reduceMotion { return .zero }
+        let turns = elapsed / Self.waveEnd
+        let whole = floor(turns)
+        return .degrees(360 * (whole + Ease.inOut(turns - whole)))
     }
 
     var logoOpacity: Double {

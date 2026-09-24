@@ -684,8 +684,9 @@ struct AddToPlanSheet: View {
     /// Kafel pory: kafelek z ikoną w kolorze pory, nazwa i godzina — nic
     /// więcej. Co zapis podmieni, mówi JEDNA karta „ZAMIENISZ” w stopce
     /// (runda 20: wiersz dania w każdym kaflu był „brzydki”, a karta na dole
-    /// „wystarczy”). Pora, pod którą przepis nie jest oznaczony, jest
-    /// przygaszona, ale da się ją wybrać.
+    /// „wystarczy”). Wszystkie pory w pełnym kolorze — także te, pod które
+    /// przepis nie jest oznaczony (Rafał: „obiad i kolacja wyszarzone, zostaw
+    /// normalne”); mówi o tym tylko VoiceOver.
     private func slotTile(_ slot: MealSlot, compact: Bool) -> some View {
         let isSelected = slot == selectedSlot
         let fits = recipe.fits(slot)
@@ -706,7 +707,6 @@ struct AddToPlanSheet: View {
                     wideSlotContent(slot, time: time, isSelected: isSelected)
                 }
             }
-            .opacity(fits ? 1 : 0.5)
             .scChoiceSurface(
                 shape,
                 isOn: isSelected,

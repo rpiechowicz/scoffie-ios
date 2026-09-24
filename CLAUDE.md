@@ -230,6 +230,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `SCSessionCurtain` (`Components/`, własne okno nad arkuszami, pod toastami) — zasłona w kolorze tła
   w górę, `ScoffieApp.showRootScreen` przestawia korzeń bez animacji (na AKTUALNY cel), zasłona w dół.
   Korzeń nie ma już własnego crossfade'u (pulpit wjeżdżał z loaderem i prześwitywał Kalendarz).
+  Loader schodzi TYLKO na pełnym obrocie znaku (runda 21): znak robi obrót ease-in-out na każdą falę dni
+  (`LoaderMotion.logoRotation`, `StartupLoaderView.turnSeconds`), a `ScoffieApp.loaderShown` czeka po
+  `wantsStartupLoader == false` do końca bieżącego obrotu (`remainingToFullTurn`) — 1,5 obrotu = do końca drugiego.
   WYJĄTEK — wejście do aplikacji (logowanie / kreator → pulpit): ZAWSZE loader startu, bez zasłony
   (`enterAppUnderLoader`, runda 18 — Rafał: „po logowaniu ZAWSZE ma się włączyć loading”): loader
   przenika się nad logowaniem (`entryLoaderHold`), korzeń przechodzi pod nim, loader schodzi po całej fali
