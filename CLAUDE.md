@@ -458,8 +458,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
   Przełożenie dania (stuknięcie talerzyka) ROLUJE cyfry i tekst (`.numericText()`): wielki wiersz
   ma tożsamość „danie / pustka” (`headlineKey`), nie po daniu — między daniami roluje ZAWSZE, także „Zjedzone” ↔
-  „za 4 h” (runda 23: klucz cyfry/słowa przenikał to kryciem i „nie było naszej animacji”); kryciem tylko pusty dzień / pora;
-  nazwa dania i nadpis („OBIAD · 14:00”) też rolują (nadpis przenika się tylko pora z godziną ↔ bez).
+  „za 4 h” (runda 23: klucz cyfry/słowa przenikał to kryciem i „nie było naszej animacji”). Runda 24 (24.09.2026): ŻADNEGO
+  `.id`/krycia w podpisie ani nadpisie — danie ↔ pusta pora też roluje (wielki wiersz, nazwa jako pusty tekst w stałym przycisku,
+  pierwsza pigułka o stałym id `lead` z ikoną `symbolEffect(.replace)`, nadpis z godziną ↔ bez). Pusty dzień nie potrzebuje klucza:
+  każdy dzień to osobny widok z `.id` po dacie. Krzywa tekstu = `SCMotion.textRoll` (`smooth` 0,42 s, jak danie w arkuszu wyboru
+  posiłku u Asystenta); `DayNavigationMotion.plateFade` to ta sama stała, więc zdjęcie kończy z tekstem. Nowe rolowanie tekstu
+  gdziekolwiek → `SCMotion.textRoll`. Arkusz „Cel dnia” z Kalendarza nie ma podtytułu („1 z 5 zjedzone” usunięte).
   Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
