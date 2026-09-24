@@ -7,7 +7,7 @@ import SwiftUI
 /// Ten sam układ ma powitanie asystenta (`AssistantWelcomeView`): znak,
 /// nagłówek kroku (`SCStepHeader`), karta funkcji (`SCStepFeatureCard`).
 /// Przyciski i „Pomiń" są w stopce (`SCStepFooter`), którą składa
-/// `FeatureTourView` poza animowaną treścią.
+/// `WelcomeView` poza animowaną treścią.
 struct TourIntroView: View {
     private static let logoSize: CGFloat = 56
 

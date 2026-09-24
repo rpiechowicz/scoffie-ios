@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Klocki przepływów krok po kroku — JEDNE dla trzech miejsc: przewodnika
-// „Poznaj aplikację” (`FeatureTourView`), kreatora „Poznajmy się”
+// „Poznaj aplikację” (`WelcomeView`), kreatora „Poznajmy się”
 // (`WelcomeView`) i wprowadzenia asystenta (`AssistantIntroFooter`,
 // `AssistantWelcomeView`, `AssistantConsentGateView`, `AssistantHowItWorksView`).
 //

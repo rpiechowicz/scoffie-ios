@@ -30,7 +30,7 @@ enum TourLayout {
 /// lepiej przewinąć niż przyciąć. `.basedOnSize` gasi gumowanie, gdy
 /// wszystko się mieści, więc na docelowym ekranie strona stoi nieruchomo.
 ///
-/// Stopki tu celowo nie ma. Składa ją `FeatureTourView` pod animowaną
+/// Stopki tu celowo nie ma. Składa ją `WelcomeView` pod animowaną
 /// treścią (`SCStepFooter`), żeby pasek kroków i przyciski stały w miejscu,
 /// gdy kroki przejeżdżają na bok — dokładnie tak, jak w kreatorze profilu.
 struct TourPage<Content: View>: View {
@@ -73,7 +73,7 @@ extension EnvironmentValues {
 ///
 /// Wiersze wchodzą kaskadą (`scReveal`: krycie + 14 pt z dołu) — kafelek
 /// dostaje przy tym lekkie „kliknięcie” (0,6 → 1). Bez ruchu całego ekranu:
-/// strona i tak wjeżdża z boku (`FeatureTourView`).
+/// strona i tak wjeżdża z boku (`WelcomeView`).
 struct TourPointsCard: View {
     let points: [TourPoint]
     let accent: Color

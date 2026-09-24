@@ -109,7 +109,7 @@ struct TourStepView: View {
     @Environment(\.colorScheme) private var scheme
     /// Kaskada punktów — przestawiane w `.task` (klatka oddechu, jak
     /// w `SCReveal`); każda strona ma własną tożsamość (`.id(phase)`
-    /// w `FeatureTourView`), więc kaskada gra przy każdym kroku.
+    /// w `WelcomeView`), więc kaskada gra przy każdym kroku.
     @State private var hasAppeared = false
     /// Wysokość nagłówka i karty punktów — reszta strony idzie na zdjęcie.
     /// 400 do pierwszego pomiaru (typowy krok na iPhonie 6,1").

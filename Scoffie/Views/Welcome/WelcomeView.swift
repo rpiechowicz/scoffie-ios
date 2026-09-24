@@ -1,6 +1,14 @@
 import SwiftUI
 
-// First-login welcome flow. Five sequential pages — profile → goal →
+// First-login welcome flow. Od 24.09.2026 JEDEN przepływ z przewodnikiem
+// „Poznaj aplikację” na początku (Rafał: „daj to wszystko w jednym wielkim
+// stepperze, aby nie przełączać”): powitanie → 5 kroków przewodnika →
+// „Teraz my poznajmy Ciebie” → 5 kroków kreatora, jedna stopka, jeden pasek
+// kroków (11 odcinków), strony jadą na bok bez przenikania między dwoma
+// ekranami. Dawniej `WelcomeFlowView` przenikał `FeatureTourView` w ten widok
+// i pasek „1/5” zaczynał się od nowa.
+//
+// Kreator: five sequential pages — profile → goal →
 // preferences → meals → household — gated by the shared step footer
 // (`SCStepFooter`: pasek kroków, „Wstecz”, akcja główna na płycie
 // `SCSheetFooter` z cieniem krawędzi). Each step persists optimistically (AppStorage) and
@@ -23,6 +31,18 @@ struct WelcomeView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.sessionStore) private var sessionStore
+
+    /// Faza przewodnika przed kreatorem: 0 = powitanie, 1…5 = kroki,
+    /// 6 = „Teraz my poznajmy Ciebie”. `nil` = jesteśmy w kreatorze (`step`).
+    @State private var tourPhase: Int?
+    @AppStorage(TourCompletion.storageKey) private var tourCompleted: Bool = false
+    /// Wysokość płyty stopki — strony przewodnika kończą się nad nią
+    /// (`TourPage` mierzy widoczną stronę pod sufit zdjęcia), a kroki
+    /// kreatora mają własny zapas (`WelcomeLayout.bottomInset`).
+    @State private var footerHeight: CGFloat = 150
+
+    private let tourSteps = TourStep.all
+    private var tourDonePhase: Int { tourSteps.count + 1 }
 
     // Step state — kept locally so the user can move back and tweak
     // without touching the backend until they advance.
@@ -79,13 +99,20 @@ struct WelcomeView: View {
         initialDisplayName: String,
         isCreatingHousehold: Bool,
         errorMessage: String?,
-        initialStep: Int = 1
+        initialStep: Int = 1,
+        showsTour: Bool = false,
+        /// Tylko do zrzutów (`SCOFFIE_DEBUG_OPTIONS=tour-N`): faza, od której
+        /// startuje przewodnik.
+        startTourPhase: Int = 0
     ) {
         self.initialDisplayName = initialDisplayName
         self.isCreatingHousehold = isCreatingHousehold
         self.errorMessage = errorMessage
         self.initialStep = initialStep
         _step = State(initialValue: initialStep)
+        // Przewodnik tylko na pełnej ścieżce — kto wraca po nowe
+        // gospodarstwo, aplikację zna.
+        _tourPhase = State(initialValue: showsTour && initialStep == 1 ? startTourPhase : nil)
 
         let defaults = UserDefaults.standard
 
@@ -174,11 +201,11 @@ struct WelcomeView: View {
                 .ignoresSafeArea()
 
             ZStack {
-                stepContent(for: step)
-                    .id(step)
+                pageContent
+                    .id(pageKey)
                     .transition(asymmetricSlide())
             }
-            .animation(.easeInOut(duration: 0.34), value: step)
+            .animation(.easeInOut(duration: 0.34), value: pageKey)
 
             // Stopka jako nakładka, nie ostatnie dziecko `VStack`: stoi pod
             // klawiaturą (`ignoresSafeArea(.keyboard)`), a kroki z polami
@@ -187,25 +214,26 @@ struct WelcomeView: View {
             VStack {
                 Spacer()
                 SCStepFooter(
-                    // Pasek kroków tylko na pełnej ścieżce — „5 z 5” nie
-                    // ma sensu dla kogoś, kto wrócił tu wyłącznie po nowe
-                    // gospodarstwo i innych kroków nie widział.
-                    slot: initialStep == 1
-                        ? .progress(step: step, total: totalSteps)
-                        : .empty,
-                    notice: saveWarning,
-                    showsBack: step > initialStep,
+                    slot: footerSlot,
+                    onSlotTap: { skipTour() },
+                    notice: tourPhase == nil ? saveWarning : nil,
+                    showsBack: canGoBack,
                     onBack: { handleBack() },
-                    primaryTitle: nextLabel,
-                    primaryIcon: step == totalSteps ? "checkmark" : "arrow.right",
-                    isPrimaryEnabled: isNextEnabled,
-                    isPrimaryLoading: isCreatingHousehold && step == totalSteps,
-                    onPrimary: { handleNext() }
+                    // Jak w przewodniku: „Wstecz” w jednej linii z „Dalej”.
+                    backPlacement: .besidePrimary,
+                    primaryTitle: primaryTitle,
+                    primaryIcon: tourPhase == nil && step == totalSteps ? "checkmark" : "arrow.right",
+                    isPrimaryEnabled: tourPhase != nil || isNextEnabled,
+                    isPrimaryLoading: tourPhase == nil && isCreatingHousehold && step == totalSteps,
+                    onPrimary: { handlePrimary() }
                 )
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    footerHeight = height
+                }
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
         }
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: step)
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: pageKey)
         // Suwak kalorii podąża za podpowiedzią, dopóki użytkownik sam go nie
         // przeciągnie. Podpowiedź zależy nie tylko od celu, ale i od sylwetki
         // z kroku 1 oraz treningów z kroku 2 — stąd wspólny token zamiast
@@ -249,6 +277,98 @@ struct WelcomeView: View {
     /// Zmienia się przy każdej danej, która wpływa na podpowiedź.
     private var calorieSuggestionToken: String {
         "\(goal.rawValue)|\(heightCm)|\(weightKg)|\(yearOfBirth)|\(activity.rawValue)|\(sex?.rawValue ?? "")"
+    }
+
+    // MARK: - Jeden przepływ: przewodnik + kreator
+
+    /// Tożsamość strony — przejście na bok przy każdej zmianie, także na
+    /// styku przewodnika z kreatorem.
+    private var pageKey: String {
+        if let tourPhase { return "tour-\(tourPhase)" }
+        return "step-\(step)"
+    }
+
+    @ViewBuilder
+    private var pageContent: some View {
+        if let tourPhase {
+            Group {
+                if tourPhase <= 0 {
+                    TourIntroView()
+                } else if tourPhase >= tourDonePhase {
+                    TourDoneView()
+                } else {
+                    TourStepView(step: tourSteps[tourPhase - 1])
+                }
+            }
+            // Stopka jest nakładką (kroki kreatora przewijają się pod nią nad
+            // klawiaturą), a strona przewodnika liczy wysokość zdjęcia
+            // z widocznej części — kończy się więc nad płytą stopki.
+            .padding(.bottom, footerHeight)
+            .ignoresSafeArea(.keyboard)
+        } else {
+            stepContent(for: step)
+        }
+    }
+
+    /// Pasek kroków na całość: 5 kroków przewodnika, ekran „Teraz my
+    /// poznajmy Ciebie” i 5 kroków kreatora. Powitanie ma zamiast paska
+    /// „Pomiń…”, a powrót po nowe gospodarstwo — nic („5 z 5” nie ma sensu
+    /// dla kogoś, kto innych kroków nie widział).
+    private var footerSlot: SCStepFooter.Slot {
+        if let tourPhase, tourPhase <= 0 {
+            return .link("Pomiń i przejdź do konfiguracji")
+        }
+        guard initialStep == 1 else { return .empty }
+        let total = tourDonePhase + totalSteps
+        if let tourPhase { return .progress(step: tourPhase, total: total) }
+        return .progress(step: tourDonePhase + step, total: total)
+    }
+
+    private var primaryTitle: String {
+        guard let tourPhase else { return nextLabel }
+        if tourPhase <= 0 { return "Poznaj aplikację" }
+        if tourPhase >= tourDonePhase { return "Opowiedz nam o sobie" }
+        return tourPhase == tourSteps.count ? "Poznajmy się" : "Dalej"
+    }
+
+    private var canGoBack: Bool {
+        if let tourPhase { return tourPhase > 0 }
+        // Z pierwszego kroku kreatora wraca się do przewodnika.
+        return step > initialStep || initialStep == 1
+    }
+
+    private func handlePrimary() {
+        guard let tourPhase else {
+            handleNext()
+            return
+        }
+        if tourPhase >= tourDonePhase {
+            enterWizard()
+        } else {
+            moveTour(to: tourPhase + 1, direction: 1)
+        }
+    }
+
+    /// „Pomiń…” z powitania — prosto do pierwszego kroku kreatora.
+    private func skipTour() {
+        enterWizard()
+    }
+
+    /// Przewodnik zaliczony: po wznowieniu aplikacja zaczyna od kreatora.
+    private func enterWizard() {
+        tourCompleted = true
+        direction = 1
+        DispatchQueue.main.async {
+            tourPhase = nil
+            step = 1
+        }
+    }
+
+    private func moveTour(to phase: Int, direction newDirection: Int) {
+        direction = newDirection
+        DispatchQueue.main.async {
+            tourPhase = phase
+        }
     }
 
     @ViewBuilder
@@ -334,8 +454,17 @@ struct WelcomeView: View {
     }
 
     private func handleBack() {
-        guard step > initialStep else { return }
-        move(to: step - 1)
+        if let tourPhase {
+            guard tourPhase > 0 else { return }
+            moveTour(to: tourPhase - 1, direction: -1)
+            return
+        }
+        if step > initialStep {
+            move(to: step - 1)
+        } else if initialStep == 1 {
+            // Pierwszy krok kreatora → ekran „Teraz my poznajmy Ciebie”.
+            moveTour(to: tourDonePhase, direction: -1)
+        }
     }
 
     /// Kierunek trafia do drzewa widoków PRZED zmianą kroku, w osobnym
@@ -343,7 +472,7 @@ struct WelcomeView: View {
     /// renderu widoku, który znika — gdyby oba pola zmieniły się w jednej
     /// transakcji, strona schodząca wyjeżdżałaby jeszcze w POPRZEDNIM
     /// kierunku i przy pierwszym „Wstecz" po serii „Dalej" obie strony
-    /// zjeżdżały się na tej samej krawędzi. To samo w `FeatureTourView`.
+    /// zjeżdżały się na tej samej krawędzi. To samo przy przejściach przewodnika (`moveTour`).
     private func move(to target: Int) {
         direction = target > step ? 1 : -1
         DispatchQueue.main.async {

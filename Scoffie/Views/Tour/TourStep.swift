@@ -143,3 +143,14 @@ extension TourStep {
         ),
     ]
 }
+
+/// Klucz „przewodnik obejrzany".
+///
+/// Trzymany w `UserDefaults`, a nie na serwerze, bo dotyczy urządzenia, nie
+/// konta — i celowo kasowany w `SessionStore.clearPersistedSession()`.
+/// Bez tego kasowania wylogowanie i ponowne zalogowanie (także na cudze
+/// konto) omijałoby przewodnik, bo flaga przeżywa w `UserDefaults` sesję,
+/// po której została ustawiona.
+enum TourCompletion {
+    static let storageKey = "onboarding.tourCompleted"
+}

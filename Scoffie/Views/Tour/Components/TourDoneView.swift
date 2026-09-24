@@ -8,7 +8,7 @@ import SwiftUI
 /// zanim padnie pytanie, a nie w polityce prywatności. Od 23.09.2026 powód
 /// mieści się w kilku słowach — dawne podpisy szły na dwie–trzy linie.
 ///
-/// Przyciski są w stopce (`SCStepFooter`), którą składa `FeatureTourView`
+/// Przyciski są w stopce (`SCStepFooter`), którą składa `WelcomeView`
 /// poza animowaną treścią.
 struct TourDoneView: View {
     @Environment(\.colorScheme) private var scheme

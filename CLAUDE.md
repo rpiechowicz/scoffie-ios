@@ -516,7 +516,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
-- Przewodnik „Poznaj aplikację” (`FeatureTourView`, `TourStep`, 24.09.2026 — Rafał: „więcej opisu pod
+- Przewodnik „Poznaj aplikację” (`TourStep`, strony w `Views/Tour/`, 24.09.2026 — Rafał: „więcej opisu pod
   title… bardziej friendly”, „odśwież po nowemu”): krok = zdjęcie, `SCStepHeader` z eyebrow w kolorze
   kroku („Zakładka Plan” — dawna kapsułka „Znajdziesz w…” zniknęła), tytuł, `lead` (dwa zdania zwykłym
   językiem) i `TourPointsCard` — punkty z IKONAMI w kafelkach (`TourPoint`), ten sam wiersz co
@@ -526,9 +526,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   ilustracje z kartami aplikacji (`isArtwork`: ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 90 %
   naturalnej wysokości — ucina się tylko krem nad i pod kartami; 1200 × 868, w bundlu — NIE z R2,
   bo przewodnik idzie przed pierwszym pobraniem czegokolwiek i nie może czekać na sieć); reszta to
-  rendery telefonów kadrowane 16:13. „Wstecz” stoi w jednej linii z „Dalej”, po lewej
-  (`SCStepFooter(backPlacement: .besidePrimary)`, krążek wysokości przycisku) — TYLKO w przewodniku;
-  kreator i asystent zostają przy krążku w wierszu kroków (`.progressRow`).
+  rendery telefonów kadrowane 16:13.
+- Przewodnik + kreator profilu = JEDEN przepływ w `WelcomeView` (24.09.2026, Rafał: „wszystko w jednym
+  wielkim stepperze, aby nie przełączać”): `tourPhase` (0 powitanie, 1…5 kroki, 6 „Teraz my poznajmy
+  Ciebie”, `nil` = kreator `step` 1…5), jedna stopka, jeden pasek na 11 odcinków, strony jadą na bok także
+  na styku; „Wstecz” z 1. kroku kreatora wraca do przewodnika, „Pomiń…” skacze do kreatora.
+  `FeatureTourView` usunięty; `WelcomeFlowView` tylko decyduje, czy przewodnik jest (pełna ścieżka i brak
+  `TourCompletion`). Strony przewodnika dostają `padding(.bottom, footerHeight)`, bo stopka kreatora jest
+  nakładką (pola nad klawiaturą). „Wstecz” w jednej linii z „Dalej”, po lewej
+  (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie; asystent zostaje przy `.progressRow`.
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
   treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”

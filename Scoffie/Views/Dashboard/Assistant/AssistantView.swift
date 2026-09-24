@@ -506,7 +506,7 @@ struct AssistantView: View {
     /// z ostatniego renderu widoku, który znika: gdyby kierunek i krok
     /// zmieniły się w jednej transakcji, strona schodząca wyjeżdżałaby
     /// jeszcze w poprzednim kierunku i przy „Wstecz" obie spotykały się na
-    /// tej samej krawędzi. Ta sama sztuczka w `FeatureTourView` i `WelcomeView`.
+    /// tej samej krawędzi. Ta sama sztuczka w `WelcomeView`.
     private func goToStep(_ step: IntroStep, alongside sideEffects: (() -> Void)? = nil) {
         introDirection = step.order >= (currentStep?.order ?? 0) ? 1 : -1
         DispatchQueue.main.async {

@@ -78,35 +78,16 @@ struct AssistantOptionsDebugScreen: View {
 
     private var mode: String? { ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] }
 
-    /// Jedna faza przewodnika ze stopką, jak w `FeatureTourView`.
-    @ViewBuilder
+    /// Jedna faza przewodnika w prawdziwym przepływie (`WelcomeView`:
+    /// przewodnik + kreator, jedna stopka).
     private func debugTour(phase: Int) -> some View {
-        let steps = TourStep.all
-        ZStack {
-            SCPageBackground(scheme: scheme).ignoresSafeArea()
-            VStack(spacing: 0) {
-                Group {
-                    if phase <= 0 {
-                        TourIntroView()
-                    } else if phase > steps.count {
-                        TourDoneView()
-                    } else {
-                        TourStepView(step: steps[phase - 1])
-                    }
-                }
-                .frame(maxHeight: .infinity)
-                SCStepFooter(
-                    slot: phase <= 0
-                        ? .link("Pomiń i przejdź do konfiguracji")
-                        : phase > steps.count ? .empty : .progress(step: phase, total: steps.count),
-                    showsBack: phase > 0,
-                    onBack: {},
-                    backPlacement: .besidePrimary,
-                    primaryTitle: phase <= 0 ? "Poznaj aplikację" : "Dalej",
-                    onPrimary: {}
-                )
-            }
-        }
+        WelcomeView(
+            initialDisplayName: "Rafał",
+            isCreatingHousehold: false,
+            errorMessage: nil,
+            showsTour: true,
+            startTourPhase: phase
+        )
     }
 
     var body: some View {
