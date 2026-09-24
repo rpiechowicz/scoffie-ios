@@ -17,25 +17,23 @@ private enum SCChoiceTileMetrics {
     static let media: CGFloat = 38
     static let mediaRadius: CGFloat = 11
     static let badge: CGFloat = 18
-    /// Wcięcie treści ze wszystkich stron.
+    /// Wcięcie treści z prawej.
     static let inset: CGFloat = 10
-    /// Od miniatury do nazwy — mieści znaczek wystający 8 pt pod miniaturę.
-    static let mediaGap: CGFloat = 10
+    /// Od miniatury do nazwy — mieści znaczek wystający 6 pt z miniatury.
+    static let mediaGap: CGFloat = 11
 }
 
-/// Kafelek wyboru w siatce 2 × N: miniatura u góry, pod nią nazwa i jedna
-/// linijka dopowiedzenia (w filtrach — ile przepisów zostanie po zaznaczeniu).
+/// Kafelek wyboru w siatce 2 × N: miniatura z lewej, obok nazwa i pod nią
+/// jedna linijka dopowiedzenia (w filtrach — ile przepisów zostanie po
+/// zaznaczeniu).
 ///
-/// Nazwa stoi POD miniaturą, na całej szerokości kafelka, a nie obok niej.
-/// Obok miniatury zostawało na tekst 96 pt (iPhone 375 pt), a
-/// „Niskotłuszczowe” i „Wysokobiałkowe” w 14,5 pt semibold mają ~118 pt —
-/// malały do 80 % i stały mniejszym krojem niż „Mało soli”, a „Bogate
-/// w błonnik” schodziło do drugiej linii i podnosiło swój rząd (Rafał,
-/// 23.09.2026: „nie są wszystkie takiej samej wielkości”). Pod miniaturą jest
-/// 143 pt przy 375 i 152 przy 393, więc każda nazwa filtrów i aspektów
-/// kategorii (najdłuższa „Makaron, ryż, kasze”, ~138 pt) mieści się w jednej
-/// linii jednym krojem. Wysokość kafelków wyrównuje siatka
-/// (`RecipeFilterTileGrid`): każdy dostaje wysokość najwyższego w CAŁEJ siatce.
+/// Nazwa stoi OBOK miniatury, w jednej linii z nią. Wersja z nazwą pod
+/// miniaturą (23.09) wyrównywała krój, ale każdy kafelek zrobił się
+/// dwupiętrowy i siatka urosła dwukrotnie — Rafał, 24.09.2026: „podobało mi
+/// się bardziej, jak jest w 1 linii”. Długie jedno słowo („Niskotłuszczowe”)
+/// zostaje w jednej linii i lekko maleje, kilka słów schodzi do drugiej.
+/// Wysokość kafelków wyrównuje siatka (`RecipeFilterTileGrid`): każdy dostaje
+/// wysokość najwyższego w CAŁEJ siatce.
 ///
 /// Miniatura to zwykle zdjęcie dania z tą cechą („Z rybą” — dorsz, „Zupy” —
 /// zupa), a bez zdjęcia glif w tincie akcentu. Pierwsza wersja miała w tym
@@ -80,45 +78,39 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
         }
     }
 
-    /// Kilka słów („Ryby i owoce morza”) może zejść do drugiej linii — łamie
-    /// się tylko na spacji, bo każdy wyraz z osobna ma najwyżej ~86 pt.
-    /// Jedno słowo zostaje w jednej linii: w dwóch złamałoby się w pół wyrazu.
+    /// Kilka słów („Ryby i owoce morza”) może zejść do drugiej linii.
+    /// Jedno słowo zostaje w jednej linii i najwyżej lekko maleje — w dwóch
+    /// złamałoby się w pół wyrazu.
     private var isSingleWord: Bool { !title.contains(" ") }
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: SCChoiceTileMetrics.mediaGap) {
                 mediaView
-                    .padding(.bottom, SCChoiceTileMetrics.mediaGap)
 
-                Text(title)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .tracking(-0.25)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(isSingleWord ? 1 : 2)
-                    // Bezpiecznik na ekran 320 pt (iPhone z powiększonym
-                    // ekranem): tam jedno długie słowo zmaleje o włos, zamiast
-                    // złamać się w pół. Od 375 pt nie działa — wszystkie nazwy
-                    // stoją tym samym krojem 14,5 pt.
-                    .minimumScaleFactor(isSingleWord ? 0.9 : 1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .tracking(-0.25)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(isSingleWord ? 1 : 2)
+                        .minimumScaleFactor(isSingleWord ? 0.8 : 1)
 
-                // Kafelek wyższy od swojej treści (sąsiad z nazwą w dwóch
-                // liniach) oddaje nadmiar TU: miniatura i nazwa trzymają górę,
-                // liczba przepisów — dół, w jednej linii na każdym kafelku.
-                Spacer(minLength: 2)
-
-                detail()
-                    .font(.system(size: 12))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    detail()
+                        .font(.system(size: 12))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(SCChoiceTileMetrics.inset)
+            .padding(.leading, 8)
+            .padding(.trailing, SCChoiceTileMetrics.inset)
+            .padding(.vertical, 9)
             // Elastyczny w obu osiach: siatka daje każdemu kafelkowi tę samą
             // szerokość kolumny i wysokość najwyższego kafelka w siatce.
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 58, maxHeight: .infinity, alignment: .leading)
             .background(shape.fill(fill))
             .overlay(shape.strokeBorder(stroke, lineWidth: mark == .on ? 1.2 : 1))
             .contentShape(shape)

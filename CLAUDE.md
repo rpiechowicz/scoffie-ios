@@ -64,6 +64,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a strona końcowa idzie za STANEM propozycji (`OptionsStoryMode.review(…, status:)`, `ProposalEndCopy`): „Wszystko
   pasuje?” z listą zestawu i zgodą w SZAŁWII (`ProposalAcceptButton`), zapis NIE zamyka arkusza — „Wstawiam do planu…”
   przechodzi w „Jest w planie” + „Otwórz plan”; cofnięta / nieaktualna / wygasła mają własne słowa.
+  Runda 15 (24.09.2026): na dole strony końcowej JEDEN przycisk (zapis → „Otwórz plan” → przy stanie bez zapisu
+  „Napisz, co zmienić”), lista zestawu (`ProposalRecap`) = miniatura dania, pora z ikoną w kolorze pory, nazwa, kcal
+  (tydzień: wiersz na dzień z trzema krążkami zdjęć), nad nią dzień i suma kcal; pod listą cichy odnośnik
+  „Zaproponuj inne dania” (`ProposalRegenerateLink`, wysyła prośbę o nowy zestaw). Świeża propozycja dnia/tygodnia
+  (PENDING, przyszła na żywo) otwiera ten arkusz SAMA, raz na wiadomość (`ProposalAutoPresent`), jak karta OPTIONS.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
@@ -181,12 +186,18 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   krzywą (`AssistantView.greetingComposing`, `keyboardMoved`), nie fokus — fokus przychodził klatkę przed
   klawiaturą i powitanie skakało w dół i w górę. Nie przywracać `.animation(value: composing)`
   w `AssistantGreeting`. Puste pole ma JEDNĄ linię (`lineLimit(draft.isEmpty ? 1...1 : 1...8)`), bo
-  dwuwierszowy przykład zwijał się przy pierwszej literze i ciągnął powitanie.
+  dwuwierszowy przykład zwijał się przy pierwszej literze i ciągnął powitanie. Runda 15: akcje i kontekst NIE
+  wypadają z układu — `GreetingCollapse` zwija zmierzoną wysokość do zera w krzywej klawiatury (krycie osobno,
+  szybciej), a schowanie klawiatury rozwija powitanie w TYM SAMYM ruchu (`keyboardMoved(hiding:)`), nie po fokusie.
+  Krzywa klawiatury jest jedna: `SCTabBarChrome.keyboardCurve` — także dla rezerwy pod dolnym menu (była `easeOut 0,25`).
 - Żywy znak = `SCLivingMark` (`Components/`): nastroje idle (oddech 4,2 s + co 8 s rozejrzenie / mrugnięcie
   / pauza / obrót) · attentive · thinking (2,4 s obrót / 1,8 s oddech — liczby „Oddechu łuku”) · sleeping ·
   still, reakcje `cheer`/`nudge` (`keyframeAnimator`); staje przy nieaktywnej zakładce i przy Reduce Motion.
   Powitanie, kompaktowy nagłówek, jednorazowe podskoczenie przy świeżej odpowiedzi, karta puli. Drugiego
-  kręcącego się znaku w linii myślenia NIE dokładać.
+  kręcącego się znaku w linii myślenia NIE dokładać. Powitanie ma `lively: true` (runda 15, „ledwo zauważalna”):
+  oddech 3,4 s o 10 % z unoszeniem, kołysanie ±5°, poświata do pełnej, zachowania co 5 s od 1,6 s
+  (rozejrzenie · podskok · mrugnięcie · obrót), znak 26 pt. Ślad kroków w linii myślenia rośnie TYLKO w dół:
+  bez kroków `transient`, każde zdanie raz, w miejscu pierwszego pojawienia, id = zdanie.
 - Wykorzystana pula = `AssistantQuotaKit.swift`: `AssistantQuotaFacts` (liczby z `AgentUsageDTO`, plan
   tylko jako „Polecamy”), `AssistantQuotaPanel` w powitaniu `trialExhausted` (paski wiadomości/zapisów,
   alternatywy Plan tygodnia · Lista zakupów · Historia rozmów) i `AssistantQuotaSpentCard` zamiast pola
@@ -205,6 +216,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
   `UIGestureRecognizerRepresentable` ruszające tylko przy ruchu poziomym (`OptionsPagePan`) —
   `DragGesture` na całym arkuszu zabiera systemowi zamykanie w dół.
+- Zmiana korzenia (logowanie, kreator, pulpit, wylogowanie, usunięcie konta) idzie JEDNĄ drogą:
+  `SCSessionCurtain` (`Components/`, własne okno nad arkuszami, pod toastami) — zasłona w kolorze tła
+  w górę, `ScoffieApp.showRootScreen` przestawia korzeń bez animacji (na AKTUALNY cel), zasłona w dół.
+  Korzeń nie ma już własnego crossfade'u (pulpit wjeżdżał z loaderem i prześwitywał Kalendarz).
+  Koniec sesji z ręki użytkownika = `SessionStore.signOut()` / `deleteAccount()`: najpierw
+  `await sessionCurtain.cover()`, dopiero potem czyszczenie `UserDefaults` i store. Gołe `logout()`
+  zostaje dla wylogowań wymuszonych (odmowa serwera, cofnięte Apple ID).
 - Szczegóły posiłku v2 (21.09.2026) — makieta Claude Design „Scoffie — Szczegóły Posiłku v2”
   (projekt `43b605d0-…`, `components/detail-v2.jsx`, sekcja „final”). Stepper porcji siedzi
   w nagłówku „Wartości odżywcze”; pod nim porcja na tle celu dnia (`PlanGoalRings` +
@@ -237,12 +255,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   miniatura BEZ przybliżenia (zdjęcia katalogu to 1344×768 z talerzem na środku — `scaledToFill`
   w kwadracie już wycina środek, a dawne ×1,45 ucinało rant każdego talerza, runda 9);
   bez zdjęcia glif — i najpierw dania, których profil NIE ukrywa (kafelek nie pokaże dania z alergenem
-  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii. Runda 14: kafelek jest PIONOWY (miniatura 38 u góry,
-  nazwa 14,5 semibold na całej szerokości, liczba przypięta do dołu) — obok miniatury zostawało 96 pt przy
-  375, a „Niskotłuszczowe” (~118 pt) malało (Rafał: „nie są wszystkie takiej samej wielkości”). Siatka
+  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii. Runda 14 postawiła kafelek PIONOWO (miniatura nad nazwą), 24.09 wrócił
+  POZIOMY (miniatura 38 z lewej, obok nazwa i liczba) — Rafał: „podobało mi się bardziej, jak jest w 1 linii”;
+  jedno długie słowo („Niskotłuszczowe”) maleje do 0,8, kilka słów schodzi do drugiej linii. Siatka
   `RecipeFilterTileGrid` stoi na `RecipeFilterTileGridLayout`: każdy kafelek ma wysokość najwyższego
-  w CAŁEJ siatce, nie w wierszu; nazwy bez `minimumScaleFactor` (poza bezpiecznikiem 0,9 dla jednego słowa
-  przy 320 pt). Nowa nazwa kafelka = sprawdź szerokość w SF Pro Text Semibold 14,5 wobec 143 pt (375).
+  w CAŁEJ siatce, nie w wierszu.
   Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
   tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
   per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie
@@ -296,8 +313,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Alergeny w Ustawieniach → „Dieta i alergeny”: sam wynik (`AllergenSummaryCard` — „Omijamy 3 alergeny ·
   ukrywa 84 przepisy” + etykiety), wybór w osobnym arkuszu (`AllergenPickerSheet`: trzy grupy, ikona
   i jedno zdanie przy każdym alergenie, pole wyboru). Trzy układy w samym arkuszu diety odpadły
-  (chmura, kafle z opisami, siatka pigułek — „dalej nie jest ładne UX”). Kreator powitalny zostaje
-  przy siatce 3 × 5 (`AllergenPicker`), bo tam wybór jest treścią kroku.
+  (chmura, kafle z opisami, siatka pigułek — „dalej nie jest ładne UX”). Od 24.09.2026 kreator stoi
+  na TYM SAMYM mechanizmie: `AllergenSelectionField` (karta + arkusz, stan arkusza w środku) w obu
+  miejscach; siatka 3 × 5 (`AllergenPicker`) usunięta — nie robić drugiego wyboru alergenów.
+- Pory posiłków = `MealDayTimesCard` (oś dnia z kreatora: ikona pory, godzina na kapsułce, krótka nazwa),
+  JEDNA w kroku 4 kreatora i w Ustawieniach → „Posiłki w planie” (osobny `MealTimesSheet` z listą
+  wierszy usunięty 24.09.2026). Stuknięcie w posiłek = koło godzin w arkuszu `.medium`
+  (`MealTimeEditorSheet`). Kreator trzyma godziny lokalnie i wysyła po utworzeniu gospodarstwa
+  (tylko gdy różne od domyślnych), Ustawienia zapisują od razu.
 - Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
   (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
   liczone z NAZWY dania i składników (katalog nie ma tagów), sprawdzone na 495 przepisach
@@ -329,6 +352,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: `EditorialSheetHeader` z kafelkiem,
   zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka. Linijka „Aktywne: …” pod spodem
   zniknęła w rundzie 9 („niepotrzebne”) — co działa, widać na kafelkach. „Wyczyść” obok krzyżyka
+  (`RecipeFilterClearButton` — od 24.09 SAMA ikona w terakotowym krążku 36 pt, słowo tylko dla VoiceOver)
   mają też oba arkusze wykluczania (dział czyści swój dział, główny — wszystko) i wybór alergenów
   w Ustawieniach (zostają id alergenów nieznanych tej wersji — unia z `SettingsView`).
 - „Wybierz przepis” w Planie (`PlanSlotPickerSheet`) i lista kategorii na Przepisach
@@ -359,10 +383,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   TYLKO znane klocki. Nagłówek = zdjęcie dania (`EditorialRecipeCover` 58 pt) + „DODAJ DO PLANU” + nazwa
   + fakty z ikonami (czas, kcal) + krzyżyk. „Kiedy” = tydzień w karcie dokładnie jak `EditorialWeekBar`
   (podpis „TEN TYDZIEŃ · …”, „Wróć do dziś”, strzałki 26 pt, przejeżdżające podkreślenie, przeciąganie
-  w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = lista pór w karcie:
-  kafelek pory, nazwa, pod nią miniatura + nazwa dania, które już tam stoi, `SCRadioMark` w kolorze pory,
-  tło wybranego w tincie pory. „Dla kogo” = `PlanAudienceChips`. „Porcje” = karta z rolującą liczbą
-  i `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” /
+  w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = od 24.09 kafle pór w siatce 2 × N
+  (ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule`, miniatura dania, które już tam stoi, w rogu;
+  wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
+  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” /
   „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,

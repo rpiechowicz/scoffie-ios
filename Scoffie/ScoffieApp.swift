@@ -313,6 +313,59 @@ struct ScoffieApp: App {
         return hasDashboardStores ? .dashboard : .loader
     }
 
+    /// Ekran, który korzeń NAPRAWDĘ pokazuje. `currentRootScreen` to cel —
+    /// liczony ze stanu sesji, więc zmienia się w chwili, w której zmienia
+    /// się sesja. Ten tu dogania go pod zasłoną (`showRootScreen`), a do
+    /// pierwszego pojawienia się jest `nil` i korzeń bierze cel wprost.
+    @State private var displayedScreen: RootScreen?
+
+    private var shownScreen: RootScreen { displayedScreen ?? currentRootScreen }
+
+    /// Ekran i tak przykryty loaderem startu — przejście między dwoma
+    /// takimi dzieje się pod kryjącą planszą i zasłona nie ma czego chować.
+    private func isUnderLoader(_ screen: RootScreen) -> Bool {
+        switch screen {
+        case .loader: return true
+        case .dashboard: return !isStartupReady
+        case .auth, .welcome: return false
+        }
+    }
+
+    /// JEDNA droga zmiany korzenia: zasłona w górę, korzeń bez animacji,
+    /// zasłona w dół (`SCSessionCurtain`). Wcześniej korzeń przenikał się
+    /// sam, a po założeniu domu pulpit wjeżdżał razem z loaderem i przez
+    /// pół przejścia prześwitywał spod niego Kalendarz.
+    ///
+    /// Pod zasłoną bierze się cel AKTUALNY, nie ten, z którym wołano —
+    /// sesja mogła w tym czasie pójść dalej (logowanie z domem: auth →
+    /// pulpit). Po przestawieniu na pulpit stoi już nad nim loader, więc
+    /// zasłona schodzi z loadera, nie z Kalendarza.
+    private func showRootScreen(_ target: RootScreen) async {
+        guard let shown = displayedScreen else {
+            displayedScreen = target
+            return
+        }
+        guard shown != target else { return }
+        if isUnderLoader(shown), isUnderLoader(target) {
+            swapRootScreen(to: target)
+            return
+        }
+        let curtain = sessionStore.sessionCurtain
+        await curtain.cover()
+        swapRootScreen(to: currentRootScreen)
+        curtain.lift()
+    }
+
+    private func swapRootScreen(to screen: RootScreen) {
+        var transaction = Transaction()
+        // Także loader, który wchodzi razem z pulpitem: ma stać od razu,
+        // a nie przenikać się z pulpitem pod spodem.
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            displayedScreen = screen
+        }
+    }
+
     private var hasDashboardStores: Bool {
         sessionStore.mealCalendarStore != nil
             && sessionStore.recipeCatalogStore != nil
@@ -324,7 +377,7 @@ struct ScoffieApp: App {
     /// Loader startu: osobny ekran, zanim są store pulpitu, a potem plansza
     /// nad budującym się pod nią pulpitem, dopóki start nie jest gotowy.
     private var showsStartupLoader: Bool {
-        switch currentRootScreen {
+        switch shownScreen {
         case .loader: return true
         case .dashboard: return !isStartupReady
         case .auth, .welcome: return false
@@ -418,14 +471,10 @@ struct ScoffieApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                rootScreen(currentRootScreen)
-                    .id(currentRootScreen)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 1.015)),
-                            removal: .opacity.combined(with: .scale(scale: 0.985))
-                        )
-                    )
+                // Bez przejścia: korzeń zmienia się pod zasłoną
+                // (`showRootScreen`), więc crossfade nie miałby kogo cieszyć.
+                rootScreen(shownScreen)
+                    .id(shownScreen)
 
                 // JEDEN loader na cały start, nad korzeniem i poza jego
                 // tożsamością: przejście „loader → pulpit pod loaderem” dzieje
@@ -441,8 +490,14 @@ struct ScoffieApp: App {
                 if let debugScreen = AssistantOptionsDebugScreen.requested { debugScreen }
                 #endif
             }
-            .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
             .animation(.easeOut(duration: 0.4), value: showsStartupLoader)
+            .onChange(of: currentRootScreen, initial: true) { _, target in
+                if displayedScreen == nil {
+                    displayedScreen = target
+                } else {
+                    Task { await showRootScreen(target) }
+                }
+            }
             .environment(\.sessionStore, sessionStore)
             // Kolejność ma znaczenie: każdy z mostów poniżej musi stać POD
             // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`
@@ -452,7 +507,7 @@ struct ScoffieApp: App {
             // użytkownik patrzył na plan, i zakup dogadany z Apple w tle.
             //
             // Wiszą TUTAJ, a nie w gałęzi pulpitu, i to jest istotne: gałąź
-            // pulpitu ma `.id(currentRootScreen)`, więc przy każdym przejściu
+            // pulpitu ma `.id(shownScreen)`, więc przy każdym przejściu
             // korzenia (loader, powitanie, zmiana gospodarstwa) budowałaby się
             // od nowa i brała bieżącą wartość za punkt odniesienia. A zakup
             // odtworzony przez StoreKit dociera właśnie w oknie loadera.
@@ -465,6 +520,7 @@ struct ScoffieApp: App {
                 onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
             )
             .scConnectivityToast()
+            .scSessionCurtain(sessionStore.sessionCurtain, colorScheme: appTheme.colorScheme)
             // Motyw podany JAWNIE: warstwa toastów mieszka w osobnym oknie,
             // do którego `preferredColorScheme` nie dociera.
             .scToastLayer(toastCenter, colorScheme: appTheme.colorScheme)

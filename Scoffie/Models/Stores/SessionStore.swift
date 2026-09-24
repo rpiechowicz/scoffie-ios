@@ -122,6 +122,11 @@ final class SessionStore {
     /// byłby to drugi banner o tej samej treści, tylko innym tytułem.
     private(set) var isPushDeliveryActive: Bool = false
 
+    /// Zasłona przejść między fazami aplikacji — patrz `SCSessionCurtain`.
+    /// Korzeń (`ScoffieApp`) przestawia pod nią ekran, a koniec sesji
+    /// czyści pod nią stan.
+    let sessionCurtain = SCSessionCurtain()
+
     var mealCalendarStore: MealCalendarStore?
     var recipeCatalogStore: RecipeCatalogStore?
     var shoppingListStore: ShoppingListStore?
@@ -487,6 +492,17 @@ final class SessionStore {
         }
     }
 
+    /// Wylogowanie z ręki użytkownika: najpierw zasłona, potem sprzątanie.
+    ///
+    /// `logout()` czyści stan od razu — store pulpitu znikają, a preferencje
+    /// wracają do domyślnych pod otwartym jeszcze ekranem. Przy wymuszonym
+    /// wylogowaniu (odmowa serwera, cofnięte Apple ID) liczy się czas; przy
+    /// stuknięciu „Wyloguj” — to, żeby nic z tego nie było widać.
+    func signOut() async {
+        await sessionCurtain.cover()
+        logout()
+    }
+
     func logout() {
         // Trwający refresh: `cancel()` przerywa żądanie w locie, a gdy odpowiedź
         // już przyszła, przed zapisem tokenów `refreshSessionTokens` sprawdza,
@@ -575,6 +591,11 @@ final class SessionStore {
         // Konto już nie istnieje, więc oprócz zwykłego wylogowania trzeba
         // zdjąć też dane profilowe i preferencje — inaczej następne logowanie
         // na tym urządzeniu zastałoby cudzy wzrost i cudzą dietę.
+        //
+        // Wszystko POD zasłoną: czyszczenie `UserDefaults` przestawia
+        // otwarty arkusz profilu i Ustawienia na wartości domyślne, a to
+        // było widać przez pół sekundy przed ekranem logowania.
+        await sessionCurtain.cover()
         clearPersistedProfileFields()
         clearPersistedPreferences()
         logout()

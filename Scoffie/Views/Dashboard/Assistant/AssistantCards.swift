@@ -235,6 +235,9 @@ struct AssistantPlanWeekCard: View {
     /// Zamiana jednego dania z arkusza przeglądu — zwykła wiadomość.
     var onAsk: ((String) -> Void)? = nil
     var onCompose: () -> Void = {}
+    /// Id wiadomości, która właśnie przyszła; `nil` dla historii — patrz
+    /// `ProposalAutoPresent`.
+    var autoPresentID: String? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.recipeCatalogStore) private var recipeCatalog
@@ -358,8 +361,16 @@ struct AssistantPlanWeekCard: View {
                 onOpenPlan: onOpenPlan == nil ? nil : {
                     presented = nil
                     onOpenPlan?()
+                },
+                onRegenerate: onAsk == nil ? nil : {
+                    presented = nil
+                    onAsk?("Zaproponuj inny plan tego tygodnia — z innymi daniami.")
                 }
             )
+        }
+        .task(id: autoPresentID) {
+            guard await ProposalAutoPresent.shouldOpen(autoPresentID, state: card.state, isEmpty: storyEntries.isEmpty) else { return }
+            presented = OptionsSheetPage(id: 0)
         }
     }
 
@@ -386,6 +397,9 @@ struct AssistantPlanDayCard: View {
     /// Zamiana jednego dania z arkusza przeglądu — zwykła wiadomość.
     var onAsk: ((String) -> Void)? = nil
     var onCompose: () -> Void = {}
+    /// Id wiadomości, która właśnie przyszła; `nil` dla historii — patrz
+    /// `ProposalAutoPresent`.
+    var autoPresentID: String? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.recipeCatalogStore) private var recipeCatalog
@@ -480,9 +494,40 @@ struct AssistantPlanDayCard: View {
                 onOpenPlan: onOpenPlan == nil ? nil : {
                     presented = nil
                     onOpenPlan?()
+                },
+                onRegenerate: onAsk == nil ? nil : {
+                    presented = nil
+                    onAsk?(card.slots.count == 1
+                        ? "Zaproponuj inne danie zamiast tego."
+                        : "Zaproponuj inny zestaw dań na ten dzień.")
                 }
             )
         }
+        .task(id: autoPresentID) {
+            guard await ProposalAutoPresent.shouldOpen(autoPresentID, state: card.state, isEmpty: card.slots.isEmpty) else { return }
+            presented = OptionsSheetPage(id: 0)
+        }
+    }
+}
+
+/// Świeża propozycja dnia albo tygodnia otwiera przegląd dań SAMA
+/// (24.09.2026, Rafał: „sheet z podglądem powinien się z defaultu otwierać
+/// zawsze”) — jak karta dań do wyboru. Jedno danie = arkusz z jedną stroną
+/// i od razu „Wszystko pasuje?” obok, kilka = strony po kolei od pierwszego.
+/// RAZ na wiadomość (leniwa lista odtwarza stan wiersza przy każdym powrocie
+/// na ekran), nigdy dla historii i nigdy dla propozycji, której nie da się
+/// już zapisać ani zmienić (zapisana, cofnięta, nieaktualna, wygasła) —
+/// tam arkusz otwiera tylko dotknięcie.
+@MainActor
+private enum ProposalAutoPresent {
+    private static var opened = Set<String>()
+
+    static func shouldOpen(_ id: String?, state: AgentCardStateDTO, isEmpty: Bool) async -> Bool {
+        guard let id, !isEmpty, state.isPending, !opened.contains(id) else { return false }
+        opened.insert(id)
+        // Najpierw karta wjeżdża pod tekstem, potem arkusz — nie oba naraz.
+        try? await Task.sleep(for: .milliseconds(450))
+        return !Task.isCancelled
     }
 }
 
@@ -1380,6 +1425,9 @@ private struct AssistantOptionsStorySheet: View {
     var isBusy: Bool = false
     /// „Otwórz plan” po zapisie.
     var onOpenPlan: (() -> Void)? = nil
+    /// „Zaproponuj inne dania” pod listą strony końcowej przeglądu — nowy
+    /// zestaw zamiast tego; `nil` = odnośnika nie ma.
+    var onRegenerate: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -1416,7 +1464,8 @@ private struct AssistantOptionsStorySheet: View {
         onApply: (() -> Void)? = nil,
         contexts: [ProposalStoryContext] = [],
         isBusy: Bool = false,
-        onOpenPlan: (() -> Void)? = nil
+        onOpenPlan: (() -> Void)? = nil,
+        onRegenerate: (() -> Void)? = nil
     ) {
         self.slotDetail = slotDetail
         self.options = options
@@ -1429,6 +1478,7 @@ private struct AssistantOptionsStorySheet: View {
         self.contexts = contexts
         self.isBusy = isBusy
         self.onOpenPlan = onOpenPlan
+        self.onRegenerate = onRegenerate
         let start = min(max(initialPage, 0), options.count)
         let startDish = min(start, max(options.count - 1, 0))
         _page = State(initialValue: start)
@@ -2039,6 +2089,14 @@ private struct AssistantOptionsStorySheet: View {
                         .padding(.horizontal, 16)
                     }
                     .padding(.top, 24)
+
+                    if status == .pending, !isBusy, let onRegenerate {
+                        endStep(3, rise: 10) {
+                            ProposalRegenerateLink(title: regenerateTitle, action: onRegenerate)
+                        }
+                        .padding(.top, 10)
+                        .transition(.opacity)
+                    }
                 }
                 // 118 = uchwyt, nagłówek i segmenty nad treścią.
                 .padding(.top, 118)
@@ -2055,21 +2113,11 @@ private struct AssistantOptionsStorySheet: View {
             .scScrollEdgeFade()
 
             endStep(3, rise: 20) {
-                // Jak w całym asystencie: poboczna pierwsza, główna NA
-                // KOŃCU (`AssistantActionPair`) — zgoda stoi tam, gdzie na
-                // stronach dań „Zamień to danie”.
-                AssistantActionPair(spacing: 10) {
-                    if !isBusy {
-                        AssistantGhostButton(
-                            action: AssistantCardAction(
-                                title: copy.composeTitle,
-                                icon: "square.and.pencil"
-                            ) {
-                                onCompose()
-                            }
-                        )
-                        .transition(.opacity)
-                    }
+                // JEDEN przycisk na dole (runda 15, Rafał): zapis całości,
+                // po zapisie „Otwórz plan”, a gdy propozycji nie da się już
+                // zapisać — „Napisz, co zmienić”. Nowe dania to cichy
+                // odnośnik pod listą, nie drugi przycisk.
+                Group {
                     if let applyTitle, let onApply {
                         ProposalAcceptButton(
                             title: isBusy ? "Zapisuję…" : applyTitle,
@@ -2081,8 +2129,19 @@ private struct AssistantOptionsStorySheet: View {
                     } else if status == .applied, let onOpenPlan {
                         ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
                             .transition(.opacity)
+                    } else if !isBusy {
+                        AssistantGhostButton(
+                            action: AssistantCardAction(
+                                title: copy.composeTitle,
+                                icon: "square.and.pencil"
+                            ) {
+                                onCompose()
+                            }
+                        )
+                        .transition(.opacity)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 6)
                 .animation(motion(.smooth(duration: 0.35)), value: status)
@@ -2175,6 +2234,11 @@ private struct AssistantOptionsStorySheet: View {
                 .opacity(isEnd ? 1 : 0)
                 .animation(motion(.easeInOut(duration: 0.35)), value: isEnd)
         )
+    }
+
+    /// Jedno danie — „Zaproponuj inne danie”, kilka — „inne dania”.
+    private var regenerateTitle: String {
+        options.count == 1 ? "Zaproponuj inne danie" : "Zaproponuj inne dania"
     }
 
     private var endBody: String {
@@ -2356,7 +2420,7 @@ private struct ProposalEndCopy {
     var body: String {
         if isBusy { return "Chwila — zaraz wszystko będzie w planie." }
         switch status {
-        case .pending: return "Zapiszę cały zestaw jednym dotknięciem — albo napisz, co zmienić."
+        case .pending: return "Zapiszę cały zestaw jednym dotknięciem."
         case .applied: return "Wszystkie dania z tej propozycji czekają w Twoim planie."
         case .undone: return "Cofnąłem ten zapis. Możesz zastosować go jeszcze raz."
         case .stale: return "Od tej propozycji plan się zmienił. Poproś o nową — policzę od nowa."
@@ -2431,9 +2495,12 @@ private struct ProposalStatusBadge: View {
     }
 }
 
-/// Cały zestaw jeszcze raz, w jednej karcie: pora, danie, ptaszek.
-/// Do pięciu dań — wiersz na danie; tydzień — wiersz na dzień z liczbą
-/// dań i sumą kalorii.
+/// Cały zestaw jeszcze raz, w jednej karcie (runda 15, 24.09.2026 — Rafał:
+/// „dopracuj design tych wybranych posiłków”): miniatura dania, pora
+/// z ikoną w kolorze pory, nazwa i kcal po prawej. Do pięciu dań — wiersz na
+/// danie; tydzień — wiersz na dzień z miniaturami jego dań, liczbą i sumą
+/// kalorii. Nad listą dzień (jeden) i suma kcal zestawu. Karta jak każda
+/// w aplikacji: `scTileBg` + `scTileStroke`, bez cienia.
 private struct ProposalRecap: View {
     let options: [OptionsCardItemDTO]
     let contexts: [ProposalStoryContext]
@@ -2441,12 +2508,17 @@ private struct ProposalRecap: View {
 
     @Environment(\.colorScheme) private var scheme
 
+    private static let thumb: CGFloat = 46
+
     private struct Row: Identifiable {
         let id: Int
         let icon: String?
         let accent: Color?
         let label: String
         let title: String
+        let kcal: Int
+        /// Zdjęcia: jedno dla dania, kilka (do trzech) dla dnia tygodnia.
+        let images: [URL?]
     }
 
     private var days: [String] {
@@ -2455,19 +2527,37 @@ private struct ProposalRecap: View {
         return seen
     }
 
-    /// Jeden dzień → jego nazwa nad listą; kilka → każdy wiersz ma swój.
-    private var header: String? { days.count == 1 ? days[0] : nil }
+    private var isWeek: Bool { options.count > 5 }
+
+    /// Jeden dzień → jego nazwa nad listą; tydzień → „Cały tydzień”.
+    private var header: String {
+        if days.count == 1 { return days[0] }
+        return isWeek ? "Cały tydzień" : "Zestaw"
+    }
+
+    private var totalKcal: Int { options.reduce(0) { $0 + $1.kcalPerServing } }
+
+    private func url(_ option: OptionsCardItemDTO) -> URL? {
+        option.imageUrl.flatMap(URL.init(string:))
+    }
 
     private var rows: [Row] {
-        if options.count <= 5 {
+        if !isWeek {
             return options.indices.map { index in
                 let context = contexts.indices.contains(index) ? contexts[index] : nil
+                var label = context?.slot?.title ?? context?.mealLabel ?? ""
+                // Kilka dni w jednym zestawie (rzadkie) — dzień przy porze.
+                if days.count > 1, let day = context?.day {
+                    label += " · \(day.components(separatedBy: ",").first ?? day)"
+                }
                 return Row(
                     id: index,
                     icon: context?.slot?.icon,
                     accent: context?.slot?.cozyAccent,
-                    label: context?.slot?.title ?? context?.mealLabel ?? "",
-                    title: options[index].title
+                    label: label,
+                    title: options[index].title,
+                    kcal: options[index].kcalPerServing,
+                    images: [url(options[index])]
                 )
             }
         }
@@ -2481,7 +2571,9 @@ private struct ProposalRecap: View {
                 icon: "calendar",
                 accent: nil,
                 label: day,
-                title: kcal > 0 ? "\(count) \(word) · \(kcal) kcal" : "\(count) \(word)"
+                title: "\(count) \(word)",
+                kcal: kcal,
+                images: indices.prefix(3).map { url(options[$0]) }
             )
         }
     }
@@ -2495,69 +2587,146 @@ private struct ProposalRecap: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let header {
+            HStack(alignment: .firstTextBaseline) {
                 Text(header)
                     .font(.system(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.faint(scheme))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
-                    .padding(.bottom, 4)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if totalKcal > 0 {
+                    Text("\(totalKcal) kcal")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(AssistantLook.muted(scheme))
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
 
             ForEach(Array(rows.enumerated()), id: \.element.id) { offset, row in
                 if offset > 0 {
                     Rectangle()
-                        .fill(AssistantLook.hair(scheme))
-                        .frame(height: 0.5)
-                        .padding(.leading, 60)
+                        .fill(Color.scTileStroke(scheme))
+                        .frame(height: 1)
+                        .padding(.leading, 16 + Self.thumb + 12)
+                        .padding(.trailing, 16)
                 }
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill((row.accent ?? AssistantLook.ink(scheme)).opacity(scheme == .dark ? 0.2 : 0.12))
-                        Image(systemName: row.icon ?? "fork.knife")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(row.accent ?? AssistantLook.muted(scheme))
-                    }
-                    .frame(width: 32, height: 32)
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(row.label)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AssistantLook.faint(scheme))
-                            .lineLimit(1)
-                        Text(row.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .tracking(-0.3)
-                            .foregroundStyle(AssistantLook.ink(scheme))
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if let checkColor {
-                        Image(systemName: status == .applied ? "checkmark.circle.fill" : "checkmark.circle")
-                            .font(.system(size: 19, weight: .medium))
-                            .foregroundStyle(checkColor)
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .opacity(status.tone == .muted ? 0.6 : 1)
+                rowView(row)
             }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, 6)
         .background(
             RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-                .fill(AssistantLook.card(scheme))
+                .fill(Color.scTileBg(scheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-                .stroke(AssistantLook.cardStroke(scheme), lineWidth: 1)
+                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
         )
+        .opacity(status.tone == .muted ? 0.6 : 1)
         .accessibilityElement(children: .combine)
+    }
+
+    private func rowView(_ row: Row) -> some View {
+        HStack(spacing: 12) {
+            thumbnails(row)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    if let icon = row.icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    Text(row.label)
+                        .font(.system(size: 11.5, weight: .bold))
+                        .tracking(0.2)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(row.accent ?? AssistantLook.muted(scheme))
+
+                Text(row.title)
+                    .font(.system(size: 15.5, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(AssistantLook.ink(scheme))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                if let checkColor {
+                    Image(systemName: status == .applied ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(checkColor)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                if row.kcal > 0 {
+                    Text("\(row.kcal) kcal")
+                        .font(.system(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(AssistantLook.faint(scheme))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    /// Danie = jedna miniatura; dzień tygodnia = do trzech nałożonych
+    /// krążków w tym samym kwadracie, żeby kolumna nazw nie skakała.
+    @ViewBuilder
+    private func thumbnails(_ row: Row) -> some View {
+        if row.images.count <= 1 {
+            AssistantThumbnail(url: row.images.first ?? nil, size: Self.thumb)
+        } else {
+            let small: CGFloat = 30
+            let far = Self.thumb - small
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(row.images.enumerated()), id: \.offset) { index, image in
+                    AssistantThumbnail(url: image, size: small)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 2))
+                        .offset(
+                            x: index == 1 ? far : (index == 2 ? far / 2 : 0),
+                            y: index == 0 ? 0 : (index == 1 ? far / 2 : far)
+                        )
+                        .zIndex(Double(-index))
+                }
+            }
+            .frame(width: Self.thumb, height: Self.thumb, alignment: .topLeading)
+        }
+    }
+}
+
+/// Cichy odnośnik pod listą zestawu: ikona odświeżenia + tytuł w terakocie,
+/// bez tła — opcja, nie druga decyzja obok zapisu.
+private struct ProposalRegenerateLink: View {
+    let title: String
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .tracking(-0.2)
+            }
+            .foregroundStyle(AssistantLook.terra(scheme))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.97))
+        .accessibilityHint("Asystent przygotuje nowy zestaw zamiast tego")
     }
 }
 

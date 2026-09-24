@@ -77,12 +77,15 @@ struct WelcomeStep3PreferencesView: View {
                 // Bez zdania „Dania z nimi znikną z przepisów” — powód padł
                 // na ostatnim ekranie przewodnika, a siatka mówi sama za siebie.
                 WelcomeSection(title: "Alergeny i nietolerancje") {
-                    // Ten sam wybór co w Ustawieniach — siatka niesie własną kartę.
-                    AllergenPicker(selected: allergens) { candidate in
-                        withAnimation(.smooth(duration: 0.18)) {
-                            toggleAllergen(candidate)
-                        }
-                    }
+                    // Ten sam mechanizm co w Ustawieniach: karta z wynikiem
+                    // i arkusz wyboru. Katalogu w kreatorze jeszcze nie ma,
+                    // więc bez liczby ukrytych przepisów.
+                    AllergenSelectionField(
+                        selected: allergens,
+                        hiddenRecipes: nil,
+                        onToggle: { toggleAllergen($0) },
+                        onClear: { allergens = [] }
+                    )
                 }
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
