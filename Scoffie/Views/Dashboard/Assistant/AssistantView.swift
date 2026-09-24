@@ -630,7 +630,7 @@ struct AssistantView: View {
         // Nowe konto: żadnego planu w pamięci i żadnej rozmowy. Cokolwiek
         // z tych dwóch znaczy, że Scoffie ten dom już zna.
         let plan = sessionStore.mealCalendarStore
-        let isNewUser = (plan?.plans.isEmpty ?? true) && store.conversations.isEmpty
+        let isNewUser = (plan?.plans.isEmpty ?? true) && store.historyConversations.isEmpty
         return AssistantBriefingContext(
             now: now,
             calendar: calendar,

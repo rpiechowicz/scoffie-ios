@@ -613,62 +613,38 @@ struct ProductsView: View {
     @ViewBuilder
     private var emptyGroupsNote: some View {
         if todayOnly {
-            noteCard(
-                icon: "checkmark.seal.fill",
-                tint: SCPalette.sage,
-                title: "Na dzisiejsze dania masz wszystko",
-                subtitle: "Wróć do całej listy, żeby dokupić resztę tygodnia."
+            RecipeListEmptyState(
+                icon: "checkmark",
+                accent: SCPalette.sage,
+                title: "Na dziś masz wszystko",
+                message: "Reszta tygodnia czeka na całej liście.",
+                actions: [
+                    .init(title: "Pokaż całą listę", icon: "list.bullet") {
+                        withAnimation(.smooth(duration: 0.3)) { todayOnly = false }
+                    }
+                ]
             )
         } else if hasOpenRevision {
-            noteCard(
-                icon: "checkmark.seal.fill",
-                tint: SCPalette.sage,
-                title: "Brak nowych produktów do kupienia",
-                subtitle: "Zmiany w planie nie dodały nowych zakupów na ten tydzień."
+            RecipeListEmptyState(
+                icon: "checkmark",
+                accent: SCPalette.sage,
+                title: "Nic nowego do kupienia",
+                message: "Zmiany w planie nie dodały zakupów."
             )
         } else {
-            noteCard(
+            RecipeListEmptyState(
                 icon: "basket",
-                tint: Color.scMuted(scheme),
-                title: "Brak aktywnej listy",
-                subtitle: "Zapisz plan tygodniowy, aby wygenerować produkty."
+                accent: SCPalette.terracotta,
+                title: "Lista jest pusta",
+                message: "Produkty z planu tygodnia pojawią się tu same."
             )
         }
     }
 
-    /// Karta pustego stanu — tytuł 16 heavy i zdanie 13 pt, jak pusty stan
-    /// list przepisów (`RecipeListEmptyState`); dawne 14/12 było najmniejszym
-    /// z czterech krojów pustych stanów w aplikacji.
+    /// Mała karta pustego stanu (historia) — ten sam klocek, co pusta lista
+    /// i puste listy przepisów (`RecipeListEmptyState`), bez akcji.
     private func noteCard(icon: String, tint: Color, title: String, subtitle: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(tint)
-
-            Text(title)
-                .font(.system(size: 16, weight: .heavy))
-                .tracking(-0.3)
-                .foregroundStyle(Color.scLabel(scheme))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(subtitle)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Color.scMuted(scheme))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 22)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
+        RecipeListEmptyState(icon: icon, accent: tint, title: title, message: subtitle)
     }
 
     // MARK: - Akcje
@@ -782,66 +758,48 @@ struct ProductsView: View {
 
     // MARK: - Empty state
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10))
-                Image(systemName: "basket.fill")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(SCPalette.terracotta)
-            }
-            .frame(width: 78, height: 78)
-
-            VStack(spacing: 8) {
-                Text("Lista zakupów jest jeszcze pusta")
-                    .font(.system(size: 18, weight: .heavy))
-                    .tracking(-0.4)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Dodaj posiłki do planu tygodniowego, a produkty pojawią się tutaj automatycznie.")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: 8) {
-                emptyHintChip(icon: "calendar.badge.plus", title: "Dodaj plan")
-                emptyHintChip(icon: "cart", title: "Lista pojawi się sama")
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 28)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .padding(.horizontal, pageHorizontalPadding)
-        .padding(.top, 16)
+    /// Czy w tygodniu stoi choć jeden posiłek — pusta lista znaczy wtedy
+    /// „jeszcze się układa”, a bez planu „nie ma z czego jej ułożyć”.
+    private var weekHasMeals: Bool {
+        datesViewModel.dates.contains { !mealStore.plan(for: $0).allMeals.isEmpty }
     }
 
-    private func emptyHintChip(icon: String, title: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
-            Text(title)
-                .font(.system(size: 11, weight: .bold))
-                .tracking(0.2)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+    /// Pusta lista tygodnia — ten sam klocek, co puste listy przepisów
+    /// i karta pustego tygodnia w Planie (`RecipeListEmptyState`: kafelek
+    /// powodu w tincie, etykieta, tytuł, jedno zdanie, akcja „soft”). Dawna
+    /// karta z koszykiem 78 pt, tytułem 18 heavy i dwoma szarymi chipami
+    /// („Dodaj plan”, „Lista pojawi się sama”) była ostatnim pustym stanem
+    /// w starym kroju (24.09.2026).
+    @ViewBuilder
+    private var emptyState: some View {
+        Group {
+            if weekHasMeals {
+                RecipeListEmptyState(
+                    icon: "basket",
+                    accent: SCPalette.terracotta,
+                    eyebrow: "LISTA ZAKUPÓW",
+                    title: "Lista jest pusta",
+                    message: "Produkty z zaplanowanych dań pojawią się tu same."
+                )
+            } else {
+                RecipeListEmptyState(
+                    icon: MenuConstans.Assistant.icon,
+                    accent: SCPalette.terracotta,
+                    eyebrow: "LISTA ZAKUPÓW",
+                    title: "Tydzień bez planu",
+                    message: "Lista ułoży się sama z dań w Planie.",
+                    actions: [
+                        .init(title: "Ułóż z Asystentem", icon: MenuConstans.Assistant.icon) {
+                            sessionStore.dashboardTab = .assistant
+                            dismiss()
+                        },
+                        .init(title: "Wróć do Planu") { dismiss() }
+                    ]
+                )
+            }
         }
-        .foregroundStyle(Color.scMuted(scheme))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Color.scChipBg(scheme)))
+        .padding(.horizontal, pageHorizontalPadding)
+        .padding(.top, 16)
     }
 
     // MARK: - Historia
