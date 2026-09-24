@@ -130,7 +130,9 @@ struct TourPointsCard: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Self.horizontalPadding)
-        .padding(.vertical, 10)
+        // 6, nie 10: przy ilustracji na pełną szerokość (Plan, Przepisy)
+        // cztery punkty muszą zmieścić się nad stopką bez przewijania.
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
     }
 }

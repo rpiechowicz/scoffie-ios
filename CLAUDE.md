@@ -523,7 +523,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `SCStepFeatureCard` na powitaniu i ekranie końcowym. Opis i punkty mówią tylko o tym, co JEST
   w aplikacji. Zdjęcie bierze to, co zostaje po ZMIERZONYM tekście kroku (`TourStepView.textHeight` →
   `TourMedia.reserved`), więc czwarty punkt nigdy nie wchodzi pod cień stopki. Plan i Przepisy to
-  ilustracje z kartami aplikacji (`isArtwork`: w całości, `scaledToFit`, 1200 × 868, w bundlu — NIE z R2,
+  ilustracje z kartami aplikacji (`isArtwork`: ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 90 %
+  naturalnej wysokości — ucina się tylko krem nad i pod kartami; 1200 × 868, w bundlu — NIE z R2,
   bo przewodnik idzie przed pierwszym pobraniem czegokolwiek i nie może czekać na sieć); reszta to
   rendery telefonów kadrowane 16:13. „Wstecz” stoi w jednej linii z „Dalej”, po lewej
   (`SCStepFooter(backPlacement: .besidePrimary)`, krążek wysokości przycisku) — TYLKO w przewodniku;

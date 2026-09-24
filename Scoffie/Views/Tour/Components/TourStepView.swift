@@ -7,9 +7,12 @@ import SwiftUI
 ///   `scaledToFill` plus delikatne przybliżenie zjada ten margines, żeby
 ///   ekrany aplikacji zajmowały kadr, a nie pływały w pustce;
 /// - ilustracje z kartami aplikacji (od 24.09.2026, Plan i Przepisy) —
-///   skomponowane do samego brzegu, więc w SWOICH proporcjach i w całości
-///   (`scaledToFit`, bez przybliżenia). Przycięcie do 16:13 ucinało karty
-///   z boków, a przybliżenie — nagłówki u góry.
+///   ZAWSZE na pełną szerokość (Rafał: „obrazek daj na całość, żeby było
+///   dobrze widać”), `scaledToFill` bez przybliżenia. Karty zajmują całą
+///   szerokość grafiki, a nad i pod nimi jest ~12 % pustego kremu — gdy
+///   brakuje wysokości, ucina się ten krem, nie karty. Pomniejszanie
+///   w całości (`scaledToFit`) robiło z kart miniaturę na środku, a kadr
+///   16:13 z przybliżeniem ucinał karty z boków.
 ///
 /// Wysokość kadru ma sufit: widoczna strona (`TourPage` podaje ją
 /// w `tourViewport`) minus ZMIERZONA reszta kroku (`reserved`: eyebrow,
@@ -18,9 +21,8 @@ import SwiftUI
 /// raz zostawiał pustkę pod kartą, raz wpychał czwarty punkt pod cień
 /// stopki. Na
 /// Plus / Pro Max sufit leży nad naturalną wysokością i nic się nie zmienia,
-/// na mniejszych ekranach render traci wysokość (przycina się, szerokość
-/// zostaje), a ilustracja maleje w całości, na środku — tytuł i punkty
-/// mieszczą się nad stopką bez przewijania.
+/// na mniejszych ekranach obraz traci wysokość (przycina się, szerokość
+/// zostaje) — tytuł i punkty mieszczą się nad stopką bez przewijania.
 private struct TourMedia: View {
     let imageName: String
     let accent: Color
@@ -44,10 +46,13 @@ private struct TourMedia: View {
         guard viewport.width > 0, viewport.height > 0 else { return nil }
         let fullWidth = viewport.width - 2 * TourLayout.mediaHorizontal
         let natural = fullWidth / aspect
-        let height = min(natural, max(Self.minimum, viewport.height - reserved))
-        // Ilustracja maleje w całości; render zachowuje szerokość i traci
-        // wysokość.
-        return CGSize(width: isArtwork ? height * aspect : fullWidth, height: height)
+        // Ilustracja nie schodzi poniżej 90 % naturalnej wysokości: tyle
+        // zjada sam krem nad i pod kartami (po ~5 %), a nagłówki kart
+        // („Przepisy”, „Plan tygodnia”) leżą ~12 % od brzegu. Niżej ucinało
+        // już karty — wtedy lepiej, żeby strona się przewinęła.
+        let floor = isArtwork ? natural * 0.9 : Self.minimum
+        let height = min(natural, max(floor, viewport.height - reserved))
+        return CGSize(width: fullWidth, height: height)
     }
 
     var body: some View {
@@ -56,7 +61,7 @@ private struct TourMedia: View {
                 if isArtwork {
                     Image(imageName)
                         .resizable()
-                        .aspectRatio(contentMode: .fit)
+                        .aspectRatio(contentMode: .fill)
                 } else {
                     Image(imageName)
                         .resizable()
@@ -110,7 +115,7 @@ struct TourStepView: View {
     /// 400 do pierwszego pomiaru (typowy krok na iPhonie 6,1").
     @State private var textHeight: CGFloat = 400
 
-    private static let mediaGap: CGFloat = 20
+    private static let mediaGap: CGFloat = 16
 
     var body: some View {
         TourPage {
@@ -148,7 +153,7 @@ struct TourStepView: View {
                 subtitle: step.lead
             )
             .padding(.horizontal, TourLayout.horizontal)
-            .padding(.bottom, 14)
+            .padding(.bottom, 12)
 
             TourPointsCard(points: step.points, accent: step.accent, isVisible: hasAppeared)
                 .padding(.horizontal, TourLayout.horizontal)
