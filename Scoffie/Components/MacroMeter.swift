@@ -16,7 +16,7 @@ import SwiftUI
 /// i rysował nadwyżkę od lewej — przy 102 % celu wyglądało to jak 2 % postępu,
 /// czyli odwrotnie niż było. Drugi rysował nadwyżkę w bieli i obcy kolor
 /// wjeżdżający na tor wyglądał jak błąd, nie jak sygnał. Tutaj pełny tor mówi
-/// „cel zrobiony", a nadwyżka to TEN SAM kolor przyciemniony o jedną trzecią,
+/// „cel zrobiony", a nadwyżka to TEN SAM kolor przyciemniony (`scOverTargetShade`),
 /// rosnący od lewej jak zwykły postęp: im dalej ponad cel, tym więcej toru
 /// ciemnieje. Od lewej, nie od prawej — pasek czyta się od początku i nadwyżka
 /// ma rosnąć w tę samą stronę, co wszystko inne na nim.
@@ -68,7 +68,7 @@ struct MacroProgressTrack: View {
             // Rysowany ZAWSZE, nie pod `if` — przy `if` przejście przez 100 %
             // wstawiałoby warstwę skokiem. Pusta ścieżka nie rysuje niczego.
             BarLap(progress: CGFloat(max(progress, 0)), lap: 1)
-                .fill(color.mix(black: 0.34))
+                .fill(color.scOverTargetShade)
         }
         .frame(height: height)
         .animation(animation, value: progress)
@@ -244,4 +244,15 @@ struct MacroMeter: View {
         if let accessibilityDetail { text += ", \(accessibilityDetail)" }
         return text
     }
+}
+
+// MARK: - Nadwyżka
+
+extension Color {
+    /// Kolor nadwyżki ponad cel — ten sam kolor makra, przyciemniony. JEDEN
+    /// dla toru (`MacroProgressTrack`) i pierścienia (`ActivityRing`), bo
+    /// stoją obok siebie w „Celu dnia” i mówią o tych samych liczbach.
+    /// 0,46 zamiast 0,34 (24.09.2026): na pierścieniu druga pętla ledwo
+    /// odróżniała się od pierwszej.
+    var scOverTargetShade: Color { mix(black: 0.46) }
 }

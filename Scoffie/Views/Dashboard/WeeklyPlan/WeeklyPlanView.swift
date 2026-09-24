@@ -32,6 +32,8 @@ struct WeeklyPlanView: View {
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scTabBarChrome) private var tabBarChrome
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
     /// wspólny zostaje tylko tydzień.
@@ -430,6 +432,15 @@ struct WeeklyPlanView: View {
                     }
                 )
                 .frame(width: goalBarWidth)
+                // Zwija się RAZEM z dolnym menu: ten sam moment, ten sam ruch
+                // (`SCFloatingTabBar.compaction`). Opada o tyle, o ile opada
+                // górna krawędź paska, więc odstęp między nimi zostaje, i lekko
+                // maleje od dołu — jak pasek, który zszedł z drogi treści.
+                // Przesunięcie i skala nie ruszają układu, więc treść nad
+                // pigułką nie skacze.
+                .scaleEffect(tabBarChrome.isCompact ? 0.92 : 1, anchor: .bottom)
+                .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
+                .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
                 .padding(.bottom, 8)
                 // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
                 // pigułka o zerowej szerokości mignęłaby jako kreska.

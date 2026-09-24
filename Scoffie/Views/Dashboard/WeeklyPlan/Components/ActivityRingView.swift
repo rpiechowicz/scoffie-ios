@@ -68,7 +68,7 @@ struct ActivityRing: View {
             // nakładka i tak domknęłaby koło.
             RingLap(progress: progress, lap: 1)
                 .stroke(
-                    endColor.mix(black: 0.34),
+                    endColor.scOverTargetShade,
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .shadow(color: .black.opacity(isOver ? 0.35 : 0), radius: 3, x: 0, y: 1)
