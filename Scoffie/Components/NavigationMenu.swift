@@ -44,6 +44,14 @@ struct NavigationMenu: View {
     /// warstwa, a ekran zakładki nie przelicza się w żadnej klatce wejścia.
     @State private var enteringTab: DashboardTab?
     @State private var entranceOpacity: Double = 1
+    /// Zakładka, z której się wychodzi — stoi pod wchodzącą, dopóki ta
+    /// nie nabierze pełnego krycia (patrz `tabSelection`).
+    @State private var leavingTab: DashboardTab?
+
+    private func pageOpacity(_ tab: DashboardTab, isActive: Bool) -> Double {
+        if isActive { return tab == enteringTab ? entranceOpacity : 1 }
+        return tab == leavingTab ? 1 : 0
+    }
 
     private static let order: [DashboardTab] = [.recipes, .plan, .calendar, .assistant, .settings]
 
@@ -63,10 +71,10 @@ struct NavigationMenu: View {
                     let isActive = tab == session.dashboardTab
                     page(tab)
                         .environment(\.scTabIsActive, isActive)
-                        .opacity(isActive ? (tab == enteringTab ? entranceOpacity : 1) : 0)
+                        .opacity(pageOpacity(tab, isActive: isActive))
                         .allowsHitTesting(isActive)
                         .accessibilityHidden(!isActive)
-                        .zIndex(isActive ? 1 : 0)
+                        .zIndex(isActive ? 2 : (tab == leavingTab ? 1 : 0))
                 }
             }
         }
@@ -104,24 +112,33 @@ struct NavigationMenu: View {
         }
     }
 
-    /// Wybór z paska. Wchodząca zakładka startuje od krycia 0 W TEJ SAMEJ
-    /// transakcji co przełączenie (pasek robi je bez animacji), więc nie ma
-    /// klatki, w której stoi już w pełni i dopiero potem gaśnie — to był
-    /// przeskok. Wyłania się z `SCPageBackground` pod zakładkami, a stara
-    /// znika cięciem. Asystent ma własne powitanie, więc wchodzi od razu.
+    /// Wybór z paska = PRZENIKANIE treści: stara zakładka stoi pod spodem
+    /// w pełnym kryciu, a nowa nabiera krycia NAD nią (0,2 s). Tło, pasek
+    /// i wszystko, co obie strony mają wspólne, nie drgnie — zmienia się
+    /// tylko to, co się różni. Runda 18 wyłaniała nową zakładkę z gołego tła
+    /// przy zgaszonej starej i przez pół przejścia cały ekran przygasał
+    /// („wygląda, jakby cały widok się zmieniał”). Krycie startowe idzie
+    /// w tej samej transakcji co wybór, więc nie ma klatki z nową w pełni.
+    /// Asystent ma własne powitanie — wchodzi od razu.
     private var tabSelection: Binding<DashboardTab> {
         Binding(
             get: { sessionStore.dashboardTab },
             set: { tab in
-                guard tab != sessionStore.dashboardTab else { return }
+                let previous = sessionStore.dashboardTab
+                guard tab != previous else { return }
                 let fades = tab != .assistant && !reduceMotion
                 enteringTab = fades ? tab : nil
+                leavingTab = fades ? previous : nil
                 entranceOpacity = fades ? 0 : 1
                 sessionStore.dashboardTab = tab
                 guard fades else { return }
                 DispatchQueue.main.async {
                     guard enteringTab == tab else { return }
-                    withAnimation(.easeOut(duration: 0.22)) { entranceOpacity = 1 }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        entranceOpacity = 1
+                    } completion: {
+                        if enteringTab == tab { leavingTab = nil }
+                    }
                 }
             }
         )
