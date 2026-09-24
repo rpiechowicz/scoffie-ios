@@ -428,7 +428,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   sylwetki — rocznik 2000, 70 kg, 170 cm, bez płci (BMR −78), aktywność 2–3 — w JEDNYM miejscu:
   `DailyNutritionTargets.forMember` (runda 17). Arkusz ma dla każdej osoby tę samą strukturę: tor
   legendy stoi zawsze (bez celu niewidoczny), miejsce na podpowiedź o makrach trzyma się, gdy
-  potrzebuje jej ktokolwiek, imię w przełączniku ma ramę najdłuższego imienia (kapsuła nie zmienia
+  potrzebuje jej ktokolwiek, przełącznik to SAME awatary (runda 19: imię pod ramę najdłuższego zostawiało pustkę — nie wracać do imienia; kapsuła nie zmienia
   szerokości), a podtytuł z imieniem przenika (`subtitleTransition: .opacity`), zamiast rolować litery. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
   kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka, runda 13: mniejsza — awatary 22 pt, wysokość 26, imię 12 pt) z obwódką w kolorze osoby,
   wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
