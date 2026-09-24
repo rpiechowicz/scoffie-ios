@@ -513,9 +513,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
   nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
+- Onboarding (przewodnik `TourStep` + kreator `Welcome*`, 24.09.2026 — Rafał: „więcej opisu pod
+  title… bardziej friendly”): każdy krok przewodnika ma pod tytułem `lead` (dwa zdania zwykłym
+  językiem, zanim padną punkty), a sekcje kreatora `WelcomeSection(title:hint:)` — jedno zdanie
+  PO CO pytamy. Opis mówi tylko o tym, co JEST w aplikacji (jak punkty w `TourStep.all`). Zdjęcie
+  kroku oddaje wysokość pod opis (`TourMedia.reserved`), żeby czwarty punkt nie wchodził pod cień stopki.
 - Ekran logowania nie przewija się: elastyczne jest hero z kaflami (150–280 pt) i odstęp nad
   przyciskiem; poniżej 700 pt kafle funkcji tracą podpisy. Arkusze dokumentów
   (`LegalDocumentSheet`) stoją na `EditorialSheetHeader`, nagłówek NAD przewijaną treścią.

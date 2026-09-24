@@ -14,10 +14,10 @@ struct WelcomeStep2GoalView: View {
                     icon: "target",
                     eyebrow: "Twój cel",
                     title: "Co chcesz osiągnąć?",
-                    subtitle: "Dobierzemy do tego kalorie i przepisy."
+                    subtitle: "Od tego zależy Twój dzienny cel kalorii i przepisy, które podsuniemy jako pierwsze. Cel zmienisz w każdej chwili w Ustawieniach."
                 )
 
-                WelcomeSection(title: "Główny cel") {
+                WelcomeSection(title: "Główny cel", hint: "Wybierz to, co jest dla Ciebie teraz najważniejsze.") {
                     VStack(spacing: 0) {
                         ForEach(Array(UserGoal.allCases.enumerated()), id: \.element.id) { index, candidate in
                             WelcomeOptionRow(
@@ -42,7 +42,7 @@ struct WelcomeStep2GoalView: View {
 
                 // Same chipy, bez karty z ikoną i pytaniem „Ile razy
                 // w tygodniu trenujesz?” — etykieta sekcji mówi to samo.
-                WelcomeSection(title: "Treningi w tygodniu") {
+                WelcomeSection(title: "Treningi w tygodniu", hint: "Siłownia, bieganie, rower, basen — liczy się każdy. Więcej ruchu to wyższy cel.") {
                     HStack(spacing: 8) {
                         ForEach(ActivityLevel.allCases) { candidate in
                             ActivityChip(

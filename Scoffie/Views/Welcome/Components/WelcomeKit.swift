@@ -47,17 +47,37 @@ extension View {
 }
 
 /// Sekcja kroku: etykieta sekcji aplikacji (`EditorialSheetSectionLabel`,
-/// 10,5 pt, tracking 1,4, `scFaint`) nad treścią.
+/// 10,5 pt, tracking 1,4, `scFaint`) nad treścią i — opcjonalnie — jedno
+/// zdanie pod etykietą, PO CO o to pytamy.
 ///
 /// Zastąpiła `WelcomeFieldCaption` — kopię tej samej etykiety, która żyła
 /// w kreatorze osobno i dostawała odstępy od każdego kroku po swojemu.
+/// Podpowiedź doszła 24.09.2026 (Rafał: „więcej opisu… takie bardziej
+/// friendly”): sama etykieta mówiła CO podać, a nie po co.
 struct WelcomeSection<Content: View>: View {
     let title: String
+    var hint: String? = nil
     @ViewBuilder var content: () -> Content
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             EditorialSheetSectionLabel(title: title)
+            if let hint {
+                // Etykieta ma własne 6 pt pod spodem — podpowiedź dosuwa się
+                // do niej, a od treści odsuwa, żeby czytała się jako podpis
+                // etykiety, nie pierwsza linijka karty.
+                Text(hint)
+                    .font(.system(size: 13))
+                    .lineSpacing(1.5)
+                    .foregroundStyle(Color.scMuted(colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 6)
+                    .padding(.top, -4)
+                    .padding(.bottom, 8)
+            }
             content()
         }
     }

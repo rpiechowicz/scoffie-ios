@@ -35,7 +35,10 @@ struct TourDoneView: View {
                 )
                 .padding(.bottom, 18)
 
-                SCStepHeader(title: "Znasz już nas.\nTeraz my poznajmy Ciebie.")
+                SCStepHeader(
+                    title: "Znasz już nas.\nTeraz my poznajmy Ciebie.",
+                    subtitle: "Kilka krótkich pytań, żeby plan, przepisy i kalorie od pierwszego dnia pasowały do Ciebie — a nie do „przeciętnego człowieka”."
+                )
                     .padding(.bottom, 22)
 
                 SCStepFeatureCard(features: features)

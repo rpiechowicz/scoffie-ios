@@ -69,8 +69,9 @@ struct SCStepProgress: View {
 
 /// Nagłówek strony w przepływie: kafelek z glifem w tincie akcentu
 /// (`SCHeaderIconWell`, ten sam, co w nagłówkach arkuszy), eyebrow w kroju
-/// `EditorialSheetHeader`, tytuł w kroju `EditorialPageHeader` i najwyżej
-/// jedno zdanie pod spodem.
+/// `EditorialSheetHeader`, tytuł w kroju `EditorialPageHeader` i krótki
+/// opis pod spodem (do dwóch–trzech zdań od 24.09.2026 — przewodnik
+/// i kreator tłumaczą w nim, o co chodzi, zanim padnie pytanie).
 ///
 /// Zastąpił nagłówek kreatora z pełnym kafelkiem w gradiencie i poświatą
 /// (jedyny taki akcent w aplikacji) oraz ręcznie składane tytuły przewodnika

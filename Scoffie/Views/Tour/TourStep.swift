@@ -13,6 +13,10 @@ struct TourStep: Identifiable {
     let placeIcon: String
     let accent: Color
     let title: String
+    /// Dwa zdania pod tytułem: o co w tym chodzi, zwykłym językiem, zanim
+    /// padną konkrety. Sam tytuł i lista funkcji czytały się jak specyfikacja
+    /// (Rafał 24.09.2026: „więcej opisu pod title… bardziej friendly”).
+    let lead: String
     /// Konkrety pod tytułem, każdy z ptaszkiem w karcie (`TourPointsCard`).
     /// Od 24.09.2026 cztery, nie trzy: każdy punkt to funkcja, która JEST
     /// w aplikacji (źródła przy `TourStep.all`), a nie obietnica. Czwarty
@@ -58,6 +62,7 @@ extension TourStep {
             placeIcon: MenuConstans.Plan.icon,
             accent: SCPalette.terracotta,
             title: "Zaplanuj tydzień w pięć minut",
+            lead: "Rozkładasz posiłki na dni tygodnia jak w kalendarzu — i nikt już nie musi pytać, co dziś na obiad.",
             points: [
                 "Od śniadania po przekąski — tyle pór, ile jecie",
                 "Kalorie i makro na każdy dzień i każdą osobę",
@@ -72,6 +77,7 @@ extension TourStep {
             placeIcon: MenuConstans.Recipes.icon,
             accent: SCPalette.sage,
             title: "Przepisy dopasowane do Was",
+            lead: "Kilkaset dań z kaloriami, makro i czasem gotowania. Te z Twoimi alergenami chowamy same, a filtry odsieją resztę tego, czego nie jecie.",
             points: [
                 "Filtry: czas, kalorie, trudność, dieta i składniki",
                 "Porcje przeliczają składniki i makro",
@@ -86,6 +92,7 @@ extension TourStep {
             placeIcon: MenuConstans.Products.icon,
             accent: SCPalette.indigo,
             title: "Lista zakupów robi się sama",
+            lead: "Nie musisz niczego przepisywać. Składniki ze wszystkich dań w planie zbierają się w jedną listę, ułożoną po działach sklepu.",
             points: [
                 "Produkty po działach sklepu",
                 "„Na dziś” — braki na dzisiejsze dania",
@@ -100,6 +107,7 @@ extension TourStep {
             placeIcon: MenuConstans.Assistant.icon,
             accent: SCPalette.butter,
             title: "Zapytaj, gdy brakuje pomysłu",
+            lead: "Napisz zwyczajnie, czego potrzebujesz — „lekki obiad na jutro” albo „tydzień bez mięsa”. Asystent zaproponuje dania, a Ty decydujesz, co trafi do planu.",
             points: [
                 "Dzień albo tydzień z katalogu przepisów",
                 "Podmiana dania z różnicą kalorii i czasu",
@@ -114,6 +122,7 @@ extension TourStep {
             placeIcon: MenuConstans.Settings.icon,
             accent: SCPalette.terracottaDeep,
             title: "Ustaw wszystko pod siebie",
+            lead: "Wszystko, o co zaraz zapytamy, zmienisz tu później jednym stuknięciem — cel, dietę, godziny posiłków i domowników.",
             points: [
                 "Cel, makroskładniki, dieta i alergeny",
                 "Posiłki w planie i godziny, o których jecie",

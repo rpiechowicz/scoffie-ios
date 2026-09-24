@@ -38,7 +38,7 @@ struct TourIntroView: View {
                 SCStepHeader(
                     eyebrow: "Plan posiłków dla całego domu",
                     title: "Witaj w Scoffie",
-                    subtitle: "Układacie tydzień raz — resztą zajmuje się aplikacja."
+                    subtitle: "Scoffie pomaga zaplanować jedzenie na cały tydzień — dla Ciebie albo dla całego domu. Układacie menu raz, a lista zakupów, kalorie i przypomnienia robią się same."
                 )
                 .padding(.bottom, 22)
 

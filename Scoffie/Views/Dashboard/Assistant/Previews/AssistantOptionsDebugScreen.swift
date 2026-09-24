@@ -78,6 +78,36 @@ struct AssistantOptionsDebugScreen: View {
 
     private var mode: String? { ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] }
 
+    /// Jedna faza przewodnika ze stopką, jak w `FeatureTourView`.
+    @ViewBuilder
+    private func debugTour(phase: Int) -> some View {
+        let steps = TourStep.all
+        ZStack {
+            SCPageBackground(scheme: scheme).ignoresSafeArea()
+            VStack(spacing: 0) {
+                Group {
+                    if phase <= 0 {
+                        TourIntroView()
+                    } else if phase > steps.count {
+                        TourDoneView()
+                    } else {
+                        TourStepView(step: steps[phase - 1])
+                    }
+                }
+                .frame(maxHeight: .infinity)
+                SCStepFooter(
+                    slot: phase <= 0
+                        ? .link("Pomiń i przejdź do konfiguracji")
+                        : phase > steps.count ? .empty : .progress(step: phase, total: steps.count),
+                    showsBack: phase > 0,
+                    onBack: {},
+                    primaryTitle: phase <= 0 ? "Poznaj aplikację" : "Dalej",
+                    onPrimary: {}
+                )
+            }
+        }
+    }
+
     var body: some View {
         if mode == "shopping" {
             // Liczniki Zakupów na przykładowych danych — do sprawdzenia
@@ -129,6 +159,13 @@ struct AssistantOptionsDebugScreen: View {
                 errorMessage: mode == "auth-error" ? "Nie udało się zweryfikować logowania Apple. Spróbuj ponownie." : nil,
                 onSignInWithAppleTap: {}
             )
+        } else if let raw = mode, raw.hasPrefix("tour-"), let phase = Int(raw.dropFirst(5)) {
+            // Przewodnik „Poznaj aplikację”: `tour-0` powitanie, `tour-1…5`
+            // kroki, `tour-6` przejście do kreatora.
+            debugTour(phase: phase)
+        } else if let raw = mode, raw.hasPrefix("welcome-"), let step = Int(raw.dropFirst(8)) {
+            // Kreator „Poznajmy się”, krok 1…5.
+            WelcomeView(initialDisplayName: "Rafał", isCreatingHousehold: false, errorMessage: nil, initialStep: step)
         } else if mode == "legal" {
             // Arkusz dokumentu nad ekranem logowania.
             AuthView(isLoading: false, errorMessage: nil, onSignInWithAppleTap: {})

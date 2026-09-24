@@ -22,8 +22,10 @@ private struct TourMedia: View {
 
     private static let aspect: CGFloat = 16.0 / 13.0
     /// Wszystko na stronie kroku poza zdjęciem (liczone z odstępów
-    /// `TourStepView` i `TourLayout`, z zapasem na dwulinijkowy tytuł).
-    private static let reserved: CGFloat = 390
+    /// `TourStepView` i `TourLayout`, z zapasem na dwulinijkowy tytuł
+    /// i trzylinijkowy opis — `TourStep.lead`, +90 pt od 24.09.2026; przy
+    /// +70 czwarty punkt wchodził pod cień stopki).
+    private static let reserved: CGFloat = 480
     /// Poniżej tego kadr przestaje coś pokazywać — wtedy lepiej przewinąć.
     private static let minimum: CGFloat = 150
 
@@ -72,7 +74,7 @@ private struct TourMedia: View {
 }
 
 /// Treść jednego kroku przewodnika: gdzie to jest (chip), jak wygląda
-/// (zdjęcie), co robi (tytuł), co z tego macie (cztery punkty w karcie,
+/// (zdjęcie), co robi (tytuł i dwa zdania opisu), co z tego macie (cztery punkty w karcie,
 /// wchodzące kaskadą po wjeździe strony). Pasek kroków
 /// i przyciski są w stopce (`SCStepFooter`) — osobno, bo treść jeździ
 /// między krokami, a stopka ma stać w miejscu.
@@ -109,7 +111,7 @@ struct TourStepView: View {
 
                 // Ten sam nagłówek kroku, co w kreatorze i u asystenta —
                 // tu bez kafelka, bo miejsce i kolor niesie chip nad zdjęciem.
-                SCStepHeader(title: step.title)
+                SCStepHeader(title: step.title, subtitle: step.lead)
                     .padding(.horizontal, TourLayout.horizontal)
                     .padding(.bottom, 14)
 

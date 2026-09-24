@@ -30,10 +30,10 @@ struct WelcomeStep1ProfileView: View {
                     icon: "person.fill",
                     eyebrow: "Witaj w Scoffie",
                     title: "Zacznijmy od Ciebie",
-                    subtitle: "Z tych danych policzymy Twój dzienny cel."
+                    subtitle: "Z wieku, wzrostu i wagi policzymy, ile energii potrzebujesz w ciągu dnia. Nie musisz niczego ważyć od nowa — wystarczy przybliżenie."
                 )
 
-                WelcomeSection(title: "Imię") {
+                WelcomeSection(title: "Imię", hint: "Tak zobaczą Cię domownicy we wspólnym planie.") {
                     HStack(spacing: 12) {
                         Image(systemName: "person.fill")
                             .font(.system(size: 15, weight: .semibold))
@@ -58,7 +58,7 @@ struct WelcomeStep1ProfileView: View {
                     .welcomeCard()
                 }
 
-                WelcomeSection(title: "Rok urodzenia") {
+                WelcomeSection(title: "Rok urodzenia", hint: "Z wiekiem zmienia się zapotrzebowanie — uwzględnimy to w celu.") {
                     YearWheelPicker(year: $yearOfBirth, range: yearRange)
                 }
 
@@ -82,7 +82,7 @@ struct WelcomeStep1ProfileView: View {
                     }
                 }
 
-                WelcomeSection(title: "Płeć") {
+                WelcomeSection(title: "Płeć", hint: "Nieobowiązkowo. Bez niej liczymy ze średniej.") {
                     HStack(spacing: 8) {
                         ForEach(Sex.allCases) { candidate in
                             SexChip(

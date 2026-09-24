@@ -23,7 +23,8 @@ enum TourLayout {
 /// Przewijalna treść jednego ekranu przewodnika.
 ///
 /// Treść ma mieścić się bez przewijania — taki jest cel projektu i dlatego
-/// każdy krok ma tytuł i trzy punkty, bez akapitu. `ScrollView` jest tu jako
+/// każdy krok ma tytuł, dwa zdania opisu i cztery punkty; zdjęcie kroku
+/// oddaje wysokość, zanim zacznie się przewijanie (`TourMedia`). `ScrollView` jest tu jako
 /// zabezpieczenie: na iPhonie mini albo przy powiększonej czcionce
 /// systemowej to samo ułożenie nie zmieści się co do punktu, a wtedy
 /// lepiej przewinąć niż przyciąć. `.basedOnSize` gasi gumowanie, gdy

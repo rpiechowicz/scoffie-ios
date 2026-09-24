@@ -38,20 +38,20 @@ struct WelcomeStep3PreferencesView: View {
                     icon: "flame.fill",
                     eyebrow: "Dieta i kalorie",
                     title: "Ile i co jesz?",
-                    subtitle: "Cel policzyliśmy z Twoich danych — możesz go przesunąć."
+                    subtitle: "Cel policzyliśmy z Twoich danych. Jeśli czujesz, że to za dużo albo za mało, przesuń suwak — i powiedz nam, czego nie jesz."
                 )
 
-                WelcomeSection(title: "Dzienny cel") {
+                WelcomeSection(title: "Dzienny cel", hint: "Suma ze wszystkich posiłków w ciągu dnia.") {
                     calorieCard
                 }
 
                 if let macros {
-                    WelcomeSection(title: "Makroskładniki") {
+                    WelcomeSection(title: "Makroskładniki", hint: "Tak rozłożymy kalorie między białko, węglowodany i tłuszcze.") {
                         macroCard(macros)
                     }
                 }
 
-                WelcomeSection(title: "Sposób odżywiania") {
+                WelcomeSection(title: "Sposób odżywiania", hint: "Przepisy i propozycje asystenta będą trzymać się tej diety.") {
                     VStack(spacing: 0) {
                         ForEach(Array(DietPreference.allCases.enumerated()), id: \.element.id) { index, candidate in
                             WelcomeOptionRow(
@@ -74,9 +74,13 @@ struct WelcomeStep3PreferencesView: View {
                     .welcomeCard()
                 }
 
-                // Bez zdania „Dania z nimi znikną z przepisów” — powód padł
-                // na ostatnim ekranie przewodnika, a siatka mówi sama za siebie.
-                WelcomeSection(title: "Alergeny i nietolerancje") {
+                // Powód pada tu jeszcze raz, choć był na ostatnim ekranie
+                // przewodnika — kto go pominął, dopiero tu dowiaduje się, co
+                // zaznaczenie zmienia (24.09.2026, „więcej opisu”).
+                WelcomeSection(
+                    title: "Alergeny i nietolerancje",
+                    hint: "Przepisy z tymi składnikami schowamy — nie trafią do planu ani na listę zakupów."
+                ) {
                     // Ten sam mechanizm co w Ustawieniach: karta z wynikiem
                     // i arkusz wyboru. Katalogu w kreatorze jeszcze nie ma,
                     // więc bez liczby ukrytych przepisów.
