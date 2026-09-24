@@ -211,7 +211,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Wykorzystana pula = `AssistantQuotaKit.swift`: `AssistantQuotaFacts` (liczby z `AgentUsageDTO`, plan
   tylko jako „Polecamy”), `AssistantQuotaPanel` w powitaniu `trialExhausted` (paski wiadomości/zapisów,
   alternatywy Plan tygodnia · Lista zakupów · Historia rozmów) i `AssistantQuotaSpentCard` zamiast pola
-  (próbna → plany; miesięczna → „Wraca 1 października · za 8 dni” + arkusz limitów).
+  (próbna → plany; miesięczna → arkusz limitów). Runda 23 (24.09.2026, „średnio wygląda”): karta = kafel
+  44 pt z drzemiącym `SCLivingMark` w tincie terakoty, etykieta „DARMOWA PULA” / „PULA NA TEN MIESIĄC”,
+  tytuł „Wiadomości wykorzystane” / „Asystent odpoczywa”, jedno zdanie „Plan i zakupy działają dalej.”,
+  wiersz „co dalej” `AssistantQuotaNextRow` (miesięczna: „Wraca 1 października” + pigułka „za 8 dni”;
+  próba: „Polecamy „We dwoje”” · wiadomości/mies. + pigułka z ceną) i JEDNA akcja. Kreseczek zużycia
+  w karcie nie ma (pełny pasek nic nie mówił) — zostały w panelu powitania, który ma ten sam wiersz
+  „co dalej” zamiast osobnej stopki (`AssistantQuotaResetRow` usunięty).
 - Przyciski Asystenta (runda 14): stopka karty = `AssistantButtonSize.compact` (42 pt rysowane, 44 dotyk,
   14 semibold), przycisk samodzielny (arkusz, stopka, plany) = `.regular` (46 pt, 15). Para =
   `AssistantActionPair`: równe połowy, gdy oba tytuły się mieszczą, inaczej stos z główną NA DOLE — główna
