@@ -235,7 +235,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
   (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
 - Przewodnik „Poznaj aplikację” (`Views/Tour/`, runda 24, 24.09.2026): punkty kroków to cztery sprawdzone w kodzie
-  funkcje w karcie z ptaszkami w kolorze kroku (`TourPointsCard`, kaskada `scReveal`) — źródło każdego twierdzenia
+  funkcje w karcie z ikonami w kolorze kroku (`SCStepFeatureCard(revealed:compact:)`, kaskada `scReveal`) — źródło każdego twierdzenia
   w komentarzu przy `TourStep.all`. Zmieniasz / usuwasz funkcję → popraw punkt. Zdjęte jako nieprawdziwe:
   „Własne przepisy domu” (nie ma tworzenia przepisów), „z Waszych przepisów” u asystenta, „z powodem” przy
   podmianie. Kadr zdjęcia ma sufit wysokości (`TourMedia`, `tourViewport`), żeby na SE punkty mieściły się nad stopką.
@@ -519,11 +519,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Przewodnik „Poznaj aplikację” (`TourStep`, strony w `Views/Tour/`, 24.09.2026 — Rafał: „więcej opisu pod
   title… bardziej friendly”, „odśwież po nowemu”): krok = zdjęcie, `SCStepHeader` z eyebrow w kolorze
   kroku („Zakładka Plan” — dawna kapsułka „Znajdziesz w…” zniknęła), tytuł, `lead` (dwa zdania zwykłym
-  językiem) i `TourPointsCard` — punkty z IKONAMI w kafelkach (`TourPoint`), ten sam wiersz co
-  `SCStepFeatureCard` na powitaniu i ekranie końcowym. Opis i punkty mówią tylko o tym, co JEST
+  językiem, NAJWYŻEJ dwie linie na iPhonie 16e) i `SCStepFeatureCard(revealed:compact:)` — punkty
+  `TourPoint` = ikona + tytuł + podpis, TEN SAM wiersz co na powitaniu i ekranie końcowym (Rafał: „te
+  wszystkie listy, aby były podobne”). Przewodnik stoi BEZ przewijania także na 16e — nowy tekst
+  sprawdzaj na zrzucie 16e (`tour-1…5`), zanim go dopiszesz. Opis i punkty mówią tylko o tym, co JEST
   w aplikacji. Zdjęcie bierze to, co zostaje po ZMIERZONYM tekście kroku (`TourStepView.textHeight` →
   `TourMedia.reserved`), więc czwarty punkt nigdy nie wchodzi pod cień stopki. Plan i Przepisy to
-  ilustracje z kartami aplikacji (`isArtwork`: ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 90 %
+  ilustracje z kartami aplikacji (`isArtwork`: ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 85 %
   naturalnej wysokości — ucina się tylko krem nad i pod kartami; 1200 × 868, w bundlu — NIE z R2,
   bo przewodnik idzie przed pierwszym pobraniem czegokolwiek i nie może czekać na sieć); reszta to
   rendery telefonów kadrowane 16:13.

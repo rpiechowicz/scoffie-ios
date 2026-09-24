@@ -13,12 +13,12 @@ struct TourStep: Identifiable {
     let eyebrow: String
     let accent: Color
     let title: String
-    /// Dwa zdania pod tytułem: o co w tym chodzi, zwykłym językiem, zanim
+    /// Najwyżej dwie linie pod tytułem: o co w tym chodzi, zwykłym językiem, zanim
     /// padną konkrety. Sam tytuł i lista funkcji czytały się jak specyfikacja
     /// (Rafał 24.09.2026: „więcej opisu pod title… bardziej friendly”).
     let lead: String
-    /// Konkrety pod tytułem, każdy z własną ikoną w karcie (`TourPointsCard`,
-    /// wiersze jak `SCStepFeatureCard` na powitaniu i ekranie końcowym).
+    /// Konkrety pod tytułem: ikona, tytuł i podpis w `SCStepFeatureCard` —
+    /// tej samej karcie, co na powitaniu i ekranie końcowym.
     /// Od 24.09.2026 cztery, nie trzy: każdy punkt to funkcja, która JEST
     /// w aplikacji (źródła przy `TourStep.all`), a nie obietnica. Czwarty
     /// punkt mieści się dzięki ciaśniejszej karcie; na iPhonie SE zdjęcie
@@ -31,12 +31,17 @@ struct TourStep: Identifiable {
     var isArtwork: Bool = false
 }
 
-/// Jeden punkt kroku: ikona w kafelku (tint koloru kroku) i jedno zdanie.
+/// Jeden punkt kroku: ikona w kafelku (tint koloru kroku), tytuł i krótki
+/// podpis — ten sam wiersz, co na powitaniu i ekranie „Teraz my poznajmy
+/// Ciebie” (`SCStepFeatureCard`). Do 24.09.2026 jedno zdanie bez podpisu —
+/// trzy różne listy w jednym przepływie (Rafał: „dopracuj te wszystkie
+/// listy, aby były podobne”).
 struct TourPoint: Identifiable {
     let icon: String
-    let text: String
+    let title: String
+    let subtitle: String
 
-    var id: String { text }
+    var id: String { title }
 }
 
 extension TourStep {
@@ -74,12 +79,12 @@ extension TourStep {
             eyebrow: "Zakładka Plan",
             accent: SCPalette.terracotta,
             title: "Zaplanuj tydzień w pięć minut",
-            lead: "Rozkładasz posiłki na dni tygodnia jak w kalendarzu — i nikt już nie musi pytać, co dziś na obiad.",
+            lead: "Rozkładasz posiłki na dni tygodnia — i nikt już nie musi pytać, co dziś na obiad.",
             points: [
-                TourPoint(icon: "fork.knife", text: "Od śniadania po przekąski — tyle pór, ile jecie"),
-                TourPoint(icon: "flame.fill", text: "Kalorie i makro na każdy dzień i każdą osobę"),
-                TourPoint(icon: "person.2.fill", text: "Zmiany widzi od razu cały dom"),
-                TourPoint(icon: "bell.fill", text: "Przypomnienie, kiedy zacząć gotować"),
+                TourPoint(icon: "fork.knife", title: "Tyle posiłków, ile jecie", subtitle: "Od śniadania po przekąski"),
+                TourPoint(icon: "flame.fill", title: "Kalorie i makro", subtitle: "Na każdy dzień i każdą osobę"),
+                TourPoint(icon: "person.2.fill", title: "Wspólny plan", subtitle: "Zmiany widzi od razu cały dom"),
+                TourPoint(icon: "bell.fill", title: "Przypomnienia", subtitle: "Kiedy zacząć gotować"),
             ],
             imageName: "TourPlan",
             isArtwork: true
@@ -89,12 +94,12 @@ extension TourStep {
             eyebrow: "Zakładka Przepisy",
             accent: SCPalette.sage,
             title: "Przepisy dopasowane do Was",
-            lead: "Kilkaset dań z kaloriami, makro i czasem gotowania. Te z Twoimi alergenami chowamy same, a filtry odsieją resztę tego, czego nie jecie.",
+            lead: "Kilkaset dań z kaloriami i czasem gotowania. Te z Twoimi alergenami chowamy same.",
             points: [
-                TourPoint(icon: "slider.horizontal.3", text: "Filtry: czas, kalorie, trudność, dieta i składniki"),
-                TourPoint(icon: "plusminus", text: "Porcje przeliczają składniki i makro"),
-                TourPoint(icon: "list.bullet.rectangle.fill", text: "Składniki po działach i kroki na jednym ekranie"),
-                TourPoint(icon: "heart.fill", text: "Ulubione pod sercem — i pod ręką w planie"),
+                TourPoint(icon: "slider.horizontal.3", title: "Filtry", subtitle: "Czas, kalorie, trudność, dieta, składniki"),
+                TourPoint(icon: "plusminus", title: "Porcje", subtitle: "Przeliczają składniki i makro"),
+                TourPoint(icon: "list.bullet.rectangle.fill", title: "Składniki i kroki", subtitle: "Po działach, na jednym ekranie"),
+                TourPoint(icon: "heart.fill", title: "Ulubione", subtitle: "Pod sercem — i pod ręką w planie"),
             ],
             imageName: "TourRecipes",
             isArtwork: true
@@ -104,12 +109,12 @@ extension TourStep {
             eyebrow: "Plan · pod koszykiem",
             accent: SCPalette.indigo,
             title: "Lista zakupów robi się sama",
-            lead: "Nie musisz niczego przepisywać. Składniki ze wszystkich dań w planie zbierają się w jedną listę, ułożoną po działach sklepu.",
+            lead: "Nie musisz niczego przepisywać — składniki z całego planu zbierają się w jedną listę.",
             points: [
-                TourPoint(icon: "square.grid.2x2.fill", text: "Produkty po działach sklepu"),
-                TourPoint(icon: "sun.max.fill", text: "„Na dziś” — braki na dzisiejsze dania"),
-                TourPoint(icon: "checkmark.circle.fill", text: "Odhaczanie widoczne u drugiej osoby od razu"),
-                TourPoint(icon: "clock.arrow.circlepath", text: "Zamknięte listy zostają w historii"),
+                TourPoint(icon: "square.grid.2x2.fill", title: "Po działach sklepu", subtitle: "Alejka po alejce"),
+                TourPoint(icon: "sun.max.fill", title: "„Na dziś”", subtitle: "Braki na dzisiejsze dania"),
+                TourPoint(icon: "checkmark.circle.fill", title: "Wspólne odhaczanie", subtitle: "Druga osoba widzi je od razu"),
+                TourPoint(icon: "clock.arrow.circlepath", title: "Historia", subtitle: "Zamknięte listy zostają pod ręką"),
             ],
             imageName: "TourShopping"
         ),
@@ -118,12 +123,12 @@ extension TourStep {
             eyebrow: "Zakładka Asystent",
             accent: SCPalette.butter,
             title: "Zapytaj, gdy brakuje pomysłu",
-            lead: "Napisz zwyczajnie, czego potrzebujesz — „lekki obiad na jutro” albo „tydzień bez mięsa”. Asystent zaproponuje dania, a Ty decydujesz, co trafi do planu.",
+            lead: "Napisz, czego potrzebujesz. Asystent zaproponuje dania, a Ty wybierzesz.",
             points: [
-                TourPoint(icon: "calendar", text: "Dzień albo tydzień z katalogu przepisów"),
-                TourPoint(icon: "arrow.triangle.2.circlepath", text: "Podmiana dania z różnicą kalorii i czasu"),
-                TourPoint(icon: "checkmark.shield.fill", text: "Pilnuje alergenów i celu kalorii"),
-                TourPoint(icon: "hand.thumbsup.fill", text: "Nic nie trafia do planu bez Twojej zgody"),
+                TourPoint(icon: "calendar", title: "Dzień albo tydzień", subtitle: "Z katalogu przepisów"),
+                TourPoint(icon: "arrow.triangle.2.circlepath", title: "Podmiana dania", subtitle: "Z różnicą kalorii i czasu"),
+                TourPoint(icon: "checkmark.shield.fill", title: "Alergeny i cel", subtitle: "Pilnuje ich w każdej propozycji"),
+                TourPoint(icon: "hand.thumbsup.fill", title: "Ty decydujesz", subtitle: "Nic nie trafia do planu bez zgody"),
             ],
             imageName: "TourAssistant"
         ),
@@ -132,12 +137,12 @@ extension TourStep {
             eyebrow: "Ustawienia",
             accent: SCPalette.terracottaDeep,
             title: "Ustaw wszystko pod siebie",
-            lead: "Wszystko, o co zaraz zapytamy, zmienisz tu później jednym stuknięciem — cel, dietę, godziny posiłków i domowników.",
+            lead: "Wszystko, o co zaraz zapytamy, zmienisz tu później jednym stuknięciem.",
             points: [
-                TourPoint(icon: "target", text: "Cel, makroskładniki, dieta i alergeny"),
-                TourPoint(icon: "clock.fill", text: "Posiłki w planie i godziny, o których jecie"),
-                TourPoint(icon: "person.badge.plus", text: "Zaproszenie domowników do gospodarstwa"),
-                TourPoint(icon: "bell.badge.fill", text: "Poranny przegląd i przypomnienia o porach"),
+                TourPoint(icon: "target", title: "Cel i makro", subtitle: "Dieta i alergeny w jednym miejscu"),
+                TourPoint(icon: "clock.fill", title: "Posiłki w planie", subtitle: "I godziny, o których jecie"),
+                TourPoint(icon: "person.badge.plus", title: "Domownicy", subtitle: "Zaproś ich do gospodarstwa"),
+                TourPoint(icon: "bell.badge.fill", title: "Powiadomienia", subtitle: "Poranny przegląd i pory posiłków"),
             ],
             imageName: "TourSettings"
         ),

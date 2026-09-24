@@ -46,11 +46,12 @@ private struct TourMedia: View {
         guard viewport.width > 0, viewport.height > 0 else { return nil }
         let fullWidth = viewport.width - 2 * TourLayout.mediaHorizontal
         let natural = fullWidth / aspect
-        // Ilustracja nie schodzi poniżej 90 % naturalnej wysokości: tyle
-        // zjada sam krem nad i pod kartami (po ~5 %), a nagłówki kart
-        // („Przepisy”, „Plan tygodnia”) leżą ~12 % od brzegu. Niżej ucinało
-        // już karty — wtedy lepiej, żeby strona się przewinęła.
-        let floor = isArtwork ? natural * 0.9 : Self.minimum
+        // Ilustracja nie schodzi poniżej 85 % naturalnej wysokości: tyle
+        // zjada sam krem nad i pod kartami (po ~7 %), a nagłówki kart
+        // („Przepisy”, „Plan tygodnia”) leżą ~11 % od brzegu. Niżej ucinało
+        // już karty. 85, nie 90 — przy 90 na iPhonie 16e czwarty punkt
+        // wchodził pod cień stopki, a przewodnik ma stać bez przewijania.
+        let floor = isArtwork ? natural * 0.85 : Self.minimum
         let height = min(natural, max(floor, viewport.height - reserved))
         return CGSize(width: fullWidth, height: height)
     }
@@ -155,8 +156,14 @@ struct TourStepView: View {
             .padding(.horizontal, TourLayout.horizontal)
             .padding(.bottom, 12)
 
-            TourPointsCard(points: step.points, accent: step.accent, isVisible: hasAppeared)
-                .padding(.horizontal, TourLayout.horizontal)
+            SCStepFeatureCard(
+                features: step.points.map {
+                    SCStepFeature(icon: $0.icon, accent: step.accent, title: $0.title, subtitle: $0.subtitle)
+                },
+                revealed: hasAppeared,
+                compact: true
+            )
+            .padding(.horizontal, TourLayout.horizontal)
         }
     }
 }

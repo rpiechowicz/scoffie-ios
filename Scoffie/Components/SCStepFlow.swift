@@ -140,8 +140,15 @@ struct SCStepFeature: Identifiable {
 /// tle, a na powitaniu asystenta jako ptaszki w zielonych kółkach.
 struct SCStepFeatureCard: View {
     let features: [SCStepFeature]
+    /// Kaskada wejścia wierszy (`scReveal` + „kliknięcie” kafelka 0,6 → 1),
+    /// jak w krokach przewodnika. `nil` = karta stoi od razu.
+    var revealed: Bool? = nil
+    /// Ciaśniejsze wiersze — kroki przewodnika, gdzie nad kartą stoi zdjęcie,
+    /// a cała strona ma się zmieścić bez przewijania.
+    var compact: Bool = false
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let iconSize: CGFloat = 34
     private static let iconSpacing: CGFloat = 12
@@ -151,7 +158,14 @@ struct SCStepFeatureCard: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
-                row(feature)
+                Group {
+                    if let revealed {
+                        row(feature, order: index)
+                            .scReveal(revealed, order: index)
+                    } else {
+                        row(feature, order: index)
+                    }
+                }
                 if index < features.count - 1 {
                     Rectangle()
                         .fill(Color.scRule(scheme))
@@ -171,9 +185,18 @@ struct SCStepFeatureCard: View {
         )
     }
 
-    private func row(_ feature: SCStepFeature) -> some View {
-        HStack(spacing: Self.iconSpacing) {
+    private func row(_ feature: SCStepFeature, order: Int) -> some View {
+        let shown = revealed ?? true
+        return HStack(spacing: Self.iconSpacing) {
             SCHeaderIconWell(icon: feature.icon, accent: feature.accent, size: Self.iconSize)
+                .scaleEffect(shown || reduceMotion ? 1 : 0.6)
+                .animation(
+                    revealed == nil || reduceMotion
+                        ? nil
+                        : .spring(response: 0.42, dampingFraction: 0.62)
+                            .delay(0.22 + Double(order) * 0.05),
+                    value: shown
+                )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(feature.title)
@@ -191,7 +214,7 @@ struct SCStepFeatureCard: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Self.horizontalPadding)
-        .padding(.vertical, feature.subtitle == nil ? 11 : 12)
+        .padding(.vertical, compact ? 8 : (feature.subtitle == nil ? 11 : 12))
         .accessibilityElement(children: .combine)
     }
 }
