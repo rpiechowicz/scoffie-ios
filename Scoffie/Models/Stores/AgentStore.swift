@@ -146,6 +146,7 @@ final class AgentStore {
     /// Ostatnio pobrane limity — po 429 pole wiadomości musi wiedzieć, czy
     /// to próba (pokazać „Wybierz plan"), czy miesiąc (pokazać datę).
     private(set) var usage: AgentUsageDTO?
+    @ObservationIgnored private var usageFetchedAt: Date?
     private(set) var isLoadingHistory = false
     /// Treść wiadomości, która NIE doszła do serwera — do ponowienia jednym
     /// przyciskiem. Ustawiana tylko wtedy, gdy wiadomość wypadła z historii;
@@ -316,6 +317,17 @@ final class AgentStore {
         // Nie `defer`: flaga ma żyć tylko przez zakładanie rozmowy, a `send()`
         // wraca dopiero po całej turze (`follow`).
         isPreparing = true
+        // Pula nieznana (pierwsze pytanie zaraz po starcie, odczyt przy
+        // wejściu jeszcze w drodze) — najpierw pytamy o nią, dopiero potem
+        // pytanie trafia do rozmowy. Pusta pula = blokada tu, BEZ dymka
+        // pytania, który serwer i tak zaraz by odrzucił.
+        if usage == nil {
+            _ = await loadUsage()
+            guard !isLocked else {
+                isPreparing = false
+                return false
+            }
+        }
         await ensureConversation()
         isPreparing = false
         guard let conversationId else {
@@ -485,18 +497,42 @@ final class AgentStore {
         let loaded = try? await client.usage(householdId: householdId)
         if let loaded {
             usage = loaded
-            // Po włączeniu PRO (albo ręcznym nadaniu) blokada „do PRO" znika
-            // bez restartu aplikacji.
-            // Także pula PRÓBNA, która znów ma zapas (reset po stronie serwera,
-            // korekta limitu): blokada „do PRO" była wieczna niezależnie od
-            // tego, co mówił serwer, i schodziła dopiero z restartem aplikacji.
-            let trialHasRoom = loaded.isTrial && loaded.messages.remaining > 0
-            if (!loaded.isTrial || trialHasRoom), lockReason == .quota, lockedUntil == .distantFuture {
+            usageFetchedAt = Date()
+            if loaded.messages.remaining <= 0 {
+                // Pula pusta WEDŁUG SERWERA — blokada od razu, a nie dopiero
+                // po odmowie wysyłki. Dotąd stuknięcie w akcję powitania
+                // wrzucało pytanie do rozmowy, a sekundę później 429 je
+                // zabierało i pokazywało limit: skok w rozmowę i z powrotem.
+                lockReason = .quota
+                lockedUntil = Self.quotaLockEnd(for: loaded)
+            } else if lockReason == .quota {
+                // Pula znów ma zapas (PRO, nadanie, odnowienie, korekta limitu
+                // na próbie) — blokada schodzi bez restartu aplikacji.
                 lockedUntil = nil
                 lockReason = nil
             }
         }
         return loaded
+    }
+
+    /// Do kiedy trzyma blokada pustej puli: do odnowienia, a na próbie
+    /// (i przy puli bez odnowienia) — do wyboru planu.
+    private static func quotaLockEnd(for usage: AgentUsageDTO) -> Date {
+        if let iso = usage.resetsAt, let date = parseTimestamp(iso), date > Date() {
+            return date
+        }
+        if usage.isTrial || usage.renews == false {
+            return .distantFuture
+        }
+        return Date().addingTimeInterval(60 * 60)
+    }
+
+    /// Wejście na zakładkę: pula świeża, ZANIM ktoś stuknie w akcję.
+    /// Odczyt młodszy niż `maxAge` wystarcza — po każdej turze i tak
+    /// przychodzi nowy (`apply(finished:)`).
+    func refreshUsageIfStale(maxAge: TimeInterval = 60) async {
+        if let usageFetchedAt, Date().timeIntervalSince(usageFetchedAt) < maxAge { return }
+        _ = await loadUsage()
     }
 
     /// Pole zablokowane przez wyczerpaną pulę na PRÓBIE — bez odnowienia,
@@ -1155,14 +1191,8 @@ final class AgentStore {
                 // żeby pole pokazało właściwy krok, a nie „spróbuj za moment".
                 // W PRO blokada trwa do odnowienia puli (po godzinie ten sam
                 // błąd wracał jak bumerang), na próbie — do PRO.
-                Task {
-                    guard let loaded = await loadUsage() else { return }
-                    if let iso = loaded.resetsAt, let date = Self.parseTimestamp(iso), date > Date() {
-                        lockedUntil = date
-                    } else if loaded.isTrial {
-                        lockedUntil = .distantFuture
-                    }
-                }
+                // `loadUsage` sam ustawia koniec blokady z odczytu puli.
+                Task { _ = await loadUsage() }
             case "AI_BUDGET_PAUSED":
                 lockReason = .budget
                 lockedUntil = Date().addingTimeInterval(15 * 60)
