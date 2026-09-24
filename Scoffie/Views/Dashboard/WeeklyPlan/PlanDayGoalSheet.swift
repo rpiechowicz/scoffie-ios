@@ -202,12 +202,13 @@ struct PlanDayGoalSheet: View {
     /// osi dnia liczą cały dom, więc przy domownikach z osobnymi daniami ta
     /// para może się od nich różnić — arkusz mówi o talerzu jednej osoby.
     ///
-    /// W Kalendarzu ta sama para liczy co innego: nie ile pór jest
-    /// zaplanowanych, tylko ile już zjedzonych — bo to jest liczba, z której
-    /// wzięła się suma nad listą.
-    private var subtitle: String {
-        let what = nutrition.countsOnlyEaten ? "zjedzone" : "posiłków"
-        let count = "\(nutrition.filledSlots) z \(nutrition.slotCount) \(what)"
+    /// W Kalendarzu podtytułu nie ma (24.09.2026, Rafał): „1 z 5 zjedzone”
+    /// powtarzało ptaszki przy daniach na liście poniżej. Kalendarz nie ma
+    /// przełącznika osób, więc nie ma też czyjego dnia do nazwania; detent
+    /// jest mierzony, więc pusty wiersz nie zostaje.
+    private var subtitle: String? {
+        if nutrition.countsOnlyEaten { return nil }
+        let count = "\(nutrition.filledSlots) z \(nutrition.slotCount) posiłków"
         // Przy kilku osobach zdanie mówi, CZYJ to dzień — awatar w kapsule
         // obok krzyżyka to za mało, żeby przeczytać to bez zgadywania.
         guard people.count > 1 else { return count }

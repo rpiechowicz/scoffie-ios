@@ -31,10 +31,13 @@ enum DayNavigationMotion {
     /// żeby się rozjechać. Przenikanie nie ma geometrii, którą można zepsuć:
     /// jest tylko krycie, a krycie animuje w SwiftUI zawsze.
     ///
-    /// `easeInOut` 0,30 s. Krzywa symetryczna, bo przenikanie jest
-    /// symetryczne — nic tu nie startuje ani nie ląduje. Krócej czyta się
-    /// jak cięcie, dłużej — jak zdjęcie, które się nie doczytało.
-    static let plateFade: Animation = .easeInOut(duration: 0.30)
+    /// Od 24.09.2026 to `SCMotion.textRoll` — ta sama krzywa, którą w arkuszu
+    /// wyboru posiłku u Asystenta przechodzi danie w danie. Wcześniej
+    /// `easeInOut` 0,30 s: podpis pod talerzem rolował się inaczej niż
+    /// każdy inny tekst w aplikacji (Rafał: „nie jest taka sama jak wszędzie”).
+    /// Zdjęcie, nadpis i podpis dalej kończą w tej samej klatce, bo wszystkie
+    /// jadą tą jedną stałą.
+    static let plateFade: Animation = SCMotion.textRoll
 }
 
 /// Jak `DayPager` pokazuje zmianę dnia.
