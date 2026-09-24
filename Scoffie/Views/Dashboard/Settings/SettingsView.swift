@@ -621,7 +621,7 @@ struct SettingsView: View {
             .alert("Czy na pewno chcesz się wylogować?", isPresented: $showLogoutAlert) {
                 Button("Anuluj", role: .cancel) {}
                 Button("Wyloguj", role: .destructive) {
-                    sessionStore.logout()
+                    Task { await sessionStore.signOut() }
                 }
             } message: {
                 Text("Sesja zostanie zakończona na tym urządzeniu.")
@@ -1891,48 +1891,14 @@ struct SettingsView: View {
         }
     }
 
-    /// Big animated kcal readout above a 50-kcal-stepped slider — that's
-    /// the whole picker. No quick-pick chips, no on/off toggle: the goal
-    /// is always set, the slider is the only control.
+    /// Duża liczba nad suwakiem co 50 kcal — cały wybór. Suwak ma własny
+    /// stan na czas przeciągania (`CalorieGoalEditor`), patrz niżej.
     private var calorieGoalEditor: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Text(calorieGoal, format: .number.grouping(.never))
-                    .font(.system(size: 44, weight: .heavy))
-                    .tracking(-1.4)
-                    .foregroundStyle(SCPalette.terracotta)
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: Double(calorieGoal)))
-
-                Text("kcal / dzień")
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(-0.1)
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(.smooth(duration: 0.18), value: calorieGoal)
-
-            VStack(spacing: 6) {
-                Slider(
-                    value: Binding(
-                        get: { Double(calorieGoal) },
-                        set: { calorieGoal = snappedCalorieGoal(from: $0) }
-                    ),
-                    in: Double(Self.calorieGoalMin)...Double(Self.calorieGoalMax),
-                    step: Double(Self.calorieGoalStep)
-                )
-                .tint(SCPalette.terracotta)
-
-                HStack {
-                    Text("\(Self.calorieGoalMin)")
-                    Spacer()
-                    Text("\(Self.calorieGoalMax)")
-                }
-                .font(.system(size: 11, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(Color.scFaint(scheme))
-            }
-        }
+        CalorieGoalEditor(
+            calorieGoal: $calorieGoal,
+            range: Self.calorieGoalMin...Self.calorieGoalMax,
+            step: Self.calorieGoalStep
+        )
     }
 
     /// Round an arbitrary slider value to the nearest 50-kcal step and
@@ -3128,4 +3094,96 @@ private struct NavBarHitTestPassthrough: UIViewRepresentable {
 
 #Preview {
     SettingsView()
+}
+
+/// Suwak „Dzienny cel” z liczbą nad nim.
+///
+/// W trakcie przeciągania wartość żyje TYLKO tutaj, a do `@AppStorage`
+/// trafia po puszczeniu. Wcześniej każdy krok suwaka (co 50 kcal, kilkanaście
+/// razy na sekundę) zapisywał `UserDefaults` — a na ten klucz patrzy cały
+/// arkusz diety (makro, podpowiedź celu, liczenie ukrytych przepisów), całe
+/// Ustawienia i zakładki pod arkuszem (ranking Przepisów, cel dnia w Planie
+/// i Kalendarzu). Każdy krok przebudowywał je wszystkie, a liczba dodatkowo
+/// rolowała się animacją, której następny krok nie dawał dojechać — suwak
+/// szedł za palcem z opóźnieniem. Zapis na serwer i tak czekał na koniec
+/// (`dietPreferencesSyncToken`), więc nic się nie traci.
+private struct CalorieGoalEditor: View {
+    @Binding var calorieGoal: Int
+    let range: ClosedRange<Int>
+    let step: Int
+
+    @Environment(\.colorScheme) private var scheme
+    /// Wartość pod palcem; `nil`, gdy nikt nie przeciąga.
+    @State private var draft: Int?
+    @State private var isEditing = false
+
+    private var shown: Int { draft ?? calorieGoal }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(shown, format: .number.grouping(.never))
+                    .font(.system(size: 44, weight: .heavy))
+                    .tracking(-1.4)
+                    .foregroundStyle(SCPalette.terracotta)
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(shown)))
+
+                Text("kcal / dzień")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(-0.1)
+                    .foregroundStyle(Color.scMuted(scheme))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Pod palcem liczba zmienia się od razu — rolowanie co krok
+            // nie nadążało za ruchem. Roluje, gdy wartość przychodzi
+            // z zewnątrz („Ustaw”, „Wyczyść preferencje”).
+            .animation(isEditing ? nil : .smooth(duration: 0.18), value: shown)
+
+            VStack(spacing: 6) {
+                Slider(
+                    value: Binding(
+                        get: { Double(shown) },
+                        set: { raw in
+                            let value = snapped(raw)
+                            if isEditing {
+                                if value != draft { draft = value }
+                            } else if value != calorieGoal {
+                                // VoiceOver (przesunięcie w górę / w dół) nie
+                                // przeciąga — zapisuje od razu.
+                                calorieGoal = value
+                            }
+                        }
+                    ),
+                    in: Double(range.lowerBound)...Double(range.upperBound),
+                    step: Double(step),
+                    onEditingChanged: { editing in
+                        isEditing = editing
+                        guard !editing else { return }
+                        if let draft, draft != calorieGoal {
+                            calorieGoal = draft
+                        }
+                        draft = nil
+                    }
+                )
+                .tint(SCPalette.terracotta)
+
+                HStack {
+                    Text("\(range.lowerBound)")
+                    Spacer()
+                    Text("\(range.upperBound)")
+                }
+                .font(.system(size: 11, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(Color.scFaint(scheme))
+            }
+        }
+    }
+
+    /// Najbliższy krok co 50 kcal, w granicach skali — UISlider potrafi
+    /// oddać wartość tuż za końcem.
+    private func snapped(_ raw: Double) -> Int {
+        let stepped = (raw / Double(step)).rounded() * Double(step)
+        return min(max(Int(stepped), range.lowerBound), range.upperBound)
+    }
 }
