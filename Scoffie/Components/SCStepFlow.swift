@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Klocki przepływów krok po kroku — JEDNE dla trzech miejsc: przewodnika
-// „Poznaj aplikację” (`FeatureTourView`), kreatora „Poznajmy się”
+// „Poznaj aplikację” (`WelcomeView`), kreatora „Poznajmy się”
 // (`WelcomeView`) i wprowadzenia asystenta (`AssistantIntroFooter`,
 // `AssistantWelcomeView`, `AssistantConsentGateView`, `AssistantHowItWorksView`).
 //
@@ -69,8 +69,9 @@ struct SCStepProgress: View {
 
 /// Nagłówek strony w przepływie: kafelek z glifem w tincie akcentu
 /// (`SCHeaderIconWell`, ten sam, co w nagłówkach arkuszy), eyebrow w kroju
-/// `EditorialSheetHeader`, tytuł w kroju `EditorialPageHeader` i najwyżej
-/// jedno zdanie pod spodem.
+/// `EditorialSheetHeader`, tytuł w kroju `EditorialPageHeader` i krótki
+/// opis pod spodem (do dwóch–trzech zdań od 24.09.2026 — przewodnik
+/// i kreator tłumaczą w nim, o co chodzi, zanim padnie pytanie).
 ///
 /// Zastąpił nagłówek kreatora z pełnym kafelkiem w gradiencie i poświatą
 /// (jedyny taki akcent w aplikacji) oraz ręcznie składane tytuły przewodnika
@@ -139,8 +140,15 @@ struct SCStepFeature: Identifiable {
 /// tle, a na powitaniu asystenta jako ptaszki w zielonych kółkach.
 struct SCStepFeatureCard: View {
     let features: [SCStepFeature]
+    /// Kaskada wejścia wierszy (`scReveal` + „kliknięcie” kafelka 0,6 → 1),
+    /// jak w krokach przewodnika. `nil` = karta stoi od razu.
+    var revealed: Bool? = nil
+    /// Ciaśniejsze wiersze — kroki przewodnika, gdzie nad kartą stoi zdjęcie,
+    /// a cała strona ma się zmieścić bez przewijania.
+    var compact: Bool = false
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let iconSize: CGFloat = 34
     private static let iconSpacing: CGFloat = 12
@@ -150,7 +158,14 @@ struct SCStepFeatureCard: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
-                row(feature)
+                Group {
+                    if let revealed {
+                        row(feature, order: index)
+                            .scReveal(revealed, order: index)
+                    } else {
+                        row(feature, order: index)
+                    }
+                }
                 if index < features.count - 1 {
                     Rectangle()
                         .fill(Color.scRule(scheme))
@@ -170,9 +185,18 @@ struct SCStepFeatureCard: View {
         )
     }
 
-    private func row(_ feature: SCStepFeature) -> some View {
-        HStack(spacing: Self.iconSpacing) {
+    private func row(_ feature: SCStepFeature, order: Int) -> some View {
+        let shown = revealed ?? true
+        return HStack(spacing: Self.iconSpacing) {
             SCHeaderIconWell(icon: feature.icon, accent: feature.accent, size: Self.iconSize)
+                .scaleEffect(shown || reduceMotion ? 1 : 0.6)
+                .animation(
+                    revealed == nil || reduceMotion
+                        ? nil
+                        : .spring(response: 0.42, dampingFraction: 0.62)
+                            .delay(0.22 + Double(order) * 0.05),
+                    value: shown
+                )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(feature.title)
@@ -190,7 +214,7 @@ struct SCStepFeatureCard: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Self.horizontalPadding)
-        .padding(.vertical, feature.subtitle == nil ? 11 : 12)
+        .padding(.vertical, compact ? 8 : (feature.subtitle == nil ? 11 : 12))
         .accessibilityElement(children: .combine)
     }
 }
@@ -232,6 +256,18 @@ struct SCStepFooter: View {
         }
     }
 
+    /// Gdzie stoi „Wstecz”.
+    enum BackPlacement {
+        /// Krążek 36 pt na lewym końcu wiersza z paskiem kroków (kreator,
+        /// asystent).
+        case progressRow
+        /// Krążek wysokości przycisku głównego, w jednej linii z nim, po lewej
+        /// — przewodnik „Poznaj aplikację” (Rafał 24.09.2026: „ten button
+        /// wstecz daj obok buttonu dalej”). Pasek kroków dostaje wtedy cały
+        /// wiersz nad nimi.
+        case besidePrimary
+    }
+
     let slot: Slot
     var onSlotTap: (() -> Void)? = nil
     /// Zdanie nad przyciskami (błąd zapisu) — przy akcji, która go wywołała,
@@ -239,6 +275,7 @@ struct SCStepFooter: View {
     var notice: String? = nil
     var showsBack: Bool = false
     var onBack: (() -> Void)? = nil
+    var backPlacement: BackPlacement = .progressRow
     let primaryTitle: String
     var primaryIcon: String = "arrow.right"
     var isPrimaryEnabled: Bool = true
@@ -248,6 +285,10 @@ struct SCStepFooter: View {
 
     /// Wysokość wiersza nawigacji = średnica krążka „Wstecz”.
     static let rowHeight: CGFloat = 36
+
+    /// Zmierzona wysokość przycisku głównego — średnica krążka „Wstecz”
+    /// w układzie `.besidePrimary`. 48 do pierwszego pomiaru.
+    @State private var primaryHeight: CGFloat = 48
 
     @Environment(\.colorScheme) private var scheme
 
@@ -265,32 +306,74 @@ struct SCStepFooter: View {
             navigationRow
                 .padding(.bottom, 4)
 
-            EditorialPrimaryActionButton(
-                title: primaryTitle,
-                icon: primaryIcon,
-                isEnabled: isPrimaryEnabled,
-                isLoading: isPrimaryLoading,
-                action: onPrimary
-            )
-            .accessibilityHint(primaryHint ?? "")
-            // Animowana transakcja dla `numericText` w tytule — bez niej
-            // „Dalej” → „Utwórz gospodarstwo” podmieniało się w jednej klatce.
-            .animation(.smooth(duration: 0.32), value: primaryTitle)
+            actionRow
         }
         .animation(.easeInOut(duration: 0.2), value: notice)
     }
 
+    private var primaryButton: some View {
+        EditorialPrimaryActionButton(
+            title: primaryTitle,
+            icon: primaryIcon,
+            isEnabled: isPrimaryEnabled,
+            isLoading: isPrimaryLoading,
+            action: onPrimary
+        )
+        .accessibilityHint(primaryHint ?? "")
+        // Animowana transakcja dla `numericText` w tytule — bez niej
+        // „Dalej” → „Utwórz gospodarstwo” podmieniało się w jednej klatce.
+        .animation(.smooth(duration: 0.32), value: primaryTitle)
+    }
+
+    @ViewBuilder
+    private var actionRow: some View {
+        switch backPlacement {
+        case .progressRow:
+            primaryButton
+        case .besidePrimary:
+            // Krążek bierze ZMIERZONĄ wysokość przycisku, więc oba stoją na
+            // jednej linii bez stałej przepisanej z
+            // `EditorialPrimaryActionButton` (i rosną razem z Dynamic Type).
+            // Bez „Wstecz” (powitanie) przycisk rozjeżdża się na całą szerokość.
+            HStack(spacing: 10) {
+                if canGoBack {
+                    Button {
+                        onBack?()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .frame(width: primaryHeight, height: primaryHeight)
+                            .background(Circle().fill(Color.scChipBg(scheme)))
+                            .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(PlanPressStyle(scale: 0.92))
+                    .accessibilityLabel("Wstecz")
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+                primaryButton
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        primaryHeight = height
+                    }
+            }
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: canGoBack)
+        }
+    }
+
     private var navigationRow: some View {
         HStack(spacing: 12) {
-            SCSheetIconButton(
-                systemName: "chevron.left",
-                accessibilityLabel: "Wstecz",
-                action: { onBack?() }
-            )
-            .opacity(canGoBack ? 1 : 0)
-            .scaleEffect(canGoBack ? 1 : 0.8)
-            .allowsHitTesting(canGoBack)
-            .accessibilityHidden(!canGoBack)
+            if backPlacement == .progressRow {
+                SCSheetIconButton(
+                    systemName: "chevron.left",
+                    accessibilityLabel: "Wstecz",
+                    action: { onBack?() }
+                )
+                .opacity(canGoBack ? 1 : 0)
+                .scaleEffect(canGoBack ? 1 : 0.8)
+                .allowsHitTesting(canGoBack)
+                .accessibilityHidden(!canGoBack)
+            }
 
             ZStack {
                 slotContent
@@ -300,8 +383,18 @@ struct SCStepFooter: View {
             .frame(maxWidth: .infinity)
             .animation(.easeInOut(duration: 0.3), value: slot.key)
 
-            counter
-                .frame(width: Self.rowHeight, alignment: .trailing)
+            // Przy „Wstecz” obok przycisku nie ma krążka, który równoważyłby
+            // licznik z lewej — pusty licznik zjadałby 36 pt z prawej
+            // i odnośnik „Pomiń…” stałby krzywo.
+            if backPlacement == .progressRow || slot.key == Slot.progress(step: 0, total: 0).key {
+                // Szerokość z treści, nie stałe 36 pt: przy dwucyfrowych
+                // krokach („11/11” w przepływie przewodnik + kreator) licznik
+                // łamał się na dwie linie. Minimum trzyma pasek w miejscu przy
+                // „1/5” → „2/5”.
+                counter
+                    .fixedSize()
+                    .frame(minWidth: Self.rowHeight, alignment: .trailing)
+            }
         }
         .frame(height: Self.rowHeight)
         .animation(.spring(response: 0.36, dampingFraction: 0.86), value: canGoBack)

@@ -5,7 +5,7 @@ import SwiftUI
 // stopka na cały przepływ.
 //
 // Od 5.09.2026 przepływ ma tę samą mechanikę, co przewodnik „Poznaj
-// aplikację" (`FeatureTourView`) i kreator „Poznajmy się": treść jeździ
+// aplikację" (`WelcomeView`) i kreator „Poznajmy się": treść jeździ
 // na bok zgodnie z kierunkiem ruchu, a stopka z paskiem kroków i przyciskami
 // stoi w miejscu poza animowanym obszarem. Od 23.09.2026 także te same
 // KLOCKI (`Components/SCStepFlow.swift`): pasek kroków, stopka na

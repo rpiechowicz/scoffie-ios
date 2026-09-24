@@ -282,7 +282,7 @@ struct ProfileDetailsSheet: View {
                 }
 
                 if let metrics {
-                    bmiRow(metrics)
+                    BodyMetricsSummaryRow(metrics: metrics)
                 }
 
             }
@@ -303,88 +303,8 @@ struct ProfileDetailsSheet: View {
         )
     }
 
-    /// BMI z kategorią i policzonym zapotrzebowaniem. Zapotrzebowanie ląduje
-    /// tutaj, a nie tylko w arkuszu diety, bo to jedyne miejsce, gdzie widać
-    /// wszystkie liczby, z których się bierze.
-    private func bmiRow(_ metrics: BodyMetrics) -> some View {
-        let category = metrics.bmiCategory
-
-        return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? "—")
-                        .font(.system(size: 20, weight: .heavy))
-                        .tracking(-0.4)
-                        .monospacedDigit()
-                        .foregroundStyle(Color.scLabel(scheme))
-
-                    Text("BMI")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(Color.scFaint(scheme))
-                }
-
-                Text(category.title)
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(category.accent)
-            }
-
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(width: 1, height: 34)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(metrics.maintenanceCalories)")
-                        .font(.system(size: 20, weight: .heavy))
-                        .tracking(-0.4)
-                        .monospacedDigit()
-                        .foregroundStyle(Color.scLabel(scheme))
-
-                    Text("KCAL")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(Color.scFaint(scheme))
-                }
-
-                Text("Na utrzymanie wagi")
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.scChipBg(scheme))
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("BMI \(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? ""), \(category.title). Na utrzymanie wagi \(metrics.maintenanceCalories) kilokalorii dziennie.")
-    }
-
-    private static let bmiFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 1
-        formatter.maximumFractionDigits = 1
-        return formatter
-    }()
-
     private var ageLabel: String {
-        let age = max(currentYear - yearOfBirth, 0)
-        return "\(age) \(Self.yearNoun(for: age))"
-    }
-
-    /// Polska odmiana „lat” po liczebniku: 1 → „rok”, 2–4 (poza 12–14) →
-    /// „lata”, reszta → „lat”.
-    private static func yearNoun(for count: Int) -> String {
-        let lastTwo = count % 100
-        let last = count % 10
-        if count == 1 { return "rok" }
-        if (2...4).contains(last), !(12...14).contains(lastTwo) { return "lata" }
-        return "lat"
+        BodyMetricsSummaryRow.ageLabel(max(currentYear - yearOfBirth, 0))
     }
 
     private func measureField(
@@ -835,5 +755,94 @@ struct ProfileDetailsSheet: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
+    }
+}
+
+/// BMI z kategorią i zapotrzebowaniem na utrzymanie wagi — Ustawienia →
+/// „Twoje dane” i pierwszy krok kreatora (od 24.09.2026 wspólny: kreator
+/// pyta o te same liczby i pokazuje od razu, do czego posłużą).
+struct BodyMetricsSummaryRow: View {
+    let metrics: BodyMetrics
+
+    @Environment(\.colorScheme) private var scheme
+
+    /// BMI z kategorią i policzonym zapotrzebowaniem. Zapotrzebowanie ląduje
+    /// tutaj, a nie tylko w arkuszu diety, bo to jedyne miejsce, gdzie widać
+    /// wszystkie liczby, z których się bierze.
+    var body: some View {
+        let category = metrics.bmiCategory
+
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? "—")
+                        .font(.system(size: 20, weight: .heavy))
+                        .tracking(-0.4)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scLabel(scheme))
+
+                    Text("BMI")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(Color.scFaint(scheme))
+                }
+
+                Text(category.title)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(category.accent)
+            }
+
+            Rectangle()
+                .fill(Color.scRule(scheme))
+                .frame(width: 1, height: 34)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(metrics.maintenanceCalories)")
+                        .font(.system(size: 20, weight: .heavy))
+                        .tracking(-0.4)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scLabel(scheme))
+
+                    Text("KCAL")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(Color.scFaint(scheme))
+                }
+
+                Text("Na utrzymanie wagi")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Color.scMuted(scheme))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.scChipBg(scheme))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("BMI \(Self.bmiFormatter.string(from: NSNumber(value: metrics.bmi)) ?? ""), \(category.title). Na utrzymanie wagi \(metrics.maintenanceCalories) kilokalorii dziennie.")
+    }
+
+    static let bmiFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 1
+        formatter.maximumFractionDigits = 1
+        return formatter
+    }()
+
+
+    /// „34 lata” — wiek z polską odmianą „lat” po liczebniku: 1 → „rok”,
+    /// 2–4 (poza 12–14) → „lata”, reszta → „lat”.
+    static func ageLabel(_ age: Int) -> String {
+        let lastTwo = age % 100
+        let last = age % 10
+        if age == 1 { return "1 rok" }
+        if (2...4).contains(last), !(12...14).contains(lastTwo) { return "\(age) lata" }
+        return "\(age) lat"
     }
 }

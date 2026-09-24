@@ -1,24 +1,74 @@
 import SwiftUI
 
-/// Zdjęcie kroku w kadrze 16:13.
+/// Zdjęcie kroku.
 ///
-/// Zdjęcia to rendery telefonów na jasnym tle z szerokim marginesem —
-/// `scaledToFill` plus delikatne przybliżenie zjada ten margines, żeby
-/// ekrany aplikacji zajmowały kadr, a nie pływały w pustce.
+/// Dwa rodzaje grafik (`TourStep.isArtwork`):
+/// - rendery telefonów na jasnym tle z szerokim marginesem — kadr 16:13,
+///   `scaledToFill` plus delikatne przybliżenie zjada ten margines, żeby
+///   ekrany aplikacji zajmowały kadr, a nie pływały w pustce;
+/// - ilustracje z kartami aplikacji (od 24.09.2026, Plan i Przepisy) —
+///   ZAWSZE na pełną szerokość (Rafał: „obrazek daj na całość, żeby było
+///   dobrze widać”), `scaledToFill` bez przybliżenia. Karty zajmują całą
+///   szerokość grafiki, a nad i pod nimi jest ~12 % pustego kremu — gdy
+///   brakuje wysokości, ucina się ten krem, nie karty. Pomniejszanie
+///   w całości (`scaledToFit`) robiło z kart miniaturę na środku, a kadr
+///   16:13 z przybliżeniem ucinał karty z boków.
+///
+/// Wysokość kadru ma sufit: widoczna strona (`TourPage` podaje ją
+/// w `tourViewport`) minus ZMIERZONA reszta kroku (`reserved`: eyebrow,
+/// tytuł, opis, karta czterech punktów i marginesy — `TourStepView` mierzy
+/// je co krok, bo tytuł i opis mają od jednej do trzech linii). Stały zapas
+/// raz zostawiał pustkę pod kartą, raz wpychał czwarty punkt pod cień
+/// stopki. Na
+/// Plus / Pro Max sufit leży nad naturalną wysokością i nic się nie zmienia,
+/// na mniejszych ekranach obraz traci wysokość (przycina się, szerokość
+/// zostaje) — tytuł i punkty mieszczą się nad stopką bez przewijania.
 private struct TourMedia: View {
     let imageName: String
     let accent: Color
+    let isArtwork: Bool
+    /// Wysokość strony zajęta przez wszystko poza zdjęciem.
+    let reserved: CGFloat
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.tourViewport) private var viewport
+
+    private static let renderAspect: CGFloat = 16.0 / 13.0
+    /// Proporcje ilustracji (`TourPlan`, `TourRecipes`: 1200 × 868).
+    private static let artworkAspect: CGFloat = 1200.0 / 868.0
+    /// Poniżej tego kadr przestaje coś pokazywać — wtedy lepiej przewinąć.
+    private static let minimum: CGFloat = 150
+
+    private var aspect: CGFloat { isArtwork ? Self.artworkAspect : Self.renderAspect }
+
+    /// `nil` przed pierwszym pomiarem — wtedy same proporcje.
+    private var size: CGSize? {
+        guard viewport.width > 0, viewport.height > 0 else { return nil }
+        let fullWidth = viewport.width - 2 * TourLayout.mediaHorizontal
+        let natural = fullWidth / aspect
+        // Ilustracja nie schodzi poniżej 85 % naturalnej wysokości: tyle
+        // zjada sam krem nad i pod kartami (po ~7 %), a nagłówki kart
+        // („Przepisy”, „Plan tygodnia”) leżą ~11 % od brzegu. Niżej ucinało
+        // już karty. 85, nie 90 — przy 90 na iPhonie 16e czwarty punkt
+        // wchodził pod cień stopki, a przewodnik ma stać bez przewijania.
+        let floor = isArtwork ? natural * 0.85 : Self.minimum
+        let height = min(natural, max(floor, viewport.height - reserved))
+        return CGSize(width: fullWidth, height: height)
+    }
 
     var body: some View {
-        Color.clear
-            .aspectRatio(16.0 / 13.0, contentMode: .fit)
+        mediaFrame
             .overlay {
-                Image(imageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .scaleEffect(1.06)
+                if isArtwork {
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .scaleEffect(1.06)
+                }
             }
             .background(
                 RadialGradient(
@@ -33,54 +83,87 @@ private struct TourMedia: View {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
+            .frame(maxWidth: .infinity)
             .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var mediaFrame: some View {
+        if let size {
+            Color.clear
+                .frame(width: size.width, height: size.height)
+        } else {
+            Color.clear
+                .aspectRatio(aspect, contentMode: .fit)
+        }
     }
 }
 
-/// Treść jednego kroku przewodnika: gdzie to jest (chip), jak wygląda
-/// (zdjęcie), co robi (tytuł), co z tego macie (trzy punkty). Pasek kroków
+/// Treść jednego kroku przewodnika: jak wygląda (zdjęcie), gdzie to jest
+/// (eyebrow), co robi (tytuł i dwa zdania opisu), co z tego macie (cztery punkty w karcie,
+/// wchodzące kaskadą po wjeździe strony). Pasek kroków
 /// i przyciski są w stopce (`SCStepFooter`) — osobno, bo treść jeździ
 /// między krokami, a stopka ma stać w miejscu.
 struct TourStepView: View {
     let step: TourStep
 
     @Environment(\.colorScheme) private var scheme
+    /// Kaskada punktów — przestawiane w `.task` (klatka oddechu, jak
+    /// w `SCReveal`); każda strona ma własną tożsamość (`.id(phase)`
+    /// w `WelcomeView`), więc kaskada gra przy każdym kroku.
+    @State private var hasAppeared = false
+    /// Wysokość nagłówka i karty punktów — reszta strony idzie na zdjęcie.
+    /// 400 do pierwszego pomiaru (typowy krok na iPhonie 6,1").
+    @State private var textHeight: CGFloat = 400
 
-    /// „Znajdziesz w Zakładce Plan" — mówi wprost, w którym miejscu
-    /// aplikacji szukać funkcji z tego kroku. Zastępuje rysunek paska
-    /// zakładek, który w tej skali byłby plamką.
-    private var placeLabel: Text {
-        Text("Znajdziesz w ")
-            .foregroundStyle(Color.scMuted(scheme))
-        + Text(step.place)
-            .foregroundStyle(Color.scLabel(scheme))
-            .fontWeight(.semibold)
-    }
+    private static let mediaGap: CGFloat = 16
 
     var body: some View {
         TourPage {
             VStack(alignment: .leading, spacing: 0) {
-                TourChip(icon: step.placeIcon, accent: step.accent, label: placeLabel)
-                    .padding(.horizontal, TourLayout.horizontal)
-                    .padding(.bottom, 14)
+                TourMedia(
+                    imageName: step.imageName,
+                    accent: step.accent,
+                    isArtwork: step.isArtwork,
+                    reserved: textHeight + Self.mediaGap + TourLayout.top + TourLayout.bottom
+                )
+                .padding(.horizontal, TourLayout.mediaHorizontal)
+                .padding(.bottom, Self.mediaGap)
 
-                TourMedia(imageName: step.imageName, accent: step.accent)
-                    .padding(.horizontal, TourLayout.mediaHorizontal)
-                    .padding(.bottom, 22)
-
-                // Ten sam nagłówek kroku, co w kreatorze i u asystenta —
-                // tu bez kafelka, bo miejsce i kolor niesie chip nad zdjęciem.
-                SCStepHeader(title: step.title)
-                    .padding(.horizontal, TourLayout.horizontal)
-                    .padding(.bottom, 16)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(step.points, id: \.self) { point in
-                        TourPoint(text: point, accent: SCPalette.sage)
+                textBlock
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        textHeight = height
                     }
-                }
-                .padding(.horizontal, TourLayout.horizontal)
             }
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            hasAppeared = true
+        }
+    }
+
+    private var textBlock: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Ten sam nagłówek kroku, co w kreatorze i u asystenta: eyebrow
+            // w kolorze kroku mówi, gdzie to jest w aplikacji — bez kafelka,
+            // bo nad nagłówkiem stoi zdjęcie.
+            SCStepHeader(
+                accent: step.accent,
+                eyebrow: step.eyebrow,
+                title: step.title,
+                subtitle: step.lead
+            )
+            .padding(.horizontal, TourLayout.horizontal)
+            .padding(.bottom, 12)
+
+            SCStepFeatureCard(
+                features: step.points.map {
+                    SCStepFeature(icon: $0.icon, accent: step.accent, title: $0.title, subtitle: $0.subtitle)
+                },
+                revealed: hasAppeared,
+                compact: true
+            )
+            .padding(.horizontal, TourLayout.horizontal)
         }
     }
 }

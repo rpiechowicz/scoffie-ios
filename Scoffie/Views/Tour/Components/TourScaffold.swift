@@ -23,17 +23,20 @@ enum TourLayout {
 /// Przewijalna treść jednego ekranu przewodnika.
 ///
 /// Treść ma mieścić się bez przewijania — taki jest cel projektu i dlatego
-/// każdy krok ma tytuł i trzy punkty, bez akapitu. `ScrollView` jest tu jako
+/// każdy krok ma tytuł, dwa zdania opisu i cztery punkty; zdjęcie kroku
+/// oddaje wysokość, zanim zacznie się przewijanie (`TourMedia`). `ScrollView` jest tu jako
 /// zabezpieczenie: na iPhonie mini albo przy powiększonej czcionce
 /// systemowej to samo ułożenie nie zmieści się co do punktu, a wtedy
 /// lepiej przewinąć niż przyciąć. `.basedOnSize` gasi gumowanie, gdy
 /// wszystko się mieści, więc na docelowym ekranie strona stoi nieruchomo.
 ///
-/// Stopki tu celowo nie ma. Składa ją `FeatureTourView` pod animowaną
+/// Stopki tu celowo nie ma. Składa ją `WelcomeView` pod animowaną
 /// treścią (`SCStepFooter`), żeby pasek kroków i przyciski stały w miejscu,
 /// gdy kroki przejeżdżają na bok — dokładnie tak, jak w kreatorze profilu.
 struct TourPage<Content: View>: View {
     private let content: Content
+    /// Widoczna część strony — dla sufitu zdjęcia kroku (`TourMedia`).
+    @State private var viewport: CGSize = .zero
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -45,75 +48,18 @@ struct TourPage<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, TourLayout.top)
                 .padding(.bottom, TourLayout.bottom)
+                .environment(\.tourViewport, viewport)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            viewport = size
+        }
     }
 }
 
-/// Kapsułka nad treścią: ikona w kafelku i krótka etykieta. Kroki mówią
-/// nią „Znajdziesz w Zakładce Plan", ekran domykający — „Zostały dwie
-/// minuty". Jeden widok dla obu, bo stoją w tym samym miejscu na kolejnych
-/// ekranach: inna wysokość albo inne tło robiłyby skok przy przejściu.
-struct TourChip: View {
-    let icon: String
-    let accent: Color
-    let label: Text
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // Tint jak w `SCHeaderIconWell`, ale glif 12 pt — przy 24 pt
-            // kafelka proporcja nagłówka dawała 10 pt i ikona ginęła.
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
-                .frame(width: 24, height: 24)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accent)
-                )
-
-            label
-                .font(.system(size: 13))
-                .tracking(-0.08)
-        }
-        .padding(.leading, 7)
-        .padding(.trailing, 13)
-        .padding(.vertical, 6)
-        .background(Capsule(style: .continuous).fill(Color.scTileBg(scheme)))
-        .overlay(Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Punkt pod tytułem kroku: ptaszek w kółku w tincie akcentu i jedno zdanie.
-/// Trzy takie zamiast akapitu opisu — konkret czyta się szybciej niż zdanie
-/// o tym samym.
-struct TourPoint: View {
-    let text: String
-    let accent: Color
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        // Do góry, nie do środka: dłuższy punkt łamie się na dwie linie,
-        // a ptaszek ma zostać przy pierwszej. 2 pt nad tekstem wyrównują
-        // środek 22-punktowego kółka ze środkiem pierwszej linii.
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 11, weight: .heavy))
-                .foregroundStyle(accent)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(accent.opacity(scheme == .dark ? 0.16 : 0.12)))
-            Text(text)
-                .font(.system(size: 15))
-                .tracking(-0.15)
-                .foregroundStyle(Color.scLabel(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
-        }
-        .accessibilityElement(children: .combine)
-    }
+extension EnvironmentValues {
+    /// Rozmiar widocznej strony przewodnika (`TourPage`); `.zero` przed
+    /// pierwszym pomiarem.
+    @Entry var tourViewport: CGSize = .zero
 }

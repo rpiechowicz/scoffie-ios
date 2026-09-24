@@ -227,25 +227,20 @@ struct CalendarPlateKicker: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        // `ZStack` jako kontener przejścia dla tożsamości niżej.
-        ZStack {
-            Text(item?.kicker ?? " ")
-                .font(.system(size: 10.5, weight: .bold))
-                .tracking(1.1)
-                .foregroundStyle(item?.kickerColor(in: scheme) ?? Color.scMuted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                // Przy przełożeniu dania godzina roluje cyframi, a nazwa pory
-                // przechodzi w nową literami — ten sam ruch, co liczby
-                // w pigułkach pod talerzem („OBIAD · 14:00” w „KOLACJA ·
-                // 20:00”). Tożsamość po rodzaju nadpisu, jak wielki wiersz:
-                // pora z godziną ↔ pora bez godziny („PRZEKĄSKA”) przenika się,
-                // bo rolowanie cyfr w litery wyglądało jak usterka.
-                .contentTransition(.numericText())
-                .id(item?.time == nil ? "words" : "digits")
-                .transition(.opacity)
-        }
-        .frame(maxWidth: .infinity)
+        Text(item?.kicker ?? " ")
+            .font(.system(size: 10.5, weight: .bold))
+            .tracking(1.1)
+            .foregroundStyle(item?.kickerColor(in: scheme) ?? Color.scMuted(scheme))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            // Przy przełożeniu dania godzina roluje cyframi, a nazwa pory
+            // przechodzi w nową literami — ten sam ruch, co liczby
+            // w pigułkach pod talerzem („OBIAD · 14:00” w „KOLACJA ·
+            // 20:00”). JEDNA tożsamość, także pora z godziną ↔ bez godziny
+            // (24.09.2026): dawny klucz „słowa / cyfry” przenikał to
+            // przejście kryciem i nadpis nie ruszał się jak reszta.
+            .contentTransition(.numericText())
+            .frame(maxWidth: .infinity)
         // Pusty dzień nie ma pory, ale ma mieć tę samą wysokość: bez
         // spacji w miejscu nadpisu talerz podskakiwałby o trzynaście
         // punktów przy każdym wejściu w dzień bez planu. Krycie zostawia
@@ -778,6 +773,9 @@ struct CalendarPlateChip: View {
             if let icon {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .bold))
+                    // Pierwsza pigułka zmienia ikonę razem z tekstem (plan ↔
+                    // zegar) — podmiana symbolu zamiast przeskoku w klatce.
+                    .contentTransition(.symbolEffect(.replace))
             }
 
             Text(text)
@@ -847,31 +845,25 @@ struct CalendarPlateCaption: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Wielki wiersz ma tożsamość „danie / pustka” (`headlineKey`),
-            // nie po daniu i nie po rodzaju zdania: każde przełożenie między
-            // daniami roluje — cyfry w cyfry („za 4 h 19 min” w „za 10 h
-            // 5 min”), słowa w słowa i słowa w cyfry („Zjedzone” w „za 4 h”).
-            // Kryciem idzie wyłącznie pusty dzień / pusta pora — rolowanie
-            // odliczania w „Pusty dzień” przy zmianie dnia wyglądało jak
-            // usterka renderowania.
-            ZStack {
-                Text(headline)
-                    .font(.system(size: 34, weight: .bold))
-                    .tracking(-1.3)
-                    .monospacedDigit()
-                    .foregroundStyle(headlineColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .contentTransition(.numericText())
-                    .id(headlineKey)
-                    // Samo krycie, w miejscu — jak zdjęcie na talerzu nad
-                    // nim. Wjazd z boku i z dołu (16 pt w stronę stuknięcia)
-                    // czytał się jako tekst, który „się przesuwa": dwa
-                    // zdania w dwóch miejscach naraz, a przy szybkim
-                    // stukaniu po talerzykach — trzy. Przenikanie nie ma
-                    // geometrii, którą można zepsuć.
-                    .transition(.opacity)
-            }
+            // Wielki wiersz ma JEDNĄ tożsamość: każde przełożenie roluje —
+            // cyfry w cyfry („za 4 h 19 min” w „za 10 h 5 min”), słowa
+            // w słowa i słowa w cyfry („Zjedzone” w „za 4 h”), a od
+            // 24.09.2026 także danie ↔ pusta pora („Zjedzone” w „Nic nie
+            // zaplanowano”). Dawny klucz „danie / pustka” (`.id` + krycie)
+            // robił z tego przejścia przenikanie i Rafał przy zjedzonym
+            // śniadaniu i pustym drugim śniadaniu widział tekst, który „się
+            // nie animuje”. Rolowanie „Pusty dzień” przy zmianie DNIA, przed
+            // którym chronił klucz, już tu nie występuje: każdy dzień to
+            // osobny widok (`CalendarView.dayPage`, `.id` po dacie), więc
+            // w obrębie jednej strony pusty dzień nie przechodzi w danie.
+            Text(headline)
+                .font(.system(size: 34, weight: .bold))
+                .tracking(-1.3)
+                .monospacedDigit()
+                .foregroundStyle(headlineColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
 
             titleSlot
                 .padding(.top, 5)
@@ -897,7 +889,8 @@ struct CalendarPlateCaption: View {
         }
         .frame(maxWidth: .infinity)
         // JEDNA krzywa na przełożenie dania — ta sama, którą przenika zdjęcie
-        // na talerzu (`plateFade`): wielki wiersz, nazwa i pigułki zmieniają
+        // na talerzu (`plateFade` = `SCMotion.textRoll`, krzywa tekstu
+        // w całej aplikacji od 24.09.2026): wielki wiersz, nazwa i pigułki zmieniają
         // się razem ze zdjęciem, w tej samej klatce — cyfry i litery rolują
         // (`numericText`), a kryciem wchodzi tylko to, co się pojawia albo
         // znika (pigułka porcji, nazwa na pustej porze). Dotąd podpis
@@ -930,22 +923,24 @@ struct CalendarPlateCaption: View {
                 .hidden()
                 .accessibilityHidden(true)
 
-            if let title = item?.title {
-                Button {
-                    pagerGate.ifNotSwiping { onOpenDetail?() }
-                } label: {
-                    // Nazwa przechodzi w nową literami, tym samym ruchem co
-                    // cyfry nad nią i w pigułkach — nie gaśnie i nie zapala
-                    // się od nowa. Pudełko ma stałą wysokość (próbka wyżej),
-                    // więc zmiana liczby linijek nie rusza sekwencji.
-                    titleText(title, eaten: item?.isEaten == true)
-                        .contentTransition(.numericText())
-                }
-                .buttonStyle(.plain)
-                .disabled(onOpenDetail == nil)
-                .transition(.opacity)
-                .accessibilityHint("Otwiera szczegóły posiłku")
+            // Przycisk stoi ZAWSZE, także na pustej porze (pusty tekst,
+            // wyłączony): nazwa dania ↔ brak nazwy to ta sama zmiana
+            // tekstu co danie ↔ danie i ma się rolować, a nie wskakiwać
+            // kryciem jako nowy widok (24.09.2026).
+            Button {
+                pagerGate.ifNotSwiping { onOpenDetail?() }
+            } label: {
+                // Nazwa przechodzi w nową literami, tym samym ruchem co
+                // cyfry nad nią i w pigułkach — nie gaśnie i nie zapala
+                // się od nowa. Pudełko ma stałą wysokość (próbka wyżej),
+                // więc zmiana liczby linijek nie rusza sekwencji.
+                titleText(item?.title ?? "", eaten: item?.isEaten == true)
+                    .contentTransition(.numericText())
             }
+            .buttonStyle(.plain)
+            .disabled(onOpenDetail == nil || item?.title == nil)
+            .accessibilityHidden(item?.title == nil)
+            .accessibilityHint("Otwiera szczegóły posiłku")
         }
         .frame(maxWidth: .infinity, alignment: .top)
     }
@@ -1025,17 +1020,6 @@ struct CalendarPlateCaption: View {
     private static let dueVariants = ["Pora jeść", "Smacznego!", "Na stół!", "Czas jeść"]
     private static let lateVariants = ["Pora minęła", "Już po porze", "Po czasie"]
 
-    /// Tożsamość wielkiego wiersza: danie albo pustka, nic więcej. Każde
-    /// przełożenie między daniami ROLUJE (`numericText`) — także „Zjedzone”
-    /// ↔ „za 4 h 19 min” (runda 23, 24.09.2026: Rafał przy zjedzonym
-    /// śniadaniu i obiedzie za 4 h nie widział „naszej animacji tekstu”, bo
-    /// dawny klucz cyfry/słowa przenikał to przejście kryciem). Kryciem
-    /// idzie tylko wejście w pusty dzień / pustą porę i wyjście z nich.
-    private var headlineKey: String {
-        guard let item, !item.isEmptySlot else { return "empty" }
-        return "meal"
-    }
-
     private var headlineColor: Color {
         guard let item else { return Color.scMuted(scheme) }
         if item.isEmptySlot { return Color.scMuted(scheme) }
@@ -1064,11 +1048,13 @@ struct CalendarPlateCaption: View {
         // stanęło. Ikona z dolnego menu, nie własna — użytkownik ma trafić
         // wzrokiem po tym samym znaku, który widzi w pasku pod spodem.
         guard let item, !item.isEmptySlot else {
-            // Tożsamość pigułki idzie za doborem słów: inny wariant to inna
-            // pigułka (wchodzi skalą i kryciem), a nie ta sama z literami
-            // rolującymi się pod `numericText`.
+            // Pierwsza pigułka ma tę samą tożsamość (`lead`) na pustej porze
+            // i przy daniu: „Zaplanujesz w Planie” ↔ „12 min · 510 kcal” roluje
+            // literami w miejscu, jak wielki wiersz nad nią, a ikona
+            // przechodzi w nową (24.09.2026 — dawniej osobne pigułki
+            // przenikały się kryciem i wyglądały na inny ruch).
             let text = voice(["Zaplanujesz w Planie", "Ułożysz w Planie", "Dodasz w Planie"], "plan-chip")
-            return [Chip(id: "plan|\(text)", text: text, icon: MenuConstans.Plan.icon)]
+            return [Chip(id: "lead", text: text, icon: MenuConstans.Plan.icon)]
         }
 
         var out: [Chip] = []
@@ -1079,7 +1065,7 @@ struct CalendarPlateCaption: View {
 
         var meta = "\(item.kcal) kcal"
         if item.prepMinutes > 0 { meta = "\(item.prepMinutes) min · \(meta)" }
-        out.append(Chip(id: "meta", text: meta, icon: "clock"))
+        out.append(Chip(id: "lead", text: meta, icon: "clock"))
 
         if let servings = item.servingsNote {
             out.append(Chip(id: "servings", text: servings, icon: "person.2"))

@@ -78,6 +78,18 @@ struct AssistantOptionsDebugScreen: View {
 
     private var mode: String? { ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] }
 
+    /// Jedna faza przewodnika w prawdziwym przepływie (`WelcomeView`:
+    /// przewodnik + kreator, jedna stopka).
+    private func debugTour(phase: Int) -> some View {
+        WelcomeView(
+            initialDisplayName: "Rafał",
+            isCreatingHousehold: false,
+            errorMessage: nil,
+            showsTour: true,
+            startTourPhase: phase
+        )
+    }
+
     var body: some View {
         if mode == "shopping" {
             // Liczniki Zakupów na przykładowych danych — do sprawdzenia
@@ -129,6 +141,13 @@ struct AssistantOptionsDebugScreen: View {
                 errorMessage: mode == "auth-error" ? "Nie udało się zweryfikować logowania Apple. Spróbuj ponownie." : nil,
                 onSignInWithAppleTap: {}
             )
+        } else if let raw = mode, raw.hasPrefix("tour-"), let phase = Int(raw.dropFirst(5)) {
+            // Przewodnik „Poznaj aplikację”: `tour-0` powitanie, `tour-1…5`
+            // kroki, `tour-6` przejście do kreatora.
+            debugTour(phase: phase)
+        } else if let raw = mode, raw.hasPrefix("welcome-"), let step = Int(raw.dropFirst(8)) {
+            // Kreator „Poznajmy się”, krok 1…5.
+            WelcomeView(initialDisplayName: "Rafał", isCreatingHousehold: false, errorMessage: nil, initialStep: step)
         } else if mode == "legal" {
             // Arkusz dokumentu nad ekranem logowania.
             AuthView(isLoading: false, errorMessage: nil, onSignInWithAppleTap: {})

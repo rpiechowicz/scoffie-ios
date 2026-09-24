@@ -7,7 +7,7 @@ import SwiftUI
 /// Ten sam układ ma powitanie asystenta (`AssistantWelcomeView`): znak,
 /// nagłówek kroku (`SCStepHeader`), karta funkcji (`SCStepFeatureCard`).
 /// Przyciski i „Pomiń" są w stopce (`SCStepFooter`), którą składa
-/// `FeatureTourView` poza animowaną treścią.
+/// `WelcomeView` poza animowaną treścią.
 struct TourIntroView: View {
     private static let logoSize: CGFloat = 56
 
@@ -15,7 +15,7 @@ struct TourIntroView: View {
         SCStepFeature(icon: MenuConstans.Plan.icon, accent: SCPalette.terracotta, title: "Plan na cały tydzień", subtitle: "Ułóżcie menu raz — widzi je cały dom"),
         SCStepFeature(icon: MenuConstans.Products.icon, accent: SCPalette.sage, title: "Lista zakupów z planu", subtitle: "Składa się sama, po działach sklepu"),
         SCStepFeature(icon: MenuConstans.Recipes.icon, accent: SCPalette.indigo, title: "Przepisy krok po kroku", subtitle: "Z czasem gotowania i składnikami"),
-        SCStepFeature(icon: MenuConstans.Assistant.icon, accent: SCPalette.terracottaDeep, title: "Asystent od pomysłów", subtitle: "Ułoży posiłek i doda go do planu"),
+        SCStepFeature(icon: MenuConstans.Assistant.icon, accent: SCPalette.terracottaDeep, title: "Asystent od pomysłów", subtitle: "Ułoży dzień albo tydzień — Ty zatwierdzasz"),
         SCStepFeature(icon: "leaf.fill", accent: SCPalette.sage, title: "Pod Waszą dietę i alergeny", subtitle: "Bez składników, których nie jecie"),
     ]
 
@@ -38,7 +38,7 @@ struct TourIntroView: View {
                 SCStepHeader(
                     eyebrow: "Plan posiłków dla całego domu",
                     title: "Witaj w Scoffie",
-                    subtitle: "Układacie tydzień raz — resztą zajmuje się aplikacja."
+                    subtitle: "Scoffie pomaga zaplanować jedzenie na cały tydzień — dla Ciebie albo dla całego domu. Układacie menu raz, a lista zakupów, kalorie i przypomnienia robią się same."
                 )
                 .padding(.bottom, 22)
 

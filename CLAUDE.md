@@ -148,6 +148,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `AgentStore` wisi na `SessionStore`, a nie na arkuszu — rozmowa przeżywa zamknięcie asystenta.
   Kroki postępu (`turn.progress`) przychodzą z serwera jako gotowe zdania po polsku; nie tłumaczyć
   ich po stronie klienta. `AI_ENABLED=false` na serwerze = `503 AI_DISABLED` i ekran mówi to wprost.
+  Od 24.09.2026 to `AssistantMaintenanceView` („mały remont”: znak z kluczem, co działa dalej,
+  „Sprawdź ponownie” = `AgentStore.recheckAvailability`, ciche sprawdzenie przy każdym wejściu na zakładkę)
+  zamiast rozmowy; pole wiadomości znika. Pula wyczerpana to inny stan (`AssistantQuotaSpentCard`).
+- Czysta kartka po przerwie (`AgentStore.rotateIfStale`): 30 min ciszy w rozmowie ALBO 10 min nieobecności
+  na zakładce/w tle (`staleAfterAway`, od `setVisible(false)` / `noteWentToBackground`) przy rozmowie bez
+  propozycji PENDING; tura w biegu nigdy. Zamiana czyści `AssistantGreetingMemory.forget()`, więc powitanie
+  pisze się od nowa. Pole wiadomości w jasnym motywie: krem #F3ECE0 (`AssistantLook.input`), nie biel.
 - **Źródło makiet asystenta** to dwa artefakty Claude Design (bundle React): „Scoffie — Asystent v4”
   (`claude.ai/artifact/VRQX2MccxwjMNTSvbFLU1U`: ekrany, stan pracy, karty, stany karty, arkusze,
   język systemu) i „Dynamic Empty States” (`claude.ai/artifact/43pdC2GemR7abQDdGepU65`: 12 wariantów
@@ -227,6 +234,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
   `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
   (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
+- Przewodnik „Poznaj aplikację” (`Views/Tour/`, runda 24, 24.09.2026): punkty kroków to cztery sprawdzone w kodzie
+  funkcje w karcie z ikonami w kolorze kroku (`SCStepFeatureCard(revealed:compact:)`, kaskada `scReveal`) — źródło każdego twierdzenia
+  w komentarzu przy `TourStep.all`. Zmieniasz / usuwasz funkcję → popraw punkt. Zdjęte jako nieprawdziwe:
+  „Własne przepisy domu” (nie ma tworzenia przepisów), „z Waszych przepisów” u asystenta, „z powodem” przy
+  podmianie. Kadr zdjęcia ma sufit wysokości (`TourMedia`, `tourViewport`), żeby na SE punkty mieściły się nad stopką.
 - Loader startu stoi NAD korzeniem (`ScoffieApp.showsStartupLoader`), nie w gałęzi pulpitu:
   krycie kontenera bez `compositingGroup` schodzi na dzieci, więc przy przejściu korzenia przez
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
@@ -240,6 +252,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   robi obrót ease-in-out na każdą falę dni, a cała choreografia (fala, refleks, oddech, kropki) idzie jednym taktem 1,34 s
   (`LoaderMotion.logoRotation`, `StartupLoaderView.turnSeconds`), a `ScoffieApp.loaderShown` czeka po
   `wantsStartupLoader == false` do końca bieżącego obrotu (`remainingToFullTurn`) — 1,5 obrotu = do końca drugiego.
+  Runda 24 (24.09.2026): na tym końcu znak STAJE (`loaderRestElapsed` → `StartupLoaderView(restElapsed:)`,
+  `LoaderMotion.motionElapsed`) — zegar szedł dalej i w 0,4 s gaśnięcia planszy ruszał trzeci obrót („zaczyna
+  kręcić, a aplikacja już wchodzi”). Po spoczynku nie startuje żaden nowy cykl (obrót, oddech, refleks, kropki).
   WYJĄTEK — wejście do aplikacji (logowanie / kreator → pulpit): ZAWSZE loader startu, bez zasłony
   (`enterAppUnderLoader`, runda 18 — Rafał: „po logowaniu ZAWSZE ma się włączyć loading”): loader
   przenika się nad logowaniem (`entryLoaderHold`), korzeń przechodzi pod nim, loader schodzi po całej fali
@@ -443,8 +458,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   potrzebuje jej ktokolwiek, przełącznik to SAME awatary (runda 19: imię pod ramę najdłuższego zostawiało pustkę — nie wracać do imienia; kapsuła nie zmienia
   szerokości), a podtytuł z imieniem przenika (`subtitleTransition: .opacity`), zamiast rolować litery. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
   kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka, runda 13: mniejsza — awatary 22 pt, wysokość 26, imię 12 pt) z obwódką w kolorze osoby,
-  wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
-  dzień („Twój dzień · 3 z 4 posiłków” / „Dzień: Ania · …”). Pełnoszerokościowe zakładki z rundy 11
+  wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna). Arkusz NIE ma podtytułu
+  (24.09.2026: „Twój dzień · 3 z 3 posiłków — bez sensu”; w Kalendarzu „1 z 5 zjedzone” też usunięte) — nie wracać. Pełnoszerokościowe zakładki z rundy 11
   odpadły. Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
   Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
 - `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
@@ -458,8 +473,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
   Przełożenie dania (stuknięcie talerzyka) ROLUJE cyfry i tekst (`.numericText()`): wielki wiersz
   ma tożsamość „danie / pustka” (`headlineKey`), nie po daniu — między daniami roluje ZAWSZE, także „Zjedzone” ↔
-  „za 4 h” (runda 23: klucz cyfry/słowa przenikał to kryciem i „nie było naszej animacji”); kryciem tylko pusty dzień / pora;
-  nazwa dania i nadpis („OBIAD · 14:00”) też rolują (nadpis przenika się tylko pora z godziną ↔ bez).
+  „za 4 h” (runda 23: klucz cyfry/słowa przenikał to kryciem i „nie było naszej animacji”). Runda 24 (24.09.2026): ŻADNEGO
+  `.id`/krycia w podpisie ani nadpisie — danie ↔ pusta pora też roluje (wielki wiersz, nazwa jako pusty tekst w stałym przycisku,
+  pierwsza pigułka o stałym id `lead` z ikoną `symbolEffect(.replace)`, nadpis z godziną ↔ bez). Pusty dzień nie potrzebuje klucza:
+  każdy dzień to osobny widok z `.id` po dacie. Krzywa tekstu = `SCMotion.textRoll` (`smooth` 0,42 s, jak danie w arkuszu wyboru
+  posiłku u Asystenta); `DayNavigationMotion.plateFade` to ta sama stała, więc zdjęcie kończy z tekstem. Nowe rolowanie tekstu
+  gdziekolwiek → `SCMotion.textRoll`. Arkusz „Cel dnia” (Kalendarz i Plan) nie ma podtytułu.
   Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
@@ -494,9 +513,44 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
   nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
+- Przewodnik „Poznaj aplikację” (`TourStep`, strony w `Views/Tour/`, 24.09.2026 — Rafał: „więcej opisu pod
+  title… bardziej friendly”, „odśwież po nowemu”): krok = zdjęcie, `SCStepHeader` z eyebrow w kolorze
+  kroku („Zakładka Plan” — dawna kapsułka „Znajdziesz w…” zniknęła), tytuł, `lead` (dwa zdania zwykłym
+  językiem, NAJWYŻEJ dwie linie na iPhonie 16e) i `SCStepFeatureCard(revealed:compact:)` — punkty
+  `TourPoint` = ikona + tytuł + podpis, TEN SAM wiersz co na powitaniu i ekranie końcowym (Rafał: „te
+  wszystkie listy, aby były podobne”). Przewodnik stoi BEZ przewijania także na 16e — nowy tekst
+  sprawdzaj na zrzucie 16e (`tour-1…5`), zanim go dopiszesz. Opis i punkty mówią tylko o tym, co JEST
+  w aplikacji. Zdjęcie bierze to, co zostaje po ZMIERZONYM tekście kroku (`TourStepView.textHeight` →
+  `TourMedia.reserved`), więc czwarty punkt nigdy nie wchodzi pod cień stopki. Plan i Przepisy to
+  ilustracje z kartami aplikacji (`isArtwork`: ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 85 %
+  naturalnej wysokości — ucina się tylko krem nad i pod kartami; 1200 × 868, w bundlu — NIE z R2,
+  bo przewodnik idzie przed pierwszym pobraniem czegokolwiek i nie może czekać na sieć); reszta to
+  rendery telefonów kadrowane 16:13.
+- Przewodnik + kreator profilu = JEDEN przepływ w `WelcomeView` (24.09.2026, Rafał: „wszystko w jednym
+  wielkim stepperze, aby nie przełączać”): `tourPhase` (0 powitanie, 1…5 kroki, 6 „Teraz my poznajmy
+  Ciebie”, `nil` = kreator `step` 1…5), jedna stopka, jeden pasek na 11 odcinków, strony jadą na bok także
+  na styku; „Wstecz” z 1. kroku kreatora wraca do przewodnika, „Pomiń…” skacze do kreatora.
+  `FeatureTourView` usunięty; `WelcomeFlowView` tylko decyduje, czy przewodnik jest (pełna ścieżka i brak
+  `TourCompletion`). Strony przewodnika dostają `padding(.bottom, footerHeight)`, bo stopka kreatora jest
+  nakładką (pola nad klawiaturą). „Wstecz” w jednej linii z „Dalej”, po lewej
+  (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie; asystent zostaje przy `.progressRow`.
+  Krok 1 kreatora = układ Ustawień → „Twoje dane”: karta „Profil” (awatar + imię w miejscu, ołówek)
+  i karta „Sylwetka” (płeć, rok z wiekiem, wzrost, waga na `scChipBg`) z `BodyMetricsSummaryRow` (BMI
+  + kcal na utrzymanie, wspólny z `ProfileDetailsSheet`) — Rafał: „tak smutno wygląda”. Krok 1 mieści się
+  BEZ przewijania (także 16e): karta profilu bez etykiety, „🔒 Tylko do obliczeń” w wierszu etykiety
+  „Sylwetka”, odstępy 16. Krok 2: treningi w karcie „Aktywność” jak w „Twoich danych”. Krok 3: makro
+  ZOSTAJE osobną sekcją „Makroskładniki” z trzema paskami, gramami i procentami (Rafał 24.09.2026: „daj
+  tak samo jak było wcześniej” — połączenie z kartą celu w jeden pasek proporcji odrzucone). Krok 5 jak Ustawienia →
+  Gospodarstwo: nazwa w miejscu (kafelek domu, ołówek) z podpowiedziami „Dom / Nasz dom / Mieszkanie”,
+  karta „Domownicy” (Ty + „TY” / „WŁAŚCICIEL”, pod kreską „Domownicy dołączą z linku”). Licznik kroków
+  w stopce ma szerokość z treści — „11/11” nie łamie się.
+- Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
+  nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
+  treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
+  (przewodnik) od „onboardingu usera” (kreator) i kreator ma zostać, jak jest.
 - Ekran logowania nie przewija się: elastyczne jest hero z kaflami (150–280 pt) i odstęp nad
   przyciskiem; poniżej 700 pt kafle funkcji tracą podpisy. Arkusze dokumentów
   (`LegalDocumentSheet`) stoją na `EditorialSheetHeader`, nagłówek NAD przewijaną treścią.

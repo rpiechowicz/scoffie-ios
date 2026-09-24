@@ -202,7 +202,10 @@ struct AssistantView: View {
             store.setVisible(active)
             // Powrót na zakładkę po przerwie: czysta kartka zamiast
             // dopisywania do rozmowy sprzed pół dnia.
-            if active { store.rotateIfStale() }
+            if active { rotateIfStale() }
+            // Przerwa techniczna: każde wejście na zakładkę sprawdza po cichu,
+            // czy asystent już wrócił — nikt nie musi pamiętać o przycisku.
+            if active, store.isUnavailable { Task { await store.recheckAvailability() } }
             // Pula znana, zanim ktoś stuknie w akcję powitania: pusta =
             // powitanie od razu w stanie limitu, bez wysyłki i skoku.
             if active { Task { await store.refreshUsageIfStale() } }
@@ -211,7 +214,8 @@ struct AssistantView: View {
         .onChange(of: scenePhase) { _, phase in
             // Ten sam próg dla powrotu z tła: aplikacja zminimalizowana
             // w sklepie i otwarta w kuchni to dwie różne rozmowy.
-            if phase == .active { store.rotateIfStale() }
+            if phase == .active { rotateIfStale() }
+            if phase == .background { store.noteWentToBackground() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             keyboardMoved(covers: Self.keyboardCoversBottom(note), duration: Self.animationDuration(of: note))
@@ -306,6 +310,14 @@ struct AssistantView: View {
         } message: {
             Text("Znikną wszystkie Twoje rozmowy z asystentem. Plan tygodnia i przepisy zostają.")
         }
+    }
+
+    /// Czysta kartka po przerwie to NOWA wiadomość asystenta — powitanie
+    /// pisze się od nowa, nawet gdy ta sama sytuacja grała przed chwilą.
+    /// Pamięć czyścimy w tej samej aktualizacji, w której znika rozmowa,
+    /// więc `AssistantEmptyState` rodzi się już jako „do odtworzenia”.
+    private func rotateIfStale() {
+        if store.rotateIfStale() { AssistantGreetingMemory.forget() }
     }
 
     // MARK: - Nagłówek
@@ -494,7 +506,7 @@ struct AssistantView: View {
     /// z ostatniego renderu widoku, który znika: gdyby kierunek i krok
     /// zmieniły się w jednej transakcji, strona schodząca wyjeżdżałaby
     /// jeszcze w poprzednim kierunku i przy „Wstecz" obie spotykały się na
-    /// tej samej krawędzi. Ta sama sztuczka w `FeatureTourView` i `WelcomeView`.
+    /// tej samej krawędzi. Ta sama sztuczka w `WelcomeView`.
     private func goToStep(_ step: IntroStep, alongside sideEffects: (() -> Void)? = nil) {
         introDirection = step.order >= (currentStep?.order ?? 0) ? 1 : -1
         DispatchQueue.main.async {
@@ -772,7 +784,27 @@ struct AssistantView: View {
 
     private var conversation: some View {
         ZStack {
-            if isConversationEmpty {
+            if store.isUnavailable {
+                // Asystent wyłączony na serwerze (`AI_DISABLED`): przerwa
+                // techniczna zamiast rozmowy i pola. Historia zostaje
+                // w menu („Historia rozmów”), a po powrocie wszystko wraca samo.
+                GeometryReader { geometry in
+                    ScrollView {
+                        AssistantMaintenanceView(
+                            isChecking: store.isCheckingAvailability,
+                            onRecheck: { await store.recheckAvailability() }
+                        )
+                        .padding(.horizontal, SCPageMetrics.horizontal)
+                        .padding(.top, 4)
+                        .padding(.bottom, 28)
+                        .frame(minHeight: geometry.size.height, alignment: .bottom)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                }
+                .scrollIndicators(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
+            } else if isConversationEmpty {
                 // Powitanie stoi PRZY POLU, nie pod nagłówkiem (makieta
                 // „Empty state v2”, wariant A): pytanie i odpowiedzi pod
                 // kciukiem, tam, gdzie zacznie się rozmowa. Wolne miejsce
@@ -811,6 +843,7 @@ struct AssistantView: View {
             }
         }
         .animation(conversationSwitch, value: isConversationEmpty)
+        .animation(conversationSwitch, value: store.isUnavailable)
     }
 
     private var messageList: some View {
@@ -1116,7 +1149,11 @@ struct AssistantView: View {
             // wyłącznie frustracją. W rozmowie stoi zamiast niego karta
             // z jednym przyciskiem, który coś zmienia; na pustym ekranie
             // to samo mówi briefing, więc composera nie ma wcale.
-            if store.isLockedByTrialQuota {
+            if store.isUnavailable {
+                // Przerwa techniczna: ekran mówi to sam i ma własne
+                // „Sprawdź ponownie” — wyszarzone pole byłoby tylko szumem.
+                EmptyView()
+            } else if store.isLockedByTrialQuota {
                 if !isConversationEmpty {
                     quotaSpentCard(isTrial: true)
                 }
@@ -1150,6 +1187,7 @@ struct AssistantView: View {
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
         .animation(.easeInOut(duration: 0.2), value: isLockedByMonthlyQuota)
+        .animation(.easeInOut(duration: 0.2), value: store.isUnavailable)
     }
 
     /// `LComposer` z makiety: pole 50 pt w pigułce z włoskowatym obrysem,
@@ -1187,7 +1225,6 @@ struct AssistantView: View {
                     .stroke(AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.12), lineWidth: 3)
                     .padding(-2)
             )
-            .shadow(color: Color.black.opacity(scheme == .dark || editing != nil ? 0 : 0.04), radius: 1, y: 1)
             .animation(.easeOut(duration: 0.2), value: editing != nil)
             .accessibilityLabel(editing == nil ? "Wiadomość do asystenta" : "Poprawiana wiadomość")
 
