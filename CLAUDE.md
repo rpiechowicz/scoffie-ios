@@ -521,6 +521,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   językiem, zanim padną punkty), a sekcje kreatora `WelcomeSection(title:hint:)` — jedno zdanie
   PO CO pytamy. Opis mówi tylko o tym, co JEST w aplikacji (jak punkty w `TourStep.all`). Zdjęcie
   kroku oddaje wysokość pod opis (`TourMedia.reserved`), żeby czwarty punkt nie wchodził pod cień stopki.
+  Kreator BEZ paska nawigacji: „Wyloguj” stoi w rzędzie z kafelkiem ikony (`WelcomeHeader`), treść
+  zaczyna się od bezpiecznego obszaru jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`),
+  górny brzeg gaśnie przez `scScrollEdgeFade`. Cel kalorii i makro = JEDNA karta: suwak, pod kreską
+  pasek proporcji z legendą w kolorach `SCMacroPalette`.
 - Ekran logowania nie przewija się: elastyczne jest hero z kaflami (150–280 pt) i odstęp nad
   przyciskiem; poniżej 700 pt kafle funkcji tracą podpisy. Arkusze dokumentów
   (`LegalDocumentSheet`) stoją na `EditorialSheetHeader`, nagłówek NAD przewijaną treścią.

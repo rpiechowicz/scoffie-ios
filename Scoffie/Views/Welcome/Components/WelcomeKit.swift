@@ -11,9 +11,11 @@ enum WelcomeLayout {
     /// Margines stron aplikacji (`SCPageMetrics`) — ten sam, co w stopce
     /// kroków (`SCSheetFooter`), więc karty i przycisk stoją w jednej linii.
     static let horizontal: CGFloat = SCPageMetrics.horizontal
-    /// Pod paskiem statusu i „Wyloguj" — treść ignoruje górny bezpieczny
-    /// obszar (`WelcomeView`), więc odstęp jest liczony od krawędzi ekranu.
-    static let topInset: CGFloat = 132
+    /// Od bezpiecznego obszaru, jak strona przewodnika (`TourLayout.top`) —
+    /// przejście przewodnik → kreator nie przesuwa nagłówka. Dawne 132 pt
+    /// liczone od krawędzi ekranu robiło miejsce pod „Wyloguj” w pasku
+    /// nawigacji; przycisk stoi teraz w nagłówku (`WelcomeHeader`).
+    static let topInset: CGFloat = TourLayout.top
     /// Tyle zajmuje stopka kroków (`SCStepFooter`: 12 + wiersz 36 + 14 +
     /// przycisk ~45 + 12) nad bezpiecznym obszarem, plus jej cień
     /// (`SCEdgeShade.bottomHeight`), który leży na treści. Ostatnia karta ma
@@ -145,5 +147,55 @@ struct WelcomeOptionDivider: View {
             .fill(Color.scRule(colorScheme))
             .frame(height: 1)
             .padding(.leading, WelcomeOptionRow.dividerInset)
+    }
+}
+
+/// Nagłówek kroku kreatora: wspólny `SCStepHeader` i „Wyloguj” w rzędzie
+/// z kafelkiem ikony.
+///
+/// Do 24.09.2026 „Wyloguj” wisiał w pasku nawigacji jako pływająca
+/// pigułka, a treść zaczynała się 132 pt od krawędzi ekranu, żeby się pod
+/// nim nie schować — nad każdym krokiem stała pusta ćwiartka ekranu, której
+/// przewodnik (`TourPage`) nie ma. Teraz przycisk przewija się razem
+/// z nagłówkiem, a krok zaczyna się tam, gdzie strona przewodnika.
+struct WelcomeHeader: View {
+    let icon: String
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        SCStepHeader(icon: icon, eyebrow: eyebrow, title: title, subtitle: subtitle)
+            // Kafelek ikony ma 48 pt, przycisk 34 — 7 pt z góry stawia oba
+            // na jednej osi.
+            .overlay(alignment: .topTrailing) {
+                WelcomeSignOutButton()
+                    .padding(.top, 7)
+            }
+    }
+}
+
+/// „Wyloguj” w kreatorze — cicha kapsuła na karcie aplikacji
+/// (`scTileBg` + `scTileStroke`), nie akcja niszcząca: nic tu nie ginie,
+/// kreator wraca po ponownym zalogowaniu.
+struct WelcomeSignOutButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sessionStore) private var sessionStore
+
+    var body: some View {
+        Button {
+            Task { await sessionStore.signOut() }
+        } label: {
+            Text("Wyloguj")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.scMuted(colorScheme))
+                .padding(.horizontal, 14)
+                .frame(height: 34)
+                .background(Capsule(style: .continuous).fill(Color.scTileBg(colorScheme)))
+                .overlay(Capsule(style: .continuous).stroke(Color.scTileStroke(colorScheme), lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Powrót do ekranu logowania")
     }
 }

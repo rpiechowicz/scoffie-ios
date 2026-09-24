@@ -26,7 +26,7 @@ struct WelcomeStep1ProfileView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                SCStepHeader(
+                WelcomeHeader(
                     icon: "person.fill",
                     eyebrow: "Witaj w Scoffie",
                     title: "Zacznijmy od Ciebie",
@@ -114,6 +114,7 @@ struct WelcomeStep1ProfileView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
+        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 

@@ -29,7 +29,7 @@ struct WelcomeStep4HouseholdView: View {
         // krokach 1–4.
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                SCStepHeader(
+                WelcomeHeader(
                     icon: "house.fill",
                     eyebrow: "Ostatni krok",
                     title: "Stwórz gospodarstwo",
@@ -68,6 +68,7 @@ struct WelcomeStep4HouseholdView: View {
             .padding(.bottom, WelcomeLayout.bottomInset)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 

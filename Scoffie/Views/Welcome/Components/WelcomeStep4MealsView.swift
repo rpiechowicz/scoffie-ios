@@ -20,7 +20,7 @@ struct WelcomeStep4MealsView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                SCStepHeader(
+                WelcomeHeader(
                     icon: "clock.fill",
                     eyebrow: "Rytm dnia",
                     title: "Ile posiłków jecie?",
@@ -55,6 +55,7 @@ struct WelcomeStep4MealsView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
+        .scScrollEdgeFade()
     }
 
     // MARK: - Trójka obowiązkowa

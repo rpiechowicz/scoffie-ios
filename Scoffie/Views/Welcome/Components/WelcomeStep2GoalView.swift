@@ -10,7 +10,7 @@ struct WelcomeStep2GoalView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                SCStepHeader(
+                WelcomeHeader(
                     icon: "target",
                     eyebrow: "Twój cel",
                     title: "Co chcesz osiągnąć?",
@@ -62,6 +62,7 @@ struct WelcomeStep2GoalView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
+        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 }
