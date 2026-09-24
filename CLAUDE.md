@@ -223,6 +223,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Koniec sesji z ręki użytkownika = `SessionStore.signOut()` / `deleteAccount()`: najpierw
   `await sessionCurtain.cover()`, dopiero potem czyszczenie `UserDefaults` i store. Gołe `logout()`
   zostaje dla wylogowań wymuszonych (odmowa serwera, cofnięte Apple ID).
+  Pod zasłoną, przed podmianą: `dismissPresentedScreens()` zamyka BEZ animacji arkusze starego
+  korzenia (inaczej UIKit zamykał je sam, z animacją, już nad ekranem logowania), klawiatura chowa
+  się razem z wejściem zasłony. Ekran, z którego się wychodzi, nie wraca do stanu spoczynku
+  pod wchodzącą zasłoną: spinner logowania trzyma `isAuthenticated`, przycisk kroku 5 —
+  `currentHouseholdId`. Logowanie BEZ domu czeka na `users:me` (limit 4 s) przed `isAuthenticated`,
+  bo to ono mówi, czy kreator zaczyna od przewodnika, od kroku 5, czy od razu pulpit — dociągnięte
+  po wejściu przestawiało kreator albo korzeń drugi raz na oczach użytkownika.
 - Szczegóły posiłku v2 (21.09.2026) — makieta Claude Design „Scoffie — Szczegóły Posiłku v2”
   (projekt `43b605d0-…`, `components/detail-v2.jsx`, sekcja „final”). Stepper porcji siedzi
   w nagłówku „Wartości odżywcze”; pod nim porcja na tle celu dnia (`PlanGoalRings` +
