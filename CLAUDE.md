@@ -458,8 +458,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   potrzebuje jej ktokolwiek, przełącznik to SAME awatary (runda 19: imię pod ramę najdłuższego zostawiało pustkę — nie wracać do imienia; kapsuła nie zmienia
   szerokości), a podtytuł z imieniem przenika (`subtitleTransition: .opacity`), zamiast rolować litery. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
   kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka, runda 13: mniejsza — awatary 22 pt, wysokość 26, imię 12 pt) z obwódką w kolorze osoby,
-  wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
-  dzień („Twój dzień · 3 z 4 posiłków” / „Dzień: Ania · …”). Pełnoszerokościowe zakładki z rundy 11
+  wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna). Arkusz NIE ma podtytułu
+  (24.09.2026: „Twój dzień · 3 z 3 posiłków — bez sensu”; w Kalendarzu „1 z 5 zjedzone” też usunięte) — nie wracać. Pełnoszerokościowe zakładki z rundy 11
   odpadły. Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
   Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
 - `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
@@ -478,7 +478,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   pierwsza pigułka o stałym id `lead` z ikoną `symbolEffect(.replace)`, nadpis z godziną ↔ bez). Pusty dzień nie potrzebuje klucza:
   każdy dzień to osobny widok z `.id` po dacie. Krzywa tekstu = `SCMotion.textRoll` (`smooth` 0,42 s, jak danie w arkuszu wyboru
   posiłku u Asystenta); `DayNavigationMotion.plateFade` to ta sama stała, więc zdjęcie kończy z tekstem. Nowe rolowanie tekstu
-  gdziekolwiek → `SCMotion.textRoll`. Arkusz „Cel dnia” z Kalendarza nie ma podtytułu („1 z 5 zjedzone” usunięte).
+  gdziekolwiek → `SCMotion.textRoll`. Arkusz „Cel dnia” (Kalendarz i Plan) nie ma podtytułu.
   Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
