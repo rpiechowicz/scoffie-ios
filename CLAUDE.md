@@ -234,11 +234,6 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
   `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
   (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
-- Przewodnik „Poznaj aplikację” (`Views/Tour/`, runda 24, 24.09.2026): punkty kroków to cztery sprawdzone w kodzie
-  funkcje w karcie z ikonami w kolorze kroku (`SCStepFeatureCard(revealed:compact:)`, kaskada `scReveal`) — źródło każdego twierdzenia
-  w komentarzu przy `TourStep.all`. Zmieniasz / usuwasz funkcję → popraw punkt. Zdjęte jako nieprawdziwe:
-  „Własne przepisy domu” (nie ma tworzenia przepisów), „z Waszych przepisów” u asystenta, „z powodem” przy
-  podmianie. Kadr zdjęcia ma sufit wysokości (`TourMedia`, `tourViewport`), żeby na SE punkty mieściły się nad stopką.
 - Loader startu stoi NAD korzeniem (`ScoffieApp.showsStartupLoader`), nie w gałęzi pulpitu:
   krycie kontenera bez `compositingGroup` schodzi na dzieci, więc przy przejściu korzenia przez
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
@@ -342,7 +337,33 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   spodem `EditorialPrimaryActionButton`. JEDNA instancja na cały przepływ, żeby pasek się animował.
   `WelcomeFooter`, `WelcomeStepper`, `WelcomeStepHeader`, `TourFooter`, `TourBackground`, `AssistantTickRow`
   usunięte; kreator i przewodnik na `SCPageBackground`, margines 20, sekcje `WelcomeSection`, wiersze celu
-  i diety jak w Ustawieniach, bez akapitów objaśnień.
+  i diety jak w Ustawieniach, bez akapitów objaśnień. `SCStepHeader(typing:)` = tytuł i opis PISZĄ SIĘ
+  (`SCTypedText`, tempo powitania Asystenta: 65 / 170 zn/s, razem ≤ 0,9 s) — używa tego tylko Asystent.
+- Wprowadzenie Asystenta v2 (24.09.2026, Rafał: „nieaktualne… zrób od nowa”, „button wstecz taki sam jak na
+  onboardingu aplikacji”, „po poznawaniu od razu klawiatura, a nie chcę”) — makieta Claude Design
+  „Scoffie — Asystent · Wprowadzenie v2” (`claude.ai/artifact/6pXaTCJ3VDrcrTSmmPCGwU`). CZTERY ekrany zamiast
+  sześciu: Powitanie → Planowanie → Ty decydujesz → Zgoda (`AssistantView.IntroStep`), zgoda NA KOŃCU, po niej
+  od razu rozmowa — BEZ fokusu pola (dawne `startConversation` wysuwało klawiaturę po 0,35 s; nie wracać).
+  Na czas wprowadzenia zakładka NIE ma nagłówka „Asystent” (strona od góry jak w przewodniku). Strony w
+  `AssistantIntroPages.swift` (wspólne z arkuszem menu „Jak działa Asystent” = `AssistantHowItWorksView`):
+  powitanie = JEDEN zwarty blok na środku wolnego miejsca (v3, Rafał: „dużo wolnej przestrzeni”): żywy znak 52
+  (`SCLivingMark` lively, podskok po tytule) z oddechem 38 pt nad sobą — poświata i podskok muszą zmieścić się
+  pod górną krawędzią przewijanej strony (v2: „od góry za bardzo przycięte”), „Cześć! Jestem Twoim Asystentem”
+  (Asystent mówi w 1. osobie), pole wiadomości w stroju prawdziwego (kapsuła 50 + krążek „soft”), w którym
+  przykłady piszą się same, i etykiety. Planowanie i Ty decydujesz = SCENKA z PRAWDZIWYCH klocków rozmowy
+  (bez ramki wokół — karta w karcie ściska) + `SCStepHeader` + etykiety `SCTag` (Components/, wspólne
+  z alergenami w Ustawieniach) zamiast karty punktów. Scenki na PRAWDZIWYCH daniach z katalogu odsianych dietą
+  i alergenami z Ustawień (`AssistantIntroDish.pool` → `RecipePersonalization.excludes`): dymek jak
+  `AssistantUserBubble` pisze „Coś lekkiego na kolację”, karta „Do wyboru · kolacja” (`AssistantCard`,
+  `AssistantCardHead`, `AssistantMealRow`) — kcal liczą się od zera, potem wybór (ptaszek, reszta przygasa);
+  karta propozycji dnia [Inny zestaw][Zapisz dzień] → kręciołek → szałwia, „Zapisane”, [Cofnij][Otwórz plan]
+  (`AssistantCardActions`, tytuły rolują). Karta stoi w układzie od pierwszej klatki (opacity), a kcal wchodzą
+  przez `kcal: shown ? … : 0` — wtedy liczą się NA OCZACH. Jedna `SCStepFooter` (`.besidePrimary`), powitanie ma
+  „Pomiń wprowadzenie” (→ zgoda), pasek 3 odcinki. Każdy punkt sprawdzony w backendzie (komentarz na górze
+  pliku): alergeny = `collectPlanViolations` sprawdza KAŻDEGO domownika; cofnięcie = okno
+  `AI_PROPOSAL_UNDO_WINDOW_MS` (domyślnie 1 h — NIE pisać „w ciągu doby”). Menu ⋯ „Co potrafi Asystent” bez karty
+  „Jedna zasada” i bez opisów/miniatur (`AssistantThumb`, `AssistantExchangePreview` usunięte), zgoda z menu:
+  status z kafelkiem + `SCDestructiveButton` „Cofnij zgodę”. Licznik potwierdzeń „0 z 2” roluje (`numericText`).
 - Przypięty nagłówek nad przewijaną treścią arkusza = BEZ kreski: `.scScrollEdgeFade()` na
   `ScrollView` (`Components/SCScrollEdgeFade.swift`) — górny brzeg treści gaśnie (maska, więc działa
   na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Wzór:
@@ -513,22 +534,23 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
   nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
-- Przewodnik „Poznaj aplikację” (`TourStep`, strony w `Views/Tour/`, 24.09.2026 — Rafał: „więcej opisu pod
-  title… bardziej friendly”, „odśwież po nowemu”): krok = zdjęcie, `SCStepHeader` z eyebrow w kolorze
-  kroku („Zakładka Plan” — dawna kapsułka „Znajdziesz w…” zniknęła), tytuł, `lead` (dwa zdania zwykłym
-  językiem, NAJWYŻEJ dwie linie na iPhonie 16e) i `SCStepFeatureCard(revealed:compact:)` — punkty
-  `TourPoint` = ikona + tytuł + podpis, TEN SAM wiersz co na powitaniu i ekranie końcowym (Rafał: „te
-  wszystkie listy, aby były podobne”). Przewodnik stoi BEZ przewijania także na 16e — nowy tekst
-  sprawdzaj na zrzucie 16e (`tour-1…5`), zanim go dopiszesz. Opis i punkty mówią tylko o tym, co JEST
-  w aplikacji. Zdjęcie bierze to, co zostaje po ZMIERZONYM tekście kroku (`TourStepView.textHeight` →
-  `TourMedia.reserved`), więc czwarty punkt nigdy nie wchodzi pod cień stopki. Plan i Przepisy to
-  ilustracje z kartami aplikacji (`isArtwork`: ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 85 %
-  naturalnej wysokości — ucina się tylko krem nad i pod kartami; 1200 × 868, w bundlu — NIE z R2,
-  bo przewodnik idzie przed pierwszym pobraniem czegokolwiek i nie może czekać na sieć); reszta to
-  rendery telefonów kadrowane 16:13.
+- Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień
+  przewodnik”): krok = SAM PLAKAT z R2 (`TourStepView`) — pionowa grafika z własnym nagłówkiem, opisem
+  i kartami aplikacji, te same co zrzuty w App Store. Bez `SCStepHeader` i karty funkcji nad/pod nim
+  (dublowałyby tekst plakatu). Plakat mieści się W CAŁOŚCI bez przewijania: wysokość strony nad stopką,
+  szerokość z proporcji 1080 : 2344, na środku; przed pobraniem tint koloru kroku w tym samym rozmiarze.
+  `TourStep.title`/`lead` = tekst plakatu słowo w słowo — tylko dla VoiceOver. Pliki:
+  `https://img.scoffie.app/onboarding/tour-{plan,recipes,shopping,assistant,settings}-v2.webp`
+  (1080 × 2344, WebP q85, ~150–210 KB; `-v1` = dawne poziome ilustracje, zostają dla starszych wersji).
+  Bucket `scoffie` (produkcyjny — lokalny token R2 w `.env` backendu jest nieaktualny, wysyłka przez
+  `railway run` z katalogu backendu), `Cache-Control: immutable` na rok → NOWA grafika = NOWA wersja
+  w nazwie (`TourStep.image(_:version:)`), nigdy nadpisanie. Wariant `CachedAsyncImage(.poster)` (do
+  2400 px) — przy `.large` (1200 px) drobny tekst plakatu się rozmywał. `TourStep.prefetchImages()`
+  rusza na ekranie logowania (`AuthView`) i przy wejściu w przepływ. Powitanie (`TourIntroView`)
+  i „Teraz my poznajmy Ciebie” (`TourDoneView`) zostają rysowane w aplikacji.
 - Przewodnik + kreator profilu = JEDEN przepływ w `WelcomeView` (24.09.2026, Rafał: „wszystko w jednym
   wielkim stepperze, aby nie przełączać”): `tourPhase` (0 powitanie, 1…5 kroki, 6 „Teraz my poznajmy
   Ciebie”, `nil` = kreator `step` 1…5), jedna stopka, jeden pasek na 11 odcinków, strony jadą na bok także
@@ -536,7 +558,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `FeatureTourView` usunięty; `WelcomeFlowView` tylko decyduje, czy przewodnik jest (pełna ścieżka i brak
   `TourCompletion`). Strony przewodnika dostają `padding(.bottom, footerHeight)`, bo stopka kreatora jest
   nakładką (pola nad klawiaturą). „Wstecz” w jednej linii z „Dalej”, po lewej
-  (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie; asystent zostaje przy `.progressRow`.
+  (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie — od wprowadzenia v2 także u Asystenta.
   Krok 1 kreatora = układ Ustawień → „Twoje dane”: karta „Profil” (awatar + imię w miejscu, ołówek)
   i karta „Sylwetka” (płeć, rok z wiekiem, wzrost, waga na `scChipBg`) z `BodyMetricsSummaryRow` (BMI
   + kcal na utrzymanie, wspólny z `ProfileDetailsSheet`) — Rafał: „tak smutno wygląda”. Krok 1 mieści się

@@ -4,8 +4,10 @@ import SwiftUI
 /// pytanie. Typograficzny, bez zdjęcia: zdjęcia zaczynają się od kroku 1
 /// i gdyby jedno stało już tutaj, cała reszta straciłaby efekt wejścia.
 ///
-/// Ten sam układ ma powitanie asystenta (`AssistantWelcomeView`): znak,
-/// nagłówek kroku (`SCStepHeader`), karta funkcji (`SCStepFeatureCard`).
+/// Układ: znak, nagłówek kroku (`SCStepHeader`), karta funkcji
+/// (`SCStepFeatureCard`). Powitanie wprowadzenia Asystenta
+/// (`AssistantIntroPages.swift`) ma ten sam znak i nagłówek, a pod nimi
+/// pole z przykładami zamiast karty.
 /// Przyciski i „Pomiń" są w stopce (`SCStepFooter`), którą składa
 /// `WelcomeView` poza animowaną treścią.
 struct TourIntroView: View {

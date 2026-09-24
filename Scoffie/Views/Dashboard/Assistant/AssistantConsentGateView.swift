@@ -1,18 +1,19 @@
 import SwiftUI
 
-/// „Zanim zaczniemy" — stan zakładki Asystent zamiast rozmowy, dopóki nie
-/// ma zgody (projekt „Asystent Zgoda", 3.09.2026). Ten sam widok jako arkusz
-/// z menu ⋯ → „Prywatność i zgoda": wtedy pokazuje pasek statusu, wygaszone
-/// potwierdzenia i „Cofnij zgodę".
+/// „Zanim zaczniemy" — ostatni krok wprowadzenia Asystenta (v2, 24.09.2026:
+/// Powitanie → Planowanie → Ty decydujesz → Zgoda), stan zakładki zamiast
+/// rozmowy, dopóki nie ma zgody. Ten sam widok jako arkusz z menu ⋯ →
+/// „Prywatność i zgoda": wtedy pokazuje stan zgody, wygaszone potwierdzenia
+/// i „Cofnij zgodę".
 ///
 /// Serwer wymaga DWÓCH zgód (wiek 16+ i przetwarzanie danych o diecie
-/// w asystencie), więc „Włącz asystenta" odblokowuje się dopiero po dwóch
-/// stuknięciach. „Co potrafi" nie jest tu linkiem — to następny krok
-/// przepływu, po zgodzie i onboardingu. Treść „co wysyłamy / czego nie" jest przepisana z sekcji 6
-/// polityki prywatności — ekran nie obiecuje ani mniej, ani więcej.
+/// w asystencie), więc „Włącz Asystenta" odblokowuje się dopiero po dwóch
+/// stuknięciach — licznik „0 z 2” roluje przy każdym. Treść „co wysyłamy /
+/// czego nie" jest przepisana z sekcji 6 polityki prywatności — ekran nie
+/// obiecuje ani mniej, ani więcej.
 struct AssistantConsentGateView: View {
     enum Presentation {
-        /// W zakładce, pod nagłówkiem „Asystent"; bez własnego nagłówka.
+        /// Krok wprowadzenia w zakładce — nagłówek kroku, stopkę składa rodzic.
         case inline
         /// Arkusz z menu — z nagłówkiem i przyciskiem zamknięcia.
         case sheet
@@ -23,14 +24,17 @@ struct AssistantConsentGateView: View {
     var presentation: Presentation = .inline
     var onGranted: (() -> Void)? = nil
     /// Potwierdzenia i błąd zapisu od rodzica — w zakładce trzyma je
-    /// `AssistantView`, bo stopka z „Włącz asystenta" stoi poza tym widokiem
-    /// (`AssistantIntroFooter`). Arkusz z menu podaje `nil` i ma własne.
+    /// `AssistantView`, bo stopka z „Włącz Asystenta" stoi poza tym widokiem
+    /// (`AssistantView.introFooter`). Arkusz z menu podaje `nil` i ma własne.
     var draft: Binding<AssistantConsentDraft>? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var localDraft = AssistantConsentDraft()
+    /// Nagłówek kroku już się napisał — zdanie, które wraca po błędzie
+    /// zapisu, stoi od razu, zamiast pisać się drugi raz.
+    @State private var headerTyped = false
     @State private var showPrivacyPolicy = false
     @State private var confirmsRevoke = false
 
@@ -123,34 +127,41 @@ struct AssistantConsentGateView: View {
                 sections
             }
         } else {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Nagłówek kroku jak w kreatorze „Poznajmy się”
-                        // i na kartach „Poznaj” (`SCStepHeader`). Zdanie pod
-                        // tytułem gaśnie przy błędzie zapisu — błąd stoi wtedy
-                        // w stopce, nad przyciskiem, i nie spycha potwierdzeń.
-                        SCStepHeader(
-                            icon: "lock.shield.fill",
-                            eyebrow: isGranted ? "Prywatność" : "Asystent",
-                            title: "Zanim zaczniemy",
-                            subtitle: isGranted || currentDraft.errorMessage != nil
-                                ? nil
-                                : "Zanim asystent wyśle cokolwiek do modelu, potrzebuje Twojej zgody."
-                        )
-                        .padding(.top, 4)
-                        .padding(.bottom, 6)
-
-                        sections
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Nagłówek kroku jak na stronach wprowadzenia i w kreatorze
+                    // (`SCStepHeader`) — tytuł i zdanie PISZĄ SIĘ, jak na
+                    // pozostałych krokach. Kafelek w szałwii: prywatność, nie
+                    // funkcja. Zdanie pod tytułem gaśnie przy błędzie zapisu —
+                    // błąd stoi wtedy w stopce, nad przyciskiem, i nie spycha
+                    // potwierdzeń.
+                    SCStepHeader(
+                        icon: "lock.shield.fill",
+                        accent: SCPalette.sage,
+                        eyebrow: "Prywatność",
+                        title: "Zanim zaczniemy",
+                        subtitle: isGranted || currentDraft.errorMessage != nil
+                            ? nil
+                            : "Zanim Asystent wyśle cokolwiek do modelu, potrzebuje Twojej zgody.",
+                        typing: isGranted || headerTyped ? nil : 0
+                    )
+                    .padding(.bottom, 8)
+                    .task {
+                        try? await Task.sleep(for: .seconds(1.2))
+                        if !Task.isCancelled { headerTyped = true }
                     }
-                    .padding(.horizontal, SCPageMetrics.horizontal)
-                    .padding(.top, 6)
-                    // Zapas na cień stopki (`SCEdgeShade`), który leży na treści.
-                    .padding(.bottom, SCEdgeShade.bottomHeight)
+
+                    sections
                 }
-                .scrollIndicators(.hidden)
-                .scScrollEdgeFade()
+                .padding(.horizontal, SCPageMetrics.horizontal)
+                // Od góry jak strony wprowadzenia — nad krokiem nie stoi
+                // nagłówek zakładki.
+                .padding(.top, AssistantIntroLayout.top)
+                // Zapas na cień stopki (`SCEdgeShade`), który leży na treści.
+                .padding(.bottom, AssistantIntroLayout.bottom)
             }
+            .scrollIndicators(.hidden)
+            .scScrollEdgeFade()
         }
     }
 
@@ -236,33 +247,43 @@ struct AssistantConsentGateView: View {
     /// Licznik zamiast napisu „oba wymagane": 0 z 2 → 1 z 2 → 2 z 2 (zielone),
     /// po zapisie „Zapisane” z ptaszkiem. Mówi to samo, ale zmienia się razem
     /// z tym, co użytkownik robi, zamiast go pouczać.
+    ///
+    /// Cyfra ROLUJE przy każdym stuknięciu (`numericText`, krzywa tekstu
+    /// aplikacji `SCMotion.textRoll`) — ta sama animacja liczb, co w reszcie
+    /// Asystenta, zamiast podmiany w klatce.
     private var confirmationsBadge: some View {
         let done = isGranted ? 2 : (currentDraft.confirmsAge ? 1 : 0) + (currentDraft.confirmsData ? 1 : 0)
         let complete = done == 2
         return Text(isGranted ? "Zapisane" : "\(done) z 2")
-            .font(.system(size: 12, weight: complete ? .bold : .regular))
+            .font(.system(size: 12, weight: complete ? .bold : .semibold))
             .monospacedDigit()
             .foregroundStyle(complete ? AssistantLook.sage(scheme) : AssistantLook.faint(scheme))
-            .animation(.easeInOut(duration: 0.18), value: done)
+            .contentTransition(.numericText(value: Double(done)))
+            .animation(SCMotion.textRoll, value: done)
     }
 
-    /// Pasek „Zgoda włączona · wersja …” w tincie szałwii.
+    /// Stan zgody w tincie szałwii: kafelek z tarczą, „Zgoda włączona” i pod
+    /// spodem wersja dokumentu — ten sam układ, co kafelek z tytułem
+    /// w wierszach Ustawień, zamiast jednej linijki ściśniętej do 85 %.
     private var statusBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.shield")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AssistantLook.sage(scheme))
-            (Text("Zgoda włączona").fontWeight(.bold).foregroundColor(AssistantLook.sage(scheme))
-                + Text(" · wersja \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)"))
-                .font(.system(size: 13.5))
-                .foregroundStyle(AssistantLook.muted(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+        HStack(spacing: 12) {
+            SCHeaderIconWell(icon: "checkmark.shield.fill", accent: SCPalette.sage, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Zgoda włączona")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AssistantLook.sage(scheme))
+                Text("Wersja \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(AssistantLook.muted(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AssistantLook.sageTint(scheme)))
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(AssistantLook.sageTint(scheme)))
+        .accessibilityElement(children: .combine)
     }
 
     /// „Co wysyłamy do modelu” jako lista z kropkami szałwii; „Czego nie
@@ -358,7 +379,13 @@ struct AssistantConsentGateView: View {
     }
 
     /// Stopka ARKUSZA z menu. W zakładce stopkę przepływu składa
-    /// `AssistantView` (`AssistantIntroFooter`).
+    /// `AssistantView` (`introFooter`).
+    ///
+    /// Przyciski z tych samych klocków, co w całej aplikacji: włączenie jak
+    /// akcja główna kroku (`EditorialPrimaryActionButton`, ta sama, co
+    /// w stopce wprowadzenia), cofnięcie jak każda akcja nieodwracalna
+    /// (`SCDestructiveButton` — tylko otwiera potwierdzenie). Wcześniej goły
+    /// terakotowy tekst „Cofnij zgodę”, który czytał się jak odnośnik.
     @ViewBuilder
     private var footer: some View {
         VStack(spacing: 10) {
@@ -371,25 +398,21 @@ struct AssistantConsentGateView: View {
             }
 
             if isGranted {
-                Button {
+                SCDestructiveButton(
+                    title: consents.isBusy ? "Cofam…" : "Cofnij zgodę",
+                    icon: "arrow.uturn.backward",
+                    isLoading: consents.isBusy
+                ) {
                     confirmsRevoke = true
-                } label: {
-                    Text(consents.isBusy ? "Cofam…" : "Cofnij zgodę")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AssistantLook.terra(scheme))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .disabled(consents.isBusy)
             } else {
-                AssistantPrimaryButton(
-                    action: AssistantCardAction(title: "Włącz asystenta", icon: "arrow.right", action: grant),
-                    isBusy: consents.isBusy
+                EditorialPrimaryActionButton(
+                    title: "Włącz Asystenta",
+                    icon: "sparkles",
+                    isEnabled: canGrant,
+                    isLoading: consents.isBusy,
+                    action: grant
                 )
-                .disabled(!canGrant)
-                .opacity(canGrant ? 1 : 0.5)
                 .accessibilityHint(canGrant ? "" : "Najpierw zaznacz oba potwierdzenia")
             }
         }

@@ -19,11 +19,16 @@ enum CachedImageVariant: Sendable {
     case thumbnail
     /// Okładka szczegółów przepisu i duże karty.
     case large
+    /// Pionowy plakat z drobnym tekstem na cały ekran — plansze przewodnika
+    /// „Poznaj aplikację” (1080 × 2344). Przy `.large` dłuższy bok schodził
+    /// do 1200 px i tekst na plakacie się rozmywał.
+    case poster
 
     var maxPixelSize: CGFloat {
         switch self {
         case .thumbnail: 512
         case .large: 1200
+        case .poster: 2400
         }
     }
 
@@ -31,6 +36,7 @@ enum CachedImageVariant: Sendable {
         switch self {
         case .thumbnail: "#t512"
         case .large: ""
+        case .poster: "#p2400"
         }
     }
 }

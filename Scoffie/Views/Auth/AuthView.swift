@@ -47,6 +47,9 @@ struct AuthView: View {
                 .ignoresSafeArea(edges: .top)
             }
         }
+        // Ilustracje przewodnika leżą na R2 — ściągamy je tutaj, żeby po
+        // zalogowaniu kroki „Poznaj aplikację” miały je od pierwszej klatki.
+        .task { TourStep.prefetchImages() }
     }
 }
 
