@@ -425,9 +425,42 @@ struct ScoffieApp: App {
 
     private var isStartupReady: Bool { sessionStore.startupPhase == .ready }
 
+    /// Czy loader NAPRAWDĘ stoi. Wchodzi od razu, gdy `wantsStartupLoader`,
+    /// ale schodzi dopiero na pełnym obrocie znaku (`StartupLoaderView.
+    /// remainingToFullTurn`) — start gotowy w półtora obrotu czeka do końca
+    /// drugiego. `nil` = idzie za `wantsStartupLoader` (pierwsza klatka).
+    @State private var loaderShown: Bool?
+    @State private var loaderStartedAt = Date()
+    @State private var loaderRelease: Task<Void, Never>?
+
+    private var showsStartupLoader: Bool { loaderShown ?? wantsStartupLoader }
+
+    private func startupLoaderWish(changedTo wants: Bool) {
+        if wants {
+            loaderRelease?.cancel()
+            loaderRelease = nil
+            // Z ukrytego: nowy loader, nowy początek obrotów. Pierwsza klatka
+            // (`nil`) już rysuje loader z datą ze stanu — tej się nie rusza.
+            if loaderShown == false { loaderStartedAt = Date() }
+            loaderShown = true
+            return
+        }
+        guard loaderShown == true else {
+            loaderShown = false
+            return
+        }
+        let wait = StartupLoaderView.remainingToFullTurn(since: loaderStartedAt)
+        loaderRelease?.cancel()
+        loaderRelease = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            loaderShown = false
+        }
+    }
+
     /// Loader startu: osobny ekran, zanim są store pulpitu, a potem plansza
     /// nad budującym się pod nią pulpitem, dopóki start nie jest gotowy.
-    private var showsStartupLoader: Bool {
+    private var wantsStartupLoader: Bool {
         // Wejście do aplikacji trzyma loader sam — także nad logowaniem,
         // zanim korzeń przejdzie pod nim na pulpit.
         if entryLoaderHold, shownScreen != .auth || isEnteringApp { return true }
@@ -542,7 +575,8 @@ struct ScoffieApp: App {
                 // się pod nieprzezroczystą planszą, więc nie ma czego pokazać,
                 // a fala kafelków nie zaczyna się od nowa w połowie.
                 if showsStartupLoader {
-                    StartupLoaderView()
+                    // Ta sama chwila startu co liczenie obrotów w korzeniu.
+                    StartupLoaderView(startDate: loaderStartedAt)
                         // Zgaśnięcie loadera nad pulpitem jako JEDNA warstwa:
                         // bez tego krycie schodzi na każdy kafelek i napis
                         // osobno, a przez rozrzedzone tło prześwitują one
@@ -557,6 +591,9 @@ struct ScoffieApp: App {
                 #endif
             }
             .animation(.easeOut(duration: 0.4), value: showsStartupLoader)
+            .onChange(of: wantsStartupLoader, initial: true) { _, wants in
+                startupLoaderWish(changedTo: wants)
+            }
             .onChange(of: currentRootScreen, initial: true) { _, target in
                 if displayedScreen == nil {
                     displayedScreen = target
