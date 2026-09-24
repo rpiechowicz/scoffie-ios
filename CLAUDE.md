@@ -237,12 +237,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   miniatura BEZ przybliżenia (zdjęcia katalogu to 1344×768 z talerzem na środku — `scaledToFill`
   w kwadracie już wycina środek, a dawne ×1,45 ucinało rant każdego talerza, runda 9);
   bez zdjęcia glif — i najpierw dania, których profil NIE ukrywa (kafelek nie pokaże dania z alergenem
-  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii. Runda 14: kafelek jest PIONOWY (miniatura 38 u góry,
-  nazwa 14,5 semibold na całej szerokości, liczba przypięta do dołu) — obok miniatury zostawało 96 pt przy
-  375, a „Niskotłuszczowe” (~118 pt) malało (Rafał: „nie są wszystkie takiej samej wielkości”). Siatka
+  z Ustawień). Wspólny dla Diety/Cech i filtrów kategorii. Runda 14 postawiła kafelek PIONOWO (miniatura nad nazwą), 24.09 wrócił
+  POZIOMY (miniatura 38 z lewej, obok nazwa i liczba) — Rafał: „podobało mi się bardziej, jak jest w 1 linii”;
+  jedno długie słowo („Niskotłuszczowe”) maleje do 0,8, kilka słów schodzi do drugiej linii. Siatka
   `RecipeFilterTileGrid` stoi na `RecipeFilterTileGridLayout`: każdy kafelek ma wysokość najwyższego
-  w CAŁEJ siatce, nie w wierszu; nazwy bez `minimumScaleFactor` (poza bezpiecznikiem 0,9 dla jednego słowa
-  przy 320 pt). Nowa nazwa kafelka = sprawdź szerokość w SF Pro Text Semibold 14,5 wobec 143 pt (375).
+  w CAŁEJ siatce, nie w wierszu.
   Wszystkie liczby w arkuszu idą przez `RecipeFilterOptions.matches(RecipeFilterFacts)` —
   tę samą regułę, którą filtruje lista, więc „Pokaż” nie może się rozjechać z listą; fakty
   per przepis trzyma `RecipeFilterFactsCache`, pulę arkusza `RecipeFilterIndex` (liczona leniwie
@@ -329,6 +328,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: `EditorialSheetHeader` z kafelkiem,
   zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka. Linijka „Aktywne: …” pod spodem
   zniknęła w rundzie 9 („niepotrzebne”) — co działa, widać na kafelkach. „Wyczyść” obok krzyżyka
+  (`RecipeFilterClearButton` — od 24.09 SAMA ikona w terakotowym krążku 36 pt, słowo tylko dla VoiceOver)
   mają też oba arkusze wykluczania (dział czyści swój dział, główny — wszystko) i wybór alergenów
   w Ustawieniach (zostają id alergenów nieznanych tej wersji — unia z `SettingsView`).
 - „Wybierz przepis” w Planie (`PlanSlotPickerSheet`) i lista kategorii na Przepisach
@@ -359,10 +359,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   TYLKO znane klocki. Nagłówek = zdjęcie dania (`EditorialRecipeCover` 58 pt) + „DODAJ DO PLANU” + nazwa
   + fakty z ikonami (czas, kcal) + krzyżyk. „Kiedy” = tydzień w karcie dokładnie jak `EditorialWeekBar`
   (podpis „TEN TYDZIEŃ · …”, „Wróć do dziś”, strzałki 26 pt, przejeżdżające podkreślenie, przeciąganie
-  w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = lista pór w karcie:
-  kafelek pory, nazwa, pod nią miniatura + nazwa dania, które już tam stoi, `SCRadioMark` w kolorze pory,
-  tło wybranego w tincie pory. „Dla kogo” = `PlanAudienceChips`. „Porcje” = karta z rolującą liczbą
-  i `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” /
+  w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = od 24.09 kafle pór w siatce 2 × N
+  (ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule`, miniatura dania, które już tam stoi, w rogu;
+  wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
+  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” /
   „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,
