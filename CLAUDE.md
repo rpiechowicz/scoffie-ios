@@ -227,6 +227,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
   `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
   (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
+- Przewodnik „Poznaj aplikację” (`Views/Tour/`, runda 24, 24.09.2026): punkty kroków to cztery sprawdzone w kodzie
+  funkcje w karcie z ptaszkami w kolorze kroku (`TourPointsCard`, kaskada `scReveal`) — źródło każdego twierdzenia
+  w komentarzu przy `TourStep.all`. Zmieniasz / usuwasz funkcję → popraw punkt. Zdjęte jako nieprawdziwe:
+  „Własne przepisy domu” (nie ma tworzenia przepisów), „z Waszych przepisów” u asystenta, „z powodem” przy
+  podmianie. Kadr zdjęcia ma sufit wysokości (`TourMedia`, `tourViewport`), żeby na SE punkty mieściły się nad stopką.
 - Loader startu stoi NAD korzeniem (`ScoffieApp.showsStartupLoader`), nie w gałęzi pulpitu:
   krycie kontenera bez `compositingGroup` schodzi na dzieci, więc przy przejściu korzenia przez
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
@@ -240,6 +245,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   robi obrót ease-in-out na każdą falę dni, a cała choreografia (fala, refleks, oddech, kropki) idzie jednym taktem 1,34 s
   (`LoaderMotion.logoRotation`, `StartupLoaderView.turnSeconds`), a `ScoffieApp.loaderShown` czeka po
   `wantsStartupLoader == false` do końca bieżącego obrotu (`remainingToFullTurn`) — 1,5 obrotu = do końca drugiego.
+  Runda 24 (24.09.2026): na tym końcu znak STAJE (`loaderRestElapsed` → `StartupLoaderView(restElapsed:)`,
+  `LoaderMotion.motionElapsed`) — zegar szedł dalej i w 0,4 s gaśnięcia planszy ruszał trzeci obrót („zaczyna
+  kręcić, a aplikacja już wchodzi”). Po spoczynku nie startuje żaden nowy cykl (obrót, oddech, refleks, kropki).
   WYJĄTEK — wejście do aplikacji (logowanie / kreator → pulpit): ZAWSZE loader startu, bez zasłony
   (`enterAppUnderLoader`, runda 18 — Rafał: „po logowaniu ZAWSZE ma się włączyć loading”): loader
   przenika się nad logowaniem (`entryLoaderHold`), korzeń przechodzi pod nim, loader schodzi po całej fali

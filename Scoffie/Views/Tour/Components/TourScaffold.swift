@@ -34,6 +34,8 @@ enum TourLayout {
 /// gdy kroki przejeżdżają na bok — dokładnie tak, jak w kreatorze profilu.
 struct TourPage<Content: View>: View {
     private let content: Content
+    /// Widoczna część strony — dla sufitu zdjęcia kroku (`TourMedia`).
+    @State private var viewport: CGSize = .zero
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -45,10 +47,20 @@ struct TourPage<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, TourLayout.top)
                 .padding(.bottom, TourLayout.bottom)
+                .environment(\.tourViewport, viewport)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            viewport = size
+        }
     }
+}
+
+extension EnvironmentValues {
+    /// Rozmiar widocznej strony przewodnika (`TourPage`); `.zero` przed
+    /// pierwszym pomiarem.
+    @Entry var tourViewport: CGSize = .zero
 }
 
 /// Kapsułka nad treścią: ikona w kafelku i krótka etykieta. Kroki mówią
@@ -88,32 +100,80 @@ struct TourChip: View {
     }
 }
 
-/// Punkt pod tytułem kroku: ptaszek w kółku w tincie akcentu i jedno zdanie.
-/// Trzy takie zamiast akapitu opisu — konkret czyta się szybciej niż zdanie
-/// o tym samym.
-struct TourPoint: View {
-    let text: String
+/// Punkty kroku w jednej karcie: ptaszek w kółku w kolorze kroku i jedno
+/// zdanie, wiersze przedzielone linią jak w `SCStepFeatureCard`. Karta jak
+/// każda inna w aplikacji — `scTileBg` + `scTileStroke`, bez cienia.
+///
+/// Wiersze wchodzą kaskadą (`scReveal`: krycie + 14 pt z dołu) — kółko
+/// z ptaszkiem dostaje przy tym lekkie „kliknięcie” (0,6 → 1), jakby punkt
+/// był właśnie odhaczany. Bez ruchu całego ekranu: strona i tak wjeżdża
+/// z boku (`FeatureTourView`).
+struct TourPointsCard: View {
+    let points: [String]
     let accent: Color
+    let isVisible: Bool
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let badge: CGFloat = 22
+    private static let spacing: CGFloat = 12
+    private static let horizontalPadding: CGFloat = 14
+    private static let radius: CGFloat = 18
 
     var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(points.enumerated()), id: \.offset) { index, point in
+                row(point, order: index)
+                    .scReveal(isVisible, order: index)
+                if index < points.count - 1 {
+                    Rectangle()
+                        .fill(Color.scRule(scheme))
+                        .frame(height: 1)
+                        .padding(.leading, Self.horizontalPadding + Self.badge + Self.spacing)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+        )
+    }
+
+    private func row(_ text: String, order: Int) -> some View {
         // Do góry, nie do środka: dłuższy punkt łamie się na dwie linie,
-        // a ptaszek ma zostać przy pierwszej. 2 pt nad tekstem wyrównują
+        // a ptaszek ma zostać przy pierwszej. 1 pt nad tekstem wyrównuje
         // środek 22-punktowego kółka ze środkiem pierwszej linii.
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Self.spacing) {
             Image(systemName: "checkmark")
-                .font(.system(size: 11, weight: .heavy))
+                .font(.system(size: 10.5, weight: .heavy))
                 .foregroundStyle(accent)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(accent.opacity(scheme == .dark ? 0.16 : 0.12)))
+                .frame(width: Self.badge, height: Self.badge)
+                .background(Circle().fill(accent.opacity(scheme == .dark ? 0.18 : 0.14)))
+                .overlay(Circle().stroke(accent.opacity(scheme == .dark ? 0.30 : 0.24), lineWidth: 1))
+                .scaleEffect(isVisible || reduceMotion ? 1 : 0.6)
+                .animation(
+                    reduceMotion
+                        ? nil
+                        : .spring(response: 0.42, dampingFraction: 0.62)
+                            .delay(0.22 + Double(order) * 0.05),
+                    value: isVisible
+                )
             Text(text)
-                .font(.system(size: 15))
+                .font(.system(size: 14.5))
                 .tracking(-0.15)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
+                .padding(.top, 1)
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
     }
 }
