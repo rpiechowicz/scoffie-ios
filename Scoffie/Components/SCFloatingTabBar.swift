@@ -95,9 +95,16 @@ struct SCFloatingTabBar: View {
     /// stoi na wybranej zakładce.
     @State private var dragX: CGFloat?
 
-    private var compaction: Animation {
+    private var compaction: Animation { Self.compaction(reduceMotion: reduceMotion) }
+
+    /// Ruch zwinięcia i rozwinięcia — JEDEN dla paska i dla wszystkiego, co
+    /// zwija się razem z nim (pigułka „Cel dnia” w Planie).
+    static func compaction(reduceMotion: Bool) -> Animation {
         reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.38)
     }
+
+    /// O ile opada górna krawędź paska przy zwinięciu (pasek stoi na dole).
+    static let compactionDrop: CGFloat = expandedHeight - compactHeight
 
     /// Pigułka za palcem: krótka sprężyna bez odbicia — nadąża za ruchem,
     /// a pierwszy dotyk daleko od pigułki nie jest teleportacją.

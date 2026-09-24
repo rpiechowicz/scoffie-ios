@@ -497,6 +497,11 @@ struct PlanGoalRings: View {
                     endColor: ring.color,
                     trackOpacity: 0.16
                 )
+                // Ta sama krzywa co tory legendy obok (`MacroProgressTrack`
+                // z `revealAnimation`) — także przy przełączeniu osoby i dnia.
+                // Bez tego pierścień brał sprężynę 0,36 s z przełącznika i był
+                // gotowy, zanim kreska obok przejechała połowę drogi.
+                .animation(Self.revealAnimation, value: ring.progress)
                 .padding(CGFloat(index) * (Self.lineWidth + Self.spacing))
             }
         }
