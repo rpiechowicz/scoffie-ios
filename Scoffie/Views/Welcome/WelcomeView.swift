@@ -204,7 +204,7 @@ struct WelcomeView: View {
                 // tak jak w przewodniku — w pasku został tylko „Wyloguj".
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Wyloguj") {
-                        sessionStore.logout()
+                        Task { await sessionStore.signOut() }
                     }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.scMuted(colorScheme))

@@ -205,6 +205,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
   `UIGestureRecognizerRepresentable` ruszające tylko przy ruchu poziomym (`OptionsPagePan`) —
   `DragGesture` na całym arkuszu zabiera systemowi zamykanie w dół.
+- Zmiana korzenia (logowanie, kreator, pulpit, wylogowanie, usunięcie konta) idzie JEDNĄ drogą:
+  `SCSessionCurtain` (`Components/`, własne okno nad arkuszami, pod toastami) — zasłona w kolorze tła
+  w górę, `ScoffieApp.showRootScreen` przestawia korzeń bez animacji (na AKTUALNY cel), zasłona w dół.
+  Korzeń nie ma już własnego crossfade'u (pulpit wjeżdżał z loaderem i prześwitywał Kalendarz).
+  Koniec sesji z ręki użytkownika = `SessionStore.signOut()` / `deleteAccount()`: najpierw
+  `await sessionCurtain.cover()`, dopiero potem czyszczenie `UserDefaults` i store. Gołe `logout()`
+  zostaje dla wylogowań wymuszonych (odmowa serwera, cofnięte Apple ID).
 - Szczegóły posiłku v2 (21.09.2026) — makieta Claude Design „Scoffie — Szczegóły Posiłku v2”
   (projekt `43b605d0-…`, `components/detail-v2.jsx`, sekcja „final”). Stepper porcji siedzi
   w nagłówku „Wartości odżywcze”; pod nim porcja na tle celu dnia (`PlanGoalRings` +
