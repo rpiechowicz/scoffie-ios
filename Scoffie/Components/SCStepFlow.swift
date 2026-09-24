@@ -387,8 +387,13 @@ struct SCStepFooter: View {
             // licznik z lewej — pusty licznik zjadałby 36 pt z prawej
             // i odnośnik „Pomiń…” stałby krzywo.
             if backPlacement == .progressRow || slot.key == Slot.progress(step: 0, total: 0).key {
+                // Szerokość z treści, nie stałe 36 pt: przy dwucyfrowych
+                // krokach („11/11” w przepływie przewodnik + kreator) licznik
+                // łamał się na dwie linie. Minimum trzyma pasek w miejscu przy
+                // „1/5” → „2/5”.
                 counter
-                    .frame(width: Self.rowHeight, alignment: .trailing)
+                    .fixedSize()
+                    .frame(minWidth: Self.rowHeight, alignment: .trailing)
             }
         }
         .frame(height: Self.rowHeight)

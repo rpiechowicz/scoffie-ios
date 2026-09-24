@@ -7,6 +7,8 @@ struct WelcomeStep2GoalView: View {
     @Binding var goal: UserGoal
     @Binding var activity: ActivityLevel
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
@@ -40,22 +42,42 @@ struct WelcomeStep2GoalView: View {
                     .welcomeCard()
                 }
 
-                // Same chipy, bez karty z ikoną i pytaniem „Ile razy
-                // w tygodniu trenujesz?” — etykieta sekcji mówi to samo.
-                WelcomeSection(title: "Treningi w tygodniu") {
-                    HStack(spacing: 8) {
-                        ForEach(ActivityLevel.allCases) { candidate in
-                            ActivityChip(
-                                level: candidate,
-                                isSelected: candidate == activity,
-                                onTap: {
-                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                                        activity = candidate
+                // Karta jak „Aktywność” w Ustawieniach → „Twoje dane”
+                // (24.09.2026): nagłówek z ikoną i jednym zdaniem, pod nim
+                // chipy. Gołe chipy na tle wyglądały jak inny ekran.
+                WelcomeSection(title: "Aktywność") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 12) {
+                            EditorialSettingsTileIcon(icon: "figure.run", color: SCPalette.terracotta)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Treningi w tygodniu")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Color.scLabel(colorScheme))
+                                Text("Im więcej ruchu, tym wyższe zapotrzebowanie.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.scMuted(colorScheme))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        HStack(spacing: 8) {
+                            ForEach(ActivityLevel.allCases) { candidate in
+                                ActivityChip(
+                                    level: candidate,
+                                    isSelected: candidate == activity,
+                                    onTap: {
+                                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                                            activity = candidate
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
+                    .padding(16)
+                    .welcomeCard()
                 }
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
@@ -78,26 +100,24 @@ private struct ActivityChip: View {
         Button(action: onTap) {
             VStack(spacing: 5) {
                 Text(level.label)
-                    .font(.system(size: 18, weight: .heavy))
+                    .font(.system(size: 17, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
                 Text(level.subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(isSelected ? SCPalette.terracotta.opacity(0.85) : Color.scMuted(colorScheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, minHeight: 64)
+            .frame(maxWidth: .infinity, minHeight: 62)
             .padding(.horizontal, 4)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             // Ten sam chip co w „Twoich danych” w Ustawieniach: wybór
-            // w wariancie „soft”, bez gradientu i bez cienia. Niewybrany na
-            // tle karty (`scTileBg`), bo stoi wprost na stronie.
+            // w wariancie „soft”, bez gradientu i bez cienia, wewnątrz karty.
             .scChoiceSurface(
-                RoundedRectangle(cornerRadius: 14, style: .continuous),
-                isOn: isSelected,
-                offFill: Color.scTileBg(colorScheme)
+                RoundedRectangle(cornerRadius: 12, style: .continuous),
+                isOn: isSelected
             )
         }
         .buttonStyle(.plain)

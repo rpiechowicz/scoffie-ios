@@ -49,7 +49,9 @@ struct WelcomeStep1ProfileView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
+            // Ciaśniej niż inne kroki (16 zamiast 22): ten krok ma się
+            // zmieścić bez przewijania razem z podglądem BMI (Rafał 24.09.2026).
+            VStack(alignment: .leading, spacing: 16) {
                 SCStepHeader(
                     icon: "person.fill",
                     eyebrow: "Witaj w Scoffie",
@@ -57,25 +59,28 @@ struct WelcomeStep1ProfileView: View {
                     subtitle: "Z tych danych policzymy Twój dzienny cel."
                 )
 
-                WelcomeSection(title: "Profil") {
-                    profileCard
-                }
+                // Bez etykiety „Profil” — awatar z imieniem mówi sam za siebie,
+                // a ten krok ma się zmieścić bez przewijania.
+                profileCard
 
-                WelcomeSection(title: "Sylwetka") {
+                VStack(alignment: .leading, spacing: 2) {
+                    // Zdanie o prywatności w wierszu etykiety, po prawej — pada,
+                    // zanim poda się wagę, i nie kosztuje osobnej linijki.
+                    HStack(alignment: .firstTextBaseline) {
+                        EditorialSheetSectionLabel(title: "Sylwetka")
+                            .fixedSize()
+                        Spacer(minLength: 8)
+                        HStack(spacing: 4) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 9.5, weight: .semibold))
+                            Text("Tylko do obliczeń")
+                                .font(.system(size: 11.5, weight: .medium))
+                        }
+                        .foregroundStyle(Color.scFaint(colorScheme))
+                        .padding(.trailing, 6)
+                    }
                     bodyCard
                 }
-
-                // Jedna linijka zamiast akapitu — tyle, ile trzeba wiedzieć,
-                // zanim poda się wagę.
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 10.5, weight: .semibold))
-                    Text("Tylko do obliczeń — nikomu ich nie udostępniamy.")
-                        .font(.system(size: 12.5))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .foregroundStyle(Color.scFaint(colorScheme))
-                .padding(.horizontal, 6)
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
             .padding(.top, WelcomeLayout.topInset)
@@ -98,7 +103,7 @@ struct WelcomeStep1ProfileView: View {
             ProfileAvatar(
                 avatarUrl: nil,
                 displayName: trimmed.isEmpty ? "?" : trimmed,
-                size: 56,
+                size: 44,
                 seed: sessionStore.currentUserId ?? trimmed
             )
 
@@ -115,7 +120,7 @@ struct WelcomeStep1ProfileView: View {
                         }
                         .focused($focusedField, equals: .name)
                         .submitLabel(.next)
-                        .font(.system(size: 19, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(colorScheme))
                         .onSubmit { focusedField = .height }
@@ -130,14 +135,15 @@ struct WelcomeStep1ProfileView: View {
                     .frame(height: isEditing ? 1.5 : 1)
 
                 Text("Tak zobaczą Cię domownicy w planie")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.scMuted(colorScheme))
-                    .padding(.top, 3)
+                    .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.smooth(duration: 0.18), value: isEditing)
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .welcomeCard()
         .contentShape(Rectangle())
         .onTapGesture { focusedField = .name }
@@ -148,7 +154,7 @@ struct WelcomeStep1ProfileView: View {
     /// Jedna karta jak „Sylwetka” w Ustawieniach: płeć, rok, wzrost i waga,
     /// a pod nimi wynik — BMI i kalorie na utrzymanie wagi.
     private var bodyCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 fieldCaption("Płeć")
                 HStack(spacing: 8) {
@@ -206,7 +212,7 @@ struct WelcomeStep1ProfileView: View {
                     .animation(.smooth(duration: 0.2), value: metrics.maintenanceCalories)
             }
         }
-        .padding(18)
+        .padding(14)
         .welcomeCard()
     }
 
@@ -232,7 +238,7 @@ struct WelcomeStep1ProfileView: View {
                 .foregroundStyle(Color.scMuted(colorScheme))
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.scChipBg(colorScheme))
@@ -264,7 +270,7 @@ private struct SexChip: View {
             }
             .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
+            .padding(.vertical, 10)
             // Ten sam chip co w „Twoich danych” w Ustawieniach — wybór
             // w wariancie „soft”, nie pełna terakota z białym napisem.
             // Niewybrany na tle karty (`scTileBg`), bo stoi wprost na stronie.

@@ -11,6 +11,12 @@ import SwiftUI
 // Od 23.09.2026 bez kafla z gradientem, separatora „ALBO” i przerywanej
 // ramki, która wyglądała jak przycisk, a nim nie była: dwie sekcje z
 // etykietami aplikacji i karty `scTileBg`.
+//
+// Od 24.09.2026 (Rafał: „widoki, które są stare i odbiegają od designu”)
+// w układzie Ustawień → Gospodarstwo: nazwa jak imię w „Twoich danych”
+// (kafelek domu, nazwa w miejscu, ołówek, kreska) z podpowiedziami do
+// stuknięcia, a domownicy jako lista — Ty z plakietkami „TY” i
+// „WŁAŚCICIEL”, pod spodem miejsce na resztę.
 struct WelcomeStep4HouseholdView: View {
     @Binding var householdName: String
     let firstName: String
@@ -20,7 +26,13 @@ struct WelcomeStep4HouseholdView: View {
     var onAcceptInvitation: ((String) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sessionStore) private var sessionStore
     @FocusState private var isHouseholdFieldFocused: Bool
+
+    /// Podpowiedzi nazwy — stuknięcie wpisuje ją w pole. Bez imienia
+    /// w środku („Dom Rafała”): odmiana imion po polsku to loteria.
+    /// Trzy, nie cztery: na iPhonie 16e czwarta ścinała pozostałe do „Nasz d…”.
+    private static let nameSuggestions = ["Dom", "Nasz dom", "Mieszkanie"]
 
     var body: some View {
         // Ten sam kontener, co pozostałe kroki (ScrollView, ten sam odstęp
@@ -38,6 +50,10 @@ struct WelcomeStep4HouseholdView: View {
 
                 WelcomeSection(title: "Nazwa gospodarstwa") {
                     nameCard
+                }
+
+                WelcomeSection(title: "Domownicy") {
+                    membersCard
                 }
 
                 WelcomeSection(title: pendingInvitations.isEmpty ? "Masz zaproszenie?" : "Czekające zaproszenia") {
@@ -67,40 +83,139 @@ struct WelcomeStep4HouseholdView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
-    /// Pole nazwy i pod kreską domownicy: Ty i puste miejsce na resztę.
+    /// Nazwa jak imię w „Twoich danych”: kafelek domu, nazwa edytowana
+    /// w miejscu, ołówek i kreska zapalające się przy edycji, a pod spodem
+    /// podpowiedzi do stuknięcia.
     private var nameCard: some View {
+        let trimmed = householdName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
+                EditorialSettingsTileIcon(icon: "house.fill", color: SCPalette.terracotta, size: 44, radius: 12)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        TextField("Np. Nasz dom", text: $householdName)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                            .focused($isHouseholdFieldFocused)
+                            .submitLabel(.done)
+                            .font(.system(size: 18, weight: .bold))
+                            .tracking(-0.3)
+                            .foregroundStyle(Color.scLabel(colorScheme))
+
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(isHouseholdFieldFocused ? SCPalette.terracotta : Color.scFaint(colorScheme))
+                    }
+
+                    Rectangle()
+                        .fill(isHouseholdFieldFocused ? SCPalette.terracotta : Color.scRule(colorScheme))
+                        .frame(height: isHouseholdFieldFocused ? 1.5 : 1)
+                }
+                .animation(.smooth(duration: 0.18), value: isHouseholdFieldFocused)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { isHouseholdFieldFocused = true }
+
+            HStack(spacing: 6) {
+                ForEach(Self.nameSuggestions, id: \.self) { suggestion in
+                    let isOn = trimmed == suggestion
+                    Button {
+                        withAnimation(.smooth(duration: 0.18)) {
+                            householdName = suggestion
+                        }
+                    } label: {
+                        Text(suggestion)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(isOn ? SCPalette.terracotta : Color.scLabel(colorScheme))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .scChoiceSurface(Capsule(style: .continuous), isOn: isOn, style: .chip)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Nazwa: \(suggestion)")
+                    .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+        }
+        .padding(16)
+        .welcomeCard()
+    }
+
+    /// Domownicy jak w Ustawieniach → Gospodarstwo: Ty z plakietkami i pod
+    /// kreską puste miejsce na resztę — zaprasza się ich po utworzeniu.
+    private var membersCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "house.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.scFaint(colorScheme))
-                TextField("Np. Nasz dom", text: $householdName)
-                    .textInputAutocapitalization(.words)
-                    .autocorrectionDisabled()
-                    .focused($isHouseholdFieldFocused)
-                    .submitLabel(.done)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.scLabel(colorScheme))
+                ProfileAvatar(
+                    avatarUrl: nil,
+                    displayName: firstName.isEmpty ? avatarInitial : firstName,
+                    size: 40,
+                    seed: sessionStore.currentUserId ?? firstName
+                )
+
+                HStack(spacing: 6) {
+                    Text(firstName.isEmpty ? "Ty" : firstName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.scLabel(colorScheme))
+                        .lineLimit(1)
+                    badge("TY", color: SCPalette.terracotta)
+                    badge("WŁAŚCICIEL", color: SCPalette.butter)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
 
             Rectangle()
                 .fill(Color.scRule(colorScheme))
                 .frame(height: 1)
-                .padding(.horizontal, 14)
+                .padding(.leading, 14 + 40 + 12)
 
-            HStack(spacing: 10) {
-                AvatarStack(initial: avatarInitial)
-                Text("Domowników zaprosisz po utworzeniu")
-                    .font(.system(size: 12.5))
+            HStack(spacing: 12) {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.scMuted(colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.scChipBg(colorScheme)))
+                    .overlay(
+                        Circle().strokeBorder(
+                            Color.scFaint(colorScheme),
+                            style: StrokeStyle(lineWidth: 1.2, dash: [3, 2])
+                        )
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Domownicy dołączą z linku")
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(Color.scLabel(colorScheme))
+                    Text("Wyślesz go z Ustawień po utworzeniu")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.scMuted(colorScheme))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         }
         .welcomeCard()
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Plakietka przy imieniu — ta sama, co w Ustawieniach → Gospodarstwo.
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .heavy))
+            .tracking(0.8)
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(colorScheme == .dark ? 0.16 : 0.12), in: Capsule())
+            .fixedSize()
     }
 
     /// Bez czekających zaproszeń: jedna informacja, skąd się je bierze.
@@ -155,49 +270,6 @@ struct WelcomeStep4HouseholdView: View {
         .buttonStyle(PlanPressStyle())
         .accessibilityLabel("Dołącz do \(invitation.householdName)")
         .accessibilityHint(invitation.subtitle)
-    }
-}
-
-private struct AvatarStack: View {
-    let initial: String
-    @Environment(\.colorScheme) private var colorScheme
-
-    private let bubbleSize: CGFloat = 28
-
-    var body: some View {
-        // Obok siebie, bez zachodzenia: karta (`scTileBg`) jest
-        // półprzezroczysta, więc dawna obwódka „w kolorze tła” pod drugim
-        // kółkiem prześwitywałaby zamiast je przycinać.
-        HStack(spacing: 4) {
-            avatarBubble
-            placeholderBubble
-        }
-        .accessibilityHidden(true)
-    }
-
-    /// Inicjał w tincie terakoty, jak awatary domowników w Ustawieniach →
-    /// Gospodarstwo — nie pełne koło z gradientem.
-    private var avatarBubble: some View {
-        Text(initial)
-            .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(SCPalette.terracotta)
-            .frame(width: bubbleSize, height: bubbleSize)
-            .background(Circle().fill(SCPalette.terracotta.opacity(colorScheme == .dark ? 0.22 : 0.16)))
-    }
-
-    private var placeholderBubble: some View {
-        Image(systemName: "plus")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color.scMuted(colorScheme))
-            .frame(width: bubbleSize, height: bubbleSize)
-            .background(Circle().fill(Color.scChipBg(colorScheme)))
-            .overlay(
-                Circle()
-                    .strokeBorder(
-                        Color.scFaint(colorScheme),
-                        style: StrokeStyle(lineWidth: 1.2, dash: [3, 2])
-                    )
-            )
     }
 }
 

@@ -539,7 +539,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie; asystent zostaje przy `.progressRow`.
   Krok 1 kreatora = układ Ustawień → „Twoje dane”: karta „Profil” (awatar + imię w miejscu, ołówek)
   i karta „Sylwetka” (płeć, rok z wiekiem, wzrost, waga na `scChipBg`) z `BodyMetricsSummaryRow` (BMI
-  + kcal na utrzymanie, wspólny z `ProfileDetailsSheet`) — Rafał: „tak smutno wygląda”.
+  + kcal na utrzymanie, wspólny z `ProfileDetailsSheet`) — Rafał: „tak smutno wygląda”. Krok 1 mieści się
+  BEZ przewijania (także 16e): karta profilu bez etykiety, „🔒 Tylko do obliczeń” w wierszu etykiety
+  „Sylwetka”, odstępy 16. Krok 2: treningi w karcie „Aktywność” jak w „Twoich danych”. Krok 3: cel kcal
+  i makro w JEDNEJ karcie (pasek proporcji `SCMacroPalette` + legenda). Krok 5 jak Ustawienia →
+  Gospodarstwo: nazwa w miejscu (kafelek domu, ołówek) z podpowiedziami „Dom / Nasz dom / Mieszkanie”,
+  karta „Domownicy” (Ty + „TY” / „WŁAŚCICIEL”, pod kreską „Domownicy dołączą z linku”). Licznik kroków
+  w stopce ma szerokość z treści — „11/11” nie łamie się.
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
   treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
