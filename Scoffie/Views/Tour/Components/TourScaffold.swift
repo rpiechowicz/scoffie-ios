@@ -22,9 +22,9 @@ enum TourLayout {
 
 /// Przewijalna treść jednego ekranu przewodnika.
 ///
-/// Treść ma mieścić się bez przewijania — taki jest cel projektu i dlatego
-/// każdy krok ma tytuł, dwa zdania opisu i cztery punkty; zdjęcie kroku
-/// oddaje wysokość, zanim zacznie się przewijanie (`TourMedia`). `ScrollView` jest tu jako
+/// Powitanie i ekran „Teraz my poznajmy Ciebie” (kroki z plakatem mają
+/// własny układ — `TourStepView`). Treść ma mieścić się bez przewijania;
+/// `ScrollView` jest tu jako
 /// zabezpieczenie: na iPhonie mini albo przy powiększonej czcionce
 /// systemowej to samo ułożenie nie zmieści się co do punktu, a wtedy
 /// lepiej przewinąć niż przyciąć. `.basedOnSize` gasi gumowanie, gdy
@@ -35,8 +35,6 @@ enum TourLayout {
 /// gdy kroki przejeżdżają na bok — dokładnie tak, jak w kreatorze profilu.
 struct TourPage<Content: View>: View {
     private let content: Content
-    /// Widoczna część strony — dla sufitu zdjęcia kroku (`TourMedia`).
-    @State private var viewport: CGSize = .zero
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -48,18 +46,8 @@ struct TourPage<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, TourLayout.top)
                 .padding(.bottom, TourLayout.bottom)
-                .environment(\.tourViewport, viewport)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            viewport = size
-        }
     }
-}
-
-extension EnvironmentValues {
-    /// Rozmiar widocznej strony przewodnika (`TourPage`); `.zero` przed
-    /// pierwszym pomiarem.
-    @Entry var tourViewport: CGSize = .zero
 }

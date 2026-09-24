@@ -234,11 +234,6 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
   `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
   (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
-- Przewodnik „Poznaj aplikację” (`Views/Tour/`, runda 24, 24.09.2026): punkty kroków to cztery sprawdzone w kodzie
-  funkcje w karcie z ikonami w kolorze kroku (`SCStepFeatureCard(revealed:compact:)`, kaskada `scReveal`) — źródło każdego twierdzenia
-  w komentarzu przy `TourStep.all`. Zmieniasz / usuwasz funkcję → popraw punkt. Zdjęte jako nieprawdziwe:
-  „Własne przepisy domu” (nie ma tworzenia przepisów), „z Waszych przepisów” u asystenta, „z powodem” przy
-  podmianie. Kadr zdjęcia ma sufit wysokości (`TourMedia`, `tourViewport`), żeby na SE punkty mieściły się nad stopką.
 - Loader startu stoi NAD korzeniem (`ScoffieApp.showsStartupLoader`), nie w gałęzi pulpitu:
   krycie kontenera bez `compositingGroup` schodzi na dzieci, więc przy przejściu korzenia przez
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
@@ -542,23 +537,20 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
-- Przewodnik „Poznaj aplikację” (`TourStep`, strony w `Views/Tour/`, 24.09.2026 — Rafał: „więcej opisu pod
-  title… bardziej friendly”, „odśwież po nowemu”): krok = zdjęcie, `SCStepHeader` z eyebrow w kolorze
-  kroku („Zakładka Plan” — dawna kapsułka „Znajdziesz w…” zniknęła), tytuł, `lead` (dwa zdania zwykłym
-  językiem, NAJWYŻEJ dwie linie na iPhonie 16e) i `SCStepFeatureCard(revealed:compact:)` — punkty
-  `TourPoint` = ikona + tytuł + podpis, TEN SAM wiersz co na powitaniu i ekranie końcowym (Rafał: „te
-  wszystkie listy, aby były podobne”). Przewodnik stoi BEZ przewijania także na 16e — nowy tekst
-  sprawdzaj na zrzucie 16e (`tour-1…5`), zanim go dopiszesz. Opis i punkty mówią tylko o tym, co JEST
-  w aplikacji. Zdjęcie bierze to, co zostaje po ZMIERZONYM tekście kroku (`TourStepView.textHeight` →
-  `TourMedia.reserved`), więc czwarty punkt nigdy nie wchodzi pod cień stopki. Wszystkie pięć
-  kroków to ilustracje z kartami aplikacji na R2 (Rafał 24.09.2026): `https://img.scoffie.app/onboarding/
-  tour-{plan,recipes,shopping,assistant,settings}-v1.webp`, 1474 × 1067, WebP q82 (~100 KB), bucket
-  `scoffie` (produkcyjny — lokalny token R2 w `.env` backendu jest nieaktualny, wysyłka przez
-  `railway run` z katalogu backendu), `Cache-Control: immutable` na rok → NOWA grafika = NOWA nazwa
-  (`-v2` w `TourStep.image(_:version:)`), nigdy nadpisanie. Pokazywane `CachedAsyncImage(.large)`,
-  ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 85 % naturalnej wysokości (ucina się tylko krem
-  nad i pod kartami); zanim dojdą — tint koloru kroku w tym samym rozmiarze. `TourStep.prefetchImages()`
-  rusza na ekranie logowania (`AuthView`) i przy wejściu w przepływ.
+- Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień
+  przewodnik”): krok = SAM PLAKAT z R2 (`TourStepView`) — pionowa grafika z własnym nagłówkiem, opisem
+  i kartami aplikacji, te same co zrzuty w App Store. Bez `SCStepHeader` i karty funkcji nad/pod nim
+  (dublowałyby tekst plakatu). Plakat mieści się W CAŁOŚCI bez przewijania: wysokość strony nad stopką,
+  szerokość z proporcji 1080 : 2344, na środku; przed pobraniem tint koloru kroku w tym samym rozmiarze.
+  `TourStep.title`/`lead` = tekst plakatu słowo w słowo — tylko dla VoiceOver. Pliki:
+  `https://img.scoffie.app/onboarding/tour-{plan,recipes,shopping,assistant,settings}-v2.webp`
+  (1080 × 2344, WebP q85, ~150–210 KB; `-v1` = dawne poziome ilustracje, zostają dla starszych wersji).
+  Bucket `scoffie` (produkcyjny — lokalny token R2 w `.env` backendu jest nieaktualny, wysyłka przez
+  `railway run` z katalogu backendu), `Cache-Control: immutable` na rok → NOWA grafika = NOWA wersja
+  w nazwie (`TourStep.image(_:version:)`), nigdy nadpisanie. Wariant `CachedAsyncImage(.poster)` (do
+  2400 px) — przy `.large` (1200 px) drobny tekst plakatu się rozmywał. `TourStep.prefetchImages()`
+  rusza na ekranie logowania (`AuthView`) i przy wejściu w przepływ. Powitanie (`TourIntroView`)
+  i „Teraz my poznajmy Ciebie” (`TourDoneView`) zostają rysowane w aplikacji.
 - Przewodnik + kreator profilu = JEDEN przepływ w `WelcomeView` (24.09.2026, Rafał: „wszystko w jednym
   wielkim stepperze, aby nie przełączać”): `tourPhase` (0 powitanie, 1…5 kroki, 6 „Teraz my poznajmy
   Ciebie”, `nil` = kreator `step` 1…5), jedna stopka, jeden pasek na 11 odcinków, strony jadą na bok także
