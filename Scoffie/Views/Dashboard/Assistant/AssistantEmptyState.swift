@@ -14,7 +14,8 @@ import SwiftUI
 //
 // Ruch: otwarcie i zdanie PISZĄ SIĘ (`SCTypedText`, jak odpowiedź
 // asystenta), potem kaskadą wchodzą kontekst i akcje, a liczby liczą się
-// od zera. Całość gra od nowa przy każdym wejściu na zakładkę i przy nowej
+// od zera. Całość gra przy nowej sytuacji, a przy wejściu na zakładkę tylko po
+// uruchomieniu aplikacji albo 30 min przerwy (`AssistantGreetingMemory`) i przy nowej
 // sytuacji; ta sama sytuacja ze zmienioną liczbą („Za 39 minut obiad”)
 // tylko roluje cyfry. Pisanie („Mam inny pomysł”, fokus pola) zdejmuje
 // akcje i kontekst — otwarcie zostaje nad polem jako temat rozmowy.
@@ -39,8 +40,33 @@ struct AssistantEmptyState: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scTabIsActive) private var isActiveTab
 
-    /// Każde wejście na zakładkę i każda nowa sytuacja = nowe odtworzenie.
-    @State private var play = 0
+    /// Odtworzenie powitania; `nil` = stoi gotowe. Gra przy nowej sytuacji
+    /// i przy wejściu na zakładkę TYLKO wtedy, gdy tej sytuacji nie było
+    /// widać od dawna (`AssistantGreetingMemory`) — Rafał 24.09.2026: „nie
+    /// chcę za każdym razem przy każdym wejściu na nowo animować”.
+    @State private var play: Int?
+
+    init(
+        briefing: AssistantBriefing,
+        composing: Bool = false,
+        nudge: Int = 0,
+        quota: AssistantQuotaFacts? = nil,
+        sleeping: Bool = false,
+        onAction: @escaping (AssistantBriefing.Action) -> Void
+    ) {
+        self.briefing = briefing
+        self.composing = composing
+        self.nudge = nudge
+        self.quota = quota
+        self.sleeping = sleeping
+        self.onAction = onAction
+        _play = State(initialValue: AssistantGreetingMemory.shouldPlay(briefing.kind) ? 0 : nil)
+    }
+
+    private func replay() {
+        play = (play ?? 0) + 1
+        AssistantGreetingMemory.markPlayed(briefing.kind)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -50,7 +76,9 @@ struct AssistantEmptyState: View {
                 nudge: nudge,
                 quota: quota,
                 sleeping: sleeping,
-                playKey: play,
+                // Nowa sytuacja rysuje się od pierwszej klatki jako „do odtworzenia”,
+                // zanim `onChange(of: kind)` podbije licznik — bez mignięcia gotowym tekstem.
+                playKey: play ?? (AssistantGreetingMemory.shouldPlay(briefing.kind) ? 0 : nil),
                 onAction: onAction
             )
             .id(briefing.kind)
@@ -59,9 +87,32 @@ struct AssistantEmptyState: View {
         .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.3), value: briefing.kind)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: isActiveTab, initial: true) { _, active in
-            if active { play += 1 }
+            if active, AssistantGreetingMemory.shouldPlay(briefing.kind) { replay() }
         }
-        .onChange(of: briefing.kind) { _, _ in play += 1 }
+        // Nowa sytuacja to nowa wiadomość — ta gra zawsze.
+        .onChange(of: briefing.kind) { _, _ in replay() }
+    }
+}
+
+/// Kiedy powitanie Asystenta pisze się od nowa. Pamięć na czas życia
+/// procesu: po uruchomieniu aplikacji (wyrzuceniu z pamięci) gra pierwsze
+/// wejście, potem ta sama sytuacja stoi gotowa przy każdym powrocie na
+/// zakładkę — aż do nowej sytuacji albo dłuższej przerwy.
+@MainActor
+enum AssistantGreetingMemory {
+    private static var lastKind: AssistantBriefing.Kind?
+    private static var lastPlayedAt: Date?
+    /// Po takiej przerwie ta sama sytuacja pisze się znowu.
+    static let replayAfter: TimeInterval = 30 * 60
+
+    static func shouldPlay(_ kind: AssistantBriefing.Kind) -> Bool {
+        guard kind == lastKind, let lastPlayedAt else { return true }
+        return Date().timeIntervalSince(lastPlayedAt) > replayAfter
+    }
+
+    static func markPlayed(_ kind: AssistantBriefing.Kind) {
+        lastKind = kind
+        lastPlayedAt = Date()
     }
 }
 
@@ -72,12 +123,33 @@ private struct AssistantGreeting: View {
     let nudge: Int
     let quota: AssistantQuotaFacts?
     let sleeping: Bool
-    let playKey: Int
+    /// `nil` = powitanie stoi gotowe, bez pisania i kaskady (widziane niedawno).
+    let playKey: Int?
     let onAction: (AssistantBriefing.Action) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var revealed = false
+    @State private var revealed: Bool
+
+    init(
+        briefing: AssistantBriefing,
+        composing: Bool,
+        nudge: Int,
+        quota: AssistantQuotaFacts?,
+        sleeping: Bool,
+        playKey: Int?,
+        onAction: @escaping (AssistantBriefing.Action) -> Void
+    ) {
+        self.briefing = briefing
+        self.composing = composing
+        self.nudge = nudge
+        self.quota = quota
+        self.sleeping = sleeping
+        self.playKey = playKey
+        self.onAction = onAction
+        // Bez odtworzenia blok stoi od pierwszej klatki — bez mrugnięcia pustką.
+        _revealed = State(initialValue: playKey == nil)
+    }
 
     /// Tempo pisania: otwarcie spokojnie, zdanie pomocy szybciej.
     private static let baseHeadlineRate: Double = 65
@@ -208,6 +280,7 @@ private struct AssistantGreeting: View {
         // klawiatury. Własna animacja tutaj (była `.smooth(0.3)`) nadpisywała
         // ją w tym poddrzewie i blok zjeżdżał innym tempem niż pole.
         .task(id: playKey) {
+            guard playKey != nil else { return }
             var reset = Transaction()
             reset.disablesAnimations = true
             withTransaction(reset) { revealed = false }
