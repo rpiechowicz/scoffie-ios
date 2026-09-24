@@ -29,6 +29,9 @@ struct EditorialSheetHeader<Accessory: View>: View {
     let icon: String?
     let accent: Color
     let subtitle: String?
+    /// Jak podtytuł zmienia treść. Domyślnie rolują cyfry („3 z 4”);
+    /// podtytuł z imieniem woli przenikanie, bo rolowanie przetacza litery.
+    let subtitleTransition: ContentTransition
     let onClose: () -> Void
     let accessory: () -> Accessory
 
@@ -38,6 +41,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
         icon: String? = nil,
         accent: Color = SCPalette.terracotta,
         subtitle: String? = nil,
+        subtitleTransition: ContentTransition = .numericText(),
         onClose: @escaping () -> Void,
         @ViewBuilder accessory: @escaping () -> Accessory
     ) {
@@ -46,6 +50,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
         self.icon = icon
         self.accent = accent
         self.subtitle = subtitle
+        self.subtitleTransition = subtitleTransition
         self.onClose = onClose
         self.accessory = accessory
     }
@@ -94,7 +99,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
-                    .contentTransition(.numericText())
+                    .contentTransition(subtitleTransition)
                     .padding(.top, 10)
             }
         }
@@ -108,6 +113,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
         icon: String? = nil,
         accent: Color = SCPalette.terracotta,
         subtitle: String? = nil,
+        subtitleTransition: ContentTransition = .numericText(),
         onClose: @escaping () -> Void
     ) {
         self.init(
@@ -116,6 +122,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
             icon: icon,
             accent: accent,
             subtitle: subtitle,
+            subtitleTransition: subtitleTransition,
             onClose: onClose,
             accessory: { EmptyView() }
         )

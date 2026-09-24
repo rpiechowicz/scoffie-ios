@@ -361,7 +361,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Wjazd szczegółów posiłku jak wybór posiłku u Asystenta: `hasAppeared` w `.task` po 80 ms (klatka
   oddechu — w `onAppear` padało w klatce wstawienia i nic nie grało), zdjęcie osiada z 1,12, sekcje
   kaskadą (`smooth 0,55`, opóźnienie 0,10 + 0,05·n), serce i krzyżyk wchodzą z treścią; arkusz ma
-  rogi 40 pt (`dashboardLiquidSheet(cornerRadius: 40)`) we wszystkich czterech miejscach otwarcia.
+  rogi 40 pt i KRYJĄCE tło prezentacji (`recipeDetailSheet()` w `RecipeDetail.swift`) we wszystkich czterech miejscach otwarcia — przy `.clear` na pierwszych klatkach wjazdu prześwitywała na dole biała kreska ekranu pod spodem (24.09.2026).
 - Nagłówek „Filtrów” i filtrów kategorii = `RecipeFilterHeader`: `EditorialSheetHeader` z kafelkiem,
   zdaniem o zasięgu jako `subtitle` i „Wyczyść” obok krzyżyka. Linijka „Aktywne: …” pod spodem
   zniknęła w rundzie 9 („niepotrzebne”) — co działa, widać na kafelkach. „Wyczyść” obok krzyżyka
@@ -418,7 +418,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`PlanPersonSwitcher`: awatary, wybrana osoba z imieniem na tincie swojego koloru): dania, suma
   i CEL tej osoby. Cele domowników przychodzą z serwera w `households:memberPreferences`
   (`targets: {calorieGoal, macros}` — policzone w `toMemberContext`, BEZ sylwetki) →
-  `HouseholdMemberPreferences.targets`. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
+  `HouseholdMemberPreferences.targets`. Domownik bez celu (albo bez makr) dostaje cel z domyślnej
+  sylwetki — rocznik 2000, 70 kg, 170 cm, bez płci (BMR −78), aktywność 2–3 — w JEDNYM miejscu:
+  `DailyNutritionTargets.forMember` (runda 17). Arkusz ma dla każdej osoby tę samą strukturę: tor
+  legendy stoi zawsze (bez celu niewidoczny), miejsce na podpowiedź o makrach trzyma się, gdy
+  potrzebuje jej ktokolwiek, imię w przełączniku ma ramę najdłuższego imienia (kapsuła nie zmienia
+  szerokości), a podtytuł z imieniem przenika (`subtitleTransition: .opacity`), zamiast rolować litery. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
   kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka, runda 13: mniejsza — awatary 22 pt, wysokość 26, imię 12 pt) z obwódką w kolorze osoby,
   wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
   dzień („Twój dzień · 3 z 4 posiłków” / „Dzień: Ania · …”). Pełnoszerokościowe zakładki z rundy 11

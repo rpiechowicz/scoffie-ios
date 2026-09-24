@@ -298,8 +298,7 @@ struct RecipesView: View {
                     // na jednej porcji i to stepper decyduje, ile ich będzie.
                     onAddedToPlan: { _, _ in selectedRecipe = nil }
                 )
-                .presentationDetents([.large])
-                .dashboardLiquidSheet(cornerRadius: 40)
+                .recipeDetailSheet()
             }
             .sheet(item: $categorySheetSelection) { category in
                 let categoryRecipes = recipeCatalogStore.recipes.filter { $0.category == category }
@@ -898,8 +897,7 @@ private struct RecipeCategorySheetView: View {
                 onClose: { selectedRecipe = nil },
                 onAddedToPlan: { _, _ in selectedRecipe = nil }
             )
-            .presentationDetents([.large])
-            .dashboardLiquidSheet(cornerRadius: 40)
+            .recipeDetailSheet()
         }
         .sheet(isPresented: $isFilterSheetPresented) {
             RecipeCategoryFilterSheet(category: category, recipes: pool, filter: $categoryFilter)
