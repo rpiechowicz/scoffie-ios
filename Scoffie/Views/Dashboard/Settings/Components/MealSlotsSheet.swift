@@ -3,11 +3,10 @@ import SwiftUI
 /// Ustawienia → „Posiłki w planie".
 ///
 /// Odpowiada na dwa pytania po kolei: **które** posiłki gospodarstwo planuje
-/// i **o której** się je. Drugie ma własny ekran, otwierany stąd — obie
-/// decyzje obowiązują cały dom, ale to osobne decyzje i osobne zapisy, więc
-/// mieszanie ich w jednej liście kończyło się stopką prostującą samą siebie.
-/// W Ustawieniach jest jeden wiersz, bo nikt nie szuka „pór posiłków" gdzie
-/// indziej niż przy „posiłkach w planie".
+/// i **o której** się je. Drugie to oś dnia z kreatora (`MealDayTimesCard`,
+/// od 24.09.2026 zamiast osobnego arkusza z listą godzin) — stuknięcie
+/// w posiłek otwiera koło godzin w arkuszu do połowy ekranu. Obie decyzje
+/// obowiązują cały dom, ale to osobne zapisy.
 ///
 /// Trzy decyzje projektowe:
 ///
@@ -31,25 +30,29 @@ struct MealSlotsSheet: View {
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.colorScheme) private var scheme
 
-    @State private var showTimes = false
     @State private var pendingDisable: MealSlot?
     @State private var errorMessage: String?
     /// Konfiguracja, której nie udało się zapisać — zasila „Spróbuj ponownie".
     /// Bez tego użytkownik musi się domyślić, że ma przestawić kartę drugi raz.
     @State private var lastFailed: MealSlotConfiguration?
+    @State private var timesErrorMessage: String?
+    /// Rozkład godzin, którego nie udało się zapisać — zasila „Spróbuj ponownie".
+    @State private var lastFailedTimes: MealSlotSchedule?
 
     private var configuration: MealSlotConfiguration { sessionStore.mealSlots }
-    private var mealTimesRowValue: String {
-        let schedule = sessionStore.mealSlotSchedule
-        guard !schedule.isDefault else { return "Domyślne" }
+    private var schedule: MealSlotSchedule { sessionStore.mealSlotSchedule }
 
-        let times = sessionStore.mealSlots.enabled.compactMap { schedule.minutes(for: $0) }
-        guard let first = times.min(), let last = times.max(), first != last else {
-            return "Własne"
+    /// Posiłki, które Plan faktycznie rysuje w dniu — włączone i te wyłączone,
+    /// w których zostały dania. Gdyby tych drugich nie było na osi, ich
+    /// godzina byłaby widoczna w Planie i nieedytowalna.
+    private var timeSlots: [MealSlot] {
+        let planned = MealSlot.allCases.filter { slot in
+            datesViewModel.dates.contains { date in
+                !mealStore.meals(for: date, slot: slot).isEmpty
+            }
         }
-        return "\(MealSlotSchedule.format(first)) – \(MealSlotSchedule.format(last))"
+        return configuration.visibleSlots(planned: planned)
     }
-
 
     var body: some View {
         // Liczone raz na przemalowanie: `plannedCount` przechodzi po całym
@@ -86,20 +89,7 @@ struct MealSlotsSheet: View {
                             }
                         }
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            EditorialSheetSectionLabel(title: "Rozkład dnia")
-
-                            EditorialSettingsCardGroup {
-                                EditorialSettingsRow(
-                                    icon: "clock.fill",
-                                    iconColor: SCPalette.indigo,
-                                    title: "Pory posiłków",
-                                    value: mealTimesRowValue,
-                                    isLast: true,
-                                    action: { showTimes = true }
-                                )
-                            }
-                        }
+                        mealTimesSection
 
                         introCard
                         saveStatus
@@ -117,9 +107,6 @@ struct MealSlotsSheet: View {
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
             }
-        }
-        .sheet(isPresented: $showTimes) {
-            MealTimesSheet { showTimes = false }
         }
         .alert(
             disableAlertTitle,
@@ -275,6 +262,67 @@ struct MealSlotsSheet: View {
         .accessibilityLabel("\(slot.title). \(slot.settingsSubtitle)")
         .accessibilityAddTraits(isEnabled ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(isEnabled ? "Stuknij, aby wyłączyć" : "Stuknij, aby włączyć")
+    }
+
+    // MARK: - Pory posiłków
+
+    /// Oś dnia z kreatora (`MealDayTimesCard`) — stuknięcie w posiłek otwiera
+    /// koło godzin w arkuszu do połowy ekranu. Godziny obowiązują cały dom
+    /// i zapisują się od razu.
+    private var mealTimesSection: some View {
+        let slots = timeSlots
+        let enabled = Set(configuration.enabled)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            EditorialSheetSectionLabel(title: "Pory posiłków")
+
+            MealDayTimesCard(
+                slots: slots,
+                schedule: schedule,
+                dimmed: Set(slots.filter { !enabled.contains($0) }),
+                onSetTime: { slot, minutes in
+                    saveTimes(schedule.setting(slot, toMinutes: minutes))
+                }
+            )
+            .animation(.smooth(duration: 0.24), value: slots)
+
+            MealTimesOrderNotice(slots: slots, schedule: schedule)
+
+            if let timesErrorMessage {
+                VStack(alignment: .leading, spacing: 6) {
+                    SCInlineErrorText(timesErrorMessage)
+
+                    if let lastFailedTimes {
+                        SCRetryButton { saveTimes(lastFailedTimes) }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6)
+            }
+
+            if !schedule.isDefault {
+                Button("Przywróć domyślne godziny") {
+                    saveTimes(.default)
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(SCPalette.terracotta)
+                .padding(.horizontal, 6)
+            }
+        }
+    }
+
+    /// Bez stanu „Zapisuję…" — zapis jest optymistyczny, oś pokazuje nową
+    /// godzinę, zanim cokolwiek poleci po sieci. Zostaje tylko nieudany zapis.
+    private func saveTimes(_ next: MealSlotSchedule) {
+        timesErrorMessage = nil
+        lastFailedTimes = nil
+        Task { @MainActor in
+            let saved = await sessionStore.saveMealSlotSchedule(next)
+            if !saved {
+                timesErrorMessage = "Nie udało się zapisać godzin."
+                lastFailedTimes = next
+            }
+        }
     }
 
     // MARK: - Zasięg i stan zapisu
