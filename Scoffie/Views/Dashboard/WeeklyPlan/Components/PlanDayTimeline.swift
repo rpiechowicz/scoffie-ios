@@ -595,9 +595,9 @@ struct PlanTimelineRow: View {
 /// Treść jednego dania: eyebrow, tytuł, „min · kcal” i zdjęcie po prawej.
 ///
 /// Pierwsze danie wiersza mówi porą dnia w jej kolorze i ma zdjęcie 72 pt;
-/// każde następne to danie domownika — imię w jego kolorze i zdjęcie 56 pt,
-/// żeby od pierwszego spojrzenia było wiadomo, które danie jest wyjątkiem od
-/// którego.
+/// każde następne to danie domownika — bez eyebrow, mniejszy tytuł i zdjęcie
+/// 56 pt z awatarem, żeby od pierwszego spojrzenia było wiadomo, które danie
+/// jest wyjątkiem od którego.
 struct PlanTimelineDish: View {
     let slot: MealSlot
     let meal: PlanMeal
@@ -621,8 +621,13 @@ struct PlanTimelineDish: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
-                eyebrow
-                    .padding(.top, 2)
+                // Danie domownika nie ma eyebrow z imieniem: „dla kogo” mówi
+                // już awatar na zdjęciu, a imię nad drugim daniem obiadu
+                // czytało się jak podpis zamiast nazwy pory.
+                if !isAlternative {
+                    eyebrow
+                        .padding(.top, 2)
+                }
 
                 Text(meal.recipe.name)
                     .scFont(isAlternative ? 15.5 : 17, weight: .semibold, relativeTo: .body)
@@ -630,7 +635,7 @@ struct PlanTimelineDish: View {
                     .foregroundStyle(Color.scLabel(scheme))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
-                    .padding(.top, 4)
+                    .padding(.top, isAlternative ? 2 : 4)
 
                 Text(metaText)
                     .scFont(12.5, weight: .regular, relativeTo: .caption)
@@ -653,17 +658,8 @@ struct PlanTimelineDish: View {
 
     // MARK: Eyebrow
 
-    @ViewBuilder
     private var eyebrow: some View {
-        if isAlternative, !named.isEmpty {
-            eyebrowText(
-                named.map { HouseholdMemberStyle.shortName($0.displayName) }
-                    .joined(separator: " · "),
-                color: HouseholdMemberStyle.color(for: named[0])
-            )
-        } else {
-            eyebrowText(slot.title, color: slot.cozyAccent)
-        }
+        eyebrowText(slot.title, color: slot.cozyAccent)
     }
 
     private func eyebrowText(_ text: String, color: Color) -> some View {
