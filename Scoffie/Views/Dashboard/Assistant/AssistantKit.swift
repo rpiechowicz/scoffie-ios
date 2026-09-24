@@ -29,8 +29,13 @@ struct AssistantHeader<MenuContent: View>: View {
 
     let mode: Mode
     var onNewConversation: () -> Void
-    /// Kapsuła limitu po lewej od ⋯ — tylko na próbie, tylko w dużym nagłówku.
+    /// Kapsuła limitu po lewej od ⋯ — tylko na próbie, w obu nagłówkach
+    /// (w kompaktowym krótsza, bez słowa „wiadomości”).
     var accessory: AnyView?
+    /// Nastrój znaku w kompaktowym pasku — myśli, gdy tura biegnie.
+    var markMood: SCLivingMark.Mood = .idle
+    /// Podbicie = podskok znaku (tura skończyła się odpowiedzią).
+    var markCheer: Int = 0
     /// Pozycje menu ⋯ — systemowe `Menu` z ikonami, nie arkusz z dołu.
     @ViewBuilder var menu: () -> MenuContent
 
@@ -53,10 +58,10 @@ struct AssistantHeader<MenuContent: View>: View {
         case .compact:
             ZStack {
                 HStack(spacing: 7) {
-                    SCMarkShape()
-                        .fill(AssistantLook.terraFill(scheme))
-                        .frame(width: 15, height: 15)
-                        .accessibilityHidden(true)
+                    // Żywy znak: oddycha w spoczynku, kręci się w tempie łuku,
+                    // gdy tura biegnie, podskakuje przy odpowiedzi. Bez
+                    // poświaty — przy 15 pt zlewała się ze słowem obok.
+                    SCLivingMark(mood: markMood, color: AssistantLook.terraFill(scheme), size: 15, cheer: markCheer, glows: false)
                     Text("Asystent")
                         .font(.system(size: 17, weight: .semibold))
                         .tracking(-0.4)
@@ -65,8 +70,10 @@ struct AssistantHeader<MenuContent: View>: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isHeader)
 
-                HStack {
+                HStack(spacing: 8) {
                     Spacer(minLength: 0)
+                    accessory
+                        .fixedSize(horizontal: true, vertical: false)
                     menuButton(size: Self.actionSize)
                 }
             }
@@ -105,6 +112,9 @@ struct AssistantHeader<MenuContent: View>: View {
 struct AssistantQuotaPill: View {
     let remaining: Int
     let limit: Int
+    /// Kompaktowy pasek rozmowy: samo „3 z 5” — pełna etykieta weszłaby
+    /// na wyśrodkowany tytuł „Asystent”.
+    var compact: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
@@ -118,7 +128,7 @@ struct AssistantQuotaPill: View {
             HStack(spacing: 3) {
                 CountingNumber(target: max(0, remaining))
                 // Po „z” dopełniacz — „z 5 wiadomości”, „z 1 wiadomości”.
-                Text("z \(max(limit, remaining)) wiadomości")
+                Text(compact ? "z \(max(limit, remaining))" : "z \(max(limit, remaining)) wiadomości")
             }
             .font(.system(size: 12, weight: .semibold))
             .tracking(-0.1)
@@ -185,18 +195,29 @@ struct AssistantUserBubble: View {
 
 /// `LAsstMsg`: znak marki 18 pt obok treści odpowiedzi — treść na całą
 /// szerokość, bez dymka.
+///
+/// `greets`: odpowiedź przyszła w tej chwili (nie z historii) — znak raz
+/// podskakuje przy wejściu. Potem stoi: żywy znak przy KAŻDEJ odpowiedzi
+/// w rozmowie byłby rojem; żyje ten w nagłówku.
 struct AssistantVoice<Content: View>: View {
+    var greets: Bool = false
     @ViewBuilder var content: () -> Content
 
     @Environment(\.colorScheme) private var scheme
+    @State private var cheer = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            SCMarkShape()
-                .fill(AssistantLook.terraFill(scheme))
-                .frame(width: 18, height: 18)
+            SCLivingMark(mood: .still, color: AssistantLook.terraFill(scheme), size: 18, cheer: cheer, glows: false)
                 .padding(.top, 3)
-                .accessibilityHidden(true)
+                .task {
+                    // Po pierwszej klatce: zmiana wyzwalacza w klatce wstawienia
+                    // nie gra (ta sama pułapka co `hasAppeared` w szczegółach).
+                    guard greets, cheer == 0 else { return }
+                    try? await Task.sleep(for: .milliseconds(120))
+                    if Task.isCancelled { return }
+                    cheer += 1
+                }
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

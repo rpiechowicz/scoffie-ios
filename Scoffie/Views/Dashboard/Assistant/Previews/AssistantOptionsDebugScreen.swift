@@ -173,9 +173,17 @@ struct AssistantOptionsDebugScreen: View {
             }
         } else if showsButtons {
             ScrollView {
+                // Każdy rodzaj rzędu przycisków: para w połówkach (czeka),
+                // para po zapisie, para nieaktualnej, pojedyncza, pigułki
+                // odpowiedzi (przed i po wyborze) i stan pracy.
                 VStack(alignment: .leading, spacing: 14) {
                     AssistantSwapCard(card: AssistantPreviewFixtures.swap, isBusy: false, onApply: { _ in }, onRevise: {}, onAskNew: {}, onAsk: { _ in }, onUndo: {}, onOpenPlan: {})
+                    AssistantPlanDayCard(card: AssistantPreviewFixtures.planDay, isBusy: true, onApply: { _ in }, onRevise: {}, onAskNew: {}, onUndo: {}, onOpenPlan: {})
+                    AssistantPlanWeekCard(card: AssistantPreviewFixtures.planWeek(status: "STALE", canApply: true, canUndo: false), isBusy: false, isExpanded: .constant(false), onApply: { _ in }, onRevise: {}, onAskNew: {}, onUndo: {}, onOpenPlan: {})
                     AssistantAppliedCard(card: AssistantPreviewFixtures.applied, isBusy: false, onUndo: {}, onOpenPlan: {})
+                    AssistantClarifyCard(card: AssistantPreviewFixtures.clarify, onAsk: { _ in })
+                    AssistantClarifyCard(card: AssistantPreviewFixtures.clarify, reply: "Dla dwóch", onAsk: { _ in })
+                    AssistantShoppingListCard(card: AssistantPreviewFixtures.shoppingList, onOpenShopping: {})
                 }
                 .padding(16)
                 .padding(.top, 50)

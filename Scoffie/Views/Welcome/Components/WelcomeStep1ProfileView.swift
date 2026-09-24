@@ -1,11 +1,10 @@
 import SwiftUI
 
-// Welcome step 1 — Profile: imię, rok urodzenia, wzrost, waga.
+// Kreator, krok 1 — profil: imię, rok urodzenia, wzrost, waga, płeć.
 //
-// All fields are bound to local @State so users can type freely; the
-// commit + backend save happens at the WelcomeView level when the user
-// taps "Dalej". Year of birth uses a horizontal wheel-style picker that
-// echoes the design canvas (5 visible values, center-highlighted).
+// Pola trzymają lokalny `@State` rodzica, więc wpisuje się swobodnie; zapis
+// na serwer robi `WelcomeView` przy „Dalej”. Rok urodzenia to poziome koło
+// (`YearWheelPicker`), to samo co w Ustawieniach → „Twoje dane”.
 struct WelcomeStep1ProfileView: View {
     @Binding var name: String
     @Binding var yearOfBirth: Int
@@ -27,21 +26,19 @@ struct WelcomeStep1ProfileView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                WelcomeStepHeader(
+                SCStepHeader(
                     icon: "person.fill",
-                    accent: SCPalette.terracotta,
                     eyebrow: "Witaj w Scoffie",
                     title: "Zacznijmy od Ciebie",
-                    subtitle: "Te dane pomogą nam dopasować propozycje. Zmienisz je później w ustawieniach."
+                    subtitle: "Z tych danych policzymy Twój dzienny cel."
                 )
 
-                VStack(alignment: .leading, spacing: 6) {
-                    WelcomeFieldCaption(text: "Jak masz na imię?")
+                WelcomeSection(title: "Imię") {
                     HStack(spacing: 12) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(Color.scMuted(colorScheme))
-                        TextField("Np. Rafał", text: $name)
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.scFaint(colorScheme))
+                        TextField("Jak masz na imię?", text: $name)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
                             .onChange(of: name) { _, newValue in
@@ -57,57 +54,35 @@ struct WelcomeStep1ProfileView: View {
                             .onSubmit { focusedField = .height }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 13)
                     .welcomeCard()
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    WelcomeFieldCaption(text: "Rok urodzenia")
+                WelcomeSection(title: "Rok urodzenia") {
                     YearWheelPicker(year: $yearOfBirth, range: yearRange)
                 }
 
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        WelcomeFieldCaption(text: "Wzrost")
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                HStack(alignment: .top, spacing: 10) {
+                    WelcomeSection(title: "Wzrost") {
+                        measureField(unit: "cm") {
                             TextField("178", value: $heightCm, format: .number)
                                 .keyboardType(.numberPad)
                                 .focused($focusedField, equals: .height)
-                                .font(.system(size: 19, weight: .bold))
-                                .foregroundStyle(Color.scLabel(colorScheme))
-                                .monospacedDigit()
-                            Text("cm")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.scMuted(colorScheme))
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-                        .welcomeCard()
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        WelcomeFieldCaption(text: "Waga")
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    WelcomeSection(title: "Waga") {
+                        measureField(unit: "kg") {
                             // Jedno miejsce po przecinku — 83,5 kg to
                             // normalny odczyt z wagi łazienkowej.
                             TextField("74", value: $weightKg, format: .number.precision(.fractionLength(0...1)))
                                 .keyboardType(.decimalPad)
                                 .focused($focusedField, equals: .weight)
-                                .font(.system(size: 19, weight: .bold))
-                                .foregroundStyle(Color.scLabel(colorScheme))
-                                .monospacedDigit()
-                            Text("kg")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.scMuted(colorScheme))
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-                        .welcomeCard()
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    WelcomeFieldCaption(text: "Płeć")
+                WelcomeSection(title: "Płeć") {
                     HStack(spacing: 8) {
                         ForEach(Sex.allCases) { candidate in
                             SexChip(
@@ -123,11 +98,17 @@ struct WelcomeStep1ProfileView: View {
                     }
                 }
 
-                Text("Te dane przetwarzamy lokalnie wyłącznie do obliczeń kalorycznych — nie udostępniamy ich nikomu, ani nie wykorzystujemy do reklam.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.scMuted(colorScheme))
-                    .padding(.horizontal, 6)
-                    .padding(.top, 4)
+                // Jedna linijka zamiast akapitu — tyle, ile trzeba wiedzieć,
+                // zanim poda się wagę.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10.5, weight: .semibold))
+                    Text("Tylko do obliczeń — nikomu ich nie udostępniamy.")
+                        .font(.system(size: 12.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(Color.scFaint(colorScheme))
+                .padding(.horizontal, 6)
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
             .padding(.top, WelcomeLayout.topInset)
@@ -135,14 +116,24 @@ struct WelcomeStep1ProfileView: View {
         }
         .scrollDismissesKeyboard(.interactively)
     }
+
+    /// Pole liczby z jednostką — wzrost i waga w jednym kroju.
+    private func measureField<Input: View>(unit: String, @ViewBuilder input: () -> Input) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            input()
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(Color.scLabel(colorScheme))
+                .monospacedDigit()
+            Text(unit)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Color.scMuted(colorScheme))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .welcomeCard()
+    }
 }
 
-// Year-of-birth picker. Shows 5 years horizontally with the selected one
-// scaled and highlighted. Tapping a side value advances the wheel; the
-// terracotta highlight band animates with a spring so the interaction
-// feels tactile. Drag updates live (every cell-width of horizontal travel
-// changes the year by one) so the picker reads as a real wheel and not a
-// commit-on-release control.
 /// Płeć różnicuje wzór na przemianę materii wyłącznie stałą (+5 / −161),
 /// więc pytanie jest opcjonalne: ponowne stuknięcie w zaznaczoną opcję ją
 /// odznacza, a bez niej liczymy ze średniej.
@@ -163,10 +154,15 @@ private struct SexChip: View {
             }
             .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 13)
             // Ten sam chip co w „Twoich danych” w Ustawieniach — wybór
             // w wariancie „soft”, nie pełna terakota z białym napisem.
-            .scChoiceSurface(RoundedRectangle(cornerRadius: 12, style: .continuous), isOn: isSelected)
+            // Niewybrany na tle karty (`scTileBg`), bo stoi wprost na stronie.
+            .scChoiceSurface(
+                RoundedRectangle(cornerRadius: 14, style: .continuous),
+                isOn: isSelected,
+                offFill: Color.scTileBg(colorScheme)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(candidate.title)
@@ -356,7 +352,7 @@ private struct StepPreviewWrapper<Content: View>: View {
     @ViewBuilder var content: () -> Content
     var body: some View {
         ZStack {
-            Color.scCanvas(colorScheme).ignoresSafeArea()
+            SCPageBackground(scheme: colorScheme).ignoresSafeArea()
             content()
         }
     }

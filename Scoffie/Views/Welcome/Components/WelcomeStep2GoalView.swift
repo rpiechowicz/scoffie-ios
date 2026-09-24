@@ -1,29 +1,23 @@
 import SwiftUI
 
-// Welcome step 2 — Goal & activity. The user picks one of five goals and
-// declares their training frequency (1–4). Tapping a row updates state
-// optimistically; the WelcomeView pushes the result to the backend on
-// "Dalej". Selection markers animate with a spring so the radio dot pops
-// in instead of snapping.
+// Kreator, krok 2 — cel i aktywność. Jeden z pięciu celów (te same wiersze,
+// co w Ustawieniach → „Dieta i alergeny”) i liczba treningów w tygodniu.
+// Wybór zmienia stan od razu; `WelcomeView` wysyła go na serwer przy „Dalej”.
 struct WelcomeStep2GoalView: View {
     @Binding var goal: UserGoal
     @Binding var activity: ActivityLevel
 
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                WelcomeStepHeader(
+                SCStepHeader(
                     icon: "target",
-                    accent: SCPalette.terracotta,
                     eyebrow: "Twój cel",
                     title: "Co chcesz osiągnąć?",
-                    subtitle: "Wybierz to, co najbardziej do Ciebie pasuje. Pomoże nam dobrać propozycje i kalorie."
+                    subtitle: "Dobierzemy do tego kalorie i przepisy."
                 )
 
-                VStack(alignment: .leading, spacing: 8) {
-                    WelcomeFieldCaption(text: "Główny cel")
+                WelcomeSection(title: "Główny cel") {
                     VStack(spacing: 0) {
                         ForEach(Array(UserGoal.allCases.enumerated()), id: \.element.id) { index, candidate in
                             WelcomeOptionRow(
@@ -46,48 +40,22 @@ struct WelcomeStep2GoalView: View {
                     .welcomeCard()
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    WelcomeFieldCaption(text: "Treningi w tygodniu")
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 10) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                SCPalette.terracotta,
-                                                SCPalette.terracottaDeep,
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 30, height: 30)
-                                Image(systemName: "figure.run")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(.white)
-                            }
-                            Text("Ile razy w tygodniu trenujesz?")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Color.scLabel(colorScheme))
-                        }
-
-                        HStack(spacing: 8) {
-                            ForEach(ActivityLevel.allCases) { candidate in
-                                ActivityChip(
-                                    level: candidate,
-                                    isSelected: candidate == activity,
-                                    onTap: {
-                                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                                            activity = candidate
-                                        }
+                // Same chipy, bez karty z ikoną i pytaniem „Ile razy
+                // w tygodniu trenujesz?” — etykieta sekcji mówi to samo.
+                WelcomeSection(title: "Treningi w tygodniu") {
+                    HStack(spacing: 8) {
+                        ForEach(ActivityLevel.allCases) { candidate in
+                            ActivityChip(
+                                level: candidate,
+                                isSelected: candidate == activity,
+                                onTap: {
+                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                                        activity = candidate
                                     }
-                                )
-                            }
+                                }
+                            )
                         }
                     }
-                    .padding(16)
-                    .welcomeCard()
                 }
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
@@ -107,9 +75,9 @@ private struct ActivityChip: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 6) {
+            VStack(spacing: 5) {
                 Text(level.label)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 18, weight: .heavy))
                     .monospacedDigit()
                     .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
                 Text(level.subtitle)
@@ -123,17 +91,24 @@ private struct ActivityChip: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 12)
             // Ten sam chip co w „Twoich danych” w Ustawieniach: wybór
-            // w wariancie „soft”, bez gradientu i bez cienia.
-            .scChoiceSurface(RoundedRectangle(cornerRadius: 12, style: .continuous), isOn: isSelected)
+            // w wariancie „soft”, bez gradientu i bez cienia. Niewybrany na
+            // tle karty (`scTileBg`), bo stoi wprost na stronie.
+            .scChoiceSurface(
+                RoundedRectangle(cornerRadius: 14, style: .continuous),
+                isOn: isSelected,
+                offFill: Color.scTileBg(colorScheme)
+            )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(level.label) treningów w tygodniu, \(level.subtitle)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
 #Preview("Dark") {
     StatefulPreviewContainer(initialGoal: .healthy, initialActivity: .active) { goal, activity in
         ZStack {
-            SCPalette.canvasDark.ignoresSafeArea()
+            SCPageBackground(scheme: .dark).ignoresSafeArea()
             WelcomeStep2GoalView(goal: goal, activity: activity)
         }
         .preferredColorScheme(.dark)
@@ -143,7 +118,7 @@ private struct ActivityChip: View {
 #Preview("Light") {
     StatefulPreviewContainer(initialGoal: .lose, initialActivity: .light) { goal, activity in
         ZStack {
-            SCPalette.canvasLight.ignoresSafeArea()
+            SCPageBackground(scheme: .light).ignoresSafeArea()
             WelcomeStep2GoalView(goal: goal, activity: activity)
         }
         .preferredColorScheme(.light)

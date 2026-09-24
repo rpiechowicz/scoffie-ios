@@ -1,9 +1,9 @@
 import SwiftUI
 
-// Welcome step 3 — Diet + daily kcal target. The slider sits between the
-// design's 1200…3500 bounds with a 50 kcal step so the value lands on a
-// recognisable number. The diet rows reuse the radio + accent-icon
-// pattern from step 2 so the flow feels visually consistent.
+// Kreator, krok 3 — dzienny cel kalorii, makro, sposób odżywiania i alergeny.
+// Suwak chodzi w granicach 1200…3500 co 50 kcal, żeby liczba lądowała na
+// rozpoznawalnej wartości. Wiersze diety są tymi samymi wierszami, co cele
+// w kroku 2 i dieta w Ustawieniach.
 struct WelcomeStep3PreferencesView: View {
     @Binding var diet: DietPreference
     @Binding var calorieGoal: Int
@@ -34,94 +34,24 @@ struct WelcomeStep3PreferencesView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                WelcomeStepHeader(
-                    icon: "leaf.fill",
-                    accent: SCPalette.terracotta,
+                SCStepHeader(
+                    icon: "flame.fill",
                     eyebrow: "Dieta i kalorie",
-                    title: "Co najczęściej jadasz?",
-                    subtitle: "Na podstawie Twojego celu zaproponowaliśmy dzienną liczbę kalorii — możesz ją dostosować."
+                    title: "Ile i co jesz?",
+                    subtitle: "Cel policzyliśmy z Twoich danych — możesz go przesunąć."
                 )
 
-                VStack(alignment: .leading, spacing: 8) {
-                    WelcomeFieldCaption(text: "Cel kaloryczny")
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                SCPalette.terracotta,
-                                                SCPalette.terracottaDeep,
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "flame.fill")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(.white)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Dzienny cel")
-                                    .font(.system(size: 15.5, weight: .semibold))
-                                    .foregroundStyle(Color.scLabel(colorScheme))
-                                Text("Aplikacja podpowie, jak rozłożyć posiłki w ciągu dnia.")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Color.scMuted(colorScheme))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text("\(calorieGoal)")
-                                .font(.system(size: 38, weight: .bold))
-                                .foregroundStyle(SCPalette.terracotta)
-                                .monospacedDigit()
-                                .contentTransition(.numericText(value: Double(calorieGoal)))
-                                .animation(
-                                    .spring(response: 0.28, dampingFraction: 0.86),
-                                    value: calorieGoal
-                                )
-                            Text("kcal / dzień")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Color.scMuted(colorScheme))
-                        }
-
-                        Slider(
-                            value: Binding(
-                                get: { Double(calorieGoal) },
-                                set: { calorieGoal = Int($0.rounded()) }
-                            ),
-                            in: calorieRange,
-                            step: calorieStep
-                        )
-                        .tint(SCPalette.terracotta)
-
-                        HStack {
-                            Text("1 200")
-                            Spacer()
-                            Text("3 500")
-                        }
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.scMuted(colorScheme))
-                        .monospacedDigit()
-                    }
-                    .padding(16)
-                    .welcomeCard()
+                WelcomeSection(title: "Dzienny cel") {
+                    calorieCard
                 }
 
                 if let macros {
-                    VStack(alignment: .leading, spacing: 8) {
-                        WelcomeFieldCaption(text: "Makroskładniki")
+                    WelcomeSection(title: "Makroskładniki") {
                         macroCard(macros)
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    WelcomeFieldCaption(text: "Sposób odżywiania")
+                WelcomeSection(title: "Sposób odżywiania") {
                     VStack(spacing: 0) {
                         ForEach(Array(DietPreference.allCases.enumerated()), id: \.element.id) { index, candidate in
                             WelcomeOptionRow(
@@ -144,14 +74,9 @@ struct WelcomeStep3PreferencesView: View {
                     .welcomeCard()
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    WelcomeFieldCaption(text: "Alergeny i nietolerancje")
-                    Text("Dania z nimi znikną z przepisów. Zmienisz to w Ustawieniach.")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.scMuted(colorScheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.bottom, 6)
-
+                // Bez zdania „Dania z nimi znikną z przepisów” — powód padł
+                // na ostatnim ekranie przewodnika, a siatka mówi sama za siebie.
+                WelcomeSection(title: "Alergeny i nietolerancje") {
                     // Ten sam wybór co w Ustawieniach — siatka niesie własną kartę.
                     AllergenPicker(selected: allergens) { candidate in
                         withAnimation(.smooth(duration: 0.18)) {
@@ -167,20 +92,62 @@ struct WelcomeStep3PreferencesView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
+    /// Duża liczba celu, suwak i granice. Bez kafelka z płomieniem i zdania
+    /// „Aplikacja podpowie, jak rozłożyć posiłki” — płomień stoi w nagłówku
+    /// kroku, a liczba w terakocie mówi, co tu się ustawia.
+    private var calorieCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(calorieGoal)")
+                    .font(.system(size: 38, weight: .heavy))
+                    .tracking(-0.8)
+                    .foregroundStyle(SCPalette.terracotta)
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(calorieGoal)))
+                    .animation(
+                        .spring(response: 0.28, dampingFraction: 0.86),
+                        value: calorieGoal
+                    )
+                Text("kcal / dzień")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.scMuted(colorScheme))
+            }
+
+            Slider(
+                value: Binding(
+                    get: { Double(calorieGoal) },
+                    set: { calorieGoal = Int($0.rounded()) }
+                ),
+                in: calorieRange,
+                step: calorieStep
+            )
+            .tint(SCPalette.terracotta)
+            .accessibilityLabel("Dzienny cel kalorii")
+            .accessibilityValue("\(calorieGoal) kcal")
+
+            HStack {
+                Text("1 200")
+                Spacer()
+                Text("3 500")
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Color.scFaint(colorScheme))
+            .monospacedDigit()
+        }
+        .padding(16)
+        .welcomeCard()
+    }
+
     /// Trzy paski w proporcji kalorii z każdego makro plus gramy.
     ///
     /// Ta karta niczego nie pyta — jest odpowiedzią na to, o co pytaliśmy
     /// wcześniej. Bez niej krok 3 wyglądał tak, jakby wzrost i waga z kroku 1
-    /// nigdzie nie poszły.
+    /// nigdzie nie poszły. Gramy rolują się razem z suwakiem celu, a paski
+    /// zmieniają proporcje w miejscu.
     private func macroCard(_ macros: MacroTargets) -> some View {
         let total = max(macros.totalKcal, 1)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("Tak rozkładamy \(calorieGoal) kcal na dzień. Dokładne wartości ustawisz w Ustawieniach.")
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.scMuted(colorScheme))
-                .fixedSize(horizontal: false, vertical: true)
-
+        return VStack(alignment: .leading, spacing: 14) {
             macroRow(
                 title: "Białko",
                 grams: macros.proteinG,
@@ -216,8 +183,9 @@ struct WelcomeStep3PreferencesView: View {
         accent: Color
     ) -> some View {
         let share = min(max(Double(kcal) / Double(total), 0), 1)
+        let percent = Int((share * 100).rounded())
 
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Circle()
                     .fill(accent)
@@ -228,12 +196,15 @@ struct WelcomeStep3PreferencesView: View {
                 Spacer(minLength: 8)
                 Text("\(grams) g")
                     .font(.system(size: 13.5, weight: .bold))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(Color.scLabel(colorScheme))
                     .monospacedDigit()
-                Text("· \(Int((share * 100).rounded()))%")
-                    .font(.system(size: 11.5))
+                    .contentTransition(.numericText(value: Double(grams)))
+                Text("\(percent)%")
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Color.scFaint(colorScheme))
                     .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(percent)))
+                    .frame(minWidth: 30, alignment: .trailing)
             }
 
             GeometryReader { proxy in
@@ -250,14 +221,12 @@ struct WelcomeStep3PreferencesView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title): \(grams) gramów")
     }
-
 }
-
 
 #Preview("Dark") {
     StatefulPreviewContainer(diet: .none, kcal: 2300, allergens: []) { diet, kcal, allergens in
         ZStack {
-            SCPalette.canvasDark.ignoresSafeArea()
+            SCPageBackground(scheme: .dark).ignoresSafeArea()
             WelcomeStep3PreferencesView(diet: diet, calorieGoal: kcal, allergens: allergens)
         }
         .preferredColorScheme(.dark)
@@ -267,7 +236,7 @@ struct WelcomeStep3PreferencesView: View {
 #Preview("Light") {
     StatefulPreviewContainer(diet: .vegetarian, kcal: 1900, allergens: [.gluten, .nuts]) { diet, kcal, allergens in
         ZStack {
-            SCPalette.canvasLight.ignoresSafeArea()
+            SCPageBackground(scheme: .light).ignoresSafeArea()
             WelcomeStep3PreferencesView(diet: diet, calorieGoal: kcal, allergens: allergens)
         }
         .preferredColorScheme(.light)

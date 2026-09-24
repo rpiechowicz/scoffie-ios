@@ -187,6 +187,21 @@ check("poza pulą ostatnia alternatywa to „Mam inny pomysł”", everyone.allS
 check("poza pulą przykład w polu nie jest pusty", everyone.allSatisfy { !resolve($0).placeholder.isEmpty })
 check("bez liczenia braków w otwarciu", everyone.allSatisfy { !resolve($0).headline.contains(" z ") })
 
+// Zdanie z powitania nie może zmuszać asystenta do dopytania: każde mówi,
+// na kiedy. Wyjątki: pytanie o możliwości i kroki konkretnego dania.
+let whenWords = ["dziś", "jutr", "tydzień", "tygodni", "dni", "poniedziałek", "sobotę"]
+let everyPrompt = everyone.flatMap { c -> [String] in
+    let b = resolve(c)
+    return ([b.primary] + b.alternatives).compactMap(asks)
+}
+let vague = everyPrompt.filter { prompt in
+    !prompt.hasPrefix("Co potrafisz") && !prompt.hasPrefix("Jak ugotować")
+        && !whenWords.contains { prompt.lowercased().contains($0) }
+}
+check("każde zdanie z powitania mówi, na kiedy" + (vague.isEmpty ? "" : ": \(vague)"), vague.isEmpty)
+check("zamiana wskazuje danie z planu", asks(resolve(dayReady).primary)?.hasPrefix("Zamień ") == true && asks(resolve(dayReady).primary)?.contains("(Danie)") == true)
+check("zamiana jutra wskazuje obiad", resolve(eveningReady).alternatives.first.flatMap(asks) == "Zamień obiad na jutro (Danie): pokaż 3 inne dania do wyboru")
+
 if failures > 0 {
     print("\n\(failures) błędów")
     exit(1)

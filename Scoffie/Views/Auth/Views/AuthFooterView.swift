@@ -54,9 +54,9 @@ struct AuthFooterView: View {
 /// (`src/common/legal-documents.ts`) — wersja z przyszłości jest odrzucana,
 /// a starsza niż minimalna nie otwiera bramki asystenta.
 enum LegalDocMeta {
-    static let version = "1.0"
-    static let effectiveDate = "15 września 2026"
-    static let documentVersionISO = "2026-09-15"
+    static let version = "1.1"
+    static let effectiveDate = "23 września 2026"
+    static let documentVersionISO = "2026-09-23"
     static let contactEmail = "support@scoffie.app"
 }
 
@@ -229,7 +229,7 @@ private struct LegalBullet: View {
 
 // MARK: - Polityka prywatności
 //
-// Treść 1:1 z `docs/privacy/index.html` (wersja 1.0, 15 września 2026).
+// Treść 1:1 z `docs/privacy/index.html` (wersja 1.1, 23 września 2026; strona: scoffie-web `src/pages/privacy`).
 // Zmiana tutaj = zmiana na stronie i podbicie wersji w
 // `src/common/legal-documents.ts` na serwerze — inaczej nikt nie zostanie
 // poproszony o ponowną akceptację.
@@ -258,8 +258,8 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("imię wyświetlane i kolor awatara,")
                 LegalBullet("sylwetka: płeć, wzrost, waga, rok urodzenia — używane wyłącznie do wyliczenia zapotrzebowania kalorycznego i makroskładników,")
                 LegalBullet("cel (np. redukcja, utrzymanie), poziom aktywności, cele kaloryczne i makro,")
-                LegalBullet("dieta, alergeny i wykluczone składniki — są to dane dotyczące zdrowia w rozumieniu art. 9 RODO (patrz sekcja 3),")
-                LegalBullet("maksymalny czas gotowania, liczba i pory posiłków.")
+                LegalBullet("dieta i alergeny — są to dane dotyczące zdrowia w rozumieniu art. 9 RODO (patrz sekcja 3),")
+                LegalBullet("liczba i pory posiłków.")
                 LegalParagraph("Gospodarstwo domowe i planowanie:").fontWeight(.medium)
                 LegalBullet("nazwa gospodarstwa, lista domowników i ich role, zaproszenia,")
                 LegalBullet("plany posiłków, uczestnicy posiłków, oznaczenia zjedzonych posiłków, listy zakupów wraz z historią, własne przepisy i ulubione.")
@@ -276,7 +276,8 @@ struct PrivacyPolicyContent: View {
                 LegalParagraph("Techniczne:").fontWeight(.medium)
                 LegalBullet("token urządzenia do powiadomień push (za zgodą na powiadomienia),")
                 LegalBullet("logi żądań: identyfikator użytkownika, adres IP, wersja aplikacji, czas i status żądania — bez treści wiadomości do asystenta,")
-                LegalBullet("dziennik zgód: rodzaj zgody, wersja dokumentu, data, źródło.")
+                LegalBullet("dziennik zgód: rodzaj zgody, wersja dokumentu, data, źródło,")
+                LegalBullet("dane diagnostyczne: raporty awarii i zawieszeń aplikacji, czasy działania ekranów i żądań, model urządzenia, wersja systemu i aplikacji, identyfikator użytkownika — bez zrzutów ekranu, nagrań sesji, adresu IP i treści wpisywanych w aplikacji.")
             }
         }
 
@@ -284,7 +285,7 @@ struct PrivacyPolicyContent: View {
             VStack(alignment: .leading, spacing: 6) {
                 LegalBullet("założenie i utrzymanie konta, gospodarstwo, planowanie posiłków, listy zakupów, powiadomienia o zmianach — wykonanie umowy, art. 6 ust. 1 lit. b RODO,")
                 LegalBullet("wyliczanie zapotrzebowania i personalizacja propozycji na podstawie profilu i preferencji — wykonanie umowy, art. 6 ust. 1 lit. b RODO,")
-                LegalBullet("dieta, alergeny i wykluczone składniki (dane dotyczące zdrowia): przetwarzanie w Aplikacji — na podstawie wyraźnej zgody użytkownika wyrażonej przy ich podaniu (art. 9 ust. 2 lit. a RODO); przekazanie ich do asystenta AI — na podstawie odrębnej, wyraźnej zgody każdej osoby, której dotyczą (sekcja 6),")
+                LegalBullet("dieta i alergeny (dane dotyczące zdrowia): przetwarzanie w Aplikacji — na podstawie wyraźnej zgody użytkownika wyrażonej przy ich podaniu (art. 9 ust. 2 lit. a RODO); przekazanie ich do asystenta AI — na podstawie odrębnej, wyraźnej zgody każdej osoby, której dotyczą (sekcja 6),")
                 LegalBullet("dane ze Zdrowia (kroki) — zgoda udzielona w systemie iOS przy włączaniu integracji (art. 9 ust. 2 lit. a RODO),")
                 LegalBullet("poświadczenia Cookidoo — zgoda wyrażona przy łączeniu konta (art. 6 ust. 1 lit. a RODO),")
                 LegalBullet("bezpieczeństwo, wykrywanie nadużyć, limity użycia i ochrona sesji — prawnie uzasadniony interes, art. 6 ust. 1 lit. f RODO,")
@@ -304,7 +305,7 @@ struct PrivacyPolicyContent: View {
         LegalSection(number: 5, title: "Gospodarstwo domowe — dane o domownikach", icon: "house.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalParagraph("Dołączenie do gospodarstwa jest dobrowolne. Członkowie gospodarstwa współdzielą plan tygodnia, listy zakupów, własne przepisy i ustawienia gospodarstwa i mogą je modyfikować.")
-                LegalParagraph("Co widzą o Tobie pozostali domownicy: imię i awatar, dietę, alergeny, wykluczone składniki, cel kaloryczny i makro oraz Twój udział w posiłkach. Te dane są potrzebne, żeby wspólny plan uwzględniał każdego. Sylwetka (wzrost, waga, płeć, rok urodzenia) nie jest udostępniana domownikom ani asystentowi.")
+                LegalParagraph("Co widzą o Tobie pozostali domownicy: imię i awatar, dietę, alergeny, cel kaloryczny i makro oraz Twój udział w posiłkach. Te dane są potrzebne, żeby wspólny plan uwzględniał każdego. Sylwetka (wzrost, waga, płeć, rok urodzenia) nie jest udostępniana domownikom ani asystentowi.")
                 LegalParagraph("Skąd mamy dane o innych osobach: każdy domownik podaje swoje dane sam, w swoim koncie. Zapraszając kogoś do gospodarstwa, poinformuj tę osobę, jakie dane będą współdzielone. Gospodarstwo można w każdej chwili opuścić w Ustawieniach.")
             }
         }
@@ -314,8 +315,8 @@ struct PrivacyPolicyContent: View {
                 LegalParagraph("Asystent planowania posiłków działa na modelu językowym Claude dostarczanym przez Anthropic, PBC z siedzibą w Stanach Zjednoczonych, który przetwarza dane na zlecenie Administratora (podmiot przetwarzający). Asystent to program, nie człowiek; jego odpowiedzi mogą zawierać błędy i nie są poradą lekarską ani dietetyczną.")
                 LegalParagraph("Co jest wysyłane do Anthropic przy każdej wiadomości:").fontWeight(.medium)
                 LegalBullet("treść Twojej wiadomości i dotychczasowej rozmowy,")
-                LegalBullet("Twoje imię, dieta, alergeny, wykluczone składniki, cel, wyliczone zapotrzebowanie kaloryczne i makro, maksymalny czas gotowania,")
-                LegalBullet("te same dane pozostałych domowników — wyłącznie tych, którzy sami wyrazili zgodę na asystenta; ograniczenia pozostałych (alergeny, wykluczenia) egzekwuje serwer przy zapisie planu bez przekazywania ich danych,")
+                LegalBullet("Twoje imię, dieta, alergeny, cel, wyliczone zapotrzebowanie kaloryczne i makro,")
+                LegalBullet("te same dane pozostałych domowników — wyłącznie tych, którzy sami wyrazili zgodę na asystenta; ograniczenia pozostałych (alergeny) egzekwuje serwer przy zapisie planu bez przekazywania ich danych,")
                 LegalBullet("nazwa gospodarstwa, aktualny plan tygodnia i notatki pamięci,")
                 LegalBullet("wspólny katalog przepisów.")
                 LegalParagraph("Nie jest wysyłane: wzrost, waga, płeć, rok urodzenia, kroki ze Zdrowia, adres e-mail, poświadczenia Cookidoo.")
@@ -345,7 +346,7 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("Railway Corp. — hosting serwera i bazy danych (infrastruktura Aplikacji),")
                 LegalBullet("Cloudflare, Inc. — przechowywanie i serwowanie zdjęć przepisów z katalogu oraz przechowywanie zaszyfrowanych kopii zapasowych bazy danych (kopie zawierają dane osobowe; 30 dni),")
                 LegalBullet("GitHub, Inc. (Microsoft) — wykonanie nocnej kopii zapasowej bazy: zrzut przechodzi przez środowisko GitHub Actions i jest usuwane zaraz po wysłaniu do Cloudflare,")
-                LegalBullet("Functional Software, Inc. (Sentry) — zbieranie błędów aplikacji i serwera: identyfikator żądania, kod i ścieżka błędu, wersja, identyfikator użytkownika; bez treści wiadomości i danych profilu; serwery w Unii Europejskiej,")
+                LegalBullet("Functional Software, Inc. (Sentry) — diagnostyka aplikacji i serwera: awarie i błędy, czasy działania, ostrzeżenia z logów serwera; identyfikator żądania, kod i ścieżka błędu, wersja, identyfikator użytkownika; bez treści wiadomości, danych profilu, zrzutów ekranu i adresu IP; serwery w Unii Europejskiej,")
                 LegalBullet("Apple Inc. — Sign in with Apple, powiadomienia push, App Store,")
                 LegalBullet("Anthropic, PBC — model językowy asystenta AI, w zakresie z sekcji 6, wyłącznie dla osób, które wyraziły zgodę,")
                 LegalBullet("Vorwerk (Cookidoo) — wyłącznie jeśli użytkownik połączy konto Cookidoo, w zakresie z sekcji 8,")

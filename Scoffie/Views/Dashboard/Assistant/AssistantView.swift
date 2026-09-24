@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -117,6 +118,29 @@ struct AssistantView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.scTabIsActive) private var isActiveTab
     @FocusState private var isComposerFocused: Bool
+    /// Powitanie w trybie pisania (akcje i kontekst zgaszone).
+    ///
+    /// DLACZEGO NIE SAM FOKUS: powitanie stoi przyklejone do pola, a pole
+    /// jedzie z klawiaturą. Fokus przełączał się klatkę PRZED ruchem
+    /// klawiatury i zwijał blok własną animacją (`.smooth(0.3)`), a klawiatura
+    /// podnosiła go swoją krzywą — otwarcie najpierw opadało o wysokość akcji,
+    /// a potem wjeżdżało w górę („przeskakuje, jak zaczynam pisać”). Przy
+    /// chowaniu odwrotnie: akcje wracały, zanim klawiatura zjechała, blok
+    /// nie mieścił się nad nią, stawał od góry i dopiero potem opadał.
+    /// Teraz ten stan zmienia się w powiadomieniu klawiatury, w JEJ krzywej
+    /// i w tej samej chwili (`keyboardMoved`) — zwinięcie bloku i ruch pola to
+    /// jeden ciągły ruch. Fokus bez klawiatury ekranowej (klawiatura
+    /// sprzętowa) przełącza go sam, po chwili (`focusChanged`).
+    @State private var greetingComposing = false
+    /// Klawiatura ekranowa zasłania dół ekranu.
+    @State private var keyboardUp = false
+    /// Czas ostatniego ruchu klawiatury (z powiadomienia) — zapasowe
+    /// przełączenie w `focusChanged` jedzie w tym samym tempie.
+    @State private var keyboardDuration: Double = 0.3
+    /// Podbicie = pierwsza litera w polu — znak powitania skinie.
+    @State private var typingNudge = 0
+    /// Podbicie = tura skończyła się odpowiedzią — znak w nagłówku podskakuje.
+    @State private var answerCheer = 0
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -185,6 +209,20 @@ struct AssistantView: View {
             // Ten sam próg dla powrotu z tła: aplikacja zminimalizowana
             // w sklepie i otwarta w kuchni to dwie różne rozmowy.
             if phase == .active { store.rotateIfStale() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            keyboardMoved(covers: Self.keyboardCoversBottom(note), duration: Self.animationDuration(of: note))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
+            keyboardMoved(covers: false, duration: Self.animationDuration(of: note))
+        }
+        .onChange(of: isComposerFocused) { _, focused in focusChanged(focused) }
+        .onChange(of: draft.isEmpty) { wasEmpty, isEmpty in
+            if wasEmpty, !isEmpty { typingNudge += 1 }
+        }
+        .onChange(of: store.isSending) { wasSending, isSending in
+            // Tura domknęła się odpowiedzią (nie błędem, nie „stop”).
+            if wasSending, !isSending, store.errorMessage == nil { answerCheer += 1 }
         }
         .task {
             // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
@@ -278,7 +316,9 @@ struct AssistantView: View {
         AssistantHeader(
             mode: headerMode,
             onNewConversation: { Task { await store.startNewConversation() } },
-            accessory: quotaPips
+            accessory: quotaPips,
+            markMood: store.isSending ? .thinking : .idle,
+            markCheer: answerCheer
         ) {
             // W przepływie startowym (przed zgodą albo w kartach) menu ma
             // tylko to, co wtedy działa — „Nowa rozmowa" czy „Usuń historię"
@@ -539,7 +579,11 @@ struct AssistantView: View {
         guard let usage = store.usage, usage.isTrial, usage.messages.remaining > 0 else { return nil }
         return AnyView(
             Button { showUsage = true } label: {
-                AssistantQuotaPill(remaining: usage.messages.remaining, limit: usage.messages.limit)
+                AssistantQuotaPill(
+                    remaining: usage.messages.remaining,
+                    limit: usage.messages.limit,
+                    compact: headerMode != .large
+                )
             }
             .buttonStyle(.plain)
             .accessibilityHint("Otwiera limity asystenta")
@@ -699,6 +743,11 @@ struct AssistantView: View {
         case .compose: isComposerFocused = true
         case .openPlans: showPaywall = true
         case .openHistory: showConversations = true
+        case .openPlan: sessionStore.dashboardTab = .plan
+        case .openShopping:
+            // Lista zakupów jest arkuszem w Planie, więc sama zakładka to za mało.
+            sessionStore.opensShoppingList = true
+            sessionStore.dashboardTab = .plan
         }
     }
 
@@ -815,8 +864,14 @@ struct AssistantView: View {
         }
     }
 
+    /// Odstęp między wiadomościami. Odpowiedź z kartą pod pytaniem i kolejne
+    /// pytanie pod kartą stały po 14 pt — wszystko zlewało się w jeden słup.
+    /// Ta sama wartość w historii i w slocie ostatniej tury, inaczej slot
+    /// przeskoczyłby przy przejściu do historii.
+    static let messageGap: CGFloat = 22
+
     private var messageStack: some View {
-        LazyVStack(alignment: .leading, spacing: 14) {
+        LazyVStack(alignment: .leading, spacing: Self.messageGap) {
             if store.isLoadingHistory && store.messages.isEmpty {
                 ChatSkeleton()
             }
@@ -931,7 +986,96 @@ struct AssistantView: View {
     }
 
     private var emptyState: some View {
-        AssistantEmptyState(briefing: briefing, composing: isComposerFocused, onAction: perform)
+        AssistantEmptyState(
+            briefing: briefing,
+            // Przy wyczerpanej puli miesięcznej akcje powitania i tak nic nie
+            // wyślą — zostaje samo otwarcie, a pod nim karta z datą powrotu.
+            composing: greetingComposing || isLockedByMonthlyQuota,
+            nudge: typingNudge,
+            quota: quotaFacts,
+            sleeping: isLockedByMonthlyQuota,
+            onAction: perform
+        )
+    }
+
+    /// Liczby puli dla widoków „wykorzystane” — z serwera; plan polecany
+    /// tylko, gdy znamy liczbę domowników.
+    private var quotaFacts: AssistantQuotaFacts? {
+        AssistantQuotaFacts.make(
+            usage: store.usage,
+            householdSize: sessionStore.didLoadHouseholdMembers ? sessionStore.householdMembers.count : 0,
+            subscriptions: sessionStore.subscriptionStore
+        )
+    }
+
+    /// Wyczerpana pula planu MIESIĘCZNEGO. Tylko gdy serwer już powiedział,
+    /// że to nie próba — inaczej próba zobaczyłaby na chwilę „wraca …”.
+    /// Dotąd pole stało wtedy wyszarzone z „Chwila przerwy — spróbuj za
+    /// moment”, choć przerwa trwała do odnowienia puli.
+    private var isLockedByMonthlyQuota: Bool {
+        store.isLocked && store.lockReason == .quota && store.usage?.isTrial == false
+    }
+
+    // MARK: - Klawiatura a powitanie
+
+    /// Klawiatura rusza: powitanie zwija się / rozwija w tej samej chwili
+    /// i w tej samej krzywej co pole nad klawiaturą (patrz `greetingComposing`).
+    private func keyboardMoved(covers: Bool, duration: Double) {
+        let target: Bool
+        if covers {
+            target = true
+        } else if isComposerFocused {
+            // Klawiatura zjeżdża, a fokus jeszcze nie zszedł (schował ją
+            // system) — rozwinięcie odda `focusChanged` za chwilę.
+            target = greetingComposing
+        } else {
+            target = false
+        }
+        guard keyboardUp != covers || greetingComposing != target else { return }
+        keyboardDuration = duration
+        withAnimation(reduceMotion ? nil : Self.keyboardCurve(duration: duration)) {
+            keyboardUp = covers
+            greetingComposing = target
+        }
+    }
+
+    /// Fokus pola. Z klawiaturą ekranową stan przełącza jej powiadomienie
+    /// (`keyboardMoved`); tu tylko zapas: klawiatura sprzętowa nie zasłania
+    /// ekranu, a fokus zdjęty przez system przychodzi już po powiadomieniu.
+    private func focusChanged(_ focused: Bool) {
+        if !focused {
+            guard !keyboardUp, greetingComposing else { return }
+            withAnimation(reduceMotion ? nil : Self.keyboardCurve(duration: keyboardDuration)) { greetingComposing = false }
+            return
+        }
+        guard !greetingComposing else { return }
+        Task { @MainActor in
+            // Do tej chwili klawiatura ekranowa na pewno już ruszyła; jeśli
+            // nie — jest sprzętowa i powitanie zwija się samo.
+            try? await Task.sleep(for: .milliseconds(350))
+            guard isComposerFocused, !greetingComposing else { return }
+            withAnimation(reduceMotion ? nil : Self.keyboardCurve(duration: keyboardDuration)) { greetingComposing = true }
+        }
+    }
+
+    /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
+    /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.
+    private static func keyboardCurve(duration: Double) -> Animation {
+        .timingCurve(0.38, 0.7, 0.125, 1, duration: max(duration, 0.2))
+    }
+
+    /// Czas ruchu klawiatury z powiadomienia.
+    private static func animationDuration(of note: Notification) -> Double {
+        (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
+    }
+
+    /// Czy klawiatura po zmianie ramki zasłoni dół ekranu. Pasek skrótów
+    /// klawiatury sprzętowej ma ~55–70 pt, prawdziwa klawiatura ponad 250 —
+    /// ten sam próg co rezerwa pod dolnym menu (`NavigationMenu`).
+    private static func keyboardCoversBottom(_ note: Notification) -> Bool {
+        guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return false }
+        let overlap = max(0, UIScreen.main.bounds.height - frame.minY)
+        return overlap > 120
     }
 
     /// Przykład w polu: na pustym ekranie pasuje do sytuacji z powitania
@@ -961,8 +1105,13 @@ struct AssistantView: View {
             // to samo mówi briefing, więc composera nie ma wcale.
             if store.isLockedByTrialQuota {
                 if !isConversationEmpty {
-                    trialExhaustedCard
+                    quotaSpentCard(isTrial: true)
                 }
+            } else if isLockedByMonthlyQuota {
+                // Pula miesięczna: pole, w które nie da się pisać do
+                // odnowienia, zastępuje karta z datą powrotu — także na
+                // pustym ekranie, bo powitanie o puli nie mówi.
+                quotaSpentCard(isTrial: false)
             } else {
                 composerField
             }
@@ -987,6 +1136,7 @@ struct AssistantView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
+        .animation(.easeInOut(duration: 0.2), value: isLockedByMonthlyQuota)
     }
 
     /// `LComposer` z makiety: pole 50 pt w pigułce z włoskowatym obrysem,
@@ -998,8 +1148,11 @@ struct AssistantView: View {
         return HStack(alignment: .bottom, spacing: 10) {
             TextField(composerPrompt, text: $draft, axis: .vertical)
             // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
-            // w sobotę, dwie osoby bez glutenu…").
-            .lineLimit(1...8)
+            // w sobotę, dwie osoby bez glutenu…"). PUSTE pole ma jeden
+            // wiersz: przykład z powitania („Np. obiady do 30 minut przez
+            // cały tydzień”) łamał się na dwa, a pierwsza litera zwijała pole
+            // do jednego — powitanie nad nim opadało skokiem o wiersz.
+            .lineLimit(draft.isEmpty ? 1...1 : 1...8)
             .font(.system(size: 16.5))
             .tracking(-0.3)
             .foregroundStyle(AssistantLook.ink(scheme))
@@ -1067,42 +1220,21 @@ struct AssistantView: View {
         .padding(.bottom, 8)
     }
 
-    /// `TrialCard` — karta zastępuje pole po wykorzystaniu puli na próbę:
-    /// znak marki, dwa zdania i jedna akcja „Zobacz plany”.
-    private var trialExhaustedCard: some View {
-        AssistantCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    SCMarkShape()
-                        .fill(AssistantLook.terraFill(scheme))
-                        .frame(width: 20, height: 20)
-                        .padding(.top, 1)
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Darmowe wiadomości wykorzystane")
-                            .font(.system(size: 16.5, weight: .bold))
-                            .tracking(-0.4)
-                            .foregroundStyle(AssistantLook.ink(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Rozmowy i plan zostają.")
-                            .font(.system(size: 14))
-                            .foregroundStyle(AssistantLook.muted(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                AssistantPrimaryButton(action: AssistantCardAction(title: "Zobacz plany", icon: "arrow.right") { showPaywall = true })
+    /// Karta zamiast pola po wykorzystaniu puli (`AssistantQuotaSpentCard`):
+    /// próba prowadzi do planów, plan miesięczny — do limitów z datą powrotu.
+    private func quotaSpentCard(isTrial: Bool) -> some View {
+        AssistantQuotaSpentCard(
+            facts: quotaFacts,
+            isTrial: isTrial,
+            action: {
+                if isTrial { showPaywall = true } else { showUsage = true }
             }
-            .padding(.horizontal, AssistantCardMetrics.inset)
-            .padding(.vertical, 16)
-        }
+        )
         .background(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).fill(AssistantLook.input(scheme)))
         // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
         .padding(.horizontal, SCFloatingTabBar.sideMargin)
         .padding(.top, 8)
         .padding(.bottom, 8)
-        .accessibilityElement(children: .contain)
     }
 
     /// `LEditBar`: pasek 36 pt nad polem — „Edytujesz wiadomość” i „Anuluj”.
@@ -1406,11 +1538,11 @@ struct AssistantView: View {
     /// w `followTurn` przełączają obie strony w jednej transakcji: wiersz
     /// osiada w miejscu, szkic przenika w odpowiedź, treść wyrasta pod nim.
     private var turnSlot: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Self.messageGap) {
             if slotStart < store.messages.count {
                 bubble(at: slotStart, store.messages[slotStart])
             }
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 // JEDEN wiersz na całe życie tury: ten sam widok w tym samym
                 // miejscu drzewa od pierwszej klatki do końca życia odpowiedzi
                 // w slocie. Domknięcie tury nie podmienia go na inny widok,
@@ -1451,7 +1583,7 @@ struct AssistantView: View {
                         // w nieanimowanej transakcji.
                         .transition(.opacity)
                     } else {
-                        VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: Self.messageGap) {
                             ForEach(Array(store.messages.enumerated().dropFirst(slotStart + 1)), id: \.element.id) { index, message in
                                 bubble(at: index, message)
                             }
@@ -1701,13 +1833,16 @@ private struct MessageBubble: View {
     /// Pełna szerokość daje treści (a wkrótce kartom) miejsce, którego dymek
     /// nie ma jak dać; rozmowę czyta się po stronie ekranu, nie po ramce.
     private var assistantCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // 20 pt między tekstem a kartą: karta to osobna rzecz do obejrzenia,
+        // nie dalszy ciąg akapitu.
+        VStack(alignment: .leading, spacing: 20) {
             // `LAsstMsg` + `LThought`: znak marki obok treści, a POD nią
             // „Myślałem 42 s” wcięte pod tekst. Karta pytania NIESIE treść
             // wypowiedzi, więc obok niej nie ma `text`.
             if !message.text.isEmpty, message.card?.replacesText != true {
-                VStack(alignment: .leading, spacing: 6) {
-                    AssistantVoice {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Świeża odpowiedź: znak przy niej raz podskakuje.
+                    AssistantVoice(greets: message.revealFrom != nil) {
                         if let from = message.revealFrom {
                             AssistantRevealedAnswer(text: message.text, from: from, onDone: onRevealed)
                         } else {
