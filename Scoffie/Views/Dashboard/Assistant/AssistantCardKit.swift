@@ -53,10 +53,16 @@ enum AssistantLook {
     /// Pole nad przewijaną treścią (composer, pasek edycji, szukanie):
     /// NIEPRZEZROCZYSTE, bo rozmowa przelatuje pod nim — w ciemnym motywie
     /// półprzezroczysty tint pokazywał litery przez pole.
+    ///
+    /// Jasny motyw od 24.09.2026: ciepły krem o stopień CIEMNIEJSZY od tła
+    /// strony (#FBF5EA), nie prawie-biel #FDFAF6 — biała pigułka z krążkiem
+    /// świeciła nad kremową stroną jako jedyna taka plama („za bardzo gryzie”).
+    /// To nieprzezroczysty odpowiednik `scTileBg` (6 % atramentu na kremie)
+    /// odrobinę rozjaśniony, żeby pole nie wyglądało na wyłączone.
     static func input(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 38 / 255, green: 30 / 255, blue: 26 / 255)
-            : Color(red: 253 / 255, green: 250 / 255, blue: 246 / 255)
+            : Color(red: 243 / 255, green: 236 / 255, blue: 224 / 255)   // #F3ECE0
     }
 
     static func terra(_ scheme: ColorScheme) -> Color {

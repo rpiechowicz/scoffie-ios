@@ -251,6 +251,17 @@ final class AgentStore {
     /// ma zaczynać od czystej kartki. Trzy minuty zostają na jeden przypadek —
     /// odpowiedź doszła, iOS ubił proces, użytkownik wraca ją przeczytać.
     static let staleAfterRelaunch: TimeInterval = 3 * 60
+    /// Nieobecność na zakładce (inna zakładka albo aplikacja w tle), po której
+    /// SKOŃCZONA rozmowa ustępuje czystej kartce — 24.09.2026: „zaplanowałem
+    /// dzień, wracam po chwili, a tam dalej stara rozmowa”. Ten sam wzorzec co
+    /// w aplikacji ChatGPT (powrót = nowy czat, stary w historii); publicznego
+    /// progu żaden z dużych czatów nie podaje, więc 10 min — dłużej niż
+    /// zerknięcie do Planu po zapisie, krócej niż „wyszedłem do sklepu”.
+    /// Przerwa liczy się i od wyjścia, i od ostatniego ruchu w rozmowie.
+    static let staleAfterAway: TimeInterval = 10 * 60
+    /// Kiedy użytkownik zszedł z zakładki (albo aplikacja poszła w tło).
+    /// `nil` = jest na zakładce.
+    @ObservationIgnored private var awaySince: Date?
 
     /// Otwarcie zakładki: historia rozmowy i ewentualny powrót do tury w biegu.
     func openIfNeeded() async {
@@ -266,11 +277,35 @@ final class AgentStore {
 
     /// Powrót na wierzch (zakładka, pierwszy plan) po przerwie: zaczynamy
     /// od zera, chyba że tura jeszcze biegnie — wtedy jest do czego wracać.
-    func rotateIfStale() {
-        guard conversationId != nil, !isSending, pendingTurnId == nil else { return }
-        guard let lastActivityAt,
-              Date().timeIntervalSince(lastActivityAt) > Self.staleAfter else { return }
+    /// `true` = ekran dostał czystą kartkę (powitanie ma się napisać od nowa).
+    @discardableResult
+    func rotateIfStale() -> Bool {
+        let away = awaySince.map { Date().timeIntervalSince($0) }
+        // Powrót z tła na INNEJ zakładce nie kończy nieobecności na tej —
+        // liczy się dopiero wejście tutaj.
+        if isVisible { awaySince = nil }
+        guard conversationId != nil, !isSending, pendingTurnId == nil else { return false }
+        guard let lastActivityAt else { return false }
+        let idle = Date().timeIntervalSince(lastActivityAt)
+        // Długa cisza w rozmowie zamyka ją zawsze — także wtedy, gdy ktoś
+        // cały czas stał na zakładce.
+        if idle > Self.staleAfter {
+            beginFreshConversation()
+            return true
+        }
+        // Krótszy próg tylko po NIEOBECNOŚCI i tylko dla rozmowy, która nie
+        // czeka na decyzję: propozycja dnia / tygodnia z „Dodaj do planu”
+        // zostaje do pełnego `staleAfter`.
+        guard let away, away > Self.staleAfterAway, idle > Self.staleAfterAway,
+              !hasPendingProposal else { return false }
         beginFreshConversation()
+        return true
+    }
+
+    /// Ostatnia odpowiedź asystenta niesie propozycję czekającą na zapis.
+    private var hasPendingProposal: Bool {
+        guard let last = messages.last(where: { $0.author == .assistant }) else { return false }
+        return last.card?.state?.isPending == true
     }
 
     /// Czysta kartka bez wiersza na serwerze — powstanie z pierwszym pytaniem.
@@ -305,8 +340,16 @@ final class AgentStore {
     /// Ekran wszedł na wierzch albo z niego zszedł. Po tym poznajemy, czy
     /// odpowiedź trzeba jeszcze zgłosić kropką na zakładce.
     func setVisible(_ visible: Bool) {
+        if isVisible, !visible { awaySince = Date() }
         isVisible = visible
         if visible { unseenAnswers = 0 }
+    }
+
+    /// Aplikacja zeszła w tło, gdy zakładka była na wierzchu — to też
+    /// nieobecność (`staleAfterAway`), choć zakładka się nie zmieniła.
+    func noteWentToBackground() {
+        guard isVisible, awaySince == nil else { return }
+        awaySince = Date()
     }
 
     /// Wysyła wiadomość i czeka na odpowiedź, pokazując po drodze postęp.
@@ -555,6 +598,21 @@ final class AgentStore {
 
     enum LockReason { case quota, budget, pause }
     private(set) var lockReason: LockReason?
+
+    /// „Sprawdź ponownie” na ekranie przerwy (`AssistantMaintenanceView`).
+    /// Ta sama droga co wejście na zakładkę — udany odczyt rozmów zdejmuje
+    /// `isUnavailable`, a 503 `AI_DISABLED` zostawia go na miejscu.
+    /// `true` = asystent wrócił.
+    @discardableResult
+    func recheckAvailability() async -> Bool {
+        guard !isCheckingAvailability else { return !isUnavailable }
+        isCheckingAvailability = true
+        defer { isCheckingAvailability = false }
+        await loadOrCreateConversation()
+        return !isUnavailable
+    }
+
+    private(set) var isCheckingAvailability = false
 
     // MARK: - Rozmowy
 
