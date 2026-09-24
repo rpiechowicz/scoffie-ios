@@ -32,6 +32,9 @@ struct AssistantConsentGateView: View {
     @Environment(\.colorScheme) private var scheme
 
     @State private var localDraft = AssistantConsentDraft()
+    /// Nagłówek kroku już się napisał — zdanie, które wraca po błędzie
+    /// zapisu, stoi od razu, zamiast pisać się drugi raz.
+    @State private var headerTyped = false
     @State private var showPrivacyPolicy = false
     @State private var confirmsRevoke = false
 
@@ -140,9 +143,13 @@ struct AssistantConsentGateView: View {
                         subtitle: isGranted || currentDraft.errorMessage != nil
                             ? nil
                             : "Zanim Asystent wyśle cokolwiek do modelu, potrzebuje Twojej zgody.",
-                        typing: isGranted ? nil : 0
+                        typing: isGranted || headerTyped ? nil : 0
                     )
                     .padding(.bottom, 8)
+                    .task {
+                        try? await Task.sleep(for: .seconds(1.2))
+                        if !Task.isCancelled { headerTyped = true }
+                    }
 
                     sections
                 }

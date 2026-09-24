@@ -8,7 +8,7 @@ import SwiftUI
 // Zgoda (`AssistantConsentGateView`). Zgoda stoi NA KOŃCU — decyduje ktoś,
 // kto już wie, o co chodzi, a po niej od razu jest rozmowa. Trzy pierwsze
 // ekrany żyją tutaj i są wspólne dla zakładki (`AssistantView.introFlow`)
-// i arkusza z menu ⋯ „Jak działa asystent” (`AssistantHowItWorksView`).
+// i arkusza z menu ⋯ „Jak działa Asystent” (`AssistantHowItWorksView`).
 //
 // Anatomia jak krok przewodnika „Poznaj aplikację” (`TourStepView`): u góry
 // scenka zamiast zdjęcia — żywa, na prawdziwych daniach z katalogu — pod nią
@@ -69,6 +69,10 @@ enum AssistantIntroLayout {
     /// Cień stopki (`SCEdgeShade`) leży na treści — strona kończy się nad nim.
     static let bottom: CGFloat = SCEdgeShade.bottomHeight + 8
     static let stageGap: CGFloat = 16
+    /// Promień kadru scenki — ten sam, co zdjęcia kroku przewodnika
+    /// (`TourMedia`). Tu, a nie w `AssistantIntroStage`: typ generyczny nie
+    /// może mieć statycznej stałej.
+    static let stageRadius: CGFloat = 26
     /// Scenka nie schodzi poniżej tego — niżej zdjęcia w kafelkach spadają
     /// pod 44 pt, a przycisk decyzji wychodzi poza kadr; wtedy lepiej
     /// przewinąć (iPhone SE, duża czcionka). Na 16 / 16e scenka ma
@@ -188,8 +192,6 @@ private struct AssistantIntroStage<Content: View>: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private static let radius: CGFloat = 26
-
     var body: some View {
         content()
             .padding(14)
@@ -203,12 +205,12 @@ private struct AssistantIntroStage<Content: View>: View {
                 )
             )
             .background(
-                RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                RoundedRectangle(cornerRadius: AssistantIntroLayout.stageRadius, style: .continuous)
                     .fill(Color.scTileBg(scheme))
             )
-            .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AssistantIntroLayout.stageRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                RoundedRectangle(cornerRadius: AssistantIntroLayout.stageRadius, style: .continuous)
                     .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
             )
     }
@@ -230,6 +232,10 @@ private struct AssistantIntroHelloPage: View {
     @State private var markShown = false
     /// Podbicie = znak podskakuje — „cześć”, gdy tytuł się dopisze.
     @State private var cheer = 0
+    /// Pole z przykładami wchodzi, gdy tytuł jest napisany. Wcześniej
+    /// stałoby w pierwszej klatce pod opisem — zanim strona zmierzy wolne
+    /// miejsce — i zjeżdżało na dół skokiem.
+    @State private var composerShown = false
 
     private static let markSize: CGFloat = 48
 
@@ -264,7 +270,7 @@ private struct AssistantIntroHelloPage: View {
 
                 Spacer(minLength: 28)
 
-                AssistantIntroComposerDemo()
+                AssistantIntroComposerDemo(isShown: composerShown)
             }
             // Pole na dole wolnego miejsca, gdy strona mieści się bez
             // przewijania; na małym ekranie po prostu pod opisem.
@@ -275,9 +281,14 @@ private struct AssistantIntroHelloPage: View {
             try? await Task.sleep(for: .milliseconds(80))
             if Task.isCancelled { return }
             markShown = true
+            if reduceMotion {
+                composerShown = true
+                return
+            }
             try? await Task.sleep(for: .milliseconds(820))
-            if Task.isCancelled || reduceMotion { return }
+            if Task.isCancelled { return }
             cheer += 1
+            composerShown = true
         }
     }
 }
@@ -286,6 +297,9 @@ private struct AssistantIntroHelloPage: View {
 /// kontrolka: nie przyjmuje fokusu, a do VoiceOver trafia jako jedna lista
 /// przykładów. Ten sam kształt i kolor, co prawdziwe pole (`AssistantLook.input`).
 private struct AssistantIntroComposerDemo: View {
+    /// Pole wchodzi (i zaczyna pisać) dopiero na znak od strony.
+    let isShown: Bool
+
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Zakładki żyją wszystkie naraz — na niewybranej pętla stoi.
@@ -318,10 +332,14 @@ private struct AssistantIntroComposerDemo: View {
             HStack(spacing: 8) {
                 ZStack(alignment: .leading) {
                     // Każdy przykład to NOWY tekst (`.id`) — rodzi się jako
-                    // „do napisania”, bez mignięcia gotowym zdaniem.
-                    SCTypedText(Self.prompts[index], playKey: 0, rate: Self.rate, delay: Self.typingDelay)
-                        .id(index)
-                        .transition(.opacity)
+                    // „do napisania”, bez mignięcia gotowym zdaniem. Przed
+                    // wejściem pola nie ma go wcale, więc pierwszy przykład
+                    // też pisze się na oczach.
+                    if isShown {
+                        SCTypedText(Self.prompts[index], playKey: 0, rate: Self.rate, delay: Self.typingDelay)
+                            .id(index)
+                            .transition(.opacity)
+                    }
                 }
                 .font(.system(size: 16))
                 .tracking(-0.3)
@@ -353,10 +371,13 @@ private struct AssistantIntroComposerDemo: View {
             .padding(.leading, 6)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: index)
         }
+        .opacity(isShown ? 1 : 0)
+        .offset(y: isShown || reduceMotion ? 0 : 10)
+        .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.5), value: isShown)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Przykłady próśb do Asystenta: \(Self.prompts.joined(separator: ", "))")
-        .task(id: isActiveTab) {
-            guard isActiveTab, !reduceMotion else { return }
+        .task(id: isActiveTab && isShown) {
+            guard isActiveTab, isShown, !reduceMotion else { return }
             while !Task.isCancelled {
                 let typing = Self.typingDelay + SCTypedText.duration(Self.prompts[index], rate: Self.rate)
                 try? await Task.sleep(for: .seconds(typing + 0.25))
@@ -404,7 +425,11 @@ private struct AssistantIntroPlanPage: View {
         ) {
             AssistantIntroOptionsScene(dishes: dishes)
         }
-        .onAppear {
+        // Przy wejściu — i jeszcze raz, gdy katalog doładuje się później
+        // (arkusz „Jak działa” otwarty tuż po starcie): wtedy stały tu dania
+        // zastępcze bez zdjęć. Raz dobrane prawdziwe dania już nie tasują się.
+        .onChange(of: recipeCatalogStore.recipes.count, initial: true) { _, _ in
+            guard dishes.contains(where: { $0.imageURL == nil }) else { return }
             let picked = AssistantIntroDish.lightDinners(from: recipeCatalogStore.recipes)
             if !picked.isEmpty { dishes = picked }
         }
@@ -620,7 +645,10 @@ private struct AssistantIntroTrustPage: View {
         ) {
             AssistantIntroDecisionScene(dish: dish)
         }
-        .onAppear {
+        // Jak na Planowaniu: przy wejściu i po doładowaniu katalogu, dopóki
+        // stoi danie zastępcze.
+        .onChange(of: recipeCatalogStore.recipes.count, initial: true) { _, _ in
+            guard dish.imageURL == nil else { return }
             if let picked = AssistantIntroDish.lunch(from: recipeCatalogStore.recipes) {
                 dish = picked
             }

@@ -179,7 +179,7 @@ struct AssistantView: View {
             // w przewodniku „Poznaj aplikację", a stopka (`SCStepFooter`) stoi
             // pod nimi poza animowanym obszarem. Pionowe przenikanie zostaje
             // tylko na wejściu do rozmowy.
-            Group {
+            ZStack {
                 if let step = activeIntroStep {
                     // BEZ nagłówka zakładki (v2, 24.09.2026): strona zaczyna
                     // się od góry, jak krok przewodnika — nad „Cześć! Jestem
@@ -188,6 +188,7 @@ struct AssistantView: View {
                     // bezpieczny obszar zostaje (bez `ignoresSafeArea`), więc
                     // treść siada pod Dynamic Island.
                     introFlow(step)
+                        .transition(.assistantIntroStep)
                 } else {
                     VStack(spacing: 0) {
                         header
@@ -209,9 +210,14 @@ struct AssistantView: View {
                     // podnosić pole wiadomości, a composer wszedłby pod pasek
                     // zakładek. NIE skracać do `.ignoresSafeArea()`.
                     .ignoresSafeArea(.container, edges: .top)
+                    .transition(.assistantIntroStep)
                 }
             }
-            .transition(.assistantIntroStep)
+            // Trwały kontener (nie `Group`, który rozdaje modyfikatory
+            // gałęziom): wymiana wprowadzenie ↔ rozmowa animuje się także
+            // bez `withAnimation` (cofnięcie zgody z menu), a haptyka gra
+            // na wejściu i wyjściu z wprowadzenia, nie tylko między krokami.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.easeOut(duration: 0.28), value: activeIntroStep == nil)
             .sensoryFeedback(.impact(flexibility: .soft), trigger: activeIntroStep)
             // Miejsce pod własnym paskiem zakładek: pole wiadomości i stopka
