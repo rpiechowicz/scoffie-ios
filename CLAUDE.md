@@ -516,15 +516,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
-- Onboarding (przewodnik `TourStep` + kreator `Welcome*`, 24.09.2026 — Rafał: „więcej opisu pod
-  title… bardziej friendly”): każdy krok przewodnika ma pod tytułem `lead` (dwa zdania zwykłym
-  językiem, zanim padną punkty), a sekcje kreatora `WelcomeSection(title:hint:)` — jedno zdanie
-  PO CO pytamy. Opis mówi tylko o tym, co JEST w aplikacji (jak punkty w `TourStep.all`). Zdjęcie
-  kroku oddaje wysokość pod opis (`TourMedia.reserved`), żeby czwarty punkt nie wchodził pod cień stopki.
-  Kreator BEZ paska nawigacji: „Wyloguj” stoi w rzędzie z kafelkiem ikony (`WelcomeHeader`), treść
-  zaczyna się od bezpiecznego obszaru jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`),
-  górny brzeg gaśnie przez `scScrollEdgeFade`. Cel kalorii i makro = JEDNA karta: suwak, pod kreską
-  pasek proporcji z legendą w kolorach `SCMacroPalette`.
+- Przewodnik „Poznaj aplikację” (`FeatureTourView`, `TourStep`, 24.09.2026 — Rafał: „więcej opisu pod
+  title… bardziej friendly”, „odśwież po nowemu”): krok = zdjęcie, `SCStepHeader` z eyebrow w kolorze
+  kroku („Zakładka Plan” — dawna kapsułka „Znajdziesz w…” zniknęła), tytuł, `lead` (dwa zdania zwykłym
+  językiem) i `TourPointsCard` — punkty z IKONAMI w kafelkach (`TourPoint`), ten sam wiersz co
+  `SCStepFeatureCard` na powitaniu i ekranie końcowym. Opis i punkty mówią tylko o tym, co JEST
+  w aplikacji. Zdjęcie oddaje wysokość (`TourMedia.reserved`), żeby czwarty punkt nie wchodził pod cień
+  stopki. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
+  (przewodnik) od „onboardingu usera” (kreator) i kreator ma zostać, jak jest.
 - Ekran logowania nie przewija się: elastyczne jest hero z kaflami (150–280 pt) i odstęp nad
   przyciskiem; poniżej 700 pt kafle funkcji tracą podpisy. Arkusze dokumentów
   (`LegalDocumentSheet`) stoją na `EditorialSheetHeader`, nagłówek NAD przewijaną treścią.

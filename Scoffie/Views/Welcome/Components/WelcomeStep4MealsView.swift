@@ -20,18 +20,18 @@ struct WelcomeStep4MealsView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                WelcomeHeader(
+                SCStepHeader(
                     icon: "clock.fill",
                     eyebrow: "Rytm dnia",
                     title: "Ile posiłków jecie?",
-                    subtitle: "Każdy dzień w planie dostanie tyle miejsc na dania, ile tu zaznaczysz. Godziny przydadzą się w Kalendarzu i przy przypomnieniach."
+                    subtitle: "Tyle miejsc dostanie każdy dzień w planie."
                 )
 
-                WelcomeSection(title: "Zawsze w planie", hint: "Te trzy są podstawą każdego dnia.") {
+                WelcomeSection(title: "Zawsze w planie") {
                     coreRuleCard
                 }
 
-                WelcomeSection(title: "Dodatkowe posiłki", hint: "Zaznacz, jeśli zdarza Ci się jeść coś między głównymi posiłkami.") {
+                WelcomeSection(title: "Dodatkowe posiłki") {
                     VStack(spacing: 10) {
                         ForEach(MealSlot.optionalSlots) { slot in
                             optionalCard(slot)
@@ -41,7 +41,7 @@ struct WelcomeStep4MealsView: View {
 
                 // Ta sama oś co w Ustawieniach → „Posiłki w planie”:
                 // stuknięcie w posiłek otwiera koło godzin do połowy ekranu.
-                WelcomeSection(title: "Pory posiłków", hint: "Stuknij w posiłek, żeby zmienić godzinę.") {
+                WelcomeSection(title: "Pory posiłków") {
                     MealDayTimesCard(
                         slots: mealSlots.enabled,
                         schedule: mealSchedule,
@@ -55,7 +55,6 @@ struct WelcomeStep4MealsView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
-        .scScrollEdgeFade()
     }
 
     // MARK: - Trójka obowiązkowa

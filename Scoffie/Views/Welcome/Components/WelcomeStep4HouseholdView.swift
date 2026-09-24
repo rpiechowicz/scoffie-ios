@@ -29,23 +29,18 @@ struct WelcomeStep4HouseholdView: View {
         // krokach 1–4.
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                WelcomeHeader(
+                SCStepHeader(
                     icon: "house.fill",
                     eyebrow: "Ostatni krok",
                     title: "Stwórz gospodarstwo",
-                    subtitle: "Gospodarstwo to Wasz wspólny kąt w Scoffie: jeden plan tygodnia i jedna lista zakupów. Planujesz tylko dla siebie? Też je załóż — po prostu jednoosobowe."
+                    subtitle: "Wspólny plan i lista zakupów dla domowników."
                 )
 
-                WelcomeSection(title: "Nazwa gospodarstwa", hint: "Zobaczą ją domownicy, których zaprosisz.") {
+                WelcomeSection(title: "Nazwa gospodarstwa") {
                     nameCard
                 }
 
-                WelcomeSection(
-                    title: pendingInvitations.isEmpty ? "Masz zaproszenie?" : "Czekające zaproszenia",
-                    hint: pendingInvitations.isEmpty
-                        ? "Ktoś z Twojego domu już korzysta ze Scoffie? Dołącz do niego, zamiast zakładać nowe."
-                        : "Dołącz jednym stuknięciem — od razu zobaczysz Wasz plan i listę zakupów."
-                ) {
+                WelcomeSection(title: pendingInvitations.isEmpty ? "Masz zaproszenie?" : "Czekające zaproszenia") {
                     if pendingInvitations.isEmpty {
                         linkHintCard
                     } else {
@@ -68,7 +63,6 @@ struct WelcomeStep4HouseholdView: View {
             .padding(.bottom, WelcomeLayout.bottomInset)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 

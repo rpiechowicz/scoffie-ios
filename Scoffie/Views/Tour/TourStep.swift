@@ -6,24 +6,33 @@ import SwiftUI
 /// identyczny układ — różni je wyłącznie zdjęcie, akcent i tekst.
 struct TourStep: Identifiable {
     let id: String
-    /// Gdzie w aplikacji szukać tej funkcji. Chip pod statusbarem zastępuje
-    /// mini pasek zakładek z designu: nazwa miejsca niesie tę informację
-    /// wprost, a rysunek paska w skali 1:3 i tak byłby nieczytelny.
-    let place: String
-    let placeIcon: String
+    /// Gdzie w aplikacji szukać tej funkcji — eyebrow nad tytułem w kolorze
+    /// kroku („Zakładka Plan”), jak w nagłówkach arkuszy. Do 24.09.2026
+    /// stała tu kapsułka „Znajdziesz w…” nad zdjęciem: trzeci styl nagłówka
+    /// w jednym przepływie, obok logo powitania i kafelka kreatora.
+    let eyebrow: String
     let accent: Color
     let title: String
     /// Dwa zdania pod tytułem: o co w tym chodzi, zwykłym językiem, zanim
     /// padną konkrety. Sam tytuł i lista funkcji czytały się jak specyfikacja
     /// (Rafał 24.09.2026: „więcej opisu pod title… bardziej friendly”).
     let lead: String
-    /// Konkrety pod tytułem, każdy z ptaszkiem w karcie (`TourPointsCard`).
+    /// Konkrety pod tytułem, każdy z własną ikoną w karcie (`TourPointsCard`,
+    /// wiersze jak `SCStepFeatureCard` na powitaniu i ekranie końcowym).
     /// Od 24.09.2026 cztery, nie trzy: każdy punkt to funkcja, która JEST
     /// w aplikacji (źródła przy `TourStep.all`), a nie obietnica. Czwarty
     /// punkt mieści się dzięki ciaśniejszej karcie; na iPhonie SE zdjęcie
     /// kroku przycina się do wysokości (`TourMedia`), a stopka stoi osobno.
-    let points: [String]
+    let points: [TourPoint]
     let imageName: String
+}
+
+/// Jeden punkt kroku: ikona w kafelku (tint koloru kroku) i jedno zdanie.
+struct TourPoint: Identifiable {
+    let icon: String
+    let text: String
+
+    var id: String { text }
 }
 
 extension TourStep {
@@ -58,76 +67,71 @@ extension TourStep {
     static let all: [TourStep] = [
         TourStep(
             id: "plan",
-            place: "Zakładce Plan",
-            placeIcon: MenuConstans.Plan.icon,
+            eyebrow: "Zakładka Plan",
             accent: SCPalette.terracotta,
             title: "Zaplanuj tydzień w pięć minut",
             lead: "Rozkładasz posiłki na dni tygodnia jak w kalendarzu — i nikt już nie musi pytać, co dziś na obiad.",
             points: [
-                "Od śniadania po przekąski — tyle pór, ile jecie",
-                "Kalorie i makro na każdy dzień i każdą osobę",
-                "Zmiany widzi od razu cały dom",
-                "Przypomnienie, kiedy zacząć gotować",
+                TourPoint(icon: "fork.knife", text: "Od śniadania po przekąski — tyle pór, ile jecie"),
+                TourPoint(icon: "flame.fill", text: "Kalorie i makro na każdy dzień i każdą osobę"),
+                TourPoint(icon: "person.2.fill", text: "Zmiany widzi od razu cały dom"),
+                TourPoint(icon: "bell.fill", text: "Przypomnienie, kiedy zacząć gotować"),
             ],
             imageName: "TourPlan"
         ),
         TourStep(
             id: "recipes",
-            place: "Zakładce Przepisy",
-            placeIcon: MenuConstans.Recipes.icon,
+            eyebrow: "Zakładka Przepisy",
             accent: SCPalette.sage,
             title: "Przepisy dopasowane do Was",
             lead: "Kilkaset dań z kaloriami, makro i czasem gotowania. Te z Twoimi alergenami chowamy same, a filtry odsieją resztę tego, czego nie jecie.",
             points: [
-                "Filtry: czas, kalorie, trudność, dieta i składniki",
-                "Porcje przeliczają składniki i makro",
-                "Składniki po działach i kroki na jednym ekranie",
-                "Ulubione pod sercem — i pod ręką w planie",
+                TourPoint(icon: "slider.horizontal.3", text: "Filtry: czas, kalorie, trudność, dieta i składniki"),
+                TourPoint(icon: "plusminus", text: "Porcje przeliczają składniki i makro"),
+                TourPoint(icon: "list.bullet.rectangle.fill", text: "Składniki po działach i kroki na jednym ekranie"),
+                TourPoint(icon: "heart.fill", text: "Ulubione pod sercem — i pod ręką w planie"),
             ],
             imageName: "TourRecipes"
         ),
         TourStep(
             id: "shopping",
-            place: "Planie, pod koszykiem",
-            placeIcon: MenuConstans.Products.icon,
+            eyebrow: "Plan · pod koszykiem",
             accent: SCPalette.indigo,
             title: "Lista zakupów robi się sama",
             lead: "Nie musisz niczego przepisywać. Składniki ze wszystkich dań w planie zbierają się w jedną listę, ułożoną po działach sklepu.",
             points: [
-                "Produkty po działach sklepu",
-                "„Na dziś” — braki na dzisiejsze dania",
-                "Odhaczanie widoczne u drugiej osoby od razu",
-                "Zamknięte listy zostają w historii",
+                TourPoint(icon: "square.grid.2x2.fill", text: "Produkty po działach sklepu"),
+                TourPoint(icon: "sun.max.fill", text: "„Na dziś” — braki na dzisiejsze dania"),
+                TourPoint(icon: "checkmark.circle.fill", text: "Odhaczanie widoczne u drugiej osoby od razu"),
+                TourPoint(icon: "clock.arrow.circlepath", text: "Zamknięte listy zostają w historii"),
             ],
             imageName: "TourShopping"
         ),
         TourStep(
             id: "assistant",
-            place: "Zakładce Asystent",
-            placeIcon: MenuConstans.Assistant.icon,
+            eyebrow: "Zakładka Asystent",
             accent: SCPalette.butter,
             title: "Zapytaj, gdy brakuje pomysłu",
             lead: "Napisz zwyczajnie, czego potrzebujesz — „lekki obiad na jutro” albo „tydzień bez mięsa”. Asystent zaproponuje dania, a Ty decydujesz, co trafi do planu.",
             points: [
-                "Dzień albo tydzień z katalogu przepisów",
-                "Podmiana dania z różnicą kalorii i czasu",
-                "Pilnuje alergenów i celu kalorii",
-                "Nic nie trafia do planu bez Twojej zgody",
+                TourPoint(icon: "calendar", text: "Dzień albo tydzień z katalogu przepisów"),
+                TourPoint(icon: "arrow.triangle.2.circlepath", text: "Podmiana dania z różnicą kalorii i czasu"),
+                TourPoint(icon: "checkmark.shield.fill", text: "Pilnuje alergenów i celu kalorii"),
+                TourPoint(icon: "hand.thumbsup.fill", text: "Nic nie trafia do planu bez Twojej zgody"),
             ],
             imageName: "TourAssistant"
         ),
         TourStep(
             id: "settings",
-            place: "Ustawieniach",
-            placeIcon: MenuConstans.Settings.icon,
+            eyebrow: "Ustawienia",
             accent: SCPalette.terracottaDeep,
             title: "Ustaw wszystko pod siebie",
             lead: "Wszystko, o co zaraz zapytamy, zmienisz tu później jednym stuknięciem — cel, dietę, godziny posiłków i domowników.",
             points: [
-                "Cel, makroskładniki, dieta i alergeny",
-                "Posiłki w planie i godziny, o których jecie",
-                "Zaproszenie domowników do gospodarstwa",
-                "Poranny przegląd i przypomnienia o porach",
+                TourPoint(icon: "target", text: "Cel, makroskładniki, dieta i alergeny"),
+                TourPoint(icon: "clock.fill", text: "Posiłki w planie i godziny, o których jecie"),
+                TourPoint(icon: "person.badge.plus", text: "Zaproszenie domowników do gospodarstwa"),
+                TourPoint(icon: "bell.badge.fill", text: "Poranny przegląd i przypomnienia o porach"),
             ],
             imageName: "TourSettings"
         ),

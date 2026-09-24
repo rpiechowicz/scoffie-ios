@@ -8,7 +8,7 @@ import SwiftUI
 ///
 /// Wysokość kadru ma sufit: widoczna strona (`TourPage` podaje ją
 /// w `tourViewport`) minus to, czego potrzebuje reszta kroku (`reserved`:
-/// chip, tytuł w dwóch liniach, karta czterech punktów, marginesy). Na
+/// eyebrow, tytuł w dwóch liniach, opis, karta czterech punktów, marginesy). Na
 /// Plus / Pro Max sufit leży nad 16:13 i nic się nie zmienia, na zwykłym
 /// iPhonie kadr traci kilkanaście punktów, na SE / mini wyraźnie więcej
 /// (zdjęcie się przycina, szerokość zostaje) — tytuł i punkty mieszczą się
@@ -23,9 +23,9 @@ private struct TourMedia: View {
     private static let aspect: CGFloat = 16.0 / 13.0
     /// Wszystko na stronie kroku poza zdjęciem (liczone z odstępów
     /// `TourStepView` i `TourLayout`, z zapasem na dwulinijkowy tytuł
-    /// i trzylinijkowy opis — `TourStep.lead`, +90 pt od 24.09.2026; przy
-    /// +70 czwarty punkt wchodził pod cień stopki).
-    private static let reserved: CGFloat = 480
+    /// i trzylinijkowy opis — `TourStep.lead`; bez kapsułki „Znajdziesz w…”
+    /// nad zdjęciem, za to z eyebrow i wyższymi wierszami punktów z ikonami).
+    private static let reserved: CGFloat = 470
     /// Poniżej tego kadr przestaje coś pokazywać — wtedy lepiej przewinąć.
     private static let minimum: CGFloat = 150
 
@@ -73,8 +73,8 @@ private struct TourMedia: View {
     }
 }
 
-/// Treść jednego kroku przewodnika: gdzie to jest (chip), jak wygląda
-/// (zdjęcie), co robi (tytuł i dwa zdania opisu), co z tego macie (cztery punkty w karcie,
+/// Treść jednego kroku przewodnika: jak wygląda (zdjęcie), gdzie to jest
+/// (eyebrow), co robi (tytuł i dwa zdania opisu), co z tego macie (cztery punkty w karcie,
 /// wchodzące kaskadą po wjeździe strony). Pasek kroków
 /// i przyciski są w stopce (`SCStepFooter`) — osobno, bo treść jeździ
 /// między krokami, a stopka ma stać w miejscu.
@@ -87,31 +87,22 @@ struct TourStepView: View {
     /// w `FeatureTourView`), więc kaskada gra przy każdym kroku.
     @State private var hasAppeared = false
 
-    /// „Znajdziesz w Zakładce Plan" — mówi wprost, w którym miejscu
-    /// aplikacji szukać funkcji z tego kroku. Zastępuje rysunek paska
-    /// zakładek, który w tej skali byłby plamką.
-    private var placeLabel: Text {
-        Text("Znajdziesz w ")
-            .foregroundStyle(Color.scMuted(scheme))
-        + Text(step.place)
-            .foregroundStyle(Color.scLabel(scheme))
-            .fontWeight(.semibold)
-    }
-
     var body: some View {
         TourPage {
             VStack(alignment: .leading, spacing: 0) {
-                TourChip(icon: step.placeIcon, accent: step.accent, label: placeLabel)
-                    .padding(.horizontal, TourLayout.horizontal)
-                    .padding(.bottom, 14)
-
                 TourMedia(imageName: step.imageName, accent: step.accent)
                     .padding(.horizontal, TourLayout.mediaHorizontal)
                     .padding(.bottom, 20)
 
-                // Ten sam nagłówek kroku, co w kreatorze i u asystenta —
-                // tu bez kafelka, bo miejsce i kolor niesie chip nad zdjęciem.
-                SCStepHeader(title: step.title, subtitle: step.lead)
+                // Ten sam nagłówek kroku, co w kreatorze i u asystenta: eyebrow
+                // w kolorze kroku mówi, gdzie to jest w aplikacji — bez kafelka,
+                // bo nad nagłówkiem stoi zdjęcie.
+                SCStepHeader(
+                    accent: step.accent,
+                    eyebrow: step.eyebrow,
+                    title: step.title,
+                    subtitle: step.lead
+                )
                     .padding(.horizontal, TourLayout.horizontal)
                     .padding(.bottom, 14)
 

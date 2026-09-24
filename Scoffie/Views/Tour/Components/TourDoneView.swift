@@ -23,23 +23,15 @@ struct TourDoneView: View {
     var body: some View {
         TourPage {
             VStack(alignment: .leading, spacing: 0) {
-                // Ten sam chip, co „Znajdziesz w…" na krokach — stoi w tym
-                // samym miejscu, więc przy wjeździe tego ekranu nie zmienia
-                // ani wysokości, ani tła.
-                TourChip(
-                    icon: "clock",
-                    accent: SCPalette.terracotta,
-                    label: Text("Zostały dwie minuty")
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .fontWeight(.semibold)
-                )
-                .padding(.bottom, 18)
-
+                // Nagłówek jak na krokach: eyebrow w kolorze, tytuł, opis.
+                // Kafelek z zegarem stoi tam, gdzie powitanie ma logo.
                 SCStepHeader(
+                    icon: "clock.fill",
+                    eyebrow: "Zostały dwie minuty",
                     title: "Znasz już nas.\nTeraz my poznajmy Ciebie.",
                     subtitle: "Kilka krótkich pytań, żeby plan, przepisy i kalorie od pierwszego dnia pasowały do Ciebie — a nie do „przeciętnego człowieka”."
                 )
-                    .padding(.bottom, 22)
+                .padding(.bottom, 22)
 
                 SCStepFeatureCard(features: features)
                     .padding(.bottom, 14)

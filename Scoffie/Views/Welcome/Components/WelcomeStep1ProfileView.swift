@@ -26,14 +26,14 @@ struct WelcomeStep1ProfileView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: WelcomeLayout.sectionSpacing) {
-                WelcomeHeader(
+                SCStepHeader(
                     icon: "person.fill",
                     eyebrow: "Witaj w Scoffie",
                     title: "Zacznijmy od Ciebie",
-                    subtitle: "Z wieku, wzrostu i wagi policzymy, ile energii potrzebujesz w ciągu dnia. Nie musisz niczego ważyć od nowa — wystarczy przybliżenie."
+                    subtitle: "Z tych danych policzymy Twój dzienny cel."
                 )
 
-                WelcomeSection(title: "Imię", hint: "Tak zobaczą Cię domownicy we wspólnym planie.") {
+                WelcomeSection(title: "Imię") {
                     HStack(spacing: 12) {
                         Image(systemName: "person.fill")
                             .font(.system(size: 15, weight: .semibold))
@@ -58,7 +58,7 @@ struct WelcomeStep1ProfileView: View {
                     .welcomeCard()
                 }
 
-                WelcomeSection(title: "Rok urodzenia", hint: "Z wiekiem zmienia się zapotrzebowanie — uwzględnimy to w celu.") {
+                WelcomeSection(title: "Rok urodzenia") {
                     YearWheelPicker(year: $yearOfBirth, range: yearRange)
                 }
 
@@ -82,7 +82,7 @@ struct WelcomeStep1ProfileView: View {
                     }
                 }
 
-                WelcomeSection(title: "Płeć", hint: "Nieobowiązkowo. Bez niej liczymy ze średniej.") {
+                WelcomeSection(title: "Płeć") {
                     HStack(spacing: 8) {
                         ForEach(Sex.allCases) { candidate in
                             SexChip(
@@ -114,7 +114,6 @@ struct WelcomeStep1ProfileView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
-        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 

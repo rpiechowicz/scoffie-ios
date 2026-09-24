@@ -64,62 +64,27 @@ extension EnvironmentValues {
     @Entry var tourViewport: CGSize = .zero
 }
 
-/// Kapsułka nad treścią: ikona w kafelku i krótka etykieta. Kroki mówią
-/// nią „Znajdziesz w Zakładce Plan", ekran domykający — „Zostały dwie
-/// minuty". Jeden widok dla obu, bo stoją w tym samym miejscu na kolejnych
-/// ekranach: inna wysokość albo inne tło robiłyby skok przy przejściu.
-struct TourChip: View {
-    let icon: String
-    let accent: Color
-    let label: Text
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // Tint jak w `SCHeaderIconWell`, ale glif 12 pt — przy 24 pt
-            // kafelka proporcja nagłówka dawała 10 pt i ikona ginęła.
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
-                .frame(width: 24, height: 24)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accent)
-                )
-
-            label
-                .font(.system(size: 13))
-                .tracking(-0.08)
-        }
-        .padding(.leading, 7)
-        .padding(.trailing, 13)
-        .padding(.vertical, 6)
-        .background(Capsule(style: .continuous).fill(Color.scTileBg(scheme)))
-        .overlay(Capsule(style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Punkty kroku w jednej karcie: ptaszek w kółku w kolorze kroku i jedno
-/// zdanie, wiersze przedzielone linią jak w `SCStepFeatureCard`. Karta jak
-/// każda inna w aplikacji — `scTileBg` + `scTileStroke`, bez cienia.
+/// Punkty kroku w jednej karcie: ikona w kafelku z tintem koloru kroku
+/// (`SCHeaderIconWell`) i jedno zdanie, wiersze przedzielone linią — ten sam
+/// wiersz, co `SCStepFeatureCard` na powitaniu i ekranie końcowym, więc
+/// cały przewodnik mówi jednym językiem. Do 24.09.2026 były tu ptaszki
+/// w kółkach, jak z listy zadań. Karta jak każda inna w aplikacji —
+/// `scTileBg` + `scTileStroke`, bez cienia.
 ///
-/// Wiersze wchodzą kaskadą (`scReveal`: krycie + 14 pt z dołu) — kółko
-/// z ptaszkiem dostaje przy tym lekkie „kliknięcie” (0,6 → 1), jakby punkt
-/// był właśnie odhaczany. Bez ruchu całego ekranu: strona i tak wjeżdża
-/// z boku (`FeatureTourView`).
+/// Wiersze wchodzą kaskadą (`scReveal`: krycie + 14 pt z dołu) — kafelek
+/// dostaje przy tym lekkie „kliknięcie” (0,6 → 1). Bez ruchu całego ekranu:
+/// strona i tak wjeżdża z boku (`FeatureTourView`).
 struct TourPointsCard: View {
-    let points: [String]
+    let points: [TourPoint]
     let accent: Color
     let isVisible: Bool
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let badge: CGFloat = 22
+    private static let badge: CGFloat = 32
     private static let spacing: CGFloat = 12
-    private static let horizontalPadding: CGFloat = 14
+    private static let horizontalPadding: CGFloat = 16
     private static let radius: CGFloat = 18
 
     var body: some View {
@@ -146,17 +111,9 @@ struct TourPointsCard: View {
         )
     }
 
-    private func row(_ text: String, order: Int) -> some View {
-        // Do góry, nie do środka: dłuższy punkt łamie się na dwie linie,
-        // a ptaszek ma zostać przy pierwszej. 1 pt nad tekstem wyrównuje
-        // środek 22-punktowego kółka ze środkiem pierwszej linii.
-        HStack(alignment: .top, spacing: Self.spacing) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 10.5, weight: .heavy))
-                .foregroundStyle(accent)
-                .frame(width: Self.badge, height: Self.badge)
-                .background(Circle().fill(accent.opacity(scheme == .dark ? 0.18 : 0.14)))
-                .overlay(Circle().stroke(accent.opacity(scheme == .dark ? 0.30 : 0.24), lineWidth: 1))
+    private func row(_ point: TourPoint, order: Int) -> some View {
+        HStack(spacing: Self.spacing) {
+            SCHeaderIconWell(icon: point.icon, accent: accent, size: Self.badge)
                 .scaleEffect(isVisible || reduceMotion ? 1 : 0.6)
                 .animation(
                     reduceMotion
@@ -165,12 +122,11 @@ struct TourPointsCard: View {
                             .delay(0.22 + Double(order) * 0.05),
                     value: isVisible
                 )
-            Text(text)
-                .font(.system(size: 14.5))
+            Text(point.text)
+                .font(.system(size: 14.5, weight: .medium))
                 .tracking(-0.15)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Self.horizontalPadding)
