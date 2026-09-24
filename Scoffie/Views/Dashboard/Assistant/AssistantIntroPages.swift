@@ -264,6 +264,9 @@ private struct AssistantIntroHelloPage: View {
             // Zwarty blok na środku wolnego miejsca: bez dziury między
             // opisem a polem (v2 dosuwało pole do stopki).
             .frame(minHeight: available, alignment: .leading)
+            // Do pierwszego pomiaru (`available == 0`) blok stałby u góry
+            // i w następnej klatce przeskakiwał na środek — niech go nie widać.
+            .opacity(available > 0 ? 1 : 0)
         }
         .task {
             // Klatka oddechu — zmiana w klatce wstawienia nie gra.
@@ -415,9 +418,12 @@ private struct AssistantIntroPlanPage: View {
             title: "Dzień, tydzień albo jedno danie",
             lead: "Napisz, na co masz ochotę. Dania biorę z katalogu przepisów i od razu liczę kalorie.",
             tags: [
-                AssistantIntroTag(title: "Dzień i tydzień", icon: "calendar", accent: SCPalette.terracotta),
+                // Krótkie, żeby stały w JEDNYM wierszu także na 16e (350 pt) —
+                // „Dzień i tydzień” zawijało wiersz i strona zaczynała się
+                // przewijać; dzień i tydzień mówi już tytuł.
                 AssistantIntroTag(title: "Do wyboru", icon: "square.grid.2x2.fill", accent: SCPalette.terracotta),
                 AssistantIntroTag(title: "Podmiana", icon: "arrow.triangle.2.circlepath", accent: SCPalette.terracotta),
+                AssistantIntroTag(title: "Zakupy", icon: "cart.fill", accent: SCPalette.terracotta),
             ]
         ) {
             AssistantIntroOptionsScene(dishes: dishes)
@@ -426,7 +432,7 @@ private struct AssistantIntroPlanPage: View {
         // (arkusz „Jak działa” otwarty tuż po starcie): wtedy stały tu dania
         // zastępcze bez zdjęć. Raz dobrane prawdziwe dania już nie tasują się.
         .onChange(of: recipeCatalogStore.recipes.count, initial: true) { _, _ in
-            guard dishes.contains(where: { $0.imageURL == nil }) else { return }
+            guard dishes.contains(where: { !$0.fromCatalog }) else { return }
             let picked = AssistantIntroDish.lightDinners(from: recipeCatalogStore.recipes)
             if !picked.isEmpty { dishes = picked }
         }
@@ -459,7 +465,7 @@ private struct AssistantIntroOptionsScene: View {
 
                 VStack(spacing: 12) {
                     ForEach(Array(dishes.prefix(3).enumerated()), id: \.element.id) { order, dish in
-                        optionRow(dish, isFirst: order == 0)
+                        optionRow(dish, order: order)
                             .scReveal(cardShown, order: order + 1)
                     }
                 }
@@ -482,7 +488,8 @@ private struct AssistantIntroOptionsScene: View {
     /// Wiersz jak w karcie „Do wyboru” (`anchorRow`): wybrane danie
     /// pogrubione z ptaszkiem, pozostałe przygaszone. Kalorie wchodzą razem
     /// z kartą i liczą się od zera (`AssistantMealRow` pokazuje je od `kcal > 0`).
-    private func optionRow(_ dish: AssistantIntroDish, isFirst: Bool) -> some View {
+    private func optionRow(_ dish: AssistantIntroDish, order: Int) -> some View {
+        let isFirst = order == 0
         let picked = chosen && isFirst
         return HStack(spacing: 8) {
             AssistantMealRow(
@@ -492,7 +499,8 @@ private struct AssistantIntroOptionsScene: View {
                 kcal: cardShown ? dish.kcal : 0,
                 size: 40,
                 muted: chosen && !isFirst,
-                titleWeight: picked ? .semibold : .medium
+                titleWeight: picked ? .semibold : .medium,
+                kcalAnimation: AssistantIntroDish.countAnimation(order: order)
             )
             if picked {
                 Image(systemName: "checkmark.circle.fill")
@@ -602,7 +610,7 @@ private struct AssistantIntroTrustPage: View {
         // Jak na Planowaniu: przy wejściu i po doładowaniu katalogu, dopóki
         // stoją dania zastępcze.
         .onChange(of: recipeCatalogStore.recipes.count, initial: true) { _, _ in
-            guard day.contains(where: { $0.imageURL == nil }) else { return }
+            guard day.contains(where: { !$0.fromCatalog }) else { return }
             let picked = AssistantIntroDish.day(from: recipeCatalogStore.recipes)
             if !picked.isEmpty { day = picked }
         }
@@ -642,7 +650,10 @@ private struct AssistantIntroDecisionScene: View {
                 eyebrow: "Propozycja",
                 eyebrowDetail: "jutro",
                 title: nil,
-                subtitle: "Sprawdzona pod alergeny całego domu",
+                // Obietnica tylko przy daniach z katalogu, odsianych dietą
+                // i alergenami z Ustawień — zastępcze (katalog się nie wczytał)
+                // przez ten filtr nie przeszły.
+                subtitle: day.allSatisfy(\.fromCatalog) ? "Sprawdzona pod alergeny całego domu" : nil,
                 status: status
             )
 
@@ -653,7 +664,8 @@ private struct AssistantIntroDecisionScene: View {
                         title: dish.name,
                         imageUrl: dish.imageURL?.absoluteString,
                         kcal: shown ? dish.kcal : 0,
-                        size: 36
+                        size: 36,
+                        kcalAnimation: AssistantIntroDish.countAnimation(order: order)
                     )
                     .scReveal(shown, order: order + 1)
                 }
@@ -710,14 +722,18 @@ struct AssistantIntroDish: Identifiable {
     let kcal: Int
     let minutes: Int
     let slot: MealSlot
+    /// Prawdziwy przepis, odsiany dietą i alergenami z Ustawień (`pool`).
+    /// `false` = danie zastępcze, zanim katalog się wczyta.
+    let fromCatalog: Bool
 
-    init(id: String, name: String, imageURL: URL?, kcal: Int, minutes: Int, slot: MealSlot) {
+    init(id: String, name: String, imageURL: URL?, kcal: Int, minutes: Int, slot: MealSlot, fromCatalog: Bool = false) {
         self.id = id
         self.name = name
         self.imageURL = imageURL
         self.kcal = kcal
         self.minutes = minutes
         self.slot = slot
+        self.fromCatalog = fromCatalog
     }
 
     init(recipe: Recipe, slot: MealSlot) {
@@ -727,8 +743,16 @@ struct AssistantIntroDish: Identifiable {
             imageURL: recipe.imageURL,
             kcal: Int(recipe.nutritionPerServing.kcal.rounded()),
             minutes: recipe.prepTimeMinutes,
-            slot: slot
+            slot: slot,
+            fromCatalog: true
         )
+    }
+
+    /// Kalorie wiersza liczą się od zera, gdy wiersz jest już prawie cały
+    /// widoczny — `scReveal` wpuszcza wiersz `order + 1` z opóźnieniem
+    /// 0,10 + 0,05 · n; liczenie rusza chwilę po nim.
+    static func countAnimation(order: Int) -> Animation {
+        .easeOut(duration: 0.9).delay(0.35 + 0.05 * Double(order))
     }
 
     /// Pula dań, które wolno pokazać TEJ osobie: ze zdjęciem, z policzonymi
@@ -775,17 +799,26 @@ struct AssistantIntroDish: Identifiable {
     }
 
     /// Dzień do karty propozycji: śniadanie, obiad i kolacja — po jednym,
-    /// losowo, bez powtórki. Pusta lista, gdy którejś pory nie da się
-    /// obsadzić (wtedy zostają dania zastępcze).
+    /// losowo, bez powtórki. Jak przy kolacjach: gdy w zwykłym czasie nie ma
+    /// kandydata (wąska dieta), pula rozszerza się o dłuższe gotowanie.
+    /// Pusta lista dopiero wtedy, gdy którejś pory nie da się obsadzić
+    /// w ogóle (zostają dania zastępcze, bez obietnicy o alergenach).
     @MainActor
     static func day(from recipes: [Recipe]) -> [AssistantIntroDish] {
         let plan: [(MealSlot, Int)] = [(.breakfast, 30), (.lunch, 60), (.dinner, 45)]
         var picked: [AssistantIntroDish] = []
         var used = Set<UUID>()
         for (slot, maxMinutes) in plan {
-            let candidates = pool(from: recipes, slot: slot, maxMinutes: maxMinutes)
-                .filter { !used.contains($0.id) }
-            guard let recipe = candidates.randomElement() else { return [] }
+            var chosen: Recipe?
+            for limit in [maxMinutes, 90, Int.max] {
+                let candidates = pool(from: recipes, slot: slot, maxMinutes: limit)
+                    .filter { !used.contains($0.id) }
+                if let recipe = candidates.randomElement() {
+                    chosen = recipe
+                    break
+                }
+            }
+            guard let recipe = chosen else { return [] }
             used.insert(recipe.id)
             picked.append(AssistantIntroDish(recipe: recipe, slot: slot))
         }
