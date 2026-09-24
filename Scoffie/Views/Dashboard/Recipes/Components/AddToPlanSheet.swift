@@ -906,7 +906,14 @@ struct AddToPlanSheet: View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
 
         return HStack(spacing: 10) {
-            EditorialRecipeCover(recipe: meal.recipe, size: 36, cornerRadius: 10)
+            // Zdjęcie przenika się przy zmianie wypieranego dania (np.
+            // śniadanie → obiad), karta stoi w miejscu.
+            ZStack {
+                EditorialRecipeCover(recipe: meal.recipe, size: 36, cornerRadius: 10)
+                    .id(meal.recipe.id)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+            .frame(width: 36, height: 36)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("ZAMIENISZ")
@@ -921,14 +928,19 @@ struct AddToPlanSheet: View {
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .contentTransition(.opacity)
+                    // Nazwa ROLUJE jak zdanie pod kartą — `.opacity` przy
+                    // tej długości tekstu wyglądało jak podmiana bez ruchu.
+                    .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Image(systemName: "arrow.triangle.2.circlepath")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(accent)
+                // Strzałki obracają się raz przy każdej zmianie dania.
+                .symbolEffect(.rotate, value: meal.recipe.id)
         }
+        .animation(.smooth(duration: 0.3), value: meal.recipe.id)
         .padding(.leading, 8)
         .padding(.trailing, 14)
         .padding(.vertical, 8)

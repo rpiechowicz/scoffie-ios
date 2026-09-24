@@ -51,7 +51,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`briefing.placeholder`) zmienia się z sytuacją. Bez liczenia braków („0 z 4”) i dat w tekście.
   Ruch: otwarcie (65 zn/s) i zdanie (170 zn/s) PISZĄ SIĘ — razem najwyżej 0,75 s, dłuższy tekst przyspiesza oba w tej samej proporcji (`typingBudget`) (`Components/SCTypedText.swift` — nienapisana końcówka jest
   przezroczysta, więc układ nie skacze), potem kaskada kontekstu i akcji, liczby przez `SCCountingText`;
-  gra od nowa przy wejściu na zakładkę i nowej sytuacji, a ta sama sytuacja z inną liczbą tylko roluje
+  gra przy NOWEJ sytuacji, a przy wejściu na zakładkę tylko pierwszy raz po uruchomieniu aplikacji albo po 30 min przerwy (`AssistantGreetingMemory`, 24.09.2026 — „nie za każdym razem”; inaczej stoi gotowe), a ta sama sytuacja z inną liczbą tylko roluje
   (`numericText`). Akcje o JEDNEJ porze proszą o dania „do wyboru”, więc kończą się arkuszem wyboru
   posiłku (prompt serwera: jedna pora albo „do wyboru” = `offer_options`).
 - Przegląd propozycji w arkuszu wyboru posiłku: karty dnia i tygodnia mają dania jako przyciski i wiersz
