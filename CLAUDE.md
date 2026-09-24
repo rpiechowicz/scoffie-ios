@@ -450,7 +450,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
   Przełożenie dania (stuknięcie talerzyka) ROLUJE cyfry i tekst (`.numericText()`): wielki wiersz
-  ma tożsamość po RODZAJU zdania (cyfry/słowa), nie po daniu — przenika się tylko cyfry ↔ słowa;
+  ma tożsamość „danie / pustka” (`headlineKey`), nie po daniu — między daniami roluje ZAWSZE, także „Zjedzone” ↔
+  „za 4 h” (runda 23: klucz cyfry/słowa przenikał to kryciem i „nie było naszej animacji”); kryciem tylko pusty dzień / pora;
   nazwa dania i nadpis („OBIAD · 14:00”) też rolują (nadpis przenika się tylko pora z godziną ↔ bez).
   Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`

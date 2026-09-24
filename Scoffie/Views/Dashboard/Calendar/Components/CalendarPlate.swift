@@ -847,13 +847,13 @@ struct CalendarPlateCaption: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Wielki wiersz ma tożsamość po RODZAJU zdania (liczby albo
-            // słowa), nie po daniu: przy przełożeniu na inne danie cyfry
-            // rolują („za 4 h 19 min” w „za 10 h 5 min”), a słowa przechodzą
-            // w słowa tym samym ruchem („Zjedzone” w „Pora jeść”). Kryciem
-            // idzie wyłącznie przejście między liczbą a słowami — rolowanie
-            // „za 4 h 19 min” w „Pusty dzień” literka po literce wyglądało
-            // jak usterka renderowania.
+            // Wielki wiersz ma tożsamość „danie / pustka” (`headlineKey`),
+            // nie po daniu i nie po rodzaju zdania: każde przełożenie między
+            // daniami roluje — cyfry w cyfry („za 4 h 19 min” w „za 10 h
+            // 5 min”), słowa w słowa i słowa w cyfry („Zjedzone” w „za 4 h”).
+            // Kryciem idzie wyłącznie pusty dzień / pusta pora — rolowanie
+            // odliczania w „Pusty dzień” przy zmianie dnia wyglądało jak
+            // usterka renderowania.
             ZStack {
                 Text(headline)
                     .font(.system(size: 34, weight: .bold))
@@ -1025,13 +1025,15 @@ struct CalendarPlateCaption: View {
     private static let dueVariants = ["Pora jeść", "Smacznego!", "Na stół!", "Czas jeść"]
     private static let lateVariants = ["Pora minęła", "Już po porze", "Po czasie"]
 
-    /// Tożsamość wielkiego wiersza: sam RODZAJ zdania, bez dania. Zdania
-    /// z liczbami (odliczanie, godzina) dzielą jeden klucz, zdania ze słów —
-    /// drugi; w obrębie klucza treść roluje (`numericText`), także przy
-    /// przełożeniu na inne danie. Zmiana klucza (liczba ↔ słowa) przechodzi
-    /// kryciem.
+    /// Tożsamość wielkiego wiersza: danie albo pustka, nic więcej. Każde
+    /// przełożenie między daniami ROLUJE (`numericText`) — także „Zjedzone”
+    /// ↔ „za 4 h 19 min” (runda 23, 24.09.2026: Rafał przy zjedzonym
+    /// śniadaniu i obiedzie za 4 h nie widział „naszej animacji tekstu”, bo
+    /// dawny klucz cyfry/słowa przenikał to przejście kryciem). Kryciem
+    /// idzie tylko wejście w pusty dzień / pustą porę i wyjście z nich.
     private var headlineKey: String {
-        headline.contains(where: { $0.isNumber }) ? "digits" : "words"
+        guard let item, !item.isEmptySlot else { return "empty" }
+        return "meal"
     }
 
     private var headlineColor: Color {
