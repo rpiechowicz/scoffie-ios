@@ -41,12 +41,14 @@ struct WelcomeStep3PreferencesView: View {
                     subtitle: "Cel policzyliśmy z Twoich danych — możesz go przesunąć."
                 )
 
-                // Cel i jego rozkład na makro w JEDNEJ karcie (24.09.2026),
-                // jak liczby dania w szczegółach i w wyborze posiłku: najpierw
-                // kcal, pod kreską pasek proporcji z legendą. Dawniej osobna
-                // sekcja z trzema paskami, każdy na swoim torze.
                 WelcomeSection(title: "Dzienny cel") {
                     calorieCard
+                }
+
+                if let macros {
+                    WelcomeSection(title: "Makroskładniki") {
+                        macroCard(macros)
+                    }
                 }
 
                 WelcomeSection(title: "Sposób odżywiania") {
@@ -135,81 +137,93 @@ struct WelcomeStep3PreferencesView: View {
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(Color.scFaint(colorScheme))
             .monospacedDigit()
-
-            if let macros {
-                Rectangle()
-                    .fill(Color.scRule(colorScheme))
-                    .frame(height: 1)
-                    .padding(.vertical, 4)
-                macroSplit(macros)
-            }
         }
         .padding(16)
         .welcomeCard()
     }
 
-    /// Rozkład celu na makro: jeden pasek podzielony w proporcji kalorii
-    /// z każdego makro i legenda z gramami — ten sam idiom, co liczby dania
-    /// w wyborze posiłku i w szczegółach, w kolorach `SCMacroPalette`
-    /// (Ustawienia, „Cel dnia”).
+    /// Trzy paski w proporcji kalorii z każdego makro plus gramy.
     ///
-    /// Ta część karty niczego nie pyta — jest odpowiedzią na to, o co
-    /// pytaliśmy wcześniej. Bez niej krok 3 wyglądał tak, jakby wzrost i waga
-    /// z kroku 1 nigdzie nie poszły. Gramy rolują się razem z suwakiem celu,
-    /// a odcinki zmieniają proporcje w miejscu.
-    private func macroSplit(_ macros: MacroTargets) -> some View {
-        let parts: [(title: String, grams: Int, kcal: Int, color: Color)] = [
-            ("białko", macros.proteinG, macros.proteinKcal, SCMacroPalette.protein),
-            ("węglowodany", macros.carbsG, macros.carbsKcal, SCMacroPalette.carbs),
-            ("tłuszcze", macros.fatG, macros.fatKcal, SCMacroPalette.fat),
-        ]
-        let total = max(1, parts.reduce(0) { $0 + $1.kcal })
+    /// Ta karta niczego nie pyta — jest odpowiedzią na to, o co pytaliśmy
+    /// wcześniej. Bez niej krok 3 wyglądał tak, jakby wzrost i waga z kroku 1
+    /// nigdzie nie poszły. Gramy rolują się razem z suwakiem celu, a paski
+    /// zmieniają proporcje w miejscu.
+    private func macroCard(_ macros: MacroTargets) -> some View {
+        let total = max(macros.totalKcal, 1)
 
-        return VStack(alignment: .leading, spacing: 10) {
-            GeometryReader { proxy in
-                let gap: CGFloat = 3
-                let free = max(0, proxy.size.width - gap * CGFloat(parts.count - 1))
-                HStack(spacing: gap) {
-                    ForEach(parts, id: \.title) { part in
-                        Capsule(style: .continuous)
-                            .fill(part.color)
-                            .frame(width: max(6, free * CGFloat(part.kcal) / CGFloat(total)))
-                    }
-                }
-            }
-            .frame(height: 8)
-
-            HStack(spacing: 0) {
-                ForEach(parts, id: \.title) { part in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            Text("\(part.grams)")
-                                .font(.system(size: 17, weight: .heavy))
-                                .monospacedDigit()
-                                .foregroundStyle(Color.scLabel(colorScheme))
-                                .contentTransition(.numericText(value: Double(part.grams)))
-                            Text("g")
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .foregroundStyle(Color.scMuted(colorScheme))
-                        }
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(part.color)
-                                .frame(width: 7, height: 7)
-                            Text(part.title)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.scMuted(colorScheme))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(part.title): \(part.grams) gramów")
-                }
-            }
+        return VStack(alignment: .leading, spacing: 14) {
+            macroRow(
+                title: "Białko",
+                grams: macros.proteinG,
+                kcal: macros.proteinKcal,
+                total: total,
+                accent: SCPalette.indigo
+            )
+            macroRow(
+                title: "Węglowodany",
+                grams: macros.carbsG,
+                kcal: macros.carbsKcal,
+                total: total,
+                accent: SCPalette.sage
+            )
+            macroRow(
+                title: "Tłuszcze",
+                grams: macros.fatG,
+                kcal: macros.fatKcal,
+                total: total,
+                accent: SCPalette.butter
+            )
         }
+        .padding(16)
+        .welcomeCard()
         .animation(.smooth(duration: 0.22), value: macros)
+    }
+
+    private func macroRow(
+        title: String,
+        grams: Int,
+        kcal: Int,
+        total: Int,
+        accent: Color
+    ) -> some View {
+        let share = min(max(Double(kcal) / Double(total), 0), 1)
+        let percent = Int((share * 100).rounded())
+
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 7, height: 7)
+                Text(title)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Color.scLabel(colorScheme))
+                Spacer(minLength: 8)
+                Text("\(grams) g")
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(Color.scLabel(colorScheme))
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(grams)))
+                Text("\(percent)%")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Color.scFaint(colorScheme))
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(percent)))
+                    .frame(minWidth: 30, alignment: .trailing)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.scBarTrack(colorScheme))
+                    Capsule()
+                        .fill(accent)
+                        .frame(width: proxy.size.width * share)
+                }
+            }
+            .frame(height: 6)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(grams) gramów")
     }
 }
 
