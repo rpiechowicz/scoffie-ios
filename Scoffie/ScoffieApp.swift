@@ -432,6 +432,11 @@ struct ScoffieApp: App {
     @State private var loaderShown: Bool?
     @State private var loaderStartedAt = Date()
     @State private var loaderRelease: Task<Void, Never>?
+    /// Koniec obrotu, na którym znak loadera staje po gotowości
+    /// (`StartupLoaderView.restingElapsed`). Bez tego zegar loadera szedł
+    /// dalej i w 0,4 s gaśnięcia planszy było widać początek kolejnego
+    /// obrotu — „zaczyna kręcić trzeci raz, a aplikacja już wchodzi”.
+    @State private var loaderRestElapsed: Double?
 
     private var showsStartupLoader: Bool { loaderShown ?? wantsStartupLoader }
 
@@ -439,6 +444,7 @@ struct ScoffieApp: App {
         if wants {
             loaderRelease?.cancel()
             loaderRelease = nil
+            loaderRestElapsed = nil
             // Z ukrytego: nowy loader, nowy początek obrotów. Pierwsza klatka
             // (`nil`) już rysuje loader z datą ze stanu — tej się nie rusza.
             if loaderShown == false { loaderStartedAt = Date() }
@@ -449,7 +455,13 @@ struct ScoffieApp: App {
             loaderShown = false
             return
         }
-        let wait = StartupLoaderView.remainingToFullTurn(since: loaderStartedAt)
+        // Jedna chwila „teraz” dla obu liczb — spoczynek i czekanie muszą
+        // wskazywać ten sam koniec obrotu, także gdy gotowość wpada w chwili
+        // startu kolejnego.
+        let now = Date()
+        let rest = StartupLoaderView.restingElapsed(since: loaderStartedAt, now: now)
+        let wait = max(0, rest - now.timeIntervalSince(loaderStartedAt))
+        loaderRestElapsed = rest
         loaderRelease?.cancel()
         loaderRelease = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
@@ -576,7 +588,7 @@ struct ScoffieApp: App {
                 // a fala kafelków nie zaczyna się od nowa w połowie.
                 if showsStartupLoader {
                     // Ta sama chwila startu co liczenie obrotów w korzeniu.
-                    StartupLoaderView(startDate: loaderStartedAt)
+                    StartupLoaderView(startDate: loaderStartedAt, restElapsed: loaderRestElapsed)
                         // Zgaśnięcie loadera nad pulpitem jako JEDNA warstwa:
                         // bez tego krycie schodzi na każdy kafelek i napis
                         // osobno, a przez rozrzedzone tło prześwitują one

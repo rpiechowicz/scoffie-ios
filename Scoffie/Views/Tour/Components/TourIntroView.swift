@@ -15,7 +15,7 @@ struct TourIntroView: View {
         SCStepFeature(icon: MenuConstans.Plan.icon, accent: SCPalette.terracotta, title: "Plan na cały tydzień", subtitle: "Ułóżcie menu raz — widzi je cały dom"),
         SCStepFeature(icon: MenuConstans.Products.icon, accent: SCPalette.sage, title: "Lista zakupów z planu", subtitle: "Składa się sama, po działach sklepu"),
         SCStepFeature(icon: MenuConstans.Recipes.icon, accent: SCPalette.indigo, title: "Przepisy krok po kroku", subtitle: "Z czasem gotowania i składnikami"),
-        SCStepFeature(icon: MenuConstans.Assistant.icon, accent: SCPalette.terracottaDeep, title: "Asystent od pomysłów", subtitle: "Ułoży posiłek i doda go do planu"),
+        SCStepFeature(icon: MenuConstans.Assistant.icon, accent: SCPalette.terracottaDeep, title: "Asystent od pomysłów", subtitle: "Ułoży dzień albo tydzień — Ty zatwierdzasz"),
         SCStepFeature(icon: "leaf.fill", accent: SCPalette.sage, title: "Pod Waszą dietę i alergeny", subtitle: "Bez składników, których nie jecie"),
     ]
 

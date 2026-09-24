@@ -20,6 +20,10 @@ import SwiftUI
 /// - od 1.34    wolne ładowanie: kafelki NIE resetują się; na każdy obrót
 ///              znaku przez tydzień przechodzi refleks światła. Loader schodzi
 ///              zawsze na końcu obrotu (`remainingToFullTurn`).
+/// - zejście    od sygnału gotowości (`restElapsed`) znak dokręca BIEŻĄCY
+///              obrót i staje; nowy obrót, oddech, refleks i fala kropek już
+///              nie ruszają, więc gaśnięcie planszy (0,4 s) idzie nad
+///              stojącym znakiem, a nie nad początkiem kolejnego obrotu.
 ///
 /// Wszystko jest driver'owane jednym `TimelineView(.animation)` na
 /// podstawie czasu od `startDate` — bez state'ów i `repeatForever`, więc
@@ -30,6 +34,10 @@ struct StartupLoaderView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var startDate: Date = .init()
+    /// Sekunda (od `startDate`), na której znak staje na dobre — koniec
+    /// obrotu trwającego w chwili gotowości (`restingElapsed`). `nil` =
+    /// ładowanie trwa i obroty idą dalej.
+    private let restElapsed: Double?
 
     /// Moment, w którym ostatni kafelek (niedziela) jest w pełni domknięty.
     /// Jedyne źródło prawdy dla minimalnego czasu wyświetlania loadera.
@@ -43,14 +51,26 @@ struct StartupLoaderView: View {
     /// obrotu = loader stoi do końca drugiego.
     static func remainingToFullTurn(since start: Date, now: Date = .init()) -> Double {
         let elapsed = max(0, now.timeIntervalSince(start))
-        let into = elapsed.truncatingRemainder(dividingBy: turnSeconds)
-        // Tuż po domknięciu (albo przed pierwszym ruchem) nie ma na co czekać.
-        if into < 0.05 { return elapsed < 0.05 ? turnSeconds - into : 0 }
-        return turnSeconds - into
+        return max(0, restingElapsed(since: start, now: now) - elapsed)
     }
 
-    init(startDate: Date = .init()) {
+    /// Koniec obrotu, na którym znak ma stanąć, licząc od `start`: bieżący
+    /// obrót się domyka, kolejny już nie rusza. Gotowość tuż po domknięciu
+    /// (< 0,05 s — znak w smoothstepie ledwie drgnął, ~1°) oddaje obrót,
+    /// który właśnie się skończył, zamiast kręcić cały następny. Przed
+    /// końcem pierwszego obrotu — zawsze jego koniec (fala dni też tam się
+    /// domyka).
+    static func restingElapsed(since start: Date, now: Date = .init()) -> Double {
+        let elapsed = max(0, now.timeIntervalSince(start))
+        let completed = floor(elapsed / turnSeconds)
+        let into = elapsed - completed * turnSeconds
+        if completed >= 1, into < 0.05 { return completed * turnSeconds }
+        return (completed + 1) * turnSeconds
+    }
+
+    init(startDate: Date = .init(), restElapsed: Double? = nil) {
         _startDate = State(initialValue: startDate)
+        self.restElapsed = restElapsed
     }
 
     private static let dayInitials = ["P", "W", "Ś", "C", "P", "S", "N"]
@@ -72,7 +92,7 @@ struct StartupLoaderView: View {
             // dzięki czemu nie składają się z parent'owym w double-fade.
             TimelineView(.animation) { context in
                 let elapsed = max(0, context.date.timeIntervalSince(startDate))
-                content(motion: LoaderMotion(elapsed: elapsed, reduceMotion: reduceMotion))
+                content(motion: LoaderMotion(elapsed: elapsed, reduceMotion: reduceMotion, restElapsed: restElapsed))
             }
         }
     }
@@ -358,6 +378,23 @@ private struct CheckMarkShape: Shape {
 private struct LoaderMotion {
     let elapsed: Double
     let reduceMotion: Bool
+    /// Chwila spoczynku (`StartupLoaderView.restingElapsed`) — po niej nie
+    /// zaczyna się żaden nowy cykl. `nil` = ładowanie trwa.
+    var restElapsed: Double? = nil
+
+    /// Czas ruchów ciągłych (obrót, oddech): zatrzymany na spoczynku.
+    /// Gotowość tuż po domknięciu obrotu cofa go o najwyżej 0,05 s, czyli
+    /// o ~1° — niewidoczne, a znak nie zaczyna kolejnego obrotu.
+    private var motionElapsed: Double {
+        guard let restElapsed else { return elapsed }
+        return min(elapsed, restElapsed)
+    }
+
+    /// Cykl, który ruszył PO spoczynku, nie gra — ten, który trwał, dogrywa się.
+    private func startsAfterRest(_ cycleStart: Double) -> Bool {
+        guard let restElapsed else { return false }
+        return cycleStart >= restElapsed - 0.001
+    }
 
     // Wszystko liczy się od JEDNEGO taktu — obrotu znaku (`waveEnd`):
     // fala dni, obrót, później refleks na tygodniu, oddech znaku i kropki
@@ -398,7 +435,7 @@ private struct LoaderMotion {
         let entrance = reduceMotion ? 1 : 0.92 + 0.08 * Ease.out(elapsed / Self.logoInDuration)
         // Oddech: raz na takt, szczyt w połowie obrotu — krzywa (1 − cos)
         // odpowiada CSS ease-in-out bez state'a.
-        let breathe = reduceMotion ? 0 : 0.014 * (1 - cos(2 * .pi * elapsed / Self.waveEnd)) / 2
+        let breathe = reduceMotion ? 0 : 0.014 * (1 - cos(2 * .pi * motionElapsed / Self.waveEnd)) / 2
         return CGFloat(entrance + breathe)
     }
 
@@ -407,7 +444,7 @@ private struct LoaderMotion {
     /// postoju loader schodzi (`remainingToFullTurn`).
     var logoRotation: Angle {
         if reduceMotion { return .zero }
-        let turns = elapsed / Self.waveEnd
+        let turns = motionElapsed / Self.waveEnd
         let whole = floor(turns)
         return .degrees(360 * (whole + Ease.inOut(turns - whole)))
     }
@@ -462,7 +499,9 @@ private struct LoaderMotion {
         guard !reduceMotion else { return 0 }
         let raw = elapsed - Self.glowStart - Double(index) * Self.glowStagger
         guard raw >= 0 else { return 0 }
-        let u = raw.truncatingRemainder(dividingBy: Self.glowCycle) / Self.glowWidth
+        let into = raw.truncatingRemainder(dividingBy: Self.glowCycle)
+        if startsAfterRest(elapsed - into) { return 0 }
+        let u = into / Self.glowWidth
         guard u < 1 else { return 0 }
         return 0.22 * sin(.pi * u)
     }
@@ -480,7 +519,8 @@ private struct LoaderMotion {
         let raw = elapsed - Double(index) * 0.18
         var t: Double = 0
         if raw >= 0 {
-            let phase = raw.truncatingRemainder(dividingBy: Self.waveEnd) / Self.waveEnd
+            let into = raw.truncatingRemainder(dividingBy: Self.waveEnd)
+            let phase = startsAfterRest(elapsed - into) ? 0 : into / Self.waveEnd
             if phase >= 0.2, phase < 0.5 {
                 t = Ease.inOut((phase - 0.2) / 0.3)
             } else if phase >= 0.5, phase < 0.8 {
