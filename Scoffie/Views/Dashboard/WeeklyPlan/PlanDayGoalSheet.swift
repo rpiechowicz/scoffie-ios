@@ -358,15 +358,14 @@ struct PlanDayPerson: Identifiable {
     )
 }
 
-/// Przełącznik osób obok krzyżyka: kapsuła z awatarami, wybrana osoba
-/// rozwija się do awatara z imieniem na tincie swojego koloru.
+/// Przełącznik osób obok krzyżyka: kapsuła z SAMYMI awatarami, wybrana osoba
+/// na tincie swojego koloru z obwódką.
 ///
-/// Runda 12 — Rafał wrócił do tego układu („1 widok mi się podobał”) po
-/// próbie z zakładkami na całą szerokość, ale „dopracować trzeba”:
-/// awatary 28 pt z obwódką w kolorze osoby (także niewybrane — widać, kto
-/// jest do wyboru), cel dotyku całej wysokości kapsuły, imię wjeżdża
-/// kryciem razem z przesunięciem tła, a nie skokiem szerokości; czyj to
-/// dzień, mówi też podtytuł arkusza.
+/// Runda 19 (24.09.2026) — imię wybranej osoby zniknęło: rama pod najdłuższe
+/// imię zostawiała przy krótszym dużo pustego miejsca, a zmienna rama
+/// przesuwała tytuł obok (Rafał: „dajmy same ikony userów”). Kto jest wybrany,
+/// mówi tint, obwódka i podtytuł arkusza („Dzień: Ania · …”); kapsuła ma stałą
+/// szerokość, więc przełączenie to tylko przejazd tła.
 struct PlanPersonSwitcher: View {
     let people: [PlanDayPerson]
     let members: [HouseholdMemberSnapshot]
@@ -374,39 +373,14 @@ struct PlanPersonSwitcher: View {
 
     @Environment(\.colorScheme) private var scheme
     @Namespace private var selectionNS
-    /// Szerokość najdłuższego imienia. Miejsce na imię ma ją KAŻDA wybrana
-    /// osoba, więc kapsuła nie zmienia szerokości przy przełączeniu — dawniej
-    /// „Rafał” → „Ania” skracało kapsułę, tytuł obok przesuwał się, a imię
-    /// wjeżdżało w środek zmieniającej się ramy (Rafał, 24.09.2026).
-    @State private var nameWidth: CGFloat = 0
 
-    private static let nameFont = Font.system(size: 12, weight: .semibold)
-    /// Odstęp awatara od imienia — część miejsca na imię, żeby niewybrany
-    /// segment nie trzymał pustej przerwy.
-    private static let nameGap: CGFloat = 5
+    private static let avatarSize: CGFloat = 22
+    private static let segmentSize: CGFloat = 28
 
     var body: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 2) {
             ForEach(people) { person in
                 segment(person)
-            }
-        }
-        // Pomiar wszystkich imion naraz, niewidoczny i poza układem kapsuły.
-        .background(alignment: .leading) {
-            ZStack(alignment: .leading) {
-                ForEach(people) { person in
-                    Text(person.name)
-                        .font(Self.nameFont)
-                        .tracking(-0.2)
-                        .lineLimit(1)
-                        .fixedSize()
-                }
-            }
-            .hidden()
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.width
-            } action: { width in
-                nameWidth = width
             }
         }
         .padding(2)
@@ -431,42 +405,22 @@ struct PlanPersonSwitcher: View {
                 selection = person.id
             }
         } label: {
-            HStack(spacing: 0) {
-                avatar(person, tint: tint, isOn: isOn)
-
-                // Imię jest zawsze w układzie: wybrany segment rozwija ramę
-                // do szerokości najdłuższego imienia, niewybrany zwija ją do
-                // zera. Rama zmienia się w tej samej sprężynie co tło wyboru,
-                // a tekst tylko przenika — bez wjazdu litera po literze.
-                Text(person.name)
-                    .font(Self.nameFont)
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.leading, Self.nameGap)
-                    .frame(width: isOn ? nameWidth + Self.nameGap : 0, alignment: .leading)
-                    .clipped()
-                    .opacity(isOn ? 1 : 0)
-                    .accessibilityHidden(true)
-            }
-            .padding(.leading, 2)
-            .padding(.trailing, isOn ? 9 : 2)
-            .frame(height: 26)
-            .background {
-                if isOn {
-                    Capsule(style: .continuous)
-                        .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .strokeBorder(tint.opacity(scheme == .dark ? 0.55 : 0.45), lineWidth: 1.2)
-                        )
-                        .matchedGeometryEffect(id: "selection", in: selectionNS)
+            avatar(person, tint: tint, isOn: isOn)
+                .frame(width: Self.segmentSize, height: Self.segmentSize)
+                .background {
+                    if isOn {
+                        Circle()
+                            .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(tint.opacity(scheme == .dark ? 0.7 : 0.6), lineWidth: 1.4)
+                            )
+                            .matchedGeometryEffect(id: "selection", in: selectionNS)
+                    }
                 }
-            }
-            .contentShape(Capsule(style: .continuous))
+                .contentShape(Circle())
         }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .buttonStyle(PlanPressStyle(scale: 0.9))
         .accessibilityLabel(person.isMe ? "\(person.name), Ty" : person.name)
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
@@ -475,18 +429,18 @@ struct PlanPersonSwitcher: View {
     private func avatar(_ person: PlanDayPerson, tint: Color, isOn: Bool) -> some View {
         Group {
             if let member = person.member {
-                MemberAvatar(member: member, members: members, size: 22)
+                MemberAvatar(member: member, members: members, size: Self.avatarSize)
             } else {
                 Image(systemName: "person.fill")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Color.scMuted(scheme))
-                    .frame(width: 22, height: 22)
+                    .frame(width: Self.avatarSize, height: Self.avatarSize)
             }
         }
-        // Niewybrana osoba przygaszona, ale z obwódką swojego koloru —
-        // kółka bez podpisu i tak mają się dać rozróżnić.
-        .overlay(Circle().strokeBorder(tint.opacity(isOn ? 0 : 0.6), lineWidth: 1.2))
-        .opacity(isOn ? 1 : 0.7)
+        // Niewybrana osoba przygaszona i pomniejszona — wybrana „wychodzi”
+        // do pełnego rozmiaru w tej samej sprężynie co przejazd tła.
+        .scaleEffect(isOn ? 1 : 0.9)
+        .opacity(isOn ? 1 : 0.6)
     }
 }
 
