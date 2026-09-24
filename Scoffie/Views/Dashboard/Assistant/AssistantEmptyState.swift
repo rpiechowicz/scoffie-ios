@@ -120,6 +120,13 @@ enum AssistantGreetingMemory {
         lastKind = kind
         lastPlayedAt = Date()
     }
+
+    /// Rozmowa zamknięta po przerwie (`AgentStore.rotateIfStale`) — następne
+    /// powitanie gra od początku, jak nowa wiadomość.
+    static func forget() {
+        lastKind = nil
+        lastPlayedAt = nil
+    }
 }
 
 /// Sam blok powitania.

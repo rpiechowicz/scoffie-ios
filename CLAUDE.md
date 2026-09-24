@@ -148,6 +148,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `AgentStore` wisi na `SessionStore`, a nie na arkuszu — rozmowa przeżywa zamknięcie asystenta.
   Kroki postępu (`turn.progress`) przychodzą z serwera jako gotowe zdania po polsku; nie tłumaczyć
   ich po stronie klienta. `AI_ENABLED=false` na serwerze = `503 AI_DISABLED` i ekran mówi to wprost.
+  Od 24.09.2026 to `AssistantMaintenanceView` („mały remont”: znak z kluczem, co działa dalej,
+  „Sprawdź ponownie” = `AgentStore.recheckAvailability`, ciche sprawdzenie przy każdym wejściu na zakładkę)
+  zamiast rozmowy; pole wiadomości znika. Pula wyczerpana to inny stan (`AssistantQuotaSpentCard`).
+- Czysta kartka po przerwie (`AgentStore.rotateIfStale`): 30 min ciszy w rozmowie ALBO 10 min nieobecności
+  na zakładce/w tle (`staleAfterAway`, od `setVisible(false)` / `noteWentToBackground`) przy rozmowie bez
+  propozycji PENDING; tura w biegu nigdy. Zamiana czyści `AssistantGreetingMemory.forget()`, więc powitanie
+  pisze się od nowa. Pole wiadomości w jasnym motywie: krem #F3ECE0 (`AssistantLook.input`), nie biel.
 - **Źródło makiet asystenta** to dwa artefakty Claude Design (bundle React): „Scoffie — Asystent v4”
   (`claude.ai/artifact/VRQX2MccxwjMNTSvbFLU1U`: ekrany, stan pracy, karty, stany karty, arkusze,
   język systemu) i „Dynamic Empty States” (`claude.ai/artifact/43pdC2GemR7abQDdGepU65`: 12 wariantów
