@@ -24,11 +24,8 @@ struct TourStep: Identifiable {
     /// punkt mieści się dzięki ciaśniejszej karcie; na iPhonie SE zdjęcie
     /// kroku przycina się do wysokości (`TourMedia`), a stopka stoi osobno.
     let points: [TourPoint]
-    let imageName: String
-    /// Ilustracja z kartami aplikacji skomponowana do brzegu (Plan,
-    /// Przepisy) — pokazywana w całości, w swoich proporcjach. `false` =
-    /// render telefonów z marginesem, kadrowany 16:13 (`TourMedia`).
-    var isArtwork: Bool = false
+    /// Ilustracja kroku na R2 (`TourStep.image(_:)`).
+    let imageURL: URL
 }
 
 /// Jeden punkt kroku: ikona w kafelku (tint koloru kroku), tytuł i krótki
@@ -45,6 +42,23 @@ struct TourPoint: Identifiable {
 }
 
 extension TourStep {
+    /// Ilustracje przewodnika leżą na R2 (bucket zdjęć, `onboarding/`), nie
+    /// w paczce aplikacji — Rafał 24.09.2026. WebP ~100 KB zamiast PNG
+    /// ~1,4 MB w bundlu. CDN trzyma je z `immutable` na rok, więc NOWA
+    /// grafika = NOWA nazwa (`-v2`), nigdy nadpisanie pod tą samą.
+    private static let imageBase = URL(string: "https://img.scoffie.app/onboarding/")!
+
+    private static func image(_ name: String, version: Int = 1) -> URL {
+        imageBase.appendingPathComponent("tour-\(name)-v\(version).webp")
+    }
+
+    /// Ściąga ilustracje do pamięci i na dysk, zanim przewodnik je pokaże —
+    /// woła ją ekran logowania i sam przepływ. Powtórne wołanie nic nie
+    /// kosztuje (trafienie w pamięć podręczną).
+    static func prefetchImages() {
+        ImagePrefetcher.prefetch(all.map(\.imageURL), variant: .large)
+    }
+
     /// Kolejność jak w aplikacji od lewej: Przepisy zaczynają, Ustawienia
     /// domykają — ostatni krok prowadzi wprost do kreatora, który te
     /// ustawienia wypełnia.
@@ -86,8 +100,7 @@ extension TourStep {
                 TourPoint(icon: "person.2.fill", title: "Wspólny plan", subtitle: "Zmiany widzi od razu cały dom"),
                 TourPoint(icon: "bell.fill", title: "Przypomnienia", subtitle: "Kiedy zacząć gotować"),
             ],
-            imageName: "TourPlan",
-            isArtwork: true
+            imageURL: image("plan")
         ),
         TourStep(
             id: "recipes",
@@ -101,8 +114,7 @@ extension TourStep {
                 TourPoint(icon: "list.bullet.rectangle.fill", title: "Składniki i kroki", subtitle: "Po działach, na jednym ekranie"),
                 TourPoint(icon: "heart.fill", title: "Ulubione", subtitle: "Pod sercem — i pod ręką w planie"),
             ],
-            imageName: "TourRecipes",
-            isArtwork: true
+            imageURL: image("recipes")
         ),
         TourStep(
             id: "shopping",
@@ -116,7 +128,7 @@ extension TourStep {
                 TourPoint(icon: "checkmark.circle.fill", title: "Wspólne odhaczanie", subtitle: "Druga osoba widzi je od razu"),
                 TourPoint(icon: "clock.arrow.circlepath", title: "Historia", subtitle: "Zamknięte listy zostają pod ręką"),
             ],
-            imageName: "TourShopping"
+            imageURL: image("shopping")
         ),
         TourStep(
             id: "assistant",
@@ -130,7 +142,7 @@ extension TourStep {
                 TourPoint(icon: "checkmark.shield.fill", title: "Alergeny i cel", subtitle: "Pilnuje ich w każdej propozycji"),
                 TourPoint(icon: "hand.thumbsup.fill", title: "Ty decydujesz", subtitle: "Nic nie trafia do planu bez zgody"),
             ],
-            imageName: "TourAssistant"
+            imageURL: image("assistant")
         ),
         TourStep(
             id: "settings",
@@ -144,7 +156,7 @@ extension TourStep {
                 TourPoint(icon: "person.badge.plus", title: "Domownicy", subtitle: "Zaproś ich do gospodarstwa"),
                 TourPoint(icon: "bell.badge.fill", title: "Powiadomienia", subtitle: "Poranny przegląd i pory posiłków"),
             ],
-            imageName: "TourSettings"
+            imageURL: image("settings")
         ),
     ]
 }

@@ -544,11 +544,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wszystkie listy, aby były podobne”). Przewodnik stoi BEZ przewijania także na 16e — nowy tekst
   sprawdzaj na zrzucie 16e (`tour-1…5`), zanim go dopiszesz. Opis i punkty mówią tylko o tym, co JEST
   w aplikacji. Zdjęcie bierze to, co zostaje po ZMIERZONYM tekście kroku (`TourStepView.textHeight` →
-  `TourMedia.reserved`), więc czwarty punkt nigdy nie wchodzi pod cień stopki. Plan i Przepisy to
-  ilustracje z kartami aplikacji (`isArtwork`: ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 85 %
-  naturalnej wysokości — ucina się tylko krem nad i pod kartami; 1200 × 868, w bundlu — NIE z R2,
-  bo przewodnik idzie przed pierwszym pobraniem czegokolwiek i nie może czekać na sieć); reszta to
-  rendery telefonów kadrowane 16:13.
+  `TourMedia.reserved`), więc czwarty punkt nigdy nie wchodzi pod cień stopki. Wszystkie pięć
+  kroków to ilustracje z kartami aplikacji na R2 (Rafał 24.09.2026): `https://img.scoffie.app/onboarding/
+  tour-{plan,recipes,shopping,assistant,settings}-v1.webp`, 1474 × 1067, WebP q82 (~100 KB), bucket
+  `scoffie` (produkcyjny — lokalny token R2 w `.env` backendu jest nieaktualny, wysyłka przez
+  `railway run` z katalogu backendu), `Cache-Control: immutable` na rok → NOWA grafika = NOWA nazwa
+  (`-v2` w `TourStep.image(_:version:)`), nigdy nadpisanie. Pokazywane `CachedAsyncImage(.large)`,
+  ZAWSZE na pełną szerokość, `scaledToFill`, najniżej 85 % naturalnej wysokości (ucina się tylko krem
+  nad i pod kartami); zanim dojdą — tint koloru kroku w tym samym rozmiarze. `TourStep.prefetchImages()`
+  rusza na ekranie logowania (`AuthView`) i przy wejściu w przepływ.
 - Przewodnik + kreator profilu = JEDEN przepływ w `WelcomeView` (24.09.2026, Rafał: „wszystko w jednym
   wielkim stepperze, aby nie przełączać”): `tourPhase` (0 powitanie, 1…5 kroki, 6 „Teraz my poznajmy
   Ciebie”, `nil` = kreator `step` 1…5), jedna stopka, jeden pasek na 11 odcinków, strony jadą na bok także

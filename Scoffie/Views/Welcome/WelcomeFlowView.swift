@@ -33,6 +33,11 @@ struct WelcomeFlowView: View {
             if showsTourAtStart == nil {
                 showsTourAtStart = initialStep == 1 && !tourCompleted
             }
+            // Na wypadek sesji wznowionej bez ekranu logowania — ilustracje
+            // przewodnika z R2 (`TourStep.prefetchImages`).
+            if showsTourAtStart == true {
+                TourStep.prefetchImages()
+            }
         }
     }
 }

@@ -1,73 +1,64 @@
 import SwiftUI
 
-/// Zdjęcie kroku.
+/// Zdjęcie kroku — ilustracja z kartami aplikacji z R2 (`TourStep.imageURL`,
+/// od 24.09.2026 wszystkie pięć, 1474 × 1067 WebP).
 ///
-/// Dwa rodzaje grafik (`TourStep.isArtwork`):
-/// - rendery telefonów na jasnym tle z szerokim marginesem — kadr 16:13,
-///   `scaledToFill` plus delikatne przybliżenie zjada ten margines, żeby
-///   ekrany aplikacji zajmowały kadr, a nie pływały w pustce;
-/// - ilustracje z kartami aplikacji (od 24.09.2026, Plan i Przepisy) —
-///   ZAWSZE na pełną szerokość (Rafał: „obrazek daj na całość, żeby było
-///   dobrze widać”), `scaledToFill` bez przybliżenia. Karty zajmują całą
-///   szerokość grafiki, a nad i pod nimi jest ~12 % pustego kremu — gdy
-///   brakuje wysokości, ucina się ten krem, nie karty. Pomniejszanie
-///   w całości (`scaledToFit`) robiło z kart miniaturę na środku, a kadr
-///   16:13 z przybliżeniem ucinał karty z boków.
+/// ZAWSZE na pełną szerokość (Rafał: „obrazek daj na całość, żeby było
+/// dobrze widać”), `scaledToFill` bez przybliżenia. Karty zajmują całą
+/// szerokość grafiki, a nad i pod nimi jest ~12 % pustego kremu — gdy
+/// brakuje wysokości, ucina się ten krem, nie karty. Pomniejszanie
+/// w całości (`scaledToFit`) robiło z kart miniaturę na środku.
 ///
 /// Wysokość kadru ma sufit: widoczna strona (`TourPage` podaje ją
 /// w `tourViewport`) minus ZMIERZONA reszta kroku (`reserved`: eyebrow,
 /// tytuł, opis, karta czterech punktów i marginesy — `TourStepView` mierzy
 /// je co krok, bo tytuł i opis mają od jednej do trzech linii). Stały zapas
 /// raz zostawiał pustkę pod kartą, raz wpychał czwarty punkt pod cień
-/// stopki. Na
-/// Plus / Pro Max sufit leży nad naturalną wysokością i nic się nie zmienia,
-/// na mniejszych ekranach obraz traci wysokość (przycina się, szerokość
-/// zostaje) — tytuł i punkty mieszczą się nad stopką bez przewijania.
+/// stopki. Na Plus / Pro Max sufit leży nad naturalną wysokością i nic się
+/// nie zmienia, na mniejszych ekranach obraz traci wysokość (przycina się,
+/// szerokość zostaje) — tytuł i punkty mieszczą się nad stopką bez przewijania.
+///
+/// Zanim grafika dojdzie z sieci, kadr stoi w swoim rozmiarze na tincie
+/// koloru kroku — układ nie skacze, a grafika wchodzi kryciem
+/// (`CachedAsyncImage`). Zwykle jest już w pamięci: `TourStep.prefetchImages()`
+/// rusza na ekranie logowania.
 private struct TourMedia: View {
-    let imageName: String
+    let imageURL: URL
     let accent: Color
-    let isArtwork: Bool
     /// Wysokość strony zajęta przez wszystko poza zdjęciem.
     let reserved: CGFloat
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.tourViewport) private var viewport
 
-    private static let renderAspect: CGFloat = 16.0 / 13.0
-    /// Proporcje ilustracji (`TourPlan`, `TourRecipes`: 1200 × 868).
-    private static let artworkAspect: CGFloat = 1200.0 / 868.0
-    /// Poniżej tego kadr przestaje coś pokazywać — wtedy lepiej przewinąć.
-    private static let minimum: CGFloat = 150
-
-    private var aspect: CGFloat { isArtwork ? Self.artworkAspect : Self.renderAspect }
+    /// Proporcje ilustracji (1474 × 1067).
+    private static let aspect: CGFloat = 1474.0 / 1067.0
 
     /// `nil` przed pierwszym pomiarem — wtedy same proporcje.
     private var size: CGSize? {
         guard viewport.width > 0, viewport.height > 0 else { return nil }
         let fullWidth = viewport.width - 2 * TourLayout.mediaHorizontal
-        let natural = fullWidth / aspect
+        let natural = fullWidth / Self.aspect
         // Ilustracja nie schodzi poniżej 85 % naturalnej wysokości: tyle
         // zjada sam krem nad i pod kartami (po ~7 %), a nagłówki kart
         // („Przepisy”, „Plan tygodnia”) leżą ~11 % od brzegu. Niżej ucinało
         // już karty. 85, nie 90 — przy 90 na iPhonie 16e czwarty punkt
         // wchodził pod cień stopki, a przewodnik ma stać bez przewijania.
-        let floor = isArtwork ? natural * 0.85 : Self.minimum
-        let height = min(natural, max(floor, viewport.height - reserved))
+        let height = min(natural, max(natural * 0.85, viewport.height - reserved))
         return CGSize(width: fullWidth, height: height)
     }
 
     var body: some View {
         mediaFrame
             .overlay {
-                if isArtwork {
-                    Image(imageName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Image(imageName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .scaleEffect(1.06)
+                CachedAsyncImage(url: imageURL, variant: .large) { phase in
+                    if case .success(let image) = phase {
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Color.clear
+                    }
                 }
             }
             .background(
@@ -94,7 +85,7 @@ private struct TourMedia: View {
                 .frame(width: size.width, height: size.height)
         } else {
             Color.clear
-                .aspectRatio(aspect, contentMode: .fit)
+                .aspectRatio(Self.aspect, contentMode: .fit)
         }
     }
 }
@@ -122,9 +113,8 @@ struct TourStepView: View {
         TourPage {
             VStack(alignment: .leading, spacing: 0) {
                 TourMedia(
-                    imageName: step.imageName,
+                    imageURL: step.imageURL,
                     accent: step.accent,
-                    isArtwork: step.isArtwork,
                     reserved: textHeight + Self.mediaGap + TourLayout.top + TourLayout.bottom
                 )
                 .padding(.horizontal, TourLayout.mediaHorizontal)
