@@ -342,7 +342,27 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   spodem `EditorialPrimaryActionButton`. JEDNA instancja na cały przepływ, żeby pasek się animował.
   `WelcomeFooter`, `WelcomeStepper`, `WelcomeStepHeader`, `TourFooter`, `TourBackground`, `AssistantTickRow`
   usunięte; kreator i przewodnik na `SCPageBackground`, margines 20, sekcje `WelcomeSection`, wiersze celu
-  i diety jak w Ustawieniach, bez akapitów objaśnień.
+  i diety jak w Ustawieniach, bez akapitów objaśnień. `SCStepHeader(typing:)` = tytuł i opis PISZĄ SIĘ
+  (`SCTypedText`, tempo powitania Asystenta: 65 / 170 zn/s, razem ≤ 0,9 s) — używa tego tylko Asystent.
+- Wprowadzenie Asystenta v2 (24.09.2026, Rafał: „nieaktualne… zrób od nowa”, „button wstecz taki sam jak na
+  onboardingu aplikacji”, „po poznawaniu od razu klawiatura, a nie chcę”) — makieta Claude Design
+  „Scoffie — Asystent · Wprowadzenie v2” (`claude.ai/artifact/6pXaTCJ3VDrcrTSmmPCGwU`). CZTERY ekrany zamiast
+  sześciu: Powitanie → Planowanie → Ty decydujesz → Zgoda (`AssistantView.IntroStep`), zgoda NA KOŃCU, po niej
+  od razu rozmowa — BEZ fokusu pola (dawne `startConversation` wysuwało klawiaturę po 0,35 s; nie wracać).
+  Na czas wprowadzenia zakładka NIE ma nagłówka „Asystent” (strona od góry jak w przewodniku). Strony w
+  `AssistantIntroPages.swift` (wspólne z arkuszem menu „Jak działa Asystent” = `AssistantHowItWorksView`):
+  powitanie = żywy znak 48 (`SCLivingMark` lively, podskok po tytule), „Cześć! Jestem Twoim Asystentem” (Asystent
+  mówi w 1. osobie), na dole pole wiadomości, w którym przykłady piszą się same; Planowanie i Ty decydujesz =
+  SCENKA na górze (jak zdjęcie kroku przewodnika, wysokość z ZMIERZONEGO tekstu, 172–214 pt) + `SCStepHeader`
+  + 3 punkty. Scenki na PRAWDZIWYCH daniach z katalogu odsianych dietą i alergenami z Ustawień
+  (`AssistantIntroDish.pool` → `RecipePersonalization.excludes`): „Coś lekkiego na kolację” pisze się w dymku,
+  trzy kafle wchodzą kaskadą, kcal liczą się od zera; propozycja obiadu „na jutro” → przycisk sam roluje
+  „Dodaj do planu” → „Jest w planie” + „Cofnij”. Jedna `SCStepFooter` (`.besidePrimary`), powitanie ma
+  „Pomiń wprowadzenie” (→ zgoda), pasek 3 odcinki. Każdy punkt sprawdzony w backendzie (komentarz na górze
+  pliku): alergeny = `collectPlanViolations` sprawdza KAŻDEGO domownika; cofnięcie = okno
+  `AI_PROPOSAL_UNDO_WINDOW_MS` (domyślnie 1 h — NIE pisać „w ciągu doby”). Menu ⋯ „Co potrafi Asystent” bez karty
+  „Jedna zasada” i bez opisów/miniatur (`AssistantThumb`, `AssistantExchangePreview` usunięte), zgoda z menu:
+  status z kafelkiem + `SCDestructiveButton` „Cofnij zgodę”. Licznik potwierdzeń „0 z 2” roluje (`numericText`).
 - Przypięty nagłówek nad przewijaną treścią arkusza = BEZ kreski: `.scScrollEdgeFade()` na
   `ScrollView` (`Components/SCScrollEdgeFade.swift`) — górny brzeg treści gaśnie (maska, więc działa
   na każdym tle, także z poświatą `SCPageBackground`), dopiero gdy treść wjedzie pod nagłówek. Wzór:
@@ -513,7 +533,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
   nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
 - Przewodnik „Poznaj aplikację” (`TourStep`, strony w `Views/Tour/`, 24.09.2026 — Rafał: „więcej opisu pod
@@ -536,7 +556,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `FeatureTourView` usunięty; `WelcomeFlowView` tylko decyduje, czy przewodnik jest (pełna ścieżka i brak
   `TourCompletion`). Strony przewodnika dostają `padding(.bottom, footerHeight)`, bo stopka kreatora jest
   nakładką (pola nad klawiaturą). „Wstecz” w jednej linii z „Dalej”, po lewej
-  (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie; asystent zostaje przy `.progressRow`.
+  (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie — od wprowadzenia v2 także u Asystenta.
   Krok 1 kreatora = układ Ustawień → „Twoje dane”: karta „Profil” (awatar + imię w miejscu, ołówek)
   i karta „Sylwetka” (płeć, rok z wiekiem, wzrost, waga na `scChipBg`) z `BodyMetricsSummaryRow` (BMI
   + kcal na utrzymanie, wspólny z `ProfileDetailsSheet`) — Rafał: „tak smutno wygląda”. Krok 1 mieści się

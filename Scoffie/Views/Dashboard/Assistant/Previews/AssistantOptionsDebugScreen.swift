@@ -90,6 +90,27 @@ struct AssistantOptionsDebugScreen: View {
         )
     }
 
+    /// Strona wprowadzenia Asystenta v2 ze stopką, jak w zakładce:
+    /// `asystent-0` powitanie, `asystent-1` planowanie, `asystent-2` ty
+    /// decydujesz. `asystent-jak` = arkusz „Jak działa asystent” z menu.
+    private func debugAssistantIntro(_ page: AssistantIntroPage) -> some View {
+        ZStack {
+            SCPageBackground(scheme: scheme).ignoresSafeArea()
+            VStack(spacing: 0) {
+                AssistantIntroPageView(page: page)
+                SCStepFooter(
+                    slot: page == .hello ? .link("Pomiń wprowadzenie") : .progress(step: page.rawValue, total: 3),
+                    onSlotTap: {},
+                    showsBack: page != .hello,
+                    onBack: {},
+                    backPlacement: .besidePrimary,
+                    primaryTitle: page == .hello ? "Zobacz, jak działa" : "Dalej",
+                    onPrimary: {}
+                )
+            }
+        }
+    }
+
     var body: some View {
         if mode == "shopping" {
             // Liczniki Zakupów na przykładowych danych — do sprawdzenia
@@ -145,6 +166,15 @@ struct AssistantOptionsDebugScreen: View {
             // Przewodnik „Poznaj aplikację”: `tour-0` powitanie, `tour-1…5`
             // kroki, `tour-6` przejście do kreatora.
             debugTour(phase: phase)
+        } else if mode == "asystent-jak" {
+            SCPageBackground(scheme: scheme).ignoresSafeArea()
+                .sheet(isPresented: .constant(true)) {
+                    AssistantHowItWorksView()
+                        .interactiveDismissDisabled()
+                }
+        } else if let raw = mode, raw.hasPrefix("asystent-"), let index = Int(raw.dropFirst(9)) {
+            // Wprowadzenie Asystenta v2 — strona `index` ze stopką.
+            debugAssistantIntro(AssistantIntroPage(rawValue: index) ?? .hello)
         } else if let raw = mode, raw.hasPrefix("welcome-"), let step = Int(raw.dropFirst(8)) {
             // Kreator „Poznajmy się”, krok 1…5.
             WelcomeView(initialDisplayName: "Rafał", isCreatingHousehold: false, errorMessage: nil, initialStep: step)

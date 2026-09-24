@@ -2,8 +2,9 @@ import SwiftUI
 
 // Klocki przepływów krok po kroku — JEDNE dla trzech miejsc: przewodnika
 // „Poznaj aplikację” (`WelcomeView`), kreatora „Poznajmy się”
-// (`WelcomeView`) i wprowadzenia asystenta (`AssistantIntroFooter`,
-// `AssistantWelcomeView`, `AssistantConsentGateView`, `AssistantHowItWorksView`).
+// (`WelcomeView`) i wprowadzenia Asystenta (`AssistantView.introFlow`,
+// strony z `AssistantIntroPages.swift`, `AssistantConsentGateView`,
+// arkusz `AssistantHowItWorksView`).
 //
 // Wcześniej każdy przepływ miał własną stopkę (`TourFooter`, `WelcomeFooter`,
 // `AssistantIntroFooter`), pigułkowe kropki kroków (`WelcomeStepper`), własny
@@ -82,8 +83,31 @@ struct SCStepHeader: View {
     var eyebrow: String? = nil
     let title: String
     var subtitle: String? = nil
+    /// Tytuł i opis PISZĄ SIĘ na oczach — ta sama animacja co powitanie
+    /// Asystenta (`SCTypedText`: nienapisana końcówka jest przezroczysta,
+    /// więc układ nie skacze). Nowa wartość = pisze się od zera. `nil`
+    /// (domyślnie) = zwykły tekst, jak w przewodniku i kreatorze.
+    var typing: Int? = nil
 
     @Environment(\.colorScheme) private var scheme
+
+    /// Tempo z powitania Asystenta: tytuł spokojnie, opis szybciej, razem
+    /// najwyżej `typingBudget` — dłuższy tekst przyspiesza oba w tej samej
+    /// proporcji, zamiast kazać czekać na ostatnie słowo.
+    private static let titleRate: Double = 65
+    private static let subtitleRate: Double = 170
+    private static let typingBudget: Double = 0.9
+    private static let typingLead: Double = 0.08
+
+    private var rateScale: Double {
+        let natural = Double(title.count) / Self.titleRate
+            + Double(subtitle?.count ?? 0) / Self.subtitleRate
+        return max(1, natural / Self.typingBudget)
+    }
+
+    private var subtitleDelay: Double {
+        Self.typingLead + SCTypedText.duration(title, rate: Self.titleRate * rateScale) + 0.05
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -101,7 +125,7 @@ struct SCStepHeader: View {
                     .padding(.bottom, 6)
             }
 
-            Text(title)
+            titleText
                 .font(.system(size: 28, weight: .heavy))
                 .tracking(-0.5)
                 .foregroundStyle(Color.scLabel(scheme))
@@ -109,7 +133,7 @@ struct SCStepHeader: View {
                 .accessibilityAddTraits(.isHeader)
 
             if let subtitle {
-                Text(subtitle)
+                subtitleText(subtitle)
                     .font(.system(size: 15))
                     .lineSpacing(2)
                     .foregroundStyle(Color.scMuted(scheme))
@@ -118,6 +142,24 @@ struct SCStepHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var titleText: some View {
+        if let typing {
+            SCTypedText(title, playKey: typing, rate: Self.titleRate * rateScale, delay: Self.typingLead)
+        } else {
+            Text(title)
+        }
+    }
+
+    @ViewBuilder
+    private func subtitleText(_ subtitle: String) -> some View {
+        if let typing {
+            SCTypedText(subtitle, playKey: typing, rate: Self.subtitleRate * rateScale, delay: subtitleDelay)
+        } else {
+            Text(subtitle)
+        }
     }
 }
 
@@ -258,13 +300,13 @@ struct SCStepFooter: View {
 
     /// Gdzie stoi „Wstecz”.
     enum BackPlacement {
-        /// Krążek 36 pt na lewym końcu wiersza z paskiem kroków (kreator,
-        /// asystent).
+        /// Krążek 36 pt na lewym końcu wiersza z paskiem kroków.
         case progressRow
         /// Krążek wysokości przycisku głównego, w jednej linii z nim, po lewej
-        /// — przewodnik „Poznaj aplikację” (Rafał 24.09.2026: „ten button
-        /// wstecz daj obok buttonu dalej”). Pasek kroków dostaje wtedy cały
-        /// wiersz nad nimi.
+        /// — przewodnik „Poznaj aplikację” i kreator (Rafał 24.09.2026: „ten
+        /// button wstecz daj obok buttonu dalej”), od wprowadzenia Asystenta
+        /// v2 także Asystent („taki sam jak na onboardingu aplikacji”). Pasek
+        /// kroków dostaje wtedy cały wiersz nad nimi.
         case besidePrimary
     }
 
