@@ -38,6 +38,12 @@ struct NavigationMenu: View {
     /// Zakładki już zbudowane. Wybrana buduje się od razu, reszta po kolei
     /// w tle — patrz `warmUpRemainingTabs`.
     @State private var mounted: Set<DashboardTab> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Zakładka, która właśnie wchodzi, i jej krycie. Samo krycie, bez
+    /// przesunięcia i bez `keyframeAnimator` na całej stronie: to renderuje
+    /// warstwa, a ekran zakładki nie przelicza się w żadnej klatce wejścia.
+    @State private var enteringTab: DashboardTab?
+    @State private var entranceOpacity: Double = 1
 
     private static let order: [DashboardTab] = [.recipes, .plan, .calendar, .assistant, .settings]
 
@@ -56,11 +62,8 @@ struct NavigationMenu: View {
                 if mounted.contains(tab) || tab == session.dashboardTab {
                     let isActive = tab == session.dashboardTab
                     page(tab)
-                        // Asystent rysuje przy wejściu własne powitanie —
-                        // drugie wejście nad nim byłoby podwójnym ruchem.
-                        .scTabEntrance(isActive: isActive && tab != .assistant)
                         .environment(\.scTabIsActive, isActive)
-                        .opacity(isActive ? 1 : 0)
+                        .opacity(isActive ? (tab == enteringTab ? entranceOpacity : 1) : 0)
                         .allowsHitTesting(isActive)
                         .accessibilityHidden(!isActive)
                         .zIndex(isActive ? 1 : 0)
@@ -72,7 +75,7 @@ struct NavigationMenu: View {
         .background(SCPageBackground(scheme: colorScheme).ignoresSafeArea())
         .tint(SCPalette.terracotta)
         .overlay(alignment: .bottom) {
-            SCFloatingTabBar(items: items, selection: $session.dashboardTab, isCompact: chrome.isCompact)
+            SCFloatingTabBar(items: items, selection: tabSelection, isCompact: chrome.isCompact)
                 // Klawiatura ma pasek ZASŁONIĆ, jak systemowy — bez tego
                 // `overlay` uciekałby nad klawiaturę i stawał między nią
                 // a polem asystenta.
@@ -99,6 +102,29 @@ struct NavigationMenu: View {
             chrome.keyboardDuration = Self.animationDuration(of: note)
             chrome.isKeyboardVisible = false
         }
+    }
+
+    /// Wybór z paska. Wchodząca zakładka startuje od krycia 0 W TEJ SAMEJ
+    /// transakcji co przełączenie (pasek robi je bez animacji), więc nie ma
+    /// klatki, w której stoi już w pełni i dopiero potem gaśnie — to był
+    /// przeskok. Wyłania się z `SCPageBackground` pod zakładkami, a stara
+    /// znika cięciem. Asystent ma własne powitanie, więc wchodzi od razu.
+    private var tabSelection: Binding<DashboardTab> {
+        Binding(
+            get: { sessionStore.dashboardTab },
+            set: { tab in
+                guard tab != sessionStore.dashboardTab else { return }
+                let fades = tab != .assistant && !reduceMotion
+                enteringTab = fades ? tab : nil
+                entranceOpacity = fades ? 0 : 1
+                sessionStore.dashboardTab = tab
+                guard fades else { return }
+                DispatchQueue.main.async {
+                    guard enteringTab == tab else { return }
+                    withAnimation(.easeOut(duration: 0.22)) { entranceOpacity = 1 }
+                }
+            }
+        )
     }
 
     /// Czas ruchu klawiatury z powiadomienia.

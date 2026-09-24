@@ -122,9 +122,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają na niewybranej zakładce stać. Pasek ma JEDEN gest na całość: pigułka idzie za palcem
   (stuknięcie i przeciąganie w bok jak w iOS 26), zakładka zmienia się po puszczeniu, w transakcji
   z `disablesAnimations`. Nie dokładać przycisków, `matchedGeometryEffect` ani haptyki. Wejście na
-  zakładkę (od 24.09.2026, prośba Rafała) = JEDEN modyfikator `scTabEntrance` (`Components/SCTabEntrance.swift`):
-  krycie 0 → 1 i 8 pt z dołu, 0,28 s, tylko przy zmianie na aktywną (nie pod loaderem), bez Asystenta
-  (ma własne powitanie), stoi przy Reduce Motion; pod zakładkami leży `SCPageBackground`. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
+  zakładkę (24.09.2026, prośba Rafała) = SAMO krycie 0 → 1, 0,22 s, ustawiane w `NavigationMenu.tabSelection`
+  w tej samej transakcji co wybór z paska (stara zakładka znika cięciem, nowa wyłania się z `SCPageBackground`
+  pod zakładkami); bez Asystenta (własne powitanie), bez przy Reduce Motion, zmiany z kodu = cięcie.
+  NIE wracać do `keyframeAnimator`/przesunięcia na całej stronie (`scTabEntrance`, runda 16) — Rafał: „totalnie
+  zbugowane, przeskakuje”: ruszało od klatki w pełnym kryciu i przeliczało ekran zakładki w każdej klatce. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
   główny `ScrollView` zakładki melduje kierunek przez `scTracksTabBarCompaction()`; rezerwa
   miejsca pod treścią (`scReservesTabBarSpace()`, WEWNĄTRZ `NavigationStack`) jest stała i schodzi
   do zera przy klawiaturze.
@@ -226,6 +228,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `SCSessionCurtain` (`Components/`, własne okno nad arkuszami, pod toastami) — zasłona w kolorze tła
   w górę, `ScoffieApp.showRootScreen` przestawia korzeń bez animacji (na AKTUALNY cel), zasłona w dół.
   Korzeń nie ma już własnego crossfade'u (pulpit wjeżdżał z loaderem i prześwitywał Kalendarz).
+  WYJĄTEK — wejście do aplikacji (logowanie / kreator → pulpit): ZAWSZE loader startu, bez zasłony
+  (`enterAppUnderLoader`, runda 18 — Rafał: „po logowaniu ZAWSZE ma się włączyć loading”): loader
+  przenika się nad logowaniem (`entryLoaderHold`), korzeń przechodzi pod nim, loader schodzi po całej fali
+  kafelków i `startupPhase == .ready` (sufit 12 s). Nie uzależniać go od fazy startu — bywała gotowa, zanim
+  ktokolwiek zobaczył loader, i zasłona schodziła prosto na Kalendarz.
   Koniec sesji z ręki użytkownika = `SessionStore.signOut()` / `deleteAccount()`: najpierw
   `await sessionCurtain.cover()`, dopiero potem czyszczenie `UserDefaults` i store. Gołe `logout()`
   zostaje dla wylogowań wymuszonych (odmowa serwera, cofnięte Apple ID).
