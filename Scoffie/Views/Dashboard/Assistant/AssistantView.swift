@@ -850,18 +850,23 @@ struct AssistantView: View {
             isPinnedToBottom = atBottom
         }
 
-        return withScrollTriggers(scroll, proxy: proxy)
+        let triggered = withScrollTriggers(scroll, proxy: proxy)
         // Wibracja tylko przy NOWEJ odpowiedzi i przy NOWYM błędzie.
         // Wyzwalacz po samej zmianie wartości odzywał się też, gdy
         // liczba odpowiedzi SPADAŁA (nowa rozmowa, wybór z historii,
         // poprawka pytania) i gdy błąd ZNIKAŁ — „sukces" i „błąd"
         // pod palcem w chwili, w której nic takiego się nie stało.
-        .sensoryFeedback(trigger: answerCount) { old, new in
-            new > old ? .success : nil
+        // Typy domknięć jawnie: `.success : nil` bez nich zjadało
+        // kompilatorowi limit czasu na całe wyrażenie.
+        let onAnswer: (Int, Int) -> SensoryFeedback? = { old, new in
+            new > old ? SensoryFeedback.success : nil
         }
-        .sensoryFeedback(trigger: store.errorMessage) { old, new in
-            old == nil && new != nil ? .error : nil
+        let onError: (String?, String?) -> SensoryFeedback? = { old, new in
+            old == nil && new != nil ? SensoryFeedback.error : nil
         }
+        return triggered
+            .sensoryFeedback(trigger: answerCount, onAnswer)
+            .sensoryFeedback(trigger: store.errorMessage, onError)
     }
 
     /// Odstęp między wiadomościami. Odpowiedź z kartą pod pytaniem i kolejne
