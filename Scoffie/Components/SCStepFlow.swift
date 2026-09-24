@@ -233,6 +233,18 @@ struct SCStepFooter: View {
         }
     }
 
+    /// Gdzie stoi „Wstecz”.
+    enum BackPlacement {
+        /// Krążek 36 pt na lewym końcu wiersza z paskiem kroków (kreator,
+        /// asystent).
+        case progressRow
+        /// Krążek wysokości przycisku głównego, w jednej linii z nim, po lewej
+        /// — przewodnik „Poznaj aplikację” (Rafał 24.09.2026: „ten button
+        /// wstecz daj obok buttonu dalej”). Pasek kroków dostaje wtedy cały
+        /// wiersz nad nimi.
+        case besidePrimary
+    }
+
     let slot: Slot
     var onSlotTap: (() -> Void)? = nil
     /// Zdanie nad przyciskami (błąd zapisu) — przy akcji, która go wywołała,
@@ -240,6 +252,7 @@ struct SCStepFooter: View {
     var notice: String? = nil
     var showsBack: Bool = false
     var onBack: (() -> Void)? = nil
+    var backPlacement: BackPlacement = .progressRow
     let primaryTitle: String
     var primaryIcon: String = "arrow.right"
     var isPrimaryEnabled: Bool = true
@@ -249,6 +262,10 @@ struct SCStepFooter: View {
 
     /// Wysokość wiersza nawigacji = średnica krążka „Wstecz”.
     static let rowHeight: CGFloat = 36
+
+    /// Zmierzona wysokość przycisku głównego — średnica krążka „Wstecz”
+    /// w układzie `.besidePrimary`. 48 do pierwszego pomiaru.
+    @State private var primaryHeight: CGFloat = 48
 
     @Environment(\.colorScheme) private var scheme
 
@@ -266,32 +283,74 @@ struct SCStepFooter: View {
             navigationRow
                 .padding(.bottom, 4)
 
-            EditorialPrimaryActionButton(
-                title: primaryTitle,
-                icon: primaryIcon,
-                isEnabled: isPrimaryEnabled,
-                isLoading: isPrimaryLoading,
-                action: onPrimary
-            )
-            .accessibilityHint(primaryHint ?? "")
-            // Animowana transakcja dla `numericText` w tytule — bez niej
-            // „Dalej” → „Utwórz gospodarstwo” podmieniało się w jednej klatce.
-            .animation(.smooth(duration: 0.32), value: primaryTitle)
+            actionRow
         }
         .animation(.easeInOut(duration: 0.2), value: notice)
     }
 
+    private var primaryButton: some View {
+        EditorialPrimaryActionButton(
+            title: primaryTitle,
+            icon: primaryIcon,
+            isEnabled: isPrimaryEnabled,
+            isLoading: isPrimaryLoading,
+            action: onPrimary
+        )
+        .accessibilityHint(primaryHint ?? "")
+        // Animowana transakcja dla `numericText` w tytule — bez niej
+        // „Dalej” → „Utwórz gospodarstwo” podmieniało się w jednej klatce.
+        .animation(.smooth(duration: 0.32), value: primaryTitle)
+    }
+
+    @ViewBuilder
+    private var actionRow: some View {
+        switch backPlacement {
+        case .progressRow:
+            primaryButton
+        case .besidePrimary:
+            // Krążek bierze ZMIERZONĄ wysokość przycisku, więc oba stoją na
+            // jednej linii bez stałej przepisanej z
+            // `EditorialPrimaryActionButton` (i rosną razem z Dynamic Type).
+            // Bez „Wstecz” (powitanie) przycisk rozjeżdża się na całą szerokość.
+            HStack(spacing: 10) {
+                if canGoBack {
+                    Button {
+                        onBack?()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .frame(width: primaryHeight, height: primaryHeight)
+                            .background(Circle().fill(Color.scChipBg(scheme)))
+                            .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(PlanPressStyle(scale: 0.92))
+                    .accessibilityLabel("Wstecz")
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+                primaryButton
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        primaryHeight = height
+                    }
+            }
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: canGoBack)
+        }
+    }
+
     private var navigationRow: some View {
         HStack(spacing: 12) {
-            SCSheetIconButton(
-                systemName: "chevron.left",
-                accessibilityLabel: "Wstecz",
-                action: { onBack?() }
-            )
-            .opacity(canGoBack ? 1 : 0)
-            .scaleEffect(canGoBack ? 1 : 0.8)
-            .allowsHitTesting(canGoBack)
-            .accessibilityHidden(!canGoBack)
+            if backPlacement == .progressRow {
+                SCSheetIconButton(
+                    systemName: "chevron.left",
+                    accessibilityLabel: "Wstecz",
+                    action: { onBack?() }
+                )
+                .opacity(canGoBack ? 1 : 0)
+                .scaleEffect(canGoBack ? 1 : 0.8)
+                .allowsHitTesting(canGoBack)
+                .accessibilityHidden(!canGoBack)
+            }
 
             ZStack {
                 slotContent
@@ -301,8 +360,13 @@ struct SCStepFooter: View {
             .frame(maxWidth: .infinity)
             .animation(.easeInOut(duration: 0.3), value: slot.key)
 
-            counter
-                .frame(width: Self.rowHeight, alignment: .trailing)
+            // Przy „Wstecz” obok przycisku nie ma krążka, który równoważyłby
+            // licznik z lewej — pusty licznik zjadałby 36 pt z prawej
+            // i odnośnik „Pomiń…” stałby krzywo.
+            if backPlacement == .progressRow || slot.key == Slot.progress(step: 0, total: 0).key {
+                counter
+                    .frame(width: Self.rowHeight, alignment: .trailing)
+            }
         }
         .frame(height: Self.rowHeight)
         .animation(.spring(response: 0.36, dampingFraction: 0.86), value: canGoBack)

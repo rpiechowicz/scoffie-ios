@@ -1,48 +1,68 @@
 import SwiftUI
 
-/// Zdjęcie kroku w kadrze 16:13.
+/// Zdjęcie kroku.
 ///
-/// Zdjęcia to rendery telefonów na jasnym tle z szerokim marginesem —
-/// `scaledToFill` plus delikatne przybliżenie zjada ten margines, żeby
-/// ekrany aplikacji zajmowały kadr, a nie pływały w pustce.
+/// Dwa rodzaje grafik (`TourStep.isArtwork`):
+/// - rendery telefonów na jasnym tle z szerokim marginesem — kadr 16:13,
+///   `scaledToFill` plus delikatne przybliżenie zjada ten margines, żeby
+///   ekrany aplikacji zajmowały kadr, a nie pływały w pustce;
+/// - ilustracje z kartami aplikacji (od 24.09.2026, Plan i Przepisy) —
+///   skomponowane do samego brzegu, więc w SWOICH proporcjach i w całości
+///   (`scaledToFit`, bez przybliżenia). Przycięcie do 16:13 ucinało karty
+///   z boków, a przybliżenie — nagłówki u góry.
 ///
 /// Wysokość kadru ma sufit: widoczna strona (`TourPage` podaje ją
-/// w `tourViewport`) minus to, czego potrzebuje reszta kroku (`reserved`:
-/// eyebrow, tytuł w dwóch liniach, opis, karta czterech punktów, marginesy). Na
-/// Plus / Pro Max sufit leży nad 16:13 i nic się nie zmienia, na zwykłym
-/// iPhonie kadr traci kilkanaście punktów, na SE / mini wyraźnie więcej
-/// (zdjęcie się przycina, szerokość zostaje) — tytuł i punkty mieszczą się
-/// nad stopką bez przewijania.
+/// w `tourViewport`) minus ZMIERZONA reszta kroku (`reserved`: eyebrow,
+/// tytuł, opis, karta czterech punktów i marginesy — `TourStepView` mierzy
+/// je co krok, bo tytuł i opis mają od jednej do trzech linii). Stały zapas
+/// raz zostawiał pustkę pod kartą, raz wpychał czwarty punkt pod cień
+/// stopki. Na
+/// Plus / Pro Max sufit leży nad naturalną wysokością i nic się nie zmienia,
+/// na mniejszych ekranach render traci wysokość (przycina się, szerokość
+/// zostaje), a ilustracja maleje w całości, na środku — tytuł i punkty
+/// mieszczą się nad stopką bez przewijania.
 private struct TourMedia: View {
     let imageName: String
     let accent: Color
+    let isArtwork: Bool
+    /// Wysokość strony zajęta przez wszystko poza zdjęciem.
+    let reserved: CGFloat
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.tourViewport) private var viewport
 
-    private static let aspect: CGFloat = 16.0 / 13.0
-    /// Wszystko na stronie kroku poza zdjęciem (liczone z odstępów
-    /// `TourStepView` i `TourLayout`, z zapasem na dwulinijkowy tytuł
-    /// i trzylinijkowy opis — `TourStep.lead`; bez kapsułki „Znajdziesz w…”
-    /// nad zdjęciem, za to z eyebrow i wyższymi wierszami punktów z ikonami).
-    private static let reserved: CGFloat = 470
+    private static let renderAspect: CGFloat = 16.0 / 13.0
+    /// Proporcje ilustracji (`TourPlan`, `TourRecipes`: 1200 × 868).
+    private static let artworkAspect: CGFloat = 1200.0 / 868.0
     /// Poniżej tego kadr przestaje coś pokazywać — wtedy lepiej przewinąć.
     private static let minimum: CGFloat = 150
 
-    /// `nil` przed pierwszym pomiarem — wtedy sam 16:13.
-    private var height: CGFloat? {
+    private var aspect: CGFloat { isArtwork ? Self.artworkAspect : Self.renderAspect }
+
+    /// `nil` przed pierwszym pomiarem — wtedy same proporcje.
+    private var size: CGSize? {
         guard viewport.width > 0, viewport.height > 0 else { return nil }
-        let natural = (viewport.width - 2 * TourLayout.mediaHorizontal) / Self.aspect
-        return min(natural, max(Self.minimum, viewport.height - Self.reserved))
+        let fullWidth = viewport.width - 2 * TourLayout.mediaHorizontal
+        let natural = fullWidth / aspect
+        let height = min(natural, max(Self.minimum, viewport.height - reserved))
+        // Ilustracja maleje w całości; render zachowuje szerokość i traci
+        // wysokość.
+        return CGSize(width: isArtwork ? height * aspect : fullWidth, height: height)
     }
 
     var body: some View {
         mediaFrame
             .overlay {
-                Image(imageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .scaleEffect(1.06)
+                if isArtwork {
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .scaleEffect(1.06)
+                }
             }
             .background(
                 RadialGradient(
@@ -57,18 +77,18 @@ private struct TourMedia: View {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
+            .frame(maxWidth: .infinity)
             .accessibilityHidden(true)
     }
 
     @ViewBuilder
     private var mediaFrame: some View {
-        if let height {
+        if let size {
             Color.clear
-                .frame(maxWidth: .infinity)
-                .frame(height: height)
+                .frame(width: size.width, height: size.height)
         } else {
             Color.clear
-                .aspectRatio(Self.aspect, contentMode: .fit)
+                .aspectRatio(aspect, contentMode: .fit)
         }
     }
 }
@@ -86,33 +106,52 @@ struct TourStepView: View {
     /// w `SCReveal`); każda strona ma własną tożsamość (`.id(phase)`
     /// w `FeatureTourView`), więc kaskada gra przy każdym kroku.
     @State private var hasAppeared = false
+    /// Wysokość nagłówka i karty punktów — reszta strony idzie na zdjęcie.
+    /// 400 do pierwszego pomiaru (typowy krok na iPhonie 6,1").
+    @State private var textHeight: CGFloat = 400
+
+    private static let mediaGap: CGFloat = 20
 
     var body: some View {
         TourPage {
             VStack(alignment: .leading, spacing: 0) {
-                TourMedia(imageName: step.imageName, accent: step.accent)
-                    .padding(.horizontal, TourLayout.mediaHorizontal)
-                    .padding(.bottom, 20)
-
-                // Ten sam nagłówek kroku, co w kreatorze i u asystenta: eyebrow
-                // w kolorze kroku mówi, gdzie to jest w aplikacji — bez kafelka,
-                // bo nad nagłówkiem stoi zdjęcie.
-                SCStepHeader(
+                TourMedia(
+                    imageName: step.imageName,
                     accent: step.accent,
-                    eyebrow: step.eyebrow,
-                    title: step.title,
-                    subtitle: step.lead
+                    isArtwork: step.isArtwork,
+                    reserved: textHeight + Self.mediaGap + TourLayout.top + TourLayout.bottom
                 )
-                    .padding(.horizontal, TourLayout.horizontal)
-                    .padding(.bottom, 14)
+                .padding(.horizontal, TourLayout.mediaHorizontal)
+                .padding(.bottom, Self.mediaGap)
 
-                TourPointsCard(points: step.points, accent: step.accent, isVisible: hasAppeared)
-                    .padding(.horizontal, TourLayout.horizontal)
+                textBlock
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        textHeight = height
+                    }
             }
         }
         .task {
             try? await Task.sleep(nanoseconds: 80_000_000)
             hasAppeared = true
+        }
+    }
+
+    private var textBlock: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Ten sam nagłówek kroku, co w kreatorze i u asystenta: eyebrow
+            // w kolorze kroku mówi, gdzie to jest w aplikacji — bez kafelka,
+            // bo nad nagłówkiem stoi zdjęcie.
+            SCStepHeader(
+                accent: step.accent,
+                eyebrow: step.eyebrow,
+                title: step.title,
+                subtitle: step.lead
+            )
+            .padding(.horizontal, TourLayout.horizontal)
+            .padding(.bottom, 14)
+
+            TourPointsCard(points: step.points, accent: step.accent, isVisible: hasAppeared)
+                .padding(.horizontal, TourLayout.horizontal)
         }
     }
 }

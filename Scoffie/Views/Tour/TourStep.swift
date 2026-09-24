@@ -25,6 +25,10 @@ struct TourStep: Identifiable {
     /// kroku przycina się do wysokości (`TourMedia`), a stopka stoi osobno.
     let points: [TourPoint]
     let imageName: String
+    /// Ilustracja z kartami aplikacji skomponowana do brzegu (Plan,
+    /// Przepisy) — pokazywana w całości, w swoich proporcjach. `false` =
+    /// render telefonów z marginesem, kadrowany 16:13 (`TourMedia`).
+    var isArtwork: Bool = false
 }
 
 /// Jeden punkt kroku: ikona w kafelku (tint koloru kroku) i jedno zdanie.
@@ -77,7 +81,8 @@ extension TourStep {
                 TourPoint(icon: "person.2.fill", text: "Zmiany widzi od razu cały dom"),
                 TourPoint(icon: "bell.fill", text: "Przypomnienie, kiedy zacząć gotować"),
             ],
-            imageName: "TourPlan"
+            imageName: "TourPlan",
+            isArtwork: true
         ),
         TourStep(
             id: "recipes",
@@ -91,7 +96,8 @@ extension TourStep {
                 TourPoint(icon: "list.bullet.rectangle.fill", text: "Składniki po działach i kroki na jednym ekranie"),
                 TourPoint(icon: "heart.fill", text: "Ulubione pod sercem — i pod ręką w planie"),
             ],
-            imageName: "TourRecipes"
+            imageName: "TourRecipes",
+            isArtwork: true
         ),
         TourStep(
             id: "shopping",

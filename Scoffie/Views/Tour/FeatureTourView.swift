@@ -74,6 +74,7 @@ struct FeatureTourView: View {
                     onSlotTap: { onFinish() },
                     showsBack: phase > 0,
                     onBack: { goBack() },
+                    backPlacement: .besidePrimary,
                     primaryTitle: primaryTitle,
                     onPrimary: {
                         if isDone {

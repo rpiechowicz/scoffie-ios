@@ -101,6 +101,7 @@ struct AssistantOptionsDebugScreen: View {
                         : phase > steps.count ? .empty : .progress(step: phase, total: steps.count),
                     showsBack: phase > 0,
                     onBack: {},
+                    backPlacement: .besidePrimary,
                     primaryTitle: phase <= 0 ? "Poznaj aplikację" : "Dalej",
                     onPrimary: {}
                 )
