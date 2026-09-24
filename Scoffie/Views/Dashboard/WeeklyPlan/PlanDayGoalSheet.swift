@@ -178,42 +178,26 @@ struct PlanDayGoalSheet: View {
 
     // MARK: - Nagłówek
 
-    /// Domyślny nagłówek arkusza: dzień w eyebrow, „Cel dnia”, a pod spodem
-    /// liczba posiłków. Wcześniej własny tytuł bez eyebrow — jedyny arkusz
-    /// Planu, który zaczynał się inaczej niż reszta.
+    /// Domyślny nagłówek arkusza: dzień w eyebrow i „Cel dnia”. Wcześniej
+    /// własny tytuł bez eyebrow — jedyny arkusz Planu, który zaczynał się
+    /// inaczej niż reszta.
+    ///
+    /// Bez podtytułu (24.09.2026, Rafał: „Twój dzień · 3 z 3 posiłków — bez
+    /// sensu”): liczba pór powtarzała listę dań pod spodem, a czyj to dzień
+    /// mówi wybrany awatar w przełączniku. W Kalendarzu („1 z 5 zjedzone”)
+    /// zniknął rundę wcześniej. Detent jest mierzony, więc pusty wiersz nie zostaje.
     private var header: some View {
         EditorialSheetHeader(
             eyebrow: Self.longDayFormatter.string(from: date),
             title: "Cel dnia",
-            subtitle: subtitle,
-            // Podtytuł niesie imię („Dzień: Ania”) — rolowanie cyfr
-            // przetaczało każdą literę osobno i imię rozsypywało się
-            // w trakcie przełączenia. Zwykłe przenikanie.
-            subtitleTransition: people.count > 1 ? .opacity : .numericText(),
+            subtitle: nil,
+            subtitleTransition: .opacity,
             onClose: { dismiss() }
         ) {
             if people.count > 1 {
                 PlanPersonSwitcher(people: people, members: members, selection: $selectedId)
             }
         }
-    }
-
-    /// „3 z 3 posiłków” — pory, w których wybrana osoba ma danie. Kropki na
-    /// osi dnia liczą cały dom, więc przy domownikach z osobnymi daniami ta
-    /// para może się od nich różnić — arkusz mówi o talerzu jednej osoby.
-    ///
-    /// W Kalendarzu podtytułu nie ma (24.09.2026, Rafał): „1 z 5 zjedzone”
-    /// powtarzało ptaszki przy daniach na liście poniżej. Kalendarz nie ma
-    /// przełącznika osób, więc nie ma też czyjego dnia do nazwania; detent
-    /// jest mierzony, więc pusty wiersz nie zostaje.
-    private var subtitle: String? {
-        if nutrition.countsOnlyEaten { return nil }
-        let count = "\(nutrition.filledSlots) z \(nutrition.slotCount) posiłków"
-        // Przy kilku osobach zdanie mówi, CZYJ to dzień — awatar w kapsule
-        // obok krzyżyka to za mało, żeby przeczytać to bez zgadywania.
-        guard people.count > 1 else { return count }
-        let whose = person.isMe ? "Twój dzień" : "Dzień: " + person.name
-        return whose + " · " + count
     }
 
     // MARK: - Pierścienie i legenda
