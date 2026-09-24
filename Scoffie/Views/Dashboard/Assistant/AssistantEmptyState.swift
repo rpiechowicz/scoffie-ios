@@ -89,8 +89,14 @@ struct AssistantEmptyState: View {
         .onChange(of: isActiveTab, initial: true) { _, active in
             if active, AssistantGreetingMemory.shouldPlay(briefing.kind) { replay() }
         }
-        // Nowa sytuacja to nowa wiadomość — ta gra zawsze.
-        .onChange(of: briefing.kind) { _, _ in replay() }
+        // Nowa sytuacja to nowa wiadomość — gra zawsze, ale tylko NA OCZACH.
+        // Po uruchomieniu zakładka buduje się pod loaderem, a sytuacja
+        // przestawia się tam, gdy dojdą dane; odtworzenie w ukryciu
+        // zapisywało się jako „widziane” i pierwsze wejście nie grało nic.
+        // Ukryta nowa sytuacja zagra przy wejściu (`shouldPlay` = true).
+        .onChange(of: briefing.kind) { _, _ in
+            if isActiveTab { replay() }
+        }
     }
 }
 

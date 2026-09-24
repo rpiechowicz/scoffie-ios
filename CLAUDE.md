@@ -230,7 +230,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `SCSessionCurtain` (`Components/`, własne okno nad arkuszami, pod toastami) — zasłona w kolorze tła
   w górę, `ScoffieApp.showRootScreen` przestawia korzeń bez animacji (na AKTUALNY cel), zasłona w dół.
   Korzeń nie ma już własnego crossfade'u (pulpit wjeżdżał z loaderem i prześwitywał Kalendarz).
-  Loader schodzi TYLKO na pełnym obrocie znaku (runda 21): znak robi obrót ease-in-out na każdą falę dni
+  Loader schodzi TYLKO na pełnym obrocie znaku (runda 21–22): SAM znak (`SCScoffieMark(markRotation:)`, kafel stoi)
+  robi obrót ease-in-out na każdą falę dni, a cała choreografia (fala, refleks, oddech, kropki) idzie jednym taktem 1,34 s
   (`LoaderMotion.logoRotation`, `StartupLoaderView.turnSeconds`), a `ScoffieApp.loaderShown` czeka po
   `wantsStartupLoader == false` do końca bieżącego obrotu (`remainingToFullTurn`) — 1,5 obrotu = do końca drugiego.
   WYJĄTEK — wejście do aplikacji (logowanie / kreator → pulpit): ZAWSZE loader startu, bez zasłony
