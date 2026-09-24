@@ -20,10 +20,9 @@ import SwiftUI
 ///   „TEN TYDZIEŃ · 22–28 WRZ”, strzałki, „Wróć do dziś”, podkreślenie, które
 ///   przejeżdża między dniami, przeciąganie w bok zmienia tydzień, miniony
 ///   dzień przekreślony. Wszystko w jednej karcie.
-/// - **Posiłek** — pory jako kafle (układ wg liczby pór): ikona w kolorze pory, nazwa, godzina, a pod
-///   nimi danie, które już tam stoi (miniatura + nazwa, `SlotDish`), albo „Wolne”. Wybrany kafel
-///   w tincie pory (`scChoiceSurface`); podmianę pokazuje znaczek na miniaturze i karta „ZAMIENISZ”
-///   w stopce.
+/// - **Posiłek** — pory jako kafle (układ wg liczby pór): ikona w kolorze pory, nazwa, godzina.
+///   Wybrany kafel w tincie pory (`scChoiceSurface`); co zapis podmieni, mówi JEDNA karta
+///   „ZAMIENISZ” w stopce (danie w kaflach odpadło w rundzie 20 — „brzydkie”).
 ///   Lista wierszy z rundy 14 odpadła 24.09 — „nie do końca podoba mi się
 ///   design tego”.
 /// - **Dla kogo** — `PlanAudienceChips` (tylko w domu wieloosobowym).
@@ -671,36 +670,27 @@ struct AddToPlanSheet: View {
             repeating: GridItem(.flexible(), spacing: 8, alignment: .top),
             count: layout.columns
         )
-        // Wiersz dania stoi w KAŻDYM kaflu, gdy choć jedna pora jest zajęta —
-        // wolna mówi „Wolne”. Kafle w rzędzie mają dzięki temu tę samą
-        // wysokość, a zmiana dnia nie podnosi i nie opuszcza siatki.
-        let showsDishRow = slots.contains { occupant(of: $0) != nil }
-
         return VStack(alignment: .leading, spacing: 4) {
             EditorialSheetSectionLabel(title: "Posiłek")
 
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(slots) { slot in
-                    slotTile(slot, compact: layout.isCompact, showsDishRow: showsDishRow)
+                    slotTile(slot, compact: layout.isCompact)
                 }
             }
-            .animation(.smooth(duration: 0.25), value: showsDishRow)
         }
     }
 
-    /// Kafel pory: kafelek z ikoną w kolorze pory, nazwa i godzina, a pod nimi
-    /// danie, które już tam stoi — miniatura i nazwa, żeby było widać, CO tam
-    /// jest, zanim się je podmieni. Wybrana zajęta pora, w której zapis wyprze
-    /// danie, ma na miniaturze znaczek zamiany w kolorze pory (i wiersz
-    /// „Zamiast” w stopce). Pora, pod którą przepis nie jest oznaczony, jest
+    /// Kafel pory: kafelek z ikoną w kolorze pory, nazwa i godzina — nic
+    /// więcej. Co zapis podmieni, mówi JEDNA karta „ZAMIENISZ” w stopce
+    /// (runda 20: wiersz dania w każdym kaflu był „brzydki”, a karta na dole
+    /// „wystarczy”). Pora, pod którą przepis nie jest oznaczony, jest
     /// przygaszona, ale da się ją wybrać.
-    private func slotTile(_ slot: MealSlot, compact: Bool, showsDishRow: Bool) -> some View {
+    private func slotTile(_ slot: MealSlot, compact: Bool) -> some View {
         let isSelected = slot == selectedSlot
         let fits = recipe.fits(slot)
         let replaced = isSelected ? conflictingMeal : nil
-        // Wyparte danie ma pierwszeństwo — to o nim kafel ma mówić.
         let taken = replaced ?? occupant(of: slot)
-        let others = max(0, mealStore.meals(for: selectedDate, slot: slot).count - 1)
         let time = sessionStore.mealSlotSchedule.time(for: slot)
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
 
@@ -711,19 +701,9 @@ struct AddToPlanSheet: View {
         } label: {
             Group {
                 if compact {
-                    compactSlotContent(
-                        slot,
-                        time: time,
-                        isSelected: isSelected,
-                        dish: showsDishRow ? slotDish(taken, others: others, slot: slot, replacing: replaced != nil, compact: true) : nil
-                    )
+                    compactSlotContent(slot, time: time, isSelected: isSelected)
                 } else {
-                    wideSlotContent(
-                        slot,
-                        time: time,
-                        isSelected: isSelected,
-                        dish: showsDishRow ? slotDish(taken, others: others, slot: slot, replacing: replaced != nil, compact: false) : nil
-                    )
+                    wideSlotContent(slot, time: time, isSelected: isSelected)
                 }
             }
             .opacity(fits ? 1 : 0.5)
@@ -735,9 +715,6 @@ struct AddToPlanSheet: View {
                 style: .tile
             )
             .contentShape(shape)
-            // Zmiana dnia podmienia dania w kaflach płynnie.
-            .animation(.smooth(duration: 0.25), value: taken?.id)
-            .animation(.smooth(duration: 0.25), value: replaced != nil)
         }
         .buttonStyle(PlanPressStyle(scale: 0.97))
         .accessibilityLabel(slotAccessibilityLabel(
@@ -749,45 +726,34 @@ struct AddToPlanSheet: View {
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// Poziomy kafel (1, 2 albo 4 pory): ikona obok nazwy i godziny, pod nimi
-    /// wiersz dania.
+    /// Poziomy kafel (1, 2 albo 4 pory): ikona obok nazwy i godziny.
     private func wideSlotContent(
         _ slot: MealSlot,
         time: String?,
-        isSelected: Bool,
-        dish: SlotDish?
+        isSelected: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 34)
+        HStack(spacing: 10) {
+            SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 34)
 
-                VStack(alignment: .leading, spacing: 1) {
-                    slotTitle(slot, size: 15, isSelected: isSelected)
+            VStack(alignment: .leading, spacing: 1) {
+                slotTitle(slot, size: 15, isSelected: isSelected)
 
-                    if let time {
-                        slotTime(time)
-                    }
+                if let time {
+                    slotTime(time)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            if let dish {
-                dish
-                    .transition(.opacity)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
     }
 
-    /// Pionowy kafel (3, 5 albo 6 pór): ikona nad nazwą i godziną, pod nimi
-    /// danie — wszystko wyśrodkowane.
+    /// Pionowy kafel (3, 5 albo 6 pór): ikona nad nazwą i godziną, wyśrodkowane.
     private func compactSlotContent(
         _ slot: MealSlot,
         time: String?,
-        isSelected: Bool,
-        dish: SlotDish?
+        isSelected: Bool
     ) -> some View {
         VStack(spacing: 6) {
             SCHeaderIconWell(icon: slot.icon, accent: slot.cozyAccent, size: 32)
@@ -799,33 +765,11 @@ struct AddToPlanSheet: View {
                     slotTime(time)
                 }
             }
-
-            if let dish {
-                dish
-                    .padding(.top, 2)
-                    .transition(.opacity)
-            }
         }
         .padding(.horizontal, 6)
         .padding(.top, 12)
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, minHeight: 88, alignment: .top)
-    }
-
-    private func slotDish(
-        _ meal: PlanMeal?,
-        others: Int,
-        slot: MealSlot,
-        replacing: Bool,
-        compact: Bool
-    ) -> SlotDish {
-        SlotDish(
-            recipe: meal?.recipe,
-            others: others,
-            accent: slot.cozyAccent,
-            replacing: replacing,
-            compact: compact
-        )
     }
 
     private func slotTitle(_ slot: MealSlot, size: CGFloat, isSelected: Bool) -> some View {
@@ -1200,95 +1144,6 @@ struct AddToPlanSheet: View {
         formatter.timeStyle = .none
         return formatter
     }()
-}
-
-// MARK: - Danie w kaflu pory
-
-/// Wiersz dania w kaflu pory „Dodaj do planu”: miniatura i nazwa tego, co już
-/// stoi w porze, albo przerywany kafelek i „Wolne”. Miniatura dania, które
-/// zapis wyprze, ma znaczek zamiany w kolorze pory, a druga linia mówi
-/// „Zamienisz” — albo „+1 więcej”, gdy w porze stoi kilka dań. Druga linia
-/// (i w pionowym kaflu dwie linie nazwy) jest zawsze zarezerwowana, więc
-/// kafle w rzędzie mają tę samą wysokość.
-private struct SlotDish: View {
-    let recipe: Recipe?
-    let others: Int
-    let accent: Color
-    let replacing: Bool
-    let compact: Bool
-
-    @Environment(\.colorScheme) private var scheme
-
-    private var thumbSize: CGFloat { compact ? 40 : 32 }
-    private var thumbRadius: CGFloat { compact ? 11 : 9 }
-
-    var body: some View {
-        if compact {
-            VStack(spacing: 5) {
-                thumb
-                label(alignment: .center)
-            }
-            .frame(maxWidth: .infinity)
-        } else {
-            HStack(spacing: 8) {
-                thumb
-                label(alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var thumb: some View {
-        if let recipe {
-            EditorialRecipeCover(recipe: recipe, size: thumbSize, cornerRadius: thumbRadius)
-                .overlay(alignment: .topTrailing) {
-                    if replacing {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 17, height: 17)
-                            .background(Circle().fill(accent))
-                            .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 1.5))
-                            .offset(x: 5, y: -5)
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
-                    }
-                }
-        } else {
-            RoundedRectangle(cornerRadius: thumbRadius, style: .continuous)
-                .strokeBorder(
-                    Color.scTileStroke(scheme),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                )
-                .frame(width: thumbSize, height: thumbSize)
-        }
-    }
-
-    private var secondary: String? {
-        if replacing { return "Zamienisz" }
-        if others > 0 { return "+\(others) więcej" }
-        return nil
-    }
-
-    private func label(alignment: HorizontalAlignment) -> some View {
-        VStack(alignment: alignment, spacing: 1) {
-            Text(recipe?.name ?? "Wolne")
-                .font(.system(size: compact ? 11.5 : 12.5, weight: .semibold))
-                .tracking(-0.1)
-                .foregroundStyle(recipe == nil ? Color.scFaint(scheme) : Color.scLabel(scheme))
-                .multilineTextAlignment(compact ? .center : .leading)
-                .lineLimit(compact ? 2 : 1, reservesSpace: true)
-                .truncationMode(.tail)
-                .contentTransition(.opacity)
-
-            // Linia zawsze w układzie — pusta jest tylko przezroczysta.
-            Text(secondary ?? " ")
-                .font(.system(size: 10.5, weight: .bold))
-                .foregroundStyle(replacing ? accent : Color.scMuted(scheme))
-                .lineLimit(1)
-                .opacity(secondary == nil ? 0 : 1)
-        }
-    }
 }
 
 // MARK: - Preview

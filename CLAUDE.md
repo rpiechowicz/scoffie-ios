@@ -122,9 +122,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają na niewybranej zakładce stać. Pasek ma JEDEN gest na całość: pigułka idzie za palcem
   (stuknięcie i przeciąganie w bok jak w iOS 26), zakładka zmienia się po puszczeniu, w transakcji
   z `disablesAnimations`. Nie dokładać przycisków, `matchedGeometryEffect` ani haptyki. Wejście na
-  zakładkę (24.09.2026, prośba Rafała) = SAMO krycie 0 → 1, 0,22 s, ustawiane w `NavigationMenu.tabSelection`
-  w tej samej transakcji co wybór z paska (stara zakładka znika cięciem, nowa wyłania się z `SCPageBackground`
-  pod zakładkami); bez Asystenta (własne powitanie), bez przy Reduce Motion, zmiany z kodu = cięcie.
+  zakładkę (24.09.2026, prośba Rafała) = PRZENIKANIE: stara zakładka stoi pod spodem w pełnym kryciu, nowa
+  nabiera krycia 0 → 1 NAD nią (0,2 s), krycie startowe w tej samej transakcji co wybór z paska
+  (`NavigationMenu.tabSelection`, `leavingTab`); tło i wspólne elementy nie drgają. Runda 18 wyłaniała nową
+  z gołego tła przy zgaszonej starej — „wygląda, jakby cały widok się zmieniał”. Bez Asystenta (własne
+  powitanie), bez przy Reduce Motion, zmiany z kodu = cięcie.
   NIE wracać do `keyframeAnimator`/przesunięcia na całej stronie (`scTabEntrance`, runda 16) — Rafał: „totalnie
   zbugowane, przeskakuje”: ruszało od klatki w pełnym kryciu i przeliczało ekran zakładki w każdej klatce. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
   główny `ScrollView` zakładki melduje kierunek przez `scTracksTabBarCompaction()`; rezerwa
@@ -405,7 +407,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (podpis „TEN TYDZIEŃ · …”, „Wróć do dziś”, strzałki 26 pt, przejeżdżające podkreślenie, przeciąganie
   w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = od 24.09 kafle pór, układ wg liczby pór
   (`SlotTileLayout`: 1–2 poziome w rzędzie, 3 pionowe obok siebie, 4 = 2 × 2 poziome, 5–6 = 3 kolumny pionowe;
-  ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule`; od rundy 18 pod nimi danie, które już tam stoi — miniatura 32/40 pt + nazwa (`SlotDish`), wolna pora = przerywany kafelek i „Wolne”, wiersz jest w KAŻDYM kaflu, gdy choć jedna pora zajęta (równe wysokości) — a podmiana = znaczek zamiany na miniaturze + „Zamienisz” w kaflu i karta „ZAMIENISZ · danie” ze zdjęciem nad zdaniem stopki (18 pt miniatura w rogu była za mała: „nie widać, co tam jest”);
+  ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule` — i NIC więcej (runda 20: danie w kaflach „brzydkie”); podmianę mówi JEDNA karta „ZAMIENISZ · danie” ze zdjęciem nad zdaniem stopki;
   wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
   podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
