@@ -122,9 +122,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają na niewybranej zakładce stać. Pasek ma JEDEN gest na całość: pigułka idzie za palcem
   (stuknięcie i przeciąganie w bok jak w iOS 26), zakładka zmienia się po puszczeniu, w transakcji
   z `disablesAnimations`. Nie dokładać przycisków, `matchedGeometryEffect` ani haptyki. Wejście na
-  zakładkę (od 24.09.2026, prośba Rafała) = JEDEN modyfikator `scTabEntrance` (`Components/SCTabEntrance.swift`):
-  krycie 0 → 1 i 8 pt z dołu, 0,28 s, tylko przy zmianie na aktywną (nie pod loaderem), bez Asystenta
-  (ma własne powitanie), stoi przy Reduce Motion; pod zakładkami leży `SCPageBackground`. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
+  zakładkę (24.09.2026, prośba Rafała) = SAMO krycie 0 → 1, 0,22 s, ustawiane w `NavigationMenu.tabSelection`
+  w tej samej transakcji co wybór z paska (stara zakładka znika cięciem, nowa wyłania się z `SCPageBackground`
+  pod zakładkami); bez Asystenta (własne powitanie), bez przy Reduce Motion, zmiany z kodu = cięcie.
+  NIE wracać do `keyframeAnimator`/przesunięcia na całej stronie (`scTabEntrance`, runda 16) — Rafał: „totalnie
+  zbugowane, przeskakuje”: ruszało od klatki w pełnym kryciu i przeliczało ekran zakładki w każdej klatce. Przy przewijaniu w dół pasek zwija się do samych ikon (Revolut):
   główny `ScrollView` zakładki melduje kierunek przez `scTracksTabBarCompaction()`; rezerwa
   miejsca pod treścią (`scReservesTabBarSpace()`, WEWNĄTRZ `NavigationStack`) jest stała i schodzi
   do zera przy klawiaturze.
@@ -226,6 +228,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `SCSessionCurtain` (`Components/`, własne okno nad arkuszami, pod toastami) — zasłona w kolorze tła
   w górę, `ScoffieApp.showRootScreen` przestawia korzeń bez animacji (na AKTUALNY cel), zasłona w dół.
   Korzeń nie ma już własnego crossfade'u (pulpit wjeżdżał z loaderem i prześwitywał Kalendarz).
+  WYJĄTEK — wejście do aplikacji (logowanie / kreator → pulpit): ZAWSZE loader startu, bez zasłony
+  (`enterAppUnderLoader`, runda 18 — Rafał: „po logowaniu ZAWSZE ma się włączyć loading”): loader
+  przenika się nad logowaniem (`entryLoaderHold`), korzeń przechodzi pod nim, loader schodzi po całej fali
+  kafelków i `startupPhase == .ready` (sufit 12 s). Nie uzależniać go od fazy startu — bywała gotowa, zanim
+  ktokolwiek zobaczył loader, i zasłona schodziła prosto na Kalendarz.
   Koniec sesji z ręki użytkownika = `SessionStore.signOut()` / `deleteAccount()`: najpierw
   `await sessionCurtain.cover()`, dopiero potem czyszczenie `UserDefaults` i store. Gołe `logout()`
   zostaje dla wylogowań wymuszonych (odmowa serwera, cofnięte Apple ID).
@@ -398,10 +405,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (podpis „TEN TYDZIEŃ · …”, „Wróć do dziś”, strzałki 26 pt, przejeżdżające podkreślenie, przeciąganie
   w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = od 24.09 kafle pór, układ wg liczby pór
   (`SlotTileLayout`: 1–2 poziome w rzędzie, 3 pionowe obok siebie, 4 = 2 × 2 poziome, 5–6 = 3 kolumny pionowe;
-  ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule`, miniatura dania, które już tam stoi, w rogu;
+  ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule`; od rundy 18 pod nimi danie, które już tam stoi — miniatura 32/40 pt + nazwa (`SlotDish`), wolna pora = przerywany kafelek i „Wolne”, wiersz jest w KAŻDYM kaflu, gdy choć jedna pora zajęta (równe wysokości) — a podmiana = znaczek zamiany na miniaturze + „Zamienisz” w kaflu i karta „ZAMIENISZ · danie” ze zdjęciem nad zdaniem stopki (18 pt miniatura w rogu była za mała: „nie widać, co tam jest”);
   wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
-  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” /
-  „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
+  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,
   nie `stroke` (clip zjadał pół obwódki). `EditorialPrimaryActionButton` roluje tytuł (`numericText`) —
