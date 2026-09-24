@@ -58,39 +58,65 @@ struct AssistantView: View {
     @State private var showPaywall = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
-    /// „Co potrafi asystent" — z menu, z bramki zgody i z onboardingu.
+    /// „Co potrafi asystent" — z menu.
     @State private var showCapabilities = false
-    /// „Jak działa asystent" — te same karty co onboarding, z menu.
+    /// „Jak działa asystent" — te same strony co wprowadzenie, z menu.
     @State private var showHowItWorks = false
-    /// Hero „Poznaj asystenta" (krok 0) — raz, przed pierwszą zgodą. Po
-    /// cofnięciu zgody użytkownik wraca prosto do kroku „Zgoda". Flagi
-    /// kasuje `AssistantIntroState.reset()` przy wylogowaniu.
+    /// Ktoś doszedł do zgody (przez „Dalej” albo „Pomiń”) — bez zgody wraca
+    /// się prosto do niej, nie do powitania. Flagi kasuje
+    /// `AssistantIntroState.reset()` przy wylogowaniu.
     @AppStorage(AssistantIntroState.welcomeSeenKey) private var welcomeSeen = false
-    /// Onboarding pokazywany raz, tuż po włączeniu zgody.
+    /// Wprowadzenie zakończone zgodą.
     @AppStorage(AssistantIntroState.onboardingSeenKey) private var onboardingSeen = false
-    /// Krok przepływu startowego wybrany ręcznie (Dalej/Wstecz). `nil` =
-    /// wyliczany ze stanu zgód i flag (`currentStep`). Nie jest
-    /// zapamiętywany: po zabiciu aplikacji user wraca na początek
-    /// niedokończonego etapu, nie w środek.
+    /// Krok wprowadzenia wybrany ręcznie (Dalej/Wstecz). `nil` = wyliczany
+    /// ze stanu zgód i flag (`currentStep`). Nie jest zapamiętywany: po
+    /// zabiciu aplikacji user wraca na początek niedokończonego etapu, nie
+    /// w środek.
     @State private var introStep: IntroStep?
-    /// Ostatnio oglądana karta „Poznaj" — „Wstecz" ze zgody wraca na nią.
-    @State private var introCard = 0
     /// Kierunek ostatniego ruchu w przepływie: 1 = dalej, −1 = wstecz.
     /// Treść wjeżdża z krawędzi zgodnej z kierunkiem (jak w przewodniku).
     @State private var introDirection = 1
-    /// Potwierdzenia z kroku „Zgoda" — tu, bo „Włącz asystenta" siedzi
-    /// w stopce przepływu, poza widokiem bramki.
+    /// Potwierdzenia z kroku „Zgoda" — tu, bo „Włącz Asystenta" siedzi
+    /// w stopce przepływu, poza widokiem zgody.
     @State private var consentDraft = AssistantConsentDraft()
+    /// Pokolenie strony wprowadzenia. Zakładki budują się POD loaderem
+    /// startowym i żyją naraz, więc pisanie tytułu, wejście znaku i scenka
+    /// pierwszej strony zagrałyby, zanim ktokolwiek otworzy zakładkę.
+    /// Pierwsze wejście na zakładkę podbija licznik — strona rodzi się na
+    /// nowo (bez animowanej transakcji, więc bez wjazdu z boku) i gra na
+    /// oczach. Kolejne wejścia już nie: wprowadzenie nie pisze się od nowa
+    /// przy każdym powrocie na zakładkę.
+    @State private var introGeneration = 0
+    @State private var introPlayedOnScreen = false
 
+    /// Wprowadzenie v2 (24.09.2026): cztery ekrany zamiast sześciu, zgoda
+    /// NA KOŃCU — decyduje ktoś, kto już wie, o co chodzi, a po zgodzie od
+    /// razu jest rozmowa. Makieta: Claude Design „Scoffie — Asystent ·
+    /// Wprowadzenie v2”.
     enum IntroStep: Equatable {
-        case hero, consent, cards
+        case hello, plan, trust, consent
 
-        /// Kolejność w przepływie — z niej liczy się kierunek przejścia.
+        /// Kolejność w przepływie — z niej liczy się kierunek przejścia
+        /// i numer na pasku kroków (powitanie ma zamiast paska „Pomiń”).
         var order: Int {
             switch self {
-            case .hero: return 0
-            case .consent: return 1
-            case .cards: return 2
+            case .hello: return 0
+            case .plan: return 1
+            case .trust: return 2
+            case .consent: return 3
+            }
+        }
+
+        /// Ile odcinków ma pasek kroków — wszystko poza powitaniem.
+        static let progressTotal = 3
+
+        /// Strona z `AssistantIntroPages`; zgoda ma własny widok.
+        var page: AssistantIntroPage? {
+            switch self {
+            case .hello: return .hello
+            case .plan: return .plan
+            case .trust: return .trust
+            case .consent: return nil
             }
         }
     }
@@ -147,21 +173,25 @@ struct AssistantView: View {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                // Przepływ startowy to STAN ZAKŁADKI, nie arkusze: hero →
-                // Zgoda → Poznaj → Start → rozmowa. Nagłówek i tab bar stoją,
-                // wymienia się tylko treść — użytkownik czyta to jako ten sam
-                // ekran w następnym kroku, nie nowy widok w stosie nawigacji.
-                //
-                // Wewnątrz przepływu treść jeździ na bok jak w przewodniku
-                // „Poznaj aplikację", a stopka (`AssistantIntroFooter`) stoi
-                // pod nią poza animowanym obszarem. Pionowe przenikanie
-                // zostaje tylko na wejściu do rozmowy.
-                Group {
-                    if let step = activeIntroStep {
-                        introFlow(step)
-                    } else {
+            // Wprowadzenie to STAN ZAKŁADKI, nie arkusze: Powitanie →
+            // Planowanie → Ty decydujesz → Zgoda → rozmowa. Tab bar stoi,
+            // wymienia się treść; wewnątrz wprowadzenia strony jadą na bok jak
+            // w przewodniku „Poznaj aplikację", a stopka (`SCStepFooter`) stoi
+            // pod nimi poza animowanym obszarem. Pionowe przenikanie zostaje
+            // tylko na wejściu do rozmowy.
+            ZStack {
+                if let step = activeIntroStep {
+                    // BEZ nagłówka zakładki (v2, 24.09.2026): strona zaczyna
+                    // się od góry, jak krok przewodnika — nad „Cześć! Jestem
+                    // Twoim Asystentem” nie stoi drugi tytuł „Asystent”,
+                    // a scenka i punkty mieszczą się bez przewijania. Górny
+                    // bezpieczny obszar zostaje (bez `ignoresSafeArea`), więc
+                    // treść siada pod Dynamic Island.
+                    introFlow(step)
+                        .transition(.assistantIntroStep)
+                } else {
+                    VStack(spacing: 0) {
+                        header
                         // Pole jako wcięcie bezpiecznego obszaru, nie wiersz
                         // pod listą: rozmowa przewija się POD szkłem pola
                         // i widać ją przez nie — tak samo jak pod dolnym menu,
@@ -170,23 +200,29 @@ struct AssistantView: View {
                         conversation
                             .safeAreaInset(edge: .bottom, spacing: 0) { composer }
                     }
+                    // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam,
+                    // gdzie na pozostałych zakładkach. Tam robi to ScrollView
+                    // z tym samym modyfikatorem; tutaj nagłówek jest przypięty
+                    // poza scrollem, więc modyfikator idzie na cały VStack.
+                    //
+                    // Świadomie tylko region `.container` i tylko krawędź
+                    // `.top`: bez tego zawężenia klawiatura przestałaby
+                    // podnosić pole wiadomości, a composer wszedłby pod pasek
+                    // zakładek. NIE skracać do `.ignoresSafeArea()`.
+                    .ignoresSafeArea(.container, edges: .top)
+                    .transition(.assistantIntroStep)
                 }
-                .transition(.assistantIntroStep)
-                .animation(.easeOut(duration: 0.28), value: activeIntroStep == nil)
             }
+            // Trwały kontener (nie `Group`, który rozdaje modyfikatory
+            // gałęziom): wymiana wprowadzenie ↔ rozmowa animuje się także
+            // bez `withAnimation` (cofnięcie zgody z menu), a haptyka gra
+            // na wejściu i wyjściu z wprowadzenia, nie tylko między krokami.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .animation(.easeOut(duration: 0.28), value: activeIntroStep == nil)
             .sensoryFeedback(.impact(flexibility: .soft), trigger: activeIntroStep)
-            // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam, gdzie na
-            // pozostałych zakładkach. Tam robi to ScrollView z tym samym
-            // modyfikatorem; tutaj nagłówek jest przypięty poza scrollem, więc
-            // modyfikator idzie na cały VStack.
-            //
-            // Świadomie tylko region `.container` i tylko krawędź `.top`: bez
-            // tego zawężenia klawiatura przestałaby podnosić pole wiadomości,
-            // a composer wszedłby pod pasek zakładek. NIE skracać do
-            // `.ignoresSafeArea()`.
-            .ignoresSafeArea(.container, edges: .top)
-            // Miejsce pod własnym paskiem zakładek: pole wiadomości siada
-            // nad nim, a przy klawiaturze rezerwa schodzi do zera.
+            // Miejsce pod własnym paskiem zakładek: pole wiadomości i stopka
+            // wprowadzenia siadają nad nim, a przy klawiaturze rezerwa
+            // schodzi do zera.
             .scReservesTabBarSpace()
         }
         .task {
@@ -200,6 +236,10 @@ struct AssistantView: View {
         // loaderem startowym.
         .onChange(of: isActiveTab, initial: true) { _, active in
             store.setVisible(active)
+            if active, !introPlayedOnScreen, activeIntroStep != nil {
+                introPlayedOnScreen = true
+                introGeneration += 1
+            }
             // Powrót na zakładkę po przerwie: czysta kartka zamiast
             // dopisywania do rozmowy sprzed pół dnia.
             if active { rotateIfStale() }
@@ -287,15 +327,7 @@ struct AssistantView: View {
             )
         }
         .sheet(isPresented: $showHowItWorks) {
-            AssistantHowItWorksView(
-                presentation: .sheet,
-                onFinish: { onboardingSeen = true },
-                onAsk: { text in askFromSheet(text) },
-                onShowCapabilities: {
-                    showHowItWorks = false
-                    showCapabilities = true
-                }
-            )
+            AssistantHowItWorksView()
         }
         .sheet(item: $reporting) { message in
             AssistantReportSheet(message: message) { reason, comment in
@@ -335,19 +367,20 @@ struct AssistantView: View {
             markMood: store.isSending ? .thinking : .idle,
             markCheer: answerCheer
         ) {
-            // W przepływie startowym (przed zgodą albo w kartach) menu ma
-            // tylko to, co wtedy działa — „Nowa rozmowa" czy „Usuń historię"
-            // bez zgody kończyły się 403 albo pustym arkuszem.
+            // Wprowadzenie stoi bez nagłówka, ale krok „Zgoda” bez magazynu
+            // zgód spada do rozmowy — wtedy menu ma tylko to, co działa bez
+            // zgody. „Nowa rozmowa" czy „Usuń historię" kończyły się 403
+            // albo pustym arkuszem.
             let inIntro = currentStep != nil
             if !inIntro {
                 Button { Task { await store.startNewConversation() } } label: { Label("Nowa rozmowa", systemImage: "plus") }
                 Button { showConversations = true } label: { Label("Historia rozmów", systemImage: "clock") }
             }
-            Button { showCapabilities = true } label: { Label("Co potrafi asystent", systemImage: "rectangle.stack") }
-            Button { showHowItWorks = true } label: { Label("Jak działa asystent", systemImage: "questionmark.bubble") }
+            Button { showCapabilities = true } label: { Label("Co potrafi Asystent", systemImage: "rectangle.stack") }
+            Button { showHowItWorks = true } label: { Label("Jak działa Asystent", systemImage: "questionmark.bubble") }
             if !inIntro {
                 Button { showMemory = true } label: { Label("Pamięć domu", systemImage: "brain.head.profile") }
-                Button { showUsage = true } label: { Label("Limity asystenta", systemImage: "chart.bar") }
+                Button { showUsage = true } label: { Label("Limity Asystenta", systemImage: "chart.bar") }
             }
             Button { showConsentReview = true } label: { Label("Prywatność i zgoda", systemImage: "lock.shield") }
             if !inIntro {
@@ -361,7 +394,7 @@ struct AssistantView: View {
         .animation(.smooth(duration: 0.25), value: headerMode)
     }
 
-    // MARK: - Przepływ startowy
+    // MARK: - Wprowadzenie
 
     /// Krok do narysowania; `nil` = rozmowa. Krok „Zgoda" bez magazynu zgód
     /// nie ma czego pokazać — wtedy też rozmowa.
@@ -371,105 +404,107 @@ struct AssistantView: View {
         return step
     }
 
-    @ViewBuilder
     private func introFlow(_ step: IntroStep) -> some View {
-        ZStack {
-            introContent(step)
-                .id(step)
-                .transition(.horizontalStep(direction: introDirection))
-        }
-        .animation(.easeInOut(duration: 0.34), value: step)
+        VStack(spacing: 0) {
+            ZStack {
+                introContent(step)
+                    .id("\(step.order)-\(introGeneration)")
+                    .transition(.horizontalStep(direction: introDirection))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.34), value: step)
 
-        introFooter(step)
+            introFooter(step)
+        }
     }
 
     @ViewBuilder
     private func introContent(_ step: IntroStep) -> some View {
-        switch step {
-        case .hero:
-            AssistantWelcomeView()
-        case .consent:
-            if let consents = sessionStore.consentStore {
-                AssistantConsentGateView(
-                    consents: consents,
-                    source: "IOS_ASSISTANT_GATE",
-                    presentation: .inline,
-                    draft: $consentDraft
-                )
-            }
-        case .cards:
-            AssistantHowItWorksView(
+        if let page = step.page {
+            AssistantIntroPageView(page: page)
+        } else if let consents = sessionStore.consentStore {
+            AssistantConsentGateView(
+                consents: consents,
+                source: "IOS_ASSISTANT_GATE",
                 presentation: .inline,
-                step: $introCard,
-                onFinish: { startConversation() },
-                onSkip: { startConversation() },
-                onAsk: { text in
-                    finishIntro()
-                    ask(text)
-                },
-                onShowCapabilities: { showCapabilities = true }
+                draft: $consentDraft
             )
         }
     }
 
-    /// Jedna stopka na trzy kroki — ta sama geometria, zmienia się gniazdo,
-    /// tytuł i obecność „Wstecz".
-    @ViewBuilder
+    /// JEDNA stopka na cały przepływ — jak w onboardingu aplikacji
+    /// (`WelcomeView`): pasek kroków nad przyciskiem, „Wstecz” w jednej linii
+    /// z „Dalej” (`.besidePrimary`, Rafał 24.09.2026: „button wstecz daj taki
+    /// sam jak na onboardingu aplikacji”). Jedna instancja, więc odcinek paska
+    /// nalewa się w miejscu, krążek „Wstecz” wskakuje sprężyną, a tytuł
+    /// przycisku roluje („Dalej” → „Włącz Asystenta”). Powitanie ma zamiast
+    /// paska „Pomiń wprowadzenie” — prosto do zgody, bo bez niej Asystent
+    /// i tak nie ruszy.
     private func introFooter(_ step: IntroStep) -> some View {
+        let consents = sessionStore.consentStore
+        let granted = consents?.assistantGranted == true
+        let busy = consents?.isBusy == true
+        let canGrant = AssistantConsentGateView.canGrant(consentDraft)
+        let isConsent = step == .consent
+
+        return SCStepFooter(
+            slot: step == .hello
+                ? .link("Pomiń wprowadzenie")
+                : .progress(step: step.order, total: IntroStep.progressTotal),
+            onSlotTap: { goToStep(.consent) { welcomeSeen = true } },
+            notice: isConsent ? consentDraft.errorMessage : nil,
+            showsBack: step != .hello,
+            onBack: { introBack(from: step) },
+            backPlacement: .besidePrimary,
+            primaryTitle: introPrimaryTitle(step, granted: granted),
+            primaryIcon: introPrimaryIcon(step, granted: granted),
+            isPrimaryEnabled: !isConsent || granted || (canGrant && !busy),
+            isPrimaryLoading: isConsent && busy,
+            primaryHint: isConsent && !granted && !canGrant ? "Najpierw zaznacz oba potwierdzenia" : nil,
+            onPrimary: { introForward(from: step, granted: granted) }
+        )
+    }
+
+    private func introPrimaryTitle(_ step: IntroStep, granted: Bool) -> String {
         switch step {
-        case .hero:
-            AssistantIntroFooter(
-                slot: .link("Zobacz wszystko, co potrafi"),
-                onSlotTap: { showCapabilities = true },
-                primaryTitle: "Zaczynamy",
-                primaryTrailingIcon: "arrow.right",
-                onPrimary: { goToStep(.consent) { welcomeSeen = true } }
-            )
-        case .consent:
-            let granted = sessionStore.consentStore?.assistantGranted == true
-            let busy = sessionStore.consentStore?.isBusy == true
-            let canGrant = AssistantConsentGateView.canGrant(consentDraft)
-            AssistantIntroFooter(
-                slot: .stepper(step: AssistantIntroSteps.consent, total: AssistantIntroSteps.total),
-                notice: consentDraft.errorMessage,
-                showsBack: true,
-                onBack: { goToStep(.hero) },
-                primaryTitle: granted ? "Dalej" : "Włącz asystenta",
-                primaryLeadingIcon: granted ? nil : "sparkles",
-                primaryTrailingIcon: granted ? "chevron.right" : nil,
-                isPrimaryEnabled: granted || (canGrant && !busy),
-                isPrimaryLoading: busy,
-                primaryHint: granted || canGrant ? nil : "Najpierw zaznacz oba potwierdzenia",
-                onPrimary: {
-                    if granted { continueAfterConsent() } else { grantConsent() }
-                }
-            )
-        case .cards:
-            let isLast = introCard >= AssistantCapabilities.onboarding.count - 1
-            AssistantIntroFooter(
-                slot: .stepper(step: AssistantIntroSteps.card(introCard), total: AssistantIntroSteps.total),
-                showsBack: true,
-                onBack: {
-                    if introCard > 0 {
-                        withAnimation(.easeInOut(duration: 0.3)) { introCard -= 1 }
-                    } else {
-                        goToStep(.consent)
-                    }
-                },
-                primaryTitle: isLast ? "Zaczynajmy" : "Dalej",
-                primaryTrailingIcon: isLast ? nil : "chevron.right",
-                onPrimary: {
-                    if isLast {
-                        startConversation()
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.3)) { introCard += 1 }
-                    }
-                }
-            )
+        case .hello: return "Zobacz, jak działa"
+        case .plan, .trust: return "Dalej"
+        case .consent: return granted ? "Zaczynamy" : "Włącz Asystenta"
         }
     }
 
-    /// Zapis zgody z przycisku w stopce; po sukcesie — dalej w przepływie.
+    private func introPrimaryIcon(_ step: IntroStep, granted: Bool) -> String {
+        switch step {
+        case .hello, .plan, .trust: return "arrow.right"
+        case .consent: return granted ? "checkmark" : "sparkles"
+        }
+    }
+
+    private func introForward(from step: IntroStep, granted: Bool) {
+        switch step {
+        case .hello:
+            goToStep(.plan)
+        case .plan:
+            goToStep(.trust)
+        case .trust:
+            // Dojście do zgody = wprowadzenie obejrzane: bez zgody następnym
+            // razem zakładka otworzy się od razu na niej.
+            goToStep(.consent) { welcomeSeen = true }
+        case .consent:
+            if granted { continueAfterConsent() } else { grantConsent() }
+        }
+    }
+
+    private func introBack(from step: IntroStep) {
+        switch step {
+        case .hello: break
+        case .plan: goToStep(.hello)
+        case .trust: goToStep(.plan)
+        case .consent: goToStep(.trust)
+        }
+    }
+
+    /// Zapis zgody z przycisku w stopce; po sukcesie — rozmowa.
     private func grantConsent() {
         guard let consents = sessionStore.consentStore else { return }
         Task { @MainActor in
@@ -479,23 +514,19 @@ struct AssistantView: View {
         }
     }
 
-    /// Który krok przepływu startowego pokazać. Bez zgody zawsze hero albo
-    /// zgoda (ręczny wybór tylko między nimi); ze zgodą — to, co user wybrał
-    /// przyciskami, a bez wyboru: rozmowa. `nil` = rozmowa.
+    /// Który krok wprowadzenia pokazać. Bez zgody: to, co user wybrał
+    /// przyciskami, a bez wyboru powitanie albo — gdy już raz doszedł do
+    /// zgody — od razu zgoda. Ze zgodą: to, co wybrał przyciskami (zgoda
+    /// przyszła w trakcie, np. z drugiego telefonu), a bez wyboru rozmowa.
+    /// `nil` = rozmowa.
     ///
-    /// ZGODA NA SERWERZE JEST DOWODEM PRZEJŚCIA PRZEPŁYWU. Karty „Poznaj"
-    /// pokazują się raz, tuż po włączeniu zgody — wchodzi się w nie jawnie
-    /// (`continueAfterConsent` → `goToStep(.cards)`), nigdy z tego miejsca.
-    /// Wcześniej bez lokalnej flagi wracały tu karty, a flagi kasuje
-    /// wylogowanie: każde ponowne logowanie pokazywało onboarding od nowa,
-    /// choć zgoda była zapisana na serwerze.
+    /// ZGODA NA SERWERZE JEST DOWODEM PRZEJŚCIA WPROWADZENIA. Flagi lokalne
+    /// kasuje wylogowanie — gdyby o wprowadzeniu decydowały same flagi, każde
+    /// ponowne logowanie pokazywałoby je od nowa, choć zgoda jest zapisana.
     private var currentStep: IntroStep? {
         if gateActive {
-            switch introStep {
-            case .hero: return .hero
-            case .consent: return .consent
-            default: return welcomeSeen ? .consent : .hero
-            }
+            if let introStep { return introStep }
+            return welcomeSeen ? .consent : .hello
         }
         return introStep
     }
@@ -515,29 +546,19 @@ struct AssistantView: View {
         }
     }
 
-    /// Po zgodzie: karty tylko za pierwszym razem. Kto cofnął zgodę i włącza
-    /// ją ponownie (albo dostał 403 w środku rozmowy), wraca prosto do
-    /// rozmowy — onboarding i „Od czego zaczniemy?" zostają pod menu ⋯.
+    /// Po zgodzie — prosto do rozmowy (zgoda jest ostatnim krokiem). Tak samo
+    /// dla kogoś, kto cofnął zgodę i włącza ją ponownie, i przy 403 w środku
+    /// rozmowy.
     private func continueAfterConsent() {
         // Zdejmuje blokadę 403 (`needsConsent`) także wtedy, gdy zgoda była
         // już zapisana po stronie serwera, a store o tym nie wiedział.
-        let unlock = {
-            store.consentGranted()
-            if store.retryText != nil { retry() }
-        }
-        if onboardingSeen {
-            unlock()
-            finishIntro()
-        } else {
-            // Odblokowanie zmienia `currentStep` — musi iść razem z krokiem,
-            // po ustawieniu kierunku (patrz `goToStep`).
-            goToStep(.cards, alongside: unlock)
-        }
+        store.consentGranted()
+        if store.retryText != nil { retry() }
+        finishIntro()
     }
 
     /// Przykład stuknięty w arkuszu z menu. Bez zgody nie ma czego wysyłać
-    /// (serwer odpowie 403) — zamiast tego prowadzi do kroku „Zgoda";
-    /// w trakcie kart kończy przepływ i wysyła.
+    /// (serwer odpowie 403) — zamiast tego prowadzi do kroku „Zgoda".
     private func askFromSheet(_ text: String) {
         if gateActive {
             goToStep(.consent) { welcomeSeen = true }
@@ -547,22 +568,20 @@ struct AssistantView: View {
         ask(text)
     }
 
-    /// „Zaczynajmy" / „Pomiń": rozmowa z kursorem w polu.
-    private func startConversation() {
-        finishIntro()
-        // Pole pojawia się razem z rozmową — fokus dopiero, gdy już jest
-        // w hierarchii.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { isComposerFocused = true }
-    }
-
-    /// Koniec przepływu: flagi na stałe, rozmowa. „Co potrafi" i „Jak działa"
-    /// zostają pod menu ⋯.
+    /// Koniec wprowadzenia: flagi na stałe, rozmowa — i NIC więcej. Do v2
+    /// „Zaczynajmy” ustawiało po 0,35 s fokus w polu wiadomości i powitanie
+    /// wjeżdżało razem z klawiaturą (Rafał 24.09.2026: „odrazu pojawia mi się
+    /// klawiatura, a nie chcę”). Pole czeka na stuknięcie, powitanie ma
+    /// własne akcje. „Co potrafi” i „Jak działa” zostają pod menu ⋯.
     private func finishIntro() {
         withAnimation(.easeOut(duration: 0.28)) {
             introStep = nil
             welcomeSeen = true
             onboardingSeen = true
         }
+        // Potwierdzenia nie przechodzą na następny raz — po cofnięciu zgody
+        // pola wyboru mają stać puste, a nie „pamiętać” poprzednią decyzję.
+        consentDraft = AssistantConsentDraft()
     }
 
     /// Bez zgody (403 z serwera albo stan z `/me/consents`) zakładka pokazuje
@@ -578,9 +597,9 @@ struct AssistantView: View {
         return !(consents.isLoaded && consents.assistantGranted)
     }
 
-    /// Bramka i onboarding to nie rozmowa — nagłówek zostaje duży, nawet
-    /// gdy konto ma stare rozmowy (tytuł starej rozmowy nad „Zanim
-    /// zaczniemy" wyglądał na błąd).
+    /// Bez zgody to nie rozmowa — nagłówek zostaje duży, nawet gdy konto
+    /// ma stare rozmowy (tytuł starej rozmowy nad zakładką bez zgody
+    /// wyglądał na błąd).
     private var headerMode: AssistantHeaderMode {
         (store.messages.isEmpty || currentStep != nil) ? .large : .compact(title: conversationTitle)
     }
