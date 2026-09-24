@@ -418,7 +418,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`PlanPersonSwitcher`: awatary, wybrana osoba z imieniem na tincie swojego koloru): dania, suma
   i CEL tej osoby. Cele domowników przychodzą z serwera w `households:memberPreferences`
   (`targets: {calorieGoal, macros}` — policzone w `toMemberContext`, BEZ sylwetki) →
-  `HouseholdMemberPreferences.targets`. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
+  `HouseholdMemberPreferences.targets`. Domownik bez celu (albo bez makr) dostaje cel z domyślnej
+  sylwetki — rocznik 2000, 70 kg, 170 cm, bez płci (BMR −78), aktywność 2–3 — w JEDNYM miejscu:
+  `DailyNutritionTargets.forMember` (runda 17). Arkusz ma dla każdej osoby tę samą strukturę: tor
+  legendy stoi zawsze (bez celu niewidoczny), miejsce na podpowiedź o makrach trzyma się, gdy
+  potrzebuje jej ktokolwiek, imię w przełączniku ma ramę najdłuższego imienia (kapsuła nie zmienia
+  szerokości), a podtytuł z imieniem przenika (`subtitleTransition: .opacity`), zamiast rolować litery. Przełącznik (runda 12, wróciła wersja z rundy 9 dopracowana):
   kompaktowa kapsuła OBOK krzyżyka (`accessory` nagłówka, runda 13: mniejsza — awatary 22 pt, wysokość 26, imię 12 pt) z obwódką w kolorze osoby,
   wybrana osoba rozwija imię na tincie (`matchedGeometryEffect`, sprężyna); podtytuł mówi, czyj to
   dzień („Twój dzień · 3 z 4 posiłków” / „Dzień: Ania · …”). Pełnoszerokościowe zakładki z rundy 11

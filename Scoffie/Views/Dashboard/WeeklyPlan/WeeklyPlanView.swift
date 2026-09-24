@@ -237,11 +237,17 @@ struct WeeklyPlanView: View {
     }
 
     /// Cel osoby, której dzień liczy pigułka: mój z Ustawień, domownika —
-    /// z serwera. Zanim cel domownika przyjdzie, pigułka mierzy do mojego.
+    /// z serwera, a bez danych z domyślnej sylwetki
+    /// (`DailyNutritionTargets.forMember`). Pigułka ma dla każdego te same
+    /// cztery tory — przełączenie osoby tylko przetacza liczby.
     private func dailyTargets(for personId: String?) -> DailyNutritionTargets {
-        guard let personId, personId != sessionStore.currentUserId,
-              let theirs = memberPreferences[personId]?.targets else { return dailyTargets }
-        return theirs
+        guard let personId, personId != sessionStore.currentUserId else { return dailyTargets }
+        return memberTargets(personId)
+    }
+
+    /// Cel domownika zawsze pełny — patrz `DailyNutritionTargets.forMember`.
+    private func memberTargets(_ memberId: String) -> DailyNutritionTargets {
+        DailyNutritionTargets.forMember(memberPreferences[memberId]?.targets)
     }
 
     /// Cele domowników z serwera. Pusta odpowiedź (błąd, anulowanie) NIE
@@ -278,7 +284,7 @@ struct WeeklyPlanView: View {
                 name: HouseholdMemberStyle.shortName(member.displayName),
                 member: member,
                 nutrition: dayNutrition(on: selectedDate, for: member.id),
-                targets: isMe ? dailyTargets : memberPreferences[member.id]?.targets,
+                targets: isMe ? dailyTargets : memberTargets(member.id),
                 isMe: isMe
             )
         }

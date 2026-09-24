@@ -54,3 +54,42 @@ struct DailyNutritionTargets: Equatable {
         )
     }
 }
+
+// MARK: - Domyślna sylwetka domownika
+
+extension DailyNutritionTargets {
+    /// Sylwetka, z której liczymy cel osoby, o której nic nie wiemy:
+    /// rocznik 2000, 70 kg, 170 cm, bez płci (BMR ze środka wzoru, −78),
+    /// 2–3 treningi w tygodniu. Nie jest niczyim prawdziwym celem — ma tylko
+    /// sprawić, że „Cel dnia” domownika bez danych wygląda tak samo jak
+    /// każdy inny: kalorie i trzy makra z torami, zamiast wierszy bez prawej
+    /// strony i arkusza, który zmienia wysokość przy przełączeniu osoby.
+    static let fallbackMetrics = BodyMetrics(
+        heightCm: 170,
+        weightKg: 70,
+        yearOfBirth: 2000,
+        activityRaw: ActivityLevel.light.rawValue
+    )
+
+    /// Cel z domyślnej sylwetki: kalorie z niej (albo podane), makra z niej.
+    static func fallback(kcal: Int? = nil, goal: UserGoal = .healthy) -> DailyNutritionTargets {
+        guard let metrics = fallbackMetrics else {
+            return DailyNutritionTargets(kcal: kcal ?? RecipePersonalization.defaultCalorieGoal, macros: nil)
+        }
+        let calories = kcal ?? metrics.suggestedCalories(for: goal)
+        return DailyNutritionTargets(
+            kcal: calories,
+            macros: metrics.macroTargets(for: goal, calories: calories)
+        )
+    }
+
+    /// Cel domownika zawsze pełny — JEDYNE miejsce, w którym brak danych
+    /// zamienia się w domyślną sylwetkę. Brak celu (serwer nie podał, jeszcze
+    /// nie przyszedł, domownik bez profilu) = cały cel z domyślnej sylwetki;
+    /// kalorie bez makr = makra z domyślnej sylwetki przy JEGO kaloriach.
+    static func forMember(_ targets: DailyNutritionTargets?) -> DailyNutritionTargets {
+        guard let targets else { return fallback() }
+        guard targets.macros == nil else { return targets }
+        return fallback(kcal: targets.kcal)
+    }
+}
