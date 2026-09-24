@@ -272,6 +272,9 @@ struct RecipeListEmptyState: View {
 
     var icon: String = "magnifyingglass"
     var accent: Color = SCPalette.terracotta
+    /// Etykieta nad tytułem w kolorze akcentu („LISTA ZAKUPÓW”) — tam, gdzie
+    /// karta stoi na ekranie sama, bez nagłówka, który mówiłby, czego dotyczy.
+    var eyebrow: String? = nil
     let title: String
     let message: String
     var actions: [Action] = []
@@ -282,13 +285,22 @@ struct RecipeListEmptyState: View {
         VStack(spacing: 0) {
             SCHeaderIconWell(icon: icon, accent: accent, size: 52)
 
+            if let eyebrow {
+                Text(eyebrow)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+                    .padding(.top, 14)
+            }
+
             Text(title)
                 .font(.system(size: 17, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 14)
+                .padding(.top, eyebrow == nil ? 14 : 4)
 
             Text(message)
                 .font(.system(size: 13.5))
