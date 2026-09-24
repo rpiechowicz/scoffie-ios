@@ -296,8 +296,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Alergeny w Ustawieniach → „Dieta i alergeny”: sam wynik (`AllergenSummaryCard` — „Omijamy 3 alergeny ·
   ukrywa 84 przepisy” + etykiety), wybór w osobnym arkuszu (`AllergenPickerSheet`: trzy grupy, ikona
   i jedno zdanie przy każdym alergenie, pole wyboru). Trzy układy w samym arkuszu diety odpadły
-  (chmura, kafle z opisami, siatka pigułek — „dalej nie jest ładne UX”). Kreator powitalny zostaje
-  przy siatce 3 × 5 (`AllergenPicker`), bo tam wybór jest treścią kroku.
+  (chmura, kafle z opisami, siatka pigułek — „dalej nie jest ładne UX”). Od 24.09.2026 kreator stoi
+  na TYM SAMYM mechanizmie: `AllergenSelectionField` (karta + arkusz, stan arkusza w środku) w obu
+  miejscach; siatka 3 × 5 (`AllergenPicker`) usunięta — nie robić drugiego wyboru alergenów.
+- Pory posiłków = `MealDayTimesCard` (oś dnia z kreatora: ikona pory, godzina na kapsułce, krótka nazwa),
+  JEDNA w kroku 4 kreatora i w Ustawieniach → „Posiłki w planie” (osobny `MealTimesSheet` z listą
+  wierszy usunięty 24.09.2026). Stuknięcie w posiłek = koło godzin w arkuszu `.medium`
+  (`MealTimeEditorSheet`). Kreator trzyma godziny lokalnie i wysyła po utworzeniu gospodarstwa
+  (tylko gdy różne od domyślnych), Ustawienia zapisują od razu.
 - Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
   (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
   liczone z NAZWY dania i składników (katalog nie ma tagów), sprawdzone na 495 przepisach

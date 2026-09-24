@@ -51,7 +51,6 @@ struct SettingsView: View {
     @State private var showNotificationsSheet = false
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
-    @State private var showAllergenPicker = false
     @State private var showMealSlotsSheet = false
     @State private var showProfileSheet = false
     @State private var showHelpSheet = false
@@ -1375,16 +1374,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAllergenPicker) {
-            AllergenPickerSheet(
-                selected: selectedAllergens,
-                hiddenRecipes: allergenHiddenRecipes,
-                onToggle: { toggleAllergen($0) },
-                onClear: { clearAllergens() }
-            )
-            .presentationDetents([.large])
-            .dashboardLiquidSheet()
-        }
         // Na arkuszu diety, a nie na ekranie Ustawień — alert podpięty pod
         // widok przykryty arkuszem się nie pokaże.
         .alert("Wyczyścić preferencje?", isPresented: $showResetPreferencesAlert) {
@@ -1961,10 +1950,11 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Alergeny i nietolerancje")
 
-            AllergenSummaryCard(
+            AllergenSelectionField(
                 selected: selectedAllergens,
                 hiddenRecipes: allergenHiddenRecipes,
-                onEdit: { showAllergenPicker = true }
+                onToggle: { toggleAllergen($0) },
+                onClear: { clearAllergens() }
             )
         }
     }

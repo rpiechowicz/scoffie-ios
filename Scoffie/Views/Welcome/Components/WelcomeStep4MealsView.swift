@@ -12,6 +12,8 @@ import SwiftUI
 /// ekranie jeszcze nie ma.
 struct WelcomeStep4MealsView: View {
     @Binding var mealSlots: MealSlotConfiguration
+    /// Godziny posiłków — jak `mealSlots` czekają na gospodarstwo z kroku 5.
+    @Binding var mealSchedule: MealSlotSchedule
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -37,8 +39,16 @@ struct WelcomeStep4MealsView: View {
                     }
                 }
 
+                // Ta sama oś co w Ustawieniach → „Posiłki w planie”:
+                // stuknięcie w posiłek otwiera koło godzin do połowy ekranu.
                 WelcomeSection(title: "Pory posiłków") {
-                    dayCard
+                    MealDayTimesCard(
+                        slots: mealSlots.enabled,
+                        schedule: mealSchedule,
+                        onSetTime: { slot, minutes in
+                            mealSchedule = mealSchedule.setting(slot, toMinutes: minutes)
+                        }
+                    )
                 }
             }
             .padding(.horizontal, WelcomeLayout.horizontal)
@@ -134,68 +144,23 @@ struct WelcomeStep4MealsView: View {
         .accessibilityAddTraits(isEnabled ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(isEnabled ? "Stuknij, aby wyłączyć" : "Stuknij, aby włączyć")
     }
-
-    // MARK: - Dzień w pigułce
-
-    /// Włączone posiłki na osi dnia — ikona w kolorze pory, godzina i nazwa.
-    /// Włączenie podwieczorku wstawia go w jego miejsce dnia, a nie tylko
-    /// dopisuje nazwę do zdania: dom widzi, jak będzie wyglądał każdy dzień
-    /// w planie.
-    ///
-    /// Godziny są tu do przeczytania, nie do ustawienia. Pięć pickerów
-    /// w kreatorze to pięć decyzji, których nikt na tym etapie nie umie
-    /// podjąć — a domyślne pory i tak trafiają w większość domów. Zmienia
-    /// się je w Ustawieniach → „Posiłki w planie”.
-    private var dayCard: some View {
-        let schedule = MealSlotSchedule.default
-
-        return HStack(alignment: .top, spacing: 4) {
-            ForEach(mealSlots.enabled) { slot in
-                VStack(spacing: 6) {
-                    Image(systemName: slot.icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(slot.cozyAccent)
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(slot.cozyAccent.opacity(colorScheme == .dark ? 0.16 : 0.12)))
-
-                    Text(schedule.time(for: slot) ?? "—")
-                        .font(.system(size: 13.5, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.scLabel(colorScheme))
-
-                    Text(slot.shortTitle)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(Color.scFaint(colorScheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .frame(maxWidth: .infinity)
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity)
-        .welcomeCard()
-    }
 }
 
 #Preview("Dark") {
-    MealsStepPreview(configuration: .default) { slots in
+    MealsStepPreview(configuration: .default) { slots, schedule in
         ZStack {
             SCPageBackground(scheme: .dark).ignoresSafeArea()
-            WelcomeStep4MealsView(mealSlots: slots)
+            WelcomeStep4MealsView(mealSlots: slots, mealSchedule: schedule)
         }
         .preferredColorScheme(.dark)
     }
 }
 
 #Preview("Light") {
-    MealsStepPreview(configuration: MealSlotConfiguration(enabled: MealSlot.allCases)) { slots in
+    MealsStepPreview(configuration: MealSlotConfiguration(enabled: MealSlot.allCases)) { slots, schedule in
         ZStack {
             SCPageBackground(scheme: .light).ignoresSafeArea()
-            WelcomeStep4MealsView(mealSlots: slots)
+            WelcomeStep4MealsView(mealSlots: slots, mealSchedule: schedule)
         }
         .preferredColorScheme(.light)
     }
@@ -203,17 +168,18 @@ struct WelcomeStep4MealsView: View {
 
 private struct MealsStepPreview<Content: View>: View {
     @State private var configuration: MealSlotConfiguration
-    let content: (Binding<MealSlotConfiguration>) -> Content
+    @State private var schedule: MealSlotSchedule = .default
+    let content: (Binding<MealSlotConfiguration>, Binding<MealSlotSchedule>) -> Content
 
     init(
         configuration: MealSlotConfiguration,
-        @ViewBuilder content: @escaping (Binding<MealSlotConfiguration>) -> Content
+        @ViewBuilder content: @escaping (Binding<MealSlotConfiguration>, Binding<MealSlotSchedule>) -> Content
     ) {
         _configuration = State(initialValue: configuration)
         self.content = content
     }
 
     var body: some View {
-        content($configuration)
+        content($configuration, $schedule)
     }
 }
