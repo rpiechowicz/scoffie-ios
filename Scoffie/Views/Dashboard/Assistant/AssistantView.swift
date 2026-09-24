@@ -203,6 +203,9 @@ struct AssistantView: View {
             // Powrót na zakładkę po przerwie: czysta kartka zamiast
             // dopisywania do rozmowy sprzed pół dnia.
             if active { store.rotateIfStale() }
+            // Pula znana, zanim ktoś stuknie w akcję powitania: pusta =
+            // powitanie od razu w stanie limitu, bez wysyłki i skoku.
+            if active { Task { await store.refreshUsageIfStale() } }
         }
         .onDisappear { store.setVisible(false) }
         .onChange(of: scenePhase) { _, phase in

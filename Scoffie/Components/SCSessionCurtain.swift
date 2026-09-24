@@ -35,6 +35,12 @@ final class SCSessionCurtain {
     func cover() async {
         guard isInstalled, UIApplication.shared.applicationState != .background else { return }
         if isCovering { return }
+        // Klawiatura mieszka w oknie NAD zasłoną — schowana dopiero pod nią
+        // zjeżdżałaby po odsłonięciu nad nowym ekranem. Chowa się razem
+        // z wejściem zasłony.
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
         await withCheckedContinuation { continuation in
             waiters.append(continuation)
             isRaised = true
@@ -46,6 +52,27 @@ final class SCSessionCurtain {
     func lift() {
         isCovering = false
         isRaised = false
+    }
+
+    /// Zamyka BEZ animacji wszystko, co okno aplikacji ma przedstawione
+    /// (arkusze, pełne ekrany). Wołane pod zasłoną, zanim korzeń się
+    /// przestawi: arkusz, którego widok-rodzic znika z drzewa, UIKit zamyka
+    /// sam — ale z animacją, i ta animacja szła już po odsłonięciu, nad
+    /// ekranem logowania (usunięcie konta z arkusza profilu).
+    ///
+    /// Alerty zostają: alert zaproszenia wisi nad korzeniem, nie w nim,
+    /// a zamknięty z zewnątrz rozjechałby się ze swoim `isPresented`.
+    func dismissPresentedScreens() {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { !($0 is SCSessionCurtainWindow) }
+        for window in windows {
+            guard let root = window.rootViewController,
+                  let presented = root.presentedViewController,
+                  !(presented is UIAlertController) else { continue }
+            root.dismiss(animated: false)
+        }
     }
 
     fileprivate func didCover() {

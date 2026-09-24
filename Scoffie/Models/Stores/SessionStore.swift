@@ -479,16 +479,42 @@ final class SessionStore {
             currentHouseholdName = nil
         }
         await registerPushDeviceIfPossible()
-        isAuthenticated = true
 
         // Odpowiedź auth niesie tylko tożsamość i dom. Sylwetka (rok
         // urodzenia, wzrost, waga, płeć) mieszka w bazie i wracała na ekran
         // dopiero przy `users:me` po RESTARCIE aplikacji — wylogowanie
         // i ponowne zalogowanie wyglądało więc jak reset ustawień profilu,
-        // bo logout czyści lokalne kopie. Dociągamy pełny profil od razu,
-        // w tle, żeby nie przedłużać spinnera logowania.
-        Task { [weak self] in
-            await self?.restoreHouseholdIfNeeded()
+        // bo logout czyści lokalne kopie.
+        if decoded.household == nil {
+            // Bez domu `users:me` decyduje, DOKĄD wejść: kto przeszedł już
+            // onboarding, zaczyna od kroku gospodarstwa, a członkostwo
+            // nieobecne w odpowiedzi auth prowadzi prosto na pulpit. Czekamy
+            // na nie pod spinnerem logowania — dociągnięte po wejściu
+            // przestawiało kreator (przewodnik → krok 5) albo cały korzeń
+            // drugi raz, już na oczach użytkownika.
+            await restoreHouseholdBeforeEntering()
+        } else {
+            // Z domem cel jest znany — profil dociąga się w tle, pod loaderem.
+            Task { [weak self] in
+                await self?.restoreHouseholdIfNeeded()
+            }
+        }
+        isAuthenticated = true
+    }
+
+    /// `restoreHouseholdIfNeeded` z limitem czasu: brak sieci po udanym
+    /// logowaniu nie może trzymać spinnera w nieskończoność. Po limicie
+    /// wchodzimy z tym, co wiadomo — reszta dojdzie przy następnym `users:me`.
+    private func restoreHouseholdBeforeEntering() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                await self?.restoreHouseholdIfNeeded()
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+            }
+            _ = await group.next()
+            group.cancelAll()
         }
     }
 

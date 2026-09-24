@@ -352,7 +352,14 @@ struct ScoffieApp: App {
         }
         let curtain = sessionStore.sessionCurtain
         await curtain.cover()
+        // Arkusze starego korzenia zamykają się tu, pod zasłoną — inaczej
+        // UIKit zamykałby je sam, z animacją, już nad nowym ekranem.
+        curtain.dismissPresentedScreens()
         swapRootScreen(to: currentRootScreen)
+        // Nowy korzeń buduje się w pierwszej klatce po podmianie (pulpit pod
+        // loaderem to cała aplikacja) — zejście zasłony rusza klatkę później,
+        // żeby ta praca nie zjadła mu pierwszych klatek.
+        try? await Task.sleep(nanoseconds: 50_000_000)
         curtain.lift()
     }
 
@@ -389,7 +396,10 @@ struct ScoffieApp: App {
         switch screen {
         case .auth:
             AuthView(
-                isLoading: sessionStore.isSigningIn,
+                // Spinner trzyma się do podmiany korzenia: `isSigningIn`
+                // gaśnie w tej samej chwili, w której sesja rusza przejście,
+                // i przycisk wracał do „Zaloguj” pod wchodzącą zasłoną.
+                isLoading: sessionStore.isSigningIn || sessionStore.isAuthenticated,
                 errorMessage: sessionStore.authError,
                 onSignInWithAppleTap: {
                     Task {
@@ -400,7 +410,11 @@ struct ScoffieApp: App {
         case .welcome:
             WelcomeFlowView(
                 initialDisplayName: UserDefaults.standard.string(forKey: "settings.user.displayName") ?? "",
-                isCreatingHousehold: sessionStore.isSigningIn,
+                // Jak przy logowaniu: dom już jest, korzeń zaraz przejdzie
+                // na pulpit — przycisk kroku 5 nie wraca na moment do stanu
+                // spoczynku pod zasłoną.
+                isCreatingHousehold: sessionStore.isSigningIn
+                    || !(sessionStore.currentHouseholdId?.isEmpty ?? true),
                 errorMessage: sessionStore.authError,
                 // Already onboarded but missing a household (left it,
                 // backend lost membership, etc.) → jump straight to the
@@ -482,6 +496,11 @@ struct ScoffieApp: App {
                 // a fala kafelków nie zaczyna się od nowa w połowie.
                 if showsStartupLoader {
                     StartupLoaderView()
+                        // Zgaśnięcie loadera nad pulpitem jako JEDNA warstwa:
+                        // bez tego krycie schodzi na każdy kafelek i napis
+                        // osobno, a przez rozrzedzone tło prześwitują one
+                        // na siebie i na pulpit.
+                        .compositingGroup()
                         .zIndex(1)
                         .transition(.opacity)
                 }
