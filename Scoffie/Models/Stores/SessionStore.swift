@@ -122,6 +122,11 @@ final class SessionStore {
     /// byłby to drugi banner o tej samej treści, tylko innym tytułem.
     private(set) var isPushDeliveryActive: Bool = false
 
+    /// Zasłona przejść między fazami aplikacji — patrz `SCSessionCurtain`.
+    /// Korzeń (`ScoffieApp`) przestawia pod nią ekran, a koniec sesji
+    /// czyści pod nią stan.
+    let sessionCurtain = SCSessionCurtain()
+
     var mealCalendarStore: MealCalendarStore?
     var recipeCatalogStore: RecipeCatalogStore?
     var shoppingListStore: ShoppingListStore?
@@ -474,17 +479,54 @@ final class SessionStore {
             currentHouseholdName = nil
         }
         await registerPushDeviceIfPossible()
-        isAuthenticated = true
 
         // Odpowiedź auth niesie tylko tożsamość i dom. Sylwetka (rok
         // urodzenia, wzrost, waga, płeć) mieszka w bazie i wracała na ekran
         // dopiero przy `users:me` po RESTARCIE aplikacji — wylogowanie
         // i ponowne zalogowanie wyglądało więc jak reset ustawień profilu,
-        // bo logout czyści lokalne kopie. Dociągamy pełny profil od razu,
-        // w tle, żeby nie przedłużać spinnera logowania.
-        Task { [weak self] in
-            await self?.restoreHouseholdIfNeeded()
+        // bo logout czyści lokalne kopie.
+        if decoded.household == nil {
+            // Bez domu `users:me` decyduje, DOKĄD wejść: kto przeszedł już
+            // onboarding, zaczyna od kroku gospodarstwa, a członkostwo
+            // nieobecne w odpowiedzi auth prowadzi prosto na pulpit. Czekamy
+            // na nie pod spinnerem logowania — dociągnięte po wejściu
+            // przestawiało kreator (przewodnik → krok 5) albo cały korzeń
+            // drugi raz, już na oczach użytkownika.
+            await restoreHouseholdBeforeEntering()
+        } else {
+            // Z domem cel jest znany — profil dociąga się w tle, pod loaderem.
+            Task { [weak self] in
+                await self?.restoreHouseholdIfNeeded()
+            }
         }
+        isAuthenticated = true
+    }
+
+    /// `restoreHouseholdIfNeeded` z limitem czasu: brak sieci po udanym
+    /// logowaniu nie może trzymać spinnera w nieskończoność. Po limicie
+    /// wchodzimy z tym, co wiadomo — reszta dojdzie przy następnym `users:me`.
+    private func restoreHouseholdBeforeEntering() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                await self?.restoreHouseholdIfNeeded()
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+            }
+            _ = await group.next()
+            group.cancelAll()
+        }
+    }
+
+    /// Wylogowanie z ręki użytkownika: najpierw zasłona, potem sprzątanie.
+    ///
+    /// `logout()` czyści stan od razu — store pulpitu znikają, a preferencje
+    /// wracają do domyślnych pod otwartym jeszcze ekranem. Przy wymuszonym
+    /// wylogowaniu (odmowa serwera, cofnięte Apple ID) liczy się czas; przy
+    /// stuknięciu „Wyloguj” — to, żeby nic z tego nie było widać.
+    func signOut() async {
+        await sessionCurtain.cover()
+        logout()
     }
 
     func logout() {
@@ -575,6 +617,11 @@ final class SessionStore {
         // Konto już nie istnieje, więc oprócz zwykłego wylogowania trzeba
         // zdjąć też dane profilowe i preferencje — inaczej następne logowanie
         // na tym urządzeniu zastałoby cudzy wzrost i cudzą dietę.
+        //
+        // Wszystko POD zasłoną: czyszczenie `UserDefaults` przestawia
+        // otwarty arkusz profilu i Ustawienia na wartości domyślne, a to
+        // było widać przez pół sekundy przed ekranem logowania.
+        await sessionCurtain.cover()
         clearPersistedProfileFields()
         clearPersistedPreferences()
         logout()

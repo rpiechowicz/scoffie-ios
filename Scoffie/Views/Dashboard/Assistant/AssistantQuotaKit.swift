@@ -153,8 +153,8 @@ struct AssistantQuotaMeter: View {
 // MARK: - Panel w powitaniu
 
 /// Kontekst powitania przy wykorzystanej puli: obie pule jako kreseczki,
-/// a pod kreską — kiedy wraca (plan miesięczny) albo co daje polecany plan
-/// (próba). Kafel jak każda karta w aplikacji.
+/// a pod nimi wiersz „co dalej” (`AssistantQuotaNextRow`) — ten sam co
+/// w karcie zamiast pola. Kafel jak każda karta w aplikacji.
 struct AssistantQuotaPanel: View {
     let facts: AssistantQuotaFacts
     var revealed: Bool = true
@@ -163,97 +163,111 @@ struct AssistantQuotaPanel: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                AssistantQuotaMeter(title: "Wiadomości", quota: facts.messages, revealed: revealed, delay: delay)
-                if facts.plans.limit > 0 {
-                    AssistantQuotaMeter(title: "Zapisy planu", quota: facts.plans, revealed: revealed, delay: delay + 0.12)
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            AssistantQuotaMeter(title: "Wiadomości", quota: facts.messages, revealed: revealed, delay: delay)
+            if facts.plans.limit > 0 {
+                AssistantQuotaMeter(title: "Zapisy planu", quota: facts.plans, revealed: revealed, delay: delay + 0.12)
             }
-            .padding(14)
-
-            if hasFooter {
-                Rectangle()
-                    .fill(AssistantLook.hair(scheme))
-                    .frame(height: 1)
-                footer
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-            }
+            AssistantQuotaNextRow(facts: facts, isTrial: facts.isTrial)
         }
+        .padding(14)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
         .frame(maxWidth: 340)
     }
-
-    private var hasFooter: Bool { facts.resetDay != nil || facts.suggestion != nil }
-
-    @ViewBuilder
-    private var footer: some View {
-        if let day = facts.resetDay {
-            AssistantQuotaResetRow(day: day, distance: facts.resetDistance())
-        } else if let suggestion = facts.suggestion {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AssistantLook.terra(scheme))
-                    .frame(width: 18)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Polecamy „\(suggestion.name)”")
-                        .font(.system(size: 14, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(AssistantLook.ink(scheme))
-                    Text("\(suggestion.messages) wiadomości co miesiąc · \(suggestion.price)")
-                        .font(.system(size: 12.5))
-                        .monospacedDigit()
-                        .foregroundStyle(AssistantLook.muted(scheme))
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                Spacer(minLength: 0)
-            }
-            .accessibilityElement(children: .combine)
-        }
-    }
 }
 
-/// „↻ Wraca 1 października · za 8 dni” — odległość roluje, gdy zmieni się dzień.
-struct AssistantQuotaResetRow: View {
-    let day: String
-    let distance: String?
+// MARK: - Wiersz „co dalej”
+
+/// Jedna linijka o tym, co dalej: przy planie miesięcznym — kiedy pula wraca
+/// (data + odliczanie w pigułce), na próbie — polecany plan z ceną w pigułce.
+/// Wspólna dla karty zamiast pola i panelu w powitaniu. `nil` treści = nic.
+struct AssistantQuotaNextRow: View {
+    let facts: AssistantQuotaFacts?
+    let isTrial: Bool
 
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "arrow.clockwise")
-                .font(.system(size: 12.5, weight: .bold))
-                .foregroundStyle(AssistantLook.terra(scheme))
-            Text("Wraca \(day)")
-                .font(.system(size: 14, weight: .semibold))
-                .tracking(-0.2)
-                .foregroundStyle(AssistantLook.ink(scheme))
-            Spacer(minLength: 8)
-            if let distance {
-                Text(distance)
-                    .font(.system(size: 13, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(AssistantLook.faint(scheme))
-                    .contentTransition(.numericText())
-                    .animation(.smooth(duration: 0.35), value: distance)
-            }
+    private struct Info {
+        let icon: String
+        let title: String
+        let detail: String?
+        let pill: String?
+    }
+
+    private var content: Info? {
+        if isTrial {
+            guard let suggestion = facts?.suggestion else { return nil }
+            return Info(
+                icon: "sparkles",
+                title: "Polecamy „\(suggestion.name)”",
+                detail: "\(suggestion.messages) wiadomości co miesiąc",
+                pill: suggestion.price
+            )
         }
-        .lineLimit(1)
-        .accessibilityElement(children: .combine)
+        guard let day = facts?.resetDay else {
+            return Info(icon: "arrow.clockwise", title: "Wróci z odnowieniem planu", detail: nil, pill: nil)
+        }
+        return Info(icon: "arrow.clockwise", title: "Wraca \(day)", detail: nil, pill: facts?.resetDistance())
+    }
+
+    var body: some View {
+        if let content {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: content.icon)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AssistantLook.terra(scheme))
+                    .frame(width: 18)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(content.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(AssistantLook.ink(scheme))
+                    if let detail = content.detail {
+                        Text(detail)
+                            .font(.system(size: 12.5))
+                            .monospacedDigit()
+                            .foregroundStyle(AssistantLook.muted(scheme))
+                    }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+                Spacer(minLength: 8)
+
+                if let pill = content.pill {
+                    Text(pill)
+                        .font(.system(size: 12.5, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(AssistantLook.terra(scheme))
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .frame(height: 26)
+                        .background(Capsule(style: .continuous).fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
+                        .contentTransition(.numericText())
+                        .animation(.smooth(duration: 0.35), value: pill)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.scChipBg(scheme)))
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 
 // MARK: - Karta zamiast pola
 
 /// Karta w miejscu pola wiadomości, gdy pula się skończyła — w rozmowie
-/// (próba) i wszędzie (plan miesięczny). Śpiący znak, jedno zdanie o skutku,
-/// kreseczki wiadomości i jedna akcja: próba prowadzi do planów, plan
-/// miesięczny — do limitów (tam jest data i rozkład na domowników).
+/// (próba) i wszędzie (plan miesięczny).
+///
+/// Runda 23 (24.09.2026, „średnio wygląda”): układ jak reszta aplikacji —
+/// kafel z drzemiącym znakiem w tincie terakoty, etykieta 10,5/1,4, tytuł
+/// i JEDNO zdanie o skutku, pod spodem wiersz „co dalej” (data powrotu
+/// z odliczaniem albo polecany plan z ceną) i jedna akcja. Kreseczki zużycia
+/// zniknęły z karty — pełny pasek nie mówił nic ponad tytuł; zostały
+/// w panelu powitania i w arkuszu limitów.
 struct AssistantQuotaSpentCard: View {
     let facts: AssistantQuotaFacts?
     /// Próba (bez odnowienia) czy plan miesięczny. Osobno od `facts`, bo
@@ -263,49 +277,42 @@ struct AssistantQuotaSpentCard: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private var title: String {
-        isTrial ? "Darmowe wiadomości wykorzystane" : "Pula na ten miesiąc wykorzystana"
-    }
+    private var eyebrow: String { isTrial ? "DARMOWA PULA" : "PULA NA TEN MIESIĄC" }
 
-    private var subtitle: String {
-        if isTrial {
-            if let suggestion = facts?.suggestion {
-                return "Rozmowy i plan zostają. „\(suggestion.name)” to \(suggestion.messages) wiadomości co miesiąc."
-            }
-            return "Rozmowy i plan zostają."
-        }
-        if let day = facts?.resetDay {
-            return [("Wraca " + day), facts?.resetDistance()].compactMap { $0 }.joined(separator: " · ")
-        }
-        return "Wróci z odnowieniem planu."
-    }
+    private var title: String { isTrial ? "Wiadomości wykorzystane" : "Asystent odpoczywa" }
 
     var body: some View {
         AssistantCard {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    // Znak drzemie — asystent odpoczywa, aplikacja nie.
-                    SCLivingMark(mood: .sleeping, color: AssistantLook.terraFill(scheme), size: 20, glows: false)
-                        .padding(.top, 1)
+                HStack(alignment: .center, spacing: 12) {
+                    // Znak drzemie w kafelku jak ikona nagłówka arkusza —
+                    // asystent odpoczywa, aplikacja nie.
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12))
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            SCLivingMark(mood: .sleeping, color: AssistantLook.terraFill(scheme), size: 22, glows: false)
+                        )
+                        .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(eyebrow)
+                            .font(.system(size: 10.5, weight: .bold))
+                            .tracking(1.4)
+                            .foregroundStyle(AssistantLook.terra(scheme))
                         Text(title)
-                            .font(.system(size: 16.5, weight: .bold))
+                            .font(.system(size: 17, weight: .bold))
                             .tracking(-0.4)
                             .foregroundStyle(AssistantLook.ink(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(subtitle)
-                            .font(.system(size: 14))
+                        Text("Plan i zakupy działają dalej.")
+                            .font(.system(size: 13.5))
                             .foregroundStyle(AssistantLook.muted(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .contentTransition(.numericText())
-                            .animation(.smooth(duration: 0.35), value: subtitle)
                     }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 }
 
-                if let facts {
-                    AssistantQuotaMeter(title: "Wiadomości", quota: facts.messages)
-                }
+                AssistantQuotaNextRow(facts: facts, isTrial: isTrial)
 
                 if isTrial {
                     AssistantPrimaryButton(action: AssistantCardAction(title: "Zobacz plany", icon: "arrow.right", action: action))

@@ -878,6 +878,10 @@ struct RecipeFilterFooterButton: View {
 
 /// „Wyczyść” obok krzyżyka — pojawia się dopiero, gdy jest co czyścić.
 /// Ten sam w filtrach, w wykluczaniu składników i w alergenach.
+///
+/// Sama ikona w terakotowym krążku „soft”, rozmiarem jak krzyżyk arkusza
+/// (Rafał, 24.09: „zmień button z ikona+wyczyść na samą ikonę”). Słowo
+/// zostaje tylko dla VoiceOver.
 struct RecipeFilterClearButton: View {
     /// Co czyta VoiceOver — „Wyczyść filtry”, „Wyczyść wykluczenia”…
     var accessibilityLabel: String = "Wyczyść filtry"
@@ -885,18 +889,12 @@ struct RecipeFilterClearButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 12, weight: .bold))
-                Text("Wyczyść")
-                    .font(.system(size: 14, weight: .semibold))
-                    .tracking(-0.2)
-            }
-            .foregroundStyle(SCPalette.terracotta)
-            .padding(.horizontal, 13)
-            .frame(height: 36)
-            .scSoftCapsule()
-            .contentShape(Capsule(style: .continuous))
+            Image(systemName: "arrow.counterclockwise")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(SCPalette.terracotta)
+                .frame(width: 36, height: 36)
+                .scSoftSurface(Circle())
+                .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
         .accessibilityLabel(accessibilityLabel)

@@ -313,6 +313,110 @@ struct ScoffieApp: App {
         return hasDashboardStores ? .dashboard : .loader
     }
 
+    /// Ekran, który korzeń NAPRAWDĘ pokazuje. `currentRootScreen` to cel —
+    /// liczony ze stanu sesji, więc zmienia się w chwili, w której zmienia
+    /// się sesja. Ten tu dogania go pod zasłoną (`showRootScreen`), a do
+    /// pierwszego pojawienia się jest `nil` i korzeń bierze cel wprost.
+    @State private var displayedScreen: RootScreen?
+
+    private var shownScreen: RootScreen { displayedScreen ?? currentRootScreen }
+
+    /// Loader wejścia do aplikacji (`enterAppUnderLoader`) — trzyma planszę
+    /// niezależnie od fazy startu, która po logowaniu bywa przez chwilę
+    /// nieaktualna albo gotowa, zanim ktokolwiek zobaczył loader.
+    @State private var entryLoaderHold = false
+    /// Trwa wejście do aplikacji: loader wchodzi, korzeń jeszcze nie
+    /// przestawiony — kolejne zmiany celu czekają na podmianę pod loaderem.
+    @State private var isEnteringApp = false
+
+    /// Ekran i tak przykryty loaderem startu — przejście między dwoma
+    /// takimi dzieje się pod kryjącą planszą i zasłona nie ma czego chować.
+    private func isUnderLoader(_ screen: RootScreen) -> Bool {
+        switch screen {
+        case .loader: return true
+        case .dashboard: return !isStartupReady
+        case .auth, .welcome: return false
+        }
+    }
+
+    /// JEDNA droga zmiany korzenia: zasłona w górę, korzeń bez animacji,
+    /// zasłona w dół (`SCSessionCurtain`). Wcześniej korzeń przenikał się
+    /// sam, a po założeniu domu pulpit wjeżdżał razem z loaderem i przez
+    /// pół przejścia prześwitywał spod niego Kalendarz.
+    ///
+    /// Pod zasłoną bierze się cel AKTUALNY, nie ten, z którym wołano —
+    /// sesja mogła w tym czasie pójść dalej (logowanie z domem: auth →
+    /// pulpit). Po przestawieniu na pulpit stoi już nad nim loader, więc
+    /// zasłona schodzi z loadera, nie z Kalendarza.
+    private func showRootScreen(_ target: RootScreen) async {
+        guard let shown = displayedScreen else {
+            displayedScreen = target
+            return
+        }
+        guard shown != target else { return }
+        // Wejście do aplikacji trwa — samo podmieni korzeń na aktualny cel.
+        guard !isEnteringApp else { return }
+        if isUnderLoader(shown), isUnderLoader(target) {
+            swapRootScreen(to: target)
+            return
+        }
+        if shown == .auth || shown == .welcome, target == .loader || target == .dashboard {
+            await enterAppUnderLoader()
+            return
+        }
+        let curtain = sessionStore.sessionCurtain
+        await curtain.cover()
+        // Arkusze starego korzenia zamykają się tu, pod zasłoną — inaczej
+        // UIKit zamykałby je sam, z animacją, już nad nowym ekranem.
+        curtain.dismissPresentedScreens()
+        swapRootScreen(to: currentRootScreen)
+        // Nowy korzeń buduje się w pierwszej klatce po podmianie (pulpit pod
+        // loaderem to cała aplikacja) — zejście zasłony rusza klatkę później,
+        // żeby ta praca nie zjadła mu pierwszych klatek.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        curtain.lift()
+    }
+
+    /// Logowanie / założenie domu → aplikacja: ZAWSZE przez loader startu.
+    /// Loader wchodzi nad ekran logowania (albo kreatora) jednym
+    /// przenikaniem, korzeń przestawia się pod nim bez animacji, a loader
+    /// schodzi dopiero po całej fali kafelków i gotowości startu. Wcześniej
+    /// szło to przez zasłonę, która schodziła z pulpitu — z loaderem nad nim
+    /// albo bez, zależnie od tego, czy warmup zdążył — i było widać Kalendarz.
+    private func enterAppUnderLoader() async {
+        isEnteringApp = true
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+        withAnimation(.easeOut(duration: 0.35)) { entryLoaderHold = true }
+        try? await Task.sleep(nanoseconds: 380_000_000)
+        sessionStore.sessionCurtain.dismissPresentedScreens()
+        swapRootScreen(to: currentRootScreen)
+        isEnteringApp = false
+        // Cel mógł pójść dalej w trakcie (loader → pulpit) — dogonić go pod loaderem.
+        await showRootScreen(currentRootScreen)
+
+        // Loader stoi co najmniej przez całą falę kafelków i do gotowości
+        // startu (najwyżej 12 s — dalej pulpit ma własne skeletony).
+        try? await Task.sleep(nanoseconds: UInt64(StartupLoaderView.waveCompletionSeconds * 1_000_000_000))
+        var waited = 0
+        while !isStartupReady, displayedScreen != .auth, waited < 240 {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            waited += 1
+        }
+        withAnimation(.easeOut(duration: 0.4)) { entryLoaderHold = false }
+    }
+
+    private func swapRootScreen(to screen: RootScreen) {
+        var transaction = Transaction()
+        // Także loader, który wchodzi razem z pulpitem: ma stać od razu,
+        // a nie przenikać się z pulpitem pod spodem.
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            displayedScreen = screen
+        }
+    }
+
     private var hasDashboardStores: Bool {
         sessionStore.mealCalendarStore != nil
             && sessionStore.recipeCatalogStore != nil
@@ -321,10 +425,46 @@ struct ScoffieApp: App {
 
     private var isStartupReady: Bool { sessionStore.startupPhase == .ready }
 
+    /// Czy loader NAPRAWDĘ stoi. Wchodzi od razu, gdy `wantsStartupLoader`,
+    /// ale schodzi dopiero na pełnym obrocie znaku (`StartupLoaderView.
+    /// remainingToFullTurn`) — start gotowy w półtora obrotu czeka do końca
+    /// drugiego. `nil` = idzie za `wantsStartupLoader` (pierwsza klatka).
+    @State private var loaderShown: Bool?
+    @State private var loaderStartedAt = Date()
+    @State private var loaderRelease: Task<Void, Never>?
+
+    private var showsStartupLoader: Bool { loaderShown ?? wantsStartupLoader }
+
+    private func startupLoaderWish(changedTo wants: Bool) {
+        if wants {
+            loaderRelease?.cancel()
+            loaderRelease = nil
+            // Z ukrytego: nowy loader, nowy początek obrotów. Pierwsza klatka
+            // (`nil`) już rysuje loader z datą ze stanu — tej się nie rusza.
+            if loaderShown == false { loaderStartedAt = Date() }
+            loaderShown = true
+            return
+        }
+        guard loaderShown == true else {
+            loaderShown = false
+            return
+        }
+        let wait = StartupLoaderView.remainingToFullTurn(since: loaderStartedAt)
+        loaderRelease?.cancel()
+        loaderRelease = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            loaderShown = false
+        }
+    }
+
     /// Loader startu: osobny ekran, zanim są store pulpitu, a potem plansza
     /// nad budującym się pod nią pulpitem, dopóki start nie jest gotowy.
-    private var showsStartupLoader: Bool {
-        switch currentRootScreen {
+    private var wantsStartupLoader: Bool {
+        // Wejście do aplikacji trzyma loader sam — także nad logowaniem,
+        // zanim korzeń przejdzie pod nim na pulpit.
+        if entryLoaderHold, shownScreen != .auth || isEnteringApp { return true }
+        switch shownScreen {
         case .loader: return true
         case .dashboard: return !isStartupReady
         case .auth, .welcome: return false
@@ -336,7 +476,10 @@ struct ScoffieApp: App {
         switch screen {
         case .auth:
             AuthView(
-                isLoading: sessionStore.isSigningIn,
+                // Spinner trzyma się do podmiany korzenia: `isSigningIn`
+                // gaśnie w tej samej chwili, w której sesja rusza przejście,
+                // i przycisk wracał do „Zaloguj” pod wchodzącą zasłoną.
+                isLoading: sessionStore.isSigningIn || sessionStore.isAuthenticated,
                 errorMessage: sessionStore.authError,
                 onSignInWithAppleTap: {
                     Task {
@@ -347,7 +490,11 @@ struct ScoffieApp: App {
         case .welcome:
             WelcomeFlowView(
                 initialDisplayName: UserDefaults.standard.string(forKey: "settings.user.displayName") ?? "",
-                isCreatingHousehold: sessionStore.isSigningIn,
+                // Jak przy logowaniu: dom już jest, korzeń zaraz przejdzie
+                // na pulpit — przycisk kroku 5 nie wraca na moment do stanu
+                // spoczynku pod zasłoną.
+                isCreatingHousehold: sessionStore.isSigningIn
+                    || !(sessionStore.currentHouseholdId?.isEmpty ?? true),
                 errorMessage: sessionStore.authError,
                 // Already onboarded but missing a household (left it,
                 // backend lost membership, etc.) → jump straight to the
@@ -418,21 +565,23 @@ struct ScoffieApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                rootScreen(currentRootScreen)
-                    .id(currentRootScreen)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 1.015)),
-                            removal: .opacity.combined(with: .scale(scale: 0.985))
-                        )
-                    )
+                // Bez przejścia: korzeń zmienia się pod zasłoną
+                // (`showRootScreen`), więc crossfade nie miałby kogo cieszyć.
+                rootScreen(shownScreen)
+                    .id(shownScreen)
 
                 // JEDEN loader na cały start, nad korzeniem i poza jego
                 // tożsamością: przejście „loader → pulpit pod loaderem” dzieje
                 // się pod nieprzezroczystą planszą, więc nie ma czego pokazać,
                 // a fala kafelków nie zaczyna się od nowa w połowie.
                 if showsStartupLoader {
-                    StartupLoaderView()
+                    // Ta sama chwila startu co liczenie obrotów w korzeniu.
+                    StartupLoaderView(startDate: loaderStartedAt)
+                        // Zgaśnięcie loadera nad pulpitem jako JEDNA warstwa:
+                        // bez tego krycie schodzi na każdy kafelek i napis
+                        // osobno, a przez rozrzedzone tło prześwitują one
+                        // na siebie i na pulpit.
+                        .compositingGroup()
                         .zIndex(1)
                         .transition(.opacity)
                 }
@@ -441,8 +590,17 @@ struct ScoffieApp: App {
                 if let debugScreen = AssistantOptionsDebugScreen.requested { debugScreen }
                 #endif
             }
-            .animation(.easeInOut(duration: 0.45), value: currentRootScreen)
             .animation(.easeOut(duration: 0.4), value: showsStartupLoader)
+            .onChange(of: wantsStartupLoader, initial: true) { _, wants in
+                startupLoaderWish(changedTo: wants)
+            }
+            .onChange(of: currentRootScreen, initial: true) { _, target in
+                if displayedScreen == nil {
+                    displayedScreen = target
+                } else {
+                    Task { await showRootScreen(target) }
+                }
+            }
             .environment(\.sessionStore, sessionStore)
             // Kolejność ma znaczenie: każdy z mostów poniżej musi stać POD
             // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`
@@ -452,7 +610,7 @@ struct ScoffieApp: App {
             // użytkownik patrzył na plan, i zakup dogadany z Apple w tle.
             //
             // Wiszą TUTAJ, a nie w gałęzi pulpitu, i to jest istotne: gałąź
-            // pulpitu ma `.id(currentRootScreen)`, więc przy każdym przejściu
+            // pulpitu ma `.id(shownScreen)`, więc przy każdym przejściu
             // korzenia (loader, powitanie, zmiana gospodarstwa) budowałaby się
             // od nowa i brała bieżącą wartość za punkt odniesienia. A zakup
             // odtworzony przez StoreKit dociera właśnie w oknie loadera.
@@ -465,6 +623,7 @@ struct ScoffieApp: App {
                 onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
             )
             .scConnectivityToast()
+            .scSessionCurtain(sessionStore.sessionCurtain, colorScheme: appTheme.colorScheme)
             // Motyw podany JAWNIE: warstwa toastów mieszka w osobnym oknie,
             // do którego `preferredColorScheme` nie dociera.
             .scToastLayer(toastCenter, colorScheme: appTheme.colorScheme)

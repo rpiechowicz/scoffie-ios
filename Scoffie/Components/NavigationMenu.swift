@@ -31,12 +31,27 @@ extension EnvironmentValues {
 
 struct NavigationMenu: View {
     @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.colorScheme) private var colorScheme
     /// Stan własnego paska (zwinięty / klawiatura). Żyje tu, bo menu jest
     /// jedynym miejscem, które przeżywa przełączanie zakładek.
     @State private var chrome = SCTabBarChrome()
     /// Zakładki już zbudowane. Wybrana buduje się od razu, reszta po kolei
     /// w tle — patrz `warmUpRemainingTabs`.
     @State private var mounted: Set<DashboardTab> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Zakładka, która właśnie wchodzi, i jej krycie. Samo krycie, bez
+    /// przesunięcia i bez `keyframeAnimator` na całej stronie: to renderuje
+    /// warstwa, a ekran zakładki nie przelicza się w żadnej klatce wejścia.
+    @State private var enteringTab: DashboardTab?
+    @State private var entranceOpacity: Double = 1
+    /// Zakładka, z której się wychodzi — stoi pod wchodzącą, dopóki ta
+    /// nie nabierze pełnego krycia (patrz `tabSelection`).
+    @State private var leavingTab: DashboardTab?
+
+    private func pageOpacity(_ tab: DashboardTab, isActive: Bool) -> Double {
+        if isActive { return tab == enteringTab ? entranceOpacity : 1 }
+        return tab == leavingTab ? 1 : 0
+    }
 
     private static let order: [DashboardTab] = [.recipes, .plan, .calendar, .assistant, .settings]
 
@@ -56,16 +71,19 @@ struct NavigationMenu: View {
                     let isActive = tab == session.dashboardTab
                     page(tab)
                         .environment(\.scTabIsActive, isActive)
-                        .opacity(isActive ? 1 : 0)
+                        .opacity(pageOpacity(tab, isActive: isActive))
                         .allowsHitTesting(isActive)
                         .accessibilityHidden(!isActive)
-                        .zIndex(isActive ? 1 : 0)
+                        .zIndex(isActive ? 2 : (tab == leavingTab ? 1 : 0))
                 }
             }
         }
+        // Tło strony POD zakładkami: wchodząca zakładka wyłania się z tego
+        // samego tła, które ma sama, a nie z gołego okna.
+        .background(SCPageBackground(scheme: colorScheme).ignoresSafeArea())
         .tint(SCPalette.terracotta)
         .overlay(alignment: .bottom) {
-            SCFloatingTabBar(items: items, selection: $session.dashboardTab, isCompact: chrome.isCompact)
+            SCFloatingTabBar(items: items, selection: tabSelection, isCompact: chrome.isCompact)
                 // Klawiatura ma pasek ZASŁONIĆ, jak systemowy — bez tego
                 // `overlay` uciekałby nad klawiaturę i stawał między nią
                 // a polem asystenta.
@@ -85,11 +103,50 @@ struct NavigationMenu: View {
         // pasek. Rezerwa pod menu schodziła wtedy do zera i pole asystenta
         // lądowało POD paskiem zakładek, którego nic nie zasłaniało.
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            chrome.keyboardDuration = Self.animationDuration(of: note)
             chrome.isKeyboardVisible = Self.keyboardCoversTabBar(note)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
+            chrome.keyboardDuration = Self.animationDuration(of: note)
             chrome.isKeyboardVisible = false
         }
+    }
+
+    /// Wybór z paska = PRZENIKANIE treści: stara zakładka stoi pod spodem
+    /// w pełnym kryciu, a nowa nabiera krycia NAD nią (0,2 s). Tło, pasek
+    /// i wszystko, co obie strony mają wspólne, nie drgnie — zmienia się
+    /// tylko to, co się różni. Runda 18 wyłaniała nową zakładkę z gołego tła
+    /// przy zgaszonej starej i przez pół przejścia cały ekran przygasał
+    /// („wygląda, jakby cały widok się zmieniał”). Krycie startowe idzie
+    /// w tej samej transakcji co wybór, więc nie ma klatki z nową w pełni.
+    /// Asystent ma własne powitanie — wchodzi od razu.
+    private var tabSelection: Binding<DashboardTab> {
+        Binding(
+            get: { sessionStore.dashboardTab },
+            set: { tab in
+                let previous = sessionStore.dashboardTab
+                guard tab != previous else { return }
+                let fades = tab != .assistant && !reduceMotion
+                enteringTab = fades ? tab : nil
+                leavingTab = fades ? previous : nil
+                entranceOpacity = fades ? 0 : 1
+                sessionStore.dashboardTab = tab
+                guard fades else { return }
+                DispatchQueue.main.async {
+                    guard enteringTab == tab else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        entranceOpacity = 1
+                    } completion: {
+                        if enteringTab == tab { leavingTab = nil }
+                    }
+                }
+            }
+        )
+    }
+
+    /// Czas ruchu klawiatury z powiadomienia.
+    private static func animationDuration(of note: Notification) -> Double {
+        (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
     }
 
     /// Czy klawiatura po zmianie ramki zasłoni dolne menu.

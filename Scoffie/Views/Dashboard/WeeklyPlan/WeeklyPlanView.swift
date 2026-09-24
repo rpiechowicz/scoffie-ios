@@ -32,6 +32,8 @@ struct WeeklyPlanView: View {
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scTabBarChrome) private var tabBarChrome
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
     /// wspólny zostaje tylko tydzień.
@@ -237,11 +239,17 @@ struct WeeklyPlanView: View {
     }
 
     /// Cel osoby, której dzień liczy pigułka: mój z Ustawień, domownika —
-    /// z serwera. Zanim cel domownika przyjdzie, pigułka mierzy do mojego.
+    /// z serwera, a bez danych z domyślnej sylwetki
+    /// (`DailyNutritionTargets.forMember`). Pigułka ma dla każdego te same
+    /// cztery tory — przełączenie osoby tylko przetacza liczby.
     private func dailyTargets(for personId: String?) -> DailyNutritionTargets {
-        guard let personId, personId != sessionStore.currentUserId,
-              let theirs = memberPreferences[personId]?.targets else { return dailyTargets }
-        return theirs
+        guard let personId, personId != sessionStore.currentUserId else { return dailyTargets }
+        return memberTargets(personId)
+    }
+
+    /// Cel domownika zawsze pełny — patrz `DailyNutritionTargets.forMember`.
+    private func memberTargets(_ memberId: String) -> DailyNutritionTargets {
+        DailyNutritionTargets.forMember(memberPreferences[memberId]?.targets)
     }
 
     /// Cele domowników z serwera. Pusta odpowiedź (błąd, anulowanie) NIE
@@ -278,7 +286,7 @@ struct WeeklyPlanView: View {
                 name: HouseholdMemberStyle.shortName(member.displayName),
                 member: member,
                 nutrition: dayNutrition(on: selectedDate, for: member.id),
-                targets: isMe ? dailyTargets : memberPreferences[member.id]?.targets,
+                targets: isMe ? dailyTargets : memberTargets(member.id),
                 isMe: isMe
             )
         }
@@ -424,6 +432,15 @@ struct WeeklyPlanView: View {
                     }
                 )
                 .frame(width: goalBarWidth)
+                // Zwija się RAZEM z dolnym menu: ten sam moment, ten sam ruch
+                // (`SCFloatingTabBar.compaction`). Opada o tyle, o ile opada
+                // górna krawędź paska, więc odstęp między nimi zostaje, i lekko
+                // maleje od dołu — jak pasek, który zszedł z drogi treści.
+                // Przesunięcie i skala nie ruszają układu, więc treść nad
+                // pigułką nie skacze.
+                .scaleEffect(tabBarChrome.isCompact ? 0.92 : 1, anchor: .bottom)
+                .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
+                .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
                 .padding(.bottom, 8)
                 // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
                 // pigułka o zerowej szerokości mignęłaby jako kreska.
@@ -592,8 +609,7 @@ struct WeeklyPlanView: View {
                         saveServings(newValue, for: target)
                     }
                 )
-                .presentationDetents([.large])
-                .dashboardLiquidSheet(cornerRadius: 40)
+                .recipeDetailSheet()
             }
         }
     }

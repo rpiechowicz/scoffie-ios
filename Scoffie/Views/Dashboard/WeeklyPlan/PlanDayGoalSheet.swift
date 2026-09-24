@@ -64,9 +64,11 @@ struct PlanDayGoalSheet: View {
         _contentHeight = State(
             initialValue: Self.estimatedHeight(
                 rows: first?.nutrition.entries.count ?? 0,
-                // Cel, który jeszcze nie przyszedł, nie dokłada podpowiedzi
-                // o makrach (`macroHint` jest wtedy `nil`).
-                hasMacroTargets: first?.targets.map { $0.macros != nil } ?? true
+                // Miejsce na podpowiedź o makrach arkusz trzyma, gdy potrzebuje
+                // jej którakolwiek osoba (`reservedMacroHint`).
+                hasMacroTargets: !people.contains { person in
+                    person.targets != nil && person.targets?.macros == nil
+                }
             )
         )
     }
@@ -155,12 +157,17 @@ struct PlanDayGoalSheet: View {
             mealsList
                 .padding(.top, 8)
 
-            if let hint = macroHint {
+            // Miejsce na podpowiedź stoi, dopóki potrzebuje jej KTÓRAKOLWIEK
+            // osoba z przełącznika, a gaśnie tylko jej tekst — przełączenie
+            // osoby nie może zmieniać wysokości arkusza (Rafał, 24.09.2026).
+            if let hint = reservedMacroHint {
                 Text(hint)
                     .scFont(12, weight: .regular, relativeTo: .caption)
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(macroHint(for: person) == nil ? 0 : 1)
+                    .accessibilityHidden(macroHint(for: person) == nil)
                     .padding(.top, 14)
             }
         }
@@ -179,6 +186,10 @@ struct PlanDayGoalSheet: View {
             eyebrow: Self.longDayFormatter.string(from: date),
             title: "Cel dnia",
             subtitle: subtitle,
+            // Podtytuł niesie imię („Dzień: Ania”) — rolowanie cyfr
+            // przetaczało każdą literę osobno i imię rozsypywało się
+            // w trakcie przełączenia. Zwykłe przenikanie.
+            subtitleTransition: people.count > 1 ? .opacity : .numericText(),
             onClose: { dismiss() }
         ) {
             if people.count > 1 {
@@ -282,11 +293,20 @@ struct PlanDayGoalSheet: View {
     /// zostawiać trzy wiersze bez prawej strony i pierścienie bez postępu.
     /// Domownik uzupełnia sylwetkę u siebie; cel, który jeszcze nie
     /// przyszedł z serwera, nie jest powodem do podpowiedzi.
-    private var macroHint: String? {
+    ///
+    /// Domownik dostaje cel z domyślnej sylwetki (`DailyNutritionTargets.forMember`),
+    /// więc w praktyce podpowiedź zostaje wyłącznie mnie.
+    private func macroHint(for person: PlanDayPerson) -> String? {
         guard let targets = person.targets, targets.macros == nil else { return nil }
         return person.isMe
             ? "Cele makro policzymy, gdy uzupełnisz sylwetkę w Ustawieniach → Twoje dane."
             : "Cele makro pojawią się, gdy \(person.name) uzupełni sylwetkę."
+    }
+
+    /// Podpowiedź, pod którą arkusz trzyma miejsce — pierwsza osoba, która
+    /// jej potrzebuje. Tylko jedna, bo podpowiedź w praktyce ma tylko „Ty”.
+    private var reservedMacroHint: String? {
+        people.lazy.compactMap { macroHint(for: $0) }.first
     }
 
     // MARK: - Posiłki
@@ -338,15 +358,14 @@ struct PlanDayPerson: Identifiable {
     )
 }
 
-/// Przełącznik osób obok krzyżyka: kapsuła z awatarami, wybrana osoba
-/// rozwija się do awatara z imieniem na tincie swojego koloru.
+/// Przełącznik osób obok krzyżyka: kapsuła z SAMYMI awatarami, wybrana osoba
+/// na tincie swojego koloru z obwódką.
 ///
-/// Runda 12 — Rafał wrócił do tego układu („1 widok mi się podobał”) po
-/// próbie z zakładkami na całą szerokość, ale „dopracować trzeba”:
-/// awatary 28 pt z obwódką w kolorze osoby (także niewybrane — widać, kto
-/// jest do wyboru), cel dotyku całej wysokości kapsuły, imię wjeżdża
-/// kryciem razem z przesunięciem tła, a nie skokiem szerokości; czyj to
-/// dzień, mówi też podtytuł arkusza.
+/// Runda 19 (24.09.2026) — imię wybranej osoby zniknęło: rama pod najdłuższe
+/// imię zostawiała przy krótszym dużo pustego miejsca, a zmienna rama
+/// przesuwała tytuł obok (Rafał: „dajmy same ikony userów”). Kto jest wybrany,
+/// mówi tint, obwódka i podtytuł arkusza („Dzień: Ania · …”); kapsuła ma stałą
+/// szerokość, więc przełączenie to tylko przejazd tła.
 struct PlanPersonSwitcher: View {
     let people: [PlanDayPerson]
     let members: [HouseholdMemberSnapshot]
@@ -355,8 +374,11 @@ struct PlanPersonSwitcher: View {
     @Environment(\.colorScheme) private var scheme
     @Namespace private var selectionNS
 
+    private static let avatarSize: CGFloat = 22
+    private static let segmentSize: CGFloat = 28
+
     var body: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 2) {
             ForEach(people) { person in
                 segment(person)
             }
@@ -383,36 +405,22 @@ struct PlanPersonSwitcher: View {
                 selection = person.id
             }
         } label: {
-            HStack(spacing: 5) {
-                avatar(person, tint: tint, isOn: isOn)
-
-                if isOn {
-                    Text(person.name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .transition(.opacity)
+            avatar(person, tint: tint, isOn: isOn)
+                .frame(width: Self.segmentSize, height: Self.segmentSize)
+                .background {
+                    if isOn {
+                        Circle()
+                            .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(tint.opacity(scheme == .dark ? 0.7 : 0.6), lineWidth: 1.4)
+                            )
+                            .matchedGeometryEffect(id: "selection", in: selectionNS)
+                    }
                 }
-            }
-            .padding(.leading, 2)
-            .padding(.trailing, isOn ? 9 : 2)
-            .frame(height: 26)
-            .background {
-                if isOn {
-                    Capsule(style: .continuous)
-                        .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .strokeBorder(tint.opacity(scheme == .dark ? 0.55 : 0.45), lineWidth: 1.2)
-                        )
-                        .matchedGeometryEffect(id: "selection", in: selectionNS)
-                }
-            }
-            .contentShape(Capsule(style: .continuous))
+                .contentShape(Circle())
         }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .buttonStyle(PlanPressStyle(scale: 0.9))
         .accessibilityLabel(person.isMe ? "\(person.name), Ty" : person.name)
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
@@ -421,18 +429,18 @@ struct PlanPersonSwitcher: View {
     private func avatar(_ person: PlanDayPerson, tint: Color, isOn: Bool) -> some View {
         Group {
             if let member = person.member {
-                MemberAvatar(member: member, members: members, size: 22)
+                MemberAvatar(member: member, members: members, size: Self.avatarSize)
             } else {
                 Image(systemName: "person.fill")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Color.scMuted(scheme))
-                    .frame(width: 22, height: 22)
+                    .frame(width: Self.avatarSize, height: Self.avatarSize)
             }
         }
-        // Niewybrana osoba przygaszona, ale z obwódką swojego koloru —
-        // kółka bez podpisu i tak mają się dać rozróżnić.
-        .overlay(Circle().strokeBorder(tint.opacity(isOn ? 0 : 0.6), lineWidth: 1.2))
-        .opacity(isOn ? 1 : 0.7)
+        // Niewybrana osoba przygaszona i pomniejszona — wybrana „wychodzi”
+        // do pełnego rozmiaru w tej samej sprężynie co przejazd tła.
+        .scaleEffect(isOn ? 1 : 0.9)
+        .opacity(isOn ? 1 : 0.6)
     }
 }
 
@@ -489,6 +497,11 @@ struct PlanGoalRings: View {
                     endColor: ring.color,
                     trackOpacity: 0.16
                 )
+                // Ta sama krzywa co tory legendy obok (`MacroProgressTrack`
+                // z `revealAnimation`) — także przy przełączeniu osoby i dnia.
+                // Bez tego pierścień brał sprężynę 0,36 s z przełącznika i był
+                // gotowy, zanim kreska obok przejechała połowę drogi.
+                .animation(Self.revealAnimation, value: ring.progress)
                 .padding(CGFloat(index) * (Self.lineWidth + Self.spacing))
             }
         }
@@ -587,14 +600,16 @@ struct PlanGoalLegendRow: View {
             // Krzywa odsłonięcia idzie z `PlanGoalRings`, a nie z domyślnej
             // sprężyny toru: kreska i pierścień obok mają wypełniać się jednym
             // ruchem, a dwie podobne krzywe obok siebie widać jako dwa.
-            if let progress = row.progress {
-                MacroProgressTrack(
-                    progress: isRevealed ? max(progress, 0) : 0,
-                    color: row.color,
-                    height: 3,
-                    animation: PlanGoalRings.revealAnimation
-                )
-            }
+            // Tor stoi zawsze, a bez celu jest niewidoczny — wiersz bez celu
+            // i wiersz z celem mają tę samą wysokość, więc przełączenie osoby
+            // nie przesuwa legendy.
+            MacroProgressTrack(
+                progress: isRevealed ? max(row.progress ?? 0, 0) : 0,
+                color: row.color,
+                height: 3,
+                animation: PlanGoalRings.revealAnimation
+            )
+            .opacity(row.progress == nil ? 0 : 1)
         }
         // Bez `withAnimation` — ruch prowadzi `MacroProgressTrack` własnym
         // modyfikatorem, tą samą krzywą co pierścienie.

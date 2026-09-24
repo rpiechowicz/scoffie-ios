@@ -203,6 +203,9 @@ struct AssistantView: View {
             // Powrót na zakładkę po przerwie: czysta kartka zamiast
             // dopisywania do rozmowy sprzed pół dnia.
             if active { store.rotateIfStale() }
+            // Pula znana, zanim ktoś stuknie w akcję powitania: pusta =
+            // powitanie od razu w stanie limitu, bez wysyłki i skoku.
+            if active { Task { await store.refreshUsageIfStale() } }
         }
         .onDisappear { store.setVisible(false) }
         .onChange(of: scenePhase) { _, phase in
@@ -214,7 +217,7 @@ struct AssistantView: View {
             keyboardMoved(covers: Self.keyboardCoversBottom(note), duration: Self.animationDuration(of: note))
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
-            keyboardMoved(covers: false, duration: Self.animationDuration(of: note))
+            keyboardMoved(covers: false, duration: Self.animationDuration(of: note), hiding: true)
         }
         .onChange(of: isComposerFocused) { _, focused in focusChanged(focused) }
         .onChange(of: draft.isEmpty) { wasEmpty, isEmpty in
@@ -627,7 +630,7 @@ struct AssistantView: View {
         // Nowe konto: żadnego planu w pamięci i żadnej rozmowy. Cokolwiek
         // z tych dwóch znaczy, że Scoffie ten dom już zna.
         let plan = sessionStore.mealCalendarStore
-        let isNewUser = (plan?.plans.isEmpty ?? true) && store.conversations.isEmpty
+        let isNewUser = (plan?.plans.isEmpty ?? true) && store.historyConversations.isEmpty
         return AssistantBriefingContext(
             now: now,
             calendar: calendar,
@@ -850,18 +853,23 @@ struct AssistantView: View {
             isPinnedToBottom = atBottom
         }
 
-        return withScrollTriggers(scroll, proxy: proxy)
+        let triggered = withScrollTriggers(scroll, proxy: proxy)
         // Wibracja tylko przy NOWEJ odpowiedzi i przy NOWYM błędzie.
         // Wyzwalacz po samej zmianie wartości odzywał się też, gdy
         // liczba odpowiedzi SPADAŁA (nowa rozmowa, wybór z historii,
         // poprawka pytania) i gdy błąd ZNIKAŁ — „sukces" i „błąd"
         // pod palcem w chwili, w której nic takiego się nie stało.
-        .sensoryFeedback(trigger: answerCount) { old, new in
-            new > old ? .success : nil
+        // Typy domknięć jawnie: `.success : nil` bez nich zjadało
+        // kompilatorowi limit czasu na całe wyrażenie.
+        let onAnswer: (Int, Int) -> SensoryFeedback? = { old, new in
+            new > old ? SensoryFeedback.success : nil
         }
-        .sensoryFeedback(trigger: store.errorMessage) { old, new in
-            old == nil && new != nil ? .error : nil
+        let onError: (String?, String?) -> SensoryFeedback? = { old, new in
+            old == nil && new != nil ? SensoryFeedback.error : nil
         }
+        return triggered
+            .sensoryFeedback(trigger: answerCount, onAnswer)
+            .sensoryFeedback(trigger: store.errorMessage, onError)
     }
 
     /// Odstęp między wiadomościami. Odpowiedź z kartą pod pytaniem i kolejne
@@ -1020,10 +1028,16 @@ struct AssistantView: View {
 
     /// Klawiatura rusza: powitanie zwija się / rozwija w tej samej chwili
     /// i w tej samej krzywej co pole nad klawiaturą (patrz `greetingComposing`).
-    private func keyboardMoved(covers: Bool, duration: Double) {
+    private func keyboardMoved(covers: Bool, duration: Double, hiding: Bool = false) {
         let target: Bool
         if covers {
             target = true
+        } else if hiding {
+            // Klawiatura ZJEŻDŻA: powitanie rozwija się w tym samym ruchu,
+            // nawet jeśli fokus zejdzie dopiero za chwilę (zamknięcie
+            // przeciągnięciem). Dawniej czekało na `focusChanged` i ruszało
+            // PO klawiaturze — drugi ruch, który wyglądał jak przeskok.
+            target = false
         } else if isComposerFocused {
             // Klawiatura zjeżdża, a fokus jeszcze nie zszedł (schował ją
             // system) — rozwinięcie odda `focusChanged` za chwilę.
@@ -1058,10 +1072,9 @@ struct AssistantView: View {
         }
     }
 
-    /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
-    /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.
+    /// Krzywa klawiatury — ta sama co rezerwa pod dolnym menu.
     private static func keyboardCurve(duration: Double) -> Animation {
-        .timingCurve(0.38, 0.7, 0.125, 1, duration: max(duration, 0.2))
+        SCTabBarChrome.keyboardCurve(duration: duration)
     }
 
     /// Czas ruchu klawiatury z powiadomienia.
@@ -1899,7 +1912,8 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planWeek.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose
+                onCompose: onCompose,
+                autoPresentID: arrivedLive ? message.id : nil
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -1911,7 +1925,8 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planDay.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose
+                onCompose: onCompose,
+                autoPresentID: arrivedLive ? message.id : nil
             )
         case .options(let options):
             AssistantOptionsCard(

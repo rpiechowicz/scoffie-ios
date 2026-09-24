@@ -7,18 +7,19 @@ import SwiftUI
 /// z krótkim pop-em i rysowanym ptaszkiem, headline + rotujący status
 /// + 3 pulsujące kropki.
 ///
-/// Choreografia (sekundy od pojawienia się ekranu, `LoaderMotion`):
-/// - 0.00–0.55  wejście: logo scale 0.92→1, kafelki wjeżdżają z dołu
-///              ze staggerem 50 ms, tekst dołącza po 0.35 s.
-/// - 0.60–2.46  fala: kafelek `i` zaczyna wypełnienie o `0.6 + i × 0.24`,
-///              kolor wznosi się od dołu przez 0.28 s, w tym czasie kafelek
-///              „podskakuje" (scale 1→1.07→1), a ptaszek dorysowuje się
-///              80 ms później przez 0.30 s. Niedziela domyka się o 2.46 s
+/// Choreografia (sekundy od pojawienia się ekranu, `LoaderMotion`) — JEDEN
+/// takt 1,34 s = jeden obrót znaku (sam znak, kafel stoi), ease-in-out:
+/// - 0.00–0.35  wejście: logo scale 0.92→1, kafelki wjeżdżają z dołu
+///              ze staggerem 30 ms, tekst dołącza po 0.15 s.
+/// - 0.20–1.34  fala: kafelek `i` zaczyna wypełnienie o `0.2 + i × 0.14`,
+///              kolor wznosi się od dołu przez 0.20 s, kafelek „podskakuje”,
+///              ptaszek dorysowuje się 50 ms później. Niedziela domyka się
+///              o 1.34 s razem z pierwszym obrotem znaku
 ///              = `StartupLoaderView.waveCompletionSeconds`, z którego
 ///              korzysta `SessionStore.startupMinimumDisplaySeconds`.
-/// - od 2.76    wolne ładowanie: kafelki NIE resetują się; po tygodniu
-///              przechodzi co 2.6 s miękki refleks światła, a podpis pod
-///              nagłówkiem zmienia się na kolejne etapy przygotowań.
+/// - od 1.34    wolne ładowanie: kafelki NIE resetują się; na każdy obrót
+///              znaku przez tydzień przechodzi refleks światła. Loader schodzi
+///              zawsze na końcu obrotu (`remainingToFullTurn`).
 ///
 /// Wszystko jest driver'owane jednym `TimelineView(.animation)` na
 /// podstawie czasu od `startDate` — bez state'ów i `repeatForever`, więc
@@ -33,6 +34,24 @@ struct StartupLoaderView: View {
     /// Moment, w którym ostatni kafelek (niedziela) jest w pełni domknięty.
     /// Jedyne źródło prawdy dla minimalnego czasu wyświetlania loadera.
     static let waveCompletionSeconds: Double = LoaderMotion.waveEnd
+
+    /// Jeden obrót znaku = jedna fala dni (poniedziałek → niedziela).
+    static let turnSeconds: Double = LoaderMotion.waveEnd
+
+    /// Ile brakuje do domknięcia bieżącego obrotu znaku. Loader schodzi
+    /// ZAWSZE na pełnym obrocie (`ScoffieApp`): start gotowy w półtora
+    /// obrotu = loader stoi do końca drugiego.
+    static func remainingToFullTurn(since start: Date, now: Date = .init()) -> Double {
+        let elapsed = max(0, now.timeIntervalSince(start))
+        let into = elapsed.truncatingRemainder(dividingBy: turnSeconds)
+        // Tuż po domknięciu (albo przed pierwszym ruchem) nie ma na co czekać.
+        if into < 0.05 { return elapsed < 0.05 ? turnSeconds - into : 0 }
+        return turnSeconds - into
+    }
+
+    init(startDate: Date = .init()) {
+        _startDate = State(initialValue: startDate)
+    }
 
     private static let dayInitials = ["P", "W", "Ś", "C", "P", "S", "N"]
     private static let logoSize: CGFloat = 84
@@ -63,7 +82,8 @@ struct StartupLoaderView: View {
     @ViewBuilder
     private func content(motion: LoaderMotion) -> some View {
         VStack(spacing: 0) {
-            SCScoffieMark(size: Self.logoSize)
+            // Kręci się sam znak, kafel stoi.
+            SCScoffieMark(size: Self.logoSize, markRotation: motion.logoRotation)
                 .shadow(color: shadowColor, radius: 16, x: 0, y: 10)
                 .scaleEffect(motion.logoScale)
                 .opacity(motion.logoOpacity)
@@ -339,41 +359,57 @@ private struct LoaderMotion {
     let elapsed: Double
     let reduceMotion: Bool
 
+    // Wszystko liczy się od JEDNEGO taktu — obrotu znaku (`waveEnd`):
+    // fala dni, obrót, później refleks na tygodniu, oddech znaku i kropki
+    // biegną w tym samym rytmie, a loader schodzi na końcu taktu
+    // (`StartupLoaderView.remainingToFullTurn`). Runda 22 (24.09.2026):
+    // „szybciej, to musi iść równo wszystko” — takt 2,46 s → 1,34 s.
+
     // Wejście
-    private static let logoInDuration: Double = 0.55
-    private static let tilesInStart: Double = 0.12
-    private static let tilesInStagger: Double = 0.05
-    private static let tilesInDuration: Double = 0.40
-    private static let textInStart: Double = 0.35
-    private static let textInDuration: Double = 0.45
+    private static let logoInDuration: Double = 0.35
+    private static let tilesInStart: Double = 0.0
+    private static let tilesInStagger: Double = 0.03
+    private static let tilesInDuration: Double = 0.30
+    private static let textInStart: Double = 0.15
+    private static let textInDuration: Double = 0.35
 
     // Fala wypełnień
-    private static let fillStart: Double = 0.60
-    private static let fillStagger: Double = 0.24
-    private static let fillDuration: Double = 0.28
-    private static let popDuration: Double = 0.42
-    private static let checkDelay: Double = 0.08
-    private static let checkDuration: Double = 0.30
+    private static let fillStart: Double = 0.20
+    private static let fillStagger: Double = 0.14
+    private static let fillDuration: Double = 0.20
+    private static let popDuration: Double = 0.30
+    private static let checkDelay: Double = 0.05
+    private static let checkDuration: Double = 0.20
 
-    /// Niedziela w pełni domknięta (fill + ptaszek + pop): 2.46 s.
+    /// Niedziela w pełni domknięta (fill + ptaszek + pop): 1,34 s = jeden takt.
     static let waveEnd: Double = fillStart + 6 * fillStagger
         + max(checkDelay + checkDuration, popDuration)
 
-    // Po fali
-    private static let glowStart: Double = waveEnd + 0.30
-    private static let glowCycle: Double = 2.6
-    private static let glowStagger: Double = 0.14
-    private static let glowWidth: Double = 0.70
-    private static let statusSwitches: [Double] = [2.7, 5.4]
+    // Po fali: refleks przechodzi przez tydzień raz na takt, razem z obrotem.
+    private static let glowStart: Double = waveEnd
+    private static let glowCycle: Double = waveEnd
+    private static let glowStagger: Double = 0.12
+    private static let glowWidth: Double = 0.50
+    private static let statusSwitches: [Double] = [2 * waveEnd, 4 * waveEnd]
 
     // MARK: Logo
 
     var logoScale: CGFloat {
         let entrance = reduceMotion ? 1 : 0.92 + 0.08 * Ease.out(elapsed / Self.logoInDuration)
-        // Oddech: 0/100 % scale 1, 50 % 1.014, okres 2.6 s — krzywa
-        // (1 − cos) odpowiada CSS ease-in-out bez state'a.
-        let breathe = reduceMotion ? 0 : 0.014 * (1 - cos(2 * .pi * elapsed / 2.6)) / 2
+        // Oddech: raz na takt, szczyt w połowie obrotu — krzywa (1 − cos)
+        // odpowiada CSS ease-in-out bez state'a.
+        let breathe = reduceMotion ? 0 : 0.014 * (1 - cos(2 * .pi * elapsed / Self.waveEnd)) / 2
         return CGFloat(entrance + breathe)
+    }
+
+    /// Obrót znaku: każdy obrót trwa jedną falę dni i jedzie ease-in-out,
+    /// więc między obrotami znak na chwilę staje — i właśnie na takim
+    /// postoju loader schodzi (`remainingToFullTurn`).
+    var logoRotation: Angle {
+        if reduceMotion { return .zero }
+        let turns = elapsed / Self.waveEnd
+        let whole = floor(turns)
+        return .degrees(360 * (whole + Ease.inOut(turns - whole)))
     }
 
     var logoOpacity: Double {
@@ -444,7 +480,7 @@ private struct LoaderMotion {
         let raw = elapsed - Double(index) * 0.18
         var t: Double = 0
         if raw >= 0 {
-            let phase = raw.truncatingRemainder(dividingBy: 1.4) / 1.4
+            let phase = raw.truncatingRemainder(dividingBy: Self.waveEnd) / Self.waveEnd
             if phase >= 0.2, phase < 0.5 {
                 t = Ease.inOut((phase - 0.2) / 0.3)
             } else if phase >= 0.5, phase < 0.8 {

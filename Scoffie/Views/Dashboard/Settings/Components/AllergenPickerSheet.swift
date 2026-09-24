@@ -10,8 +10,47 @@ import SwiftUI
 // diety pokazuje tylko wynik — co jest wykluczone i ile przepisów przez to
 // znika — a wybór ma własny arkusz, w którym jest miejsce na ikonę i jedno
 // zdanie przy każdym alergenie (gdzie się chowa: jaja w majonezie, seler
-// w bulionie). Kreator powitalny zostaje przy siatce (`AllergenPicker`):
-// tam wybór JEST treścią kroku, a nie jednym z pięciu ustawień.
+// w bulionie). Od 24.09.2026 kreator powitalny stoi na tym samym mechanizmie
+// (`AllergenSelectionField`) — siatka 3 × 5 z kreatora zniknęła, bo Rafał
+// chciał w obu miejscach tego samego arkusza, a nie dwóch wyborów.
+
+// MARK: - Karta + arkusz (Ustawienia i kreator)
+
+/// Alergeny tam, gdzie się je ustawia: Ustawienia → „Dieta i alergeny”
+/// i krok 3 kreatora. Karta z wynikiem otwiera arkusz wyboru — jeden
+/// mechanizm w obu miejscach.
+///
+/// Widok niczego nie zapisuje: dostaje zaznaczone i oddaje stuknięcia.
+/// Unię „znane ∪ nieznane” (alergeny z nowszego buildu) trzyma właściciel,
+/// patrz `SettingsView.toggleAllergen`.
+struct AllergenSelectionField: View {
+    let selected: Set<Allergen>
+    /// Ile przepisów znika przez zaznaczone alergeny (`nil` = nie wiadomo,
+    /// np. w kreatorze, zanim wczyta się katalog).
+    let hiddenRecipes: Int?
+    let onToggle: (Allergen) -> Void
+    let onClear: () -> Void
+
+    @State private var showsPicker = false
+
+    var body: some View {
+        AllergenSummaryCard(
+            selected: selected,
+            hiddenRecipes: hiddenRecipes,
+            onEdit: { showsPicker = true }
+        )
+        .sheet(isPresented: $showsPicker) {
+            AllergenPickerSheet(
+                selected: selected,
+                hiddenRecipes: hiddenRecipes,
+                onToggle: onToggle,
+                onClear: onClear
+            )
+            .presentationDetents([.large])
+            .dashboardLiquidSheet()
+        }
+    }
+}
 
 // MARK: - Karta w arkuszu diety
 

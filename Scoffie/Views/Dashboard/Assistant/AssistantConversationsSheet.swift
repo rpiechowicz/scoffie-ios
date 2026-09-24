@@ -36,7 +36,7 @@ struct AssistantConversationsSheet: View {
                 },
                 footer: { searchBar }
             ) {
-                if store.conversations.isEmpty && !store.isLoadingConversations {
+                if store.historyConversations.isEmpty && !store.isLoadingConversations {
                     emptyState
                 } else if groups.isEmpty && !query.isEmpty {
                     noResults
@@ -116,7 +116,7 @@ struct AssistantConversationsSheet: View {
 
     /// Rozmowy pogrupowane po tym, KIEDY się wydarzyły.
     private var groups: [ConversationGroup] {
-        let matching = store.conversations.filter(matches)
+        let matching = store.historyConversations.filter(matches)
         let calendar = Calendar.current
         let now = Date()
 

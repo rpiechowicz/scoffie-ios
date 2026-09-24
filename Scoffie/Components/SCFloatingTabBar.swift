@@ -20,6 +20,18 @@ final class SCTabBarChrome {
     /// Klawiatura zasłania pasek — treść nie rezerwuje pod nim miejsca,
     /// inaczej pole asystenta wisiałoby 70 pt nad klawiaturą.
     var isKeyboardVisible = false
+    /// Czas ostatniego ruchu klawiatury (z powiadomienia) — rezerwa schodzi
+    /// i wraca w tym samym tempie i tej samej krzywej co klawiatura.
+    var keyboardDuration: Double = 0.25
+
+    /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
+    /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.
+    /// JEDNA dla rezerwy pod menu i dla wszystkiego, co jedzie z polem nad
+    /// klawiaturą (powitanie Asystenta) — dwie różne krzywe (była tu
+    /// `easeOut(0.25)`) rozjeżdżały pole i blok nad nim o kilka klatek.
+    static func keyboardCurve(duration: Double) -> Animation {
+        .timingCurve(0.38, 0.7, 0.125, 1, duration: max(duration, 0.2))
+    }
 }
 
 private struct SCTabBarChromeKey: EnvironmentKey {
@@ -83,9 +95,16 @@ struct SCFloatingTabBar: View {
     /// stoi na wybranej zakładce.
     @State private var dragX: CGFloat?
 
-    private var compaction: Animation {
+    private var compaction: Animation { Self.compaction(reduceMotion: reduceMotion) }
+
+    /// Ruch zwinięcia i rozwinięcia — JEDEN dla paska i dla wszystkiego, co
+    /// zwija się razem z nim (pigułka „Cel dnia” w Planie).
+    static func compaction(reduceMotion: Bool) -> Animation {
         reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.38)
     }
+
+    /// O ile opada górna krawędź paska przy zwinięciu (pasek stoi na dole).
+    static let compactionDrop: CGFloat = expandedHeight - compactHeight
 
     /// Pigułka za palcem: krótka sprężyna bez odbicia — nadąża za ruchem,
     /// a pierwszy dotyk daleko od pigułki nie jest teleportacją.
@@ -325,7 +344,7 @@ private struct SCTabBarSpaceReservation: ViewModifier {
         content.safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear
                 .frame(height: chrome.isKeyboardVisible ? 0 : SCFloatingTabBar.reservedHeight)
-                .animation(.easeOut(duration: 0.25), value: chrome.isKeyboardVisible)
+                .animation(SCTabBarChrome.keyboardCurve(duration: chrome.keyboardDuration), value: chrome.isKeyboardVisible)
         }
     }
 }

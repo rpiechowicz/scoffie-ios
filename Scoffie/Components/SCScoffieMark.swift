@@ -20,6 +20,9 @@ struct SCScoffieMark: View {
     var size: CGFloat = 100
     var mono: Bool = false
     var palette: Palette = .auto
+    /// Obrót SAMEGO znaku (dysku z nadgryzieniem) wokół środka — kafel pod
+    /// nim stoi. Loader startu kręci tak znakiem.
+    var markRotation: Angle = .zero
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -28,7 +31,13 @@ struct SCScoffieMark: View {
             let scale = canvasSize.width / 100
 
             drawBackground(in: context, scale: scale, canvasSize: canvasSize, isLight: isLight)
-            context.fill(Self.markPath(scale: scale), with: .color(markColor(isLight: isLight)))
+            var mark = context
+            if markRotation != .zero {
+                mark.translateBy(x: canvasSize.width / 2, y: canvasSize.height / 2)
+                mark.rotate(by: markRotation)
+                mark.translateBy(x: -canvasSize.width / 2, y: -canvasSize.height / 2)
+            }
+            mark.fill(Self.markPath(scale: scale), with: .color(markColor(isLight: isLight)))
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)

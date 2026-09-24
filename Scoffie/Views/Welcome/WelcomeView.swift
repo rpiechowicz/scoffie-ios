@@ -46,6 +46,9 @@ struct WelcomeView: View {
     /// dopiero w kroku 5 — `households:updateMealTypes` potrzebuje
     /// `householdId`, który powstaje razem z gospodarstwem.
     @State private var mealSlots: MealSlotConfiguration
+    /// Godziny posiłków z kroku 4 — tak jak `mealSlots` jadą na serwer
+    /// dopiero razem z gospodarstwem (`households:updateMealTimes`).
+    @State private var mealSchedule: MealSlotSchedule
     @State private var householdName: String = ""
 
     // Whether the user has manually moved the kcal slider away from the
@@ -148,6 +151,13 @@ struct WelcomeView: View {
                 ? MealSlotConfiguration.default
                 : MealSlotConfiguration(storageValue: storedSlots)
         )
+        // Godziny — ten sam klucz co `SessionStore.mealSlotSchedule`; pusty
+        // daje rozkład domyślny (braki uzupełnia `MealSlotSchedule`).
+        _mealSchedule = State(
+            initialValue: MealSlotSchedule(
+                storageValue: defaults.string(forKey: MealSlotSchedule.Keys.times) ?? ""
+            )
+        )
     }
 
     var body: some View {
@@ -204,7 +214,7 @@ struct WelcomeView: View {
                 // tak jak w przewodniku — w pasku został tylko „Wyloguj".
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Wyloguj") {
-                        sessionStore.logout()
+                        Task { await sessionStore.signOut() }
                     }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.scMuted(colorScheme))
@@ -278,7 +288,7 @@ struct WelcomeView: View {
                 macros: macroTargets
             )
         case 4:
-            WelcomeStep4MealsView(mealSlots: $mealSlots)
+            WelcomeStep4MealsView(mealSlots: $mealSlots, mealSchedule: $mealSchedule)
         default:
             WelcomeStep4HouseholdView(
                 householdName: $householdName,
@@ -379,10 +389,12 @@ struct WelcomeView: View {
             // zapisany od razu: zabicie aplikacji na kroku 5 nie cofa go
             // do domyślnych.
             UserDefaults.standard.set(mealSlots.storageValue, forKey: MealSlotConfiguration.Keys.enabledSlots)
+            UserDefaults.standard.set(mealSchedule.storageValue, forKey: MealSlotSchedule.Keys.times)
             advance()
         case 5:
             let trimmedHousehold = householdName.trimmingCharacters(in: .whitespacesAndNewlines)
             let slots = mealSlots
+            let schedule = mealSchedule
             Task { @MainActor in
                 await store.createHousehold(name: trimmedHousehold)
                 if store.currentHouseholdId != nil {
@@ -391,6 +403,11 @@ struct WelcomeView: View {
                     // konfigurację posiłków. Zapis po tej linii dorzucałby
                     // podwieczorek do już narysowanego tygodnia.
                     await store.saveMealSlotConfiguration(slots)
+                    // Godziny tak samo: nowe gospodarstwo startuje z domyślnymi,
+                    // więc jedzie tylko rozkład zmieniony w kroku 4.
+                    if !schedule.isDefault {
+                        await store.saveMealSlotSchedule(schedule)
+                    }
                     await store.completeOnboarding()
                 }
             }
