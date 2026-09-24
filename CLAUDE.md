@@ -398,10 +398,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (podpis „TEN TYDZIEŃ · …”, „Wróć do dziś”, strzałki 26 pt, przejeżdżające podkreślenie, przeciąganie
   w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = od 24.09 kafle pór, układ wg liczby pór
   (`SlotTileLayout`: 1–2 poziome w rzędzie, 3 pionowe obok siebie, 4 = 2 × 2 poziome, 5–6 = 3 kolumny pionowe;
-  ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule`, miniatura dania, które już tam stoi, w rogu;
+  ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule`; od rundy 18 pod nimi danie, które już tam stoi — miniatura 32/40 pt + nazwa (`SlotDish`), wolna pora = przerywany kafelek i „Wolne”, wiersz jest w KAŻDYM kaflu, gdy choć jedna pora zajęta (równe wysokości) — a podmiana = znaczek zamiany na miniaturze + „Zamienisz” w kaflu i karta „ZAMIENISZ · danie” ze zdjęciem nad zdaniem stopki (18 pt miniatura w rogu była za mała: „nie widać, co tam jest”);
   wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
-  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „zamiast: X” /
-  „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
+  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,
   nie `stroke` (clip zjadał pół obwódki). `EditorialPrimaryActionButton` roluje tytuł (`numericText`) —
