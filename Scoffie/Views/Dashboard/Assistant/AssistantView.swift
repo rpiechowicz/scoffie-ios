@@ -214,7 +214,7 @@ struct AssistantView: View {
             keyboardMoved(covers: Self.keyboardCoversBottom(note), duration: Self.animationDuration(of: note))
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
-            keyboardMoved(covers: false, duration: Self.animationDuration(of: note))
+            keyboardMoved(covers: false, duration: Self.animationDuration(of: note), hiding: true)
         }
         .onChange(of: isComposerFocused) { _, focused in focusChanged(focused) }
         .onChange(of: draft.isEmpty) { wasEmpty, isEmpty in
@@ -1020,10 +1020,16 @@ struct AssistantView: View {
 
     /// Klawiatura rusza: powitanie zwija się / rozwija w tej samej chwili
     /// i w tej samej krzywej co pole nad klawiaturą (patrz `greetingComposing`).
-    private func keyboardMoved(covers: Bool, duration: Double) {
+    private func keyboardMoved(covers: Bool, duration: Double, hiding: Bool = false) {
         let target: Bool
         if covers {
             target = true
+        } else if hiding {
+            // Klawiatura ZJEŻDŻA: powitanie rozwija się w tym samym ruchu,
+            // nawet jeśli fokus zejdzie dopiero za chwilę (zamknięcie
+            // przeciągnięciem). Dawniej czekało na `focusChanged` i ruszało
+            // PO klawiaturze — drugi ruch, który wyglądał jak przeskok.
+            target = false
         } else if isComposerFocused {
             // Klawiatura zjeżdża, a fokus jeszcze nie zszedł (schował ją
             // system) — rozwinięcie odda `focusChanged` za chwilę.
@@ -1058,10 +1064,9 @@ struct AssistantView: View {
         }
     }
 
-    /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
-    /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.
+    /// Krzywa klawiatury — ta sama co rezerwa pod dolnym menu.
     private static func keyboardCurve(duration: Double) -> Animation {
-        .timingCurve(0.38, 0.7, 0.125, 1, duration: max(duration, 0.2))
+        SCTabBarChrome.keyboardCurve(duration: duration)
     }
 
     /// Czas ruchu klawiatury z powiadomienia.
@@ -1899,7 +1904,8 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planWeek.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose
+                onCompose: onCompose,
+                autoPresentID: arrivedLive ? message.id : nil
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -1911,7 +1917,8 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planDay.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose
+                onCompose: onCompose,
+                autoPresentID: arrivedLive ? message.id : nil
             )
         case .options(let options):
             AssistantOptionsCard(

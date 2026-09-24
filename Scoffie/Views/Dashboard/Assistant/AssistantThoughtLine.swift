@@ -83,8 +83,17 @@ struct AssistantThoughtLine: View {
     /// stały trzy ostatnie (z bieżącym — cztery pozycje) i dłuższa tura
     /// gubiła, co już sprawdzono. Osiem mieści całe planowanie tygodnia;
     /// dopiero dłuższy ślad przesuwa się, a najstarszy widoczny przygasa.
+    ///
+    /// Kolejność DOPISYWANIA (24.09.2026, Rafał: „checked zmieniają się
+    /// miejscami”): ślad rośnie tylko w dół. Dawniej wiersz znikał, gdy bieżący
+    /// krok miał to samo zdanie (serwer przeplata przejściowe „Zastanawiam
+    /// się…” z narzędziami), i wracał w starym miejscu przy następnym kroku —
+    /// lista przeskakiwała pod okiem. Teraz: kroki przejściowe (`transient`,
+    /// „teraz”, nie etap) nigdy nie wchodzą do śladu, każde zdanie stoi raz,
+    /// w miejscu PIERWSZEGO pojawienia się, a id to samo zdanie — powtórzone
+    /// narzędzie nie przestawia wiersza.
     private struct DoneStep: Identifiable, Equatable {
-        let id: Int
+        let id: String
         let label: String
         let wrote: Bool
     }
@@ -94,10 +103,18 @@ struct AssistantThoughtLine: View {
     private var doneSteps: [DoneStep] {
         guard !isStopping, steps.count > 1 else { return [] }
         var result: [DoneStep] = []
-        for (index, step) in steps.dropLast().enumerated() {
-            if result.last?.label == step.label { continue }
-            if step.label == steps.last?.label { continue }
-            result.append(DoneStep(id: index, label: step.label, wrote: step.writes == true))
+        var seen: [String: Int] = [:]
+        for step in steps.dropLast() where !step.isTransient {
+            if let at = seen[step.label] {
+                // Ten sam krok jeszcze raz: zostaje na swoim miejscu, tylko
+                // zapis (szałwia) może go „awansować”.
+                if step.writes == true, !result[at].wrote {
+                    result[at] = DoneStep(id: step.label, label: step.label, wrote: true)
+                }
+                continue
+            }
+            seen[step.label] = result.count
+            result.append(DoneStep(id: step.label, label: step.label, wrote: step.writes == true))
         }
         return Array(result.suffix(Self.trailLimit))
     }
