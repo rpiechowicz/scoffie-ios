@@ -527,7 +527,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   bo przewodnik idzie przed pierwszym pobraniem czegokolwiek i nie może czekać na sieć); reszta to
   rendery telefonów kadrowane 16:13. „Wstecz” stoi w jednej linii z „Dalej”, po lewej
   (`SCStepFooter(backPlacement: .besidePrimary)`, krążek wysokości przycisku) — TYLKO w przewodniku;
-  kreator i asystent zostają przy krążku w wierszu kroków (`.progressRow`). Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
+  kreator i asystent zostają przy krążku w wierszu kroków (`.progressRow`).
+- Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
+  nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
+  treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
   (przewodnik) od „onboardingu usera” (kreator) i kreator ma zostać, jak jest.
 - Ekran logowania nie przewija się: elastyczne jest hero z kaflami (150–280 pt) i odstęp nad
   przyciskiem; poniżej 700 pt kafle funkcji tracą podpisy. Arkusze dokumentów

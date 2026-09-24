@@ -62,6 +62,7 @@ struct WelcomeStep2GoalView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
+        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 }

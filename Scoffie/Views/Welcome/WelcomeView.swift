@@ -161,67 +161,51 @@ struct WelcomeView: View {
     }
 
     var body: some View {
-        // NavigationStack + invisible toolbar item is the same recipe used
-        // in CalendarView / ProductsView / SettingsView: SwiftUI keeps the
-        // nav bar layer "live" and fades in its `.bar` blur material the
-        // moment scroll content slides under the status bar. We don't have
-        // a real title — `Wyloguj` lives as the only toolbar item.
-        NavigationStack {
+        // Bez `NavigationStack` i paska nawigacji (24.09.2026, Rafał: „button
+        // wyloguj wywal”, „header od samej góry tak jak wszystkie”): pasek
+        // trzymał tylko „Wyloguj” i spychał treść 132 pt w dół. Krok zaczyna
+        // się tam, gdzie strona przewodnika, a górny brzeg treści gaśnie pod
+        // paskiem statusu (`scScrollEdgeFade` w każdym kroku).
+        ZStack {
+            // To samo tło, co przewodnik przed kreatorem i każdy ekran
+            // aplikacji — przejście przewodnik → kreator nie zmienia koloru,
+            // a płyta stopki (`scPageBase`) zlewa się z dołem strony.
+            SCPageBackground(scheme: colorScheme)
+                .ignoresSafeArea()
+
             ZStack {
-                // To samo tło, co przewodnik przed kreatorem i każdy ekran
-                // aplikacji — przejście przewodnik → kreator nie zmienia koloru,
-                // a płyta stopki (`scPageBase`) zlewa się z dołem strony.
-                SCPageBackground(scheme: colorScheme)
-                    .ignoresSafeArea()
-
-                ZStack {
-                    stepContent(for: step)
-                        .id(step)
-                        .transition(asymmetricSlide())
-                }
-                .animation(.easeInOut(duration: 0.34), value: step)
-
-                // Stopka jako nakładka, nie ostatnie dziecko `VStack`: stoi pod
-                // klawiaturą (`ignoresSafeArea(.keyboard)`), a kroki z polami
-                // dalej przewijają się nad klawiaturą. Zapas pod treścią to
-                // `WelcomeLayout.bottomInset` (stopka + jej cień).
-                VStack {
-                    Spacer()
-                    SCStepFooter(
-                        // Pasek kroków tylko na pełnej ścieżce — „5 z 5” nie
-                        // ma sensu dla kogoś, kto wrócił tu wyłącznie po nowe
-                        // gospodarstwo i innych kroków nie widział.
-                        slot: initialStep == 1
-                            ? .progress(step: step, total: totalSteps)
-                            : .empty,
-                        notice: saveWarning,
-                        showsBack: step > initialStep,
-                        onBack: { handleBack() },
-                        primaryTitle: nextLabel,
-                        primaryIcon: step == totalSteps ? "checkmark" : "arrow.right",
-                        isPrimaryEnabled: isNextEnabled,
-                        isPrimaryLoading: isCreatingHousehold && step == totalSteps,
-                        onPrimary: { handleNext() }
-                    )
-                }
-                .ignoresSafeArea(.keyboard, edges: .bottom)
+                stepContent(for: step)
+                    .id(step)
+                    .transition(asymmetricSlide())
             }
-            .sensoryFeedback(.impact(flexibility: .soft), trigger: step)
-            .ignoresSafeArea(.container, edges: .top)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // „Wstecz" siedzi w stopce obok paska kroków (`SCStepFooter`),
-                // tak jak w przewodniku — w pasku został tylko „Wyloguj".
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Wyloguj") {
-                        Task { await sessionStore.signOut() }
-                    }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.scMuted(colorScheme))
-                    .accessibilityHint("Powrót do ekranu logowania")
-                }
+            .animation(.easeInOut(duration: 0.34), value: step)
+
+            // Stopka jako nakładka, nie ostatnie dziecko `VStack`: stoi pod
+            // klawiaturą (`ignoresSafeArea(.keyboard)`), a kroki z polami
+            // dalej przewijają się nad klawiaturą. Zapas pod treścią to
+            // `WelcomeLayout.bottomInset` (stopka + jej cień).
+            VStack {
+                Spacer()
+                SCStepFooter(
+                    // Pasek kroków tylko na pełnej ścieżce — „5 z 5” nie
+                    // ma sensu dla kogoś, kto wrócił tu wyłącznie po nowe
+                    // gospodarstwo i innych kroków nie widział.
+                    slot: initialStep == 1
+                        ? .progress(step: step, total: totalSteps)
+                        : .empty,
+                    notice: saveWarning,
+                    showsBack: step > initialStep,
+                    onBack: { handleBack() },
+                    primaryTitle: nextLabel,
+                    primaryIcon: step == totalSteps ? "checkmark" : "arrow.right",
+                    isPrimaryEnabled: isNextEnabled,
+                    isPrimaryLoading: isCreatingHousehold && step == totalSteps,
+                    onPrimary: { handleNext() }
+                )
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: step)
         // Suwak kalorii podąża za podpowiedzią, dopóki użytkownik sam go nie
         // przeciągnie. Podpowiedź zależy nie tylko od celu, ale i od sylwetki
         // z kroku 1 oraz treningów z kroku 2 — stąd wspólny token zamiast

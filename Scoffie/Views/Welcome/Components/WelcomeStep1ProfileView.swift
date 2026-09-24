@@ -114,6 +114,7 @@ struct WelcomeStep1ProfileView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
+        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 

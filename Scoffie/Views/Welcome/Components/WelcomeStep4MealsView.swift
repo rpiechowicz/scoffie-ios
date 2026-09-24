@@ -55,6 +55,7 @@ struct WelcomeStep4MealsView: View {
             .padding(.top, WelcomeLayout.topInset)
             .padding(.bottom, WelcomeLayout.bottomInset)
         }
+        .scScrollEdgeFade()
     }
 
     // MARK: - Trójka obowiązkowa

@@ -63,6 +63,7 @@ struct WelcomeStep4HouseholdView: View {
             .padding(.bottom, WelcomeLayout.bottomInset)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scScrollEdgeFade()
         .scrollDismissesKeyboard(.interactively)
     }
 

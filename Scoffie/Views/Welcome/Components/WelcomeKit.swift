@@ -11,9 +11,11 @@ enum WelcomeLayout {
     /// Margines stron aplikacji (`SCPageMetrics`) — ten sam, co w stopce
     /// kroków (`SCSheetFooter`), więc karty i przycisk stoją w jednej linii.
     static let horizontal: CGFloat = SCPageMetrics.horizontal
-    /// Pod paskiem statusu i „Wyloguj" — treść ignoruje górny bezpieczny
-    /// obszar (`WelcomeView`), więc odstęp jest liczony od krawędzi ekranu.
-    static let topInset: CGFloat = 132
+    /// Od bezpiecznego obszaru, jak strona przewodnika (`TourLayout.top`) —
+    /// przejście przewodnik → kreator nie przesuwa nagłówka. Dawne 132 pt
+    /// liczone od krawędzi ekranu robiło miejsce pod „Wyloguj” w pasku
+    /// nawigacji, którego już nie ma.
+    static let topInset: CGFloat = TourLayout.top
     /// Tyle zajmuje stopka kroków (`SCStepFooter`: 12 + wiersz 36 + 14 +
     /// przycisk ~45 + 12) nad bezpiecznym obszarem, plus jej cień
     /// (`SCEdgeShade.bottomHeight`), który leży na treści. Ostatnia karta ma
