@@ -17,6 +17,51 @@ final class ApiRecipeRepository: RecipeRepository {
         )
     }
 
+    func fetchCatalogSnapshotPage(revision: String?, cursor: String?, limit: Int) async throws -> CatalogSnapshotPage {
+        let dto = try await client.fetchCatalogSnapshot(revision: revision, cursor: cursor, limit: limit)
+        return CatalogSnapshotPage(
+            resetRequired: dto.mode == .resetRequired,
+            revision: dto.revision,
+            recipes: (dto.items ?? []).compactMap { item in
+                item.toAppRecipe().map { (id: item.id, item: $0) }
+            },
+            nextCursor: dto.nextCursor
+        )
+    }
+
+    func fetchCatalogChangesPage(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> CatalogChangesPage {
+        let dto = try await client.fetchCatalogChanges(
+            sinceRevision: sinceRevision,
+            untilRevision: untilRevision,
+            cursor: cursor,
+            limit: limit
+        )
+        var upserts: [(id: String, item: Recipe)] = []
+        var tombstones = dto.tombstones ?? []
+        for item in dto.upserts ?? [] {
+            if let recipe = item.toAppRecipe() {
+                upserts.append((id: item.id, item: recipe))
+            } else {
+                tombstones.append(item.id)
+            }
+        }
+        return CatalogChangesPage(
+            resetRequired: dto.mode == .resetRequired,
+            revision: dto.revision,
+            upserts: upserts,
+            tombstones: tombstones,
+            nextCursor: dto.nextCursor
+        )
+    }
+
+    func fetchHouseholdRecipeState() async throws -> HouseholdRecipeState {
+        let dto = try await client.fetchHouseholdRecipeState()
+        return HouseholdRecipeState(
+            recipes: dto.recipes.compactMap { $0.toAppRecipe() },
+            favoriteRecipeIds: Set(dto.favoriteRecipeIds.compactMap { UUID(uuidString: $0) })
+        )
+    }
+
     func fetchRecipeById(_ recipeId: UUID) async throws -> Recipe {
         let id = recipeId.uuidString
         guard !id.isEmpty else { throw RecipeDataError.invalidRecipeId }

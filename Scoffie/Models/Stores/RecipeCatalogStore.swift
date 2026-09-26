@@ -4,10 +4,26 @@ import SwiftUI
 
 // Wydzielono z MealCalendarStore.swift — wcześniej oba Observable były w jednym pliku 1476 linii.
 
+/// Katalog przepisów na telefonie.
+///
+/// Od synchronizacji przyrostowej (backend workstream Etap 4A) katalog ma dwie
+/// części: PUBLICZNY katalog (`catalog:snapshot` / `catalog:changes`, z trwałą
+/// rewizją) i stan DOMU (`recipes:householdState`: przepisy gospodarstwa
+/// i ulubione). Pierwsze uruchomienie pobiera snapshot do końca — bez
+/// sufitu stron, więc katalog 10 000 przepisów dojeżdża w całości — a każde
+/// kolejne (foreground, powrót połączenia) tylko zmiany od zapisanej rewizji.
+/// Rewizja zapisuje się WYŁĄCZNIE po zastosowaniu całego przebiegu
+/// (`CatalogSyncState`), więc przerwany sync powtarza się od tej samej rewizji.
 @Observable
 final class RecipeCatalogStore {
     private struct RecipeCatalogCachePayload: Codable {
-        let recipes: [Recipe]
+        /// Publiczny katalog w kolejności z serwera.
+        let catalogIds: [String]
+        let catalog: [String: Recipe]
+        /// Rewizja W CAŁOŚCI zastosowanego katalogu; `nil` = następny sync to snapshot.
+        let revision: String?
+        let householdRecipes: [Recipe]
+        let favoriteRecipeIds: [UUID]
         let savedAt: Date
     }
 
@@ -16,22 +32,24 @@ final class RecipeCatalogStore {
     private(set) var didLoad: Bool = false
     var isLoading: Bool = false
     var isLoadingMore: Bool = false
-    var hasMore: Bool = true
+    var hasMore: Bool = false
     var errorMessage: String?
-    private var currentPage: Int = 0
-    private let pageSize: Int = 100
-    /// Bezpiecznik pętli pełnego ładowania — 40 stron po 100 to 4000 przepisów,
-    /// daleko ponad realny rozmiar katalogu.
-    private let maxCatalogPages: Int = 40
-    private let cacheMaxAge: TimeInterval = 60 * 60 * 12 // 12 h
+    /// Strona snapshotu/delty — duża, bo przepis to ~1,7 kB, a stron ma być mało.
+    private let syncPageSize: Int = 500
+    /// Tylko dla awaryjnej ścieżki starego backendu (`recipes:findAll`).
+    private let legacyPageSize: Int = 100
     private let maxFetchAttempts: Int = 3
+    private var catalogState = CatalogSyncState<Recipe>()
+    private var householdRecipes: [Recipe] = []
+    private var favoriteIds: Set<UUID> = []
     private var pendingRealtimeReloadTask: Task<Void, Never>?
+    private var pendingHouseholdRefreshTask: Task<Void, Never>?
     private var pendingFavoriteTasks: [UUID: Task<Void, Never>] = [:]
     private var pendingFavoriteOriginalState: [UUID: Bool] = [:]
     private var cacheURL: URL { Self.cacheFileURL }
 
     /// Kasuje plik cache — wołane przy wylogowaniu (`SessionStore`), bo plik
-    /// nie zna konta, a żyje 12 h.
+    /// nie zna konta.
     /// Przez tę samą kolejkę co zapis — inaczej zapis czekający w kolejce
     /// odtworzyłby plik już po wylogowaniu.
     static func clearCache() {
@@ -44,23 +62,16 @@ final class RecipeCatalogStore {
     private static var cacheFileURL: URL {
         FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            // v12: doszły tagi z serwera (allergens/dietTags). Stary cache
-            // dekodowałby się z `nil` i katalog przez 12 h filtrowałby dietę
-            // heurystyką zamiast tagami — z innymi wynikami (granola, seler).
+            // v13: katalog z rewizją synchronizacji + osobno przepisy domu
+            // i ulubione (backend Etap 4A). Stary plik (pełna lista bez
+            // rewizji) nie ma z czego zrobić delty — nowy przebieg zaczyna
+            // od snapshotu.
+            // v12: doszły tagi z serwera (allergens/dietTags).
             // v11: plaster A — porcje 1..8 i prostowanie nazw składników.
-            // v10: prostowanie id przepisów w katalogu przestawia 28 wierszy
-            // pod istniejącymi id. Cache trzyma pary (id, tytuł, imageUrl) z
-            // poprzedniego parowania, więc do końca 12 h ważności pokazywałby
-            // dawne nazwy przy nowych zdjęciach — czyli dokładnie ten objaw,
-            // który ta poprawka usuwa po stronie serwera.
-            // v9: doszła sekcja „Przekąski i desery". Zmieniło się i pole
-            // (`baseSlot`), i sposób liczenia `category` dla slotów pomiędzy
-            // posiłkami, więc cache z v8 trzymałby te dania w starych sekcjach
-            // przez pełne 12 h ważności.
-            // v8: doszły pola sourceProvider/sourceRecipeId (badge Thermomixa) —
-            // stary cache dekodowałby się bez nich i katalog nie miałby badge'ów
-            // aż do pełnego przeładowania.
-            .appendingPathComponent("recipes_catalog_cache_v12.json")
+            // v10: prostowanie id przepisów w katalogu.
+            // v9: sekcja „Przekąski i desery".
+            // v8: pola sourceProvider/sourceRecipeId (badge Thermomixa).
+            .appendingPathComponent("recipes_catalog_cache_v13.json")
     }
 
     init(
@@ -75,23 +86,29 @@ final class RecipeCatalogStore {
         self.repository.observeFavoritesChanges { [weak self] recipeId, isFavorite in
             guard let self else { return }
             Task { @MainActor in
+                if isFavorite {
+                    self.favoriteIds.insert(recipeId)
+                } else {
+                    self.favoriteIds.remove(recipeId)
+                }
                 if let index = self.recipes.firstIndex(where: { $0.id == recipeId }) {
                     self.recipes[index].favourite = isFavorite
                     self.saveCache()
                 }
             }
         }
-        // Przepis zmieniony poza tym telefonem — przez domownika albo przez
-        // asystenta AI, który od Fazy 1 potrafi dopisać i poprawić przepis.
-        // Ten sam debounce co przy powrocie połączenia: kilka zmian pod rząd
-        // (asystent zapisujący tydzień) ma dać JEDNO przeładowanie.
+        // Przepis GOSPODARSTWA zmieniony poza tym telefonem (domownik,
+        // asystent AI). Publiczny katalog się od tego nie zmienia — wystarczy
+        // odświeżyć stan domu, bez synchronizacji katalogu.
         self.repository.observeRecipeChanges { [weak self] in
             guard let self else { return }
             Task { @MainActor in
                 guard self.didLoad else { return }
-                self.scheduleRealtimeReload()
+                self.scheduleHouseholdRefresh()
             }
         }
+        // Powrót połączenia: zmiany katalogu od zapisanej rewizji (zwykle
+        // pusta delta, jedno zapytanie) — nie pełne pobranie.
         self.repository.observeRealtimeReconnect { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -101,18 +118,12 @@ final class RecipeCatalogStore {
         }
     }
 
-    /// Przeładowanie katalogu po zdarzeniu z serwera, z krótkim opóźnieniem.
-    ///
-    /// Zdarzenia potrafią przyjść seriami (powrót połączenia, asystent
-    /// zapisujący kilka przepisów) — bez tego każde z nich ciągnęłoby osobne
-    /// pobranie całego katalogu.
+    /// Synchronizacja po zdarzeniu z serwera, z krótkim opóźnieniem — kilka
+    /// zdarzeń pod rząd (powrót połączenia) daje jeden przebieg.
     private func scheduleRealtimeReload() {
         pendingRealtimeReloadTask?.cancel()
         pendingRealtimeReloadTask = Task { @MainActor [weak self] in
-            // Anulowany debounce NIE startuje przeładowania — `try?` połykał
-            // anulowanie i zadanie ciągnęło katalog jako anulowane, aż
-            // pierwszy rzucający `await` (odczekanie na socket, backoff
-            // ponowienia) rzucił `CancellationError` prosto do `errorMessage`.
+            // Anulowany debounce NIE startuje synchronizacji.
             do {
                 try await Task.sleep(nanoseconds: 300_000_000)
             } catch {
@@ -123,9 +134,28 @@ final class RecipeCatalogStore {
         }
     }
 
+    private func scheduleHouseholdRefresh() {
+        pendingHouseholdRefreshTask?.cancel()
+        pendingHouseholdRefreshTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            do {
+                try await self.refreshHouseholdState()
+                self.rebuildRecipes()
+                self.saveCache()
+            } catch {
+                self.errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            }
+        }
+    }
+
     func loadIfNeeded() async {
         guard !didLoad else { return }
-        if loadCacheIfFresh() {
+        if loadCache() {
             didLoad = true
             errorMessage = nil
             Task { @MainActor [weak self] in
@@ -136,29 +166,26 @@ final class RecipeCatalogStore {
         await reload()
     }
 
+    /// Synchronizacja katalogu (delta albo snapshot) i odświeżenie stanu domu.
     func reload() async {
         guard !isLoading else { return }
         isLoading = true
         isLoadingMore = false
         errorMessage = nil
         do {
-            // Ekran Przepisów buduje sekcje po kategoriach po stronie klienta,
-            // a API sortuje od najnowszych — po rozroście bazy sama pierwsza
-            // strona potrafi nie zawierać ani jednego śniadania i sekcja
-            // wygląda na pustą. Dlatego katalog ciągnie wszystkie strony od razu.
-            var all: [Recipe] = []
-            var page = 1
-            while true {
-                let fetched = try await fetchPageWithRetry(page: page)
-                all.append(contentsOf: fetched.recipes)
-                // Koniec katalogu poznajemy po tym, ile wierszy przysłał
-                // serwer, a nie po tym, ile z nich dało się zmapować — patrz
-                // `RecipePage`.
-                if fetched.receivedCount < pageSize || page >= maxCatalogPages { break }
-                page += 1
+            let usedLegacy = try await syncCatalog()
+            // Stan domu osobno: jego błąd (np. chwilowy timeout) nie może
+            // schować publicznego katalogu, który właśnie się zsynchronizował.
+            // Stara ścieżka `recipes:findAll` niesie już przepisy domu
+            // i ulubione — a stary backend i tak nie zna tego zdarzenia.
+            if !usedLegacy {
+                do {
+                    try await refreshHouseholdState()
+                } catch {
+                    errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+                }
             }
-            recipes = all
-            currentPage = page
+            rebuildRecipes()
             hasMore = false
             didLoad = true
             saveCache()
@@ -168,27 +195,157 @@ final class RecipeCatalogStore {
         isLoading = false
     }
 
+    /// Katalog trzyma się w całości (synchronizacja do końca protokołu), więc
+    /// dociąganie stron ze scrolla nie ma już czego dociągać.
     func loadNextPageIfNeeded(currentItemId: UUID?, threshold: Int = 6) async {
-        guard let currentItemId else { return }
-        guard hasMore, !isLoading, !isLoadingMore, didLoad else { return }
-        guard let index = recipes.firstIndex(where: { $0.id == currentItemId }) else { return }
-        let triggerIndex = max(0, recipes.count - max(1, threshold))
-        guard index >= triggerIndex else { return }
+        _ = currentItemId
+        _ = threshold
+    }
 
-        isLoadingMore = true
-        defer { isLoadingMore = false }
+    // MARK: - Synchronizacja
 
+    private enum DeltaOutcome {
+        case applied
+        case resetRequired
+    }
+
+    /// Zwraca `true`, gdy katalog przyszedł starą drogą (`recipes:findAll`).
+    private func syncCatalog() async throws -> Bool {
+        if let since = catalogState.revision {
+            if try await pullDelta(since: since) == .applied { return false }
+            catalogState.invalidateRevision()
+        }
         do {
-            let nextPage = currentPage + 1
-            let fetched = try await fetchPageWithRetry(page: nextPage)
-            recipes.append(contentsOf: fetched.recipes)
-            currentPage = nextPage
-            // Ta sama zasada co w `reload()`: o kolejnej stronie decyduje
-            // liczba wierszy z serwera, nie liczba tych zmapowanych.
-            hasMore = fetched.receivedCount >= pageSize
-            saveCache()
+            try await pullSnapshot()
+            return false
         } catch {
-            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            // Backend sprzed synchronizacji przyrostowej nie zna
+            // `catalog:snapshot` (ack nie przychodzi) — pełna lista starą
+            // drogą, do końca, bez sufitu stron. Rewizji wtedy nie ma, więc
+            // następnym razem znowu snapshot, a po jego porażce znowu ta droga.
+            try await legacyFullReload()
+            return true
+        }
+    }
+
+    /// Delta od `since`: wszystkie strony do bufora, `untilRevision` z pierwszej
+    /// strony, stan i rewizja dopiero po ostatniej.
+    private func pullDelta(since: String) async throws -> DeltaOutcome {
+        var buffer = CatalogSyncBuffer<Recipe>()
+        var until: String?
+        var cursor: String?
+        repeat {
+            let page = try await withRetry {
+                try await self.repository.fetchCatalogChangesPage(
+                    sinceRevision: since,
+                    untilRevision: until,
+                    cursor: cursor,
+                    limit: self.syncPageSize
+                )
+            }
+            if page.resetRequired { return .resetRequired }
+            until = until ?? page.revision
+            buffer.addTombstones(page.tombstones)
+            buffer.addUpserts(page.upserts)
+            cursor = page.nextCursor
+        } while cursor != nil
+        catalogState.applyDelta(buffer, revision: until ?? since)
+        return .applied
+    }
+
+    /// Snapshot: znacznik z pierwszej strony odsyłany na kolejnych. Gdy serwer
+    /// każe zacząć od nowa w trakcie (np. odtworzona baza), jedna ponowna próba.
+    private func pullSnapshot() async throws {
+        for _ in 0..<2 {
+            var buffer = CatalogSyncBuffer<Recipe>()
+            var revision: String?
+            var cursor: String?
+            var restart = false
+            repeat {
+                let page = try await withRetry {
+                    try await self.repository.fetchCatalogSnapshotPage(
+                        revision: revision,
+                        cursor: cursor,
+                        limit: self.syncPageSize
+                    )
+                }
+                if page.resetRequired {
+                    restart = true
+                    break
+                }
+                revision = revision ?? page.revision
+                buffer.addUpserts(page.recipes)
+                cursor = page.nextCursor
+            } while cursor != nil
+            if !restart, let revision {
+                catalogState.applySnapshot(buffer, revision: revision)
+                return
+            }
+        }
+        throw RecipeDataError.serverError(message: "Nie udało się pobrać katalogu przepisów.")
+    }
+
+    private func refreshHouseholdState() async throws {
+        let state = try await withRetry {
+            try await self.repository.fetchHouseholdRecipeState()
+        }
+        householdRecipes = state.recipes
+        favoriteIds = state.favoriteRecipeIds
+    }
+
+    /// Awaryjnie, dla backendu bez `catalog:snapshot`: `recipes:findAll` do
+    /// ostatniej strony (katalog + przepisy domu + ulubione w jednym).
+    private func legacyFullReload() async throws {
+        var all: [Recipe] = []
+        var page = 1
+        while true {
+            let fetched = try await withRetry {
+                try await self.repository.fetchRecipes(page: page, limit: self.legacyPageSize)
+            }
+            all.append(contentsOf: fetched.recipes)
+            // Koniec poznajemy po liczbie wierszy z serwera — patrz `RecipePage`.
+            if fetched.receivedCount < legacyPageSize { break }
+            page += 1
+        }
+        householdRecipes = []
+        favoriteIds = Set(all.filter(\.favourite).map(\.id))
+        catalogState = CatalogSyncState(
+            ids: all.map { $0.id.uuidString.lowercased() },
+            items: Dictionary(
+                all.map { ($0.id.uuidString.lowercased(), $0) },
+                uniquingKeysWith: { first, _ in first }
+            ),
+            revision: nil
+        )
+    }
+
+    /// Przepisy domu na początku, potem katalog; ulubione z bieżącego stanu domu.
+    /// Serduszko, którego zapis jeszcze czeka (`pendingFavoriteTasks`), zostaje
+    /// takie, jak na ekranie — stan domu pobrany przed zapisem go nie cofa.
+    private func rebuildRecipes() {
+        let householdIds = Set(householdRecipes.map(\.id))
+        let onScreen = Dictionary(
+            recipes.map { ($0.id, $0.favourite) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var merged = householdRecipes
+        merged.append(contentsOf: catalogState.orderedItems.filter { !householdIds.contains($0.id) })
+        for index in merged.indices {
+            let id = merged[index].id
+            if pendingFavoriteTasks[id] != nil, let visible = onScreen[id] {
+                merged[index].favourite = visible
+            } else {
+                merged[index].favourite = favoriteIds.contains(id)
+            }
+        }
+        recipes = merged
+    }
+
+    private func setFavoriteId(_ recipeId: UUID, _ isFavorite: Bool) {
+        if isFavorite {
+            favoriteIds.insert(recipeId)
+        } else {
+            favoriteIds.remove(recipeId)
         }
     }
 
@@ -208,7 +365,6 @@ final class RecipeCatalogStore {
             } else {
                 recipes.append(detailed)
             }
-            saveCache()
             return detailed
         } catch {
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
@@ -235,6 +391,9 @@ final class RecipeCatalogStore {
         let next = !previous
 
         recipes[index].favourite = next
+        // Od razu także w stanie domu: przebudowa listy (sync, odświeżenie
+        // domu) w oknie przed odpowiedzią serwera nie cofa serduszka.
+        setFavoriteId(recipeId, next)
 
         if pendingFavoriteTasks[recipeId] == nil {
             pendingFavoriteOriginalState[recipeId] = previous
@@ -256,8 +415,10 @@ final class RecipeCatalogStore {
 
             do {
                 try await self.repository.setFavorite(recipeId: recipeId, isFavorite: finalState)
+                self.setFavoriteId(recipeId, finalState)
                 self.saveCache()
             } catch {
+                self.setFavoriteId(recipeId, originalState)
                 if let rollbackIndex = self.recipes.firstIndex(where: { $0.id == recipeId }) {
                     self.recipes[rollbackIndex].favourite = originalState
                 }
@@ -266,6 +427,8 @@ final class RecipeCatalogStore {
         }
     }
 
+    // MARK: - Cache
+
     /// Jedna kolejka seryjna na wszystkie zapisy — ostatni snapshot wygrywa
     /// (ten sam wzór co `ShoppingListStore.persistCache`).
     private static let cacheWriteQueue = DispatchQueue(
@@ -273,12 +436,17 @@ final class RecipeCatalogStore {
         qos: .utility
     )
 
-    /// Encode + zapis pliku poza main threadem. Pełny katalog to setki
-    /// przepisów, a `loadRecipeDetail` zapisuje go tuż przed otwarciem
-    /// szczegółów posiłku — synchronicznie na MainActorze ta klatka zjadała
-    /// wjazd arkusza przy pierwszym otwarciu każdego przepisu.
+    /// Encode + zapis pliku poza main threadem — katalog to tysiące przepisów.
     private func saveCache() {
-        let payload = RecipeCatalogCachePayload(recipes: recipes, savedAt: Date())
+        let ids = catalogState.ids
+        let payload = RecipeCatalogCachePayload(
+            catalogIds: ids,
+            catalog: catalogState.items,
+            revision: catalogState.revision,
+            householdRecipes: householdRecipes,
+            favoriteRecipeIds: Array(favoriteIds),
+            savedAt: Date()
+        )
         let url = cacheURL
         Self.cacheWriteQueue.async {
             // Błąd zapisu cache świadomie pomijany.
@@ -287,24 +455,28 @@ final class RecipeCatalogStore {
         }
     }
 
-    private func loadCacheIfFresh() -> Bool {
+    /// Cache pokazuje katalog od razu; świeżość zapewnia następny sync (delta
+    /// od zapisanej rewizji), a nie wiek pliku.
+    private func loadCache() -> Bool {
         guard let data = try? Data(contentsOf: cacheURL) else { return false }
         guard let payload = try? JSONDecoder().decode(RecipeCatalogCachePayload.self, from: data) else { return false }
-        guard Date().timeIntervalSince(payload.savedAt) <= cacheMaxAge else { return false }
-        recipes = payload.recipes
-        currentPage = max(1, Int(ceil(Double(payload.recipes.count) / Double(pageSize))))
-        // Cache trzyma pełny katalog (reload ładuje wszystkie strony), a tuż po
-        // odczycie i tak startuje pełny reload — dociąganie stron ze scrolla
-        // tylko dublowałoby wiersze w tym oknie.
+        catalogState = CatalogSyncState(
+            ids: payload.catalogIds,
+            items: payload.catalog,
+            revision: payload.revision
+        )
+        householdRecipes = payload.householdRecipes
+        favoriteIds = Set(payload.favoriteRecipeIds)
+        rebuildRecipes()
         hasMore = false
-        return !payload.recipes.isEmpty
+        return !recipes.isEmpty
     }
 
-    private func fetchPageWithRetry(page: Int) async throws -> RecipePage {
+    private func withRetry<T>(_ operation: () async throws -> T) async throws -> T {
         var lastError: Error?
         for attempt in 1...maxFetchAttempts {
             do {
-                return try await repository.fetchRecipes(page: page, limit: pageSize)
+                return try await operation()
             } catch {
                 lastError = error
                 if attempt < maxFetchAttempts {

@@ -37,6 +37,59 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
         throw envelope.failure(fallback: "Nieznany błąd recipes:findAll.")
     }
 
+    /// `catalog:snapshot` — publiczny katalog stronami (backend Etap 4A).
+    /// `revision` = znacznik z PIERWSZEJ strony tego przebiegu (nil na pierwszej).
+    func fetchCatalogSnapshot(revision: String?, cursor: String?, limit: Int) async throws -> BackendCatalogSnapshotPageDTO {
+        var payload: [String: Any] = ["userId": userId, "limit": limit]
+        if let revision { payload["revision"] = revision }
+        if let cursor { payload["cursor"] = cursor }
+        let envelope: WsEnvelope<BackendCatalogSnapshotPageDTO> = try await socket.emitWithAck(
+            event: "catalog:snapshot",
+            payload: payload,
+            as: WsEnvelope<BackendCatalogSnapshotPageDTO>.self
+        )
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd catalog:snapshot.")
+    }
+
+    /// `catalog:changes` — zmiany od rewizji klienta (backend Etap 4A).
+    func fetchCatalogChanges(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> BackendCatalogChangesPageDTO {
+        var payload: [String: Any] = [
+            "userId": userId,
+            "sinceRevision": sinceRevision,
+            "limit": limit
+        ]
+        if let untilRevision { payload["untilRevision"] = untilRevision }
+        if let cursor { payload["cursor"] = cursor }
+        let envelope: WsEnvelope<BackendCatalogChangesPageDTO> = try await socket.emitWithAck(
+            event: "catalog:changes",
+            payload: payload,
+            as: WsEnvelope<BackendCatalogChangesPageDTO>.self
+        )
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd catalog:changes.")
+    }
+
+    /// `recipes:householdState` — przepisy gospodarstwa i ulubione.
+    func fetchHouseholdRecipeState() async throws -> BackendHouseholdRecipeStateDTO {
+        guard let householdId, !householdId.isEmpty else {
+            throw RecipeDataError.serverError(message: "Brak gospodarstwa do odczytu przepisów domu.")
+        }
+        let envelope: WsEnvelope<BackendHouseholdRecipeStateDTO> = try await socket.emitWithAck(
+            event: "recipes:householdState",
+            payload: ["userId": userId, "householdId": householdId],
+            as: WsEnvelope<BackendHouseholdRecipeStateDTO>.self
+        )
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd recipes:householdState.")
+    }
+
     func fetchRecipeById(recipeId: String) async throws -> BackendRecipeDTO {
         var payload: [String: Any] = [
             "userId": userId,

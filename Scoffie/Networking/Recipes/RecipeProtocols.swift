@@ -21,8 +21,37 @@ struct RecipePage {
     let receivedCount: Int
 }
 
+/// Strona snapshotu publicznego katalogu (`catalog:snapshot`). Klucz przepisu
+/// to identyfikator z serwera (napis) — ten sam, którym przychodzą tombstone'y.
+struct CatalogSnapshotPage {
+    let resetRequired: Bool
+    let revision: String
+    let recipes: [(id: String, item: Recipe)]
+    let nextCursor: String?
+}
+
+/// Strona delty katalogu (`catalog:changes`). Wiersz, którego nie dało się
+/// zmapować, idzie jako tombstone — lepiej zdjąć przepis, niż pokazać jego
+/// nieaktualną wersję.
+struct CatalogChangesPage {
+    let resetRequired: Bool
+    let revision: String
+    let upserts: [(id: String, item: Recipe)]
+    let tombstones: [String]
+    let nextCursor: String?
+}
+
+/// Przepisy gospodarstwa i ulubione domu (`recipes:householdState`).
+struct HouseholdRecipeState {
+    let recipes: [Recipe]
+    let favoriteRecipeIds: Set<UUID>
+}
+
 protocol RecipeRepository {
     func fetchRecipes(page: Int, limit: Int) async throws -> RecipePage
+    func fetchCatalogSnapshotPage(revision: String?, cursor: String?, limit: Int) async throws -> CatalogSnapshotPage
+    func fetchCatalogChangesPage(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> CatalogChangesPage
+    func fetchHouseholdRecipeState() async throws -> HouseholdRecipeState
     func fetchRecipeById(_ recipeId: UUID) async throws -> Recipe
     func setFavorite(recipeId: UUID, isFavorite: Bool) async throws
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: UUID, _ isFavorite: Bool) -> Void)
@@ -37,6 +66,9 @@ protocol RecipeRepository {
 
 protocol RecipeTransportClient {
     func fetchRecipes(page: Int, limit: Int) async throws -> [BackendRecipeDTO]
+    func fetchCatalogSnapshot(revision: String?, cursor: String?, limit: Int) async throws -> BackendCatalogSnapshotPageDTO
+    func fetchCatalogChanges(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> BackendCatalogChangesPageDTO
+    func fetchHouseholdRecipeState() async throws -> BackendHouseholdRecipeStateDTO
     func fetchRecipeById(recipeId: String) async throws -> BackendRecipeDTO
     func setFavorite(recipeId: String, isFavorite: Bool) async throws
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: String, _ isFavorite: Bool) -> Void)
