@@ -229,7 +229,9 @@ struct WeeklyPlanView: View {
                 guard let person else { return all }
                 return all.visibleTo(memberId: person)
             },
-            knownHouseholdMemberCount: knownHouseholdMemberCount
+            knownHouseholdMemberCount: knownHouseholdMemberCount,
+            // Porcja per osoba: talerz osoby z pigułki, nie średnia domu.
+            memberId: personId
         )
     }
 

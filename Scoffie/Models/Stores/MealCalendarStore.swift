@@ -143,7 +143,8 @@ class MealCalendarStore {
                         recipe: slot.recipe,
                         participantIds: slot.participantIds,
                         eatenByUserIds: slot.eatenByUserIds,
-                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId]
+                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId],
+                        portions: slot.portions
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -196,19 +197,49 @@ class MealCalendarStore {
         // „Wspólne" liczba domowników. Wcześniej stała tu jedynka i to ona
         // trafiała do `meal_plans.json` — wspólna kolacja w dwuosobowym domu
         // utrwalała się jako jedna porcja i nikt jej już potem nie poprawiał.
-        let optimisticServings = plannedServings
-            ?? (participantIds.isEmpty ? householdMemberCount.map { max(1, $0) } : participantIds.count)
+        //
+        // Porcje per osoba (Etap 2.2) przeżywają zapis tylko wtedy, gdy nic,
+        // od czego zależą, się nie zmienia: to samo danie, ci sami jedzący,
+        // bez jawnej liczby porcji. Stepper porcji łącznych albo nowe
+        // audytorium wracają do równego podziału — tak samo liczy serwer.
+        // Serwer przyjmuje porcje tylko DOKŁADNIE dla jedzących (przy
+        // „Wspólnym" — dla wszystkich domowników), więc po zmianie składu
+        // domu, którą telefon zna, ale alokacja jeszcze nie, nie odsyłamy
+        // starej — odmowa `PLAN_PORTIONS_INVALID` cofnęłaby cały zapis.
+        let existing = previous.first { $0.recipe.id == recipe.id }
+        let keptPortions: [String: Double]? = {
+            guard plannedServings == nil,
+                  replacingRecipeId == nil || replacingRecipeId == recipe.id,
+                  let existing, existing.hasPortions,
+                  Set(existing.participantIds) == Set(participantIds) else { return nil }
+            let matchesAudience = participantIds.isEmpty
+                ? existing.portions.count == householdMemberCount
+                : Set(existing.portions.keys) == Set(participantIds)
+            return matchesAudience ? existing.portions : nil
+        }()
+        let auditedServings: Int? = participantIds.isEmpty
+            ? householdMemberCount.map { max(1, $0) }
+            : participantIds.count
+        let optimisticServings: Int? = keptPortions != nil
+            ? existing?.plannedServings
+            : (plannedServings ?? auditedServings)
 
         var optimistic = previous.filter { $0.recipe.id != replacingRecipeId }
         if let index = optimistic.firstIndex(where: { $0.recipe.id == recipe.id }) {
             optimistic[index].participantIds = participantIds
             optimistic[index].plannedServings = optimisticServings
+            optimistic[index].portions = keptPortions ?? [:]
         } else {
+            // „Zmień przepis" na to samo danie (`replacingRecipeId == recipe.id`)
+            // odfiltrował istniejący wpis — odtwarzamy go z porcjami
+            // i odhaczeniami, żeby kcal nie skakały do potwierdzenia serwera.
             optimistic.append(
                 PlanMeal(
                     recipe: recipe,
                     participantIds: participantIds,
-                    plannedServings: optimisticServings
+                    eatenByUserIds: keptPortions != nil ? existing?.eatenByUserIds ?? [] : [],
+                    plannedServings: optimisticServings,
+                    portions: keptPortions ?? [:]
                 )
             )
         }
@@ -224,6 +255,7 @@ class MealCalendarStore {
                 recipeId: recipe.id,
                 participantIds: participantIds,
                 plannedServings: plannedServings,
+                portions: keptPortions,
                 replaceRecipeId: replacingRecipeId
             )
             // Wpis optymistyczny miał syntetyczne `id` i zgadywane porcje.
@@ -242,7 +274,8 @@ class MealCalendarStore {
                         // `nil` z serwera znaczy „nie znam tego pola" (starszy
                         // backend), więc zostawiamy własną wartość zamiast
                         // zerować ją do reguły auto.
-                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings
+                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings,
+                        portions: saved.portions
                     )
                     setMeals(confirmed, for: date, slot: slot)
                 }

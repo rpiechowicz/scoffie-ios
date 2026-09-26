@@ -208,6 +208,7 @@ struct CalendarView: View {
             slots: visibleSlots(on: date),
             meals: { myMeals(for: $0, on: date) },
             knownHouseholdMemberCount: knownHouseholdMemberCount,
+            memberId: userId,
             isEaten: { $0.isEaten(by: userId) }
         )
     }
@@ -240,7 +241,8 @@ struct CalendarView: View {
         PlanDayNutrition.make(
             slots: visibleSlots(on: date),
             meals: { myMeals(for: $0, on: date) },
-            knownHouseholdMemberCount: knownHouseholdMemberCount
+            knownHouseholdMemberCount: knownHouseholdMemberCount,
+            memberId: sessionStore.currentUserId
         )
     }
 
@@ -649,7 +651,10 @@ struct CalendarView: View {
     /// pokazuje w pigułce i którą sumuje pigułka celu nad dolnym menu.
     private func perPersonKcal(_ meal: PlanMeal) -> Int {
         Int(
-            meal.nutritionPerPerson(knownHouseholdMemberCount: knownHouseholdMemberCount)
+            meal.nutritionPerPerson(
+                knownHouseholdMemberCount: knownHouseholdMemberCount,
+                memberId: sessionStore.currentUserId
+            )
                 .kcal
                 .rounded()
         )

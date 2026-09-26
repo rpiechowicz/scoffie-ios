@@ -688,7 +688,10 @@ struct AssistantView: View {
             guard let briefingSlot = AssistantBriefingSlot(rawValue: slot.rawValue) else { continue }
             let visible = visibleMeals(on: date, slot: slot)
             guard let meal = visible.first else { continue }
-            let nutrition = meal.nutritionPerPerson(knownHouseholdMemberCount: memberCount)
+            let nutrition = meal.nutritionPerPerson(
+                knownHouseholdMemberCount: memberCount,
+                memberId: sessionStore.currentUserId
+            )
             meals.append(
                 AssistantBriefingDay.Meal(
                     slot: briefingSlot,
@@ -749,7 +752,8 @@ struct AssistantView: View {
             let day = PlanDayNutrition.make(
                 slots: slots,
                 meals: { visibleMeals(on: date, slot: $0) },
-                knownHouseholdMemberCount: memberCount
+                knownHouseholdMemberCount: memberCount,
+                memberId: sessionStore.currentUserId
             )
             guard !day.isEmpty else { continue }
             total += day.total.protein
