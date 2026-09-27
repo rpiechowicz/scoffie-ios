@@ -81,6 +81,42 @@ enum Sex: String, CaseIterable, Identifiable {
     var backendValue: String { rawValue.uppercased() }
 }
 
+// MARK: - Wartości startowe
+
+extension BodyMetrics {
+    /// Sylwetka startowa — kreator (`WelcomeView`) i Ustawienia → „Twoje dane”
+    /// (`ProfileDetailsSheet`). Jedno miejsce, bo arkusz nie może pokazać innych
+    /// liczb niż ekran, który je pierwszy zapisał (Rafał 27.09.2026: „zawsze 180 / 80”).
+    static let defaultYearOfBirth = 1992
+    static let defaultHeightCm = 180
+    static let defaultWeightKg: Double = 80
+
+    /// Sylwetka do podglądu BMI pod polami — jest ZAWSZE, żeby wiersz nie znikał
+    /// w trakcie wpisywania. Wzrost i waga spoza zakresu liczą się jak wartości
+    /// startowe (to one stoją w podpowiedzi pustego pola), wiek przycina się do 13…110.
+    static func preview(
+        heightCm: Int,
+        weightKg: Double,
+        yearOfBirth: Int,
+        activityRaw: Int,
+        sexRaw: String = "",
+        now: Date = Date()
+    ) -> BodyMetrics {
+        let currentYear = Calendar.current.component(.year, from: now)
+        let year = min(max(yearOfBirth, currentYear - 110), currentYear - 13)
+        let activity = ActivityLevel(rawValue: activityRaw) ?? .light
+        // Wszystkie wartości są już w zakresach `init?`, więc `!` nie pęknie.
+        return BodyMetrics(
+            heightCm: (120...230).contains(heightCm) ? heightCm : defaultHeightCm,
+            weightKg: (30...250).contains(weightKg) ? weightKg : defaultWeightKg,
+            yearOfBirth: year,
+            activityRaw: activity.rawValue,
+            sexRaw: sexRaw,
+            now: now
+        )!
+    }
+}
+
 // MARK: - BMI
 
 extension BodyMetrics {

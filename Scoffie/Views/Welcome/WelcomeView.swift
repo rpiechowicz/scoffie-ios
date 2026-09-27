@@ -121,14 +121,14 @@ struct WelcomeView: View {
 
         let storedYear = defaults.integer(forKey: "settings.profile.yearOfBirth")
         _yearOfBirth = State(
-            initialValue: storedYear > 0 ? storedYear : 1992
+            initialValue: storedYear > 0 ? storedYear : BodyMetrics.defaultYearOfBirth
         )
 
         let storedHeight = defaults.integer(forKey: "settings.profile.heightCm")
-        _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : 178)
+        _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm)
 
         let storedWeight = defaults.double(forKey: "settings.profile.weightKg")
-        _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : 74)
+        _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg)
 
         let storedSex = defaults.string(forKey: "settings.profile.sex") ?? ""
         _sex = State(initialValue: Sex(rawValue: storedSex))
@@ -146,8 +146,8 @@ struct WelcomeView: View {
 
         let storedCalorieGoal = defaults.integer(forKey: "settings.diet.calorieGoal")
         let seedMetrics = BodyMetrics(
-            heightCm: storedHeight > 0 ? storedHeight : 178,
-            weightKg: storedWeight > 0 ? storedWeight : 74,
+            heightCm: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm,
+            weightKg: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg,
             yearOfBirth: storedYear > 0 ? storedYear : 1992,
             activityRaw: storedActivity.rawValue,
             sexRaw: storedSex
