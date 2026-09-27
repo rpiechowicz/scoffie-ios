@@ -805,7 +805,8 @@ final class SessionStore {
             cacheNamespace: "\(userId)_\(householdId)"
         )
         self.recipeCatalogStore = RecipeCatalogStore(
-            repository: ApiRecipeRepository(client: recipeTransport)
+            repository: ApiRecipeRepository(client: recipeTransport),
+            ownerKey: "\(userId)_\(householdId)"
         )
         let shoppingListStore = ShoppingListStore(
             repository: ApiShoppingListRepository(client: shoppingTransport),
@@ -963,9 +964,9 @@ final class SessionStore {
         // albo wylogowaniu nie mają prawa zostać dla następnej osoby.
         MealCalendarStore.clearCache()
         ShoppingListStore.clearCache()
-        // Plik cache katalogu nie jest przypisany do konta: bez tego następna
-        // osoba zalogowana na tym telefonie widziała przez 12 h katalog
-        // (ulubione, tytuły) poprzedniego gospodarstwa.
+        // Stan domu w cache katalogu (przepisy gospodarstwa, ulubione) znika
+        // razem z domem; publiczny katalog z rewizją zostaje — jest wspólny
+        // dla wszystkich kont, a następne logowanie zrobi z niego deltę.
         RecipeCatalogStore.clearCache()
         recipeCatalogStore = nil
         shoppingListStore = nil
