@@ -42,8 +42,10 @@ protocol WeeklyPlanRepository {
     /// zostawiał pustkę. Równe `recipeId` = brak podmiany.
     ///
     /// Porcji per osoba (`portions`) iOS nie wysyła: serwer zastępuje nimi całą
-    /// alokację bez kontroli wersji. Zapisów pozycji z alokacją nie wysyła się
-    /// wcale (`PlanPortions.upsertDecision`).
+    /// alokację bez kontroli wersji. Uwaga: BRAK tego pola serwer też traktuje
+    /// jako „skasuj alokację” — zapis pozycji, o której alokacji telefon nie
+    /// wie (nieaktualny stan), ją usunie. `MealCalendarStore` blokuje tylko
+    /// pozycje z alokacją znaną lokalnie (`PlanPortions.upsertDecision`).
     func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?) async throws -> WeekPlanSlot?
     /// `recipeId == nil` clears every variant in the slot.
     func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws

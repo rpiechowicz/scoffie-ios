@@ -183,10 +183,11 @@ class MealCalendarStore {
     /// Porcje per osoba (`PlanMeal.portionUnits`): serwer przy zapisie
     /// pozycji zastępuje CAŁĄ alokację (albo kasuje ją, gdy pola brak) i nie
     /// ma kontroli wersji. Dlatego zapis, który dotyka pozycji z alokacją
-    /// (to samo danie w slocie albo danie podmieniane), jest odrzucany PRZED
-    /// wysłaniem — bez zmiany optymistycznej i bez zapytania
-    /// (`PlanPortions.upsertDecision`, API GAP w raporcie workstreamu).
-    /// Pozycje bez alokacji zapisują się jak dotąd; porcji iOS nie wysyła.
+    /// ZNANĄ LOKALNIE (to samo danie w slocie albo danie podmieniane), jest
+    /// odrzucany PRZED wysłaniem — bez zmiany optymistycznej i bez zapytania
+    /// (`PlanPortions.upsertDecision`). Pozycje bez alokacji zapisują się jak
+    /// dotąd; porcji iOS nie wysyła. To NIE chroni alokacji, której telefon
+    /// jeszcze nie zna — ten race zamyka dopiero serwer (API GAP w raporcie).
     @MainActor
     func upsertWeekSlot(
         recipe: Recipe,

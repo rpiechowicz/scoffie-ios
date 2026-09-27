@@ -7,11 +7,19 @@ import Foundation
 /// wielokrotności 0,05 — na jednostkach nie ma czego zaokrąglać drugi raz.
 /// Czysta logika (tylko Foundation) — sprawdza ją `Scripts/plan-portions-check.sh`.
 ///
-/// ZAPIS: iOS porcji NIE wysyła i nie przepisuje pozycji, które je mają.
-/// Serwer przy każdym zapisie pozycji zastępuje CAŁĄ alokację (albo ją
-/// kasuje, gdy pola brak) i nie ma kontroli wersji — pełna alokacja
-/// odesłana ze starej kopii cofnęłaby zmianę innego telefonu (API GAP
-/// w `docs/workstreams/catalog-sync-per-user-portions/report.md`).
+/// ZAPIS. Serwer przy każdym zapisie pozycji zastępuje CAŁĄ alokację,
+/// a gdy pola `portions` brak — KASUJE ją; nie ma kontroli wersji.
+/// - Zabezpieczenie klienta (tylko dla alokacji ZNANYCH telefonowi): iOS
+///   porcji nie wysyła i nie przepisuje pozycji, które lokalnie je mają
+///   (`upsertDecision`).
+/// - Pozostały race: jeśli alokacja powstała na serwerze, a telefon jeszcze
+///   o niej nie wie, zwykły zapis pozycji (bez `portions`) ją skasuje.
+///   Klient tego nie zamknie — ani brak pola, ani odświeżenie przed zapisem.
+/// - Wymagane po stronie serwera, zanim alokacje zostaną uruchomione:
+///   sprawdzenie stanu pozycji i decyzja o zapisie w tej samej transakcji;
+///   zapis bez `portions` (także `replaceRecipeId`) nie może niejawnie
+///   kasować istniejącej alokacji. Flaga planera nie jest kontrolą zapisu.
+/// Szczegóły: `docs/workstreams/catalog-sync-per-user-portions/report.md`.
 enum PlanPortions {
     static let unitsPerServing = 20
     /// Osoba bez wpisu w alokacji je jedną porcję — reguła serwera
@@ -59,8 +67,10 @@ enum PlanPortions {
     /// `weeklyPlans:upsertWeekSlot` na serwerze przepisuje pozycję tego samego
     /// przepisu w slocie (zmiana „kto je”, stepper, dołączenie, ponowny zapis)
     /// i usuwa pozycję `replaceRecipeId` (zamiana dania) — obie tracą alokację.
-    /// Blokujemy więc zapis, gdy którakolwiek z nich ją ma. Nowe danie obok
-    /// dania z porcjami (inna pozycja) przechodzi.
+    /// Blokujemy więc zapis, gdy którakolwiek z nich ją ma WEDŁUG STANU
+    /// LOKALNEGO. Nowe danie obok dania z porcjami (inna pozycja) przechodzi.
+    /// `.send` nie znaczy „bezpieczne”: przy nieaktualnym stanie serwer może
+    /// mieć alokację, której tu nie widać (patrz nagłówek typu).
     static func upsertDecision(slot: [SlotMeal], recipeId: UUID, replacingRecipeId: UUID?) -> UpsertDecision {
         let touched = slot.filter { $0.recipeId == recipeId || $0.recipeId == replacingRecipeId }
         return touched.contains(where: \.hasPortions) ? .blocked : .send
