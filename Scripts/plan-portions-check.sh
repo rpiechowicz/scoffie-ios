@@ -11,14 +11,16 @@
 set -e
 cd "$(dirname "$0")/.."
 
-# Regresja statyczna: iOS nie buduje zapisu z pełną mapą `portions` — porcję
+# Regresja statyczna: pełna mapa `portions` wychodzi WYŁĄCZNIE z polityką
+# `REPLACE` (pierwsze ustawienie porcji osób, z tokenem pozycji) — porcję
 # jednej osoby zmienia `setPortion`, a przeliczenie audytorium robi serwer
-# (`PRESERVE`). Pełna mapa nadpisałaby porcje, które zmienił inny telefon.
-if grep -n '"portions"' Scoffie/Models/Stores/WeeklyPlanStore.swift | grep -v '^[0-9]*: *///'; then
-  echo "BŁĄD iOS wysyła pole \"portions\" w zapisie planu (porcje tylko przez setPortion / PRESERVE)"
+# (`PRESERVE`). Jedno miejsce w transporcie, tuż po `"REPLACE"`.
+COUNT=$(grep -c 'data\["portions"\]' Scoffie/Models/Stores/WeeklyPlanStore.swift || true)
+if [ "$COUNT" != "1" ] || ! grep -B1 'data\["portions"\]' Scoffie/Models/Stores/WeeklyPlanStore.swift | grep -q '"REPLACE"'; then
+  echo "BŁĄD pole \"portions\" w zapisie planu poza gałęzią REPLACE (wystąpień: $COUNT)"
   exit 1
 fi
-echo "OK   zapis planu nie zawiera pola \"portions\""
+echo "OK   pole \"portions\" tylko z polityką REPLACE"
 
 OUT=$(mktemp -d)/planportions
 xcrun swiftc -o "$OUT" \
