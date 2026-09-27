@@ -245,7 +245,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `AssistantActionPair`: równe połowy, gdy oba tytuły się mieszczą, inaczej stos z główną NA DOLE — główna
   zawsze ostatnia. Ikony: strzałki/szewrony za tytułem, reszta przed. Praca = kółko na STUKNIĘTYM przycisku
   w miejscu ikony, szerokość bez zmian, drugi przygaszony. Chipy `AssistantChip` 38 pt / 44 dotyk.
-  Wysokości nie ustawiać ręcznie — `size:`.
+  Wysokości nie ustawiać ręcznie — `size:`. Od 27.09.2026 („inny daj jako ikonę, a zapisz na resztę”): poboczna
+  Z GLIFEM obok głównej = sam krążek `AssistantIconActionButton` (strój „Wyczyść” z Filtrów, tint tonu karty,
+  tytuł tylko dla VoiceOver), główna na resztę szerokości; bez glifu („Zapisz mimo to”) zostaje para słów.
+  Poboczne propozycji mają glify (`reviseIcon`): Zmień coś ✎, Inny zestaw / Zmień danie ⟳, Szukaj dalej 🔍, Zostaw ✕.
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
   `AgentRevealClock`): gotowa odpowiedź rusza od znaku, który JEST na ekranie (i od wspólnego
   początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz. Od 27.09.2026
@@ -263,8 +266,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Odpowiedź asystenta (27.09.2026, „odpowiedzi są ściśnięte”): kolejne linie to JEDEN akapit
   (złamanie w środku), pusta linia go zamyka; akapit 16 pt, interlinia 6, bez ujemnego trackingu,
   16 pt między kawałkami, nagłówek sekcji 15/600 (nie wersaliki 11 pt), lista 15 pt. Pod CAŁĄ
-  odpowiedzią (tekst + karta) pasek `AssistantAnswerFooter`: podpis „✦ Myślałem 42 s” (SAM podpis —
-  rozwijana karta z krokami i „Wziąłem pod uwagę” odpadła tego samego dnia: „do usunięcia”) oraz
+  odpowiedzią (tekst + karta) pasek `AssistantAnswerFooter`: podpis „✦ Myślałem 42 s ›” (rozwijana karta
+  z krokami W ROZMOWIE odpadła: „do usunięcia”; wieczorem tego dnia podpis otwiera półarkusz
+  `AssistantThinkingSheet` — kroki tury po kolei z glifem rodzaju pracy, zapisy w szałwii, „Odpowiedź gotowa”) oraz
   👍 · 👎 · „⋯” (udostępnij, zgłoś / popraw zgłoszenie). Bez kopiowania w pasku („co nam to daje
   realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz
   zgłoszenia. Zgłoszenie JEDNO na osobę i odpowiedź: serwer poprawia istniejące (`AgentReport`
@@ -273,6 +277,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w HISTORII — wcześniej „Myślałem” żyło tylko w pamięci sesji), ocena to `feedback` +
   `PUT agent/messages/:id/feedback {rating: UP|DOWN|null}` (backend: `AgentMessageFeedback`,
   migracja `20260927120000_agent_message_feedback`). Zrzuty: `SCOFFIE_DEBUG_OPTIONS=rozmowa|rozmowa-pisze`.
+- Nagłówek rozmowy (27.09.2026, „shadow jak na detail meal, a nie divider”) stoi w `safeAreaInset(edge: .top)`
+  jak pole na dole: rozmowa przejeżdża POD nim, a gdy jest przewinięta, pod nagłówkiem leży `AssistantHeaderShade`
+  (tło strony przez maskę — poświata się zgadza; 16 pt na nagłówku + 28 pod nim). Oceny 👍/👎 wymagają backendu
+  z `PUT agent/messages/:id/feedback` — aplikacja zawsze woła `api.scoffie.app`, więc bez backendu na `main` kciuk wraca
+  z toastem „Nie zapisałem oceny”.
 - Pytanie wysłane w tej sesji stoi pod kluczem z telefonu (`clientMessageId` — od niego zależy
   `slotKey`), a serwer ma je pod własnym id: `AgentChatMessage.serverId` (z `202 messageId`). „Popraw
   pytanie” wysyła `serverId ?? id` (sam `clientMessageId` dawał 404). „Spróbuj ponownie” po nieudanej

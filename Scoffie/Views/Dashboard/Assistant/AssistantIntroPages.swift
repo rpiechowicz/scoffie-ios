@@ -641,7 +641,7 @@ private struct AssistantIntroDecisionScene: View {
     private var secondary: AssistantCardAction {
         saved
             ? AssistantCardAction(title: "Cofnij", icon: "arrow.uturn.backward", action: {})
-            : AssistantCardAction(title: "Inny zestaw", action: {})
+            : AssistantCardAction(title: "Inny zestaw", icon: "arrow.triangle.2.circlepath", action: {})
     }
 
     var body: some View {

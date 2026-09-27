@@ -3,9 +3,12 @@ import SwiftUI
 /// Pasek pod odpowiedzią asystenta (27.09.2026 — Rafał: „pod każdą odpowiedzią
 /// możliwość polubienia, zgłoszenia itd., tak jak inne chaty AI”).
 ///
-/// Po lewej „✦ Myślałem 42 s” — sam podpis, z serwera także w historii.
-/// Rozwijana karta z krokami i kontekstem odpadła tego samego dnia („do
-/// usunięcia”), kopiowanie też („co nam to daje realnego?” — tekst i tak da
+/// Po lewej „✦ Myślałem 42 s ›” — z serwera także w historii; stuknięcie
+/// otwiera półarkusz z przebiegiem tury krok po kroku
+/// (`AssistantThinkingSheet`, 27.09.2026 wieczorem — „historia, jak asystent
+/// myślał”). Rozwijana karta z krokami W ROZMOWIE odpadła wcześniej tego
+/// dnia („do usunięcia”) i nie wraca — kroki mieszkają w arkuszu. Kopiowanie
+/// też odpadło („co nam to daje realnego?” — tekst i tak da
 /// się zaznaczyć, a „Kopiuj” zostaje pod przytrzymaniem dymka). Po prawej:
 /// kciuk w górę, kciuk w dół i „⋯” (udostępnij, zgłoś / popraw zgłoszenie —
 /// serwer trzyma JEDNO zgłoszenie na osobę i odpowiedź). Kciuk w dół otwiera
@@ -21,6 +24,8 @@ struct AssistantAnswerFooter: View {
     let isReported: Bool
     let onRate: (AgentFeedback?) -> Void
     let onReport: () -> Void
+    /// Otwiera przebieg tury; `nil` = sam podpis.
+    var onShowThinking: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -48,7 +53,21 @@ struct AssistantAnswerFooter: View {
 
     // MARK: - Myślałem
 
+    @ViewBuilder
     private func thinkingLabel(_ thinking: AgentThinkingSummary) -> some View {
+        if let onShowThinking {
+            Button(action: onShowThinking) {
+                thinkingText(thinking, opens: true)
+                    .scTapHeight(drawn: 30)
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.96))
+            .accessibilityHint("Pokazuje krok po kroku, jak powstała odpowiedź")
+        } else {
+            thinkingText(thinking, opens: false)
+        }
+    }
+
+    private func thinkingText(_ thinking: AgentThinkingSummary, opens: Bool) -> some View {
         let label = thinking.duration.map { "Myślałem \(AssistantThoughtLine.clock($0))" } ?? "Myślałem chwilę"
         return HStack(spacing: 5) {
             Image(systemName: "sparkles")
@@ -60,7 +79,14 @@ struct AssistantAnswerFooter: View {
                 .monospacedDigit()
                 .foregroundStyle(AssistantLook.faint(scheme))
                 .lineLimit(1)
+            if opens {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(AssistantLook.faint(scheme).opacity(0.8))
+                    .accessibilityHidden(true)
+            }
         }
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 

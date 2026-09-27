@@ -103,6 +103,45 @@ struct AssistantHeader<MenuContent: View>: View {
     }
 }
 
+/// Cień krawędzi pod nagłówkiem rozmowy — ten z górnego paska szczegółów
+/// posiłku (`SCEdgeShade`): rozmowa przejeżdża pod nagłówkiem i gaśnie,
+/// zamiast urywać się twardą linią na jego dolnym brzegu.
+///
+/// Rysowany TŁEM strony (`SCPageBackground`) przez maskę, a nie jednolitym
+/// `scPageBase`: nagłówek stoi w terakotowej poświacie u góry ekranu i pas
+/// w jednym kolorze byłby na niej widać. Maska: pełne krycie przez nagłówek,
+/// potem przejście, które zaczyna się `overlap` nad jego dolnym brzegiem
+/// i schodzi `tail` pod niego. Kładzie się pod nagłówkiem od górnej
+/// krawędzi ekranu, więc poświata trafia piksel w piksel w tę pod spodem.
+struct AssistantHeaderShade: View {
+    static let overlap: CGFloat = 16
+    static let tail: CGFloat = 28
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        SCPageBackground(scheme: scheme)
+            .mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black.opacity(0.85), location: 0.36),
+                            .init(color: .black.opacity(0), location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: Self.overlap + Self.tail)
+                }
+            }
+            .padding(.bottom, -Self.tail)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Kapsuła limitu
 
 /// `TrialChip` z makiety mówi „1 pozostała” — samo „3 pozostałe” w nagłówku
