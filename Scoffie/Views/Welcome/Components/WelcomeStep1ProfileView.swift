@@ -37,8 +37,9 @@ struct WelcomeStep1ProfileView: View {
 
     private var currentYear: Int { Calendar.current.component(.year, from: Date()) }
 
-    private var metrics: BodyMetrics? {
-        BodyMetrics(
+    /// Podgląd pod polami — zawsze jest (`BodyMetrics.preview`).
+    private var metrics: BodyMetrics {
+        BodyMetrics.preview(
             heightCm: heightCm,
             weightKg: weightKg,
             yearOfBirth: yearOfBirth,
@@ -189,7 +190,7 @@ struct WelcomeStep1ProfileView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     fieldCaption("Wzrost")
                     measureField(unit: "cm") {
-                        TextField("178", value: $heightCm, format: .number)
+                        TextField(String(BodyMetrics.defaultHeightCm), value: $heightCm, format: .number)
                             .keyboardType(.numberPad)
                             .focused($focusedField, equals: .height)
                     }
@@ -200,17 +201,15 @@ struct WelcomeStep1ProfileView: View {
                     measureField(unit: "kg") {
                         // Jedno miejsce po przecinku — 83,5 kg to
                         // normalny odczyt z wagi łazienkowej.
-                        TextField("74", value: $weightKg, format: .number.precision(.fractionLength(0...1)))
+                        TextField(String(Int(BodyMetrics.defaultWeightKg)), value: $weightKg, format: .number.precision(.fractionLength(0...1)))
                             .keyboardType(.decimalPad)
                             .focused($focusedField, equals: .weight)
                     }
                 }
             }
 
-            if let metrics {
-                BodyMetricsSummaryRow(metrics: metrics)
-                    .animation(.smooth(duration: 0.2), value: metrics.maintenanceCalories)
-            }
+            BodyMetricsSummaryRow(metrics: metrics)
+                .animation(.smooth(duration: 0.2), value: metrics.maintenanceCalories)
         }
         .padding(14)
         .welcomeCard()
@@ -444,8 +443,8 @@ struct YearWheelPicker: View {
         WelcomeStep1ProfileView(
             name: .constant("Rafał"),
             yearOfBirth: .constant(1992),
-            heightCm: .constant(178),
-            weightKg: .constant(74),
+            heightCm: .constant(180),
+            weightKg: .constant(80),
             sex: .constant(.male)
         )
     }
@@ -457,8 +456,8 @@ struct YearWheelPicker: View {
         WelcomeStep1ProfileView(
             name: .constant("Rafał"),
             yearOfBirth: .constant(1992),
-            heightCm: .constant(178),
-            weightKg: .constant(74),
+            heightCm: .constant(180),
+            weightKg: .constant(80),
             sex: .constant(.male)
         )
     }

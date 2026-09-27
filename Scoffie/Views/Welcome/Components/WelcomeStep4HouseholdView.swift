@@ -29,11 +29,6 @@ struct WelcomeStep4HouseholdView: View {
     @Environment(\.sessionStore) private var sessionStore
     @FocusState private var isHouseholdFieldFocused: Bool
 
-    /// Podpowiedzi nazwy — stuknięcie wpisuje ją w pole. Bez imienia
-    /// w środku („Dom Rafała”): odmiana imion po polsku to loteria.
-    /// Trzy, nie cztery: na iPhonie 16e czwarta ścinała pozostałe do „Nasz d…”.
-    private static let nameSuggestions = ["Dom", "Nasz dom", "Mieszkanie"]
-
     var body: some View {
         // Ten sam kontener, co pozostałe kroki (ScrollView, ten sam odstęp
         // od góry): krok gospodarstwa był gołym VStackiem z własnym
@@ -84,63 +79,37 @@ struct WelcomeStep4HouseholdView: View {
     }
 
     /// Nazwa jak imię w „Twoich danych”: kafelek domu, nazwa edytowana
-    /// w miejscu, ołówek i kreska zapalające się przy edycji, a pod spodem
-    /// podpowiedzi do stuknięcia.
+    /// w miejscu, ołówek i kreska zapalające się przy edycji. Bez podpowiedzi
+    /// („Dom”, „Nasz dom”, „Mieszkanie”) — Rafał 27.09.2026: „usuń proponowanie
+    /// nazwy domu”.
     private var nameCard: some View {
-        let trimmed = householdName.trimmingCharacters(in: .whitespacesAndNewlines)
+        HStack(alignment: .center, spacing: 14) {
+            EditorialSettingsTileIcon(icon: "house.fill", color: SCPalette.terracotta, size: 44, radius: 12)
 
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "house.fill", color: SCPalette.terracotta, size: 44, radius: 12)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    TextField("Np. Nasz dom", text: $householdName)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .focused($isHouseholdFieldFocused)
+                        .submitLabel(.done)
+                        .font(.system(size: 18, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(Color.scLabel(colorScheme))
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        TextField("Np. Nasz dom", text: $householdName)
-                            .textInputAutocapitalization(.words)
-                            .autocorrectionDisabled()
-                            .focused($isHouseholdFieldFocused)
-                            .submitLabel(.done)
-                            .font(.system(size: 18, weight: .bold))
-                            .tracking(-0.3)
-                            .foregroundStyle(Color.scLabel(colorScheme))
-
-                        Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(isHouseholdFieldFocused ? SCPalette.terracotta : Color.scFaint(colorScheme))
-                    }
-
-                    Rectangle()
-                        .fill(isHouseholdFieldFocused ? SCPalette.terracotta : Color.scRule(colorScheme))
-                        .frame(height: isHouseholdFieldFocused ? 1.5 : 1)
+                    Image(systemName: "pencil")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(isHouseholdFieldFocused ? SCPalette.terracotta : Color.scFaint(colorScheme))
                 }
-                .animation(.smooth(duration: 0.18), value: isHouseholdFieldFocused)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { isHouseholdFieldFocused = true }
 
-            HStack(spacing: 6) {
-                ForEach(Self.nameSuggestions, id: \.self) { suggestion in
-                    let isOn = trimmed == suggestion
-                    Button {
-                        withAnimation(.smooth(duration: 0.18)) {
-                            householdName = suggestion
-                        }
-                    } label: {
-                        Text(suggestion)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(isOn ? SCPalette.terracotta : Color.scLabel(colorScheme))
-                            .lineLimit(1)
-                            .fixedSize()
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 7)
-                            .scChoiceSurface(Capsule(style: .continuous), isOn: isOn, style: .chip)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Nazwa: \(suggestion)")
-                    .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-                }
+                Rectangle()
+                    .fill(isHouseholdFieldFocused ? SCPalette.terracotta : Color.scRule(colorScheme))
+                    .frame(height: isHouseholdFieldFocused ? 1.5 : 1)
             }
+            .animation(.smooth(duration: 0.18), value: isHouseholdFieldFocused)
         }
+        .contentShape(Rectangle())
+        .onTapGesture { isHouseholdFieldFocused = true }
         .padding(16)
         .welcomeCard()
     }
