@@ -1,21 +1,40 @@
 import SwiftUI
 
-// „Ułożę Ci ten tydzień” — arkusz zachęty asystenta przy pustym tygodniu.
+// „Ułożę Ci ten tydzień” — arkusz zachęty asystenta, otwierany pigułką „Ułóż”
+// w nagłówku Planu.
 //
-// Źródło: canvas claude.ai → „Weekly Meals - Plan v2.html”, artboard E+
-// (`components/plan-v2-empty.jsx`, `P2AssistIntroSheet`).
+// Od 27.09.2026 na klockach reszty aplikacji (Rafał: „dopracuj, żeby był
+// zgodny z resztą”): nagłówek `EditorialSheetHeader` z JEDNYM zdaniem, punkty
+// jako etykiety `SCTag` (jak strony wprowadzenia Asystenta) zamiast trzech
+// osobnych kart z opisami, podgląd tygodnia w stroju listy zestawu ze strony
+// „Wszystko pasuje?” (`ProposalRecap`: wiersz na dzień z krążkami zdjęć)
+// i stopka `scSheetFooter` z JEDNYM przyciskiem — „Wolę ułożyć sam” dublowało
+// krzyżyk. Dania podglądu to prawdziwe przepisy z katalogu odsiane dietą
+// i alergenami z Ustawień (`AssistantIntroDish.week`), nie losowe z całości —
+// podgląd pod etykietą „Alergeny” nie może pokazać dania z alergenem.
+// Tego samego dnia runda 2 („dopracuj, żeby było bardziej wow”): tydzień
+// SKŁADA SIĘ na oczach i pokazuje zamianę dania (`PlanAssistantWeekPreview`).
 //
-// Arkusz pokazuje się TYLKO wtedy, gdy w całym tygodniu nic nie stoi. Przy dniu
-// częściowym przycisk asystenta w nagłówku dnia otwiera asystenta od razu:
-// ktoś, kto ma już połowę tygodnia, wie, co asystent robi, i ekran zachęty
-// byłby dla niego wyłącznie jednym stuknięciem więcej.
+// Każda etykieta sprawdzona w backendzie 27.09.2026 (zmieniasz planer —
+// popraw etykietę):
+// - dieta, alergeny i wykluczenia KAŻDEGO jedzącego to filtry twarde planera
+//   (`hardFilterReason` w `meal-plan-engine.ts`), a przy zapisie jeszcze
+//   `collectPlanViolations`;
+// - cel kalorii i makro osoby — koszt dnia osoby wobec jej celu
+//   (`eaterDayCost`), porcje dobierane per osoba (`portionFor`);
+// - bez powtórek — `WEIGHTS.repeat` w `weekRelationCost` za każde powtórzenie
+//   w tygodniu (`REPEAT_FORCED` dopiero, gdy pula nie starcza).
+// Zdjęte obietnice: „w kilka sekund” (tura trwa 25–240 s), „w tygodniu do
+// 30 minut, w weekend dłużej” (`maxPrepTimeMinutes` telefon wysyła jako
+// `null`), „sezonowe składniki” (planer nie zna sezonu), „ulubione wracają”
+// (waga ulubionych to −0,05 — prawie nic).
 struct PlanAssistantIntroSheet: View {
     let members: [HouseholdMemberSnapshot]
-    /// Dni bieżącego tygodnia — podpisy pod podglądem „tak może wyglądać”.
+    /// Dni widocznego tygodnia — podpisy wierszy podglądu.
     let days: [Date]
-    /// Ile posiłków dziennie planuje to gospodarstwo — z tego liczy się
-    /// obietnica „21 posiłków”, żeby nie obiecywać trzech, gdy dom planuje pięć.
-    let slotsPerDay: Int
+    /// Pory, które dom planuje (Ustawienia → „Posiłki w planie”) — z nich
+    /// podgląd bierze dania.
+    let slots: [MealSlot]
     /// Czy w widocznym tygodniu stoi już cokolwiek. Zmienia obietnicę, a nie
     /// samą planszę: „ułożę” brzmi jak groźba nadpisania komuś, kto ma już
     /// pół tygodnia rozpisane ręcznie.
@@ -26,18 +45,12 @@ struct PlanAssistantIntroSheet: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
 
-    /// Siedem dań pod podgląd tygodnia — losowane RAZ, przy otwarciu arkusza.
-    ///
-    /// Prawdziwe zdjęcia z katalogu, a nie kafle z ikonami: obietnica „tak może
-    /// wyglądać Twój tydzień” pokazana kolorowymi prostokątami brzmi jak zrzut
-    /// ekranu z wersji demo. Losowanie siedzi w `@State`, żeby dania nie
-    /// przetasowywały się przy każdym przerysowaniu widoku.
-    @State private var sample: [Recipe] = []
-
-    /// Wejście treści: delikatny stagger po otwarciu arkusza. Sam arkusz
-    /// wjeżdża systemowo, więc tu chodzi tylko o to, żeby zawartość nie
-    /// pojawiła się gotowa w pierwszej klatce.
-    @State private var appeared = false
+    /// Dania podglądu — dobierane RAZ, gdy katalog jest pod ręką; nie tasują
+    /// się przy przerysowaniu.
+    @State private var week: [[AssistantIntroDish]] = []
+    /// Dania do pokazu zamiany — spoza tygodnia, z tej samej puli.
+    @State private var spares: [AssistantIntroDish] = []
+    @State private var hasAppeared = false
 
     private var isSolo: Bool { members.count <= 1 }
 
@@ -47,367 +60,434 @@ struct PlanAssistantIntroSheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Nagłówek jak w każdym arkuszu: ikona asystenta w tincie,
-                // obietnica, zdanie pod spodem i krzyżyk. Wcześniej stał tu
-                // wyśrodkowany kafel 72 pt w pełnej terakocie z cieniem,
-                // a arkusz nie miał krzyżyka — zamykało się go tylko gestem
-                // albo „Wolę ułożyć sam”.
                 EditorialSheetHeader(
                     eyebrow: "Asystent",
                     title: weekIsEmpty ? "Ułożę Ci ten tydzień" : "Uzupełnię ten tydzień",
                     icon: MenuConstans.Assistant.icon,
-                    subtitle: introSubtitle,
+                    subtitle: subtitle,
                     onClose: { dismiss() }
                 )
                 .padding(.horizontal, SCPageMetrics.horizontal)
                 .padding(.top, 18)
                 .padding(.bottom, 12)
-                .stagger(appeared, step: 0)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        EditorialSheetSectionLabel(title: "Jak dobieram")
-                            .padding(.top, 8)
-                            .stagger(appeared, step: 1)
-
-                        VStack(spacing: 8) {
-                            ForEach(Array(howRows.enumerated()), id: \.element.title) { index, row in
-                                howCard(row)
-                                    .stagger(appeared, step: 2 + index)
+                    VStack(alignment: .leading, spacing: 18) {
+                        AllergenChipFlow(spacing: 8) {
+                            ForEach(Array(tags.enumerated()), id: \.element.id) { index, tag in
+                                SCTag(title: tag.title, icon: tag.icon, accent: tag.accent)
+                                    .scReveal(hasAppeared, order: index)
                             }
                         }
-                        .padding(.top, 4)
+                        .accessibilityElement(children: .combine)
 
-                        previewHeader
-                            .padding(.top, 26)
-                            .stagger(appeared, step: 5)
-
-                        previewStrip
-                            .padding(.top, 4)
-                            .stagger(appeared, step: 6)
+                        if !week.isEmpty {
+                            PlanAssistantWeekPreview(days: days, week: week, spares: spares)
+                                .scReveal(hasAppeared, order: tags.count)
+                                .transition(.opacity)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, SCPageMetrics.horizontal)
-                    // Zapas na cień stopki (`SCEdgeShade`), który leży na treści.
-                    .padding(.bottom, SCEdgeShade.bottomHeight)
+                    .padding(.top, 4)
+                    .padding(.bottom, 8)
+                    .animation(.smooth(duration: 0.35), value: week.isEmpty)
                 }
+                .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
-
-                footer
+                .scSheetFooter {
+                    EditorialPrimaryActionButton(
+                        title: weekIsEmpty ? "Ułóż z Asystentem" : "Uzupełnij z Asystentem",
+                        icon: MenuConstans.Assistant.icon
+                    ) {
+                        dismiss()
+                        onOpenAssistant()
+                    }
+                }
             }
         }
         .task {
-            // Jedna klatka opóźnienia — bez niej stan zmienia się w tej samej
-            // klatce, w której widok powstaje, i animacji nie ma czego złapać.
-            try? await Task.sleep(for: .milliseconds(30))
-            withAnimation { appeared = true }
+            // Klatka oddechu — w `onAppear` stan zmieniał się w klatce
+            // wstawienia i kaskada nie miała czego złapać (`SCReveal`).
+            try? await Task.sleep(for: .milliseconds(80))
+            hasAppeared = true
         }
-        .task {
-            await recipeCatalogStore.loadIfNeeded()
-            guard sample.isEmpty else { return }
-            sample = Self.pickSample(from: recipeCatalogStore.recipes)
+        .task { await recipeCatalogStore.loadIfNeeded() }
+        .onChange(of: recipeCatalogStore.recipes.count, initial: true) { _, _ in
+            guard week.isEmpty else { return }
+            let recipes = recipeCatalogStore.recipes
+            let picked = AssistantIntroDish.week(from: recipes, slots: slots)
+            guard let first = picked.first, let slot = PlanAssistantWeekPreview.mainSlot(in: first) else { return }
+            // Zapas PRZED tygodniem: podgląd wchodzi do drzewa z kompletem.
+            spares = AssistantIntroDish.spares(
+                from: recipes,
+                slot: slot,
+                excluding: Set(picked.flatMap { $0.map(\.id) })
+            )
+            week = picked
         }
     }
 
-    /// Siedem dań do podglądu — z tasowania, ale bez powtórki dwa razy pod rząd,
-    /// dopóki jest z czego wybierać. Gdy katalog ma mniej niż siedem pozycji
-    /// z okładką, worek napełnia się od nowa; przy pustym katalogu zostają
-    /// kafle schematyczne.
-    private static func pickSample(from recipes: [Recipe]) -> [Recipe] {
-        let withImages = recipes.filter { $0.imageURL != nil }
-        let pool = withImages.isEmpty ? recipes : withImages
-        guard !pool.isEmpty else { return [] }
+    // MARK: - Treść
 
-        var picked: [Recipe] = []
-        var bag: [Recipe] = []
-        while picked.count < 7 {
-            if bag.isEmpty { bag = pool.shuffled() }
-            picked.append(bag.removeFirst())
+    /// Jedno zdanie, bez obietnic, których arkusz nie dotrzyma: bez liczby
+    /// dni (w niedzielę z tygodnia zostaje jeden) i bez „nie ruszę tego, co
+    /// stoi” — arkusz nie wie, co asystent zrobi z zaplanowanym dniem.
+    private var subtitle: String {
+        guard weekIsEmpty else {
+            return "Powiedz, czego brakuje, a dopiszę resztę tygodnia."
         }
-        return picked
+        return isSolo
+            ? "Cały tydzień posiłków, a każde danie możesz potem zamienić."
+            : "Cały tydzień posiłków dla domu, a każde danie możesz potem zamienić."
+    }
+
+    /// Krótkie, żeby stały w JEDNYM wierszu (jak etykiety wprowadzenia
+    /// Asystenta) — „Twój cel kalorii” zawijało „Bez powtórek” do drugiego.
+    private var tags: [AssistantIntroTag] {
+        [
+            AssistantIntroTag(
+                title: isSolo ? "Dieta i alergeny" : "Alergeny",
+                icon: "checkmark.shield.fill",
+                accent: SCPalette.sage
+            ),
+            AssistantIntroTag(
+                title: isSolo ? "Twój cel" : "Cel każdego",
+                icon: "flame.fill",
+                accent: SCPalette.terracotta
+            ),
+            AssistantIntroTag(
+                title: "Bez powtórek",
+                icon: "arrow.triangle.2.circlepath",
+                accent: SCPalette.indigo
+            ),
+        ]
+    }
+}
+
+// MARK: - Podgląd tygodnia
+
+/// „Tak może wyglądać” — siedem dni w stroju listy zestawu ze strony
+/// „Wszystko pasuje?” (`ProposalRecap` w `AssistantCards.swift`): karta
+/// `scTileBg` + `scTileStroke`, w wierszu do trzech nałożonych krążków zdjęć,
+/// dzień z porą i nazwa dania z przodu. Ciaśniej niż tam (miniatura 42,
+/// nazwa w jednej linii): siedem dni mieści się nad stopką bez przewijania.
+///
+/// Ruch (runda 2, „bardziej wow”) opowiada, co zrobi asystent, językiem
+/// reszty aplikacji:
+/// 1. SKŁADANIE — karta wchodzi z pustymi wierszami (szkielet: krążki i paski
+///    w kolorze obwódki), a dni wypełniają się po kolei: krążki wskakują
+///    sprężyną jeden po drugim, nazwa dania PISZE SIĘ (`SCTypedText`), na końcu
+///    wiersza szałwiowy ptaszek. Licznik posiłków w nagłówku roluje, a znak
+///    Asystenta obok etykiety „myśli” (`SCLivingMark`, nastrój `thinking`)
+///    i podskakuje, gdy tydzień stoi.
+/// 2. ZAMIANA — co kilka sekund jeden dzień podświetla się terakotą, ptaszek
+///    przechodzi w kręcące się strzałki, a danie przenika w inne z zapasu
+///    (zdjęcie, nazwa roluje jak w Kalendarzu, `SCMotion.textRoll`) — to jest
+///    obietnica z podtytułu: „każde danie możesz potem zamienić”.
+/// Przy „Ogranicz ruch” tydzień stoi od razu gotowy, bez pokazu zamiany.
+private struct PlanAssistantWeekPreview: View {
+    let days: [Date]
+    let week: [[AssistantIntroDish]]
+    let spares: [AssistantIntroDish]
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Ile dni już „ułożonych”.
+    @State private var built = 0
+    /// Dania po pokazowej zamianie: [numer dnia: danie].
+    @State private var swapped: [Int: AssistantIntroDish] = [:]
+    /// Dzień, w którym właśnie trwa zamiana.
+    @State private var swapping: Int?
+    @State private var cheer = 0
+
+    private static let thumb: CGFloat = 42
+    private static let small: CGFloat = 28
+
+    /// Pierwszy dzień rusza, gdy karta jest w połowie wejścia (`scReveal`).
+    private static let firstRow: Double = 0.45
+    private static let rowStep: Double = 0.22
+    /// Nazwa dania pisze się chwilę po pierwszym krążku.
+    private static let typingLag: Double = 0.12
+    private static let typingRate: Double = 80
+    /// Dni do zamiany — nie po kolei, żeby oko nie przewidziało następnego.
+    private static let swapOrder = [3, 0, 5, 2, 6, 1, 4]
+
+    /// Nazwę w wierszu niesie obiad (albo pierwsza pora, gdy domu obiad nie
+    /// dotyczy) — jego zdjęcie stoi z przodu, a pora jest w podpisie.
+    static func mainSlot(in dishes: [AssistantIntroDish]) -> MealSlot? {
+        (dishes.first { $0.slot == .lunch } ?? dishes.first)?.slot
+    }
+
+    private struct Row: Identifiable {
+        let id: Int
+        let label: String
+        let main: AssistantIntroDish
+        let others: [AssistantIntroDish]
+        /// Wszystkie dania dnia — do licznika posiłków.
+        let count: Int
+    }
+
+    private var rows: [Row] {
+        zip(days.prefix(7), week).enumerated().compactMap { index, pair in
+            let (day, dishes) = pair
+            guard let slot = Self.mainSlot(in: dishes),
+                  let original = dishes.first(where: { $0.slot == slot }) else { return nil }
+            let main = swapped[index] ?? original
+            return Row(
+                id: index,
+                label: "\(Self.dayFormatter.string(from: day).capitalized) · \(slot.lowercaseName)",
+                main: main,
+                others: Array(dishes.filter { $0.id != original.id }.prefix(2)),
+                count: dishes.count
+            )
+        }
+    }
+
+    private var isBuilding: Bool { built < week.count }
+
+    private var placedMeals: Int {
+        rows.prefix(built).reduce(0) { $0 + $1.count }
+    }
+
+    var body: some View {
+        let rows = self.rows
+
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 4)
+
+            ForEach(rows) { row in
+                VStack(spacing: 0) {
+                    if row.id > 0 {
+                        Rectangle()
+                            .fill(Color.scTileStroke(scheme))
+                            .frame(height: 1)
+                            .padding(.leading, 16 + Self.thumb + 12)
+                            .padding(.trailing, 16)
+                    }
+                    rowView(row, isBuilt: row.id < built, isSwapping: swapping == row.id)
+                }
+            }
+        }
+        .padding(.bottom, 6)
+        .background(
+            RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
+                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Przykładowy tydzień: \(rows.map { "\($0.label), \($0.main.name)" }.joined(separator: "; "))")
+        .task { await play() }
     }
 
     // MARK: - Nagłówek
 
-    private var introSubtitle: String {
-        // Bez obietnicy „nie ruszę tego, co stoi": arkusz nie wie, co asystent
-        // zrobi z już zaplanowanym dniem, a obietnica, której nie da się tu
-        // dotrzymać, jest gorsza od jej braku.
-        guard weekIsEmpty else {
-            return "Powiedz, czego brakuje, a dopiszę resztę tygodnia. Każdy posiłek zmienisz potem jednym ruchem."
-        }
-        return isSolo
-            ? "Kilka sekund i masz 7 dni posiłków. Każdy możesz potem zmienić jednym ruchem."
-            : "Kilka sekund i masz 7 dni posiłków dla całego domu. Każdy możesz potem zmienić jednym ruchem."
-    }
-
-    // MARK: - Jak dobieram
-
-    private struct HowRow {
-        let icon: String
-        let color: Color
-        let title: String
-        let subtitle: String
-        let showsMembers: Bool
-    }
-
-    private var howRows: [HowRow] {
-        [
-            HowRow(
-                icon: "person.2.fill",
-                color: SCPalette.sage,
-                title: isSolo ? "Pod Twój profil" : "Pod domowników",
-                subtitle: membersSubtitle,
-                showsMembers: !isSolo
-            ),
-            HowRow(
-                icon: "clock.fill",
-                color: SCPalette.butter,
-                title: isSolo ? "Pod Twój rytm" : "Pod Wasz rytm",
-                subtitle: "W tygodniu szybko, do 30 minut. W weekend coś, przy czym można się zatrzymać.",
-                showsMembers: false
-            ),
-            HowRow(
-                icon: "heart.fill",
-                color: SCPalette.terracotta,
-                title: isSolo ? "Pod Twoje smaki" : "Pod Wasze smaki",
-                subtitle: "Ulubione wracają, sezonowe składniki, żadnych powtórek dwa dni pod rząd.",
-                showsMembers: false
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
+            SCLivingMark(
+                mood: isBuilding ? .thinking : .idle,
+                color: AssistantLook.terraFill(scheme),
+                size: 16,
+                cheer: cheer,
+                glows: false
             )
-        ]
-    }
+            .frame(width: 16, height: 16)
 
-    /// Imiona domowników wprost w zdaniu — obietnica robi się sprawdzalna
-    /// dopiero wtedy, gdy widać w niej swój dom, a nie „gospodarstwo”.
-    private var membersSubtitle: String {
-        let names = members
-            .prefix(3)
-            .map { HouseholdMemberStyle.shortName($0.displayName) }
-        guard !names.isEmpty else {
-            return "Alergeny i wykluczenia domowników z ustawień — każdy dostaje swoje."
-        }
-        let list = names.joined(separator: ", ")
-        let tail = members.count > 3 ? " i reszta domu" : ""
-        return "\(list)\(tail) — każdy dostaje swoje, bez osobnego gotowania, gdy się da."
-    }
-
-    private func howCard(_ row: HowRow) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(row.color.opacity(scheme == .dark ? 0.16 : 0.14))
-                Image(systemName: row.icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(row.color)
-            }
-            .frame(width: 38, height: 38)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(row.title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(1)
-
-                    Spacer(minLength: 0)
-
-                    if row.showsMembers { memberStack }
-                }
-
-                Text(row.subtitle)
-                    .font(.system(size: 12.5, weight: .regular))
-                    .tracking(-0.1)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineSpacing(1.5)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-    }
-
-    private var memberStack: some View {
-        HStack(spacing: -7) {
-            ForEach(members.prefix(3), id: \.id) { member in
-                MemberAvatar(member: member, members: members, size: 22)
-                    .overlay(Circle().stroke(Color.scPageBase(scheme), lineWidth: 1.5))
-            }
-        }
-        .fixedSize()
-    }
-
-    // MARK: - Podgląd tygodnia
-
-    /// Etykieta sekcji z dopiskiem po prawej — krój i wcięcie
-    /// `EditorialSheetSectionLabel`, jak „Jak dobieram” nad nią.
-    private var previewHeader: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("TAK MOŻE WYGLĄDAĆ")
+            Text("Tak może wyglądać")
                 .font(.system(size: 10.5, weight: .bold))
                 .tracking(1.4)
-                .foregroundStyle(Color.scFaint(scheme))
+                .textCase(.uppercase)
+                .foregroundStyle(AssistantLook.faint(scheme))
                 .lineLimit(1)
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
 
-            // Odmiana przez `PolishPlural`: sześć posiłków dziennie to
-            // „42 posiłki”, nie „42 posiłków”.
-            Text("przykład · \(PolishPlural.meals(7 * max(1, slotsPerDay))) + lista zakupów")
-                .font(.system(size: 11.5, weight: .regular))
-                .foregroundStyle(Color.scFaint(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            // Liczba rośnie razem z tygodniem — cyfry rolują.
+            Text(PolishPlural.meals(placedMeals))
+                .font(.system(size: 12.5, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(AssistantLook.muted(scheme))
+                .contentTransition(.numericText(value: Double(placedMeals)))
+                .animation(.smooth(duration: 0.3), value: placedMeals)
         }
+    }
+
+    // MARK: - Wiersz
+
+    private func rowView(_ row: Row, isBuilt: Bool, isSwapping: Bool) -> some View {
+        HStack(spacing: 12) {
+            thumbnails(row, isBuilt: isBuilt, isSwapping: isSwapping)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.label)
+                    .font(.system(size: 11.5, weight: .bold))
+                    .tracking(0.2)
+                    .foregroundStyle(isSwapping ? AssistantLook.terra(scheme) : AssistantLook.muted(scheme))
+                    .lineLimit(1)
+                    .opacity(isBuilt ? 1 : 0)
+                    .background(alignment: .leading) {
+                        skeleton(width: 92, height: 8, visible: !isBuilt)
+                    }
+
+                // Stoi od pierwszej klatki (przezroczysty), pisze się
+                // w chwili, w której wiersz się składa; zamiana roluje go.
+                SCTypedText(
+                    row.main.name,
+                    playKey: 1,
+                    rate: Self.typingRate,
+                    delay: Self.firstRow + Self.rowStep * Double(row.id) + Self.typingLag
+                )
+                .font(.system(size: 15.5, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(AssistantLook.ink(scheme))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(alignment: .leading) {
+                    skeleton(width: 168, height: 11, visible: !isBuilt)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            statusIcon(isBuilt: isBuilt, isSwapping: isSwapping)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AssistantLook.terraTint(scheme))
+                .opacity(isSwapping ? 1 : 0)
+        )
         .padding(.horizontal, 6)
-        .padding(.bottom, 6)
+        .animation(.smooth(duration: 0.3), value: isSwapping)
+        .animation(.smooth(duration: 0.3), value: isBuilt)
     }
 
-    /// Siedem dni z prawdziwymi daniami z katalogu.
-    ///
-    /// Kafle z ikonami stały tu wcześniej dlatego, że aplikacja nie zna planu,
-    /// którego ten podgląd dotyczy — ale przez to obietnica „tak może wyglądać
-    /// Twój tydzień” wyglądała jak zrzut z wersji demo. Losowe dania z KATALOGU
-    /// niczego nie obiecują (podpis obok mówi „przykład”), a pokazują jedzenie,
-    /// które ta apka naprawdę ma. Kafel schematyczny zostaje jako zapas na
-    /// pusty katalog i przepis bez okładki.
-    private var previewStrip: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(days.prefix(7).enumerated()), id: \.element) { index, day in
-                VStack(spacing: 6) {
-                    // Kwadrat bierze się z przezroczystej podkładki, a nie
-                    // z `aspectRatio` nałożonego wprost na zdjęcie: zdjęcie
-                    // w trybie `fill` samo nie ma proporcji, którą da się
-                    // zmierzyć, więc kolumna nie wiedziałaby, jak wysoka być.
-                    Color.clear
-                        .aspectRatio(1, contentMode: .fit)
-                        .overlay { previewTile(index) }
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    /// Pasek szkieletu w kolorze obwódki — miejsce, w którym zaraz stanie tekst.
+    private func skeleton(width: CGFloat, height: CGFloat, visible: Bool) -> some View {
+        Capsule(style: .continuous)
+            .fill(Color.scTileStroke(scheme))
+            .frame(width: width, height: height)
+            .opacity(visible ? 1 : 0)
+    }
 
-                    Text(Self.dayLabel(day))
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+    /// Szałwiowy ptaszek, gdy dzień stoi; przy zamianie — kręcące się
+    /// strzałki w terakocie.
+    private func statusIcon(isBuilt: Bool, isSwapping: Bool) -> some View {
+        Image(systemName: isSwapping ? "arrow.triangle.2.circlepath" : "checkmark.circle.fill")
+            .font(.system(size: 17, weight: .medium))
+            .foregroundStyle(isSwapping ? AssistantLook.terra(scheme) : AssistantLook.sage(scheme))
+            .contentTransition(.symbolEffect(.replace))
+            .symbolEffect(.rotate, isActive: isSwapping)
+            .frame(width: 22, height: 22)
+            .scaleEffect(isBuilt ? 1 : 0.3)
+            .opacity(isBuilt ? 1 : 0)
+            // Ptaszek domyka wiersz, gdy nazwa jest już prawie napisana.
+            .animation(.spring(response: 0.4, dampingFraction: 0.55).delay(isBuilt ? 0.4 : 0), value: isBuilt)
+            .accessibilityHidden(true)
+    }
+
+    /// Do trzech nałożonych krążków w kwadracie miniatury (jak w
+    /// `ProposalRecap`). Pod każdym szkielet — pusty krążek, na który
+    /// danie wskakuje sprężyną. Przy zamianie krążek z przodu przenika
+    /// w nowe danie i na chwilę rośnie.
+    private func thumbnails(_ row: Row, isBuilt: Bool, isSwapping: Bool) -> some View {
+        let far = Self.thumb - Self.small
+        let dishes = [row.main] + row.others
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(dishes.enumerated()), id: \.offset) { index, dish in
+                ZStack {
+                    Circle().fill(Color.scTileStroke(scheme))
+
+                    ZStack {
+                        AssistantThumbnail(url: dish.imageURL, size: Self.small)
+                            .clipShape(Circle())
+                            .id(dish.id)
+                            .transition(.opacity)
+                    }
+                    .scaleEffect(isBuilt ? 1 : 0.2)
+                    .opacity(isBuilt ? 1 : 0)
+                    .animation(
+                        .spring(response: 0.42, dampingFraction: 0.6).delay(0.07 * Double(index)),
+                        value: isBuilt
+                    )
                 }
-                .frame(maxWidth: .infinity)
+                .frame(width: Self.small, height: Self.small)
+                .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 2))
+                .scaleEffect(index == 0 && isSwapping ? 1.12 : 1)
+                .offset(
+                    x: index == 1 ? far : (index == 2 ? far / 2 : 0),
+                    y: index == 0 ? 0 : (index == 1 ? far / 2 : far)
+                )
+                .zIndex(Double(-index))
             }
+        }
+        .frame(width: Self.thumb, height: Self.thumb, alignment: .topLeading)
+    }
+
+    // MARK: - Pokaz
+
+    private func play() async {
+        guard !reduceMotion else {
+            built = week.count
+            return
+        }
+        try? await Task.sleep(for: .seconds(Self.firstRow))
+        for index in week.indices {
+            if Task.isCancelled { return }
+            built = index + 1
+            try? await Task.sleep(for: .seconds(Self.rowStep))
+        }
+        // Ostatnia nazwa dopisuje się jeszcze chwilę.
+        try? await Task.sleep(for: .seconds(0.45))
+        if Task.isCancelled { return }
+        cheer += 1
+
+        let order = Self.swapOrder.filter { $0 < week.count }
+        guard !spares.isEmpty, !order.isEmpty else { return }
+        var round = 0
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(round == 0 ? 1.4 : 2.6))
+            if Task.isCancelled { return }
+            let day = order[round % order.count]
+            swapping = day
+            try? await Task.sleep(for: .seconds(0.6))
+            if Task.isCancelled { return }
+            withAnimation(SCMotion.textRoll) {
+                swapped[day] = spares[round % spares.count]
+            }
+            try? await Task.sleep(for: .seconds(0.75))
+            if Task.isCancelled { return }
+            swapping = nil
+            round += 1
         }
     }
 
-    @ViewBuilder
-    private func previewTile(_ index: Int) -> some View {
-        if index < sample.count, let url = sample[index].imageURL {
-            CachedAsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    schematicTile(index)
-                }
-            }
-        } else {
-            schematicTile(index)
-        }
-    }
-
-    private func schematicTile(_ index: Int) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Self.tileAccent(index).opacity(scheme == .dark ? 0.34 : 0.26),
-                    Self.tileAccent(index).opacity(scheme == .dark ? 0.14 : 0.10)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Image(systemName: Self.tileIcon(index))
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(Self.tileAccent(index))
-        }
-    }
-
-    /// „PON”, „WT” — `pl_PL` skraca dni z kropką („pon.”), której podpis
-    /// pod kaflem nie nosi.
-    private static func dayLabel(_ day: Date) -> String {
-        shortDayFormatter
-            .string(from: day)
-            .replacingOccurrences(of: ".", with: "")
-            .uppercased()
-    }
-
-    private static func tileAccent(_ index: Int) -> Color {
-        [SCPalette.butter, SCPalette.sage, SCPalette.indigo][index % 3]
-    }
-
-    private static func tileIcon(_ index: Int) -> String {
-        ["sunrise.fill", "fork.knife", "moon.stars.fill"][index % 3]
-    }
-
-    // MARK: - Stopka
-
-    private var footer: some View {
-        SCSheetFooter {
-            // Ten sam przycisk, co w stopkach pozostałych arkuszy — terakota
-            // w wariancie „soft”, bez gradientu i cienia.
-            EditorialPrimaryActionButton(
-                title: "Przejdź do Asystenta",
-                icon: MenuConstans.Assistant.icon
-            ) {
-                dismiss()
-                onOpenAssistant()
-            }
-
-            Button {
-                dismiss()
-            } label: {
-                Text("Wolę ułożyć sam")
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PlanPressStyle(scale: 0.99))
-            .padding(.top, -8)
-        }
-    }
-
-    // MARK: - Wspólne
-
-    private static let shortDayFormatter: DateFormatter = {
+    /// „poniedziałek” → „Poniedziałek”.
+    private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "pl_PL")
-        f.dateFormat = "EE"
+        f.dateFormat = "EEEE"
         return f
     }()
 }
 
-// MARK: - Stagger
-
-private extension View {
-    /// Kolejne partie treści wchodzą jedna po drugiej, po 40 ms.
-    /// Przesunięcie jest małe (10 pt) celowo: to ma być dopięcie ruchu
-    /// arkusza, a nie druga animacja obok niego.
-    func stagger(_ appeared: Bool, step: Int) -> some View {
-        opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 10)
-            .animation(
-                .spring(response: 0.42, dampingFraction: 0.92)
-                    .delay(Double(step) * 0.04),
-                value: appeared
+#Preview("Ułożę Ci ten tydzień") {
+    Color.clear
+        .sheet(isPresented: .constant(true)) {
+            PlanAssistantIntroSheet(
+                members: [],
+                days: (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: .now) ?? .now },
+                slots: MealSlot.core,
+                onOpenAssistant: {}
             )
-    }
+            .presentationDetents([.large])
+        }
 }

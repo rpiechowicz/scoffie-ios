@@ -50,7 +50,8 @@ struct ShoppingArchiveSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ShoppingSheetHeader(title: entry.name, onClose: onClose) {
+                    // Pudło — „Zamknij listę” w menu Zakupów odkłada ją właśnie tu.
+                    ShoppingSheetHeader(title: entry.name, icon: "archivebox.fill", onClose: onClose) {
                         overflowMenu
                     }
 

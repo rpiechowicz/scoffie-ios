@@ -90,7 +90,8 @@ struct ProfileDetailsSheet: View {
             VStack(spacing: 0) {
                 // Przypięty nad treścią: arkusz jest dłuższy niż ekran,
                 // a nagłówek w `ScrollView` odjeżdżał razem z krzyżykiem.
-                EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane") {
+                // Sylwetka — ten sam kafelek, co pierwszy krok kreatora.
+                EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane", icon: "person.fill") {
                     commitAndClose()
                 }
                 .padding(.horizontal, 20)

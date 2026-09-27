@@ -7,10 +7,24 @@ import SwiftUI
 /// ekranie lądowały dosłowne gwiazdki („\*\*Obiady (LUNCH):\*\*") i ściana
 /// myślników. Tu ten sam tekst zamienia się w nagłówki sekcji i wiersze dni,
 /// które renderują się jak reszta aplikacji.
+///
+/// Każdy kawałek zna swój zakres w SUROWYM tekście (`raw`, w znakach) — po nim
+/// odpowiedź, która jeszcze się pisze, wie, ile z danego kawałka już widać
+/// (`AssistantAnswer(revealed:)`).
 enum AssistantBlock {
-    case heading(String)
-    case paragraph(String)
+    case heading(String, raw: Range<Int>)
+    case paragraph(String, raw: Range<Int>)
     case list([AssistantListItem])
+
+    /// Zakres całego kawałka w surowym tekście.
+    var raw: Range<Int> {
+        switch self {
+        case let .heading(_, raw), let .paragraph(_, raw): return raw
+        case let .list(items):
+            let start = items.first?.raw.lowerBound ?? 0
+            return start..<(items.last?.raw.upperBound ?? start)
+        }
+    }
 }
 
 struct AssistantListItem {
@@ -23,12 +37,21 @@ struct AssistantListItem {
     /// nim cała hierarchia odpowiedzi znika.
     let depth: Int
     let text: String
+    /// Zakres pozycji w surowym tekście.
+    var raw: Range<Int> = 0..<0
 }
 
 enum AssistantAnswerParser {
+    /// Kolejne linie tekstu to JEDEN akapit (łamanie wiersza w środku), pusta
+    /// linia go zamyka. Do 27.09.2026 każda linia była osobnym blokiem
+    /// z tym samym odstępem 14 pt, co prawdziwy akapit — przerwa między
+    /// akapitami nie różniła się od złamania linii i odpowiedź czytała się
+    /// jak ściśnięty słup zdań.
     static func blocks(from raw: String) -> [AssistantBlock] {
         var blocks: [AssistantBlock] = []
         var pending: [AssistantListItem] = []
+        var paragraph: [String] = []
+        var paragraphRaw: Range<Int>?
 
         func flushList() {
             guard !pending.isEmpty else { return }
@@ -36,30 +59,48 @@ enum AssistantAnswerParser {
             pending = []
         }
 
-        for line in raw.components(separatedBy: .newlines) {
+        func flushParagraph() {
+            guard !paragraph.isEmpty, let range = paragraphRaw else { return }
+            blocks.append(.paragraph(paragraph.joined(separator: "\n"), raw: range))
+            paragraph = []
+            paragraphRaw = nil
+        }
+
+        var offset = 0
+        for line in raw.components(separatedBy: "\n") {
+            let range = offset..<(offset + line.count)
+            // `components(separatedBy:)` zjada znak nowej linii — liczymy go.
+            offset += line.count + 1
+
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty {
                 flushList()
+                flushParagraph()
                 continue
             }
 
             // Wcięcie liczymy z SUROWEJ linii — po przycięciu podpunkt
             // („  - bez laktozy") wygląda identycznie jak pozycja nadrzędna.
             let indent = line.prefix(while: { $0 == " " || $0 == "\t" }).count
-            if let item = listItem(from: trimmed, depth: min(indent / 2, 3)) {
+            if var item = listItem(from: trimmed, depth: min(indent / 2, 3)) {
+                flushParagraph()
+                item.raw = range
                 pending.append(item)
                 continue
             }
 
             flushList()
             if let heading = heading(from: trimmed) {
-                blocks.append(.heading(heading))
+                flushParagraph()
+                blocks.append(.heading(heading, raw: range))
             } else {
-                blocks.append(.paragraph(clean(trimmed)))
+                paragraph.append(clean(trimmed))
+                paragraphRaw = (paragraphRaw?.lowerBound ?? range.lowerBound)..<range.upperBound
             }
         }
 
         flushList()
+        flushParagraph()
         return blocks
     }
 
@@ -187,44 +228,132 @@ enum AssistantAnswerParser {
     }
 }
 
+// MARK: - Pisanie
+
+/// Ile kawałka widać, gdy odpowiedź jeszcze się pisze.
+///
+/// Tekst jest ZŁOŻONY od pierwszej klatki (cały znany tekst), a nienapisana
+/// część ma przezroczysty kolor — jak `SCTypedText` w powitaniu. Wiersze
+/// łamią się więc tak samo na początku i na końcu pisania: słowo nie
+/// przeskakuje do następnej linii w chwili, gdy się dopisze, i odpowiedź nie
+/// rośnie linijka po linijce pod okiem. Ostatnie znaki przed „kursorem”
+/// wchodzą rampą krycia — tekst wpływa, zamiast wskakiwać literami.
+struct AssistantReveal {
+    /// Napisane znaki SUROWEGO tekstu.
+    let count: Int
+
+    /// Ile znaków rampy przed kursorem.
+    static let ramp = 14
+
+    /// Kawałek w całości przed kursorem — rysuje się zwyczajnie.
+    func isComplete(_ raw: Range<Int>) -> Bool { count >= raw.upperBound }
+
+    /// Kawałek w całości za kursorem — jeszcze go nie ma.
+    func isPending(_ raw: Range<Int>) -> Bool { count <= raw.lowerBound }
+
+    /// Tekst kawałka z kryciem wg pozycji kursora. Znaki surowego tekstu
+    /// i wyrenderowanego różnią się o znaczniki (`**`, „- ”), więc pozycja
+    /// w kawałku liczy się proporcją — na długości zdania różnica to znak.
+    func styled(_ text: AttributedString, raw: Range<Int>, color: Color) -> AttributedString {
+        guard !isComplete(raw) else { return text }
+        var result = text
+        let rendered = result.characters.count
+        guard rendered > 0 else { return result }
+        let rawLength = max(1, raw.count)
+        let written = Double(max(0, count - raw.lowerBound)) / Double(rawLength)
+        let cursor = min(rendered, max(0, Int((written * Double(rendered)).rounded())))
+
+        // Od razu do początku rampy — bez przechodzenia całego akapitu
+        // w każdej klatce.
+        let rampStart = max(0, cursor - Self.ramp)
+        var index = result.characters.index(result.characters.startIndex, offsetBy: rampStart)
+        var position = rampStart
+        while position < cursor, index < result.characters.endIndex {
+            let next = result.characters.index(after: index)
+            // 1 = ostatni napisany znak: ledwie widać; czternasty wstecz —
+            // prawie w pełni.
+            let distance = cursor - position
+            let alpha = 0.3 + 0.7 * Double(distance - 1) / Double(Self.ramp)
+            result[index..<next].foregroundColor = color.opacity(alpha)
+            index = next
+            position += 1
+        }
+        // Reszta kawałka jednym zakresem — stoi w układzie, niewidoczna.
+        if index < result.characters.endIndex {
+            result[index..<result.characters.endIndex].foregroundColor = color.opacity(0)
+        }
+        return result
+    }
+}
+
 // MARK: - Widok
 
 /// Odpowiedź asystenta: nagłówki sekcji, akapity i listy dni w kafelkach.
+///
+/// Typografia (27.09.2026, „odpowiedzi są ściśnięte”): akapit 16 pt z interlinią
+/// 6 i bez ścieśniania liter (było −0,3), odstęp 16 pt między kawałkami,
+/// nagłówek sekcji jak zdanie (15/600) zamiast wersalików 11 pt, pozycje listy
+/// 15 pt z interlinią.
 struct AssistantAnswer: View {
     let text: String
+    /// Ile znaków `text` jest już napisanych — `nil` = całość (historia,
+    /// odpowiedź odsłonięta).
+    var revealed: Int? = nil
 
     @Environment(\.colorScheme) private var scheme
+
+    static let blockSpacing: CGFloat = 16
 
     private var blocks: [AssistantBlock] {
         AssistantAnswerParser.blocks(from: text)
     }
 
+    private var reveal: AssistantReveal? {
+        guard let revealed, revealed < text.count else { return nil }
+        return AssistantReveal(count: revealed)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let reveal = self.reveal
+        VStack(alignment: .leading, spacing: Self.blockSpacing) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
-                switch block {
-                case let .heading(title):
-                    Text(title.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(Color.scMuted(scheme))
-                        // Nagłówek rozdziela sekcje, więc potrzebuje powietrza
-                        // NAD sobą — ale nie wtedy, gdy stoi na samej górze.
-                        .padding(.top, index == 0 ? 0 : 10)
-
-                case let .paragraph(paragraph):
-                    Text(AssistantAnswerParser.inline(paragraph))
-                        .font(.system(size: 16))
-                        .tracking(-0.3)
-                        .lineSpacing(5)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                case let .list(items):
-                    AssistantListCard(items: items)
-                }
+                blockView(block, index: index, reveal: reveal)
+                    // Kawałek, do którego kursor jeszcze nie doszedł, stoi
+                    // w układzie (miejsce zarezerwowane), ale go nie widać —
+                    // także ramki listy i plakietek dni.
+                    .opacity(reveal?.isPending(block.raw) == true ? 0 : 1)
             }
         }
+    }
+
+    @ViewBuilder
+    private func blockView(_ block: AssistantBlock, index: Int, reveal: AssistantReveal?) -> some View {
+        switch block {
+        case let .heading(title, raw):
+            Text(styled(AssistantAnswerParser.inline(title), raw: raw, reveal: reveal))
+                .font(.system(size: 15, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(Color.scLabel(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                // Nagłówek rozdziela sekcje, więc potrzebuje powietrza
+                // NAD sobą — ale nie wtedy, gdy stoi na samej górze.
+                .padding(.top, index == 0 ? 0 : 4)
+
+        case let .paragraph(paragraph, raw):
+            Text(styled(AssistantAnswerParser.inline(paragraph), raw: raw, reveal: reveal))
+                .font(.system(size: 16))
+                .lineSpacing(6)
+                .foregroundStyle(Color.scLabel(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+
+        case let .list(items):
+            AssistantListCard(items: items, reveal: reveal)
+        }
+    }
+
+    private func styled(_ text: AttributedString, raw: Range<Int>, reveal: AssistantReveal?) -> AttributedString {
+        guard let reveal else { return text }
+        return reveal.styled(text, raw: raw, color: Color.scLabel(scheme))
     }
 }
 
@@ -232,48 +361,26 @@ struct AssistantAnswer: View {
 /// przelecieć tydzień wzrokiem zamiast czytać go zdanie po zdaniu.
 private struct AssistantListCard: View {
     let items: [AssistantListItem]
+    var reveal: AssistantReveal? = nil
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                if index > 0 {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 0.5)
-                        .padding(
-                            .leading,
-                            item.day == nil && item.ordinal == nil ? 14 : 60
-                        )
-                }
-
-                HStack(alignment: .top, spacing: 10) {
-                    if let badge = item.day ?? item.ordinal.map({ "\($0)." }) {
-                        Text(badge)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(SCPalette.terracotta)
-                            .frame(width: 36, height: 22)
-                            .background(
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .fill(Color.scAccentTint(scheme))
+                VStack(spacing: 0) {
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.scRule(scheme))
+                            .frame(height: 0.5)
+                            .padding(
+                                .leading,
+                                item.day == nil && item.ordinal == nil ? 14 : 60
                             )
-                    } else {
-                        Circle()
-                            .fill(Color.scMuted(scheme).opacity(0.5))
-                            .frame(width: 4, height: 4)
-                            .padding(.top, 8)
                     }
-
-                    Text(AssistantAnswerParser.inline(item.text))
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    row(item)
                 }
-                .padding(.leading, 12 + CGFloat(item.depth) * 14)
-                .padding(.trailing, 12)
-                .padding(.vertical, 11)
+                .opacity(reveal?.isPending(item.raw) == true ? 0 : 1)
             }
         }
         .background(
@@ -284,6 +391,42 @@ private struct AssistantListCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
+    }
+
+    private func row(_ item: AssistantListItem) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            if let badge = item.day ?? item.ordinal.map({ "\($0)." }) {
+                Text(badge)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .frame(width: 36, height: 22)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color.scAccentTint(scheme))
+                    )
+            } else {
+                Circle()
+                    .fill(Color.scMuted(scheme).opacity(0.5))
+                    .frame(width: 4, height: 4)
+                    .padding(.top, 9)
+            }
+
+            Text(styledText(item))
+                .font(.system(size: 15))
+                .lineSpacing(3)
+                .foregroundStyle(Color.scLabel(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 12 + CGFloat(item.depth) * 14)
+        .padding(.trailing, 12)
+        .padding(.vertical, 11)
+    }
+
+    private func styledText(_ item: AssistantListItem) -> AttributedString {
+        let text = AssistantAnswerParser.inline(item.text)
+        guard let reveal else { return text }
+        return reveal.styled(text, raw: item.raw, color: Color.scLabel(scheme))
     }
 }
 

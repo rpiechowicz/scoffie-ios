@@ -18,6 +18,12 @@ struct AgentChatMessage: Identifiable, Equatable {
     let text: String
     let createdAt: Date?
     var isPending: Bool = false
+    /// Id wiadomości NA SERWERZE, gdy różni się od `id`. Pytanie wysłane w tej
+    /// sesji stoi pod kluczem z telefonu (`clientMessageId` — od niego zależy
+    /// tożsamość slotu tury), a serwer nadaje mu własne id (`202 messageId`).
+    /// „Popraw pytanie” i „Spróbuj ponownie” muszą wskazać to drugie —
+    /// z samym `clientMessageId` serwer odpowiadał 404.
+    var serverId: String? = nil
     /// Tura, która skończyła się ZAPISEM planu — dymek dostaje skrót do Planu.
     var savedPlan: Bool = false
     /// Karta — propozycja tygodnia albo potwierdzenie zapisu. `nil` przy
@@ -25,21 +31,40 @@ struct AgentChatMessage: Identifiable, Equatable {
     var card: AgentCardDTO?
     /// „Uwzględniłem: …" — z czym serwer policzył tę odpowiedź.
     var usedContext: [String] = []
-    /// Ślad tury nad odpowiedzią („Myślałem 42 s ›"). Tylko dla odpowiedzi
-    /// zebranych W TEJ SESJI — patrz `AgentThinkingSummary`.
+    /// Ślad tury pod odpowiedzią („Myślałem 42 s ›"). Z serwera
+    /// (`AgentMessageDTO.thinking`, także w historii — od 27.09.2026) albo
+    /// policzony z tury w tej sesji, gdy serwer go jeszcze nie oddaje.
     var thinking: AgentThinkingSummary? = nil
-    /// Od którego znaku odpowiedź ma się jeszcze „dopisać” na ekranie
-    /// (znak po znaku, jak szkic w trakcie tury). `nil` = pokazać od razu
-    /// w całości: historia z serwera i odpowiedzi już odsłonięte. Ustawiane
-    /// TYLKO dla odpowiedzi domkniętej w tej sesji; zdejmuje `markRevealed`.
-    var revealFrom: Int? = nil
+    /// Tura, która napisała wiadomość.
+    var turnId: String? = nil
+    /// Kciuk użytkownika pod odpowiedzią.
+    var feedback: AgentFeedback? = nil
+    /// Własne zgłoszenie tej odpowiedzi — jest, to „Zgłoś” staje się „Popraw
+    /// zgłoszenie” (serwer trzyma jedno na osobę i odpowiedź).
+    var report: AgentMessageReportDTO? = nil
+    /// Zegar „pisania”, gdy odpowiedź jeszcze się dopisuje na ekranie — TEN
+    /// SAM, którym pisał się szkic (`AgentStore.draftReveal`), zakotwiczony
+    /// tam, gdzie szkic stał. `nil` = cała od razu: historia z serwera
+    /// i odpowiedzi już odsłonięte. Zdejmuje `markRevealed`.
+    var reveal: AgentRevealClock? = nil
+    /// Klucz miejsca w slocie ostatniej tury („turn-…") — ten sam, pod którym
+    /// rysował się szkic. Dzięki niemu szkic i gotowa odpowiedź to JEDEN
+    /// widok, a nie dwa przenikające się (runda 27.09.2026: „pisze jedno
+    /// słowo, a potem przeskakuje i pokazuje całą odpowiedź”).
+    var liveKey: String? = nil
+    /// Szkic w trakcie tury — wiadomość pozorna, której nie ma w `messages`.
+    var isDraft: Bool = false
+
+    /// Tożsamość wiersza na ekranie i cel przewijania.
+    var anchorID: String { liveKey ?? id }
 }
 
-/// Ślad tury, który zostaje nad odpowiedzią: ile trwała i przez co przeszła.
-/// Tylko dla odpowiedzi zebranych W TEJ SESJI — historia z serwera go nie
-/// niesie (`AgentMessageDTO` nie ma kroków), i wtedy linii po prostu nie ma.
-/// Gdyby serwer kiedyś dołożył `progress`/`startedAt`/`finishedAt` do
-/// wiadomości, wystarczy wypełnić to pole w `chatMessage(from:)`.
+enum AgentFeedback: String {
+    case up = "UP"
+    case down = "DOWN"
+}
+
+/// Ślad tury, który zostaje pod odpowiedzią: ile trwała i przez co przeszła.
 struct AgentThinkingSummary: Equatable {
     /// Czas tury w sekundach, z dziesiątymi — wiersz „Myślałem 12,3 s" ma
     /// pokazać tę samą liczbę, na której stanął licznik. `nil` = nie dało
@@ -106,6 +131,31 @@ final class AgentStore {
     /// dopisywania gotowej odpowiedzi. Zmienia się tylko przy nowej porcji
     /// z serwera; widok liczy z niego liczbę znaków co klatkę.
     private(set) var draftReveal = AgentRevealClock()
+    /// Tura, której szkic stoi (albo stał) w slocie — z niej klucz miejsca
+    /// (`AgentChatMessage.liveKey`), wspólny dla szkicu i gotowej odpowiedzi.
+    /// Zostaje po turze; zeruje go `resetTurnState()` razem z listą.
+    private(set) var liveTurnId: String?
+    /// Gotowa odpowiedź ostatniej tury dopisuje się DALEJ od szkicu, który już
+    /// był na ekranie — wtedy ekran nie przewija się pod jej początek (stała
+    /// tam od pierwszego słowa i skok byłby jedynym ruchem w tej chwili).
+    private(set) var lastAnswerContinuedDraft = false
+
+    /// Szkic jako wiadomość pozorna — rysowany tym samym widokiem i pod tym
+    /// samym kluczem, co gotowa odpowiedź, która go zastąpi.
+    var draftMessage: AgentChatMessage? {
+        guard isSending, !draftText.isEmpty, let liveTurnId else { return nil }
+        return AgentChatMessage(
+            id: "draft-\(liveTurnId)",
+            author: .assistant,
+            text: draftText,
+            createdAt: nil,
+            reveal: draftReveal,
+            liveKey: Self.liveKey(turnId: liveTurnId),
+            isDraft: true
+        )
+    }
+
+    static func liveKey(turnId: String) -> String { "turn-\(turnId)" }
     /// Epoka bieżącej tury — od niej wskaźnik liczy oddech glifu, połysk
     /// i próg „Możesz wyjść". Ustawiana w `send()`/`editMessage()` razem
     /// z `isSending`, żeby istniała od pierwszej klatki wskaźnika, a nie od
@@ -230,10 +280,35 @@ final class AgentStore {
         errorMessage = nil
     }
 
-    /// „Zgłoś odpowiedź" — oddaje komunikat błędu albo `nil`.
+    /// Kciuk pod odpowiedzią. Na ekranie od razu; gdy serwer odmówi, wraca
+    /// poprzedni stan, a komunikat (albo `nil`) dostaje wywołujący.
+    func setFeedback(_ rating: AgentFeedback?, for messageId: String) async -> String? {
+        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return nil }
+        let previous = messages[index].feedback
+        guard previous != rating else { return nil }
+        messages[index].feedback = rating
+        do {
+            try await client.rateMessage(id: messageId, rating: rating?.rawValue)
+            return nil
+        } catch {
+            // Tylko jeśli nikt w międzyczasie nie przestawił kciuka.
+            if let again = messages.firstIndex(where: { $0.id == messageId }),
+               messages[again].feedback == rating {
+                messages[again].feedback = previous
+            }
+            return UserFacingErrorMapper.inlineMessage(from: error)
+        }
+    }
+
+    /// „Zgłoś odpowiedź" / „Popraw zgłoszenie" — oddaje komunikat błędu albo
+    /// `nil`. Serwer trzyma jedno zgłoszenie na osobę i odpowiedź, więc drugie
+    /// wysłanie je poprawia; tu zapamiętujemy, co wysłano.
     func report(messageId: String, reason: String, comment: String?) async -> String? {
         do {
             try await client.reportMessage(id: messageId, reason: reason, comment: comment)
+            if let index = messages.firstIndex(where: { $0.id == messageId }) {
+                messages[index].report = AgentMessageReportDTO(reason: reason, comment: comment)
+            }
             return nil
         } catch {
             return UserFacingErrorMapper.inlineMessage(from: error)
@@ -431,7 +506,7 @@ final class AgentStore {
             // Rozmowa mogła się w tym czasie przełączyć — wtedy ta tura
             // należy do POPRZEDNIEJ i nie ma prawa dopisać odpowiedzi tutaj.
             guard sentInConversation == self.conversationId else { return true }
-            confirmPendingMessage(clientMessageId)
+            confirmPendingMessage(clientMessageId, serverId: accepted.messageId)
             pendingTurnId = accepted.turnId
             await follow(turnId: accepted.turnId)
             return true
@@ -631,8 +706,8 @@ final class AgentStore {
     /// Odpowiedź odsłoniła się do końca — od teraz rysuje się w całości,
     /// także po przeprowadzce wiersza ze slotu do części przed nim.
     func markRevealed(id: String) {
-        guard let index = messages.firstIndex(where: { $0.id == id }), messages[index].revealFrom != nil else { return }
-        messages[index].revealFrom = nil
+        guard let index = messages.firstIndex(where: { $0.id == id }), messages[index].reveal != nil else { return }
+        messages[index].reveal = nil
     }
 
     /// Odświeżenie listy w tle — bez dotykania komunikatu błędu.
@@ -838,6 +913,8 @@ final class AgentStore {
         draftText = ""
         // Tu podmienia się cała lista, więc skok epoki jest niewidoczny.
         turnStartedAt = nil
+        liveTurnId = nil
+        lastAnswerContinuedDraft = false
         hasLiveTurnSlot = false
         pendingTurnId = nil
         errorMessage = nil
@@ -870,6 +947,12 @@ final class AgentStore {
         let token = UUID()
         activeTurnToken = token
         isSending = true
+        // Klucz miejsca szkicu — nowa tura to nowe miejsce w slocie.
+        if liveTurnId != turnId {
+            liveTurnId = turnId
+            lastAnswerContinuedDraft = false
+            draftReveal = AgentRevealClock()
+        }
         // Powrót na zakładkę / relaunch: `send()` nie ustawiło epoki, a widok
         // nie ma prawa dostać `nil` — inaczej „Możesz wyjść" pojawia się od razu.
         if turnStartedAt == nil { turnStartedAt = Date() }
@@ -967,9 +1050,12 @@ final class AgentStore {
 
     /// Nowa porcja szkicu. Zegar zaczyna od tego, co już widać (i co nowy
     /// tekst kontynuuje), a tempo dobiera tak, żeby zaległość zeszła
-    /// w ~1,2 s — dłużej niż odstęp odpytywania, więc tekst płynie bez
-    /// zatrzymań między porcjami — ale nie szybciej niż `maxRate`: porcja
-    /// tysiąca znaków ma się PISAĆ, a nie wskakiwać.
+    /// w ~1,5 s — dłużej niż odstęp odpytywania (serwer zapisuje szkic
+    /// najwyżej raz na sekundę), więc tekst płynie bez zatrzymań między
+    /// porcjami. Dolna granica jest NISKA (`draftMinRate`): pierwsza porcja
+    /// to zwykle jedno słowo, które przy 70 zn/s wskakiwało w 0,1 s i stało
+    /// sekundę do następnej porcji — „pisze jedno słowo, a potem przeskakuje”.
+    /// Górna — `maxRate`: porcja tysiąca znaków ma się PISAĆ, a nie wskakiwać.
     private func receiveDraft(_ draft: String) {
         let now = Date()
         let shown = draftReveal.count(at: now, limit: draftText.count)
@@ -978,7 +1064,7 @@ final class AgentStore {
         draftReveal = AgentRevealClock(
             anchorDate: now,
             anchorCount: start,
-            rate: min(AgentRevealClock.maxRate, max(AgentRevealClock.minRate, backlog / 1.2))
+            rate: min(AgentRevealClock.maxRate, max(AgentRevealClock.draftMinRate, backlog / 1.5))
         )
         draftText = draft
     }
@@ -1029,7 +1115,15 @@ final class AgentStore {
                 answers[answers.count - 1].savedPlan = true
             }
             if !answers.isEmpty {
-                answers[answers.count - 1].thinking = Self.thinkingSummary(for: turn, localStart: turnStartedAt)
+                // Serwer od 27.09.2026 oddaje ślad przy odpowiedzi sam (ten sam,
+                // który wróci z historią); starszy — liczymy z tury.
+                if answers[answers.count - 1].thinking == nil {
+                    answers[answers.count - 1].thinking = Self.thinkingSummary(for: turn, localStart: turnStartedAt)
+                }
+                // Ostatnia odpowiedź zajmuje miejsce szkicu — ten sam klucz,
+                // więc to JEDEN widok: tekst pisze się dalej, zamiast
+                // przeniknąć w nowy widok, który zaczyna od siebie.
+                answers[answers.count - 1].liveKey = Self.liveKey(turnId: turn.id)
                 // Odpowiedź ma się DOPISAĆ, nie wskoczyć: szkic w trakcie tury
                 // odsłaniał się znak po znaku, a gotowa odpowiedź podmieniała
                 // go całą naraz — najczęściej z pustego, bo szkic dochodzi
@@ -1043,14 +1137,26 @@ final class AgentStore {
                 // całego tekstu i wskakiwała naraz. I od wspólnego początku,
                 // nie `hasPrefix`: drobna różnica na końcu szkicu (spacja,
                 // formatowanie) zerowała odsłanianie od pierwszej litery.
-                let shown = draftReveal.count(at: Date(), limit: draftText.count)
+                //
+                // I tym samym zegarem (`draftReveal` → `finishing`): tempo
+                // szkicu płynie dalej, a nie zmienia się skokowo w chwili
+                // końca tury. Zegar żyje w wiadomości, więc przebudowa wiersza
+                // nie zaczyna pisania od nowa.
+                let now = Date()
+                let shown = draftReveal.count(at: now, limit: draftText.count)
+                let continues = liveTurnId == turn.id && !draftText.isEmpty
+                lastAnswerContinuedDraft = continues && shown > 0
                 for index in answers.indices {
-                    guard index == answers.count - 1, !draftText.isEmpty else {
-                        answers[index].revealFrom = 0
-                        continue
-                    }
-                    let common = AgentRevealClock.commonPrefixCount(draftText, answers[index].text)
-                    answers[index].revealFrom = min(shown, common)
+                    let isLast = index == answers.count - 1
+                    let from = isLast && continues
+                        ? min(shown, AgentRevealClock.commonPrefixCount(draftText, answers[index].text))
+                        : 0
+                    answers[index].reveal = AgentRevealClock.finishing(
+                        after: isLast && continues ? draftReveal : nil,
+                        at: now,
+                        from: from,
+                        total: answers[index].text.count
+                    )
                 }
             }
             if answers.isEmpty {
@@ -1141,6 +1247,8 @@ final class AgentStore {
         isStopping = false
         defer { isSending = false }
 
+        // Serwer zna pytanie pod SWOIM id (pytanie z tej sesji ma lokalne).
+        let targetId = messages[index].serverId ?? messageId
         let withdrawn = Array(messages[index...])
         messages.removeSubrange(index...)
         messages.append(
@@ -1158,14 +1266,14 @@ final class AgentStore {
                 conversationId: conversationId,
                 request: AgentEditMessageRequestDTO(
                     clientMessageId: clientMessageId,
-                    messageId: messageId,
+                    messageId: targetId,
                     text: trimmed,
                     weekStart: weekStart,
                     clientToday: PlanWeek.dateKey(Date()),
                     timeZone: TimeZone.current.identifier
                 )
             )
-            confirmPendingMessage(clientMessageId)
+            confirmPendingMessage(clientMessageId, serverId: accepted.messageId)
             pendingTurnId = accepted.turnId
             await follow(turnId: accepted.turnId)
             return true
@@ -1288,9 +1396,10 @@ final class AgentStore {
         return UserFacingErrorMapper.copy(forCode: code)
     }
 
-    private func confirmPendingMessage(_ id: String) {
+    private func confirmPendingMessage(_ id: String, serverId: String? = nil) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
         messages[index].isPending = false
+        if let serverId, serverId != id { messages[index].serverId = serverId }
     }
 
     /// Serwer oddaje znaczniki z milisekundami (`2026-08-31T12:00:00.123Z`),
@@ -1340,7 +1449,18 @@ final class AgentStore {
             text: dto.text,
             createdAt: timestampParser.date(from: dto.createdAt),
             card: dto.card,
-            usedContext: dto.usedContext ?? []
+            usedContext: dto.usedContext ?? [],
+            // Ślad tury z serwera — także w rozmowie otwartej z historii
+            // (do 27.09.2026 „Myślałem” istniało tylko w pamięci sesji).
+            thinking: dto.thinking.map { thinking in
+                AgentThinkingSummary(
+                    duration: thinking.durationMs.map { Double($0) / 1000 },
+                    steps: thinking.steps.filter { !$0.isTransient }
+                )
+            },
+            turnId: dto.turnId,
+            feedback: dto.feedback.flatMap(AgentFeedback.init(rawValue:)),
+            report: dto.report
         )
     }
 }
@@ -1349,10 +1469,30 @@ final class AgentStore {
 /// przybywa `rate` znaków na sekundę. Czysta funkcja czasu — widok liczy
 /// z niej co klatkę, a sklep wie w każdej chwili, ile jest na ekranie.
 struct AgentRevealClock: Equatable {
-    /// Najwolniej, jak tekst ma się dopisywać (znaki/s).
-    static let minRate: Double = 70
+    /// Najwolniej, jak dopisuje się GOTOWA odpowiedź (znaki/s).
+    static let minRate: Double = 90
+    /// Najwolniej, jak pisze się szkic — nisko, żeby pierwsze słowo nie
+    /// wskakiwało i nie stało do następnej porcji z serwera.
+    static let draftMinRate: Double = 18
     /// Najszybciej — powyżej tekst przestaje się pisać, a zaczyna wskakiwać.
     static let maxRate: Double = 320
+    /// Gotowa odpowiedź schodzi najdłużej tyle — dłuższa pisze się szybciej.
+    static let finishWithin: TimeInterval = 3.5
+
+    /// Zegar gotowej odpowiedzi: od znaku `from`, bez szarpnięcia tempa
+    /// względem szkicu (`after`) — nie wolniej niż on, nie wolniej niż
+    /// `minRate` i tak, żeby reszta zeszła w `finishWithin`.
+    static func finishing(after previous: AgentRevealClock?, at now: Date, from: Int, total: Int) -> AgentRevealClock {
+        let remaining = Double(max(0, total - from))
+        let rate = min(maxRate, max(minRate, previous?.rate ?? 0, remaining / finishWithin))
+        return AgentRevealClock(anchorDate: now, anchorCount: from, rate: rate)
+    }
+
+    /// Kiedy zegar dojdzie do `total` znaków.
+    func finishDate(total: Int) -> Date {
+        let remaining = Double(max(0, total - anchorCount))
+        return anchorDate.addingTimeInterval(rate > 0 ? remaining / rate : 0)
+    }
 
     var anchorDate: Date = .distantPast
     var anchorCount = 0

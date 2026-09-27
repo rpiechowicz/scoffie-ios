@@ -51,6 +51,9 @@ struct PlansSheet: View {
                 eyebrow: "Plany · miesięcznie",
                 title: "Wybierz plan",
                 subtitle: "Pula wspólna dla całego domu, odnawia się co miesiąc.",
+                // Plany to plany Asystenta — jego glif, jak wiersz
+                // „Asystent i plan” w Ustawieniach.
+                icon: MenuConstans.Assistant.icon,
                 onClose: { dismiss() },
                 footer: { footer }
             ) {
@@ -93,7 +96,7 @@ struct PlansSheet: View {
             LegalDocumentSheet(title: "Regulamin") { TermsOfServiceContent() }
         }
         .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności") { PrivacyPolicyContent() }
+            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) { PrivacyPolicyContent() }
         }
         .onAppear {
             // Na wejściu: plan polecany dla domu, a gdy go nie ma — obecny.

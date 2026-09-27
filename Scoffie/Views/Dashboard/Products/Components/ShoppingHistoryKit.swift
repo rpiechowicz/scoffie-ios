@@ -77,8 +77,13 @@ struct ShoppingEyebrowRow: View {
 /// Zamyka KRZYŻYK, nie strzałka wstecz, i to nawet wtedy, gdy arkusze stoją
 /// jeden na drugim. Arkusz się zamyka — dokładnie to samo robi przeciągnięcie
 /// w dół — a strzałka obiecywałaby nawigację, której tu nie ma.
+///
+/// Przed tytułem kafelek (`SCHeaderIconWell`) — ten sam, co w każdym innym
+/// arkuszu aplikacji; eyebrow zostaje własnym wierszem pod spodem.
 struct ShoppingSheetHeader<Trailing: View>: View {
     let title: String
+    var icon: String? = nil
+    var accent: Color = SCPalette.terracotta
     var onClose: () -> Void
     @ViewBuilder var trailing: () -> Trailing
 
@@ -86,12 +91,18 @@ struct ShoppingSheetHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            // Ta sama drabinka stopni pisma, co w `EditorialPageHeader`:
-            // tytuł schodzi o stopień, zamiast się urywać.
-            ViewThatFits(in: .horizontal) {
-                titleText(size: 32)
-                titleText(size: 28)
-                titleText(size: 24, allowsScaling: true)
+            HStack(spacing: 11) {
+                if let icon {
+                    SCHeaderIconWell(icon: icon, accent: accent)
+                }
+
+                // Ta sama drabinka stopni pisma, co w `EditorialPageHeader`:
+                // tytuł schodzi o stopień, zamiast się urywać.
+                ViewThatFits(in: .horizontal) {
+                    titleText(size: 32)
+                    titleText(size: 28)
+                    titleText(size: 24, allowsScaling: true)
+                }
             }
 
             Spacer(minLength: 8)
@@ -112,12 +123,20 @@ struct ShoppingSheetHeader<Trailing: View>: View {
             .foregroundStyle(Color.scLabel(scheme))
             .lineLimit(1)
             .minimumScaleFactor(allowsScaling ? 0.75 : 1)
+            // Jak w `EditorialPageHeader` — ekran Zakupów stoi teraz na tym
+            // nagłówku i VoiceOver dalej ma ogłosić tytuł jako nagłówek.
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
 extension ShoppingSheetHeader where Trailing == EmptyView {
-    init(title: String, onClose: @escaping () -> Void) {
-        self.init(title: title, onClose: onClose) { EmptyView() }
+    init(
+        title: String,
+        icon: String? = nil,
+        accent: Color = SCPalette.terracotta,
+        onClose: @escaping () -> Void
+    ) {
+        self.init(title: title, icon: icon, accent: accent, onClose: onClose) { EmptyView() }
     }
 }
 

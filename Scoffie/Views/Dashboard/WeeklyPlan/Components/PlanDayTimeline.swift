@@ -29,11 +29,6 @@ struct PlanDayTimeline: View {
     /// Sloty, których ten dzień jeszcze nie pokazuje — z nich wybiera się przy
     /// „Dodaj posiłek”. Pusto = wiersza nie ma czym wypełnić, więc go nie ma.
     let extraSlots: [MealSlot]
-    /// Cały widoczny tydzień bez jednego posiłku — i dzień, w który da się
-    /// coś dodać. Wtedy nad osią stoi wołanie do asystenta: sześć wierszy
-    /// „Nic nie zaplanowano" mówi o dniu, a nikt z nich nie wyczyta, że pusty
-    /// jest cały tydzień i że jest na to jeden przycisk.
-    var weekIsEmpty: Bool = false
     let onTapMeal: (MealSlot, PlanMeal) -> Void
     let onAddMeal: (MealSlot) -> Void
     /// „Osobne danie dla kogoś” — osobno od `onAddMeal`, bo arkusz ma wtedy
@@ -41,16 +36,11 @@ struct PlanDayTimeline: View {
     let onAddVariant: (MealSlot) -> Void
     let onEditMeal: (MealSlot, PlanMeal) -> Void
     let onRemoveMeal: (MealSlot, PlanMeal) -> Void
-    let onAssistant: () -> Void
     /// Pora wybrana z menu „Dodaj posiłek”.
     let onPickExtraSlot: (MealSlot) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
-    /// Strona dnia jeździ palcem w bok (`DayPager`), a jej przyciski zajmują
-    /// całą szerokość — bez tej furtki machnięcie kończące się na przycisku
-    /// otwierało go zamiast przestawić dzień.
-    @Environment(\.dayPagerGate) private var pagerGate
 
     // MARK: - Wiersze
 
@@ -97,79 +87,21 @@ struct PlanDayTimeline: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(.top, 18)
+                // 14 nad nazwą dnia — jak w Kalendarzu (`CalendarDayHeader`
+                // pod tym samym paskiem dni). Było 18 plus 14 pod paskiem
+                // w `WeeklyPlanView`: dzień odjeżdżał od swojego paska.
+                .padding(.top, 14)
                 .padding(.bottom, 14)
 
-            if weekIsEmpty {
-                emptyWeekCallout
-                    .padding(.bottom, 8)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
+            // Karta „Ten tydzień jest jeszcze pusty” zniknęła 27.09.2026
+            // (Rafał: „usuń ten design”) — pusty tydzień mówi teraz oddech
+            // pigułki „Ułóż” w nagłówku ekranu (`PlanAssistantPill(invites:)`).
             timeline
         }
-        // Wołanie znika tą samą sprężyną, którą pierwszy posiłek wjeżdża na
-        // oś niżej — jeden ruch, nie dwa.
-        .animation(.spring(response: 0.36, dampingFraction: 0.9), value: weekIsEmpty)
         // Świeża tożsamość na każdy dzień: bez niej sprężyna niżej próbowałaby
         // przeprowadzić wiersze poniedziałku w wiersze wtorku dokładnie wtedy,
         // gdy `DayPager` przesuwa całą stronę — dwie animacje na jednym ruchu.
         .id(dayKey)
-    }
-
-    // MARK: - Pusty tydzień
-
-    /// Karta nad osią: „ten tydzień jest jeszcze pusty" i droga do asystenta.
-    ///
-    /// Układ kart aplikacji (runda 9, 23.09.2026): kafelek z ikoną asystenta,
-    /// etykieta i tytuł, jedno zdanie i przycisk „soft” na całą szerokość —
-    /// jak zaproszenie w gospodarstwie. Wcześniej cała karta była wierszem
-    /// z kółkiem i strzałką, a jedynym słowem o akcji był dopisek pod tytułem.
-    /// Znika z pierwszym posiłkiem; pigułka „Ułóż” w nagłówku zostaje.
-    private var emptyWeekCallout: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                SCHeaderIconWell(icon: MenuConstans.Assistant.icon, accent: SCPalette.terracotta, size: 40)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("ASYSTENT")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .tracking(1.4)
-                        .foregroundStyle(SCPalette.terracotta)
-
-                    Text("Ten tydzień jest jeszcze pusty")
-                        .scFont(16, weight: .semibold, relativeTo: .callout)
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .accessibilityElement(children: .combine)
-
-            Text("Ułożę go w kilka sekund — pod Twoją dietę i pory posiłków.")
-                .scFont(13, relativeTo: .footnote)
-                .foregroundStyle(Color.scMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
-
-            EditorialPrimaryActionButton(
-                title: "Ułóż tydzień z asystentem",
-                icon: MenuConstans.Assistant.icon,
-                // Domknięcie, nie referencja do metody (SE-0418, `CLAUDE.md`).
-                action: { pagerGate.ifNotSwiping(onAssistant) }
-            )
-            .padding(.top, 12)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
     }
 
     // MARK: - Nagłówek dnia

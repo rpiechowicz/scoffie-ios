@@ -35,7 +35,7 @@ struct AuthFooterView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 8)
         .sheet(isPresented: $showPrivacyPolicy) {
-            LegalDocumentSheet(title: "Polityka prywatności") {
+            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) {
                 PrivacyPolicyContent()
             }
         }
@@ -69,9 +69,15 @@ enum LegalDocMeta {
 ///
 /// Nagłówek stoi NAD przewijaną treścią, a nie w niej: dokument ma kilkanaście
 /// ekranów i krzyżyk nie może odjechać z pierwszym akapitem.
+///
+/// Kafelek jak przy wierszach „Prywatność i regulamin” w Ustawieniach:
+/// domyślnie kartka w szałwii (warunki, regulamin); polityka prywatności
+/// podaje dłoń (`hand.raised.fill`) w indygo.
 struct LegalDocumentSheet<Content: View>: View {
     var eyebrow: String = "Informacje"
     let title: String
+    var icon: String = "doc.text.fill"
+    var accent: Color = SCPalette.sage
     @ViewBuilder let content: () -> Content
 
     @Environment(\.dismiss) private var dismiss
@@ -79,7 +85,7 @@ struct LegalDocumentSheet<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            EditorialSheetHeader(eyebrow: eyebrow, title: title) { dismiss() }
+            EditorialSheetHeader(eyebrow: eyebrow, title: title, icon: icon, accent: accent) { dismiss() }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
                 .padding(.bottom, 14)

@@ -22,6 +22,8 @@ struct AssistantMemorySheet: View {
             AssistantSheetScaffold(
                 title: "Co o Was pamięta",
                 subtitle: "Trwałe rzeczy o Waszym domu, zapamiętane z rozmów. Każdą możesz poprawić albo usunąć.",
+                // Glif „Pamięci domu” z menu ⋯.
+                icon: "brain.head.profile.fill",
                 onClose: { dismiss() },
                 footer: { footerMeta }
             ) {

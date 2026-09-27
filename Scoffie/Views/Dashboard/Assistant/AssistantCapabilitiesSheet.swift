@@ -26,6 +26,8 @@ struct AssistantCapabilitiesSheet: View {
                 eyebrow: "Asystent",
                 title: "Co potrafi",
                 subtitle: "Stuknij przykład — Asystent od razu się nim zajmie.",
+                // Glif „Co potrafi Asystent” z menu ⋯.
+                icon: "rectangle.stack.fill",
                 onClose: { dismiss() },
                 footer: {
                     EditorialPrimaryActionButton(

@@ -50,7 +50,7 @@ struct ShoppingHistoryMonthSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ShoppingSheetHeader(title: month.name, onClose: onClose)
+                    ShoppingSheetHeader(title: month.name, icon: "calendar", onClose: onClose)
 
                     ShoppingEyebrowRow(eyebrow: "Historia · \(month.year)", meta: meta)
                         .padding(.top, 20)
