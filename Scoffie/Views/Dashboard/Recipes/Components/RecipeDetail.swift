@@ -8,6 +8,10 @@ import SwiftUI
 // Od góry: zdjęcie 340 pt wtapiające się w tło arkusza, wiersz tagów
 // (kategoria · „pasuje też na” przerywaną obwódką · czas), duży tytuł z lede,
 // a pod nim trzy sekcje z akcentowym pręcikiem:
+//   • (tylko posiłek z planu z porcjami osób) „Kto ile je” (masło) — pasek
+//     podziału garnka w kolorach osób i wiersz na osobę: awatar, „TY”, kcal
+//     jej porcji, stepper co 0,5. Stoi PRZED makrami, które liczą się
+//     z porcji patrzącego.
 //   • „Wartości odżywcze” (terakota) — stepper porcji siedzi W NAGŁÓWKU tej
 //     sekcji, a nie w osobnej karcie: porcje zmieniają wszystko niżej naraz
 //     (makra i gramatury), więc eyebrow każdej sekcji mówi, na ile porcji są
@@ -43,6 +47,9 @@ struct RecipeDetailPortions {
     struct Person {
         let memberId: String
         let name: String
+        /// Domownik z listy gospodarstwa — awatar i kolor osoby (ten sam co
+        /// w Planie). `nil`, gdy ktoś z alokacji już z domu wyszedł.
+        var member: HouseholdMemberSnapshot? = nil
     }
 
     /// Jedzący, w kolejności do pokazania.
@@ -62,7 +69,8 @@ extension RecipeDetailPortions {
     /// patrzący pierwszy. `nil`, gdy nie wiadomo, kto je (lista domowników
     /// jeszcze nie dojechała) — wtedy zostaje stepper porcji łącznych.
     init?(meal: PlanMeal, members: [HouseholdMemberSnapshot], viewerId: String?) {
-        let names = Dictionary(members.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
+        let byId = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let names = byId.mapValues(\.displayName)
         let units: [String: Int]
         if meal.hasPortions {
             units = meal.portionUnits
@@ -81,7 +89,7 @@ extension RecipeDetailPortions {
             return (names[lhs] ?? lhs).localizedCompare(names[rhs] ?? rhs) == .orderedAscending
         }
         self.init(
-            people: ids.map { Person(memberId: $0, name: names[$0] ?? "Domownik") },
+            people: ids.map { Person(memberId: $0, name: names[$0] ?? "Domownik", member: byId[$0]) },
             units: units,
             viewerId: viewerId,
             // Bez alokacji token pozycji jest opcjonalny — pozycję z syntetycznym
@@ -271,9 +279,9 @@ struct RecipeDetailView: View {
 
     private var nutritionEyebrow: String {
         guard isPortionMode else { return PlanPortions.spokenServings(units: servingsUnits, plural: PolishPlural.servings) }
-        if let viewerUnits { return "Twoja porcja: \(PlanPortions.label(units: viewerUnits))" }
+        if let viewerUnits { return "Twoja porcja · \(PlanPortions.label(units: viewerUnits))" }
         let mean = PlanPortions.totalUnits(portionUnits) / max(1, portionUnits.count)
-        return "Średnio: \(PlanPortions.label(units: mean))"
+        return "Średnio · \(PlanPortions.label(units: mean))"
     }
 
     private var ingredientsEyebrow: String {
@@ -284,6 +292,9 @@ struct RecipeDetailView: View {
     }
 
     private var look: DetailLook { DetailLook(scheme: scheme) }
+
+    /// Sekcja porcji osób wchodzi w kaskadę jako druga — reszta o krok dalej.
+    private var revealShift: Int { isPortionMode ? 1 : 0 }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -299,20 +310,28 @@ struct RecipeDetailView: View {
                         .padding(.top, 6)
                         .detailReveal(hasAppeared, order: 0)
 
+                    // Porcje osób PRZED makrami: najpierw kto ile je, potem
+                    // co to znaczy dla Twojego dnia.
+                    if isPortionMode, let personalPortions {
+                        portionsSection(personalPortions)
+                            .padding(.top, 24)
+                            .detailReveal(hasAppeared, order: 1)
+                    }
+
                     nutritionSection
                         .padding(.top, 24)
-                        .detailReveal(hasAppeared, order: 1)
+                        .detailReveal(hasAppeared, order: 1 + revealShift)
 
                     if !recipe.preparationSteps.isEmpty {
                         preparationSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 2)
+                            .detailReveal(hasAppeared, order: 2 + revealShift)
                     }
 
                     if !recipe.ingredients.isEmpty {
                         ingredientsSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 3)
+                            .detailReveal(hasAppeared, order: 3 + revealShift)
                     }
 
                     // Zapas pod dolny pasek: przycisk z marginesami (~72 pt)
@@ -508,50 +527,107 @@ struct RecipeDetailView: View {
 
             DetailNutritionCard(nutrition: recipe.nutrition(forServings: nutritionServings))
             .padding(.horizontal, 20)
-
-            if isPortionMode, let personalPortions {
-                portionsCard(personalPortions)
-                    .padding(.horizontal, 20)
-            }
         }
     }
 
-    /// Porcja każdego jedzącego — „Rafał 1,5”, „Asia 1” — ze stepperem co
-    /// pół porcji. Zapis dopiero „Zapisz porcje”, każda osoba osobno
-    /// (`setPortion` z jej tokenem). Bez tokenów (stary cache) — tylko odczyt
-    /// i jedno zdanie, co zrobić.
-    private func portionsCard(_ model: RecipeDetailPortions) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DetailCard {
-                VStack(spacing: 0) {
-                    ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
-                        portionRow(person, model: model, isFirst: index == 0)
+    /// „Kto ile je” — porcja każdego jedzącego ze stepperem co pół porcji.
+    /// Na górze karty pasek podziału garnka w kolorach osób (te same co
+    /// awatary w Planie), pod nim wiersz na osobę: awatar, imię z „TY”, kcal
+    /// JEJ porcji i stepper. Zapis dopiero „Zapisz porcje”, każda osoba
+    /// osobno (`setPortion` z jej tokenem). Bez tokenów (stary cache) — sam
+    /// odczyt i jedno zdanie, co zrobić.
+    ///
+    /// Dawniej: goła karta „Rafał (Ty)  − 1,5 +” pod pierścieniami — bez
+    /// awatarów, bez sumy i bez tego, ile to znaczy w kaloriach (Rafał
+    /// 27.09.2026: „nie podoba mi się ten design”).
+    private func portionsSection(_ model: RecipeDetailPortions) -> some View {
+        let total = PlanPortions.totalUnits(portionUnits)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            DetailSectionHeader(
+                eyebrow: "Razem \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))",
+                title: "Kto ile je",
+                accent: SCPalette.butter
+            ) { EmptyView() }
+
+            VStack(alignment: .leading, spacing: 8) {
+                DetailCard {
+                    VStack(spacing: 0) {
+                        if model.people.count > 1 {
+                            DetailPortionSplitBar(
+                                segments: model.people.map { person in
+                                    DetailPortionSplitBar.Segment(
+                                        id: person.memberId,
+                                        units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
+                                        color: person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
+                                    )
+                                }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                            .padding(.bottom, 4)
+                            .accessibilityHidden(true)
+                        }
+
+                        ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
+                            portionRow(person, model: model, isFirst: index == 0)
+                        }
                     }
                 }
+                if !model.isEditable {
+                    Text(PlanPortions.readOnlyMessage)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(look.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                }
             }
-            if !model.isEditable {
-                Text(PlanPortions.readOnlyMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(look.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
-            }
+            .padding(.horizontal, 20)
         }
     }
 
     private func portionRow(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions, isFirst: Bool) -> some View {
         let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
-        let name = person.memberId == model.viewerId ? "\(person.name) (Ty)" : person.name
-        // Z stepperem VoiceOver czyta imię i stepper osobno; bez — jedno zdanie.
-        let spoken: String = model.isEditable
-            ? ""
-            : "\(person.name): \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))"
+        let isViewer = person.memberId == model.viewerId
+        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: units)).kcal.rounded())
+        let avatarSize: CGFloat = 36
+        // Z stepperem VoiceOver czyta wiersz osoby i stepper osobno; bez — jedno zdanie.
+        let spoken = "\(person.name), \(kcal) kilokalorii"
+            + (model.isEditable ? "" : ", \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))")
+
         return HStack(spacing: 12) {
-            Text(name)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(look.fg)
-                .lineLimit(1)
-            Spacer(minLength: 8)
+            HStack(spacing: 12) {
+                ProfileAvatar(
+                    avatarUrl: person.member?.avatarUrl,
+                    displayName: person.name,
+                    size: avatarSize,
+                    colorIndex: person.member?.avatarColor,
+                    seed: person.memberId
+                )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(person.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(-0.2)
+                            .foregroundStyle(look.fg)
+                            .lineLimit(1)
+                        if isViewer {
+                            DetailPersonBadge(text: "TY")
+                        }
+                    }
+                    Text(verbatim: "\(kcal) kcal")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(look.muted)
+                        .contentTransition(.numericText(value: Double(kcal)))
+                        .animation(SCMotion.textRoll, value: kcal)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spoken)
+
             if model.isEditable {
                 DetailServingsStepper(
                     value: portionBinding(for: person.memberId),
@@ -569,17 +645,22 @@ struct RecipeDetailView: View {
                 )
             } else {
                 Text(PlanPortions.label(units: units))
-                    .font(.system(size: 15, weight: .heavy))
+                    .font(.system(size: 17, weight: .heavy))
                     .monospacedDigit()
                     .foregroundStyle(look.fg)
+                    .accessibilityHidden(true)
             }
         }
-        .accessibilityElement(children: model.isEditable ? .contain : .ignore)
-        .accessibilityLabel(spoken)
-        .padding(.horizontal, 16)
-        .padding(.vertical, model.isEditable ? 6 : 10)
+        .accessibilityElement(children: model.isEditable ? .contain : .combine)
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 12)
         .overlay(alignment: .top) {
-            if !isFirst { DetailHairline() }
+            // Kreska od tekstu, nie od krawędzi — awatary stoją w jednej kolumnie.
+            if !isFirst {
+                DetailHairline()
+                    .padding(.leading, 16 + avatarSize + 12)
+            }
         }
     }
 
@@ -1461,6 +1542,58 @@ private struct DetailHairline: View {
             .fill(DetailLook(scheme: scheme).rule)
             .frame(height: 1)
             .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Porcje osób
+
+/// Podział garnka: odcinek na osobę, szerokość = jej porcja, kolor = kolor
+/// jej awatara. Odcinki przesuwają się razem ze stepperem.
+private struct DetailPortionSplitBar: View {
+    struct Segment: Identifiable {
+        let id: String
+        let units: Int
+        let color: Color
+    }
+
+    let segments: [Segment]
+
+    private static let gap: CGFloat = 3
+    private static let height: CGFloat = 8
+
+    var body: some View {
+        GeometryReader { proxy in
+            let total = max(1, segments.reduce(0) { $0 + $1.units })
+            let usable = max(0, proxy.size.width - Self.gap * CGFloat(max(0, segments.count - 1)))
+
+            HStack(spacing: Self.gap) {
+                ForEach(segments) { segment in
+                    Capsule()
+                        .fill(segment.color)
+                        .frame(width: usable * CGFloat(segment.units) / CGFloat(total))
+                }
+            }
+        }
+        .frame(height: Self.height)
+        .animation(.snappy(duration: 0.3), value: segments.map(\.units))
+    }
+}
+
+/// „TY” przy imieniu — ta sama plakietka co przy domownikach w Ustawieniach.
+private struct DetailPersonBadge: View {
+    let text: String
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .heavy))
+            .tracking(0.8)
+            .foregroundStyle(SCPalette.terracotta)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
+            .fixedSize()
     }
 }
 
