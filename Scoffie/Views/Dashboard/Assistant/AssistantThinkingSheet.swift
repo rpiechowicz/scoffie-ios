@@ -11,6 +11,12 @@ import SwiftUI
 /// dom, bilans) — neutralny, dobieranie dań — terakota, przejście na
 /// dokładne planowanie — indygo, zapis — szałwia. Kroki wchodzą kaskadą.
 ///
+/// Runda 3 („header do poprawy, po prawej daj czas, daj jakiś unikalny
+/// title”): tytuł mówi, CO asystent zrobił w tej turze (`ThinkingHeadline`:
+/// „Ułożyłem plan”, „Dobrałem dania”, „Znalazłem zamiennik”…), kafelek ma
+/// glif i kolor tej pracy, a czas stoi kapsułką obok krzyżyka. Etykiety
+/// z faktami pod nagłówkiem odpadły — tytuł i czas mówią to samo.
+///
 /// Kroki przychodzą z serwera gotowymi zdaniami (`AgentThinkingSummary.steps`,
 /// także w historii) — bez kroków przejściowych. Nazwa narzędzia NIE wychodzi
 /// na ekran; służy tylko do wyboru glifu i koloru.
@@ -21,24 +27,20 @@ struct AssistantThinkingSheet: View {
     @Environment(\.colorScheme) private var scheme
     @State private var appeared = false
 
-    private var title: String {
-        thinking.duration.map { "Myślałem \(AssistantThoughtLine.clock($0))" } ?? "Myślałem chwilę"
-    }
-
-    private var writes: Int { thinking.steps.filter { $0.writes == true }.count }
+    private var headline: ThinkingHeadline { ThinkingHeadline(thinking.steps) }
 
     var body: some View {
         AssistantSheetScaffold(
             eyebrow: "Jak pracowałem",
-            title: title,
-            icon: "sparkles",
+            title: headline.title,
+            icon: headline.icon,
+            accent: headline.kind.tint(scheme),
             compact: true,
-            onClose: { dismiss() }
+            onClose: { dismiss() },
+            action: { durationChip },
+            footer: { EmptyView() }
         ) {
             VStack(alignment: .leading, spacing: 14) {
-                facts
-                    .scReveal(appeared, order: 0)
-
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(thinking.steps.enumerated()), id: \.offset) { index, step in
                         ThinkingStepRow(
@@ -48,17 +50,16 @@ struct AssistantThinkingSheet: View {
                             isFirst: index == 0,
                             isLast: false
                         )
-                        .scReveal(appeared, order: index + 1)
+                        .scReveal(appeared, order: index)
                     }
                     ThinkingStepRow(
                         icon: "checkmark",
                         text: "Odpowiedź gotowa",
-                        trailing: thinking.duration.map { AssistantThoughtLine.clock($0) },
                         kind: .done,
                         isFirst: thinking.steps.isEmpty,
                         isLast: true
                     )
-                    .scReveal(appeared, order: thinking.steps.count + 1)
+                    .scReveal(appeared, order: thinking.steps.count)
                 }
             }
             .padding(.horizontal, 4)
@@ -74,28 +75,71 @@ struct AssistantThinkingSheet: View {
         }
     }
 
-    /// „5 kroków” · „Zapisałem w planie” — tylko to, co z przebiegu wynika.
-    private var facts: some View {
-        HStack(spacing: 6) {
-            if !thinking.steps.isEmpty {
-                SCTag(
-                    title: "\(thinking.steps.count) \(Self.stepsWord(thinking.steps.count))",
-                    icon: "list.bullet",
-                    accent: AssistantLook.muted(scheme)
-                )
+    /// Czas tury obok krzyżyka — w wysokości krążka zamykania.
+    @ViewBuilder
+    private var durationChip: some View {
+        if let duration = thinking.duration {
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.system(size: 11, weight: .bold))
+                Text(AssistantThoughtLine.clock(duration))
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
             }
-            if writes > 0 {
-                SCTag(title: "Zapisałem zmiany", icon: "checkmark", accent: AssistantLook.sage(scheme))
-            }
+            .foregroundStyle(AssistantLook.muted(scheme))
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(Capsule(style: .continuous).fill(AssistantLook.quietTint(scheme)))
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Czas odpowiedzi: \(AssistantThoughtLine.clock(duration))")
         }
     }
+}
 
-    static func stepsWord(_ count: Int) -> String {
-        if count == 1 { return "krok" }
-        let tens = count % 100
-        let units = count % 10
-        if (2...4).contains(units), !(12...14).contains(tens) { return "kroki" }
-        return "kroków"
+/// Tytuł arkusza — NAJWAŻNIEJSZA rzecz, którą tura zrobiła, po priorytecie:
+/// zapis > plan > zamiana > dania > reszta > samo sprawdzanie. Glif i kolor
+/// idą za tym samym krokiem.
+struct ThinkingHeadline {
+    let title: String
+    let icon: String
+    let kind: ThinkingKind
+
+    private static let priority: [(tools: Set<String>, title: String)] = [
+        (["apply_week_plan"], "Zapisałem w planie"),
+        (["create_recipe", "update_recipe", "delete_recipe"], "Zapisałem przepis"),
+        (["mark_meal_eaten"], "Odhaczyłem posiłek"),
+        (["check_shopping_items"], "Odhaczyłem zakupy"),
+        (["build_meal_plan", "propose_week_plan", "propose_day_plan", "start_planning"], "Ułożyłem plan"),
+        (["propose_swap", "replace_plan_item", "revise_proposal"], "Znalazłem zamiennik"),
+        (["propose_household_split"], "Podzieliłem porcje"),
+        (["propose_remove_meal"], "Przygotowałem zmianę"),
+        (["suggest_meals", "offer_options", "find_recipes"], "Dobrałem dania"),
+        (["ask_clarifying_question"], "Dopytałem o szczegóły"),
+        (["show_shopping_list"], "Sprawdziłem zakupy"),
+        (["show_macro_gap", "get_week_balance"], "Policzyłem bilans"),
+        (["remember_note"], "Zapamiętałem"),
+    ]
+
+    init(_ steps: [AgentProgressStepDTO]) {
+        for entry in Self.priority {
+            if let step = steps.last(where: { entry.tools.contains($0.tool) }) {
+                let kind = ThinkingKind(step)
+                title = entry.title
+                icon = kind.icon(step)
+                self.kind = kind
+                return
+            }
+        }
+        if let step = steps.last {
+            title = "Sprawdziłem plan"
+            icon = ThinkingKind(step).icon(step)
+            kind = .check
+        } else {
+            title = "Odpowiedziałem od razu"
+            icon = "sparkles"
+            kind = .pick
+        }
     }
 }
 
@@ -163,12 +207,10 @@ enum ThinkingKind: Equatable {
     }
 }
 
-/// Wiersz osi: krążek z glifem, kreska łącząca z sąsiadami, zdanie,
-/// opcjonalnie wartość po prawej (czas całości przy „Odpowiedź gotowa”).
+/// Wiersz osi: krążek z glifem, kreska łącząca z sąsiadami, zdanie.
 private struct ThinkingStepRow: View {
     let icon: String
     let text: String
-    var trailing: String? = nil
     let kind: ThinkingKind
     let isFirst: Bool
     let isLast: Bool
@@ -196,12 +238,6 @@ private struct ThinkingStepRow: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let trailing {
-                Text(trailing)
-                    .font(.system(size: 13, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(AssistantLook.faint(scheme))
-            }
         }
         .padding(.vertical, Self.rowPadding)
         // Oś: kreska przez środek krążków, od sąsiada do sąsiada — nad

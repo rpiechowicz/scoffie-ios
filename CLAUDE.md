@@ -274,9 +274,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   👍 · 👎 · „⋯” (udostępnij, zgłoś / popraw zgłoszenie, przy podpowiedzi „Popraw podpowiedź”). Po 👎 wiersz
   „Co poprawić? Podpowiedz” → `AssistantSuggestionSheet` (powody `AGENT_FEEDBACK_TAGS` + zdanie, ten sam PUT
   feedback z `tags`/`comment`, historia oddaje `feedbackNote`); to NIE zgłoszenie — działa też przy odpowiedzi
-  zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Runda 2:
-  „Co poprawić?” to pigułka soft z żarówką OBOK kciuków (brak miejsca → pod nimi, do prawej), arkusz = 4 kafle 2 × 2
-  + pole „Jak powinno być?”; prawe wcięcie paska = lewe (glif „⋯” 28 pt od brzegu). Półarkusze „Jak pracowałem”
+  zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Runda 3:
+  👎 SAM otwiera arkusz „Słaba odpowiedź · Co poprawić?” (ocena zapisuje się od razu, krzyżyk zostawia sam kciuk) —
+  pigułka w pasku odpadła, bo przestawiała układ („przeskakuje, jak zmieniam like”); pasek ma zawsze ten sam układ.
+  Arkusz = 4 kafle 2 × 2, każdy powód we własnym kolorze od razu, + pole; prawe wcięcie paska = lewe (glif „⋯” 28 pt
+  od brzegu). „Jak pracowałem”: tytuł = co tura zrobiła (`ThinkingHeadline`: „Ułożyłem plan”, „Dobrałem dania”…),
+  kafelek w kolorze tej pracy, czas kapsułką obok krzyżyka. Półarkusze „Jak pracowałem”
   i „Co poprawić?” mają kompaktowy nagłówek (`EditorialSheetHeader(compact:)` / `AssistantSheetScaffold(compact:)`:
   kafelek 36, tytuł 19); oś kroków bez karty, kolor = rodzaj pracy (`ThinkingKind`). Bez kopiowania w pasku („co nam to daje
   realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz

@@ -15,6 +15,12 @@ import SwiftUI
 /// „Jak powinno być?”. „Coś innego” jako kafel odpadło — od tego jest pole.
 /// Bez etykiet sekcji i zdań objaśnień. Istniejąca podpowiedź otwiera się do
 /// poprawienia.
+///
+/// Runda 3: arkusz otwiera SAM kciuk w dół (ocena zapisuje się od razu,
+/// podpowiedź jest nieobowiązkowa — krzyżyk zostawia sam kciuk). Nagłówek
+/// „Słaba odpowiedź · Co poprawić?” z kciukiem w kafelku; każdy powód ma
+/// własny kolor od razu (nie dopiero po zaznaczeniu) — zaznaczenie to tint
+/// tego koloru i ptaszek w krążku.
 struct AssistantSuggestionSheet: View {
     let message: AgentChatMessage
     /// Oddaje komunikat błędu albo `nil` przy sukcesie.
@@ -33,18 +39,30 @@ struct AssistantSuggestionSheet: View {
 
     private var isEditing: Bool { message.feedbackNote != nil }
 
+    private enum Tone { case butter, indigo, terra, sage }
+
     private struct Option: Identifiable {
         let id: String
         let title: String
         let icon: String
+        let tone: Tone
     }
 
     private static let options: [Option] = [
-        Option(id: "TOO_LONG", title: "Za długo", icon: "text.alignleft"),
-        Option(id: "NOT_WHAT_I_ASKED", title: "Nie o to pytałem", icon: "questionmark.bubble"),
-        Option(id: "BAD_DISHES", title: "Nietrafione dania", icon: "fork.knife"),
-        Option(id: "TOO_SLOW", title: "Za wolno", icon: "tortoise"),
+        Option(id: "TOO_LONG", title: "Za długo", icon: "text.alignleft", tone: .butter),
+        Option(id: "NOT_WHAT_I_ASKED", title: "Nie o to pytałem", icon: "questionmark.bubble", tone: .indigo),
+        Option(id: "BAD_DISHES", title: "Nietrafione dania", icon: "fork.knife", tone: .terra),
+        Option(id: "TOO_SLOW", title: "Za wolno", icon: "tortoise", tone: .sage),
     ]
+
+    private func color(_ tone: Tone) -> Color {
+        switch tone {
+        case .butter: return AssistantLook.butter(scheme)
+        case .indigo: return AssistantLook.indigo(scheme)
+        case .terra: return AssistantLook.terra(scheme)
+        case .sage: return AssistantLook.sage(scheme)
+        }
+    }
 
     private var trimmedComment: String {
         comment.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -56,9 +74,9 @@ struct AssistantSuggestionSheet: View {
 
     var body: some View {
         AssistantSheetScaffold(
-            eyebrow: "Podpowiedź",
+            eyebrow: "Słaba odpowiedź",
             title: isEditing ? "Popraw podpowiedź" : "Co poprawić?",
-            icon: "lightbulb",
+            icon: "hand.thumbsdown",
             compact: true,
             onClose: { dismiss() },
             footer: { sendButton }
@@ -73,7 +91,7 @@ struct AssistantSuggestionSheet: View {
                     }
                 }
 
-                TextField("Jak powinno być?", text: $comment, axis: .vertical)
+                TextField("Jak powinno być? (opcjonalnie)", text: $comment, axis: .vertical)
                     .lineLimit(2...5)
                     .font(.system(size: 15))
                     .focused($commentFocused)
@@ -106,11 +124,11 @@ struct AssistantSuggestionSheet: View {
         .onAppear(perform: prefill)
     }
 
-    /// Kafel powodu: glif w krążku, podpis; wybrany — tint terakoty
-    /// i ptaszek w rogu.
+    /// Kafel powodu: glif w krążku w kolorze powodu, podpis; wybrany — tint
+    /// tego koloru i ptaszek w krążku.
     private func tile(_ option: Option) -> some View {
         let isOn = tags.contains(option.id)
-        let accent = AssistantLook.terra(scheme)
+        let accent = color(option.tone)
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return Button {
             withAnimation(.smooth(duration: 0.2)) {
@@ -119,10 +137,10 @@ struct AssistantSuggestionSheet: View {
         } label: {
             HStack(spacing: 10) {
                 ZStack {
-                    Circle().fill(isOn ? accent.opacity(0.16) : AssistantLook.quietTint(scheme))
+                    Circle().fill(accent.opacity(isOn ? 0.22 : (scheme == .dark ? 0.16 : 0.12)))
                     Image(systemName: isOn ? "checkmark" : option.icon)
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(isOn ? accent : AssistantLook.muted(scheme))
+                        .foregroundStyle(accent)
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 32, height: 32)
@@ -130,7 +148,7 @@ struct AssistantSuggestionSheet: View {
                 Text(option.title)
                     .font(.system(size: 14, weight: .semibold))
                     .tracking(-0.2)
-                    .foregroundStyle(isOn ? accent : AssistantLook.ink(scheme))
+                    .foregroundStyle(AssistantLook.ink(scheme))
                     .lineLimit(2)
                     .minimumScaleFactor(0.9)
                     .multilineTextAlignment(.leading)

@@ -12,15 +12,17 @@ import SwiftUI
 /// się zaznaczyć, a „Kopiuj” zostaje pod przytrzymaniem dymka). Po prawej:
 /// kciuk w górę, kciuk w dół i „⋯” (udostępnij, zgłoś / popraw zgłoszenie —
 /// serwer trzyma JEDNO zgłoszenie na osobę i odpowiedź). Kciuk w dół otwiera
-/// pod paskiem „Co poprawić? Podpowiedz” — PODPOWIEDŹ (powody + zdanie,
+/// arkusz „Co poprawić?” — PODPOWIEDŹ (powody + zdanie,
 /// `AssistantSuggestionSheet`), a nie zgłoszenie: zgłoszenie to błąd,
 /// zagrożenie albo obraza i żyje w „⋯”, więc podpowiedź działa także przy
-/// odpowiedzi już zgłoszonej (27.09.2026). Po wysłaniu wiersz znika — bez
-/// „Zgłoszone — dzięki” („bez sensu”); poprawić ją można z „⋯”.
+/// odpowiedzi już zgłoszonej (27.09.2026). Bez „Zgłoszone — dzięki” („bez
+/// sensu”).
 ///
-/// Runda 2 (27.09.2026): „Co poprawić?” to PIGUŁKA obok kciuków (soft
-/// terakota z żarówką), a nie zdanie z odnośnikiem — gdy się nie mieści,
-/// schodzi pod kciuki, do prawej. Prawa krawędź ma to samo wcięcie co lewa:
+/// Runda 3 (27.09.2026, „przeskakuje, jak zmieniam like”): kciuk w dół SAM
+/// otwiera arkusz podpowiedzi — pigułka „Co poprawić?”, która wjeżdżała
+/// w pasek i przestawiała go (`ViewThatFits`), odpadła. Pasek ma zawsze ten
+/// sam układ; poprawić podpowiedź można z „⋯”. Prawa krawędź ma to samo
+/// wcięcie co lewa:
 /// „Myślałem” stoi 28 pt od brzegu (kolumna tekstu), więc glif „⋯” też
 /// kończy się 28 pt od brzegu (`trailingInset` liczy zapas ramki ikony).
 ///
@@ -54,38 +56,14 @@ struct AssistantAnswerFooter: View {
         textInset - (iconFrame - glyphWidth) / 2
     }
 
-    private var showsSuggest: Bool {
-        feedback == .down && !hasSuggestion && onSuggest != nil
-    }
-
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 2) {
-                leading
-                Spacer(minLength: 8)
-                if showsSuggest {
-                    suggestPill
-                        .padding(.trailing, 6)
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                }
-                actions
-            }
-
-            VStack(alignment: .trailing, spacing: 6) {
-                HStack(spacing: 2) {
-                    leading
-                    Spacer(minLength: 8)
-                    actions
-                }
-                if showsSuggest {
-                    suggestPill
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                }
-            }
+        HStack(spacing: 2) {
+            leading
+            Spacer(minLength: 8)
+            actions
         }
         .padding(.leading, Self.textInset)
         .padding(.trailing, Self.trailingInset)
-        .animation(.smooth(duration: 0.25), value: showsSuggest)
     }
 
     @ViewBuilder
@@ -154,7 +132,15 @@ struct AssistantAnswerFooter: View {
                 label: "Słaba odpowiedź",
                 bounce: feedback == .down
             ) {
-                onRate(feedback == .down ? nil : .down)
+                // W dół = ocena od razu + arkusz „Co poprawić?” (podpowiedź
+                // nieobowiązkowa — zamknięcie zostawia sam kciuk). Drugie
+                // stuknięcie zdejmuje ocenę, jak przy kciuku w górę.
+                if feedback == .down {
+                    onRate(nil)
+                } else {
+                    onRate(.down)
+                    onSuggest?()
+                }
             }
             .accessibilityAddTraits(feedback == .down ? .isSelected : [])
 
@@ -164,9 +150,9 @@ struct AssistantAnswerFooter: View {
                         Label("Udostępnij", systemImage: "square.and.arrow.up")
                     }
                 }
-                if feedback == .down, hasSuggestion, let onSuggest {
+                if feedback == .down, let onSuggest {
                     Button(action: onSuggest) {
-                        Label("Popraw podpowiedź", systemImage: "lightbulb")
+                        Label(hasSuggestion ? "Popraw podpowiedź" : "Co poprawić?", systemImage: "lightbulb")
                     }
                 }
                 // Obiecane w FAQ i w regulaminie („Zgłoś odpowiedź”) — idzie na
@@ -207,31 +193,5 @@ struct AssistantAnswerFooter: View {
             .frame(width: Self.iconFrame, height: 30)
             .contentShape(Rectangle())
             .scTapHeight(drawn: 30)
-    }
-
-    // MARK: - Po kciuku w dół
-
-    /// „💡 Co poprawić?” — otwiera podpowiedź (`AssistantSuggestionSheet`).
-    private var suggestPill: some View {
-        Button {
-            onSuggest?()
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "lightbulb")
-                    .font(.system(size: 11, weight: .bold))
-                Text("Co poprawić?")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .tracking(-0.1)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(AssistantLook.terra(scheme))
-            .padding(.horizontal, 11)
-            .frame(height: 28)
-            .scSoftCapsule(AssistantLook.terra(scheme))
-            .fixedSize()
-            .scTapHeight(drawn: 28)
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.95))
-        .accessibilityHint("Otwiera podpowiedź: co było nie tak i jak powinno być")
     }
 }
