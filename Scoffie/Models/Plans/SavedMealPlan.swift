@@ -43,13 +43,26 @@ struct PlanMeal: Codable, Identifiable, Hashable {
     /// `plannedServings` jest wtedy tylko `ceil(Σ)` dla starszych buildów.
     var portionUnits: [String: Int]
 
+    /// Token pozycji (`PlanItem.revision`) — `expectedRevision` zapisu
+    /// `PRESERVE` i zamiany dania. `nil` = backend bez wersji albo wpis
+    /// optymistyczny przed ackiem; pozycji z alokacją bez tokenu nie
+    /// zapisujemy. Nigdy nie liczony lokalnie; stemple rosną w obrębie
+    /// tygodnia, więc wyższy = nowszy (spóźniony ack nie cofa stanu, §1.3).
+    var revision: Int?
+
+    /// Tokeny porcji per osoba (`portions[].revision`) — `expectedRevision`
+    /// `weeklyPlans:setPortion` dla TEJ osoby.
+    var portionRevisions: [String: Int]
+
     init(
         id: String = UUID().uuidString,
         recipe: Recipe,
         participantIds: [String] = [],
         eatenByUserIds: [String] = [],
         plannedServings: Int? = nil,
-        portionUnits: [String: Int] = [:]
+        portionUnits: [String: Int] = [:],
+        revision: Int? = nil,
+        portionRevisions: [String: Int] = [:]
     ) {
         self.id = id
         self.recipe = recipe
@@ -57,6 +70,8 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         self.eatenByUserIds = eatenByUserIds
         self.plannedServings = plannedServings
         self.portionUnits = portionUnits
+        self.revision = revision
+        self.portionRevisions = portionRevisions
     }
 
     // Plans persisted before eaten-marks existed have no `eatenByUserIds` key.
@@ -82,12 +97,22 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         // alokacja znaczy „równy podział”, czyli dokładnie to, co liczyły.
         // Następne odświeżenie tygodnia i tak przyniesie alokację z serwera.
         self.portionUnits = try container.decodeIfPresent([String: Int].self, forKey: .portionUnits) ?? [:]
+        // Tokeny z cache'u sprzed wersji — brak = „nie znam”, więc zapis
+        // porcji czeka na odświeżenie tygodnia.
+        self.revision = try container.decodeIfPresent(Int.self, forKey: .revision)
+        self.portionRevisions = try container.decodeIfPresent([String: Int].self, forKey: .portionRevisions) ?? [:]
     }
 
     var isShared: Bool { participantIds.isEmpty }
 
     /// Czy pozycja niesie porcje per osoba.
     var hasPortions: Bool { !portionUnits.isEmpty }
+
+    /// Czy porcje da się edytować z telefonu: jest token pozycji i token
+    /// porcji każdej osoby z alokacji (backend z wersjami, świeży odczyt).
+    var canEditPortions: Bool {
+        hasPortions && revision != nil && portionUnits.keys.allSatisfy { portionRevisions[$0] != nil }
+    }
 
     /// Porcja osoby w porcjach przepisu; `nil` = pozycja bez alokacji (licz
     /// z `plannedServings`). Tak jak serwer (`daily-balance.util`): osoba bez
@@ -181,6 +206,8 @@ struct PlanMeal: Codable, Identifiable, Hashable {
             && lhs.eatenByUserIds == rhs.eatenByUserIds
             && lhs.plannedServings == rhs.plannedServings
             && lhs.portionUnits == rhs.portionUnits
+            && lhs.revision == rhs.revision
+            && lhs.portionRevisions == rhs.portionRevisions
     }
 
     func hash(into hasher: inout Hasher) {
@@ -190,6 +217,8 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         hasher.combine(eatenByUserIds)
         hasher.combine(plannedServings)
         hasher.combine(portionUnits)
+        hasher.combine(revision)
+        hasher.combine(portionRevisions)
     }
 }
 

@@ -36,9 +36,8 @@ enum RecipeDetailContext {
 }
 
 /// Porcje per osoba posiłku z planu (`PlanMeal.portionUnits`). Gdy są,
-/// ekran pokazuje porcję każdego jedzącego zamiast steppera porcji łącznych —
-/// zapis liczby łącznej skasowałby na serwerze alokację i wrócił do równego
-/// podziału.
+/// ekran pokazuje porcję każdego jedzącego (ze stepperem co 0,5) zamiast
+/// steppera porcji łącznych — liczba łączna to przy alokacji tylko ceil(Σ).
 struct RecipeDetailPortions {
     struct Person {
         let memberId: String
@@ -51,6 +50,9 @@ struct RecipeDetailPortions {
     let units: [String: Int]
     /// Kto patrzy — jego porcja idzie do „Twoja porcja” i do makr.
     let viewerId: String?
+    /// Są tokeny do zapisu (`PlanMeal.canEditPortions`); bez nich porcje
+    /// tylko do odczytu, do najbliższego odświeżenia planu.
+    let isEditable: Bool
 }
 
 extension RecipeDetailPortions {
@@ -68,7 +70,8 @@ extension RecipeDetailPortions {
         self.init(
             people: ids.map { Person(memberId: $0, name: names[$0] ?? "Domownik") },
             units: meal.portionUnits,
-            viewerId: viewerId
+            viewerId: viewerId,
+            isEditable: meal.canEditPortions
         )
     }
 }
@@ -103,10 +106,17 @@ struct RecipeDetailView: View {
     var onAddedToPlan: ((Date, MealSlot) -> Void)?
 
     /// Porcje per osoba (tylko `.planned`); `nil` = zwykły stepper porcji.
-    /// Tylko do odczytu — patrz `PlanPortions.editBlockedMessage`.
     let personalPortions: RecipeDetailPortions?
 
-    private var portionUnits: [String: Int] { personalPortions?.units ?? [:] }
+    /// Wołane „Zapisz porcje” w trybie porcji per osoba — tylko ZMIENIONE
+    /// osoby (jednostki 1/20), każda idzie osobnym `setPortion`.
+    var onSavePortions: (([String: Int]) -> Void)?
+
+    /// Porcje per osoba w edycji — makra i składniki liczą się na bieżąco
+    /// z tego, co widać na stepperach, a nie z zapisanego stanu.
+    @State private var draftPortions: [String: Int]
+
+    private var portionUnits: [String: Int] { draftPortions }
 
     /// Widełki są te same, co limit `plannedServings` w backendzie — powyżej
     /// dwunastu porcji to już nie jest gotowanie na tydzień, tylko catering.
@@ -169,9 +179,12 @@ struct RecipeDetailView: View {
         context: RecipeDetailContext = .catalog,
         onSaveServings: ((Int) -> Void)? = nil,
         onAddedToPlan: ((Date, MealSlot) -> Void)? = nil,
-        personalPortions: RecipeDetailPortions? = nil
+        personalPortions: RecipeDetailPortions? = nil,
+        onSavePortions: (([String: Int]) -> Void)? = nil
     ) {
         self.personalPortions = personalPortions
+        self.onSavePortions = onSavePortions
+        _draftPortions = State(initialValue: personalPortions?.units ?? [:])
         self.recipe = recipe
         self.onSetFavourite = onSetFavourite
         self.onClose = onClose
@@ -226,8 +239,9 @@ struct RecipeDetailView: View {
 
     private var ingredientsEyebrow: String {
         guard isPortionMode else { return PolishPlural.servings(servings) }
-        // Ułamek porcji łączy się z dopełniaczem: „2,05 porcji”.
-        return "\(PlanPortions.label(units: PlanPortions.totalUnits(portionUnits))) porcji"
+        // Ułamek porcji łączy się z dopełniaczem: „2,5 porcji”; pełna liczba
+        // odmienia się jak zwykle („3 porcje”).
+        return PlanPortions.spokenServings(units: PlanPortions.totalUnits(portionUnits), plural: PolishPlural.servings)
     }
 
     private var look: DetailLook { DetailLook(scheme: scheme) }
@@ -456,10 +470,10 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// Porcja każdego jedzącego — „Rafał 1,25”, „Asia 0,80” — tylko do
-    /// odczytu. Serwer zastępuje przy zapisie całą alokację bez kontroli
-    /// wersji, więc edycja z telefonu mogłaby cofnąć zmianę innej osoby
-    /// (API GAP) — pod kartą krótko, dlaczego nie da się jej zmienić.
+    /// Porcja każdego jedzącego — „Rafał 1,5”, „Asia 1” — ze stepperem co
+    /// pół porcji. Zapis dopiero „Zapisz porcje”, każda osoba osobno
+    /// (`setPortion` z jej tokenem). Bez tokenów (stary cache) — tylko odczyt
+    /// i jedno zdanie, co zrobić.
     private func portionsCard(_ model: RecipeDetailPortions) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             DetailCard {
@@ -469,35 +483,72 @@ struct RecipeDetailView: View {
                     }
                 }
             }
-            Text(PlanPortions.editBlockedMessage)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(look.muted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 4)
+            if !model.isEditable {
+                Text(PlanPortions.readOnlyMessage)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(look.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
+            }
         }
     }
 
     private func portionRow(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions, isFirst: Bool) -> some View {
         let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
         let name = person.memberId == model.viewerId ? "\(person.name) (Ty)" : person.name
+        // Z stepperem VoiceOver czyta imię i stepper osobno; bez — jedno zdanie.
+        let spoken: String = model.isEditable
+            ? ""
+            : "\(person.name): \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))"
         return HStack(spacing: 12) {
             Text(name)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(look.fg)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            Text(PlanPortions.label(units: units))
-                .font(.system(size: 15, weight: .heavy))
-                .monospacedDigit()
-                .foregroundStyle(look.fg)
+            if model.isEditable {
+                DetailServingsStepper(
+                    value: portionBinding(for: person.memberId),
+                    range: PlanPortions.unitsRange,
+                    label: { PlanPortions.label(units: $0) },
+                    accessibilityName: "Porcja: \(person.name)",
+                    accessibilityValueText: { PlanPortions.spokenServings(units: $0, plural: PolishPlural.servings) },
+                    next: { current, direction in
+                        PlanPortions.stepped(
+                            units: current,
+                            direction: direction,
+                            totalUnits: PlanPortions.totalUnits(draftPortions)
+                        )
+                    }
+                )
+            } else {
+                Text(PlanPortions.label(units: units))
+                    .font(.system(size: 15, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(look.fg)
+            }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(person.name): \(PlanPortions.label(units: units)) porcji")
+        .accessibilityElement(children: model.isEditable ? .contain : .ignore)
+        .accessibilityLabel(spoken)
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, model.isEditable ? 6 : 10)
         .overlay(alignment: .top) {
             if !isFirst { DetailHairline() }
         }
+    }
+
+    /// Stepper osoby pisze do szkicu; brak wpisu = 1 porcja (reguła serwera).
+    private func portionBinding(for memberId: String) -> Binding<Int> {
+        Binding(
+            get: { draftPortions[memberId] ?? PlanPortions.missingEntryUnits },
+            set: { draftPortions[memberId] = $0 }
+        )
+    }
+
+    /// Osoby, których porcja różni się od zapisanej.
+    private var changedPortions: [String: Int] {
+        let saved = personalPortions?.units ?? [:]
+        return draftPortions.filter { saved[$0.key] != $0.value }
     }
 
     // MARK: - Przygotowanie
@@ -975,8 +1026,9 @@ struct RecipeDetailView: View {
         switch context {
         case .catalog: return true
         case .planned:
-            // Porcji per osoba nie zapisujemy (API GAP) — przycisk nieaktywny.
-            if isPortionMode { return false }
+            if isPortionMode {
+                return personalPortions?.isEditable == true && !changedPortions.isEmpty
+            }
             return servings != initialServings
         }
     }
@@ -986,7 +1038,15 @@ struct RecipeDetailView: View {
         case .catalog:
             isAddToPlanPresented = true
         case .planned:
-            guard !isSavingServings, !isPortionMode else { return }
+            guard !isSavingServings else { return }
+            if isPortionMode {
+                let changed = changedPortions
+                guard personalPortions?.isEditable == true, !changed.isEmpty else { return }
+                isSavingServings = true
+                onSavePortions?(changed)
+                onClose?()
+                return
+            }
             isSavingServings = true
             onSaveServings?(servings)
             onClose?()
@@ -1360,10 +1420,26 @@ private struct DetailHairline: View {
 /// `DStepper` z wartością: „−  1  +” na pigułce. Minus gaśnie na dolnej
 /// granicy, plus świeci terakotą. Cyfra przewija się w miejscu, a każde
 /// stuknięcie daje krótki takt.
+///
+/// Ten sam stepper liczy porcje łączne (co 1) i porcję osoby (jednostki
+/// 1/20, co 0,5 — `PlanPortions.stepped`): krok, etykietę i opis dla
+/// VoiceOver podaje wołający.
 private struct DetailServingsStepper: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
+    var label: (Int) -> String = { "\($0)" }
+    var accessibilityName: String = "Liczba porcji"
+    var accessibilityValueText: (Int) -> String = { PolishPlural.servings($0) }
+    /// Wartość po kroku w stronę `direction` (+1 / −1) albo `nil`, gdy krok
+    /// jest niedozwolony. Domyślnie ±1 w widełkach `range`.
+    var next: ((Int, Int) -> Int?)? = nil
     var onChange: () -> Void = {}
+
+    private func target(_ direction: Int) -> Int? {
+        if let next { return next(value, direction) }
+        let candidate = min(range.upperBound, max(range.lowerBound, value + direction))
+        return candidate == value ? nil : candidate
+    }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -1371,18 +1447,18 @@ private struct DetailServingsStepper: View {
         let look = DetailLook(scheme: scheme)
 
         HStack(spacing: 0) {
-            stepButton(systemName: "minus", enabled: value > range.lowerBound, look: look) {
+            stepButton(systemName: "minus", enabled: target(-1) != nil, look: look) {
                 adjust(by: -1)
             }
 
-            Text("\(value)")
+            Text(label(value))
                 .font(.system(size: 16, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(look.fg)
                 .frame(minWidth: 28)
                 .contentTransition(.numericText(value: Double(value)))
 
-            stepButton(systemName: "plus", enabled: value < range.upperBound, look: look) {
+            stepButton(systemName: "plus", enabled: target(1) != nil, look: look) {
                 adjust(by: 1)
             }
         }
@@ -1390,8 +1466,8 @@ private struct DetailServingsStepper: View {
         .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Liczba porcji")
-        .accessibilityValue(PolishPlural.servings(value))
+        .accessibilityLabel(accessibilityName)
+        .accessibilityValue(accessibilityValueText(value))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: adjust(by: 1)
@@ -1401,9 +1477,8 @@ private struct DetailServingsStepper: View {
         }
     }
 
-    private func adjust(by delta: Int) {
-        let next = min(range.upperBound, max(range.lowerBound, value + delta))
-        guard next != value else { return }
+    private func adjust(by direction: Int) {
+        guard let next = target(direction), next != value else { return }
         withAnimation(.snappy(duration: 0.25)) { value = next }
         onChange()
     }

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Sprawdzian granicy store → repozytorium dla porcji per osoba: prawdziwy
 # `MealCalendarStore` z atrapą `WeeklyPlanRepository`, która zapisuje wywołania
-# (pozycja z alokacją → zero zapytań; nowa pozycja i legacy → jedno).
+# (pozycja z alokacją → PRESERVE z tokenami, bez tokenów → zero zapytań;
+# stepper porcji → setPortion per osoba; konflikt → cofnięcie bez ponowienia).
 #
 # Projekt nie ma targetu testów, więc — jak `card-contract-check.sh` —
 # kompilujemy potrzebne pliki aplikacji (domknięcie zależności
