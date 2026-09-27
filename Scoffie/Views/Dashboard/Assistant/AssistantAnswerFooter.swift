@@ -47,6 +47,9 @@ struct AssistantAnswerFooter: View {
     @Environment(\.colorScheme) private var scheme
     /// Podbicie = kciuk w górę właśnie wstawiony — gra „wybuch” kropek.
     @State private var cheer = 0
+    /// Bilet odłożonego arkusza „Co było dobre?” — każde inne stuknięcie
+    /// w kciuki go unieważnia, więc zdjęty w porę 👍 arkusza nie otworzy.
+    @State private var suggestTicket = 0
 
     /// Kolumna tekstu odpowiedzi — patrz `AssistantVoice`.
     static let textInset: CGFloat = 28
@@ -126,6 +129,7 @@ struct AssistantAnswerFooter: View {
                 label: "Dobra odpowiedź",
                 bounce: feedback == .up
             ) {
+                suggestTicket += 1
                 if feedback == .up {
                     onRate(nil)
                 } else {
@@ -134,7 +138,11 @@ struct AssistantAnswerFooter: View {
                     // Arkusz „Co było dobre?” po wybuchu kropek — inaczej
                     // zasłoniłby animację w pierwszej klatce.
                     if let onSuggest {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { onSuggest(.up) }
+                        let ticket = suggestTicket
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                            guard suggestTicket == ticket else { return }
+                            onSuggest(.up)
+                        }
                     }
                 }
             }
@@ -152,6 +160,7 @@ struct AssistantAnswerFooter: View {
                 // W dół = ocena od razu + arkusz „Co poprawić?” (podpowiedź
                 // nieobowiązkowa — zamknięcie zostawia sam kciuk). Drugie
                 // stuknięcie zdejmuje ocenę, jak przy kciuku w górę.
+                suggestTicket += 1
                 if feedback == .down {
                     onRate(nil)
                 } else {

@@ -293,8 +293,9 @@ final class AgentStore {
         let previousNote = messages[index].feedbackNote
         guard previous != rating else { return nil }
         messages[index].feedback = rating
-        // Serwer zdejmuje podpowiedź przy zmianie kierunku i przy zdjęciu oceny.
-        if rating != previous { messages[index].feedbackNote = nil }
+        // Każda zmiana oceny (kierunek albo zdjęcie) zdejmuje podpowiedź —
+        // serwer robi to samo.
+        messages[index].feedbackNote = nil
         do {
             try await client.rateMessage(id: messageId, rating: rating?.rawValue)
             return nil

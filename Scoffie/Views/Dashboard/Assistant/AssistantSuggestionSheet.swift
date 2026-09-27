@@ -357,7 +357,9 @@ struct AssistantSuggestionSheet: View {
     private func prefill() {
         guard !didPrefill else { return }
         didPrefill = true
-        guard let note = message.feedbackNote else { return }
+        // Tylko podpowiedź TEGO kierunku — po zmianie 👎 → 👍 wiadomość
+        // (sprzed stuknięcia) niesie jeszcze notatkę „co nie zagrało”.
+        guard message.feedback == rating, let note = message.feedbackNote else { return }
         tags = Set(note.tags)
         comment = note.comment ?? ""
     }
@@ -369,8 +371,9 @@ struct AssistantSuggestionSheet: View {
         commentFocused = false
         // Kolejność z listy, nie ze zbioru — panel liczy powody tak samo.
         // Powód spoza listy (stare „OTHER”) zostaje, jeśli był zaznaczony.
-        let known = options.map(\.id)
-        let ordered = known.filter { tags.contains($0) } + tags.subtracting(known).sorted()
+        // Tylko powody tego kierunku, w kolejności z listy — serwer i tak
+        // odrzuca obce, a lokalna notatka nie może ich zapamiętać.
+        let ordered = options.map(\.id).filter { tags.contains($0) }
         let text = trimmedComment
         Task { @MainActor in
             let failure = await onSubmit(ordered, text.isEmpty ? nil : text)
