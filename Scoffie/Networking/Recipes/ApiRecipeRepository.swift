@@ -17,16 +17,11 @@ final class ApiRecipeRepository: RecipeRepository {
         )
     }
 
+    /// Niemapowalny przepis albo niekompletna strona odrzuca cały przebieg
+    /// (`CatalogSyncMapping`) — katalog i rewizja zostają, jakie były.
     func fetchCatalogSnapshotPage(revision: String?, cursor: String?, limit: Int) async throws -> CatalogSnapshotPage<Recipe> {
         let dto = try await client.fetchCatalogSnapshot(revision: revision, cursor: cursor, limit: limit)
-        return CatalogSnapshotPage(
-            resetRequired: dto.mode == .resetRequired,
-            revision: dto.revision,
-            items: (dto.items ?? []).compactMap { item in
-                item.toAppRecipe().map { (id: Self.catalogKey(item.id), item: Self.catalogCopy($0)) }
-            },
-            nextCursor: dto.nextCursor
-        )
+        return try CatalogSyncMapping.snapshotPage(dto, map: Self.catalogRecipe)
     }
 
     func fetchCatalogChangesPage(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> CatalogChangesPage<Recipe> {
@@ -36,22 +31,7 @@ final class ApiRecipeRepository: RecipeRepository {
             cursor: cursor,
             limit: limit
         )
-        var upserts: [(id: String, item: Recipe)] = []
-        var tombstones = (dto.tombstones ?? []).map(Self.catalogKey)
-        for item in dto.upserts ?? [] {
-            if let recipe = item.toAppRecipe() {
-                upserts.append((id: Self.catalogKey(item.id), item: Self.catalogCopy(recipe)))
-            } else {
-                tombstones.append(Self.catalogKey(item.id))
-            }
-        }
-        return CatalogChangesPage(
-            resetRequired: dto.mode == .resetRequired,
-            revision: dto.revision,
-            upserts: upserts,
-            tombstones: tombstones,
-            nextCursor: dto.nextCursor
-        )
+        return try CatalogSyncMapping.changesPage(dto, sinceRevision: sinceRevision, map: Self.catalogRecipe)
     }
 
     func fetchHouseholdRecipeState() async throws -> HouseholdRecipeState {
@@ -62,9 +42,13 @@ final class ApiRecipeRepository: RecipeRepository {
         )
     }
 
-    /// Klucz przepisu w stanie katalogu: id z serwera małymi literami — tak
-    /// samo dla upsertów, tombstone'ów i starej ścieżki `recipes:findAll`.
-    static func catalogKey(_ id: String) -> String { id.lowercased() }
+    /// Klucz przepisu w stanie katalogu — patrz `CatalogSyncMapping.key`.
+    static func catalogKey(_ id: String) -> String { CatalogSyncMapping.key(id) }
+
+    /// DTO → przepis publicznego katalogu (bez serca); `nil` = niemapowalny.
+    static func catalogRecipe(_ dto: BackendRecipeDTO) -> Recipe? {
+        dto.toAppRecipe().map(catalogCopy)
+    }
 
     /// Publiczny katalog nie niesie ulubionych (to stan DOMU) — kopia bez serca,
     /// żeby plik katalogu, który przeżywa wylogowanie, nie trzymał cudzych ulubionych.

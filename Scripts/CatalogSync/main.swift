@@ -17,6 +17,12 @@ func check(_ condition: Bool, _ name: String) {
 
 struct Boom: Error {}
 
+/// `BackendRecipeDTO` bierze bazowy adres z `AppEnvironment` (ScoffieApp.swift,
+/// z `@main`) — w sprawdzianie wystarczy stały adres.
+enum AppEnvironment {
+    static let apiBaseURL = URL(string: "https://api.scoffie.invalid")!
+}
+
 /// Serwer na niby: katalog `id → tytuł`, strony po `limit` w kolejności id,
 /// zapisane wywołania (żeby sprawdzić, co klient odsyła).
 final class FakeServer {
@@ -291,6 +297,190 @@ let householdData = try JSONEncoder().encode(household)
 check(HouseholdRecipeCacheEnvelope<String>.load(from: householdData, ownerKey: "u1_h1")?.recipes == ["Zupa domowa"], "stan domu: ten sam właściciel → odczyt")
 check(HouseholdRecipeCacheEnvelope<String>.load(from: householdData, ownerKey: "u2_h1") == nil, "stan domu: inne konto → ignorowany")
 check(HouseholdRecipeCacheEnvelope<String>.load(from: householdData, ownerKey: "u1_h2") == nil, "stan domu: inny dom → ignorowany")
+
+// MARK: - 12. Adapter DTO → domena (review patch 1)
+//
+// Prawdziwa ścieżka: JSON strony → `BackendCatalog*PageDTO` → `CatalogSyncMapping`
+// z `BackendRecipeDTO.toAppRecipe()` → silnik. Niemapowalny przepis, brakujące
+// pole, zły tryb albo obca `fromRevision` odrzucają CAŁY przebieg: katalog
+// i rewizja bez zmian, żadnych „dopowiedzianych” tombstone'ów.
+
+let epoch = "3f1d2c4b-8a9e-4f00-9b1a-2c3d4e5f6a7b"
+
+func recipeUUID(_ n: Int) -> String {
+    String(format: "00000000-0000-4000-8000-%012d", n)
+}
+
+func recipeDict(_ id: String, _ title: String, mealType: String = "DINNER") -> [String: Any] {
+    [
+        "id": id, "title": title, "description": NSNull(), "mealType": mealType,
+        "suitableMealTypes": [mealType], "difficulty": "EASY", "prepTimeMinutes": 20,
+        "servings": 2, "imageUrl": "https://img.scoffie.app/recipes/x.webp",
+        "nutritionKcal": 500, "nutritionProtein": 20, "nutritionFat": 10,
+        "nutritionCarbs": 60, "nutritionFiber": 5, "nutritionSalt": 1,
+        "isActive": true, "ingredients": [Any](), "sourceProvider": NSNull(),
+        "sourceRecipeId": NSNull(), "allergens": [String](), "dietTags": [String]()
+    ]
+}
+
+/// Serwer, który oddaje JSON, jak `CatalogSyncService`. `breakPage` psuje
+/// wybraną stronę (numer wywołania od 1) zanim trafi do dekodera.
+final class DTOServer {
+    var recipes: [String: (title: String, mealType: String)] = [:]
+    var head = 10
+    var changed: [String] = []
+    var tombstoned: [String] = []
+    var breakPage: [Int: (inout [String: Any]) -> Void] = [:]
+    private(set) var calls = 0
+
+    var token: String { "\(epoch).\(head)" }
+
+    private func decode<T: Decodable>(_ page: [String: Any], as: T.Type) throws -> T {
+        try JSONDecoder().decode(T.self, from: try JSONSerialization.data(withJSONObject: page))
+    }
+
+    private func dict(_ id: String) -> [String: Any] {
+        let recipe = recipes[id]!
+        return recipeDict(id, recipe.title, mealType: recipe.mealType)
+    }
+
+    func snapshot(_ revision: String?, _ cursor: String?, _ limit: Int) throws -> CatalogSnapshotPage<Recipe> {
+        calls += 1
+        let ids = recipes.keys.sorted().filter { cursor == nil || $0 > cursor! }
+        let page = Array(ids.prefix(limit))
+        var json: [String: Any] = [
+            "mode": "SNAPSHOT",
+            "revision": revision ?? token,
+            "items": page.map(dict),
+            "nextCursor": ids.count > limit ? page.last! as Any : NSNull()
+        ]
+        breakPage[calls]?(&json)
+        let dto = try decode(json, as: BackendCatalogSnapshotPageDTO.self)
+        return try CatalogSyncMapping.snapshotPage(dto, map: { $0.toAppRecipe() })
+    }
+
+    func changes(_ since: String, _ until: String?, _ cursor: String?, _ limit: Int) throws -> CatalogChangesPage<Recipe> {
+        calls += 1
+        let all = (changed + tombstoned).sorted().filter { cursor == nil || $0 > cursor! }
+        let page = Array(all.prefix(limit))
+        var json: [String: Any] = [
+            "mode": "DELTA",
+            "fromRevision": since,
+            "revision": until ?? token,
+            "upserts": page.filter { changed.contains($0) }.map(dict),
+            "tombstones": page.filter { tombstoned.contains($0) },
+            "nextCursor": all.count > limit ? page.last! as Any : NSNull()
+        ]
+        breakPage[calls]?(&json)
+        let dto = try decode(json, as: BackendCatalogChangesPageDTO.self)
+        return try CatalogSyncMapping.changesPage(dto, sinceRevision: since, map: { $0.toAppRecipe() })
+    }
+
+    func engine(limit: Int = 2) -> CatalogSyncEngine<Recipe> {
+        CatalogSyncEngine(
+            pageLimit: limit,
+            fetchSnapshotPage: { try self.snapshot($0, $1, $2) },
+            fetchChangesPage: { try self.changes($0, $1, $2, $3) }
+        )
+    }
+}
+
+func titles(_ state: CatalogSyncState<Recipe>) -> [String] {
+    state.orderedItems.map(\.name)
+}
+
+func expectMappingError(_ expected: CatalogSyncResponseError, _ name: String, _ body: () async throws -> Void) async {
+    do {
+        try await body()
+        check(false, name + " (brak błędu)")
+    } catch let error as CatalogSyncResponseError {
+        check(error == expected, name + (error == expected ? "" : " (inny: \(error))"))
+    } catch {
+        check(false, name + " (inny błąd: \(error))")
+    }
+}
+
+let dtoServer = DTOServer()
+for n in 1...5 { dtoServer.recipes[recipeUUID(n)] = ("Danie \(n)", "DINNER") }
+let dtoBase = try await dtoServer.engine().pullSnapshot()
+check(dtoBase.orderedItems.count == 5 && dtoBase.revision == "\(epoch).10", "adapter: snapshot 5 przepisów w 3 stronach, rewizja z serwera")
+
+// Nieznana pora na 2. stronie snapshotu → cały przebieg odrzucony.
+dtoServer.recipes[recipeUUID(3)] = ("Danie 3", "BRUNCH")
+await expectMappingError(.unmappableRecipe(id: recipeUUID(3)), "snapshot: nieznany mealType na 2. stronie → przebieg odrzucony") {
+    _ = try await dtoServer.engine().pullSnapshot()
+}
+dtoServer.recipes[recipeUUID(3)] = ("Danie 3", "DINNER")
+
+// Id spoza UUID na 2. stronie snapshotu.
+dtoServer.recipes["zzzz-not-a-uuid"] = ("Zepsute", "DINNER")
+await expectMappingError(.unmappableRecipe(id: "zzzz-not-a-uuid"), "snapshot: id spoza UUID na późniejszej stronie → przebieg odrzucony") {
+    _ = try await dtoServer.engine().pullSnapshot()
+}
+dtoServer.recipes["zzzz-not-a-uuid"] = nil
+
+// Delta: niemapowalny upsert na 2. stronie — NIE tombstone, stan i rewizja bez zmian.
+dtoServer.head = 12
+dtoServer.recipes[recipeUUID(4)] = ("Danie 4 — nowe", "BRUNCH")
+dtoServer.changed = [recipeUUID(1), recipeUUID(2), recipeUUID(4)]
+let beforeDelta = dtoBase
+await expectMappingError(.unmappableRecipe(id: recipeUUID(4)), "delta: niemapowalny upsert na 2. stronie → przebieg odrzucony (nie tombstone)") {
+    _ = try await dtoServer.engine().pullDelta(onto: dtoBase)
+}
+check(dtoBase.revision == beforeDelta.revision && titles(dtoBase) == titles(beforeDelta), "po błędzie: katalog i rewizja bez zmian (przepis 4 nadal jest)")
+
+// Ponowienie po poprawce serwera dostarcza wcześniej odrzucony przepis.
+dtoServer.recipes[recipeUUID(4)] = ("Danie 4 — nowe", "DINNER")
+if case .applied(let retried, _) = try await dtoServer.engine().pullDelta(onto: dtoBase) {
+    check(retried.revision == "\(epoch).12" && retried.items[recipeUUID(4)]?.name == "Danie 4 — nowe",
+          "ponowienie od tej samej rewizji dostarcza odrzucony wcześniej przepis")
+} else {
+    check(false, "ponowienie od tej samej rewizji dostarcza odrzucony wcześniej przepis")
+}
+
+// Tombstone wyłącznie jawny.
+dtoServer.changed = []
+dtoServer.tombstoned = [recipeUUID(5)]
+if case .applied(let afterTomb, _) = try await dtoServer.engine().pullDelta(onto: dtoBase) {
+    check(afterTomb.items[recipeUUID(5)] == nil && afterTomb.orderedItems.count == 4, "jawny tombstone serwera usuwa przepis")
+} else {
+    check(false, "jawny tombstone serwera usuwa przepis")
+}
+dtoServer.tombstoned = []
+dtoServer.changed = [recipeUUID(1)]
+
+// Brak wymaganych pól — nie „pusta strona”.
+for field in ["upserts", "tombstones", "nextCursor", "fromRevision"] {
+    dtoServer.breakPage = [dtoServer.calls + 1: { _ = $0.removeValue(forKey: field) }]
+    await expectMappingError(.missingField(field), "delta: brak `\(field)` → przebieg odrzucony") {
+        _ = try await dtoServer.engine().pullDelta(onto: dtoBase)
+    }
+}
+for field in ["items", "nextCursor"] {
+    dtoServer.breakPage = [dtoServer.calls + 2: { _ = $0.removeValue(forKey: field) }]
+    await expectMappingError(.missingField(field), "snapshot: brak `\(field)` na 2. stronie → przebieg odrzucony") {
+        _ = try await dtoServer.engine().pullSnapshot()
+    }
+}
+
+// Zły tryb i obca fromRevision.
+dtoServer.breakPage = [dtoServer.calls + 1: { $0["mode"] = "DELTA" }]
+await expectMappingError(.unexpectedMode("DELTA"), "snapshot: tryb DELTA → przebieg odrzucony") {
+    _ = try await dtoServer.engine().pullSnapshot()
+}
+dtoServer.breakPage = [dtoServer.calls + 1: { $0["mode"] = "SNAPSHOT" }]
+await expectMappingError(.unexpectedMode("SNAPSHOT"), "delta: tryb SNAPSHOT → przebieg odrzucony") {
+    _ = try await dtoServer.engine().pullDelta(onto: dtoBase)
+}
+dtoServer.breakPage = [dtoServer.calls + 1: { $0["fromRevision"] = "\(epoch).9" }]
+await expectMappingError(
+    .fromRevisionMismatch(requested: "\(epoch).10", received: "\(epoch).9"),
+    "delta: fromRevision ≠ sinceRevision → przebieg odrzucony"
+) {
+    _ = try await dtoServer.engine().pullDelta(onto: dtoBase)
+}
+dtoServer.breakPage = [:]
+check(dtoBase.revision == "\(epoch).10" && dtoBase.orderedItems.count == 5, "po wszystkich odrzuconych przebiegach stan wejściowy nietknięty")
 
 print(failures == 0 ? "\nWSZYSTKO OK" : "\nBŁĘDÓW: \(failures)")
 exit(failures == 0 ? 0 : 1)
