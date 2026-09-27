@@ -19,6 +19,9 @@ struct WeekPlanSlot {
     /// połowiłaby w dwuosobowym domu i listę zakupów, i licznik kalorii.
     /// Liczbę wylicza dopiero `PlanMeal.effectiveServings(householdMemberCount:)`.
     let plannedServings: Int?
+    /// Porcje per osoba w jednostkach 1/20 (`PlanMeal.portionUnits`); puste =
+    /// równy podział.
+    var portionUnits: [String: Int] = [:]
 }
 
 protocol WeeklyPlanRepository {
@@ -37,6 +40,12 @@ protocol WeeklyPlanRepository {
     /// Dawniej szło to jako `removeWeekSlot` + `upsertWeekSlot`: slot stał
     /// chwilę pusty, drugi domownik dostawał dwa zdarzenia, a przerwany zapis
     /// zostawiał pustkę. Równe `recipeId` = brak podmiany.
+    ///
+    /// Porcji per osoba (`portions`) iOS nie wysyła: serwer zastępuje nimi całą
+    /// alokację bez kontroli wersji. Uwaga: BRAK tego pola serwer też traktuje
+    /// jako „skasuj alokację” — zapis pozycji, o której alokacji telefon nie
+    /// wie (nieaktualny stan), ją usunie. `MealCalendarStore` blokuje tylko
+    /// pozycje z alokacją znaną lokalnie (`PlanPortions.upsertDecision`).
     func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?) async throws -> WeekPlanSlot?
     /// `recipeId == nil` clears every variant in the slot.
     func removeWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID?) async throws
@@ -80,6 +89,16 @@ struct BackendWeeklyPlanItemDTO: Codable {
     /// `nil`. To znaczy „policz z audytorium", więc taki tydzień pokazuje
     /// dzisiejsze liczby zamiast twardej jednej porcji.
     let plannedServings: Int?
+    /// Porcje per osoba (`PlanItem.portions`). Nowy backend wysyła je zawsze
+    /// (puste = bez alokacji); starszy wcale — w obu przypadkach równy podział.
+    let portions: [BackendPlanPortionDTO]?
+}
+
+/// Porcja jednej osoby w pozycji planu: `servings` w porcjach przepisu,
+/// wielokrotność 0,05.
+struct BackendPlanPortionDTO: Codable {
+    let userId: String
+    let servings: Double
 }
 
 /// Odpowiedź na `weeklyPlans:upsertWeekSlot`.
@@ -404,7 +423,11 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             eatenByUserIds: item.eatenByUserIds ?? [],
             // Bez `?? 1`: brak pola ma dojechać do modelu jako „nie wiem",
             // żeby licznik zdążył policzyć porcje z audytorium.
-            plannedServings: item.plannedServings
+            plannedServings: item.plannedServings,
+            portionUnits: Dictionary(
+                (item.portions ?? []).map { ($0.userId, PlanPortions.units(fromServings: $0.servings)) },
+                uniquingKeysWith: { first, _ in first }
+            )
         )
     }
 

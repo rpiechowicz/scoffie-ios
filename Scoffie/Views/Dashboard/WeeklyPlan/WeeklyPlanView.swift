@@ -236,7 +236,9 @@ struct WeeklyPlanView: View {
                 guard let person else { return all }
                 return all.visibleTo(memberId: person)
             },
-            knownHouseholdMemberCount: knownHouseholdMemberCount
+            knownHouseholdMemberCount: knownHouseholdMemberCount,
+            // Porcja per osoba: talerz osoby z pigułki, nie średnia domu.
+            memberId: personId
         )
     }
 
@@ -614,7 +616,14 @@ struct WeeklyPlanView: View {
                     context: .planned(day: target.date, slot: target.slot),
                     onSaveServings: { newValue in
                         saveServings(newValue, for: target)
-                    }
+                    },
+                    // Porcje per osoba: zamiast steppera porcji łącznych —
+                    // porcja każdego jedzącego, tylko do odczytu (API GAP).
+                    personalPortions: RecipeDetailPortions(
+                        meal: target.meal,
+                        members: sessionStore.householdMembers,
+                        viewerId: sessionStore.currentUserId
+                    )
                 )
                 .recipeDetailSheet()
             }

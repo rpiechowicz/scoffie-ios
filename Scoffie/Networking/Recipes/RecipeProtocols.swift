@@ -21,8 +21,22 @@ struct RecipePage {
     let receivedCount: Int
 }
 
+/// Przepisy gospodarstwa i ulubione domu (`recipes:householdState`) — nie
+/// wchodzą do publicznego logu katalogu.
+struct HouseholdRecipeState {
+    let recipes: [Recipe]
+    let favoriteRecipeIds: Set<UUID>
+}
+
 protocol RecipeRepository {
     func fetchRecipes(page: Int, limit: Int) async throws -> RecipePage
+    /// Strona `catalog:snapshot`. `revision` = znacznik z PIERWSZEJ strony
+    /// przebiegu (`nil` na pierwszej) — patrz `CatalogSyncEngine`.
+    func fetchCatalogSnapshotPage(revision: String?, cursor: String?, limit: Int) async throws -> CatalogSnapshotPage<Recipe>
+    /// Strona `catalog:changes` od `sinceRevision`; `untilRevision` = rewizja
+    /// z pierwszej strony przebiegu.
+    func fetchCatalogChangesPage(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> CatalogChangesPage<Recipe>
+    func fetchHouseholdRecipeState() async throws -> HouseholdRecipeState
     func fetchRecipeById(_ recipeId: UUID) async throws -> Recipe
     func setFavorite(recipeId: UUID, isFavorite: Bool) async throws
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: UUID, _ isFavorite: Bool) -> Void)
@@ -37,6 +51,9 @@ protocol RecipeRepository {
 
 protocol RecipeTransportClient {
     func fetchRecipes(page: Int, limit: Int) async throws -> [BackendRecipeDTO]
+    func fetchCatalogSnapshot(revision: String?, cursor: String?, limit: Int) async throws -> BackendCatalogSnapshotPageDTO
+    func fetchCatalogChanges(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> BackendCatalogChangesPageDTO
+    func fetchHouseholdRecipeState() async throws -> BackendHouseholdRecipeStateDTO
     func fetchRecipeById(recipeId: String) async throws -> BackendRecipeDTO
     func setFavorite(recipeId: String, isFavorite: Bool) async throws
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: String, _ isFavorite: Bool) -> Void)

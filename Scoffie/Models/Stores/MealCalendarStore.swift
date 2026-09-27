@@ -143,7 +143,8 @@ class MealCalendarStore {
                         recipe: slot.recipe,
                         participantIds: slot.participantIds,
                         eatenByUserIds: slot.eatenByUserIds,
-                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId]
+                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId],
+                        portionUnits: slot.portionUnits
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -178,6 +179,15 @@ class MealCalendarStore {
     /// `max(1, 0)`, czyli jedną porcję, i ta jedynka utrwalała się w pliku
     /// planu. Lepiej zostawić „nie wiem" i podmienić je na prawdę z
     /// potwierdzenia zapisu.
+    ///
+    /// Porcje per osoba (`PlanMeal.portionUnits`): serwer przy zapisie
+    /// pozycji zastępuje CAŁĄ alokację (albo kasuje ją, gdy pola brak) i nie
+    /// ma kontroli wersji. Dlatego zapis, który dotyka pozycji z alokacją
+    /// ZNANĄ LOKALNIE (to samo danie w slocie albo danie podmieniane), jest
+    /// odrzucany PRZED wysłaniem — bez zmiany optymistycznej i bez zapytania
+    /// (`PlanPortions.upsertDecision`). Pozycje bez alokacji zapisują się jak
+    /// dotąd; porcji iOS nie wysyła. To NIE chroni alokacji, której telefon
+    /// jeszcze nie zna — ten race zamyka dopiero serwer (API GAP w raporcie).
     @MainActor
     func upsertWeekSlot(
         recipe: Recipe,
@@ -190,6 +200,16 @@ class MealCalendarStore {
         weekStart: String
     ) async -> Bool {
         let previous = meals(for: date, slot: slot)
+
+        let decision = PlanPortions.upsertDecision(
+            slot: previous.map { PlanPortions.SlotMeal(recipeId: $0.recipe.id, hasPortions: $0.hasPortions) },
+            recipeId: recipe.id,
+            replacingRecipeId: replacingRecipeId
+        )
+        guard decision == .send else {
+            errorMessage = PlanPortions.editBlockedMessage
+            return false
+        }
 
         // Optymistyczny wpis musi mieć konkretną liczbę porcji już teraz, więc
         // powtarzamy tu regułę serwera co do joty: liczba uczestników, a dla
@@ -242,7 +262,10 @@ class MealCalendarStore {
                         // `nil` z serwera znaczy „nie znam tego pola" (starszy
                         // backend), więc zostawiamy własną wartość zamiast
                         // zerować ją do reguły auto.
-                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings
+                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings,
+                        // Prawda z serwera — pusta alokacja w odpowiedzi znaczy
+                        // „równy podział”, a nie „nie wiem” (pole jest zawsze).
+                        portionUnits: saved.portionUnits
                     )
                     setMeals(confirmed, for: date, slot: slot)
                 }

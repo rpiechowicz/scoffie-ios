@@ -351,7 +351,10 @@ final class SessionStore {
                         title: meal.recipe.name,
                         prepMinutes: max(0, meal.recipe.prepTimeMinutes),
                         kcal: Int(
-                            meal.nutritionPerPerson(knownHouseholdMemberCount: memberCount)
+                            meal.nutritionPerPerson(
+                                knownHouseholdMemberCount: memberCount,
+                                memberId: userId
+                            )
                                 .kcal
                                 .rounded()
                         ),
@@ -804,8 +807,13 @@ final class SessionStore {
             currentUserId: userId,
             cacheNamespace: "\(userId)_\(householdId)"
         )
+        // Poprzednia sesja katalogu (inne konto, inny dom, ponowne logowanie)
+        // traci prawo zapisu i przestaje przyjmować spóźnione odpowiedzi,
+        // ZANIM powstanie nowa — patrz `RecipeCatalogStore.invalidate()`.
+        self.recipeCatalogStore?.invalidate()
         self.recipeCatalogStore = RecipeCatalogStore(
-            repository: ApiRecipeRepository(client: recipeTransport)
+            repository: ApiRecipeRepository(client: recipeTransport),
+            ownerKey: "\(userId)_\(householdId)"
         )
         let shoppingListStore = ShoppingListStore(
             repository: ApiShoppingListRepository(client: shoppingTransport),
@@ -963,9 +971,13 @@ final class SessionStore {
         // albo wylogowaniu nie mają prawa zostać dla następnej osoby.
         MealCalendarStore.clearCache()
         ShoppingListStore.clearCache()
-        // Plik cache katalogu nie jest przypisany do konta: bez tego następna
-        // osoba zalogowana na tym telefonie widziała przez 12 h katalog
-        // (ulubione, tytuły) poprzedniego gospodarstwa.
+        // Stan domu w cache katalogu (przepisy gospodarstwa, ulubione) znika
+        // razem z domem; publiczny katalog z rewizją zostaje — jest wspólny
+        // dla wszystkich kont, a następne logowanie zrobi z niego deltę.
+        // Najpierw unieważnienie (zapis czekający w kolejce już się nie
+        // odbędzie, spóźniona odpowiedź niczego nie opublikuje), potem
+        // kasowanie prywatnego pliku tą samą kolejką.
+        recipeCatalogStore?.invalidate()
         RecipeCatalogStore.clearCache()
         recipeCatalogStore = nil
         shoppingListStore = nil
