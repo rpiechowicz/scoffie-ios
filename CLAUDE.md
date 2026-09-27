@@ -76,6 +76,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wchodzą po kolei, suma kcal roluje od 0, eyebrow/tytuł/opis rolują przy zmianie stanu. Zrzut:
   `SCOFFIE_DEBUG_OPTIONS=propozycja` (sam przechodzi na stronę końcową i „zapisuje”). Świeża propozycja dnia/tygodnia
   (PENDING, przyszła na żywo) otwiera ten arkusz SAMA, raz na wiadomość (`ProposalAutoPresent`), jak karta OPTIONS.
+  Karta propozycji w ROZMOWIE (27.09.2026, „tekst się psuje”): data/zakres tygodnia stoi we własnym wierszu pod
+  nadtytułem z ikoną kalendarza (`AssistantCardHead(detailBelow: true)`), nie w jednym wierszu z plakietką stanu
+  (`lineLimit(1)` ucinał datę); inne karty dostają meta obok nadtytułu tylko, gdy cała się mieści (`ViewThatFits`).
+  Pod „Przeglądaj dania” NIE ma wiersza „3 posiłki · 1460 kcal · zostaje 640” / „Śr. … kcal dziennie” — nie wracać.
+  Nazwa dania w `AssistantMealRow` ma do dwóch linii zamiast ucinania.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM

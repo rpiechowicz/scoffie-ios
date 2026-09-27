@@ -335,6 +335,9 @@ struct AssistantCardHead<Right: View>: View {
     let eyebrow: String
     /// „22–28 wrz” — doklejone kropką po eyebrow, jak na makiecie.
     var eyebrowDetail: String?
+    /// Meta zawsze we własnym wierszu, z ikoną kalendarza — propozycje planu
+    /// (data dnia, zakres tygodnia).
+    var detailBelow: Bool = false
     var eyebrowColor: Color? = nil
     var mark: Bool = false
     var tone: AssistantTone = .neutral
@@ -354,32 +357,27 @@ struct AssistantCardHead<Right: View>: View {
         }
     }
 
+    private var detail: String? {
+        guard let eyebrowDetail, !eyebrowDetail.isEmpty else { return nil }
+        return eyebrowDetail
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 10) {
-                HStack(alignment: .center, spacing: 8) {
-                    if mark {
-                        SCMarkShape()
-                            .fill(tone == .sage ? AssistantLook.sage(scheme) : (tone == .muted ? AssistantLook.faint(scheme) : AssistantLook.terraFill(scheme)))
-                            .frame(width: 16, height: 16)
-                            .accessibilityHidden(true)
-                    }
-                    Text(eyebrow)
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(0.9)
-                        .textCase(.uppercase)
-                        .foregroundStyle(eyeColor)
-                        .lineLimit(1)
-                    if let eyebrowDetail, !eyebrowDetail.isEmpty {
-                        Text("· " + eyebrowDetail)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AssistantLook.faint(scheme))
-                            .lineLimit(1)
-                    }
+            // Nadtytuł, meta i plakietka w jednym wierszu z `lineLimit(1)`
+            // ucinały datę w pół słowa („PROPOZYCJA DNIA · sobota, 27 wr…”,
+            // 27.09.2026). Meta idzie do wiersza obok nadtytułu TYLKO wtedy,
+            // gdy cała się mieści; propozycje planu stawiają ją zawsze niżej
+            // (`detailBelow`), żeby zmiana plakietki nie przestawiała układu.
+            if let detail, detailBelow {
+                stackedTop(detail, icon: true)
+            } else if let detail {
+                ViewThatFits(in: .horizontal) {
+                    eyebrowRow(inlineDetail: detail)
+                    stackedTop(detail, icon: false)
                 }
-                .layoutPriority(1)
-                Spacer(minLength: 0)
-                right()
+            } else {
+                eyebrowRow(inlineDetail: nil)
             }
 
             if let title, !title.isEmpty {
@@ -406,12 +404,61 @@ struct AssistantCardHead<Right: View>: View {
         .padding(.horizontal, AssistantCardMetrics.inset)
         .padding(.top, AssistantCardMetrics.headTop)
     }
+
+    private func eyebrowRow(inlineDetail: String?) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: 8) {
+                if mark {
+                    SCMarkShape()
+                        .fill(tone == .sage ? AssistantLook.sage(scheme) : (tone == .muted ? AssistantLook.faint(scheme) : AssistantLook.terraFill(scheme)))
+                        .frame(width: 16, height: 16)
+                        .accessibilityHidden(true)
+                }
+                Text(eyebrow)
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.9)
+                    .textCase(.uppercase)
+                    .foregroundStyle(eyeColor)
+                    .lineLimit(1)
+                if let inlineDetail {
+                    Text("· " + inlineDetail)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AssistantLook.faint(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .layoutPriority(1)
+            Spacer(minLength: 0)
+            right()
+        }
+    }
+
+    /// Meta we własnym wierszu pod nadtytułem: zdanie od wielkiej litery
+    /// („Sobota, 27 września”), zawijane, nigdy ucinane.
+    private func stackedTop(_ detail: String, icon: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            eyebrowRow(inlineDetail: nil)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if icon {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
+                Text(String(detail.prefix(1)).uppercased() + String(detail.dropFirst()))
+                    .font(.system(size: 13, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(AssistantLook.muted(scheme))
+            .opacity(tone == .muted ? 0.7 : 1)
+        }
+    }
 }
 
 extension AssistantCardHead where Right == EmptyView {
     init(
         eyebrow: String,
         eyebrowDetail: String? = nil,
+        detailBelow: Bool = false,
         eyebrowColor: Color? = nil,
         mark: Bool = false,
         tone: AssistantTone = .neutral,
@@ -421,6 +468,7 @@ extension AssistantCardHead where Right == EmptyView {
         self.init(
             eyebrow: eyebrow,
             eyebrowDetail: eyebrowDetail,
+            detailBelow: detailBelow,
             eyebrowColor: eyebrowColor,
             mark: mark,
             tone: tone,
@@ -435,6 +483,7 @@ extension AssistantCardHead where Right == AssistantStatusChip {
     init(
         eyebrow: String,
         eyebrowDetail: String? = nil,
+        detailBelow: Bool = false,
         eyebrowColor: Color? = nil,
         mark: Bool = false,
         title: String?,
@@ -444,6 +493,7 @@ extension AssistantCardHead where Right == AssistantStatusChip {
         self.init(
             eyebrow: eyebrow,
             eyebrowDetail: eyebrowDetail,
+            detailBelow: detailBelow,
             eyebrowColor: eyebrowColor,
             mark: mark,
             tone: status.tone,
@@ -600,8 +650,11 @@ struct AssistantMealRow: View {
                     .font(.system(size: 15, weight: titleWeight))
                     .tracking(-0.25)
                     .foregroundStyle(AssistantLook.ink(scheme))
-                    .lineLimit(1)
+                    // Dwie linie: „Kurczak w sosie curry z ryżem…” ucięte
+                    // w pół nazwy nie mówiło, co jest na talerzu.
+                    .lineLimit(2)
                     .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 8)
