@@ -2162,7 +2162,9 @@ private struct AssistantOptionsStorySheet: View {
                 }
                 // 118 = uchwyt, nagłówek i segmenty nad treścią.
                 .padding(.top, 118)
-                .padding(.bottom, 16)
+                // Miejsce na cień stopki — przewinięta do końca lista kończy
+                // się nad nim, nie pod nim.
+                .padding(.bottom, 16 + SCEdgeShade.bottomHeight)
                 .animation(motion(.smooth(duration: 0.4)), value: status)
                 .animation(motion(.smooth(duration: 0.3)), value: isBusy)
             }
@@ -2179,6 +2181,11 @@ private struct AssistantOptionsStorySheet: View {
                 // po zapisie „Otwórz plan”, a gdy propozycji nie da się już
                 // zapisać — „Napisz, co zmienić”. Nowe dania to cichy
                 // odnośnik pod listą, nie drugi przycisk.
+                //
+                // Wspólna stopka arkuszy (`SCSheetFooter`): płyta w kolorze
+                // tła i cień krawędzi nad nią — przewijana lista gaśnie pod
+                // przyciskiem, zamiast urywać się na jego brzegu (runda 10).
+                SCSheetFooter(horizontalPadding: 16) {
                 Group {
                     if let applyTitle, let onApply {
                         ProposalAcceptButton(
@@ -2204,10 +2211,9 @@ private struct AssistantOptionsStorySheet: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 6)
                 .animation(motion(.smooth(duration: 0.35)), value: status)
                 .animation(motion(.smooth(duration: 0.3)), value: isBusy)
+                }
             }
         }
         .background(
@@ -2713,8 +2719,11 @@ private struct ProposalRecap: View {
     var me: String? = nil
 
     @Environment(\.colorScheme) private var scheme
-    /// `nil` = wszyscy.
+    /// `nil` = wszyscy. Na start „Ty” (runda 10: „dla 2 osób i więcej wciąż
+    /// nieczytelne… ściana tekstu”) — lista „co ja jem”, a reszta domu jednym
+    /// stuknięciem w filtrze.
     @State private var person: String?
+    @State private var didSeedPerson = false
 
     private static let thumb: CGFloat = 42
 
@@ -2825,6 +2834,13 @@ private struct ProposalRecap: View {
         }
         .animation(.smooth(duration: 0.3), value: person)
         .opacity(status.tone == .muted ? 0.6 : 1)
+        .onAppear {
+            guard !didSeedPerson else { return }
+            didSeedPerson = true
+            if multiPerson, let me, members.contains(where: { $0.id == me }) {
+                person = me
+            }
+        }
     }
 
     private func dayCard(_ day: Day) -> some View {
@@ -2851,6 +2867,20 @@ private struct ProposalRecap: View {
     private func mealView(_ meal: Meal) -> some View {
         if meal.dishes.count == 1, let dish = meal.dishes.first {
             dishRow(dish, meal: meal, showsMeal: true)
+        } else if multiPerson, person == nil {
+            // „Wszyscy”, różne dania w jednej porze: pora raz, pod nią ZWARTE
+            // linie „awatary · danie · kcal” — bez miniatur i pigułek, które
+            // przy kilku osobach robiły ścianę tekstu.
+            VStack(alignment: .leading, spacing: 2) {
+                mealLabel(meal)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+                ForEach(meal.dishes) { dish in
+                    compactLine(dish)
+                }
+            }
+            .padding(.bottom, 8)
         } else {
             // Kilka dań w jednej porze — różne dla różnych osób: pora raz,
             // pod nią dania, każde z „dla kogo”.
@@ -2877,6 +2907,50 @@ private struct ProposalRecap: View {
                 .lineLimit(1)
         }
         .foregroundStyle(meal.slot?.cozyAccent ?? AssistantLook.muted(scheme))
+    }
+
+    /// Kto je danie — „Wspólne” = cały dom.
+    private func eaters(_ dish: Dish) -> [HouseholdMemberSnapshot] {
+        let named = members.filter { dish.participantIds.contains($0.id) }
+        return named.isEmpty ? members : named
+    }
+
+    /// Zwarta linia w porze z kilkoma daniami: nachodzące awatary jedzących,
+    /// nazwa w jednej linii, kcal.
+    private func compactLine(_ dish: Dish) -> some View {
+        let people = Array(eaters(dish).prefix(3))
+        let avatar: CGFloat = 22
+        return HStack(spacing: 10) {
+            ZStack(alignment: .leading) {
+                ForEach(Array(people.enumerated()), id: \.element.id) { index, member in
+                    MemberAvatar(member: member, members: members, size: avatar)
+                        .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 1.5))
+                        .offset(x: CGFloat(index) * (avatar - 9))
+                }
+            }
+            .frame(width: avatar + CGFloat(max(0, people.count - 1)) * (avatar - 9), alignment: .leading)
+
+            Text(dish.option.title)
+                .font(.system(size: 14.5, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(AssistantLook.ink(scheme))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if dish.option.kcalPerServing > 0 {
+                Text("\(dish.option.kcalPerServing) kcal")
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                    .fixedSize()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(ProposalAudience.label(dish.participantIds, members: members, me: me) ?? ""): \(dish.option.title)"
+        )
     }
 
     private func dishRow(_ dish: Dish, meal: Meal, showsMeal: Bool) -> some View {
