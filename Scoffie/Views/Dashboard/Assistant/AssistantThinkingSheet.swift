@@ -257,7 +257,7 @@ private struct AxisLine: Shape {
 
 // MARK: - Tytuł
 
-/// Tytuł arkusza — EFEKT tury jako rzeczownik („Propozycja planu gotowa”),
+/// Tytuł arkusza — EFEKT tury jako rzeczownik („Plan gotowy”),
 /// po priorytecie: zapis > plan > zamiana > dania > reszta > samo
 /// sprawdzanie. Rzeczownik, nie czasownik: tytuł „Ułożyłem plan” powtarzał
 /// zdanie z wiersza osi (runda 10, „head title, który się potem nie
@@ -266,14 +266,16 @@ struct ThinkingHeadline {
     let title: String
 
     private static let priority: [(tools: Set<String>, title: String)] = [
+        // KRÓTKO — obok stoją kapsułka czasu i krzyżyk, a „Propozycja planu
+        // gotowa” łamała się na dwie linie (runda 11).
         (["apply_week_plan"], "Plan zapisany"),
         (["create_recipe", "update_recipe", "delete_recipe"], "Przepis zapisany"),
-        (["mark_meal_eaten"], "Posiłek odhaczony"),
+        (["mark_meal_eaten"], "Odhaczone"),
         (["check_shopping_items"], "Zakupy odhaczone"),
-        (["build_meal_plan", "propose_week_plan", "propose_day_plan", "start_planning"], "Propozycja planu gotowa"),
-        (["propose_swap", "replace_plan_item", "revise_proposal"], "Zamiennik gotowy"),
-        (["propose_household_split"], "Porcje rozpisane"),
-        (["propose_remove_meal"], "Zmiana w planie gotowa"),
+        (["build_meal_plan", "propose_week_plan", "propose_day_plan", "start_planning"], "Plan gotowy"),
+        (["propose_swap", "replace_plan_item", "revise_proposal"], "Zamiennik"),
+        (["propose_household_split"], "Porcje"),
+        (["propose_remove_meal"], "Zmiana w planie"),
         (["suggest_meals", "offer_options", "find_recipes"], "Dania do wyboru"),
         (["ask_clarifying_question"], "Pytanie do Ciebie"),
         (["show_shopping_list"], "Lista zakupów"),

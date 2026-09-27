@@ -310,7 +310,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   pora z kilkoma daniami = zwarte linie „awatary · danie · kcal” bez miniatur, przycisk w `SCSheetFooter` (cień).
   Półarkusz „Co się zmieni” (`AssistantPlanChangesSheet`): pora = JEDEN blok — nagłówek pory z rodzajem zmiany,
   pod nim „stare → nowe” OBOK SIEBIE (miniatury 30 pt, stare szare i przekreślone), „dla kogo” tylko jako awatary
-  przy nowym daniu i tylko, gdy nie cały dom (runda 10: „ściana tekstu” z czterema piętrami na zmianę). Kciuki i „⋯” TYLKO pod odpowiedzią modelu
+  przy nowym daniu i tylko, gdy nie cały dom (runda 10: „ściana tekstu” z czterema piętrami na zmianę).
+  Runda 11: strony dań przeglądu — „Asystent” z LEWEJ, na środku plakietka bieżącego dania (ikona i tint pory,
+  „Śniadanie · Pon”), nad daniem już bez pory i dnia (`ProposalWhenPills(showsWhen: false)`); dom z kilku osób
+  i nie same wspólne dania → `ProposalPersonFilter` nad „Zamień to danie”, zawęża strony, kreski i przewijanie
+  (`visibleDishes`, `neighbor`). Tytuły „Jak pracowałem” KRÓTKIE („Plan gotowy”, „Zamiennik”), kompaktowy
+  nagłówek arkusza ma tytuł zawsze w jednej linii. Kciuki i „⋯” TYLKO pod odpowiedzią modelu
   (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
   i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
   kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”
