@@ -166,3 +166,190 @@ zmiana „kto je”, „Zmień przepis” — alokacja przetrwała (odświeżeni
 Znane różnice: kolejność przepisów w katalogu = kolejność serwera (po `id`), nie „najnowsze pierwsze” jak w
 `recipes:findAll` — ekrany sortujące same (sekcje Przepisów) bez zmian; ekrany polegające na kolejności tablicy do
 sprawdzenia w przejściu ręcznym.
+
+## Addendum — review patch (2026-09-27)
+
+Trzy poprawki, trzy commity. Backend N2-1 (#208) bez zmian. Nic nie zmergowane, nie wdrożone; Railway, flagi
+i GitHub Actions nietknięte. **Kod Swift nadal NIESKOMPILOWANY** — patrz „Weryfikacja”.
+
+Sekcje ETAP D (tabela „Działanie → co idzie na serwer”) i ETAP E (edytor porcji ze stepperami) powyżej są
+**nieaktualne** — zastępuje je punkt 3 niżej.
+
+### 1. Catalog sync — błędne mapowanie przesuwało rewizję (`767e87b`)
+
+**Root cause** (odtworzone przeglądem kodu i odwzorowane w sprawdzianie — uruchomienie wymaga macOS):
+`ApiRecipeRepository` robił `compactMap` na przepisach snapshotu (niemapowalny = pominięty) i zamieniał niemapowalny
+upsert delty na tombstone; strona z brakującymi `items`/`upserts`/`tombstones` dawała `?? []`. Silnik kończył przebieg
+i zapisywał nową rewizję, więc następna delta startowała ZA zmianą — przepis, którego serwer nie usunął (np.
+`mealType` nieznany temu buildowi, id spoza UUID), znikał z telefonu do następnego snapshotu.
+
+**Poprawka:**
+- `Scoffie/Networking/Recipes/CatalogSyncMapping.swift` (nowy): jedyne miejsce DTO → strona. Każdy z tych przypadków
+  rzuca `CatalogSyncResponseError` i odrzuca cały przebieg:
+  - niemapowalny przepis (`unmappableRecipe`);
+  - brak `items` / `upserts` / `tombstones` / `fromRevision` / klucza `nextCursor` (`missingField`);
+  - tryb spoza zdarzenia: DELTA z `catalog:snapshot`, SNAPSHOT z `catalog:changes` (`unexpectedMode`);
+  - pusta rewizja;
+  - `fromRevision` ≠ żądane `sinceRevision`.
+
+  Silnik składa stan na kopii, więc katalog i rewizja zostają bez zmian. Tombstone'y pochodzą wyłącznie z jawnego
+  `tombstones` serwera. Brak heurystycznego pomijania.
+- `BackendCatalogSyncDTOs.swift`: własny dekoder odróżnia `"nextCursor": null` (ostatnia strona) od braku klucza.
+- `ApiRecipeRepository.swift`: snapshot i delta przez `CatalogSyncMapping` z `toAppRecipe()`.
+- Poza zakresem (bez rewizji, bez zmian): `recipes:findAll` (stara droga) i `recipes:householdState` nadal pomijają
+  niemapowalne przepisy — tam nie ma rewizji do przesunięcia.
+
+**Testy** (`Scripts/CatalogSync/main.swift` §12, 17 asercji). Pełna ścieżka adaptera: JSON strony →
+`BackendCatalog*PageDTO` → `CatalogSyncMapping` → `BackendRecipeDTO.toAppRecipe()` → silnik. Kompiluje prawdziwe
+`MealSlot`, `RecipesModel`, `BackendRecipeDTOs`; zaślepka dotyczy tylko `AppEnvironment.apiBaseURL`. Scenariusze:
+- nieznany `mealType` na 2. stronie snapshotu;
+- id spoza UUID na ostatniej stronie;
+- niemapowalny upsert na 2. stronie delty — NIE tombstone, stan i rewizja bez zmian;
+- brak każdego wymaganego pola (6);
+- zły tryb (2);
+- obca `fromRevision`;
+- ponowienie po poprawce serwera dostarcza odrzucony przepis;
+- jawny tombstone usuwa.
+
+### 2. Wylogowanie / zmiana konta — stara sesja nie odtwarza cache (`5841399`)
+
+**Root cause:** chroniła tylko szeregowa kolejka zapisów. Scenariusz: zapytanie A startuje → wylogowanie kasuje
+plik → odpowiedź A wraca do NIEunieważnionej instancji → ta publikuje wynik i dopisuje zapis do kolejki PO
+kasowaniu. Efekt: prywatny stan domu A wracał na dysk. Po zmianie konta spóźniona odpowiedź A mogła nadpisać cache
+B (publiczny katalog starszą rewizją).
+
+**Poprawka:**
+- `Scoffie/Models/Components/CatalogSyncCore.swift` (nowy, czysta logika):
+  - `CatalogSyncCore` trzyma stan sesji i zapis; każde `await` kończy się `checkValid()`, a unieważniona sesja nic
+    nie publikuje;
+  - `CatalogCacheGate` pozwala pisać tylko aktywnemu tokenowi. Token jest sprawdzany pod zamkiem w chwili zapisu —
+    także przy zapisie, który czekał w kolejce;
+  - `activate` nowej sesji odbiera prawo zapisu poprzedniej.
+- `RecipeCatalogStore` jako fasada:
+  - `invalidate()` odbiera token i anuluje sync (przebieg biegnie w `reloadTask`, silnik sprawdza anulowanie między
+    stronami), debounce'y oraz oczekujące zapisy serduszek;
+  - callbacki starej sesji (serduszka, `recipes:changed`, reconnect) sprawdzają ważność.
+- `SessionStore`: `invalidate()` przed zastąpieniem store'u nową sesją oraz przy wylogowaniu, PRZED kasowaniem
+  prywatnego pliku.
+- Polityka bez zmian: publiczny katalog przeżywa wylogowanie, plik domu znika.
+
+**Testy** (§13, 17 asercji). Deterministyczne i bez sleepów: odpowiedź kończy `Controlled.resume`, start zapytania
+potwierdza continuation, kolejkę zapisu da się wstrzymać (`suspend`) i opróżnić (`flush`). Sprawdzany jest stan
+w pamięci i zawartość plików:
+- 13a: A → wylogowanie → odpowiedź A.
+- 13b: A → przełączenie na B → odpowiedź B → spóźniona odpowiedź A (delta i dom): pliki = B, rewizja B.
+- 13c: zapis czekający w kolejce przy unieważnieniu oraz przy przejęciu przez nową sesję.
+- 13d: ponowne logowanie na to samo konto.
+
+### 3. Porcje per osoba — edycja zablokowana, API GAP (`0fc58ff`)
+
+**Root cause:** `upsertWeekSlot` / `applyWeekPlan` na serwerze przy każdym zapisie pozycji zastępują CAŁĄ alokację
+(`portions: { deleteMany: {}, create }`), a brak pola ją kasuje. Nie ma wersji ani CAS. Pełna alokacja odesłana
+ze starej kopii cofa zmianę innego telefonu:
+1. A i B czytają plan.
+2. A zapisuje porcję Rafała.
+3. B zapisuje porcję Asi ze starą porcją Rafała.
+4. Zmiana A znika.
+
+„Odśwież tuż przed zapisem” okna nie zamyka, więc nie zostało użyte.
+
+**Poprawka:**
+- iOS nie wysyła pola `portions`. Usunięte z `WeeklyPlanRepository` i transportu, więc niebezpiecznego zapytania
+  nie da się zbudować.
+- `PlanPortions.upsertDecision`: zapis, który dotyka pozycji z alokacją, jest odrzucany PRZED zapisem
+  optymistycznym i przed repozytorium. Pozycja dotknięta to ten sam przepis w slocie (serwer ją przepisuje) albo
+  danie podmieniane (serwer je usuwa). Użytkownik dostaje `editBlockedMessage` przez toast
+  (`ScoffieApp .scErrorToast`) i w arkuszu wyboru.
+- Szczegóły posiłku z alokacją: „Twoja porcja: 1,25”, lista osób z porcjami i makra z porcji patrzącego — bez
+  stepperów. Pod listą krótki komunikat, a „Zapisz porcje” jest nieaktywne.
+
+**Dokładne ograniczenia** (pozycja z alokacją = `portions` niepuste):
+
+| Ścieżka | Zachowanie |
+|---|---|
+| edytor jednej osoby | usunięty (porcje tylko do odczytu) |
+| zmiana „kto je” (`PlanSlotPickerSheet.saveAudienceOnly`) | zablokowana, komunikat |
+| zamiana przepisu z porcjami na inny, także na ten sam | zablokowana, komunikat |
+| zamiana dania bez porcji na danie, które w slocie ma porcje | zablokowana (przepisałaby tamtą pozycję) |
+| dołączenie do istniejącej pozycji (AddToPlan, wybór w slocie) | zablokowane, komunikat |
+| stepper porcji łącznych | ukryty w szczegółach; gdyby zapis przyszedł — zablokowany |
+| nowe danie obok dania z porcjami (inna pozycja) | działa |
+| usunięcie dania / dnia / tygodnia, „zjedzone” | działa (nie przepisuje alokacji) |
+| pozycje bez alokacji (legacy) | działa jak dotąd, równy podział |
+| odczyt: kcal osoby, „porcja 1,25”, potwierdzenia, `weekChanged` | działa |
+
+**Testy:**
+- `Scripts/PlanPortions/main.swift`, 20 asercji: tabela decyzji (5 zablokowanych, 5 przepuszczonych, w tym legacy),
+  jednostki, etykiety i komunikat.
+- `plan-portions-check.sh` ma regresję statyczną: zapis planu nie zawiera `"portions"`. Na starym kodzie (`2f9690b`)
+  wykrywa `data["portions"]` — sprawdzone.
+
+### Backend API GAP — porcje per osoba
+
+**Stan dziś:**
+- `PlanItem` nie ma wersji.
+- `upsertWeekSlot` zastępuje całą alokację albo kasuje ją, gdy pola brak (także `[]`).
+- `replaceRecipeId` usuwa pozycję razem z porcjami.
+- `applyWeekPlan` przy slocie bez `portions` kasuje alokację.
+- Narzędzia AI (`toSlots`) porcji nie przekazują.
+
+**Opcja A — kontrola wersji (CAS) zapisu pozycji:**
+- `PlanItem.version Int` (albo `updatedAt` jako token), zwracane w każdym payloadzie pozycji.
+- `upsertWeekSlot` przyjmuje `expectedVersion`, a `applyWeekPlan` `slots[].expectedVersion`.
+- Niezgodność → `409 PLAN_ITEM_CONFLICT` z aktualną pozycją. Nic się nie zapisuje.
+- Zapis bez `expectedVersion` na pozycji z alokacją → 409 (albo 428), nie ciche nadpisanie.
+
+**Opcja B — atomowa zmiana porcji jednej osoby:**
+- `weeklyPlans:setPortion { weekStart, dayOfWeek, mealType, recipeId, userId, servings, expectedVersion? }`.
+- Jedna transakcja pod zamkiem tygodnia: `UPDATE` jednego `PlanItemPortion`, `plannedServings = ceil(Σ)`,
+  broadcast `weekChanged`.
+- Porcje innych osób nietknięte, więc A i B zmieniające RÓŻNE osoby nie kolidują.
+
+**Zachowanie przy konflikcie i brzegach:**
+- Konflikt wersji → 409 z bieżącym stanem, klient pokazuje go i prosi o ponowienie.
+- Zmiana audytorium: serwer sam przenosi alokację w tej samej transakcji (zostający bez zmian, dochodzący 1,00,
+  odchodzący usunięci — reguła, którą już stosuje przy zmianie składu domu) i przyjmuje `expectedVersion`.
+- Zamiana dania: jawny parametr `portionPolicy: KEEP | RESET | PLANNER` zamiast cichego kasowania.
+- Przekroczenie Σ > 12 albo porcja spoza 0,1–6 → `PLAN_PORTIONS_INVALID` z `details`, bez obcinania.
+
+**Rekomendacja:** B dla edytora (brak konfliktów przy różnych osobach) + A na wszystkich zapisach pozycji (audytorium,
+zamiana, stepper, `applyWeekPlan`, apply propozycji Asystenta). Do tego naprawa `toSlots`, żeby narzędzia AI
+zachowywały porcje, i ograniczenia `PlanPortionDto` w OpenAPI (min/max/multipleOf).
+
+**Kryteria odblokowania edycji iOS:**
+1. Wersja pozycji w payloadach i `expectedVersion` na każdym zapisie pozycji. E2E z dwoma równoległymi zapisami:
+   brak utraconej zmiany i 409 dla spóźnionego.
+2. `setPortion` (albo równoważne) z e2e „A zmienia Rafała, B zmienia Asię → obie zmiany zostają”.
+3. Zmiana audytorium i zamiana dania zachowują porcje po stronie serwera (e2e).
+4. Narzędzia AI nie gubią porcji (e2e).
+5. Po stronie iOS: obsługa 409 (odświeżenie + komunikat) i sprawdzian na macOS.
+
+### Weryfikacja
+
+| Kontrola | Wynik |
+|---|---|
+| `sh Scripts/catalog-sync-check.sh` | **BLOCKED / NOT RUN** — brak macOS (Xcode/swiftc) |
+| `sh Scripts/plan-portions-check.sh` | **BLOCKED / NOT RUN** — brak macOS. Uruchomiona tylko jego część powłokowa (regresja statyczna): OK; na starym kodzie — wykrycie |
+| build / typecheck Xcode z ustawieniami projektu | **BLOCKED / NOT RUN** — brak macOS |
+| pomocniczo (NIE zastępuje powyższych): parser składni tree-sitter | 237 plików, 0 błędów składni; nie sprawdza typów ani semantyki |
+
+Liczby z Pythona w sekcji „Testy” wyżej były pomocnicze; nie zastępują wyników Swift.
+
+### SHA
+
+| Commit | Opis |
+|---|---|
+| `767e87b` | fix: niemapowalny przepis odrzuca przebieg sync zamiast przesuwać rewizję |
+| `5841399` | fix: sesja katalogu z cyklem życia — spóźniona odpowiedź nie odtwarza cache |
+| `0fc58ff` | fix: porcje per osoba tylko do odczytu — zapis bez kontroli wersji zablokowany |
+| (ten commit) | docs: addendum |
+
+### Gotowość (osobno)
+
+- **Catalog sync — NOT READY.** Kod po poprawkach 1–2 kompletny, ale nieskompilowany. Nieuruchomione: sprawdzian,
+  build i przejście ręczne. Warunek wstępny: backend #208 na prod.
+- **Odczyt porcji — NOT READY.** Logika i UI tylko do odczytu gotowe, nieskompilowane. Na prod flaga planera jest
+  off, więc alokacje dziś nie powstają.
+- **Edycja porcji — BLOCKED (API GAP).** Świadomie wyłączona do czasu spełnienia kryteriów odblokowania.
+
+Nie deklaruję READY do merge'a: wymagane kontrole na macOS nie zostały wykonane.
