@@ -95,6 +95,16 @@ struct AssistantThinkingSheet: View {
 struct ThinkingEntry {
     let step: AgentProgressStepDTO?
     let seconds: Int?
+    /// Pierwszy wiersz „Przemyślałem, od czego zacząć” — zawsze jest.
+    var isStart = false
+
+    /// Wiersz startu trwa tyle, ile model naprawdę myślał przed pierwszą
+    /// akcją, ale nie krócej niż 2 s i nie dłużej niż 10 s (runda 9, Rafał:
+    /// „daj zawsze 1 wiadomość, że zaczął pracę, żeby nie było, że w 1 kroku
+    /// wszystko ogarnął… odejmij ten czas od reszty — ma być widać, że system
+    /// myślał”). Nadwyżka ponad 10 s zostaje w pierwszej akcji, a brak do 2 s
+    /// schodzi z niej — suma dalej = czas w nagłówku.
+    static let startRange: ClosedRange<Int> = 2...10
 
     static func timeline(_ thinking: AgentThinkingSummary) -> [ThinkingEntry] {
         let steps = thinking.steps
@@ -106,20 +116,44 @@ struct ThinkingEntry {
             return [ThinkingEntry(step: nil, seconds: total)]
         }
 
-        // Sekunda tury, w której akcja ruszyła; pierwsza zawsze od 0.
-        let boundaries: [Int?] = times.enumerated().map { index, at in
-            if index == 0 { return 0 }
+        // Sekunda tury, w której akcja ruszyła naprawdę.
+        let real: [Int?] = times.map { at in
             guard let at, let start else { return nil }
             return max(0, Int(at.timeIntervalSince(start).rounded()))
         }
 
-        return steps.indices.map { index in
+        // Start: prawdziwe myślenie przed 1. akcją w widełkach 2–10 s, ale
+        // każdej akcji zostaje co najmniej sekunda.
+        var startSeconds = min(max(real[0] ?? startRange.lowerBound, startRange.lowerBound), startRange.upperBound)
+        if let total {
+            startSeconds = min(startSeconds, max(0, total - steps.count))
+        }
+
+        // Granice akcji: pierwsza od końca wiersza startu, kolejne od swojej
+        // prawdziwej sekundy — nigdy wstecz.
+        var boundaries: [Int?] = []
+        var previous = startSeconds
+        for index in steps.indices {
+            if index == 0 {
+                boundaries.append(startSeconds)
+                continue
+            }
+            guard let value = real[index] else {
+                boundaries.append(nil)
+                continue
+            }
+            previous = max(previous, value)
+            boundaries.append(previous)
+        }
+
+        let actions: [ThinkingEntry] = steps.indices.map { index in
             let from = boundaries[index]
             let to: Int? = index + 1 < steps.count ? boundaries[index + 1] : total
             var seconds: Int?
             if let from, let to { seconds = max(0, to - from) }
             return ThinkingEntry(step: steps[index], seconds: seconds)
         }
+        return [ThinkingEntry(step: nil, seconds: startSeconds, isStart: true)] + actions
     }
 }
 
@@ -133,12 +167,14 @@ private struct ThinkingRow: View {
     private static let disc: CGFloat = 28
 
     private var title: String {
+        if entry.isStart { return "Przemyślałem, od czego zacząć" }
         guard let step = entry.step else { return "Przemyślałem i odpowiedziałem" }
         return step.done ?? step.label
     }
 
     private var icon: String {
-        entry.step.map(ThinkingKind.icon) ?? "sparkles"
+        if entry.isStart { return "brain" }
+        return entry.step.map(ThinkingKind.icon) ?? "sparkles"
     }
 
     var body: some View {
