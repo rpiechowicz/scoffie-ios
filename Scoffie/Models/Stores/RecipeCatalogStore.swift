@@ -176,8 +176,11 @@ final class RecipeCatalogStore {
         isLoading = true
         isLoadingMore = false
         errorMessage = nil
-        let task = Task { [weak self] in
-            await self?.performReload()
+        // Typ jawnie: `await self?.performReload()` jako jedyne wyrażenie
+        // wyprowadzałoby `Task<Void?, Never>`, niezgodne z `reloadTask`.
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.performReload()
         }
         reloadTask = task
         await task.value
