@@ -35,9 +35,10 @@ enum RecipeDetailContext {
     case planned(day: Date, slot: MealSlot)
 }
 
-/// Porcje per osoba posiłku z planu (`PlanMeal.portionUnits`). Gdy są,
-/// ekran pokazuje porcję każdego jedzącego (ze stepperem co 0,5) zamiast
-/// steppera porcji łącznych — liczba łączna to przy alokacji tylko ceil(Σ).
+/// Porcje osób posiłku z planu — KAŻDEGO, nie tylko ułożonego przez
+/// Asystenta. Ekran pokazuje porcję każdego jedzącego ze stepperem co 0,5
+/// zamiast steppera porcji łącznych. Posiłek bez alokacji startuje od
+/// równego podziału; pierwsze zapisanie ustawia porcje osób (`REPLACE`).
 struct RecipeDetailPortions {
     struct Person {
         let memberId: String
@@ -56,22 +57,36 @@ struct RecipeDetailPortions {
 }
 
 extension RecipeDetailPortions {
-    /// Model dla posiłku z planu; `nil`, gdy posiłek nie ma porcji per osoba
-    /// (wtedy zostaje zwykły stepper porcji łącznych). Osoby = klucze
-    /// alokacji (serwer trzyma je równe audytorium), patrzący pierwszy.
+    /// Model dla posiłku z planu. Osoby = klucze alokacji (serwer trzyma je
+    /// równe audytorium), a bez alokacji — audytorium („Wspólne” = cały dom);
+    /// patrzący pierwszy. `nil`, gdy nie wiadomo, kto je (lista domowników
+    /// jeszcze nie dojechała) — wtedy zostaje stepper porcji łącznych.
     init?(meal: PlanMeal, members: [HouseholdMemberSnapshot], viewerId: String?) {
-        guard meal.hasPortions else { return nil }
         let names = Dictionary(members.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
-        let ids = meal.portionUnits.keys.sorted { lhs, rhs in
+        let units: [String: Int]
+        if meal.hasPortions {
+            units = meal.portionUnits
+        } else {
+            let current = Set(members.map(\.id))
+            let eaters = meal.isShared ? Array(current) : meal.participantIds.filter { current.contains($0) }
+            let total = meal.effectiveServings(householdMemberCount: members.count) * PlanPortions.unitsPerServing
+            // Więcej niż 6 na osobę (gotowanie na zapas) — zostaje stepper
+            // porcji łącznych, żeby nie obciąć liczby.
+            guard PlanPortions.fitsPerPerson(totalUnits: total, eaterCount: eaters.count) else { return nil }
+            units = PlanPortions.seededUnits(eaters: eaters, totalUnits: total)
+        }
+        let ids = units.keys.sorted { lhs, rhs in
             if lhs == viewerId { return true }
             if rhs == viewerId { return false }
             return (names[lhs] ?? lhs).localizedCompare(names[rhs] ?? rhs) == .orderedAscending
         }
         self.init(
             people: ids.map { Person(memberId: $0, name: names[$0] ?? "Domownik") },
-            units: meal.portionUnits,
+            units: units,
             viewerId: viewerId,
-            isEditable: meal.canEditPortions
+            // Bez alokacji token pozycji jest opcjonalny — pozycję z syntetycznym
+            // id (przed ackiem) i tak zna serwer po parze (pora, przepis).
+            isEditable: meal.hasPortions ? meal.canEditPortions : true
         )
     }
 }
@@ -108,9 +123,10 @@ struct RecipeDetailView: View {
     /// Porcje per osoba (tylko `.planned`); `nil` = zwykły stepper porcji.
     let personalPortions: RecipeDetailPortions?
 
-    /// Wołane „Zapisz porcje” w trybie porcji per osoba — tylko ZMIENIONE
-    /// osoby (jednostki 1/20), każda idzie osobnym `setPortion`.
-    var onSavePortions: (([String: Int]) -> Void)?
+    /// Wołane „Zapisz porcje” w trybie porcji osób: pełna mapa (dla
+    /// posiłku bez alokacji — `REPLACE`) i ZMIENIONE osoby (dla posiłku
+    /// z alokacją — osobne `setPortion`). Jednostki 1/20.
+    var onSavePortions: ((_ all: [String: Int], _ changed: [String: Int]) -> Void)?
 
     /// Porcje per osoba w edycji — makra i składniki liczą się na bieżąco
     /// z tego, co widać na stepperach, a nie z zapisanego stanu.
@@ -122,7 +138,9 @@ struct RecipeDetailView: View {
     /// dwunastu porcji to już nie jest gotowanie na tydzień, tylko catering.
     private static let servingsRange = 1...12
 
-    @State private var servings: Int
+    /// Porcje łączne w jednostkach 1/20: w katalogu stepper co 0,5, w planie
+    /// (gdy nie ma porcji osób) co 1 — `plannedServings` to liczba całkowita.
+    @State private var servingsUnits: Int
     @State private var isAddToPlanPresented = false
 
     /// Czy użytkownik dotknął steppera na tym ekranie.
@@ -180,7 +198,7 @@ struct RecipeDetailView: View {
         onSaveServings: ((Int) -> Void)? = nil,
         onAddedToPlan: ((Date, MealSlot) -> Void)? = nil,
         personalPortions: RecipeDetailPortions? = nil,
-        onSavePortions: (([String: Int]) -> Void)? = nil
+        onSavePortions: ((_ all: [String: Int], _ changed: [String: Int]) -> Void)? = nil
     ) {
         self.personalPortions = personalPortions
         self.onSavePortions = onSavePortions
@@ -198,12 +216,30 @@ struct RecipeDetailView: View {
         // po otwarciu ekranu.
         let seed = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, initialServings))
         self.initialServings = seed
-        _servings = State(initialValue: seed)
+        _servingsUnits = State(initialValue: seed * PlanPortions.unitsPerServing)
     }
 
     /// Porcje jako `Double`, bo skalowanie makr i składników liczy się
     /// ułamkiem `porcje / recipe.servings`.
-    private var portions: Double { Double(servings) }
+    private var portions: Double { PlanPortions.servings(fromUnits: servingsUnits) }
+
+    /// Krok steppera porcji łącznych: w katalogu pół porcji, w planie cała
+    /// (zapis `plannedServings` przyjmuje tylko liczby całkowite).
+    private var totalStepUnits: Int {
+        if case .planned = context { return PlanPortions.unitsPerServing }
+        return PlanPortions.stepUnits
+    }
+
+    private var totalUnitsRange: ClosedRange<Int> {
+        (Self.servingsRange.lowerBound * PlanPortions.unitsPerServing - PlanPortions.unitsPerServing + totalStepUnits)
+            ...(Self.servingsRange.upperBound * PlanPortions.unitsPerServing)
+    }
+
+    /// Całe porcje do zapisu i do listy zakupów (API przyjmuje liczby
+    /// całkowite) — w górę, żeby nie zabrakło.
+    private var wholeServings: Int {
+        min(Self.servingsRange.upperBound, PlanPortions.plannedServings(forTotalUnits: servingsUnits))
+    }
 
     /// Tryb porcji per osoba: posiłek z planu z alokacją.
     private var isPortionMode: Bool {
@@ -231,14 +267,14 @@ struct RecipeDetailView: View {
     }
 
     private var nutritionEyebrow: String {
-        guard isPortionMode else { return PolishPlural.servings(servings) }
+        guard isPortionMode else { return PlanPortions.spokenServings(units: servingsUnits, plural: PolishPlural.servings) }
         if let viewerUnits { return "Twoja porcja: \(PlanPortions.label(units: viewerUnits))" }
         let mean = PlanPortions.totalUnits(portionUnits) / max(1, portionUnits.count)
         return "Średnio: \(PlanPortions.label(units: mean))"
     }
 
     private var ingredientsEyebrow: String {
-        guard isPortionMode else { return PolishPlural.servings(servings) }
+        guard isPortionMode else { return PlanPortions.spokenServings(units: servingsUnits, plural: PolishPlural.servings) }
         // Ułamek porcji łączy się z dopełniaczem: „2,5 porcji”; pełna liczba
         // odmienia się jak zwykle („3 porcje”).
         return PlanPortions.spokenServings(units: PlanPortions.totalUnits(portionUnits), plural: PolishPlural.servings)
@@ -349,7 +385,8 @@ struct RecipeDetailView: View {
             // dodawaniu wyglądałoby na zgubienie jego wyboru.
             AddToPlanSheet(
                 recipe: recipe,
-                initialServings: servings,
+                initialServings: wholeServings,
+                initialUnits: servingsUnits,
                 // Stepper startuje od jedynki, więc każda inna wartość znaczy,
                 // że użytkownik świadomie go ruszył — i arkusz nie ma prawa
                 // nadpisać jej regułą auto z chipów.
@@ -453,8 +490,14 @@ struct RecipeDetailView: View {
             ) {
                 if !isPortionMode {
                     DetailServingsStepper(
-                        value: $servings,
-                        range: Self.servingsRange,
+                        value: $servingsUnits,
+                        range: totalUnitsRange,
+                        label: { PlanPortions.label(units: $0) },
+                        accessibilityValueText: { PlanPortions.spokenServings(units: $0, plural: PolishPlural.servings) },
+                        next: { current, direction in
+                            let candidate = current + direction * totalStepUnits
+                            return totalUnitsRange.contains(candidate) ? candidate : nil
+                        },
                         onChange: { didTouchStepper = true }
                     )
                 }
@@ -776,7 +819,7 @@ struct RecipeDetailView: View {
     }
 
     private var currentShoppingSignature: ShoppingSendState.Signature {
-        .init(missing: Set(missingIngredientIds), servings: servings)
+        .init(missing: Set(missingIngredientIds), servings: servingsUnits)
     }
 
     /// Wysłane i od tamtej pory nic się nie zmieniło — ani odhaczenia, ani
@@ -803,7 +846,8 @@ struct RecipeDetailView: View {
 
         let signature = currentShoppingSignature
         let weekStart = targetWeekStart
-        let requestedServings = servings
+        // Lista zakupów przyjmuje całe porcje — 1,5 idzie jako 2.
+        let requestedServings = wholeServings
         withAnimation { shoppingSend = .sending }
 
         Task { @MainActor in
@@ -1029,7 +1073,7 @@ struct RecipeDetailView: View {
             if isPortionMode {
                 return personalPortions?.isEditable == true && !changedPortions.isEmpty
             }
-            return servings != initialServings
+            return servingsUnits != initialServings * PlanPortions.unitsPerServing
         }
     }
 
@@ -1043,12 +1087,12 @@ struct RecipeDetailView: View {
                 let changed = changedPortions
                 guard personalPortions?.isEditable == true, !changed.isEmpty else { return }
                 isSavingServings = true
-                onSavePortions?(changed)
+                onSavePortions?(draftPortions, changed)
                 onClose?()
                 return
             }
             isSavingServings = true
-            onSaveServings?(servings)
+            onSaveServings?(wholeServings)
             onClose?()
         }
     }
@@ -1063,7 +1107,8 @@ struct RecipeDetailView: View {
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         if let raw = environment["SCOFFIE_DEBUG_DETAIL_SERVINGS"], let count = Int(raw) {
-            servings = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, count))
+            let whole = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, count))
+            servingsUnits = whole * PlanPortions.unitsPerServing
         }
         if let raw = environment["SCOFFIE_DEBUG_DETAIL_HAVE"], let count = Int(raw) {
             let ordered = DetailIngredientGroup.make(from: recipe.ingredients).flatMap(\.ingredients)
@@ -1086,6 +1131,7 @@ private enum ShoppingSendState: Equatable {
     /// coś się zmieniło.
     struct Signature: Equatable {
         let missing: Set<UUID>
+        /// Porcje w jednostkach 1/20 — 1,5 i 2 to różne wysyłki.
         let servings: Int
     }
 

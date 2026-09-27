@@ -509,3 +509,21 @@ Backend zamknął API GAP: rewizje i tokeny (#212), `portionPolicy` (#215), krok
 
 Polecenia jak w addendum 2. Ręcznie na TestFlight / symulatorze: plan ułożony przez Asystenta (porcje per osoba) → szczegóły
 posiłku → zmień porcję → „Zapisz porcje”; drugi telefon zmienia tę samą porcję w międzyczasie → komunikat i świeży plan.
+
+## Addendum 4 — porcje co 0,5 w każdym widoku (2026-09-27)
+
+Addendum 3 pokazywało stepper co 0,5 tylko przy posiłkach, które już miały porcje osób — a te tworzy
+wyłącznie Asystent (na produkcji 27.09 wieczorem: 0 takich pozycji). Rafał po zaciągnięciu `develop` nie
+widział zmiany nigdzie. Teraz porcje co 0,5 są wszędzie, gdzie się je ustawia:
+
+| Widok | Przed | Po |
+| --- | --- | --- |
+| Szczegóły posiłku z planu (Plan, Kalendarz) | stepper porcji łącznych co 1; co 0,5 tylko przy alokacji | porcja każdego jedzącego co 0,5 dla KAŻDEGO posiłku; start z równego podziału; pierwszy zapis `REPLACE` (pełna mapa + token pozycji z migawki), kolejne `setPortion` |
+| „Dodaj do planu” | „Porcje” łącznie co 1 | porcja każdej osoby z audytorium co 0,5 (dom jednoosobowy: jeden wiersz „Porcje”); nic nie ruszone → serwer liczy sam; ruszone → `REPLACE` |
+| Szczegóły przepisu z katalogu | co 1 | co 0,5 (makra i składniki); lista zakupów i plan dostają całe porcje w górę — API `addRecipeExtras`/`plannedServings` przyjmuje liczby całkowite |
+
+Bez listy domowników (nie dojechała) i przy dołączaniu do dania, które już stoi w porze — stary stepper
+porcji łącznych. Transport: `portionWrite` (`PRESERVE` / `REPLACE`) zamiast `preserve`; pole `portions`
+wychodzi wyłącznie z `REPLACE` (regresja statyczna w `plan-portions-check.sh`).
+
+Weryfikacja: parser składni — OK; `plan-portions-check.sh`, `plan-store-check.sh`, build — **NOT RUN** (macOS).

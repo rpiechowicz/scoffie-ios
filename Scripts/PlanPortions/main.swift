@@ -68,7 +68,13 @@ let legacyPasta = PlanPortions.SlotMeal(recipeId: pasta, hasPortions: false, rev
 let allocatedPasta = PlanPortions.SlotMeal(recipeId: pasta, hasPortions: true, revision: 9)
 
 func preserve(_ revision: Int, swap: Bool = false, target: Int? = nil) -> PlanPortions.UpsertDecision {
-    .preserve(PlanPortions.PreserveTokens(expectedRevision: revision, isSwap: swap, expectedTargetRevision: target))
+    .write(.preserve(PlanPortions.RevisionTokens(expectedRevision: revision, isSwap: swap, expectedTargetRevision: target)))
+}
+
+func replace(_ units: [String: Int], _ revision: Int? = nil, swap: Bool = false, target: Int? = nil) -> PlanPortions.UpsertDecision {
+    .write(.replace(units: units, tokens: revision.map {
+        PlanPortions.RevisionTokens(expectedRevision: $0, isSwap: swap, expectedTargetRevision: target)
+    }))
 }
 
 // Z alokacją i tokenem: PRESERVE.
@@ -102,6 +108,46 @@ check(PlanPortions.upsertDecision(slot: [legacySoup, legacyPasta], recipeId: sal
       "legacy: zamiana dania → bez tokenów")
 check(PlanPortions.upsertDecision(slot: [legacySoup, allocatedPasta], recipeId: soup, replacingRecipeId: nil) == .send,
       "legacy pozycja obok dania z porcjami → bez tokenów")
+
+// MARK: Pierwsze ustawienie porcji osób (REPLACE)
+
+let map = ["a": 30, "b": 10]
+check(PlanPortions.replaceDecision(slot: [legacySoup], recipeId: soup, replacingRecipeId: nil, units: map) == replace(map, 4),
+      "REPLACE na pozycji bez alokacji → pełna mapa + token pozycji")
+check(PlanPortions.replaceDecision(slot: [legacySoup], recipeId: soup, replacingRecipeId: nil, units: map, knownRevision: 3) == replace(map, 3),
+      "REPLACE: token z migawki ekranu ma pierwszeństwo przed stanem store'u")
+check(PlanPortions.replaceDecision(slot: [], recipeId: soup, replacingRecipeId: nil, units: map) == replace(map),
+      "REPLACE na nowej pozycji → bez tokenów")
+check(PlanPortions.replaceDecision(slot: [legacySoup], recipeId: salad, replacingRecipeId: soup, units: map) == replace(map, 4, swap: true, target: nil),
+      "REPLACE z zamianą → token źródła + cel null")
+check(PlanPortions.replaceDecision(slot: [legacySoup, allocatedPasta], recipeId: pasta, replacingRecipeId: soup, units: map) == replace(map, 4, swap: true, target: 9),
+      "REPLACE z zamianą na istniejące danie → para tokenów")
+check(PlanPortions.replaceDecision(slot: [allocatedSoupNoToken], recipeId: soup, replacingRecipeId: nil, units: map) == .blocked,
+      "REPLACE na alokacji bez tokenu → zablokowane")
+check(PlanPortions.replaceDecision(slot: [allocatedSoup], recipeId: soup, replacingRecipeId: nil, units: map) == .blocked,
+      "REPLACE z ekranu bez tokenu, a store ma już alokację z serwera → zablokowane (nie nadpisuje cudzej)")
+check(PlanPortions.replaceDecision(slot: [allocatedSoup], recipeId: soup, replacingRecipeId: nil, units: map, knownRevision: 11) == replace(map, 11),
+      "REPLACE na alokacji z tokenem migawki → zastąpienie z tokenem")
+let noTokenLegacy = PlanPortions.SlotMeal(recipeId: soup, hasPortions: false, revision: nil)
+check(PlanPortions.replaceDecision(slot: [noTokenLegacy], recipeId: soup, replacingRecipeId: nil, units: map) == replace(map),
+      "REPLACE na pozycji bez alokacji i bez tokenu (np. przed ackiem) → bez tokenów")
+check(PlanPortions.replaceDecision(slot: [allocatedPasta], recipeId: pasta, replacingRecipeId: soup, units: map) == .blocked,
+      "REPLACE z zamianą nieznanego źródła na danie z alokacją → zablokowane")
+
+// MARK: Punkt startowy porcji osób
+
+check(PlanPortions.seededUnits(eaters: ["a", "b"], totalUnits: 40) == ["a": 20, "b": 20], "2 porcje / 2 osoby → po 1")
+check(PlanPortions.seededUnits(eaters: ["a", "b"], totalUnits: 60) == ["a": 30, "b": 30], "3 porcje / 2 osoby → po 1,5")
+check(PlanPortions.seededUnits(eaters: ["a", "b", "c"], totalUnits: 100) == ["a": 40, "b": 30, "c": 30], "5 / 3 → 2 / 1,5 / 1,5 (suma się zgadza)")
+check(PlanPortions.seededUnits(eaters: ["a", "b"], totalUnits: 20) == ["a": 10, "b": 10], "1 porcja / 2 osoby → po 0,5")
+check(PlanPortions.seededUnits(eaters: ["a"], totalUnits: 30) == ["a": 30], "1 osoba, 1,5 → 1,5")
+check(PlanPortions.totalUnits(PlanPortions.seededUnits(eaters: ["a", "b", "c", "d", "e"], totalUnits: 240)) == 240,
+      "12 porcji / 5 osób → suma dokładnie 12")
+check(PlanPortions.fitsPerPerson(totalUnits: 120, eaterCount: 1) && !PlanPortions.fitsPerPerson(totalUnits: 160, eaterCount: 1)
+      && !PlanPortions.fitsPerPerson(totalUnits: 40, eaterCount: 0),
+      "więcej niż 6 na osobę (8 porcji w domu jednoosobowym) → stepper porcji łącznych")
+check(PlanPortions.seededUnits(eaters: ["a", "a"], totalUnits: 40) == ["a": 40], "duplikat osoby liczony raz")
+check(PlanPortions.seededUnits(eaters: [], totalUnits: 40).isEmpty, "bez jedzących → pusto")
 
 // MARK: Optymistyczne audytorium PRESERVE
 

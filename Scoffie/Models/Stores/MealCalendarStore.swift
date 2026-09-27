@@ -197,25 +197,34 @@ class MealCalendarStore {
         plannedServings: Int? = nil,
         householdMemberCount: Int?,
         replacingRecipeId: UUID? = nil,
+        portions: [String: Int]? = nil,
+        expectedRevision: Int? = nil,
         for date: Date,
         slot: MealSlot,
         weekStart: String
     ) async -> Bool {
         let previous = meals(for: date, slot: slot)
 
-        let decision = PlanPortions.upsertDecision(
-            slot: previous.map {
-                PlanPortions.SlotMeal(recipeId: $0.recipe.id, hasPortions: $0.hasPortions, revision: $0.revision)
-            },
-            recipeId: recipe.id,
-            replacingRecipeId: replacingRecipeId
-        )
-        let preserve: PlanPortions.PreserveTokens?
+        // Jawne porcje osób (`portions`) = `REPLACE`; `expectedRevision` to
+        // token pozycji z migawki ekranu, na którym je ustawiono.
+        let slotMeals = previous.map {
+            PlanPortions.SlotMeal(recipeId: $0.recipe.id, hasPortions: $0.hasPortions, revision: $0.revision)
+        }
+        let decision = portions.map {
+            PlanPortions.replaceDecision(
+                slot: slotMeals,
+                recipeId: recipe.id,
+                replacingRecipeId: replacingRecipeId,
+                units: $0,
+                knownRevision: expectedRevision
+            )
+        } ?? PlanPortions.upsertDecision(slot: slotMeals, recipeId: recipe.id, replacingRecipeId: replacingRecipeId)
+        let portionWrite: PlanPortions.PortionWrite?
         switch decision {
         case .send:
-            preserve = nil
-        case .preserve(let tokens):
-            preserve = tokens
+            portionWrite = nil
+        case .write(let write):
+            portionWrite = write
         case .blocked:
             errorMessage = PlanPortions.editBlockedMessage
             scheduleRefreshForObservedState()
@@ -230,17 +239,27 @@ class MealCalendarStore {
         let optimisticServings = plannedServings
             ?? (participantIds.isEmpty ? householdMemberCount.map { max(1, $0) } : participantIds.count)
 
-        // Przy zamianie z `PRESERVE` nowe danie przejmuje porcje starego.
-        let carriedPortions = preserve?.isSwap == true
-            ? previous.first(where: { $0.recipe.id == replacingRecipeId })?.portionUnits ?? [:]
-            : [:]
+        // Przy zamianie z `PRESERVE` nowe danie przejmuje porcje starego,
+        // przy `REPLACE` dostaje jawne.
+        let carriedPortions: [String: Int]
+        switch portionWrite {
+        case .replace(let units, _)?:
+            carriedPortions = units
+        case .preserve(let tokens)? where tokens.isSwap:
+            carriedPortions = previous.first(where: { $0.recipe.id == replacingRecipeId })?.portionUnits ?? [:]
+        default:
+            carriedPortions = [:]
+        }
         // Równe `recipeId` to nie zamiana (transport pomija pole) — pozycja
         // zostaje w slocie ze swoimi porcjami i tokenami.
         let replaced = replacingRecipeId == recipe.id ? nil : replacingRecipeId
         var optimistic = previous.filter { $0.recipe.id != replaced }
         if let index = optimistic.firstIndex(where: { $0.recipe.id == recipe.id }) {
             optimistic[index].participantIds = participantIds
-            if optimistic[index].hasPortions {
+            if case .replace(let units, _)? = portionWrite {
+                optimistic[index].portionUnits = units
+                optimistic[index].plannedServings = PlanPortions.plannedServings(forTotalUnits: PlanPortions.totalUnits(units))
+            } else if optimistic[index].hasPortions {
                 let units = PlanPortions.preservedAllocation(optimistic[index].portionUnits, participantIds: participantIds)
                 optimistic[index].portionUnits = units
                 optimistic[index].plannedServings = PlanPortions.plannedServings(forTotalUnits: PlanPortions.totalUnits(units))
@@ -277,9 +296,9 @@ class MealCalendarStore {
                 mealSlot: slot,
                 recipeId: recipe.id,
                 participantIds: participantIds,
-                plannedServings: preserve == nil ? plannedServings : nil,
+                plannedServings: portionWrite == nil ? plannedServings : nil,
                 replaceRecipeId: replacingRecipeId,
-                preserve: preserve
+                portionWrite: portionWrite
             )
             // Wpis optymistyczny miał syntetyczne `id` i zgadywane porcje.
             // Podmieniamy go na to, co naprawdę leży w bazie — dzięki temu

@@ -57,7 +57,7 @@ final class SpyWeeklyPlanRepository: WeeklyPlanRepository {
         let participantIds: [String]
         let plannedServings: Int?
         let replaceRecipeId: UUID?
-        let preserve: PlanPortions.PreserveTokens?
+        let portionWrite: PlanPortions.PortionWrite?
     }
 
     struct SetPortion: Equatable {
@@ -82,7 +82,7 @@ final class SpyWeeklyPlanRepository: WeeklyPlanRepository {
         return []
     }
 
-    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?, preserve: PlanPortions.PreserveTokens?) async throws -> WeekPlanSlot? {
+    func upsertWeekSlot(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, participantIds: [String], plannedServings: Int?, replaceRecipeId: UUID?, portionWrite: PlanPortions.PortionWrite?) async throws -> WeekPlanSlot? {
         upserts.append(Upsert(
             weekStart: weekStart,
             mealSlot: mealSlot,
@@ -90,7 +90,7 @@ final class SpyWeeklyPlanRepository: WeeklyPlanRepository {
             participantIds: participantIds,
             plannedServings: plannedServings,
             replaceRecipeId: replaceRecipeId,
-            preserve: preserve
+            portionWrite: portionWrite
         ))
         // `nil` = odpowiedź, której klient nie umie odczytać — store zostawia
         // wpis optymistyczny, więc widać dokładnie to, co sam z siebie zrobił.
@@ -192,7 +192,7 @@ do {
     check(spy.upserts == [SpyWeeklyPlanRepository.Upsert(
         weekStart: weekStart, mealSlot: .dinner, recipeId: soup.id,
         participantIds: [rafal], plannedServings: nil, replaceRecipeId: nil,
-        preserve: PlanPortions.PreserveTokens(expectedRevision: 11, isSwap: false, expectedTargetRevision: nil)
+        portionWrite: .preserve(PlanPortions.RevisionTokens(expectedRevision: 11, isSwap: false, expectedTargetRevision: nil))
     )] && spy.otherCalls.isEmpty, "1a: jedno zapytanie — PRESERVE z tokenem pozycji, bez plannedServings")
     let meal = store.meals(for: monday, slot: .dinner).first
     check(meal?.portionUnits == [rafal: 30] && meal?.plannedServings == 2,
@@ -201,7 +201,7 @@ do {
 do {
     let (store, spy) = makeStore([allocated(soup)])
     let saved = await upsert(store, soup, servings: 4)
-    check(saved && spy.upserts.map(\.plannedServings) == [nil] && spy.upserts.first?.preserve != nil,
+    check(saved && spy.upserts.map(\.plannedServings) == [nil] && spy.upserts.first?.portionWrite != nil,
           "1b: liczba porcji łącznych przy PRESERVE nie wychodzi (liczy serwer)")
 }
 do {
@@ -219,7 +219,7 @@ do {
     let (store, spy) = makeStore([allocated(soup)])
     let saved = await upsert(store, pasta, replacing: soup.id)
     check(saved, "2: zamiana dania z alokacją → true")
-    check(spy.upserts.first?.preserve == PlanPortions.PreserveTokens(expectedRevision: 11, isSwap: true, expectedTargetRevision: nil)
+    check(spy.upserts.first?.portionWrite == .preserve(PlanPortions.RevisionTokens(expectedRevision: 11, isSwap: true, expectedTargetRevision: nil))
           && spy.upserts.first?.replaceRecipeId == soup.id,
           "2: PRESERVE, token źródła, cel null (nowego dania w slocie nie było)")
     let meals = store.meals(for: monday, slot: .dinner)
@@ -232,7 +232,7 @@ do {
 do {
     let (store, spy) = makeStore([legacy(soup), allocated(pasta, revision: 9)])
     let saved = await upsert(store, pasta, replacing: soup.id)
-    check(saved && spy.upserts.first?.preserve == PlanPortions.PreserveTokens(expectedRevision: 0, isSwap: true, expectedTargetRevision: 9),
+    check(saved && spy.upserts.first?.portionWrite == .preserve(PlanPortions.RevisionTokens(expectedRevision: 0, isSwap: true, expectedTargetRevision: 9)),
           "3: token źródła (legacy, 0) + token celu 9")
 }
 
@@ -244,7 +244,7 @@ do {
     check(saved, "4: nowe danie obok dania z alokacją → true")
     check(spy.upserts == [SpyWeeklyPlanRepository.Upsert(
         weekStart: weekStart, mealSlot: .dinner, recipeId: salad.id,
-        participantIds: [asia], plannedServings: nil, replaceRecipeId: nil, preserve: nil
+        participantIds: [asia], plannedServings: nil, replaceRecipeId: nil, portionWrite: nil
     )] && spy.otherCalls.isEmpty, "4: dokładnie jedno zapytanie — nowe danie, bez podmiany, bez liczby porcji, bez tokenów")
     let meals = store.meals(for: monday, slot: .dinner)
     check(meals.first { $0.recipe.id == soup.id }?.portionUnits == [asia: 10, rafal: 30],
@@ -260,7 +260,7 @@ do {
     check(saved && spy.upserts.count == 1 && spy.otherCalls.isEmpty, "5a: legacy zmiana „kto je” → true, jedno zapytanie")
     check(spy.upserts.first == SpyWeeklyPlanRepository.Upsert(
         weekStart: weekStart, mealSlot: .dinner, recipeId: soup.id,
-        participantIds: [asia], plannedServings: nil, replaceRecipeId: nil, preserve: nil
+        participantIds: [asia], plannedServings: nil, replaceRecipeId: nil, portionWrite: nil
     ), "5a: zapytanie jak dotąd (bez plannedServings i tokenów — serwer liczy z audytorium)")
     let meal = store.meals(for: monday, slot: .dinner).first { $0.recipe.id == soup.id }
     check(meal?.participantIds == [asia] && meal?.plannedServings == 1 && meal?.hasPortions == false,
@@ -278,6 +278,45 @@ do {
     check(saved && spy.upserts.map(\.replaceRecipeId) == [soup.id] && spy.upserts.map(\.recipeId) == [pasta.id],
           "5c: legacy zamiana dania → jedno zapytanie z replaceRecipeId")
     check(store.meals(for: monday, slot: .dinner).map(\.recipe.id) == [pasta.id], "5c: w slocie nowe danie zamiast starego")
+}
+
+// MARK: - 5d. Pierwsze ustawienie porcji osób — REPLACE z tokenem migawki
+
+do {
+    let (store, spy) = makeStore([legacy(soup)])
+    let saved = await store.upsertWeekSlot(
+        recipe: soup,
+        participantIds: [],
+        householdMemberCount: 2,
+        portions: [asia: 10, rafal: 30],
+        expectedRevision: 0,
+        for: monday,
+        slot: .dinner,
+        weekStart: weekStart
+    )
+    check(saved && spy.upserts.first?.portionWrite == .replace(
+        units: [asia: 10, rafal: 30],
+        tokens: PlanPortions.RevisionTokens(expectedRevision: 0, isSwap: false, expectedTargetRevision: nil)
+    ), "5d: posiłek bez alokacji → REPLACE, pełna mapa, token pozycji")
+    check(spy.upserts.first?.plannedServings == nil, "5d: bez plannedServings (liczy serwer)")
+    let meal = store.meals(for: monday, slot: .dinner).first
+    check(meal?.portionUnits == [asia: 10, rafal: 30] && meal?.plannedServings == 2,
+          "5d: optymistycznie porcje osób i ceil(2) = 2")
+}
+do {
+    let (store, spy) = makeStore([])
+    let saved = await store.upsertWeekSlot(
+        recipe: salad,
+        participantIds: [asia],
+        householdMemberCount: 2,
+        portions: [asia: 30],
+        for: monday,
+        slot: .dinner,
+        weekStart: weekStart
+    )
+    check(saved && spy.upserts.first?.portionWrite == .replace(units: [asia: 30], tokens: nil),
+          "5e: nowe danie z porcją (Dodaj do planu) → REPLACE bez tokenów")
+    check(store.meals(for: monday, slot: .dinner).first?.portionUnits == [asia: 30], "5e: wpis optymistyczny z porcją 1,5")
 }
 
 // MARK: - 6. Stepper porcji — setPortion per osoba, z jej tokenem
