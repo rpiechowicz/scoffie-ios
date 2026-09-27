@@ -301,7 +301,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   z wejścia i wyniku narzędzia) + sekunda tury („0:08”, od `thinking.startedAt`); przerwy ≥ 2 s na myślenie to ciche
   wiersze… — ZASTĄPIONE w rundzie 8: wiersz = JEDNA akcja (ikona · zdanie w czasie przeszłym · fakty · czas trwania
   po prawej), akcja trwa od swojego początku do początku następnej (pierwsza od startu, ostatnia do końca tury),
-  granice zaokrąglone przed odjęciem — suma = czas w nagłówku; BEZ wierszy przerw, „Napisałem odpowiedź”, „Wyniku”. Kciuki i „⋯” TYLKO pod odpowiedzią modelu
+  granice zaokrąglone przed odjęciem — suma = czas w nagłówku; BEZ wierszy przerw, „Napisałem odpowiedź”, „Wyniku”.
+  Runda 9: ZAWSZE pierwszy wiersz „Przemyślałem, od czego zacząć” (mózg) — prawdziwe myślenie przed 1. akcją
+  w widełkach 2–10 s (`ThinkingEntry.startRange`), różnica zjeżdża z/do pierwszej akcji, suma bez zmian. Kciuki i „⋯” TYLKO pod odpowiedzią modelu
   (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
   i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
   kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”
@@ -582,6 +584,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (24.09.2026: „Twój dzień · 3 z 3 posiłków — bez sensu”; w Kalendarzu „1 z 5 zjedzone” też usunięte) — nie wracać. Pełnoszerokościowe zakładki z rundy 11
   odpadły. Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
   Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
+- „Wybierz przepis” w Planie, gdy w porze stoi INNE danie kogoś z wybranego „Dla kogo” (27.09.2026): nad przyciskiem
+  `PlanSlotConflictCard` (strój „ZAMIENISZ”: zdjęcie, „OBIAD · ANIA MA JUŻ”, przełącznik „Zamień dla wszystkich /
+  Dodaj obok”, domyślnie zamiana); przycisk idzie za wyborem („Zamień w planie”). Zamiana zabiera tamtemu daniu TYLKO
+  osoby, które dostają nowe — danie bez nikogo znika (`removeWeekSlot`), reszta zostaje przy swoim (zawężone „Dla kogo”).
 - `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
   (między zjazdem a wjazdem), a przewijanie ma `.id` dnia — pełny ↔ pusty dzień szarpał wjazdem.
   Powrót do bieżącego tygodnia w pasku dni = SAM krążek z ikoną cofania (`SCWeekTodayButton`, 26 pt jak strzałki,
