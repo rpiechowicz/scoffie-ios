@@ -187,6 +187,13 @@ struct WeeklyPlanView: View {
     /// nadpisania komuś, kto ma już pół tygodnia rozpisane ręcznie.
     private var isWeekEmpty: Bool { plannedDates.isEmpty }
 
+    /// Pigułka „Ułóż” oddycha, gdy widoczny tydzień jest pusty i da się
+    /// w nim jeszcze coś zaplanować — miniony pusty tydzień jest po prostu
+    /// pusty, nie ma do czego zachęcać.
+    private var invitesAssistant: Bool {
+        isWeekEmpty && datesViewModel.dates.contains { datesViewModel.isEditable($0) }
+    }
+
     /// Dzienny cel — ta sama reguła, co w Ustawieniach.
     private var dailyTargets: DailyNutritionTargets {
         DailyNutritionTargets.resolve(
@@ -380,9 +387,9 @@ struct WeeklyPlanView: View {
                         // nim sama (`scScrollEdgeFade` w `DayPager`), jak treść
                         // pod przypiętym nagłówkiem arkusza. Kreska stała tu
                         // na stałe, także gdy nic pod nią nie przejeżdżało.
-                        // Odstęp do nazwy dnia należy do osi (`PlanDayTimeline`
-                        // zaczyna się własnym paddingiem 18 pt).
-                        .padding(.bottom, 14)
+                        // Odstęp do nazwy dnia należy w całości do osi
+                        // (`PlanDayTimeline`, 14 pt) — tyle, ile w Kalendarzu.
+                        // Dawne 14 tutaj + 18 w osi odsuwało dzień od paska.
 
                         // Bez czerwonego wiersza błędu: od kiedy most z korzenia
                         // aplikacji wystawia `errorMessage` jako toast, ten sam
@@ -551,9 +558,9 @@ struct WeeklyPlanView: View {
                         days: datesViewModel.dates,
                         // Sloty z ustawień, nie `visibleSlots(on:)`: tamte
                         // doliczają pory widoczne tylko dlatego, że akurat
-                        // w wybranym dniu coś w nich stoi, i obietnica
-                        // „21 posiłków" rosła do 28 po przełączeniu dnia.
-                        slotsPerDay: sessionStore.mealSlots.enabled.count,
+                        // w wybranym dniu coś w nich stoi, i podgląd tygodnia
+                        // zmieniałby się po przełączeniu dnia.
+                        slots: sessionStore.mealSlots.enabled,
                         weekIsEmpty: isWeekEmpty,
                         onOpenAssistant: { openAssistantTabAfterSheet() }
                     )
@@ -633,7 +640,10 @@ struct WeeklyPlanView: View {
                 // w nagłówkach aplikacji i przy pustym tygodniu nikt nie
                 // wiedział, że to właśnie ono układa plan. „Ułóż” mówi to
                 // wprost, w wariancie „soft”, jak każda akcja główna.
-                PlanAssistantPill { simpleSheet = .assistantIntro }
+                //
+                // Pusty tydzień = pigułka oddycha (27.09.2026). Zastąpiła
+                // kartę „Ten tydzień jest jeszcze pusty” nad osią dnia.
+                PlanAssistantPill(invites: invitesAssistant) { simpleSheet = .assistantIntro }
 
                 // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
                 // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
@@ -756,9 +766,6 @@ struct WeeklyPlanView: View {
             slots: visibleSlots(on: date),
             meals: { slot in visibleMeals(date: date, slot: slot) },
             extraSlots: extraSlots(on: date),
-            // Wołanie o pusty tydzień tylko tam, gdzie da się coś dodać —
-            // pusty tydzień z przeszłości jest po prostu pusty.
-            weekIsEmpty: isWeekEmpty && datesViewModel.isEditable(date),
             onTapMeal: { slot, meal in openDetail(date: date, slot: slot, meal: meal) },
             onAddMeal: { slot in
                 pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
@@ -777,7 +784,6 @@ struct WeeklyPlanView: View {
             onRemoveMeal: { slot, meal in
                 removeMeal(date: date, slot: slot, meal: meal)
             },
-            onAssistant: { simpleSheet = .assistantIntro },
             onPickExtraSlot: { slot in
                 pickerTarget = PickerTarget(date: date, slot: slot, editing: nil)
             }
