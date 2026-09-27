@@ -268,17 +268,12 @@ struct AssistantPlanWeekCard: View {
         card.days.filter { $0.id != focusedDay?.id }
     }
 
-    private var summaryItems: [String] {
-        var items = ["Śr. \(card.summary.averageKcalPerDay) kcal dziennie"]
-        if let note = card.summary.goalNote, !note.isEmpty { items.append(note) }
-        return items
-    }
-
     var body: some View {
         AssistantCard(tone: status.tone) {
             AssistantCardHead(
                 eyebrow: card.eyebrow ?? CardEyebrowFallback.planWeek,
                 eyebrowDetail: card.eyebrowDetail,
+                detailBelow: true,
                 title: card.title,
                 subtitle: card.subtitle,
                 status: status
@@ -323,8 +318,6 @@ struct AssistantPlanWeekCard: View {
             if !card.removed.isEmpty {
                 RemovalsSection(removals: card.removed)
             }
-
-            AssistantCardSummary(items: summaryItems)
 
             AssistantProposalFooter(
                 state: card.state,
@@ -412,22 +405,12 @@ struct AssistantPlanDayCard: View {
         card.actions.first { $0.kind == .apply }?.label ?? "Zapisz dzień"
     }
 
-    private var summaryItems: [String] {
-        var items = ["\(card.slots.count) \(mealsWord(card.slots.count))", "\(card.summary.kcalTotal) kcal"]
-        if let note = card.summary.goalNote, !note.isEmpty { items.append(note) }
-        return items
-    }
-
-    private func mealsWord(_ count: Int) -> String {
-        if count == 1 { return "posiłek" }
-        return (2...4).contains(count) ? "posiłki" : "posiłków"
-    }
-
     var body: some View {
         AssistantCard(tone: status.tone) {
             AssistantCardHead(
                 eyebrow: card.eyebrow ?? CardEyebrowFallback.planDay,
                 eyebrowDetail: card.eyebrowDetail,
+                detailBelow: true,
                 title: card.title,
                 subtitle: card.subtitle,
                 status: status
@@ -456,8 +439,6 @@ struct AssistantPlanDayCard: View {
             if !card.removed.isEmpty {
                 RemovalsSection(removals: card.removed, showsDay: false)
             }
-
-            AssistantCardSummary(items: summaryItems)
 
             AssistantProposalFooter(
                 state: card.state,
