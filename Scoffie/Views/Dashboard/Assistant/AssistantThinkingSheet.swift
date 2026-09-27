@@ -257,7 +257,7 @@ private struct AxisLine: Shape {
 
 // MARK: - Tytuł
 
-/// Tytuł arkusza — EFEKT tury jako rzeczownik („Propozycja planu gotowa”),
+/// Tytuł arkusza — EFEKT tury jako rzeczownik („Plan gotowy”),
 /// po priorytecie: zapis > plan > zamiana > dania > reszta > samo
 /// sprawdzanie. Rzeczownik, nie czasownik: tytuł „Ułożyłem plan” powtarzał
 /// zdanie z wiersza osi (runda 10, „head title, który się potem nie

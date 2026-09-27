@@ -1530,7 +1530,9 @@ private struct AssistantOptionsStorySheet: View {
     private var visibleDishes: [Int] {
         guard person != nil else { return Array(options.indices) }
         return options.indices.filter {
-            ProposalAudience.eats(context($0)?.participantIds ?? [], person: person)
+            let ids = context($0)?.participantIds ?? []
+            return ProposalAudience.isShared(ids, members: members)
+                || ProposalAudience.eats(ids, person: person)
         }
     }
 
@@ -1554,9 +1556,17 @@ private struct AssistantOptionsStorySheet: View {
     /// Nowa osoba w przełączniku: jeśli bieżące danie nie jest jej, skok na
     /// jej pierwsze danie (albo na stronę końcową, gdy nie ma żadnego).
     private func switchPerson(to id: String?) {
+        let previous = person
         person = id
+        // Osoba bez żadnego dania: zostajemy przy poprzednim wyborze —
+        // skok na stronę końcową zamykał drogę powrotu (przełącznik żyje
+        // w warstwie dań).
+        guard let first = visibleDishes.first else {
+            person = previous
+            return
+        }
         guard !isEnd, !visibleDishes.contains(page) else { return }
-        go(to: visibleDishes.first ?? endPage)
+        go(to: first)
     }
 
     /// Przycisk pod daniem: „Wstaw na środę” przy wyborze, „Zamień to danie”
@@ -1755,7 +1765,12 @@ private struct AssistantOptionsStorySheet: View {
                 // BIEŻĄCEGO dania — pora w jej kolorze i dzień (runda 11:
                 // „na środku, czy to śniadanie/obiad, czytelne w badge”).
                 if isReview, !isEnd, let when = context(dish) {
+                    // Symetryczny zapas po bokach = miejsce na znak
+                    // i „Asystent” z lewej — plakietka stoi na środku
+                    // i zwęża się (`ViewThatFits`), zamiast na nie nachodzić.
                     mealBadge(when, light: light)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 98)
                         .transition(.opacity)
                         .id(dish)
                 }
@@ -1810,28 +1825,66 @@ private struct AssistantOptionsStorySheet: View {
     private func mealBadge(_ when: ProposalStoryContext, light: Bool) -> some View {
         let accent = when.slot?.cozyAccent ?? AssistantLook.terra(scheme)
         let meal = when.slot?.title ?? when.mealLabel
-        let day = when.day.map { $0.components(separatedBy: ",").first ?? $0 }
-        return HStack(spacing: 5) {
-            if let icon = when.slot?.icon {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(accent)
-            }
-            Text(day.map { "\(meal) · \($0)" } ?? meal)
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(-0.2)
-                .foregroundStyle(light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+        let day = when.day.map { label -> String in
+            let lead = label.components(separatedBy: ",").first ?? label
+            return Self.shortDays[lead] ?? lead
         }
-        .padding(.horizontal, 11)
-        .frame(height: 28)
-        .background(
-            Capsule(style: .continuous)
-                .fill(light ? Color.white.opacity(0.92) : accent.opacity(scheme == .dark ? 0.22 : 0.14))
-        )
-        .frame(maxWidth: 170)
-        .accessibilityElement(children: .combine)
+        let ink = light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme)
+        // „Śniadanie · Pon” → „Śniadanie” → sama ikona — na wąskim ekranie
+        // plakietka się zwęża, zamiast ucinać tekst.
+        return ViewThatFits(in: .horizontal) {
+            badgeCapsule(accent: accent, light: light) {
+                badgeIcon(when.slot, accent: accent)
+                Text(day.map { "\(meal) · \($0)" } ?? meal)
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(ink)
+                    .lineLimit(1)
+            }
+            badgeCapsule(accent: accent, light: light) {
+                badgeIcon(when.slot, accent: accent)
+                Text(meal)
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(ink)
+                    .lineLimit(1)
+            }
+            badgeCapsule(accent: accent, light: light) {
+                badgeIcon(when.slot, accent: accent)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(day.map { "\(meal), \($0)" } ?? meal)
+    }
+
+    /// „Poniedziałek” → „Pon”; „Dziś”, „Jutro” zostają.
+    private static let shortDays: [String: String] = [
+        "Poniedziałek": "Pon", "Wtorek": "Wt", "Środa": "Śr", "Czwartek": "Czw",
+        "Piątek": "Pt", "Sobota": "Sob", "Niedziela": "Nd",
+    ]
+
+    @ViewBuilder
+    private func badgeIcon(_ slot: MealSlot?, accent: Color) -> some View {
+        if let icon = slot?.icon {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(accent)
+        }
+    }
+
+    private func badgeCapsule<Content: View>(
+        accent: Color,
+        light: Bool,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 5) { content() }
+            .padding(.horizontal, 11)
+            .frame(height: 28)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(light ? Color.white.opacity(0.92) : accent.opacity(scheme == .dark ? 0.22 : 0.14))
+            )
+            .fixedSize()
     }
 
     /// `gap: 5; height: 3; radius: 2`. Na zdjęciu biel (aktywny 1, reszta
@@ -2077,7 +2130,11 @@ private struct AssistantOptionsStorySheet: View {
     /// wyższe niż sam eyebrow przy wyborze.
     private var eyebrowHeight: CGFloat { usesWhenRow ? 28 : 21 }
 
-    private var usesWhenRow: Bool { isReview && !contexts.isEmpty }
+    /// Wiersz pigułek nad daniem ma treść tylko przy „dla kogo” (dom z kilku
+    /// osób) albo „W planie” — pora i dzień są w plakietce nagłówka.
+    private var usesWhenRow: Bool {
+        isReview && !contexts.isEmpty && (members.count > 1 || reviewStatus == .applied)
+    }
 
     @ViewBuilder
     private var eyebrowRow: some View {
