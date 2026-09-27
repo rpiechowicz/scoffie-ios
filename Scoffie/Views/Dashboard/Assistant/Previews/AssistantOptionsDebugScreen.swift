@@ -38,6 +38,20 @@ struct AssistantOptionsDebugScreen: View {
         AgentProgressStepDTO(tool: "propose_week_plan", label: "Dobieram dania na cały tydzień", at: "2026-09-21T10:00:12.000Z", writes: false, phase: nil, transient: nil),
     ]
 
+    /// Odpowiedź do trybów `rozmowa*` — akapity, łamanie linii w akapicie,
+    /// nagłówek z dwukropkiem i lista dni.
+    static let debugAnswer = """
+    Na lekką kolację mam dla Ciebie trzy pomysły — wszystkie mieszczą się w Twoim celu na dziś i nie mają alergenów z Ustawień.
+    Każdy zrobisz w mniej niż pół godziny.
+
+    Do wyboru:
+    - Sałatka z brokułem i jajkiem — 490 kcal, dużo białka
+    - Bruschetta z pomidorami i bazylią — 507 kcal
+    - Krem z kalafiora z grzankami — 430 kcal, najlżejsza
+
+    Jeśli żadna nie pasuje, napisz, na co masz ochotę, a dobiorę coś innego.
+    """
+
     /// „Owsianka z bananem i borówką” z katalogu — ten sam przepis, który
     /// stoi na artboardach makiety „Szczegóły Posiłku v2”.
     static let detailRecipe = Recipe(
@@ -166,6 +180,80 @@ struct AssistantOptionsDebugScreen: View {
             // Przewodnik „Poznaj aplikację”: `tour-0` powitanie, `tour-1…5`
             // kroki, `tour-6` przejście do kreatora.
             debugTour(phase: phase)
+        } else if mode == "propozycja" {
+            ProposalEndDebugScreen()
+        } else if mode == "wynik" {
+            // Karty porażki tury: nie dokończył, za długo, nie doszła.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    AssistantOutcomeCard(code: "AI_PROVIDER_ERROR", message: "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.", wrote: false, onAsk: { _ in }, onAskAgain: {})
+                    AssistantOutcomeCard(code: "AI_TIMEOUT", message: "", wrote: false, onAsk: { _ in }, onAskAgain: {})
+                    AssistantOutcomeCard(code: nil, message: "Nie udało się wysłać wiadomości.", wrote: false, onAsk: { _ in }, onRetry: {})
+                }
+                .padding(20)
+                .padding(.top, 50)
+            }
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
+        } else if mode == "rozmowa" || mode == "rozmowa-pisze" {
+            // Odpowiedź z paskiem pod spodem („Myślałem” rozwinięte, kciuk
+            // w dół z drogą do zgłoszenia); `-pisze` = ta sama odpowiedź
+            // pisze się zegarem, jak w trakcie tury.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    AssistantUserBubble(text: "Co zjeść dziś na kolację, coś lekkiego?", editing: false, pending: false)
+                    AssistantVoice(greets: mode == "rozmowa-pisze") {
+                        if mode == "rozmowa-pisze" {
+                            AssistantRevealedAnswer(
+                                text: Self.debugAnswer,
+                                clock: AgentRevealClock(anchorDate: Date().addingTimeInterval(1), anchorCount: 0, rate: 60)
+                            )
+                        } else {
+                            AssistantAnswer(text: Self.debugAnswer)
+                        }
+                    }
+                    if mode == "rozmowa" {
+                        AssistantAnswerFooter(
+                            text: Self.debugAnswer,
+                            thinking: AgentThinkingSummary(duration: 42, steps: Array(Self.thoughtSteps.dropFirst())),
+                            feedback: .down,
+                            isReported: false,
+                            onRate: { _ in },
+                            onReport: {}
+                        )
+                        .padding(.top, -8)
+                    }
+                }
+                .padding(20)
+                .padding(.top, 50)
+            }
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
+        } else if mode == "plan-ulos" || mode == "plan-asystent" || mode == "plan-asystent-dom" {
+            // Pigułka „Ułóż” z Planu: zwykła i oddychająca (pusty tydzień).
+            // `plan-asystent` = nad nimi arkusz „Ułożę Ci ten tydzień”,
+            // `-dom` = gospodarstwo z trzema osobami.
+            ZStack(alignment: .top) {
+                SCPageBackground(scheme: scheme).ignoresSafeArea()
+                HStack(spacing: 24) {
+                    PlanAssistantPill {}
+                    PlanAssistantPill(invites: true) {}
+                }
+                .padding(.top, 120)
+            }
+            .sheet(isPresented: .constant(mode != "plan-ulos")) {
+                PlanAssistantIntroSheet(
+                    members: mode == "plan-asystent-dom"
+                        ? ["Rafał", "Ania", "Zosia"].enumerated().map { index, name in
+                            HouseholdMemberSnapshot(id: "debug-\(index)", displayName: name, email: nil, avatarUrl: nil, avatarColor: index, role: index == 0 ? "OWNER" : "MEMBER")
+                        }
+                        : [],
+                    days: PlanWeek.dates(from: PlanWeek.monday(of: Date())),
+                    slots: MealSlot.core,
+                    onOpenAssistant: {}
+                )
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+                .interactiveDismissDisabled()
+            }
         } else if mode == "asystent-jak" {
             SCPageBackground(scheme: scheme).ignoresSafeArea()
                 .sheet(isPresented: .constant(true)) {

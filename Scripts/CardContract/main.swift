@@ -48,9 +48,9 @@ check("zmiana odróżniona od tego, co zostaje", week.days[0].slots[0].isNew && 
 check("co zniknie z planu", week.removed.first?.title == "Zupa pomidorowa")
 check("cel z preferencji domownika", week.summary.targetKcalPerDay == 2100)
 check("zdanie o celu, nie sama liczba", week.summary.goalNote?.isEmpty == false)
-check("przycisk zatwierdzenia", week.actions.contains { $0.type == .apply })
+check("przycisk zatwierdzenia", week.actions.contains { $0.kind == .apply })
 check("stan pozwala kliknąć", week.state.canApply && !week.state.canUndo)
-check("akcja niesie id propozycji", week.actions.first { $0.type == .apply }?.proposalId == week.proposalId)
+check("akcja niesie id propozycji", week.actions.first { $0.kind == .apply }?.proposalId == week.proposalId)
 
 print("PLAN_DAY")
 guard case .planDay(let day) = card(planDayJSON) else {
@@ -61,7 +61,7 @@ check("posiłki w porządku dnia", day.slots.map(\.mealLabel) == ["Śniadanie", 
 check("suma dnia", day.summary.kcalTotal == 1460)
 check("ile jeszcze wchodzi w cel", day.summary.goalNote == "zostaje 640")
 check("usunięcia tylko z tego dnia", day.removed.count == 1)
-check("przycisk nazywa dzień", day.actions.first { $0.type == .apply }?.label == "Zapisz wtorek")
+check("przycisk nazywa dzień", day.actions.first { $0.kind == .apply }?.label == "Zapisz wtorek")
 
 print("OPTIONS")
 guard case .options(let options) = card(optionsJSON) else {
@@ -72,7 +72,7 @@ check("nazwa, kalorie i czas z bazy", options.options[0].kcalPerServing == 393 &
 check("zdjęcie bywa puste i to nie jest błąd", options.options[1].imageUrl == nil)
 check("wyróżnik pokazuje się tylko tam, gdzie jest", options.options[0].tag == "Najszybsze" && options.options[1].tag == nil)
 check("dotknięcie wysyła wybór jako wiadomość", options.options[0].prompt.hasPrefix("Wybieram: "))
-check("zawsze jest wyjście „coś innego”", options.actions.contains { $0.type == .ask })
+check("zawsze jest wyjście „coś innego”", options.actions.contains { $0.kind == .ask })
 check("wybór nie ma stanu i nie udaje, że ma", card(optionsJSON).state == nil)
 
 print("SWAP")
@@ -93,7 +93,7 @@ check("nadtytuł liczy talerze", split.eyebrow == "Jedna baza · trzy porcje")
 check("przy imieniu stoi JEGO cel", split.portions[2].goalLabel.contains("bez laktozy"))
 check("sposób podania od modelu", split.portions[2].note == "Śmietana osobno")
 check("inicjał do awatara", split.portions[0].initial == "R")
-check("przycisk mówi zdaniem", split.actions.first { $0.type == .apply }?.label == "Zapisz na środę")
+check("przycisk mówi zdaniem", split.actions.first { $0.kind == .apply }?.label == "Zapisz na środę")
 
 print("REMOVE_MEAL")
 guard case .removeMeal(let removal) = card(removeMealJSON) else {
@@ -103,7 +103,7 @@ check("nadtytuł mówi, z którego slotu znika", removal.eyebrow == "Usunięcie 
 check("powód użytkownika w tytule", removal.title == "Jemy u teściów")
 check("danie do usunięcia z bazy, nie od modelu", removal.removed.title == "Zapiekanka z cukinią")
 check("kalorie i czas znikającego dania", removal.removed.kcalPerServing == 640 && removal.removed.prepTimeMinutes == 55)
-check("przycisk mówi, że czegoś UBĘDZIE", removal.actions.first { $0.type == .apply }?.label == "Usuń z planu")
+check("przycisk mówi, że czegoś UBĘDZIE", removal.actions.first { $0.kind == .apply }?.label == "Usuń z planu")
 check("stan pozwala kliknąć", removal.state.canApply && !removal.state.canUndo)
 check("usunięcie NIE zastępuje tekstu wiadomości", !card(removeMealJSON).replacesText)
 
@@ -115,7 +115,7 @@ check("brak stoi w tytule", macro.title == "Brakuje średnio 44 g dziennie")
 check("jednostka z serwera", macro.unit == "g")
 check("pasek liczy się z obu liczb", abs(macro.progress - 96.0 / 140.0) < 0.001)
 check("trzy zmiany z kwotami", macro.boosters.count == 3 && macro.boosters[0].amount == 24)
-check("zastosowanie wysyła wiadomość, nie zapisuje", macro.actions.allSatisfy { $0.type == .ask })
+check("zastosowanie wysyła wiadomość, nie zapisuje", macro.actions.allSatisfy { $0.kind == .ask })
 check("analiza nie ma stanu do kliknięcia", card(macroJSON).state == nil)
 
 print("SHOPPING_LIST")
@@ -126,14 +126,14 @@ check("działy w kolejności sklepu", shopping.groups.map(\.department) == ["War
 check("pozycja z ilością i jednostką", shopping.groups[2].items == ["Feta 2 op."])
 check("odhaczone poza listą, ale w rachunku", shopping.summary.checked == 1 && shopping.summary.remaining == 4)
 check("odmiana idzie za liczbą", shopping.checkedNote == "1 pozycja już odhaczona")
-check("jedyna akcja otwiera listę", shopping.actions.first?.type == .openShopping)
+check("jedyna akcja otwiera listę", shopping.actions.first?.kind == .openShopping)
 
 print("CLARIFY")
 guard case .clarify(let clarify) = card(clarifyJSON) else {
     print("  BŁĄD  karta pytania nie zdekodowała się"); exit(1)
 }
 check("pytanie i powód", !clarify.question.isEmpty && clarify.hint?.isEmpty == false)
-check("odpowiedzi to zwykłe wiadomości", clarify.actions.allSatisfy { $0.type == .ask })
+check("odpowiedzi to zwykłe wiadomości", clarify.actions.allSatisfy { $0.kind == .ask })
 check("każda odpowiedź niesie treść do wysłania", clarify.actions.allSatisfy { ($0.prompt ?? "").isEmpty == false })
 check("pierwsza odpowiedź wyróżniona", clarify.actions.first?.isPrimary == true)
 check("pytanie ZASTĘPUJE tekst wiadomości", card(clarifyJSON).replacesText)
@@ -144,8 +144,8 @@ guard case .applied(let applied) = card(appliedJSON) else {
     print("  BŁĄD  karta potwierdzenia nie zdekodowała się"); exit(1)
 }
 check("podtytuł mówi, co się stało", applied.subtitle?.contains("nowe pozycje") == true)
-check("„Cofnij” jest w wiadomości, nie w toaście", applied.actions.contains { $0.type == .undo })
-check("skrót do planu tygodnia", applied.actions.contains { $0.type == .openPlan })
+check("„Cofnij” jest w wiadomości, nie w toaście", applied.actions.contains { $0.kind == .undo })
+check("skrót do planu tygodnia", applied.actions.contains { $0.kind == .openPlan })
 check("ostrzeżenie o odhaczonych posiłkach", applied.notes.contains { $0.contains("zjedzone") })
 check("stan pozwala cofnąć", applied.state.canUndo && !applied.state.canApply)
 

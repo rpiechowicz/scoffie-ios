@@ -224,72 +224,51 @@ struct AssistantVoice<Content: View>: View {
     }
 }
 
-// MARK: - Szkic odpowiedzi
+// MARK: - Pisanie odpowiedzi
 
-/// Szkic odpowiedzi w trakcie tury — tekst „pisze się" pod wskaźnikiem.
+/// Odpowiedź, która jeszcze się pisze — szkic w trakcie tury ALBO gotowa
+/// odpowiedź, która dopisuje się dalej od szkicu. JEDEN widok dla obu
+/// (27.09.2026): szkic i gotowa odpowiedź stoją w slocie pod tym samym
+/// kluczem (`AgentChatMessage.liveKey`), więc koniec tury nie podmienia widoku
+/// na nowy, który zaczyna pisać od siebie, tylko ten sam tekst płynie dalej.
 ///
-/// Serwer streamuje z modelu, ale telefon odpytuje co sekundę, więc bez
-/// tego widoku tekst wskakiwałby akapitami raz na sekundę. Ile znaków
-/// widać, mówi zegar ze sklepu (`AgentStore.draftReveal`) — ten sam, od
-/// którego po domknięciu tury dopisuje się gotowa odpowiedź, więc nie ma
-/// skoku między szkicem a odpowiedzią. Widok tylko czyta go co klatkę.
-struct AssistantDraftAnswer: View {
-    let text: String
-    let clock: AgentRevealClock
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
-            let shown = reduceMotion ? text.count : clock.count(at: context.date, limit: text.count)
-            AssistantVoice {
-                AssistantAnswer(text: String(text.prefix(shown)))
-            }
-        }
-    }
-}
-
-/// Gotowa odpowiedź, która jeszcze się „dopisuje”: od znaku `from` (tam,
-/// gdzie szkic stał NA EKRANIE) do końca. Tempo jak przy szkicu — między
-/// 90 a 320 znaków/s, a przy bardzo długiej odpowiedzi tyle, żeby całość
-/// zeszła w ~5 s. Wcześniej całość mieściła się w 2,2 s bez względu na
-/// długość, więc długa odpowiedź po prostu wskakiwała. Gdy wszystko jest
-/// na ekranie, woła `onDone` (raz) — wtedy pod tekstem wchodzą karta
-/// i ślad. Reduce Motion: od razu w całości.
+/// Serwer zapisuje szkic najwyżej raz na sekundę, więc bez zegara tekst
+/// wskakiwałby porcjami. Ile znaków widać, mówi `clock` — zegar z wiadomości
+/// (`AgentStore.draftReveal`, potem `AgentRevealClock.finishing`): przebudowa
+/// wiersza nie zaczyna pisania od nowa, bo stan nie żyje w widoku. Układ
+/// stoi od pierwszej klatki, nienapisane jest przezroczyste
+/// (`AssistantAnswer(revealed:)`).
+///
+/// `onDone` (tylko gotowa odpowiedź) pada raz, gdy wszystko jest na ekranie —
+/// wtedy pod tekstem wchodzą karta i pasek akcji. Reduce Motion: od razu całość.
 struct AssistantRevealedAnswer: View {
     let text: String
-    var from: Int = 0
-    let onDone: () -> Void
+    let clock: AgentRevealClock
+    var onDone: (() -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var startedAt = Date()
 
-    private var rate: Double {
-        let remaining = Double(max(0, text.count - from))
-        return max(90, remaining / 5, min(AgentRevealClock.maxRate, remaining / 2.5))
-    }
-
-    private var duration: TimeInterval {
-        Double(max(0, text.count - from)) / rate
+    private struct DoneKey: Equatable {
+        let clock: AgentRevealClock
+        let total: Int
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
-            let shown = reduceMotion ? text.count : revealedCount(at: context.date)
-            AssistantAnswer(text: String(text.prefix(shown)))
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
+            let shown = reduceMotion ? text.count : clock.count(at: context.date, limit: text.count)
+            AssistantAnswer(text: text, revealed: shown)
         }
-        .task {
+        .task(id: DoneKey(clock: clock, total: text.count)) {
+            guard let onDone else { return }
             if !reduceMotion {
-                try? await Task.sleep(for: .seconds(duration + 0.05))
+                let wait = clock.finishDate(total: text.count).timeIntervalSinceNow
+                if wait > 0 {
+                    try? await Task.sleep(for: .seconds(wait + 0.05))
+                }
             }
             if Task.isCancelled { return }
             onDone()
         }
-    }
-
-    private func revealedCount(at date: Date) -> Int {
-        let elapsed = max(0, date.timeIntervalSince(startedAt))
-        return min(text.count, min(from, text.count) + Int(elapsed * rate))
     }
 }
 

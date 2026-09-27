@@ -72,6 +72,33 @@ struct AgentMessageDTO: Decodable, Identifiable, Equatable {
     /// dla kogo, cel). Tylko przy odpowiedziach asystenta; starszy serwer
     /// nie oddaje pola.
     let usedContext: [String]?
+    /// „Myślałem 42 s" z serwera — czas i kroki tury, która napisała tę
+    /// odpowiedź. Tylko przy OSTATNIEJ odpowiedzi zakończonej tury, w historii
+    /// i w turze DONE (od 27.09.2026). Starszy serwer nie oddaje pola.
+    var thinking: AgentMessageThinkingDTO? = nil
+    /// Kciuk pytającego: `UP` | `DOWN`; brak = nie oceniał.
+    var feedback: String? = nil
+    /// WŁASNE zgłoszenie tej odpowiedzi — jedno na osobę (27.09.2026);
+    /// ponowne „Zgłoś” je poprawia.
+    var report: AgentMessageReportDTO? = nil
+}
+
+struct AgentMessageReportDTO: Decodable, Equatable {
+    let reason: String
+    let comment: String?
+}
+
+struct AgentMessageThinkingDTO: Decodable, Equatable {
+    /// `finishedAt − startedAt` tury — ta sama liczba, którą telefon liczy
+    /// na żywo. `nil`, gdy zegary się rozjechały.
+    let durationMs: Int?
+    let steps: [AgentProgressStepDTO]
+}
+
+/// Odpowiedź `PUT agent/messages/:id/feedback`.
+struct AgentMessageRatingDTO: Decodable {
+    let messageId: String
+    let rating: String?
 }
 
 struct AgentMessagesResponseDTO: Decodable {

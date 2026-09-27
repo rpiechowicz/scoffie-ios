@@ -2048,43 +2048,59 @@ private struct AssistantOptionsStorySheet: View {
         return VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    endStep(0, scale: 0.8) {
-                        ProposalStatusBadge(status: status, isBusy: isBusy)
+                    // Wachlarz dań zestawu zamiast pustego kółka z ptaszkiem
+                    // (27.09.2026 — ptaszek PRZED zapisem mówił „już
+                    // zapisane”). Stan pokazuje odznaka na zdjęciu.
+                    endStep(0) {
+                        ProposalHero(
+                            images: heroImages,
+                            extra: max(0, options.count - heroImages.count),
+                            status: status,
+                            isBusy: isBusy,
+                            shown: isEnd
+                        )
                     }
 
                     endStep(1, rise: 14) {
                         VStack(spacing: 0) {
+                            // Zmiana stanu (zapisuję → w planie) ROLUJE słowa,
+                            // jak dania w arkuszu i Kalendarz (`SCMotion.textRoll`).
                             Text(copy.eyebrow)
                                 .font(.system(size: 11, weight: .bold))
                                 .tracking(0.9)
                                 .textCase(.uppercase)
                                 .foregroundStyle(copy.accent(scheme))
                                 .lineHeight(.exact(points: 14))
+                                .contentTransition(.numericText())
                             Text(copy.title)
                                 .font(.system(size: 30, weight: .bold))
                                 .tracking(-0.9)
                                 .foregroundStyle(AssistantLook.ink(scheme))
                                 .lineHeight(.exact(points: 34))
+                                .contentTransition(.numericText())
                                 .padding(.top, 10)
                             Text(copy.body)
                                 .font(.system(size: 15))
                                 .foregroundStyle(AssistantLook.muted(scheme))
                                 .lineHeight(.exact(points: 21))
                                 .fixedSize(horizontal: false, vertical: true)
+                                .contentTransition(.numericText())
                                 .padding(.top, 10)
                         }
+                        .animation(motion(SCMotion.textRoll), value: copy.title)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 24)
                         .offset(x: text)
                     }
-                    .padding(.top, 22)
+                    .padding(.top, 20)
 
                     endStep(2, rise: 16) {
                         ProposalRecap(
                             options: options,
                             contexts: contexts,
-                            status: status
+                            status: status,
+                            shown: isEnd
                         )
                         .padding(.horizontal, 16)
                     }
@@ -2154,6 +2170,31 @@ private struct AssistantOptionsStorySheet: View {
                 .opacity(isEnd ? 1 : 0)
                 .animation(motion(.easeInOut(duration: 0.35)), value: isEnd)
         )
+        // Zapis się udał — ta sama chwila, w której odznaka staje się
+        // szałwiowym ptaszkiem.
+        .sensoryFeedback(trigger: status) { old, new in
+            old != .applied && new == .applied ? .success : nil
+        }
+    }
+
+    /// Do trzech zdjęć do wachlarza: dzień — jego dania; tydzień — po jednym
+    /// z trzech pierwszych dni (inaczej wachlarz tygodnia byłby samym
+    /// poniedziałkiem).
+    private var heroImages: [URL?] {
+        var picked: [Int] = []
+        if options.count > 5 {
+            var days = Set<String>()
+            for index in options.indices {
+                let day = contexts.indices.contains(index) ? (contexts[index].day ?? "") : ""
+                guard !days.contains(day) else { continue }
+                days.insert(day)
+                picked.append(index)
+                if picked.count == 3 { break }
+            }
+        } else {
+            picked = Array(options.indices.prefix(3))
+        }
+        return picked.map { options[$0].imageUrl.flatMap(URL.init(string:)) }
     }
 
     /// `OptStorySheet end`: kreskowany segment staje się pełny — znak marki
@@ -2298,6 +2339,14 @@ private struct AssistantOptionsStorySheet: View {
     /// `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` — arkusz sam przechodzi po stronach,
     /// żeby animacje dało się nagrać na symulatorze bez dotyku.
     private func debugAutoplay() async {
+        // `propozycja`: jeden krok z ostatniego dania na stronę końcową —
+        // do nagrania jej wejścia.
+        if ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] == "propozycja", !isEnd {
+            try? await Task.sleep(for: .seconds(1.5))
+            if Task.isCancelled { return }
+            go(to: endPage)
+            return
+        }
         guard ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS_AUTOPLAY"] != nil,
               endPage >= 1 else { return }
         try? await Task.sleep(for: .seconds(3))
@@ -2440,20 +2489,139 @@ private struct ProposalEndCopy {
     }
 }
 
-/// Odznaka nad pytaniem: propozycja = szałwiowy krążek z ptaszkiem
-/// w obwódce (zgoda czeka), zapis = pełna szałwia, zapis w toku = kółko
-/// postępu. Pozostałe stany w cichej szarości.
-private struct ProposalStatusBadge: View {
+/// Wachlarz dań zestawu nad pytaniem (27.09.2026, zamiast pustego kółka
+/// z ptaszkiem, które PRZED zapisem mówiło „zapisane”): do trzech zdjęć,
+/// środkowe na wierzchu, boczne odchylone. Przy wejściu na stronę końcową
+/// leżą na sobie i rozkładają się sprężyną jak karty w dłoni.
+///
+/// Stan mówi odznaka na środkowym zdjęciu: zapis w toku — kręciołek, zapisane
+/// — szałwiowy ptaszek (wyskakuje, a wachlarz lekko podskakuje), cofnięte /
+/// nieaktualne / wygasłe — cicha ikona i przygaszone zdjęcia, błąd zapisu —
+/// wykrzyknik w terakocie. Propozycja czekająca na zgodę — bez odznaki.
+private struct ProposalHero: View {
+    let images: [URL?]
+    /// Ile dań zestawu nie zmieściło się w wachlarzu (tydzień).
+    let extra: Int
     let status: AssistantCardStatus
     let isBusy: Bool
+    /// Strona końcowa jest na ekranie — wachlarz się rozkłada.
+    let shown: Bool
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Podbicie = podskok wachlarza po zapisie.
+    @State private var cheer = 0
 
-    private var solid: Bool { status == .applied && !isBusy }
+    private static let size: CGFloat = 86
 
-    private var symbol: String {
+    private var fanned: Bool { shown || reduceMotion }
+
+    /// Położenie i odchylenie każdego zdjęcia po rozłożeniu.
+    private var spread: [(x: CGFloat, angle: Double)] {
+        switch images.count {
+        case 0, 1: return [(0, 0)]
+        case 2: return [(-32, -7), (32, 7)]
+        default: return [(-62, -9), (0, 0), (62, 9)]
+        }
+    }
+
+    private var centerIndex: Int { images.count == 3 ? 1 : 0 }
+    private var dimmed: Bool { status.tone == .muted }
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(images.enumerated()), id: \.offset) { index, url in
+                let target = spread[min(index, spread.count - 1)]
+                let isCenter = index == centerIndex
+                AssistantThumbnail(url: url, size: Self.size)
+                    .clipShape(Circle())
+                    .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 3))
+                    .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.14), radius: 12, y: 6)
+                    .scaleEffect(isCenter ? 1.06 : 0.92)
+                    .rotationEffect(.degrees(fanned ? target.angle : 0))
+                    .offset(x: fanned ? target.x : 0, y: fanned ? 0 : 12)
+                    .opacity(shown || reduceMotion ? 1 : 0)
+                    .zIndex(isCenter ? 3 : Double(2 - index))
+                    .animation(
+                        reduceMotion
+                            ? .easeInOut(duration: 0.2)
+                            : .spring(response: 0.6, dampingFraction: 0.7).delay(0.12 + 0.06 * Double(index)),
+                        value: shown
+                    )
+            }
+
+            badge
+                .offset(x: Self.size * 0.36, y: Self.size * 0.36)
+                .zIndex(4)
+        }
+        .saturation(dimmed ? 0.3 : 1)
+        .opacity(dimmed ? 0.75 : 1)
+        .frame(height: Self.size + 16)
+        .keyframeAnimator(initialValue: 0.0, trigger: cheer) { content, lift in
+            content.offset(y: lift)
+        } keyframes: { _ in
+            KeyframeTrack {
+                SpringKeyframe(-9, duration: 0.18, spring: .snappy)
+                SpringKeyframe(0, duration: 0.45, spring: .bouncy)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if extra > 0 {
+                Text("+\(extra)")
+                    .font(.system(size: 12, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(AssistantLook.muted(scheme))
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+                    .background(Capsule().fill(Color.scChipBg(scheme)))
+                    .offset(x: images.count == 3 ? -8 : 20)
+                    .opacity(shown ? 1 : 0)
+                    .animation(.smooth(duration: 0.4).delay(0.35), value: shown)
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.6), value: status)
+        .animation(.smooth(duration: 0.3), value: isBusy)
+        .onChange(of: status) { old, new in
+            guard old != .applied, new == .applied, !reduceMotion else { return }
+            cheer += 1
+        }
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var badge: some View {
+        if isBusy {
+            badgeCircle(fill: Color.scPageBase(scheme), stroke: AssistantLook.sage(scheme)) {
+                ProgressView().controlSize(.small).tint(AssistantLook.sage(scheme))
+            }
+            .transition(.scale(scale: 0.4).combined(with: .opacity))
+        } else if let symbol = badgeSymbol {
+            let solid = status == .applied
+            let color = badgeColor
+            badgeCircle(fill: solid ? color : Color.scPageBase(scheme), stroke: color) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(solid ? Color.white : color)
+            }
+            .transition(.scale(scale: 0.3).combined(with: .opacity))
+            .id(symbol)
+        }
+    }
+
+    private func badgeCircle<Content: View>(fill: Color, stroke: Color, @ViewBuilder content: () -> Content) -> some View {
+        ZStack {
+            Circle().fill(fill)
+            Circle().strokeBorder(stroke.opacity(0.55), lineWidth: 1.5)
+            content()
+        }
+        .frame(width: 32, height: 32)
+        .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 3).padding(-3))
+    }
+
+    private var badgeSymbol: String? {
         switch status {
-        case .pending, .applied: return "checkmark"
+        case .pending: return nil
+        case .applied: return "checkmark"
         case .undone: return "arrow.uturn.backward"
         case .stale: return "arrow.triangle.2.circlepath"
         case .expired: return "hourglass"
@@ -2461,37 +2629,12 @@ private struct ProposalStatusBadge: View {
         }
     }
 
-    private var color: Color {
+    private var badgeColor: Color {
         switch status {
         case .pending, .applied: return AssistantLook.sage(scheme)
         case .failed: return AssistantLook.terra(scheme)
         case .undone, .stale, .expired: return AssistantLook.faint(scheme)
         }
-    }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(solid ? color : color.opacity(scheme == .dark ? 0.18 : 0.13))
-            Circle()
-                .strokeBorder(color.opacity(solid ? 0 : 0.45), lineWidth: 1.5)
-            if isBusy {
-                ProgressView()
-                    .controlSize(.regular)
-                    .tint(color)
-                    .transition(.opacity)
-            } else {
-                Image(systemName: symbol)
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(solid ? Color.white : color)
-                    .contentTransition(.symbolEffect(.replace))
-                    .transition(.opacity)
-            }
-        }
-        .frame(width: 84, height: 84)
-        .scaleEffect(solid ? 1.04 : 1)
-        .animation(.spring(duration: 0.5, bounce: 0.35), value: solid)
-        .accessibilityHidden(true)
     }
 }
 
@@ -2505,6 +2648,8 @@ private struct ProposalRecap: View {
     let options: [OptionsCardItemDTO]
     let contexts: [ProposalStoryContext]
     let status: AssistantCardStatus
+    /// Strona końcowa na ekranie: wiersze wchodzą po kolei, suma roluje od 0.
+    var shown: Bool = true
 
     @Environment(\.colorScheme) private var scheme
 
@@ -2578,13 +2723,6 @@ private struct ProposalRecap: View {
         }
     }
 
-    private var checkColor: Color? {
-        switch status {
-        case .pending, .applied: return AssistantLook.sage(scheme)
-        default: return nil
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
@@ -2596,10 +2734,13 @@ private struct ProposalRecap: View {
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 if totalKcal > 0 {
-                    Text("\(totalKcal) kcal")
+                    let kcal = shown ? totalKcal : 0
+                    Text("\(kcal) kcal")
                         .font(.system(size: 12.5, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AssistantLook.muted(scheme))
+                        .contentTransition(.numericText(value: Double(kcal)))
+                        .animation(.smooth(duration: 0.8).delay(0.3), value: shown)
                 }
             }
             .padding(.horizontal, 16)
@@ -2607,14 +2748,20 @@ private struct ProposalRecap: View {
             .padding(.bottom, 6)
 
             ForEach(Array(rows.enumerated()), id: \.element.id) { offset, row in
-                if offset > 0 {
-                    Rectangle()
-                        .fill(Color.scTileStroke(scheme))
-                        .frame(height: 1)
-                        .padding(.leading, 16 + Self.thumb + 12)
-                        .padding(.trailing, 16)
+                VStack(spacing: 0) {
+                    if offset > 0 {
+                        Rectangle()
+                            .fill(Color.scTileStroke(scheme))
+                            .frame(height: 1)
+                            .padding(.leading, 16 + Self.thumb + 12)
+                            .padding(.trailing, 16)
+                    }
+                    rowView(row, order: offset)
                 }
-                rowView(row)
+                // Kaskada wierszy przy wejściu na stronę końcową.
+                .opacity(shown ? 1 : 0)
+                .offset(y: shown ? 0 : 8)
+                .animation(.smooth(duration: 0.45).delay(0.22 + 0.06 * Double(offset)), value: shown)
             }
         }
         .padding(.bottom, 6)
@@ -2630,9 +2777,30 @@ private struct ProposalRecap: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func rowView(_ row: Row) -> some View {
+    private func rowView(_ row: Row, order: Int) -> some View {
         HStack(spacing: 12) {
             thumbnails(row)
+                // Zapisane: ptaszek w szałwii na zdjęciu, wiersz po wierszu —
+                // przed zapisem ptaszków nie ma (mówiłyby „już w planie”).
+                .overlay(alignment: .bottomTrailing) {
+                    let saved = status == .applied
+                    ZStack {
+                        Circle().fill(AssistantLook.sage(scheme))
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 19, height: 19)
+                    .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 2).padding(-2))
+                    .offset(x: 5, y: 5)
+                    .scaleEffect(saved ? 1 : 0.2)
+                    .opacity(saved ? 1 : 0)
+                    .animation(
+                        .spring(response: 0.4, dampingFraction: 0.55).delay(saved ? 0.25 + 0.08 * Double(order) : 0),
+                        value: saved
+                    )
+                    .accessibilityHidden(true)
+                }
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
@@ -2656,21 +2824,13 @@ private struct ProposalRecap: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                if let checkColor {
-                    Image(systemName: status == .applied ? "checkmark.circle.fill" : "checkmark.circle")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(checkColor)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                if row.kcal > 0 {
-                    Text("\(row.kcal) kcal")
-                        .font(.system(size: 12, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(AssistantLook.faint(scheme))
-                        .lineLimit(1)
-                        .fixedSize()
-                }
+            if row.kcal > 0 {
+                Text("\(row.kcal) kcal")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                    .lineLimit(1)
+                    .fixedSize()
             }
         }
         .padding(.horizontal, 16)
@@ -3704,3 +3864,70 @@ struct AssistantAppliedCard: View {
         }
     }
 }
+
+#if DEBUG
+/// `SCOFFIE_DEBUG_OPTIONS=propozycja` — strona końcowa przeglądu propozycji
+/// dnia na prawdziwych zdjęciach z katalogu: arkusz staje na ostatnim daniu,
+/// sam przechodzi na „Wszystko pasuje?”, po chwili „zapisuje” (kręciołek)
+/// i kończy na „Jest w planie” — żeby wejście i zapis dało się nagrać.
+struct ProposalEndDebugScreen: View {
+    @Environment(\.recipeCatalogStore) private var catalog
+    @State private var status: AssistantCardStatus = .pending
+    @State private var busy = false
+
+    private static func image(_ id: String) -> String {
+        "https://img.scoffie.app/recipe-images/\(id).webp"
+    }
+
+    private static let options: [OptionsCardItemDTO] = [
+        ("Owsianka z bananem i borówką", 447, "9e845247-f630-4dcc-9bab-3656828cac29", "Śniadanie"),
+        ("Omlet ze szpinakiem i fetą", 620, "1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80", "Obiad"),
+        ("Skyr z granolą i malinami", 393, "386586d2-b4f8-41f0-9641-cce2b7c20dd7", "Kolacja"),
+    ].map { title, kcal, id, meal in
+        OptionsCardItemDTO(
+            recipeId: id, title: title, kcalPerServing: kcal, prepTimeMinutes: 15,
+            imageUrl: image(id), description: nil, proteinGrams: nil, carbsGrams: nil,
+            fatGrams: nil, ingredientCount: nil, tag: meal, prompt: title
+        )
+    }
+
+    private static let contexts: [ProposalStoryContext] = [
+        ProposalStoryContext(slot: .breakfast, mealLabel: "Śniadanie", day: "Dziś, 27 września"),
+        ProposalStoryContext(slot: .lunch, mealLabel: "Obiad", day: "Dziś, 27 września"),
+        ProposalStoryContext(slot: .dinner, mealLabel: "Kolacja", day: "Dziś, 27 września"),
+    ]
+
+    var body: some View {
+        SCPageBackground(scheme: .light).ignoresSafeArea()
+            .sheet(isPresented: .constant(true)) {
+                AssistantOptionsStorySheet(
+                    slotDetail: "niedziela, 27 września",
+                    options: Self.options,
+                    initialPage: Self.options.count - 1,
+                    mode: .review(
+                        swapTitle: nil,
+                        applyTitle: status == .pending ? "Zapisz niedzielę" : nil,
+                        status: status
+                    ),
+                    catalog: catalog,
+                    onChoose: { _ in },
+                    onCompose: {},
+                    onApply: {},
+                    contexts: Self.contexts,
+                    isBusy: busy,
+                    onOpenPlan: {},
+                    onRegenerate: {}
+                )
+                .presentationDetents([.large])
+                .interactiveDismissDisabled()
+            }
+            .task {
+                try? await Task.sleep(for: .seconds(5))
+                busy = true
+                try? await Task.sleep(for: .seconds(1.2))
+                busy = false
+                status = .applied
+            }
+    }
+}
+#endif

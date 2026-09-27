@@ -67,7 +67,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Runda 15 (24.09.2026): na dole strony końcowej JEDEN przycisk (zapis → „Otwórz plan” → przy stanie bez zapisu
   „Napisz, co zmienić”), lista zestawu (`ProposalRecap`) = miniatura dania, pora z ikoną w kolorze pory, nazwa, kcal
   (tydzień: wiersz na dzień z trzema krążkami zdjęć), nad nią dzień i suma kcal; pod listą cichy odnośnik
-  „Zaproponuj inne dania” (`ProposalRegenerateLink`, wysyła prośbę o nowy zestaw). Świeża propozycja dnia/tygodnia
+  „Zaproponuj inne dania” (`ProposalRegenerateLink`, wysyła prośbę o nowy zestaw). Od 27.09.2026 („ten ostatni
+  widok da się lepiej zrobić”) nad pytaniem stoi WACHLARZ dań zestawu (`ProposalHero`: do trzech zdjęć,
+  tydzień — po jednym z trzech dni, „+N”), rozkładany sprężyną przy wejściu na stronę; stan mówi odznaka
+  na środkowym zdjęciu (zapis w toku — kręciołek, zapisane — szałwiowy ptaszek + podskok + haptyka
+  sukcesu, reszta — cicha ikona i przygaszone zdjęcia), a nie puste kółko z ptaszkiem, które PRZED
+  zapisem mówiło „zapisane”. Ptaszki na liście dopiero po zapisie, na miniaturach, kaskadą; wiersze
+  wchodzą po kolei, suma kcal roluje od 0, eyebrow/tytuł/opis rolują przy zmianie stanu. Zrzut:
+  `SCOFFIE_DEBUG_OPTIONS=propozycja` (sam przechodzi na stronę końcową i „zapisuje”). Świeża propozycja dnia/tygodnia
   (PENDING, przyszła na żywo) otwiera ten arkusz SAMA, raz na wiadomość (`ProposalAutoPresent`), jak karta OPTIONS.
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
@@ -178,7 +185,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   po lewej i główna po prawej, nawigacja = wiersz z chevronem; `AssistantProposalFooter` liczy
   akcje ze stanu z serwera). Stan propozycji jest TEKSTEM (`AssistantCardStatus.title`), nie
   tylko kolorem. Porażka tury to `AssistantOutcomeCard` (bez czerwieni; „Nic nie zmieniłem
-  w planie” tylko gdy `AgentStore.lastTurnWrote == false`), nie notka z wykrzyknikiem. Na żywo
+  w planie” tylko gdy `AgentStore.lastTurnWrote == false`), nie notka z wykrzyknikiem. Od 27.09.2026
+  w stroju nagłówka arkusza: kafelek z ikoną sytuacji · eyebrow · tytuł w 1. osobie bez kropki, JEDNO
+  zdanie, „Plan bez zmian” jako `SCTag` w szałwii i „Spróbuj ponownie” jako `AssistantPrimaryButton`
+  w treści (bez stopki z kreską); wchodzi łagodnie, po zwinięciu wiersza „myślę” (`outcomeTransition`). Na żywo
   wiersz „myślę” pokazuje JEDEN bieżący status + `AssistantArcSpinner` (łuk krąży i oddycha, sygnał, nie procent)
   + kontekst słowami z aplikacji — nazwy narzędzi nie wychodzą na ekran. Podglądy kart biorą
   wzorce z `Previews/AssistantPreviewFixtures.swift` (kopia JSON-ów z `Scripts/CardContract`).
@@ -232,8 +242,37 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w miejscu ikony, szerokość bez zmian, drugi przygaszony. Chipy `AssistantChip` 38 pt / 44 dotyk.
   Wysokości nie ustawiać ręcznie — `size:`.
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
-  `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
-  (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
+  `AgentRevealClock`): gotowa odpowiedź rusza od znaku, który JEST na ekranie (i od wspólnego
+  początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz. Od 27.09.2026
+  (Rafał: „pisze jedno słowo, a potem przeskakuje i pokazuje całą odpowiedź”) szkic i gotowa
+  odpowiedź to JEDEN widok: szkic jest wiadomością pozorną (`AgentStore.draftMessage`), ostatnia
+  odpowiedź tury dostaje jego klucz (`liveKey` → `anchorID` = „turn-…”), a zegar żyje W WIADOMOŚCI
+  (`AgentChatMessage.reveal`, `AgentRevealClock.finishing` — tempo szkicu płynie dalej, całość ≤ 3,5 s),
+  nie w `@State` widoku. Szkic pisze się od 18 zn/s (`draftMinRate`; pierwsza porcja z serwera
+  to zwykle jedno słowo, a serwer zapisuje szkic najwyżej raz na sekundę), gotowa odpowiedź od 90.
+  Tekst jest ZŁOŻONY od pierwszej klatki, nienapisane przezroczyste, ostatnie 14 znaków rampą krycia
+  (`AssistantReveal` w `AssistantAnswer.swift`) — słowa nie przeskakują do następnej linii, a dalsze
+  akapity i listy czekają w zarezerwowanym miejscu. Wiersz „myślę” zwija się przy PIERWSZYM słowie
+  szkicu, nie na końcu tury (tekst nie podskakuje). Rozmowa idzie za porcjami szkicu (`scrollTo`
+  początku odpowiedzi), dopóki użytkownik sam nie chwyci listy (`followsAnswer`, `onScrollPhaseChange`).
+- Odpowiedź asystenta (27.09.2026, „odpowiedzi są ściśnięte”): kolejne linie to JEDEN akapit
+  (złamanie w środku), pusta linia go zamyka; akapit 16 pt, interlinia 6, bez ujemnego trackingu,
+  16 pt między kawałkami, nagłówek sekcji 15/600 (nie wersaliki 11 pt), lista 15 pt. Pod CAŁĄ
+  odpowiedzią (tekst + karta) pasek `AssistantAnswerFooter`: podpis „✦ Myślałem 42 s” (SAM podpis —
+  rozwijana karta z krokami i „Wziąłem pod uwagę” odpadła tego samego dnia: „do usunięcia”) oraz
+  👍 · 👎 · „⋯” (udostępnij, zgłoś / popraw zgłoszenie). Bez kopiowania w pasku („co nam to daje
+  realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz
+  zgłoszenia. Zgłoszenie JEDNO na osobę i odpowiedź: serwer poprawia istniejące (`AgentReport`
+  po `userId+messageId`, wraca do panelu jako NEW), historia oddaje własne (`AgentMessageDTO.report`),
+  a arkusz otwiera się jako „Popraw zgłoszenie” z tym samym powodem i komentarzem. Czas i kroki przychodzą z serwera (`AgentMessageDTO.thinking`, także
+  w HISTORII — wcześniej „Myślałem” żyło tylko w pamięci sesji), ocena to `feedback` +
+  `PUT agent/messages/:id/feedback {rating: UP|DOWN|null}` (backend: `AgentMessageFeedback`,
+  migracja `20260927120000_agent_message_feedback`). Zrzuty: `SCOFFIE_DEBUG_OPTIONS=rozmowa|rozmowa-pisze`.
+- Pytanie wysłane w tej sesji stoi pod kluczem z telefonu (`clientMessageId` — od niego zależy
+  `slotKey`), a serwer ma je pod własnym id: `AgentChatMessage.serverId` (z `202 messageId`). „Popraw
+  pytanie” wysyła `serverId ?? id` (sam `clientMessageId` dawał 404). „Spróbuj ponownie” po nieudanej
+  turze idzie drogą poprawki (`editMessage` z tą samą treścią), nie nową wiadomością — rozmowa nie ma
+  dwóch identycznych pytań pod rząd. Nieudana tura za 0 zł oddaje wiadomość z puli (backend, 27.09.2026).
 - Loader startu stoi NAD korzeniem (`ScoffieApp.showsStartupLoader`), nie w gałęzi pulpitu:
   krycie kontenera bez `compositingGroup` schodzi na dzieci, więc przy przejściu korzenia przez
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
@@ -487,8 +526,19 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (między zjazdem a wjazdem), a przewijanie ma `.id` dnia — pełny ↔ pusty dzień szarpał wjazdem.
   Powrót do bieżącego tygodnia w pasku dni = „↩ Wróć do dziś” (samo „DZIŚ” czytało się jak znacznik dnia).
 - Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
-  podświetlone kółko z iskierkami; karta pustego tygodnia w `PlanDayTimeline` = kafelek, „ASYSTENT”,
-  tytuł, jedno zdanie i `EditorialPrimaryActionButton` (runda 9, „przerób na aktualne standardy”).
+  podświetlone kółko z iskierkami. Karty pustego tygodnia nad osią dnia NIE MA (27.09.2026, „usuń ten
+  design”) — pusty tydzień z choć jednym dniem do zaplanowania = pigułka ODDYCHA (`invites:`, poświata
+  pod kapsułą, krycie ≤ 0,21, skala 1,028 — dobrane między „za mocno” a „ciut mocniej”, okres 2,6 s jak `attentive` w `SCLivingMark`, `TimelineView`, staje na
+  niewybranej zakładce, przy Reduce Motion stoi w połowie). Odstęp pasek dni → nazwa dnia = 14 pt
+  w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Pigułka otwiera `PlanAssistantIntroSheet`
+  („Ułożę Ci ten tydzień”): jedno zdanie, trzy `SCTag` w jednym wierszu (sprawdzone w planerze — lista
+  w komentarzu pliku; bez „kilku sekund”, „do 30 minut”, „sezonowych”), podgląd tygodnia w stroju
+  `ProposalRecap` z dań `AssistantIntroDish.week` (dieta i alergeny z Ustawień, bez powtórek) i JEDEN
+  przycisk „Ułóż z Asystentem” — „Wolę ułożyć sam” dublowało krzyżyk. Podgląd „wow” (runda 2): tydzień
+  SKŁADA SIĘ na oczach (szkielet → krążki wskakują sprężyną, nazwa pisze się `SCTypedText`, ptaszek
+  w szałwii, licznik posiłków roluje, `SCLivingMark` „myśli” i podskakuje), potem pętla ZAMIANY co ~3,4 s
+  (dzień w tincie terakoty, kręcące się strzałki, danie z `AssistantIntroDish.spares` przenika, nazwa roluje)
+  — to obietnica „każde danie możesz potem zamienić”. Reduce Motion = gotowy tydzień, bez pętli.
 - Puste stany Zakupów (`ProductsView`, 24.09.2026 — „design jest stary, uspójnij”) stoją na `RecipeListEmptyState` (ma teraz opcjonalny `eyebrow`): tydzień bez planu = „LISTA ZAKUPÓW · Tydzień bez planu” + „Ułóż z Asystentem” (przełącza zakładkę i zamyka arkusz) i „Wróć do Planu”; plan jest, lista pusta = „Lista jest pusta” bez akcji; „Na dziś” bez produktów i otwarta rewizja bez nowych = ptaszek w szałwii („Na dziś masz wszystko” + „Pokaż całą listę”); pusta historia — ten sam klocek. Karta z koszykiem 78 pt i dwoma szarymi chipami usunięta.
 - Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
@@ -501,6 +551,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   posiłku u Asystenta); `DayNavigationMotion.plateFade` to ta sama stała, więc zdjęcie kończy z tekstem. Nowe rolowanie tekstu
   gdziekolwiek → `SCMotion.textRoll`. Arkusz „Cel dnia” (Kalendarz i Plan) nie ma podtytułu.
   Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
+- KAŻDY arkusz poza szczegółami posiłku (27.09.2026, Rafał: „image, subtitle, title, X”) ma nagłówek
+  jak „Ułożę Ci ten tydzień”: kafelek z ikoną (`SCHeaderIconWell`) · eyebrow w kolorze akcentu · tytuł ·
+  krzyżyk. `AssistantSheetScaffold`/`AssistantSheetHeader`, `LegalDocumentSheet` i `ShoppingSheetHeader`
+  mają `icon:`/`accent:`; w arkuszach Ustawień kafelek i eyebrow biorą kolor wiersza, który je otwiera.
+  Świadomie bez kafelka: `AddToPlanSheet` (tę rolę gra zdjęcie dania), `AssistantOptionsStorySheet`
+  (pełne zdjęcie jak szczegóły posiłku), `AssistantHowItWorksView` (przepływ kroków). Nowy arkusz =
+  od razu z `icon:`.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
@@ -534,7 +591,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
   nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
 - Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień
