@@ -12,7 +12,11 @@ import SwiftUI
 /// się zaznaczyć, a „Kopiuj” zostaje pod przytrzymaniem dymka). Po prawej:
 /// kciuk w górę, kciuk w dół i „⋯” (udostępnij, zgłoś / popraw zgłoszenie —
 /// serwer trzyma JEDNO zgłoszenie na osobę i odpowiedź). Kciuk w dół otwiera
-/// pod paskiem jedno zdanie z drogą do zgłoszenia z powodem.
+/// pod paskiem „Co poprawić? Podpowiedz” — PODPOWIEDŹ (powody + zdanie,
+/// `AssistantSuggestionSheet`), a nie zgłoszenie: zgłoszenie to błąd,
+/// zagrożenie albo obraza i żyje w „⋯”, więc podpowiedź działa także przy
+/// odpowiedzi już zgłoszonej (27.09.2026). Po wysłaniu wiersz znika — bez
+/// „Zgłoszone — dzięki” („bez sensu”); poprawić ją można z „⋯”.
 ///
 /// Wcięty do kolumny tekstu (znak marki 18 pt + 10 pt). Wchodzi dopiero, gdy
 /// odpowiedź się dopisze (`MessageBubble`).
@@ -26,6 +30,10 @@ struct AssistantAnswerFooter: View {
     let onReport: () -> Void
     /// Otwiera przebieg tury; `nil` = sam podpis.
     var onShowThinking: (() -> Void)? = nil
+    /// Kciuk w dół ma już podpowiedź — wiersz „Co poprawić?” znika.
+    var hasSuggestion: Bool = false
+    /// „Podpowiedz” / „Popraw podpowiedź”; `nil` = bez podpowiedzi.
+    var onSuggest: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -42,13 +50,14 @@ struct AssistantAnswerFooter: View {
                 actions
             }
 
-            if feedback == .down {
-                improveRow
+            if feedback == .down, !hasSuggestion, let onSuggest {
+                improveRow(onSuggest)
                     .transition(.opacity)
             }
         }
         .padding(.leading, Self.textInset)
         .animation(.smooth(duration: 0.25), value: feedback)
+        .animation(.smooth(duration: 0.25), value: hasSuggestion)
     }
 
     // MARK: - Myślałem
@@ -120,6 +129,11 @@ struct AssistantAnswerFooter: View {
                         Label("Udostępnij", systemImage: "square.and.arrow.up")
                     }
                 }
+                if feedback == .down, hasSuggestion, let onSuggest {
+                    Button(action: onSuggest) {
+                        Label("Popraw podpowiedź", systemImage: "lightbulb")
+                    }
+                }
                 // Obiecane w FAQ i w regulaminie („Zgłoś odpowiedź”) — idzie na
                 // `POST /agent/messages/:id/report`, nie zmienia rozmowy.
                 Button(role: isReported ? nil : .destructive, action: onReport) {
@@ -162,19 +176,19 @@ struct AssistantAnswerFooter: View {
 
     // MARK: - Po kciuku w dół
 
-    private var improveRow: some View {
+    private func improveRow(_ onSuggest: @escaping () -> Void) -> some View {
         HStack(spacing: 6) {
-            Text(isReported ? "Zgłoszone — dzięki." : "Dzięki za ocenę. Co było nie tak?")
+            Text("Co poprawić?")
                 .font(.system(size: 13))
                 .foregroundStyle(AssistantLook.muted(scheme))
-            Button(action: onReport) {
-                Text(isReported ? "Popraw" : "Opisz")
+            Button(action: onSuggest) {
+                Text("Podpowiedz")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AssistantLook.terra(scheme))
                     .scTapHeight(drawn: 20)
             }
             .buttonStyle(.plain)
-            .accessibilityHint(isReported ? "Otwiera Twoje zgłoszenie do poprawienia" : "Otwiera zgłoszenie odpowiedzi z powodem")
+            .accessibilityHint("Otwiera podpowiedź: co było nie tak i jak powinno być")
         }
     }
 }

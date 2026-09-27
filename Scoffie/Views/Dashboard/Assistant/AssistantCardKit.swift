@@ -896,6 +896,8 @@ struct AssistantCardActions: View {
     var tone: AssistantTone = .neutral
     var style: Style = .buttons
     var isBusy: Bool = false
+    /// Kolor głównej — `nil` = terakota. Zapis propozycji: szałwia.
+    var primaryTint: Color? = nil
     /// Kreska nad stopką — wyłączana, gdy sekcja wyżej sama ją rysuje.
     var showsRule: Bool = true
     /// Zostało dla zgodności wywołań; główna akcja jest zawsze wypełniona.
@@ -912,6 +914,7 @@ struct AssistantCardActions: View {
         tone: AssistantTone = .neutral,
         style: Style = .buttons,
         isBusy: Bool = false,
+        primaryTint: Color? = nil,
         showsRule: Bool = true,
         filledPrimary: Bool = true
     ) {
@@ -920,6 +923,7 @@ struct AssistantCardActions: View {
         self.tone = tone
         self.style = style
         self.isBusy = isBusy
+        self.primaryTint = primaryTint
         self.showsRule = showsRule
         self.filledPrimary = filledPrimary
     }
@@ -977,7 +981,6 @@ struct AssistantCardActions: View {
                 AssistantIconActionButton(
                     action: marked(secondary, as: .secondary),
                     icon: icon,
-                    tint: tone == .sage ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme),
                     isBusy: busySlot == .secondary
                 )
                 .disabled(isBusy)
@@ -986,7 +989,8 @@ struct AssistantCardActions: View {
                 AssistantPrimaryButton(
                     action: marked(primary, as: .primary),
                     isBusy: busySlot == .primary,
-                    size: .compact
+                    size: .compact,
+                    tint: primaryTint
                 )
                 .disabled(isBusy)
                 .opacity(isBusy && busySlot != .primary ? 0.5 : 1)
@@ -1015,7 +1019,8 @@ struct AssistantCardActions: View {
                 AssistantPrimaryButton(
                     action: marked(primary, as: .primary),
                     isBusy: busySlot == .primary,
-                    size: .compact
+                    size: .compact,
+                    tint: primaryTint
                 )
                 .disabled(isBusy)
                 .opacity(isBusy && busySlot != .primary ? 0.5 : 1)
@@ -1124,19 +1129,21 @@ struct AssistantPrimaryButton: View {
     let action: AssistantCardAction
     var isBusy: Bool = false
     var size: AssistantButtonSize = .regular
+    /// Kolor „soft” — domyślnie terakota; zapis propozycji idzie w szałwii.
+    var tint: Color? = nil
 
     @Environment(\.colorScheme) private var scheme
 
-    private var tint: Color { AssistantLook.terra(scheme) }
+    private var resolvedTint: Color { tint ?? AssistantLook.terra(scheme) }
 
     var body: some View {
         Button(action: action.action) {
-            AssistantButtonLabel(title: action.title, icon: action.icon, isBusy: isBusy, size: size, tint: tint)
-                .foregroundStyle(tint)
+            AssistantButtonLabel(title: action.title, icon: action.icon, isBusy: isBusy, size: size, tint: resolvedTint)
+                .foregroundStyle(resolvedTint)
                 .padding(.horizontal, size.horizontalPadding)
                 .frame(maxWidth: .infinity)
                 .frame(height: size.height)
-                .scSoftCapsule(tint)
+                .scSoftCapsule(resolvedTint)
                 .scTapHeight(44, drawn: size.height)
         }
         .buttonStyle(PlanPressStyle(scale: size.pressScale))
@@ -1145,15 +1152,18 @@ struct AssistantPrimaryButton: View {
     }
 }
 
-/// Poboczna akcja karty jako sam glif w krążku „soft” — strój przycisku
-/// „Wyczyść” w Filtrach (`RecipeFilterClearButton`), w wysokości przycisku
-/// obok. Praca = kręciołek w miejscu glifu.
+/// Poboczna akcja karty jako sam glif w krążku — kształt przycisku „Wyczyść”
+/// z Filtrów, w wysokości przycisku obok, ale SZARY (strój
+/// `AssistantGhostButton`: pole o ton od karty + obwódka kafla) — Rafał
+/// 27.09.2026: „ponów ma być szary, a zapisz na zielono”. Praca = kręciołek
+/// w miejscu glifu.
 struct AssistantIconActionButton: View {
     let action: AssistantCardAction
     let icon: String
-    let tint: Color
     var isBusy: Bool = false
     var size: AssistantButtonSize = .compact
+
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Button(action: action.action) {
@@ -1161,15 +1171,16 @@ struct AssistantIconActionButton: View {
                 if isBusy {
                     ProgressView()
                         .controlSize(.small)
-                        .tint(tint)
+                        .tint(AssistantLook.muted(scheme))
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: size.iconSize + 3, weight: .bold))
-                        .foregroundStyle(tint)
+                        .foregroundStyle(AssistantLook.muted(scheme))
                 }
             }
             .frame(width: size.height, height: size.height)
-            .scSoftSurface(Circle(), accent: tint)
+            .background(Circle().fill(AssistantLook.field(scheme)))
+            .overlay(Circle().strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1.2))
             .contentShape(Circle())
             .scTapHeight(44, drawn: size.height)
         }
@@ -1263,6 +1274,8 @@ struct AssistantProposalFooter: View {
     var onUndo: (() -> Void)? = nil
     var onOpenPlan: (() -> Void)? = nil
 
+    @Environment(\.colorScheme) private var scheme
+
     private var status: AssistantCardStatus { AssistantCardStatus(state) }
 
     var body: some View {
@@ -1276,10 +1289,13 @@ struct AssistantProposalFooter: View {
     private var actions: some View {
         switch status {
         case .pending where state.canApply:
+            // Zapis w szałwii — kolorze „zapisane”, tym samym co zgoda
+            // na stronie „Wszystko pasuje?” (`ProposalAcceptButton`).
             AssistantCardActions(
                 primary: AssistantCardAction(title: applyLabel, icon: applyIcon) { onApply(false) },
                 secondary: AssistantCardAction(title: reviseLabel, icon: reviseIcon, action: onRevise),
-                isBusy: isBusy
+                isBusy: isBusy,
+                primaryTint: AssistantLook.sage(scheme)
             )
         case .applied where state.canUndo:
             if let onUndo {

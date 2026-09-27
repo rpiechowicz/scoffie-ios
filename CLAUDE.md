@@ -246,8 +246,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zawsze ostatnia. Ikony: strzałki/szewrony za tytułem, reszta przed. Praca = kółko na STUKNIĘTYM przycisku
   w miejscu ikony, szerokość bez zmian, drugi przygaszony. Chipy `AssistantChip` 38 pt / 44 dotyk.
   Wysokości nie ustawiać ręcznie — `size:`. Od 27.09.2026 („inny daj jako ikonę, a zapisz na resztę”): poboczna
-  Z GLIFEM obok głównej = sam krążek `AssistantIconActionButton` (strój „Wyczyść” z Filtrów, tint tonu karty,
-  tytuł tylko dla VoiceOver), główna na resztę szerokości; bez glifu („Zapisz mimo to”) zostaje para słów.
+  Z GLIFEM obok głównej = sam krążek `AssistantIconActionButton` (kształt „Wyczyść” z Filtrów, ale SZARY — pole
+  + obwódka jak `AssistantGhostButton`; tytuł tylko dla VoiceOver), główna na resztę szerokości; bez glifu („Zapisz
+  mimo to”) zostaje para słów. Zapis propozycji („Zapisz niedzielę”, „Dodaj do planu”) w SZAŁWII
+  (`AssistantCardActions(primaryTint:)`, `AssistantPrimaryButton(tint:)`) — „ponów szary, zapisz na zielono”.
   Poboczne propozycji mają glify (`reviseIcon`): Zmień coś ✎, Inny zestaw / Zmień danie ⟳, Szukaj dalej 🔍, Zostaw ✕.
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
   `AgentRevealClock`): gotowa odpowiedź rusza od znaku, który JEST na ekranie (i od wspólnego
@@ -269,7 +271,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   odpowiedzią (tekst + karta) pasek `AssistantAnswerFooter`: podpis „✦ Myślałem 42 s ›” (rozwijana karta
   z krokami W ROZMOWIE odpadła: „do usunięcia”; wieczorem tego dnia podpis otwiera półarkusz
   `AssistantThinkingSheet` — kroki tury po kolei z glifem rodzaju pracy, zapisy w szałwii, „Odpowiedź gotowa”) oraz
-  👍 · 👎 · „⋯” (udostępnij, zgłoś / popraw zgłoszenie). Bez kopiowania w pasku („co nam to daje
+  👍 · 👎 · „⋯” (udostępnij, zgłoś / popraw zgłoszenie, przy podpowiedzi „Popraw podpowiedź”). Po 👎 wiersz
+  „Co poprawić? Podpowiedz” → `AssistantSuggestionSheet` (powody `AGENT_FEEDBACK_TAGS` + zdanie, ten sam PUT
+  feedback z `tags`/`comment`, historia oddaje `feedbackNote`); to NIE zgłoszenie — działa też przy odpowiedzi
+  zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Bez kopiowania w pasku („co nam to daje
   realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz
   zgłoszenia. Zgłoszenie JEDNO na osobę i odpowiedź: serwer poprawia istniejące (`AgentReport`
   po `userId+messageId`, wraca do panelu jako NEW), historia oddaje własne (`AgentMessageDTO.report`),
