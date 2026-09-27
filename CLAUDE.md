@@ -307,7 +307,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Runda 10: tytuł nagłówka = EFEKT jako rzeczownik („Propozycja planu gotowa”, „Dania do wyboru”, „Plan zapisany”),
   nie czasownik — „Ułożyłem plan” powtarzał wiersz osi; fakty pod krokiem najwyżej 2 linie (backend skraca plan do
   zakresu i wyniku). Strona końcowa przeglądu propozycji: filtr zaczyna od „Ty” (lista „co ja jem”), przy „Wszyscy”
-  pora z kilkoma daniami = zwarte linie „awatary · danie · kcal” bez miniatur, przycisk w `SCSheetFooter` (cień). Kciuki i „⋯” TYLKO pod odpowiedzią modelu
+  pora z kilkoma daniami = zwarte linie „awatary · danie · kcal” bez miniatur, przycisk w `SCSheetFooter` (cień).
+  Półarkusz „Co się zmieni” (`AssistantPlanChangesSheet`): pora = JEDEN blok — nagłówek pory z rodzajem zmiany,
+  pod nim „stare → nowe” OBOK SIEBIE (miniatury 30 pt, stare szare i przekreślone), „dla kogo” tylko jako awatary
+  przy nowym daniu i tylko, gdy nie cały dom (runda 10: „ściana tekstu” z czterema piętrami na zmianę). Kciuki i „⋯” TYLKO pod odpowiedzią modelu
   (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
   i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
   kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”
