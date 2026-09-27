@@ -78,9 +78,18 @@ struct AgentMessageDTO: Decodable, Identifiable, Equatable {
     var thinking: AgentMessageThinkingDTO? = nil
     /// Kciuk pytającego: `UP` | `DOWN`; brak = nie oceniał.
     var feedback: String? = nil
+    /// Podpowiedź do kciuka w dół (powody + zdanie) — do poprawienia.
+    var feedbackNote: AgentFeedbackNoteDTO? = nil
     /// WŁASNE zgłoszenie tej odpowiedzi — jedno na osobę (27.09.2026);
     /// ponowne „Zgłoś” je poprawia.
     var report: AgentMessageReportDTO? = nil
+}
+
+/// Podpowiedź przy kciuku w dół — `AGENT_FEEDBACK_TAGS` z serwera i zdanie.
+/// To NIE zgłoszenie: trafia do działu „Oceny” w panelu, nie do kolejki.
+struct AgentFeedbackNoteDTO: Decodable, Equatable {
+    let tags: [String]
+    let comment: String?
 }
 
 struct AgentMessageReportDTO: Decodable, Equatable {

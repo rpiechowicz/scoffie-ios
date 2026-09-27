@@ -623,6 +623,7 @@ private struct AssistantIntroDecisionScene: View {
     let day: [AssistantIntroDish]
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
 
     @State private var shown = false
     @State private var busy = false
@@ -678,7 +679,9 @@ private struct AssistantIntroDecisionScene: View {
                 primary: primary,
                 secondary: secondary,
                 tone: status.tone,
-                isBusy: busy
+                isBusy: busy,
+                // Jak w rozmowie: „Zapisz dzień” w szałwii.
+                primaryTint: saved ? nil : AssistantLook.sage(scheme)
             )
         }
         .opacity(shown ? 1 : 0)

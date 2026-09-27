@@ -124,6 +124,8 @@ struct AssistantView: View {
     @State private var reporting: AgentChatMessage?
     /// Odpowiedź, której przebieg („Myślałem 42 s ›”) jest otwarty.
     @State private var thinkingOf: AgentChatMessage?
+    /// Odpowiedź, do której piszemy podpowiedź („Co poprawić?”).
+    @State private var suggesting: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
@@ -216,7 +218,7 @@ struct AssistantView: View {
                                 header
                                     .background(alignment: .top) {
                                         AssistantHeaderShade()
-                                            .opacity(isScrolledUnderHeader && !isConversationEmpty ? 1 : 0)
+                                            .opacity(isScrolledUnderHeader && !isConversationEmpty && !store.isUnavailable ? 1 : 0)
                                             .animation(.easeInOut(duration: 0.22), value: isScrolledUnderHeader)
                                     }
                             }
@@ -353,6 +355,11 @@ struct AssistantView: View {
         .sheet(item: $reporting) { message in
             AssistantReportSheet(message: message) { reason, comment in
                 await store.report(messageId: message.id, reason: reason, comment: comment)
+            }
+        }
+        .sheet(item: $suggesting) { message in
+            AssistantSuggestionSheet(message: message) { tags, comment in
+                await store.suggest(messageId: message.id, tags: tags, comment: comment)
             }
         }
         .sheet(item: $thinkingOf) { message in
@@ -1633,6 +1640,7 @@ struct AssistantView: View {
             onEdit: { beginEditing(message) },
             onReport: { reporting = message },
             onShowThinking: { thinkingOf = message },
+            onSuggest: { suggesting = message },
             onRate: { rating in
                 Task {
                     if let problem = await store.setFeedback(rating, for: message.id) {
@@ -1881,6 +1889,8 @@ private struct MessageBubble: View {
     let onReport: () -> Void
     /// „Myślałem 42 s ›” — przebieg tury w arkuszu.
     var onShowThinking: () -> Void = {}
+    /// „Co poprawić?” — podpowiedź do kciuka w dół.
+    var onSuggest: () -> Void = {}
     /// Kciuk pod odpowiedzią (`nil` = zdjęty).
     var onRate: (AgentFeedback?) -> Void = { _ in }
     /// Odpowiedź dopisała się do końca — sklep zdejmuje `reveal`.
@@ -2010,7 +2020,9 @@ private struct MessageBubble: View {
                         isReported: message.report != nil,
                         onRate: onRate,
                         onReport: onReport,
-                        onShowThinking: onShowThinking
+                        onShowThinking: onShowThinking,
+                        hasSuggestion: message.feedbackNote != nil,
+                        onSuggest: onSuggest
                     )
                     // Bliżej treści niż karta — to podpis odpowiedzi, nie
                     // kolejny kawałek.

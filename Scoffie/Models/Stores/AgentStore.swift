@@ -39,6 +39,8 @@ struct AgentChatMessage: Identifiable, Equatable {
     var turnId: String? = nil
     /// Kciuk użytkownika pod odpowiedzią.
     var feedback: AgentFeedback? = nil
+    /// Podpowiedź do kciuka w dół; `nil` = kciuk bez podpowiedzi.
+    var feedbackNote: AgentFeedbackNoteDTO? = nil
     /// Własne zgłoszenie tej odpowiedzi — jest, to „Zgłoś” staje się „Popraw
     /// zgłoszenie” (serwer trzyma jedno na osobę i odpowiedź).
     var report: AgentMessageReportDTO? = nil
@@ -285,8 +287,11 @@ final class AgentStore {
     func setFeedback(_ rating: AgentFeedback?, for messageId: String) async -> String? {
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return nil }
         let previous = messages[index].feedback
+        let previousNote = messages[index].feedbackNote
         guard previous != rating else { return nil }
         messages[index].feedback = rating
+        // Serwer czyści podpowiedź przy „w górę” i przy zdjęciu oceny.
+        if rating != .down { messages[index].feedbackNote = nil }
         do {
             try await client.rateMessage(id: messageId, rating: rating?.rawValue)
             return nil
@@ -295,7 +300,31 @@ final class AgentStore {
             if let again = messages.firstIndex(where: { $0.id == messageId }),
                messages[again].feedback == rating {
                 messages[again].feedback = previous
+                messages[again].feedbackNote = previousNote
             }
+            return UserFacingErrorMapper.inlineMessage(from: error)
+        }
+    }
+
+    /// „Co poprawić?” — kciuk w dół z podpowiedzią (powody + zdanie). Oddaje
+    /// komunikat błędu albo `nil`. Ekran zmienia się dopiero po odpowiedzi
+    /// serwera — arkusz czeka na wynik i sam pokazuje błąd.
+    func suggest(messageId: String, tags: [String], comment: String?) async -> String? {
+        do {
+            try await client.rateMessage(
+                id: messageId,
+                rating: AgentFeedback.down.rawValue,
+                tags: tags,
+                comment: comment
+            )
+            if let index = messages.firstIndex(where: { $0.id == messageId }) {
+                messages[index].feedback = .down
+                messages[index].feedbackNote = tags.isEmpty && comment == nil
+                    ? nil
+                    : AgentFeedbackNoteDTO(tags: tags, comment: comment)
+            }
+            return nil
+        } catch {
             return UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
@@ -1460,6 +1489,7 @@ final class AgentStore {
             },
             turnId: dto.turnId,
             feedback: dto.feedback.flatMap(AgentFeedback.init(rawValue:)),
+            feedbackNote: dto.feedbackNote,
             report: dto.report
         )
     }
