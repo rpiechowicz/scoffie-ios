@@ -303,7 +303,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   po prawej), akcja trwa od swojego początku do początku następnej (pierwsza od startu, ostatnia do końca tury),
   granice zaokrąglone przed odjęciem — suma = czas w nagłówku; BEZ wierszy przerw, „Napisałem odpowiedź”, „Wyniku”.
   Runda 9: ZAWSZE pierwszy wiersz „Przemyślałem, od czego zacząć” (mózg) — prawdziwe myślenie przed 1. akcją
-  w widełkach 2–10 s (`ThinkingEntry.startRange`), różnica zjeżdża z/do pierwszej akcji, suma bez zmian. Kciuki i „⋯” TYLKO pod odpowiedzią modelu
+  w widełkach 2–10 s (`ThinkingEntry.startRange`), różnica zjeżdża z/do pierwszej akcji, suma bez zmian.
+  Runda 10: tytuł nagłówka = EFEKT jako rzeczownik („Propozycja planu gotowa”, „Dania do wyboru”, „Plan zapisany”),
+  nie czasownik — „Ułożyłem plan” powtarzał wiersz osi; fakty pod krokiem najwyżej 2 linie (backend skraca plan do
+  zakresu i wyniku). Strona końcowa przeglądu propozycji: filtr zaczyna od „Ty” (lista „co ja jem”), przy „Wszyscy”
+  pora z kilkoma daniami = zwarte linie „awatary · danie · kcal” bez miniatur, przycisk w `SCSheetFooter` (cień). Kciuki i „⋯” TYLKO pod odpowiedzią modelu
   (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
   i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
   kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”

@@ -197,10 +197,12 @@ private struct ThinkingRow: View {
                         .foregroundStyle(AssistantLook.ink(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     if let detail = entry.step?.detail, !detail.isEmpty {
+                        // Najwyżej dwie linie — fakty, nie przepisana prośba.
                         Text(detail)
                             .font(.system(size: 13))
                             .lineSpacing(1)
                             .foregroundStyle(AssistantLook.muted(scheme))
+                            .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -255,25 +257,28 @@ private struct AxisLine: Shape {
 
 // MARK: - Tytuł
 
-/// Tytuł arkusza — NAJWAŻNIEJSZA rzecz, którą tura zrobiła, po priorytecie:
-/// zapis > plan > zamiana > dania > reszta > samo sprawdzanie.
+/// Tytuł arkusza — EFEKT tury jako rzeczownik („Propozycja planu gotowa”),
+/// po priorytecie: zapis > plan > zamiana > dania > reszta > samo
+/// sprawdzanie. Rzeczownik, nie czasownik: tytuł „Ułożyłem plan” powtarzał
+/// zdanie z wiersza osi (runda 10, „head title, który się potem nie
+/// powtarza”).
 struct ThinkingHeadline {
     let title: String
 
     private static let priority: [(tools: Set<String>, title: String)] = [
-        (["apply_week_plan"], "Zapisałem w planie"),
-        (["create_recipe", "update_recipe", "delete_recipe"], "Zapisałem przepis"),
-        (["mark_meal_eaten"], "Odhaczyłem posiłek"),
-        (["check_shopping_items"], "Odhaczyłem zakupy"),
-        (["build_meal_plan", "propose_week_plan", "propose_day_plan", "start_planning"], "Ułożyłem plan"),
-        (["propose_swap", "replace_plan_item", "revise_proposal"], "Znalazłem zamiennik"),
-        (["propose_household_split"], "Podzieliłem porcje"),
-        (["propose_remove_meal"], "Przygotowałem zmianę"),
-        (["suggest_meals", "offer_options", "find_recipes"], "Dobrałem dania"),
-        (["ask_clarifying_question"], "Dopytałem o szczegóły"),
-        (["show_shopping_list"], "Sprawdziłem zakupy"),
-        (["show_macro_gap", "get_week_balance"], "Policzyłem bilans"),
-        (["remember_note"], "Zapamiętałem"),
+        (["apply_week_plan"], "Plan zapisany"),
+        (["create_recipe", "update_recipe", "delete_recipe"], "Przepis zapisany"),
+        (["mark_meal_eaten"], "Posiłek odhaczony"),
+        (["check_shopping_items"], "Zakupy odhaczone"),
+        (["build_meal_plan", "propose_week_plan", "propose_day_plan", "start_planning"], "Propozycja planu gotowa"),
+        (["propose_swap", "replace_plan_item", "revise_proposal"], "Zamiennik gotowy"),
+        (["propose_household_split"], "Porcje rozpisane"),
+        (["propose_remove_meal"], "Zmiana w planie gotowa"),
+        (["suggest_meals", "offer_options", "find_recipes"], "Dania do wyboru"),
+        (["ask_clarifying_question"], "Pytanie do Ciebie"),
+        (["show_shopping_list"], "Lista zakupów"),
+        (["show_macro_gap", "get_week_balance"], "Bilans policzony"),
+        (["remember_note"], "Zapamiętane"),
     ]
 
     init(_ steps: [AgentProgressStepDTO]) {
@@ -281,7 +286,7 @@ struct ThinkingHeadline {
             title = entry.title
             return
         }
-        title = steps.isEmpty ? "Odpowiedziałem od razu" : "Sprawdziłem plan"
+        title = steps.isEmpty ? "Szybka odpowiedź" : "Plan sprawdzony"
     }
 }
 
