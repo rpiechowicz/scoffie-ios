@@ -152,31 +152,11 @@ struct EditorialWeekBar: View {
             Spacer(minLength: 6)
 
             if !datesViewModel.isCurrentWeek {
-                Button {
+                // Sam krążek z ikoną cofania (`SCWeekTodayButton`) — pigułka
+                // „Wróć do dziś” zabierała miejsce podpisowi i ten malał.
+                SCWeekTodayButton {
                     changeWeek { datesViewModel.goToCurrentWeek() }
-                } label: {
-                    // Akcja, nie etykieta: samo „DZIŚ” w wersalikach stało
-                    // przy CUDZYM tygodniu i czytało się jak znacznik dnia
-                    // („dziś jest tutaj”), a nie jak powrót (runda 11).
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 9.5, weight: .bold))
-                        Text("Wróć do dziś")
-                            .scFont(11, weight: .semibold, relativeTo: .caption2)
-                            .tracking(-0.1)
-                    }
-                        .foregroundStyle(SCPalette.terracotta)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .scSoftCapsule()
-                        // Pigułka ma ~22 pt wysokości; cel dotyku dostaje 44
-                        // bez podnoszenia wiersza podpisu.
-                        .frame(minWidth: 44)
-                        .scTapHeight(drawn: 22)
                 }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                .accessibilityLabel("Wróć do bieżącego tygodnia")
             }
 
             // Strzałki zostają obok gestu, nie zamiast niego: przesuwanie

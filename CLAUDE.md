@@ -283,8 +283,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   kafelek = stała ikona przebiegu `point.3.filled.connected.trianglepath.dotted` w terakocie, czas kapsułką obok krzyżyka.
   Runda 5 („serio pokazuj, co się działo”): oś z danych tury — krok = `done` (czas przeszły z serwera) + `detail` (fakty
   z wejścia i wyniku narzędzia) + sekunda tury („0:08”, od `thinking.startedAt`); przerwy ≥ 2 s na myślenie to ciche
-  wiersze na przerywanej osi, ostatni odcinek „Napisałem odpowiedź”; glify szare; na końcu „Wynik” z karty
-  (`ThinkingResult`), bez „Odpowiedź gotowa”. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
+  wiersze na przerywanej osi, ostatni odcinek „Napisałem odpowiedź” BEZ czasu (całość w nagłówku), sekunda przy kroku
+  od 0:01; glify szare; bez „Wyniku” i bez „Odpowiedź gotowa” (runda 6). Kciuki i „⋯” TYLKO pod odpowiedzią modelu
+  (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
   i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
   kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”
   i „Co poprawić?” mają kompaktowy nagłówek (`EditorialSheetHeader(compact:)` / `AssistantSheetScaffold(compact:)`:
@@ -298,7 +299,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   migracja `20260927120000_agent_message_feedback`). Zrzuty: `SCOFFIE_DEBUG_OPTIONS=rozmowa|rozmowa-pisze`.
 - Nagłówek rozmowy (27.09.2026, „shadow jak na detail meal, a nie divider”) stoi w `safeAreaInset(edge: .top)`
   jak pole na dole: rozmowa przejeżdża POD nim, a gdy jest przewinięta, pod nagłówkiem leży `AssistantHeaderShade`
-  (tło strony przez maskę — poświata się zgadza; 16 pt na nagłówku + 28 pod nim). Oceny 👍/👎 wymagają backendu
+  (tło strony przez maskę — poświata się zgadza; 16 pt na nagłówku + 28 pod nim). Krycie cienia idzie ZA przesunięciem
+  listy (`headerShade`: pełne po 24 pt, co 1/12, bez animacji) — przełącznik z animacją spóźniał się przy szybkim
+  przewijaniu. Przykład w polu w rozmowie zależy od OSTATNIEJ odpowiedzi (`AssistantComposerHint`: propozycja — zmiana
+  z nazwą dania z karty, zapis — następny krok, dania do wyboru — życzenie, zakupy, bilans, pytanie), wariant z ziarna
+  id wiadomości; nie powtarza przycisków karty. Oceny 👍/👎 wymagają backendu
   z `PUT agent/messages/:id/feedback` — aplikacja zawsze woła `api.scoffie.app`, więc bez backendu na `main` kciuk wraca
   z toastem „Nie zapisałem oceny”.
 - Pytanie wysłane w tej sesji stoi pod kluczem z telefonu (`clientMessageId` — od niego zależy
@@ -362,7 +367,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`SCCircleIconLabel(highlighted:)`), nie pełna terakota. Przełącznik „Dopasowane do Ciebie” jest
   TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
   i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
-  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`) = miniatura ZDJĘCIA
+  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`; od 27.09.2026 STAŁA wysokość 70 pt
+  na dwie linie nazwy i miniatura 46 pt — dwuwierszowa nazwa nic nie rozpycha) = miniatura ZDJĘCIA
   DANIA z tą cechą + nazwa + liczba przepisów; zaznaczenie = tint, obwódka wokół miniatury i znaczek
   z ptaszkiem (nie samo pole wyboru — „smutne”, Rafał 23.09). Zdjęcia dobiera `RecipeFilterCovers`
   / `RecipeFacetCovers` raz na otwarcie, z puli przed filtrami, każdy przepis na jednym kafelku;
@@ -557,7 +563,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
 - `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
   (między zjazdem a wjazdem), a przewijanie ma `.id` dnia — pełny ↔ pusty dzień szarpał wjazdem.
-  Powrót do bieżącego tygodnia w pasku dni = „↩ Wróć do dziś” (samo „DZIŚ” czytało się jak znacznik dnia).
+  Powrót do bieżącego tygodnia w pasku dni = SAM krążek z ikoną cofania (`SCWeekTodayButton`, 26 pt jak strzałki,
+  terakota soft; 27.09.2026) — pigułka „↩ Wróć do dziś” zabierała miejsce i podpis tygodnia malał. Jeden komponent
+  w pasku Planu/Kalendarza (`EditorialWeekBar`) i w „Dodaj do planu”.
 - Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
   podświetlone kółko z iskierkami. Karty pustego tygodnia nad osią dnia NIE MA (27.09.2026, „usuń ten
   design”) — pusty tydzień z choć jednym dniem do zaplanowania = pigułka ODDYCHA (`invites:`, poświata

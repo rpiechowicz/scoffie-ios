@@ -1219,15 +1219,20 @@ struct AssistantView: View {
     }
 
     /// Przykład w polu: na pustym ekranie pasuje do sytuacji z powitania
-    /// („Np. mam kurczaka i paprykę”), w rozmowie — zwykłe zaproszenie.
+    /// („Np. mam kurczaka i paprykę”), w rozmowie — do OSTATNIEJ odpowiedzi
+    /// (`AssistantComposerHint`: propozycja, zapis, dania do wyboru…).
     private var composerPrompt: String {
         if store.isUnavailable { return "Asystent jest teraz niedostępny" }
         if store.isLocked { return "Chwila przerwy — spróbuj za moment" }
-        if isConversationEmpty, editing == nil {
+        if editing != nil { return "Popraw pytanie…" }
+        if isConversationEmpty {
             let example = briefing.placeholder
             if !example.isEmpty { return example }
         }
-        return "Napisz do asystenta…"
+        return AssistantComposerHint.text(
+            after: store.messages.last(where: { $0.author == .assistant }),
+            isSending: store.isSending
+        )
     }
 
     // MARK: - Pole wiadomości
