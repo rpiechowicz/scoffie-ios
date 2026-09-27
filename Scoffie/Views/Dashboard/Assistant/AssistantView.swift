@@ -122,9 +122,13 @@ struct AssistantView: View {
     }
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
+    /// Odpowiedź, której przebieg („Myślałem 42 s ›”) jest otwarty.
+    @State private var thinkingOf: AgentChatMessage?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
+    /// Rozmowa przewinięta pod nagłówek — wtedy pod nim leży cień krawędzi.
+    @State private var isScrolledUnderHeader = false
     /// Rozwinięte karty tygodnia i listy kroków — PO ID WIADOMOŚCI, nie
     /// w `@State` wiersza: odpowiedź ostatniej tury rysuje slot, a po
     /// następnym pytaniu ta sama wiadomość przechodzi do części przed
@@ -195,14 +199,27 @@ struct AssistantView: View {
                         .transition(.assistantIntroStep)
                 } else {
                     VStack(spacing: 0) {
-                        header
                         // Pole jako wcięcie bezpiecznego obszaru, nie wiersz
                         // pod listą: rozmowa przewija się POD szkłem pola
                         // i widać ją przez nie — tak samo jak pod dolnym menu,
                         // nad którym pole stoi. To jest cała różnica między
                         // „pole w stylu iOS" a paskiem z kreską.
+                        //
+                        // Nagłówek tak samo (27.09.2026, Rafał: „od góry daj
+                        // ten shadow jak na detail meal, a nie taki divider”):
+                        // rozmowa przejeżdża POD nim i gaśnie w cieniu
+                        // krawędzi, zamiast urywać się twardą linią na jego
+                        // dolnym brzegu.
                         conversation
                             .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                            .safeAreaInset(edge: .top, spacing: 0) {
+                                header
+                                    .background(alignment: .top) {
+                                        AssistantHeaderShade()
+                                            .opacity(isScrolledUnderHeader && !isConversationEmpty ? 1 : 0)
+                                            .animation(.easeInOut(duration: 0.22), value: isScrolledUnderHeader)
+                                    }
+                            }
                     }
                     // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam,
                     // gdzie na pozostałych zakładkach. Tam robi to ScrollView
@@ -336,6 +353,11 @@ struct AssistantView: View {
         .sheet(item: $reporting) { message in
             AssistantReportSheet(message: message) { reason, comment in
                 await store.report(messageId: message.id, reason: reason, comment: comment)
+            }
+        }
+        .sheet(item: $thinkingOf) { message in
+            if let thinking = message.thinking {
+                AssistantThinkingSheet(thinking: thinking)
             }
         }
         .alert("Usunąć historię rozmów?", isPresented: $showDeleteAlert) {
@@ -912,6 +934,13 @@ struct AssistantView: View {
             // Palec na liście = użytkownik czyta sam; nie ciągniemy go za
             // pisaną odpowiedzią.
             if phase == .interacting { followsAnswer = false }
+        }
+        // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
+        // progu, a nie w każdej klatce przewijania.
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top > 1
+        } action: { _, scrolled in
+            isScrolledUnderHeader = scrolled
         }
 
         let triggered = withScrollTriggers(scroll, proxy: proxy)
@@ -1603,6 +1632,7 @@ struct AssistantView: View {
             onAsk: { prompt in ask(prompt) },
             onEdit: { beginEditing(message) },
             onReport: { reporting = message },
+            onShowThinking: { thinkingOf = message },
             onRate: { rating in
                 Task {
                     if let problem = await store.setFeedback(rating, for: message.id) {
@@ -1849,6 +1879,8 @@ private struct MessageBubble: View {
     let onAsk: (String) -> Void
     let onEdit: () -> Void
     let onReport: () -> Void
+    /// „Myślałem 42 s ›” — przebieg tury w arkuszu.
+    var onShowThinking: () -> Void = {}
     /// Kciuk pod odpowiedzią (`nil` = zdjęty).
     var onRate: (AgentFeedback?) -> Void = { _ in }
     /// Odpowiedź dopisała się do końca — sklep zdejmuje `reveal`.
@@ -1977,7 +2009,8 @@ private struct MessageBubble: View {
                         feedback: message.feedback,
                         isReported: message.report != nil,
                         onRate: onRate,
-                        onReport: onReport
+                        onReport: onReport,
+                        onShowThinking: onShowThinking
                     )
                     // Bliżej treści niż karta — to podpis odpowiedzi, nie
                     // kolejny kawałek.

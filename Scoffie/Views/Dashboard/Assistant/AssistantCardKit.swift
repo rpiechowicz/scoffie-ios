@@ -967,6 +967,40 @@ struct AssistantCardActions: View {
 
     @ViewBuilder
     private var buttons: some View {
+        // Poboczna z glifem obok głównej = SAMA ikona w krążku (jak „Wyczyść”
+        // w Filtrach), a główna bierze resztę szerokości (27.09.2026, Rafał:
+        // „inny daj jako ikonę, a zapisz na resztę wolnego space”). Tytuł
+        // pobocznej zostaje dla VoiceOver. Bez glifu („Zapisz mimo to”) —
+        // para słów, jak dotąd.
+        if let secondary, let icon = secondary.icon, let primary {
+            HStack(spacing: 8) {
+                AssistantIconActionButton(
+                    action: marked(secondary, as: .secondary),
+                    icon: icon,
+                    tint: tone == .sage ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme),
+                    isBusy: busySlot == .secondary
+                )
+                .disabled(isBusy)
+                .opacity(isBusy && busySlot != .secondary ? 0.5 : 1)
+
+                AssistantPrimaryButton(
+                    action: marked(primary, as: .primary),
+                    isBusy: busySlot == .primary,
+                    size: .compact
+                )
+                .disabled(isBusy)
+                .opacity(isBusy && busySlot != .primary ? 0.5 : 1)
+            }
+            .animation(.smooth(duration: 0.2), value: isBusy)
+            .padding(.top, 12)
+            .padding(.horizontal, AssistantCardMetrics.footerInset)
+            .padding(.bottom, AssistantCardMetrics.footerInset)
+        } else {
+            pair
+        }
+    }
+
+    private var pair: some View {
         AssistantActionPair(spacing: 8) {
             if let secondary {
                 AssistantGhostButton(
@@ -1107,6 +1141,41 @@ struct AssistantPrimaryButton: View {
         }
         .buttonStyle(PlanPressStyle(scale: size.pressScale))
         .disabled(isBusy)
+        .animation(.smooth(duration: 0.2), value: isBusy)
+    }
+}
+
+/// Poboczna akcja karty jako sam glif w krążku „soft” — strój przycisku
+/// „Wyczyść” w Filtrach (`RecipeFilterClearButton`), w wysokości przycisku
+/// obok. Praca = kręciołek w miejscu glifu.
+struct AssistantIconActionButton: View {
+    let action: AssistantCardAction
+    let icon: String
+    let tint: Color
+    var isBusy: Bool = false
+    var size: AssistantButtonSize = .compact
+
+    var body: some View {
+        Button(action: action.action) {
+            ZStack {
+                if isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(tint)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: size.iconSize + 3, weight: .bold))
+                        .foregroundStyle(tint)
+                }
+            }
+            .frame(width: size.height, height: size.height)
+            .scSoftSurface(Circle(), accent: tint)
+            .contentShape(Circle())
+            .scTapHeight(44, drawn: size.height)
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .disabled(isBusy)
+        .accessibilityLabel(action.title)
         .animation(.smooth(duration: 0.2), value: isBusy)
     }
 }
@@ -1388,7 +1457,7 @@ struct AssistantQuickReplies: View {
                 AssistantCardHead(eyebrow: "Propozycja", title: "Plan dnia", status: .pending)
                 AssistantCardActions(
                     primary: AssistantCardAction(title: "Zapisz dzień") {},
-                    secondary: AssistantCardAction(title: "Inny zestaw") {}
+                    secondary: AssistantCardAction(title: "Inny zestaw", icon: "arrow.triangle.2.circlepath") {}
                 )
                 .padding(.top, 16)
             }
