@@ -229,10 +229,12 @@ struct ProposalChanges {
             var mealOrder: [String] = []
             var addedByMeal: [String: [Dish]] = [:]
             var labels: [String: (slot: MealSlot?, label: String)] = [:]
-            for slot in day.slots where slot.isNew {
+            for (slotIndex, slot) in day.slots.enumerated() where slot.isNew {
                 if addedByMeal[slot.mealLabel] == nil { mealOrder.append(slot.mealLabel) }
                 addedByMeal[slot.mealLabel, default: []].append(Dish(
-                    id: "\(day.key)-\(slot.id)",
+                    // Z indeksem: to samo danie w tej porze dla dwóch osób
+                    // miało dwa razy ten sam `slot.id`.
+                    id: "\(day.key)-\(slot.id)-\(slotIndex)",
                     title: slot.title,
                     imageURL: slot.imageUrl.flatMap(URL.init(string:)),
                     participantIds: slot.participantIds
@@ -260,11 +262,14 @@ struct ProposalChanges {
                 }
             }
             // Porządek dnia: po porze (śniadanie → kolacja), gdy znana.
+            // Nieznana pora za znanymi — porządek przechodni.
             let sortedOrder = mealOrder.enumerated().sorted { left, right in
-                let a = labels[left.element]?.slot
-                let b = labels[right.element]?.slot
-                if let a, let b, a != b { return a < b }
-                return left.offset < right.offset
+                switch (labels[left.element]?.slot, labels[right.element]?.slot) {
+                case let (a?, b?) where a != b: return a < b
+                case (.some, .none): return true
+                case (.none, .some): return false
+                default: return left.offset < right.offset
+                }
             }.map { $0.element }
             for meal in sortedOrder {
                 let removedHere = removedByMeal[meal] ?? []

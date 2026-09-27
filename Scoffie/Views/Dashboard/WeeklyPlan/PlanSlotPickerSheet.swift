@@ -180,9 +180,11 @@ struct PlanSlotPickerSheet: View {
 
     // MARK: - Inne danie w tej porze
 
-    /// Kto je posiłek: „Wspólne” = cały skład domu.
+    /// Kto je posiłek: „Wspólne” = cały skład domu. Tylko obecni domownicy —
+    /// id kogoś, kto wyszedł z domu, zamieniłoby zawężone danie we „Wspólne”.
     private func eaters(of meal: PlanMeal) -> Set<String> {
-        meal.isShared ? Set(roster.map(\.id)) : Set(meal.participantIds)
+        let current = Set(roster.map(\.id))
+        return meal.isShared ? current : Set(meal.participantIds).intersection(current)
     }
 
     /// Kto dostanie wybrane danie.
@@ -200,6 +202,9 @@ struct PlanSlotPickerSheet: View {
             meal.recipe.id != recipe.id
                 && meal.recipe.id != editing?.recipe.id
                 && !eaters(of: meal).isDisjoint(with: audience)
+                // Danie z porcjami per osoba nie da się zawęzić z tego
+                // arkusza (serwer blokuje edycję) — zostaje „obok”.
+                && !(meal.hasPortions && !eaters(of: meal).isSubset(of: audience))
         }
     }
 
@@ -605,7 +610,7 @@ struct PlanSlotPickerSheet: View {
         let mealSlot = slot
         let week = weekStartISO
         Task { @MainActor in
-            _ = await store.upsertWeekSlot(
+            let saved = await store.upsertWeekSlot(
                 recipe: recipe,
                 participantIds: participants,
                 // Ten arkusz nie ma steppera porcji, więc świadomie nie wysyła
@@ -627,6 +632,12 @@ struct PlanSlotPickerSheet: View {
                 slot: slot,
                 weekStart: weekStartISO
             )
+            // Nowe danie się nie zapisało — stare zostaje, nikt nie zostaje
+            // bez posiłku.
+            guard saved else {
+                completion?()
+                return
+            }
             for entry in displaced {
                 if displacedEmpty.contains(entry.meal.recipe.id) {
                     _ = await store.removeWeekSlot(for: day, slot: mealSlot, weekStart: week, recipe: entry.meal.recipe)

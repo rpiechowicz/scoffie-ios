@@ -299,7 +299,7 @@ struct AssistantPlanWeekCard: View {
 
             // „Zniknie z planu” jako lista pod spodem było nieczytelne
             // (27.09.2026) — wiersz otwiera półarkusz „co na co”.
-            if !card.removed.isEmpty {
+            if !changes.days.isEmpty {
                 OptionsBrowseRow(
                     title: "Co się zmieni",
                     subtitle: changes.summary,
@@ -452,7 +452,7 @@ struct AssistantPlanDayCard: View {
                 }
             }
 
-            if !card.removed.isEmpty {
+            if !changes.days.isEmpty {
                 OptionsBrowseRow(
                     title: "Co się zmieni",
                     subtitle: changes.summary,
@@ -2756,16 +2756,20 @@ private struct ProposalRecap: View {
             let dayKey = ctx?.day ?? ""
             let mealLabel = ctx?.slot?.title ?? ctx?.mealLabel ?? ""
             let dish = Dish(id: index, option: options[index], participantIds: ids)
-            if result.last?.id != dayKey {
-                result.append(Day(id: dayKey, label: ctx?.day, meals: []))
-            }
-            var day = result.removeLast()
-            if let at = day.meals.firstIndex(where: { $0.label == mealLabel }) {
-                day.meals[at].dishes.append(dish)
+            // Dzień po kluczu, nie „ostatni”: ten sam dzień nie obok siebie
+            // dawał dwa wiersze o tym samym `id`.
+            let dayIndex: Int
+            if let found = result.firstIndex(where: { $0.id == dayKey }) {
+                dayIndex = found
             } else {
-                day.meals.append(Meal(id: "\(dayKey)-\(mealLabel)", slot: ctx?.slot, label: mealLabel, dishes: [dish]))
+                result.append(Day(id: dayKey, label: ctx?.day, meals: []))
+                dayIndex = result.count - 1
             }
-            result.append(day)
+            if let at = result[dayIndex].meals.firstIndex(where: { $0.label == mealLabel }) {
+                result[dayIndex].meals[at].dishes.append(dish)
+            } else {
+                result[dayIndex].meals.append(Meal(id: "\(dayKey)-\(mealLabel)", slot: ctx?.slot, label: mealLabel, dishes: [dish]))
+            }
         }
         return result
     }
