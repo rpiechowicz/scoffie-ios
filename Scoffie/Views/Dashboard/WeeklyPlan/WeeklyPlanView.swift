@@ -611,15 +611,12 @@ struct WeeklyPlanView: View {
                         saveServings(newValue, for: target)
                     },
                     // Porcje per osoba: zamiast steppera porcji łącznych —
-                    // porcja każdego jedzącego, zapisywana całą alokacją.
+                    // porcja każdego jedzącego, tylko do odczytu (API GAP).
                     personalPortions: RecipeDetailPortions(
                         meal: target.meal,
                         members: sessionStore.householdMembers,
                         viewerId: sessionStore.currentUserId
-                    ),
-                    onSavePortions: { units in
-                        savePortions(units, for: target)
-                    }
+                    )
                 )
                 .recipeDetailSheet()
             }
@@ -839,25 +836,6 @@ struct WeeklyPlanView: View {
                 recipe: target.meal.recipe,
                 participantIds: target.meal.participantIds,
                 plannedServings: servings,
-                householdMemberCount: knownHouseholdMemberCount,
-                for: target.date,
-                slot: target.slot,
-                weekStart: datesViewModel.weekStartISO
-            )
-            detailTarget = nil
-            refreshShoppingList()
-        }
-    }
-
-    /// Zapisuje porcje per osoba zmienione w szczegółach — CAŁĄ alokację,
-    /// bo tylko taką serwer przyjmuje (pominięcie skasowałoby porcje).
-    /// Audytorium zostaje nietknięte.
-    private func savePortions(_ units: [String: Int], for target: DetailTarget) {
-        Task { @MainActor in
-            _ = await mealStore.upsertWeekSlot(
-                recipe: target.meal.recipe,
-                participantIds: target.meal.participantIds,
-                portionUnits: units,
                 householdMemberCount: knownHouseholdMemberCount,
                 for: target.date,
                 slot: target.slot,

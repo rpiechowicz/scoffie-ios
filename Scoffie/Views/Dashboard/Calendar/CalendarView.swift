@@ -839,15 +839,12 @@ struct CalendarView: View {
                         saveServings(newValue, for: target)
                     },
                     // Porcje per osoba: zamiast steppera porcji łącznych —
-                    // porcja każdego jedzącego, zapisywana całą alokacją.
+                    // porcja każdego jedzącego, tylko do odczytu (API GAP).
                     personalPortions: RecipeDetailPortions(
                         meal: target.meal,
                         members: sessionStore.householdMembers,
                         viewerId: sessionStore.currentUserId
-                    ),
-                    onSavePortions: { units in
-                        savePortions(units, for: target)
-                    }
+                    )
                 )
                 .recipeDetailSheet()
             }
@@ -1341,27 +1338,6 @@ struct CalendarView: View {
                 recipe: target.meal.recipe,
                 participantIds: target.meal.participantIds,
                 plannedServings: servings,
-                householdMemberCount: knownHouseholdMemberCount,
-                for: target.date,
-                slot: target.slot,
-                weekStart: datesViewModel.weekStartISO
-            )
-            detailTarget = nil
-            await shoppingListStore.load(
-                weekStart: datesViewModel.weekStartISO,
-                force: true
-            )
-        }
-    }
-
-    /// Zapisuje porcje per osoba zmienione w szczegółach — CAŁĄ alokację
-    /// (patrz `WeeklyPlanView.savePortions`).
-    private func savePortions(_ units: [String: Int], for target: DetailTarget) {
-        Task { @MainActor in
-            _ = await mealStore.upsertWeekSlot(
-                recipe: target.meal.recipe,
-                participantIds: target.meal.participantIds,
-                portionUnits: units,
                 householdMemberCount: knownHouseholdMemberCount,
                 for: target.date,
                 slot: target.slot,

@@ -545,9 +545,6 @@ struct PlanSlotPickerSheet: View {
                 // odpowiedź serwera. Pusta lista to brak odpowiedzi, nie dom
                 // jednoosobowy.
                 householdMemberCount: roster.isEmpty ? nil : roster.count,
-                // Porcje per osoba przenoszą się na nowe audytorium (także
-                // przy „Wspólne” = cały dom) — patrz `MealCalendarStore.upsertWeekSlot`.
-                householdMemberIds: roster.isEmpty ? nil : roster.map(\.id),
                 // W trybie edycji inny przepis PODMIENIA edytowany posiłek,
                 // zamiast dokładać do slotu drugi wariant.
                 replacingRecipeId: editing?.recipe.id,
@@ -570,10 +567,8 @@ struct PlanSlotPickerSheet: View {
             _ = await store.upsertWeekSlot(
                 recipe: editing.recipe,
                 participantIds: participantsToSave,
-                // Porcji nie wysyłamy z tego samego powodu, co w `assign`;
-                // porcje per osoba przenosi na nowe audytorium store.
+                // Porcji nie wysyłamy z tego samego powodu, co w `assign`.
                 householdMemberCount: roster.isEmpty ? nil : roster.count,
-                householdMemberIds: roster.isEmpty ? nil : roster.map(\.id),
                 for: date,
                 slot: slot,
                 weekStart: weekStartISO

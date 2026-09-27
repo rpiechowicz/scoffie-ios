@@ -98,7 +98,7 @@ struct PlanMeal: Codable, Identifiable, Hashable {
             return PlanPortions.servings(fromUnits: PlanPortions.totalUnits(portionUnits))
                 / Double(portionUnits.count)
         }
-        return PlanPortions.servings(fromUnits: portionUnits[memberId] ?? PlanPortions.joinerUnits)
+        return PlanPortions.servings(fromUnits: portionUnits[memberId] ?? PlanPortions.missingEntryUnits)
     }
 
     /// Did this member mark the meal as eaten?

@@ -103,13 +103,10 @@ struct RecipeDetailView: View {
     var onAddedToPlan: ((Date, MealSlot) -> Void)?
 
     /// Porcje per osoba (tylko `.planned`); `nil` = zwykły stepper porcji.
+    /// Tylko do odczytu — patrz `PlanPortions.editBlockedMessage`.
     let personalPortions: RecipeDetailPortions?
 
-    /// Wołane przyciskiem „Zapisz porcje”, gdy posiłek ma porcje per osoba —
-    /// z PEŁNĄ alokacją (serwer przyjmuje tylko całość).
-    var onSavePortions: (([String: Int]) -> Void)?
-
-    @State private var portionUnits: [String: Int]
+    private var portionUnits: [String: Int] { personalPortions?.units ?? [:] }
 
     /// Widełki są te same, co limit `plannedServings` w backendzie — powyżej
     /// dwunastu porcji to już nie jest gotowanie na tydzień, tylko catering.
@@ -172,12 +169,9 @@ struct RecipeDetailView: View {
         context: RecipeDetailContext = .catalog,
         onSaveServings: ((Int) -> Void)? = nil,
         onAddedToPlan: ((Date, MealSlot) -> Void)? = nil,
-        personalPortions: RecipeDetailPortions? = nil,
-        onSavePortions: (([String: Int]) -> Void)? = nil
+        personalPortions: RecipeDetailPortions? = nil
     ) {
         self.personalPortions = personalPortions
-        self.onSavePortions = onSavePortions
-        _portionUnits = State(initialValue: personalPortions?.units ?? [:])
         self.recipe = recipe
         self.onSetFavourite = onSetFavourite
         self.onClose = onClose
@@ -462,21 +456,29 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// Porcja każdego jedzącego — „Rafał 1,25”, „Asia 0,80” — ze stepperem co
-    /// 0,05 porcji (krok serwera). Zapis idzie całością przyciskiem na dole.
+    /// Porcja każdego jedzącego — „Rafał 1,25”, „Asia 0,80” — tylko do
+    /// odczytu. Serwer zastępuje przy zapisie całą alokację bez kontroli
+    /// wersji, więc edycja z telefonu mogłaby cofnąć zmianę innej osoby
+    /// (API GAP) — pod kartą krótko, dlaczego nie da się jej zmienić.
     private func portionsCard(_ model: RecipeDetailPortions) -> some View {
-        DetailCard {
-            VStack(spacing: 0) {
-                ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
-                    portionRow(person, model: model, isFirst: index == 0)
+        VStack(alignment: .leading, spacing: 8) {
+            DetailCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
+                        portionRow(person, model: model, isFirst: index == 0)
+                    }
                 }
             }
+            Text(PlanPortions.editBlockedMessage)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(look.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
         }
     }
 
     private func portionRow(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions, isFirst: Bool) -> some View {
-        let units = portionUnits[person.memberId] ?? PlanPortions.joinerUnits
-        let total = PlanPortions.totalUnits(portionUnits)
+        let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
         let name = person.memberId == model.viewerId ? "\(person.name) (Ty)" : person.name
         return HStack(spacing: 12) {
             Text(name)
@@ -484,16 +486,13 @@ struct RecipeDetailView: View {
                 .foregroundStyle(look.fg)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            DetailPortionStepper(
-                label: PlanPortions.label(units: units),
-                canDecrease: units > PlanPortions.minUnits,
-                canIncrease: units < PlanPortions.maxUnits && total < PlanPortions.maxTotalUnits,
-                onStep: { delta in
-                    portionUnits = PlanPortions.adjusting(portionUnits, memberId: person.memberId, by: delta)
-                }
-            )
-            .accessibilityLabel("Porcja: \(person.name)")
+            Text(PlanPortions.label(units: units))
+                .font(.system(size: 15, weight: .heavy))
+                .monospacedDigit()
+                .foregroundStyle(look.fg)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(person.name): \(PlanPortions.label(units: units)) porcji")
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .overlay(alignment: .top) {
@@ -976,7 +975,8 @@ struct RecipeDetailView: View {
         switch context {
         case .catalog: return true
         case .planned:
-            if isPortionMode { return portionUnits != (personalPortions?.units ?? [:]) }
+            // Porcji per osoba nie zapisujemy (API GAP) — przycisk nieaktywny.
+            if isPortionMode { return false }
             return servings != initialServings
         }
     }
@@ -986,13 +986,9 @@ struct RecipeDetailView: View {
         case .catalog:
             isAddToPlanPresented = true
         case .planned:
-            guard !isSavingServings else { return }
+            guard !isSavingServings, !isPortionMode else { return }
             isSavingServings = true
-            if isPortionMode {
-                onSavePortions?(portionUnits)
-            } else {
-                onSaveServings?(servings)
-            }
+            onSaveServings?(servings)
             onClose?()
         }
     }
@@ -1360,66 +1356,6 @@ private struct DetailHairline: View {
 }
 
 // MARK: - Stepper porcji
-
-/// Porcja jednej osoby „−  1,25  +” co 0,05 porcji (jednostka serwera).
-/// Granice (0,1…6 na osobę, Σ ≤ 12) liczy rodzic — `PlanPortions.adjusting`.
-private struct DetailPortionStepper: View {
-    let label: String
-    let canDecrease: Bool
-    let canIncrease: Bool
-    let onStep: (Int) -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let look = DetailLook(scheme: scheme)
-
-        HStack(spacing: 0) {
-            stepButton(systemName: "minus", enabled: canDecrease, look: look) { onStep(-1) }
-
-            Text(label)
-                .font(.system(size: 15, weight: .heavy))
-                .monospacedDigit()
-                .foregroundStyle(look.fg)
-                .frame(minWidth: 44)
-                .contentTransition(.numericText())
-
-            stepButton(systemName: "plus", enabled: canIncrease, look: look) { onStep(1) }
-        }
-        .background(Capsule().fill(look.chip))
-        .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
-        .sensoryFeedback(.selection, trigger: label)
-        .accessibilityElement(children: .ignore)
-        .accessibilityValue("\(label) porcji")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment:
-                if canIncrease { onStep(1) }
-            case .decrement:
-                if canDecrease { onStep(-1) }
-            @unknown default:
-                break
-            }
-        }
-    }
-
-    private func stepButton(
-        systemName: String,
-        enabled: Bool,
-        look: DetailLook,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(enabled ? SCPalette.terracotta : look.faint)
-                .frame(width: 36, height: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.86))
-        .disabled(!enabled)
-    }
-}
 
 /// `DStepper` z wartością: „−  1  +” na pigułce. Minus gaśnie na dolnej
 /// granicy, plus świeci terakotą. Cyfra przewija się w miejscu, a każde
