@@ -149,7 +149,8 @@ enum AssistantCapabilities {
         // `check_shopping_items` / `mark_meal_eaten`
         .init(id: "checkoff", icon: "checkmark.circle.fill", accent: .sage, title: "Odhaczanie zjedzonego i zakupów", example: "Kupiłem mleko i jajka"),
         // `get_recipe_details`
-        .init(id: "cook", icon: "text.book.closed.fill", accent: .butter, title: "Skład i sposób przygotowania", example: "Jak ugotować ten czwartkowy obiad?"),
+        // Nie „jak ugotować” — kroki i skład są w szczegółach posiłku.
+        .init(id: "cook", icon: "arrow.left.arrow.right", accent: .butter, title: "Zamienniki składników", example: "Czym zastąpić śmietanę w czwartkowym obiedzie?"),
         // `search_recipes_by_ingredient`
         .init(id: "byingredient", icon: "magnifyingglass", accent: .butter, title: "Dania z tego, co masz", example: "Co mogę zrobić z bakłażanem?"),
         // `create_recipe` / `update_recipe`

@@ -276,7 +276,7 @@ struct RecipeFilterCoverThumb: View {
         ZStack {
             accent.opacity(scheme == .dark ? 0.16 : 0.12)
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(accent)
         }
     }

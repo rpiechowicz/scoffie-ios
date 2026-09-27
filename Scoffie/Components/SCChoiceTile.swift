@@ -14,8 +14,16 @@ enum SCChoiceMark: Equatable {
 /// Wymiary kafelka — poza typem generycznym, który nie może mieć stałych
 /// statycznych.
 private enum SCChoiceTileMetrics {
-    static let media: CGFloat = 38
-    static let mediaRadius: CGFloat = 11
+    /// 46, nie 38: przy stałej wysokości kafelka (`height`) miniatura
+    /// wypełnia go jak pełny kafel, także przy nazwie w jednej linii.
+    static let media: CGFloat = 46
+    static let mediaRadius: CGFloat = 13
+    /// JEDNA wysokość dla każdego kafelka w każdej siatce — mieści dwie linie
+    /// nazwy i dopowiedzenie. Wcześniej wysokość brała się z treści i siatka
+    /// z jedną dwuwierszową nazwą („Ryby i owoce morza”) była wyższa od
+    /// sąsiedniej (27.09.2026, Rafał: „znów się rozpycha 2-liniowe title od
+    /// 1-liniowego… zrób takie wszystkie, by było jednakowo”).
+    static let height: CGFloat = 70
     static let badge: CGFloat = 18
     /// Wcięcie treści z prawej.
     static let inset: CGFloat = 10
@@ -32,8 +40,10 @@ private enum SCChoiceTileMetrics {
 /// dwupiętrowy i siatka urosła dwukrotnie — Rafał, 24.09.2026: „podobało mi
 /// się bardziej, jak jest w 1 linii”. Długie jedno słowo („Niskotłuszczowe”)
 /// zostaje w jednej linii i lekko maleje, kilka słów schodzi do drugiej.
-/// Wysokość kafelków wyrównuje siatka (`RecipeFilterTileGrid`): każdy dostaje
-/// wysokość najwyższego w CAŁEJ siatce.
+/// Każdy kafelek ma tę samą wysokość (`SCChoiceTileMetrics.height`, 70 pt)
+/// z miniaturą 46 pt, więc dwuwierszowa nazwa niczego nie rozpycha, a siatki
+/// w różnych arkuszach mają ten sam rytm. Siatka (`RecipeFilterTileGrid`)
+/// dalej wyrównuje do najwyższego — przy dużym Dynamic Type.
 ///
 /// Miniatura to zwykle zdjęcie dania z tą cechą („Z rybą” — dorsz, „Zupy” —
 /// zupa), a bez zdjęcia glif w tincie akcentu. Pierwsza wersja miała w tym
@@ -54,7 +64,7 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
     /// samo, bo kafelek jest jednym elementem (`children: .ignore`).
     var accessibilityValue: String? = nil
     let action: () -> Void
-    /// Treść miniatury — kafelek przycina ją do zaokrąglonego kwadratu 38 pt.
+    /// Treść miniatury — kafelek przycina ją do zaokrąglonego kwadratu 46 pt.
     @ViewBuilder var media: () -> Media
     @ViewBuilder var detail: () -> Detail
 
@@ -110,7 +120,7 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
             .padding(.vertical, 9)
             // Elastyczny w obu osiach: siatka daje każdemu kafelkowi tę samą
             // szerokość kolumny i wysokość najwyższego kafelka w siatce.
-            .frame(maxWidth: .infinity, minHeight: 58, maxHeight: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: SCChoiceTileMetrics.height, maxHeight: .infinity, alignment: .leading)
             .background(shape.fill(fill))
             .overlay(shape.strokeBorder(stroke, lineWidth: mark == .on ? 1.2 : 1))
             .contentShape(shape)

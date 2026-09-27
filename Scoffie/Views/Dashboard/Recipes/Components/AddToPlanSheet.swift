@@ -400,26 +400,9 @@ struct AddToPlanSheet: View {
             Spacer(minLength: 6)
 
             if weekOffset != 0 {
-                Button {
+                SCWeekTodayButton {
                     changeWeek { selectedDate = Date() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 9.5, weight: .bold))
-                        Text("Wróć do dziś")
-                            .scFont(11, weight: .semibold, relativeTo: .caption2)
-                            .tracking(-0.1)
-                    }
-                    .foregroundStyle(SCPalette.terracotta)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .scSoftCapsule()
-                    .frame(minWidth: 44)
-                    .scTapHeight(drawn: 22)
                 }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                .accessibilityLabel("Wróć do bieżącego tygodnia")
             }
 
             weekArrow(
