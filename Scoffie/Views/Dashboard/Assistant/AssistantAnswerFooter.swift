@@ -18,6 +18,12 @@ import SwiftUI
 /// odpowiedzi już zgłoszonej (27.09.2026). Po wysłaniu wiersz znika — bez
 /// „Zgłoszone — dzięki” („bez sensu”); poprawić ją można z „⋯”.
 ///
+/// Runda 2 (27.09.2026): „Co poprawić?” to PIGUŁKA obok kciuków (soft
+/// terakota z żarówką), a nie zdanie z odnośnikiem — gdy się nie mieści,
+/// schodzi pod kciuki, do prawej. Prawa krawędź ma to samo wcięcie co lewa:
+/// „Myślałem” stoi 28 pt od brzegu (kolumna tekstu), więc glif „⋯” też
+/// kończy się 28 pt od brzegu (`trailingInset` liczy zapas ramki ikony).
+///
 /// Wcięty do kolumny tekstu (znak marki 18 pt + 10 pt). Wchodzi dopiero, gdy
 /// odpowiedź się dopisze (`MessageBubble`).
 struct AssistantAnswerFooter: View {
@@ -39,25 +45,54 @@ struct AssistantAnswerFooter: View {
 
     /// Kolumna tekstu odpowiedzi — patrz `AssistantVoice`.
     static let textInset: CGFloat = 28
+    /// Ramka ikony akcji i glif w niej — z nich zapas po prawej.
+    private static let iconFrame: CGFloat = 34
+    private static let glyphWidth: CGFloat = 16
+    /// Glif ostatniej akcji kończy się `textInset` od brzegu — symetrycznie
+    /// do „Myślałem” po lewej.
+    private static var trailingInset: CGFloat {
+        textInset - (iconFrame - glyphWidth) / 2
+    }
+
+    private var showsSuggest: Bool {
+        feedback == .down && !hasSuggestion && onSuggest != nil
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: 2) {
-                if let thinking {
-                    thinkingLabel(thinking)
-                }
+                leading
                 Spacer(minLength: 8)
+                if showsSuggest {
+                    suggestPill
+                        .padding(.trailing, 6)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
                 actions
             }
 
-            if feedback == .down, !hasSuggestion, let onSuggest {
-                improveRow(onSuggest)
-                    .transition(.opacity)
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(spacing: 2) {
+                    leading
+                    Spacer(minLength: 8)
+                    actions
+                }
+                if showsSuggest {
+                    suggestPill
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
             }
         }
         .padding(.leading, Self.textInset)
-        .animation(.smooth(duration: 0.25), value: feedback)
-        .animation(.smooth(duration: 0.25), value: hasSuggestion)
+        .padding(.trailing, Self.trailingInset)
+        .animation(.smooth(duration: 0.25), value: showsSuggest)
+    }
+
+    @ViewBuilder
+    private var leading: some View {
+        if let thinking {
+            thinkingLabel(thinking)
+        }
     }
 
     // MARK: - Myślałem
@@ -169,26 +204,34 @@ struct AssistantAnswerFooter: View {
             .font(.system(size: 14.5, weight: .medium))
             .foregroundStyle(active ? AssistantLook.ink(scheme) : AssistantLook.faint(scheme))
             .contentTransition(.symbolEffect(.replace))
-            .frame(width: 36, height: 30)
+            .frame(width: Self.iconFrame, height: 30)
             .contentShape(Rectangle())
             .scTapHeight(drawn: 30)
     }
 
     // MARK: - Po kciuku w dół
 
-    private func improveRow(_ onSuggest: @escaping () -> Void) -> some View {
-        HStack(spacing: 6) {
-            Text("Co poprawić?")
-                .font(.system(size: 13))
-                .foregroundStyle(AssistantLook.muted(scheme))
-            Button(action: onSuggest) {
-                Text("Podpowiedz")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AssistantLook.terra(scheme))
-                    .scTapHeight(drawn: 20)
+    /// „💡 Co poprawić?” — otwiera podpowiedź (`AssistantSuggestionSheet`).
+    private var suggestPill: some View {
+        Button {
+            onSuggest?()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "lightbulb")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Co poprawić?")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .tracking(-0.1)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Otwiera podpowiedź: co było nie tak i jak powinno być")
+            .foregroundStyle(AssistantLook.terra(scheme))
+            .padding(.horizontal, 11)
+            .frame(height: 28)
+            .scSoftCapsule(AssistantLook.terra(scheme))
+            .fixedSize()
+            .scTapHeight(drawn: 28)
         }
+        .buttonStyle(PlanPressStyle(scale: 0.95))
+        .accessibilityHint("Otwiera podpowiedź: co było nie tak i jak powinno być")
     }
 }

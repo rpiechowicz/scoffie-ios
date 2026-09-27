@@ -274,7 +274,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   👍 · 👎 · „⋯” (udostępnij, zgłoś / popraw zgłoszenie, przy podpowiedzi „Popraw podpowiedź”). Po 👎 wiersz
   „Co poprawić? Podpowiedz” → `AssistantSuggestionSheet` (powody `AGENT_FEEDBACK_TAGS` + zdanie, ten sam PUT
   feedback z `tags`/`comment`, historia oddaje `feedbackNote`); to NIE zgłoszenie — działa też przy odpowiedzi
-  zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Bez kopiowania w pasku („co nam to daje
+  zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Runda 2:
+  „Co poprawić?” to pigułka soft z żarówką OBOK kciuków (brak miejsca → pod nimi, do prawej), arkusz = 4 kafle 2 × 2
+  + pole „Jak powinno być?”; prawe wcięcie paska = lewe (glif „⋯” 28 pt od brzegu). Półarkusze „Jak pracowałem”
+  i „Co poprawić?” mają kompaktowy nagłówek (`EditorialSheetHeader(compact:)` / `AssistantSheetScaffold(compact:)`:
+  kafelek 36, tytuł 19); oś kroków bez karty, kolor = rodzaj pracy (`ThinkingKind`). Bez kopiowania w pasku („co nam to daje
   realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz
   zgłoszenia. Zgłoszenie JEDNO na osobę i odpowiedź: serwer poprawia istniejące (`AgentReport`
   po `userId+messageId`, wraca do panelu jako NEW), historia oddaje własne (`AgentMessageDTO.report`),
