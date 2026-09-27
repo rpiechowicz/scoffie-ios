@@ -1,69 +1,141 @@
 import SwiftUI
 
 /// „Jak pracowałem” — przebieg tury krok po kroku, otwierany z podpisu
-/// „✦ Myślałem 42 s” pod odpowiedzią (27.09.2026, Rafał: „historia, jak
+/// „✦ Myślałem 42 s ›” pod odpowiedzią (27.09.2026, Rafał: „historia, jak
 /// asystent myślał, w połowicznym sheecie, step by step, co zrobił”).
 ///
+/// Runda 2 tego samego dnia („header jest zbyt duży, i całą resztę też
+/// dopracuj”): nagłówek kompaktowy (`EditorialSheetHeader(compact:)`), pod nim
+/// dwie etykiety z faktami (kroki · zapisy), oś bez karty wokół — w półarkuszu
+/// karta w karcie ściskała. Kolor mówi RODZAJ pracy: sprawdzanie (plan,
+/// dom, bilans) — neutralny, dobieranie dań — terakota, przejście na
+/// dokładne planowanie — indygo, zapis — szałwia. Kroki wchodzą kaskadą.
+///
 /// Kroki przychodzą z serwera gotowymi zdaniami (`AgentThinkingSummary.steps`,
-/// także w historii) — bez kroków przejściowych, bo po turze mówiłyby to samo
-/// co sąsiedni wiersz. Nazwa narzędzia NIE wychodzi na ekran; służy tylko do
-/// wyboru glifu. Krok, który zmienił dane domu (`writes`), jest w szałwii.
-/// Na końcu „Odpowiedź gotowa” — ten sam czas, co w podpisie.
+/// także w historii) — bez kroków przejściowych. Nazwa narzędzia NIE wychodzi
+/// na ekran; służy tylko do wyboru glifu i koloru.
 struct AssistantThinkingSheet: View {
     let thinking: AgentThinkingSummary
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @State private var appeared = false
 
     private var title: String {
         thinking.duration.map { "Myślałem \(AssistantThoughtLine.clock($0))" } ?? "Myślałem chwilę"
     }
+
+    private var writes: Int { thinking.steps.filter { $0.writes == true }.count }
 
     var body: some View {
         AssistantSheetScaffold(
             eyebrow: "Jak pracowałem",
             title: title,
             icon: "sparkles",
+            compact: true,
             onClose: { dismiss() }
         ) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(thinking.steps.enumerated()), id: \.offset) { index, step in
+            VStack(alignment: .leading, spacing: 14) {
+                facts
+                    .scReveal(appeared, order: 0)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(thinking.steps.enumerated()), id: \.offset) { index, step in
+                        ThinkingStepRow(
+                            icon: ThinkingKind(step).icon(step),
+                            text: step.label,
+                            kind: ThinkingKind(step),
+                            isFirst: index == 0,
+                            isLast: false
+                        )
+                        .scReveal(appeared, order: index + 1)
+                    }
                     ThinkingStepRow(
-                        icon: Self.icon(for: step),
-                        text: step.label,
-                        tone: step.writes == true ? .sage : .terra,
-                        isFirst: index == 0,
-                        isLast: false
+                        icon: "checkmark",
+                        text: "Odpowiedź gotowa",
+                        trailing: thinking.duration.map { AssistantThoughtLine.clock($0) },
+                        kind: .done,
+                        isFirst: thinking.steps.isEmpty,
+                        isLast: true
                     )
+                    .scReveal(appeared, order: thinking.steps.count + 1)
                 }
-                ThinkingStepRow(
-                    icon: "checkmark",
-                    text: "Odpowiedź gotowa",
-                    tone: .sage,
-                    isFirst: thinking.steps.isEmpty,
-                    isLast: true
-                )
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-                    .fill(AssistantLook.card(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-                    .strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1)
-            )
-            .padding(.top, 4)
+            .padding(.horizontal, 4)
+            .padding(.top, 2)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
         .presentationBackground(Color.scPageBase(scheme))
+        .task {
+            try? await Task.sleep(for: .milliseconds(80))
+            appeared = true
+        }
+    }
+
+    /// „5 kroków” · „Zapisałem w planie” — tylko to, co z przebiegu wynika.
+    private var facts: some View {
+        HStack(spacing: 6) {
+            if !thinking.steps.isEmpty {
+                SCTag(
+                    title: "\(thinking.steps.count) \(Self.stepsWord(thinking.steps.count))",
+                    icon: "list.bullet",
+                    accent: AssistantLook.muted(scheme)
+                )
+            }
+            if writes > 0 {
+                SCTag(title: "Zapisałem zmiany", icon: "checkmark", accent: AssistantLook.sage(scheme))
+            }
+        }
+    }
+
+    static func stepsWord(_ count: Int) -> String {
+        if count == 1 { return "krok" }
+        let tens = count % 100
+        let units = count % 10
+        if (2...4).contains(units), !(12...14).contains(tens) { return "kroki" }
+        return "kroków"
+    }
+}
+
+/// Rodzaj pracy w kroku — kolor krążka i glif.
+enum ThinkingKind: Equatable {
+    case check, pick, handoff, write, done
+
+    init(_ step: AgentProgressStepDTO) {
+        if step.writes == true { self = .write; return }
+        if step.isHandoff { self = .handoff; return }
+        switch step.tool {
+        case "get_household_context", "get_week_plan", "get_week_balance",
+             "get_recipe_details", "check_plan_conflicts", "show_macro_gap",
+             "show_shopping_list", "search_ingredients":
+            self = .check
+        default:
+            self = .pick
+        }
+    }
+
+    func tint(_ scheme: ColorScheme) -> Color {
+        switch self {
+        case .check: return AssistantLook.muted(scheme)
+        case .pick: return AssistantLook.terra(scheme)
+        case .handoff: return AssistantLook.indigo(scheme)
+        case .write, .done: return AssistantLook.sage(scheme)
+        }
+    }
+
+    func fill(_ scheme: ColorScheme) -> Color {
+        switch self {
+        case .check: return AssistantLook.quietTint(scheme)
+        case .pick: return AssistantLook.terraTint(scheme)
+        case .handoff: return AssistantLook.indigoTint(scheme)
+        case .write, .done: return AssistantLook.sageTint(scheme)
+        }
     }
 
     /// Glif rodzaju pracy — z nazwy narzędzia, której nie pokazujemy.
-    static func icon(for step: AgentProgressStepDTO) -> String {
+    func icon(_ step: AgentProgressStepDTO) -> String {
         if step.isHandoff { return "wand.and.stars" }
         switch step.tool {
         case "get_household_context": return "house"
@@ -91,46 +163,47 @@ struct AssistantThinkingSheet: View {
     }
 }
 
-/// Wiersz osi: krążek z glifem, kreska łącząca z sąsiadami, zdanie.
+/// Wiersz osi: krążek z glifem, kreska łącząca z sąsiadami, zdanie,
+/// opcjonalnie wartość po prawej (czas całości przy „Odpowiedź gotowa”).
 private struct ThinkingStepRow: View {
-    enum Tone { case terra, sage }
-
     let icon: String
     let text: String
-    let tone: Tone
+    var trailing: String? = nil
+    let kind: ThinkingKind
     let isFirst: Bool
     let isLast: Bool
 
     @Environment(\.colorScheme) private var scheme
 
-    private static let disc: CGFloat = 30
-
-    private var tint: Color {
-        tone == .sage ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme)
-    }
-
-    private var fill: Color {
-        tone == .sage ? AssistantLook.sageTint(scheme) : AssistantLook.terraTint(scheme)
-    }
+    private static let disc: CGFloat = 28
+    private static let rowPadding: CGFloat = 7
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack {
-                Circle().fill(fill)
+                Circle().fill(kind.fill(scheme))
                 Image(systemName: icon)
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(tint)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(kind.tint(scheme))
             }
             .frame(width: Self.disc, height: Self.disc)
             .accessibilityHidden(true)
 
             Text(text)
-                .font(.system(size: 15, weight: isLast ? .semibold : .regular))
-                .foregroundStyle(isLast ? AssistantLook.sage(scheme) : AssistantLook.ink(scheme))
+                .font(.system(size: 15, weight: kind == .done ? .semibold : .regular))
+                .tracking(-0.2)
+                .foregroundStyle(kind == .done ? AssistantLook.sage(scheme) : AssistantLook.ink(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let trailing {
+                Text(trailing)
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(AssistantLook.faint(scheme))
+            }
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, Self.rowPadding)
         // Oś: kreska przez środek krążków, od sąsiada do sąsiada — nad
         // pierwszym i pod ostatnim jej nie ma.
         .background(alignment: .leading) {
@@ -138,7 +211,7 @@ private struct ThinkingStepRow: View {
                 Rectangle()
                     .fill(isFirst ? Color.clear : AssistantLook.hair(scheme))
                     .frame(width: 1.5)
-                Color.clear.frame(width: 1.5, height: Self.disc)
+                Color.clear.frame(width: 1.5, height: Self.disc + 6)
                 Rectangle()
                     .fill(isLast ? Color.clear : AssistantLook.hair(scheme))
                     .frame(width: 1.5)

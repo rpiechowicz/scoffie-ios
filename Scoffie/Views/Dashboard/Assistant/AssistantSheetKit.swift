@@ -17,6 +17,8 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
     /// aplikacji: glif tej samej sprawy, co pozycja menu ⋯, która go otwiera.
     var icon: String? = nil
     var accent: Color = SCPalette.terracotta
+    /// Półarkusz: mniejszy nagłówek (`EditorialSheetHeader(compact:)`).
+    var compact: Bool = false
     var onClose: () -> Void
     @ViewBuilder var action: () -> Action
     @ViewBuilder var footer: () -> Footer
@@ -38,10 +40,11 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
                     subtitle: subtitle,
                     icon: icon,
                     accent: accent,
+                    compact: compact,
                     onClose: onClose,
                     action: action
                 )
-                .padding(.bottom, 8)
+                .padding(.bottom, compact ? 4 : 8)
 
                 // Stopka przez `safeAreaInset` (`scSheetFooter`), nie nad listą
                 // w `ZStack` — treść kończy się nad nią sama, bez 140 pt zapasu.
@@ -79,6 +82,7 @@ extension AssistantSheetScaffold where Action == EmptyView {
         subtitle: String? = nil,
         icon: String? = nil,
         accent: Color = SCPalette.terracotta,
+        compact: Bool = false,
         onClose: @escaping () -> Void,
         @ViewBuilder footer: @escaping () -> Footer,
         @ViewBuilder content: @escaping () -> Content
@@ -89,6 +93,7 @@ extension AssistantSheetScaffold where Action == EmptyView {
             subtitle: subtitle,
             icon: icon,
             accent: accent,
+            compact: compact,
             onClose: onClose,
             action: { EmptyView() },
             footer: footer,
@@ -104,6 +109,7 @@ extension AssistantSheetScaffold where Action == EmptyView, Footer == EmptyView 
         subtitle: String? = nil,
         icon: String? = nil,
         accent: Color = SCPalette.terracotta,
+        compact: Bool = false,
         onClose: @escaping () -> Void,
         @ViewBuilder content: @escaping () -> Content
     ) {
@@ -113,6 +119,7 @@ extension AssistantSheetScaffold where Action == EmptyView, Footer == EmptyView 
             subtitle: subtitle,
             icon: icon,
             accent: accent,
+            compact: compact,
             onClose: onClose,
             action: { EmptyView() },
             footer: { EmptyView() },
@@ -135,6 +142,7 @@ struct AssistantSheetHeader<Action: View>: View {
     var subtitle: String? = nil
     var icon: String? = nil
     var accent: Color = SCPalette.terracotta
+    var compact: Bool = false
     var onClose: () -> Void
     @ViewBuilder var action: () -> Action
 
@@ -145,11 +153,12 @@ struct AssistantSheetHeader<Action: View>: View {
             icon: icon,
             accent: accent,
             subtitle: subtitle,
+            compact: compact,
             onClose: onClose,
             accessory: action
         )
         .padding(.horizontal, 20)
-        .padding(.top, 18)
+        .padding(.top, compact ? 16 : 18)
     }
 }
 
@@ -160,6 +169,7 @@ extension AssistantSheetHeader where Action == EmptyView {
         subtitle: String? = nil,
         icon: String? = nil,
         accent: Color = SCPalette.terracotta,
+        compact: Bool = false,
         onClose: @escaping () -> Void
     ) {
         self.init(
@@ -168,6 +178,7 @@ extension AssistantSheetHeader where Action == EmptyView {
             subtitle: subtitle,
             icon: icon,
             accent: accent,
+            compact: compact,
             onClose: onClose,
             action: { EmptyView() }
         )

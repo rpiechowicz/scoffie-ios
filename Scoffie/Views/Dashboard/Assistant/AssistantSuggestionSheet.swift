@@ -5,11 +5,16 @@ import SwiftUI
 /// kategorię o sugestię”).
 ///
 /// To NIE zgłoszenie (`AssistantReportSheet`: błąd, zagrożenie, obraza —
-/// sprawa do decyzji), tylko sygnał jakości: szybkie powody
-/// (`AGENT_FEEDBACK_TAGS` z serwera) i zdanie „jak powinno być”. Idzie tym
-/// samym `PUT agent/messages/:id/feedback` co kciuk, z `rating: DOWN`, i trafia
-/// do działu „Oceny” w panelu. Działa także przy odpowiedzi już zgłoszonej.
-/// Istniejąca podpowiedź otwiera się do poprawienia.
+/// sprawa do decyzji), tylko sygnał jakości. Idzie tym samym
+/// `PUT agent/messages/:id/feedback` co kciuk, z `rating: DOWN`, `tags`
+/// (`AGENT_FEEDBACK_TAGS`) i `comment`, i trafia do działu „Oceny” w panelu.
+///
+/// Runda 2 tego samego dnia („uprość to i zrób ładniej”): półarkusz
+/// z kompaktowym nagłówkiem, CZTERY kafle 2 × 2 (glif w krążku + jedno-dwa
+/// słowa, zaznaczenie tintem `scChoiceSurface(.tile)` z ptaszkiem) i jedno pole
+/// „Jak powinno być?”. „Coś innego” jako kafel odpadło — od tego jest pole.
+/// Bez etykiet sekcji i zdań objaśnień. Istniejąca podpowiedź otwiera się do
+/// poprawienia.
 struct AssistantSuggestionSheet: View {
     let message: AgentChatMessage
     /// Oddaje komunikat błędu albo `nil` przy sukcesie.
@@ -28,12 +33,17 @@ struct AssistantSuggestionSheet: View {
 
     private var isEditing: Bool { message.feedbackNote != nil }
 
-    private static let options: [(code: String, title: String, icon: String)] = [
-        ("TOO_LONG", "Za długo", "text.alignleft"),
-        ("NOT_WHAT_I_ASKED", "Nie o to pytałem", "questionmark.bubble"),
-        ("BAD_DISHES", "Nietrafione dania", "fork.knife"),
-        ("TOO_SLOW", "Za wolno", "tortoise"),
-        ("OTHER", "Coś innego", "ellipsis"),
+    private struct Option: Identifiable {
+        let id: String
+        let title: String
+        let icon: String
+    }
+
+    private static let options: [Option] = [
+        Option(id: "TOO_LONG", title: "Za długo", icon: "text.alignleft"),
+        Option(id: "NOT_WHAT_I_ASKED", title: "Nie o to pytałem", icon: "questionmark.bubble"),
+        Option(id: "BAD_DISHES", title: "Nietrafione dania", icon: "fork.knife"),
+        Option(id: "TOO_SLOW", title: "Za wolno", icon: "tortoise"),
     ]
 
     private var trimmedComment: String {
@@ -49,32 +59,26 @@ struct AssistantSuggestionSheet: View {
             eyebrow: "Podpowiedź",
             title: isEditing ? "Popraw podpowiedź" : "Co poprawić?",
             icon: "lightbulb",
+            compact: true,
             onClose: { dismiss() },
             footer: { sendButton }
         ) {
-            VStack(alignment: .leading, spacing: 14) {
-                EditorialSheetSectionLabel(title: "Co było nie tak")
-                AllergenChipFlow(spacing: 8) {
-                    ForEach(Self.options, id: \.code) { option in
-                        let isOn = tags.contains(option.code)
-                        AssistantChip(
-                            title: option.title,
-                            icon: isOn ? "checkmark" : option.icon,
-                            highlighted: isOn
-                        ) {
-                            if isOn { tags.remove(option.code) } else { tags.insert(option.code) }
-                        }
-                        .accessibilityAddTraits(isOn ? [.isSelected] : [])
+            VStack(alignment: .leading, spacing: 12) {
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                    spacing: 10
+                ) {
+                    ForEach(Self.options) { option in
+                        tile(option)
                     }
                 }
 
-                EditorialSheetSectionLabel(title: "Jak powinno być")
-                    .padding(.top, 6)
-                TextField("Np. krócej, bez ryby, szybsze dania", text: $comment, axis: .vertical)
-                    .lineLimit(3...6)
+                TextField("Jak powinno być?", text: $comment, axis: .vertical)
+                    .lineLimit(2...5)
                     .font(.system(size: 15))
                     .focused($commentFocused)
-                    .padding(14)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 13)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.scTileBg(scheme))
@@ -82,15 +86,17 @@ struct AssistantSuggestionSheet: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .strokeBorder(
-                                commentFocused ? AssistantLook.terra(scheme).opacity(0.5) : Color.scTileStroke(scheme),
-                                lineWidth: 1
+                                commentFocused ? AssistantLook.terra(scheme).opacity(0.45) : Color.scTileStroke(scheme),
+                                lineWidth: commentFocused ? 1.2 : 1
                             )
                     )
+                    .animation(.smooth(duration: 0.2), value: commentFocused)
 
                 if let errorMessage {
                     SCInlineErrorText(errorMessage)
                 }
             }
+            .padding(.horizontal, 4)
             .padding(.top, 4)
         }
         .presentationDetents([.medium, .large])
@@ -100,10 +106,49 @@ struct AssistantSuggestionSheet: View {
         .onAppear(perform: prefill)
     }
 
+    /// Kafel powodu: glif w krążku, podpis; wybrany — tint terakoty
+    /// i ptaszek w rogu.
+    private func tile(_ option: Option) -> some View {
+        let isOn = tags.contains(option.id)
+        let accent = AssistantLook.terra(scheme)
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return Button {
+            withAnimation(.smooth(duration: 0.2)) {
+                if isOn { tags.remove(option.id) } else { tags.insert(option.id) }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(isOn ? accent.opacity(0.16) : AssistantLook.quietTint(scheme))
+                    Image(systemName: isOn ? "checkmark" : option.icon)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(isOn ? accent : AssistantLook.muted(scheme))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .frame(width: 32, height: 32)
+
+                Text(option.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(isOn ? accent : AssistantLook.ink(scheme))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .scChoiceSurface(shape, isOn: isOn, accent: accent, offFill: Color.scTileBg(scheme), style: .tile)
+            .contentShape(shape)
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.97))
+        .accessibilityAddTraits(isOn ? [.isSelected] : [])
+    }
+
     private var sendButton: some View {
         AssistantPrimaryButton(
             action: AssistantCardAction(
-                title: isDone ? "Wysłano" : (isEditing ? "Zapisz podpowiedź" : "Wyślij podpowiedź"),
+                title: isDone ? "Dzięki!" : (isEditing ? "Zapisz podpowiedź" : "Wyślij"),
                 icon: isDone ? "checkmark" : "paperplane",
                 action: submit
             ),
@@ -131,7 +176,9 @@ struct AssistantSuggestionSheet: View {
         errorMessage = nil
         commentFocused = false
         // Kolejność z listy, nie ze zbioru — panel liczy powody tak samo.
-        let ordered = Self.options.map(\.code).filter { tags.contains($0) }
+        // Powód spoza kafli (stare „OTHER”) zostaje, jeśli był zaznaczony.
+        let known = Self.options.map(\.id)
+        let ordered = known.filter { tags.contains($0) } + tags.subtracting(known).sorted()
         let text = trimmedComment
         Task { @MainActor in
             let failure = await onSubmit(ordered, text.isEmpty ? nil : text)
