@@ -1478,6 +1478,11 @@ private struct AssistantOptionsStorySheet: View {
     /// Zwykły stan, nie `@GestureState`: gest przewracania stron jest
     /// UIKit-owy (`OptionsPagePan`), więc powrót do zera robimy sami.
     @State private var dragX: CGFloat = 0
+    /// Przegląd propozycji dla kilku osób: czyje dania przeglądamy (`nil` =
+    /// wszyscy) — przełącznik nad „Zamień to danie” (runda 11, Rafał: „tab
+    /// switcher nad albo obok buttonu, żeby można było przełączać między
+    /// osobami”). Zawęża strony, kreski i przewijanie.
+    @State private var person: String?
 
     init(
         slotDetail: String?,
@@ -1519,6 +1524,40 @@ private struct AssistantOptionsStorySheet: View {
 
     private var endPage: Int { options.count }
     private var isEnd: Bool { page == endPage }
+
+    /// Dania osoby z przełącznika (albo wszystkie) — tylko po nich chodzą
+    /// strony i kreski. Strona końcowa zostaje zawsze.
+    private var visibleDishes: [Int] {
+        guard person != nil else { return Array(options.indices) }
+        return options.indices.filter {
+            ProposalAudience.eats(context($0)?.participantIds ?? [], person: person)
+        }
+    }
+
+    /// Przełącznik osób ma sens tylko w przeglądzie domu z kilku osób, gdy
+    /// nie wszystkie dania są wspólne.
+    private var showsPersonSwitcher: Bool {
+        isReview && members.count > 1 && options.indices.contains {
+            !ProposalAudience.isShared(context($0)?.participantIds ?? [], members: members)
+        }
+    }
+
+    /// Sąsiednia strona w kolejności widocznych dań (+ strona końcowa).
+    private func neighbor(_ delta: Int) -> Int {
+        let order = visibleDishes + [endPage]
+        guard let at = order.firstIndex(of: page) else {
+            return delta > 0 ? (order.first { $0 > page } ?? endPage) : (order.last { $0 < page } ?? page)
+        }
+        return order[min(max(at + delta, 0), order.count - 1)]
+    }
+
+    /// Nowa osoba w przełączniku: jeśli bieżące danie nie jest jej, skok na
+    /// jej pierwsze danie (albo na stronę końcową, gdy nie ma żadnego).
+    private func switchPerson(to id: String?) {
+        person = id
+        guard !isEnd, !visibleDishes.contains(page) else { return }
+        go(to: visibleDishes.first ?? endPage)
+    }
 
     /// Przycisk pod daniem: „Wstaw na środę” przy wyborze, „Zamień to danie”
     /// przy przeglądzie propozycji; `nil` = sam podgląd (propozycja już
@@ -1712,16 +1751,28 @@ private struct AssistantOptionsStorySheet: View {
                 .accessibilityHidden(true)
 
             ZStack {
-                HStack(spacing: 7) {
-                    OptionsKesMark(size: 15, color: light ? Color.white : AssistantLook.terraFill(scheme))
-                        .accessibilityHidden(true)
-                    Text("Asystent")
-                        .font(.system(size: 17, weight: .semibold))
-                        .tracking(-0.4)
-                        .foregroundStyle(light ? Color.white : AssistantLook.ink(scheme))
+                // Przegląd propozycji: „Asystent” z lewej, na środku plakietka
+                // BIEŻĄCEGO dania — pora w jej kolorze i dzień (runda 11:
+                // „na środku, czy to śniadanie/obiad, czytelne w badge”).
+                if isReview, !isEnd, let when = context(dish) {
+                    mealBadge(when, light: light)
+                        .transition(.opacity)
+                        .id(dish)
                 }
-                .shadow(color: .black.opacity(light ? 0.35 : 0), radius: 1, y: 1)
-                .accessibilityAddTraits(.isHeader)
+
+                HStack {
+                    HStack(spacing: 7) {
+                        OptionsKesMark(size: 15, color: light ? Color.white : AssistantLook.terraFill(scheme))
+                            .accessibilityHidden(true)
+                        Text("Asystent")
+                            .font(.system(size: 17, weight: .semibold))
+                            .tracking(-0.4)
+                            .foregroundStyle(light ? Color.white : AssistantLook.ink(scheme))
+                    }
+                    .shadow(color: .black.opacity(light ? 0.35 : 0), radius: 1, y: 1)
+                    .accessibilityAddTraits(.isHeader)
+                    .frame(maxWidth: .infinity, alignment: isReview ? .leading : .center)
+                }
 
                 HStack {
                     Spacer()
@@ -1743,6 +1794,7 @@ private struct AssistantOptionsStorySheet: View {
             .frame(height: 40)
             .padding(.top, 7)
             .padding(.horizontal, 16)
+            .animation(motion(.smooth(duration: 0.3)), value: dish)
 
             segments
                 .padding(.horizontal, 16)
@@ -1753,6 +1805,35 @@ private struct AssistantOptionsStorySheet: View {
         .animation(motion(.easeInOut(duration: 0.3)), value: light)
     }
 
+    /// Plakietka bieżącego dania na środku nagłówka: ikona pory, pora i dzień
+    /// („Śniadanie · Pon”). Na zdjęciu biała, na tle — w tincie pory.
+    private func mealBadge(_ when: ProposalStoryContext, light: Bool) -> some View {
+        let accent = when.slot?.cozyAccent ?? AssistantLook.terra(scheme)
+        let meal = when.slot?.title ?? when.mealLabel
+        let day = when.day.map { $0.components(separatedBy: ",").first ?? $0 }
+        return HStack(spacing: 5) {
+            if let icon = when.slot?.icon {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(accent)
+            }
+            Text(day.map { "\(meal) · \($0)" } ?? meal)
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 11)
+        .frame(height: 28)
+        .background(
+            Capsule(style: .continuous)
+                .fill(light ? Color.white.opacity(0.92) : accent.opacity(scheme == .dark ? 0.22 : 0.14))
+        )
+        .frame(maxWidth: 170)
+        .accessibilityElement(children: .combine)
+    }
+
     /// `gap: 5; height: 3; radius: 2`. Na zdjęciu biel (aktywny 1, reszta
     /// 0,45, kreski 0,6); na stronie końcowej szarość 0,16 i pełna terakota.
     /// Aktywny segment to JEDEN kształt, który przesuwa się między slotami.
@@ -1760,16 +1841,17 @@ private struct AssistantOptionsStorySheet: View {
         let light = chromeOnPhoto
         let on = light ? Color.white : AssistantLook.terra(scheme)
         let off = light ? Color.white.opacity(0.45) : AssistantLook.ink(scheme).opacity(0.16)
+        let visible = visibleDishes
         return HStack(spacing: 0) {
-            ForEach(options.indices, id: \.self) { index in
-                segmentButton(index, label: "Danie \(index + 1) z \(options.count)") {
+            ForEach(visible, id: \.self) { index in
+                segmentButton(index, label: "Danie \((visible.firstIndex(of: index) ?? 0) + 1) z \(visible.count)") {
                     RoundedRectangle(cornerRadius: 2, style: .continuous).fill(off)
                 } active: {
                     RoundedRectangle(cornerRadius: 2, style: .continuous).fill(on)
                 }
                 // Tydzień: kreski dań jednego dnia blisko siebie, większa
                 // przerwa między dniami — widać, gdzie kończy się dzień.
-                .padding(.leading, index == 0 ? 0 : (startsNewDay(index) ? 9 : (groupsByDay ? 3 : 5)))
+                .padding(.leading, index == visible.first ? 0 : (startsNewDay(index) ? 9 : (groupsByDay ? 3 : 5)))
             }
             // „Coś innego” to nie kolejne danie, tylko wyjście — krótka pełna
             // pigułka zamiast kolejnego pełnego segmentu (i zamiast dawnych
@@ -1780,8 +1862,9 @@ private struct AssistantOptionsStorySheet: View {
             } active: {
                 Capsule(style: .continuous).fill(isReview ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme))
             }
-            .padding(.leading, options.isEmpty ? 0 : 5)
+            .padding(.leading, visible.isEmpty ? 0 : 5)
         }
+        .animation(motion(.smooth(duration: 0.3)), value: person)
     }
 
     /// Przegląd kilku dni — kreski grupują się po dniu.
@@ -1789,9 +1872,11 @@ private struct AssistantOptionsStorySheet: View {
         isReview && Set(contexts.compactMap(\.day)).count > 1
     }
 
+    /// Nowy dzień względem POPRZEDNIEGO WIDOCZNEGO dania.
     private func startsNewDay(_ index: Int) -> Bool {
-        guard groupsByDay, index > 0 else { return false }
-        return context(index)?.day != context(index - 1)?.day
+        let visible = visibleDishes
+        guard groupsByDay, let at = visible.firstIndex(of: index), at > 0 else { return false }
+        return context(index)?.day != context(visible[at - 1])?.day
     }
 
     /// Segment jest też skokiem na stronę — pole dotyku wyższe niż sama kreska,
@@ -1836,6 +1921,20 @@ private struct AssistantOptionsStorySheet: View {
 
             VStack(spacing: 0) {
                 info(allFacts)
+                if showsPersonSwitcher {
+                    entrance(
+                        5,
+                        ProposalPersonFilter(
+                            members: members,
+                            me: me,
+                            selection: Binding(
+                                get: { person },
+                                set: { switchPerson(to: $0) }
+                            )
+                        )
+                    )
+                    .padding(.top, 18)
+                }
                 if let dishActionTitle {
                     entrance(
                         5,
@@ -1999,7 +2098,7 @@ private struct AssistantOptionsStorySheet: View {
                     swapping(
                         index,
                         shift: 10,
-                        ProposalWhenPills(context: when, saved: reviewStatus == .applied, members: members, me: me)
+                        ProposalWhenPills(context: when, saved: reviewStatus == .applied, members: members, me: me, showsWhen: false)
                     )
                 }
             }
@@ -2366,9 +2465,9 @@ private struct AssistantOptionsStorySheet: View {
     /// szybki ruch też przewraca stronę.
     private func finishSwipe(dx: CGFloat, velocity: CGFloat) {
         if dx < -50 || (dx < -16 && velocity < -450) {
-            go(to: page + 1)
+            go(to: neighbor(1))
         } else if dx > 50 || (dx > 16 && velocity > 450) {
-            go(to: page - 1)
+            go(to: neighbor(-1))
         }
         // Treść wraca spod palca sprężyną — także gdy strona się zmieniła,
         // bo wtedy odjeżdża razem z przewróceniem.
@@ -2432,6 +2531,9 @@ private struct ProposalWhenPills: View {
     /// co jest dla kogo”). Gdy się nie mieści, dzień skraca się do nazwy dnia.
     var members: [HouseholdMemberSnapshot] = []
     var me: String? = nil
+    /// Pora i dzień — `false`, gdy stoją już w plakietce nagłówka (przegląd
+    /// propozycji, runda 11): nad daniem zostaje „dla kogo” i „W planie”.
+    var showsWhen: Bool = true
 
     @Environment(\.colorScheme) private var scheme
 
@@ -2446,6 +2548,7 @@ private struct ProposalWhenPills: View {
 
     private func pills(showsSaved: Bool, shortDay: Bool) -> some View {
         HStack(spacing: 6) {
+            if showsWhen {
             HStack(spacing: 5) {
                 if let slot = context.slot {
                     Image(systemName: slot.icon)
@@ -2458,8 +2561,9 @@ private struct ProposalWhenPills: View {
                     .foregroundStyle(AssistantLook.ink(scheme))
             }
             .modifier(ProposalPill(fill: (context.slot?.cozyAccent ?? AssistantLook.terraFill(scheme)).opacity(scheme == .dark ? 0.22 : 0.16)))
+            }
 
-            if let day = context.day {
+            if showsWhen, let day = context.day {
                 Text(shortDay ? (day.components(separatedBy: ",").first ?? day) : day)
                     .font(.system(size: 13.5, weight: .medium))
                     .tracking(-0.2)

@@ -84,8 +84,9 @@ struct EditorialSheetHeader<Accessory: View>: View {
                             .font(.system(size: compact ? 19 : 24, weight: compact ? .bold : .heavy))
                             .tracking(compact ? -0.3 : -0.4)
                             .foregroundStyle(Color.scLabel(scheme))
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.85)
+                            // Kompaktowy (półarkusz) — zawsze jedna linia.
+                            .lineLimit(compact ? 1 : 2)
+                            .minimumScaleFactor(compact ? 0.8 : 0.85)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
