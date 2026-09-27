@@ -102,6 +102,9 @@ struct AgentMessageThinkingDTO: Decodable, Equatable {
     /// na żywo. `nil`, gdy zegary się rozjechały.
     let durationMs: Int?
     let steps: [AgentProgressStepDTO]
+    /// Start tury — od niego liczymy sekundę każdego kroku i przerwy na
+    /// myślenie. Starszy serwer go nie oddaje.
+    var startedAt: String? = nil
 }
 
 /// Odpowiedź `PUT agent/messages/:id/feedback`.
@@ -143,6 +146,12 @@ struct AgentProgressStepDTO: Decodable, Equatable {
     /// dalej — pokazywany na żywo, pomijany w podsumowaniu po turze. Brak
     /// pola = zwykły krok (starszy serwer go nie oddaje).
     let transient: Bool?
+    /// To samo zdanie w czasie przeszłym („Ułożyłem propozycję dnia”) —
+    /// arkusz „Jak pracowałem”. Starszy serwer go nie oddaje.
+    var done: String? = nil
+    /// Fakty z wejścia i wyniku narzędzia („Kolacja · na środę — 3 z 38
+    /// pasujących”). Starszy serwer go nie oddaje.
+    var detail: String? = nil
 
     var isHandoff: Bool { phase == "PLANNING" }
     var isTransient: Bool { transient == true }

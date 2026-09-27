@@ -280,7 +280,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Arkusz = LISTA 4 powodów w jednej karcie (krążek w kolorze powodu · nazwa · `SCCheckbox`, bez `withAnimation`
   i podmiany glifu — „animacje check za wolne”) + pole; prawe wcięcie paska = lewe (glif „⋯” 28 pt
   od brzegu). „Jak pracowałem”: tytuł = co tura zrobiła (`ThinkingHeadline`: „Ułożyłem plan”, „Dobrałem dania”…),
-  kafelek = stała ikona przebiegu `point.3.filled.connected.trianglepath.dotted` w terakocie, czas kapsułką obok krzyżyka. Półarkusze „Jak pracowałem”
+  kafelek = stała ikona przebiegu `point.3.filled.connected.trianglepath.dotted` w terakocie, czas kapsułką obok krzyżyka.
+  Runda 5 („serio pokazuj, co się działo”): oś z danych tury — krok = `done` (czas przeszły z serwera) + `detail` (fakty
+  z wejścia i wyniku narzędzia) + sekunda tury („0:08”, od `thinking.startedAt`); przerwy ≥ 2 s na myślenie to ciche
+  wiersze na przerywanej osi, ostatni odcinek „Napisałem odpowiedź”; glify szare; na końcu „Wynik” z karty
+  (`ThinkingResult`), bez „Odpowiedź gotowa”. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
+  i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
+  kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”
   i „Co poprawić?” mają kompaktowy nagłówek (`EditorialSheetHeader(compact:)` / `AssistantSheetScaffold(compact:)`:
   kafelek 36, tytuł 19); oś kroków bez karty, kolor = rodzaj pracy (`ThinkingKind`). Bez kopiowania w pasku („co nam to daje
   realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz

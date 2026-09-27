@@ -40,10 +40,13 @@ struct AssistantAnswerFooter: View {
     var onShowThinking: (() -> Void)? = nil
     /// Kciuk w dół ma już podpowiedź — wiersz „Co poprawić?” znika.
     var hasSuggestion: Bool = false
-    /// „Podpowiedz” / „Popraw podpowiedź”; `nil` = bez podpowiedzi.
-    var onSuggest: (() -> Void)? = nil
+    /// Arkusz podpowiedzi dla kierunku oceny („Co było dobre?” / „Co nie
+    /// zagrało?”); `nil` = bez podpowiedzi.
+    var onSuggest: ((AgentFeedback) -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
+    /// Podbicie = kciuk w górę właśnie wstawiony — gra „wybuch” kropek.
+    @State private var cheer = 0
 
     /// Kolumna tekstu odpowiedzi — patrz `AssistantVoice`.
     static let textInset: CGFloat = 28
@@ -119,16 +122,30 @@ struct AssistantAnswerFooter: View {
             iconButton(
                 feedback == .up ? "hand.thumbsup.fill" : "hand.thumbsup",
                 active: feedback == .up,
+                tint: AssistantLook.sage(scheme),
                 label: "Dobra odpowiedź",
                 bounce: feedback == .up
             ) {
-                onRate(feedback == .up ? nil : .up)
+                if feedback == .up {
+                    onRate(nil)
+                } else {
+                    cheer += 1
+                    onRate(.up)
+                    // Arkusz „Co było dobre?” po wybuchu kropek — inaczej
+                    // zasłoniłby animację w pierwszej klatce.
+                    if let onSuggest {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { onSuggest(.up) }
+                    }
+                }
             }
+            .overlay { ThumbCheer(trigger: cheer, tint: AssistantLook.sage(scheme)) }
+            .sensoryFeedback(.success, trigger: cheer)
             .accessibilityAddTraits(feedback == .up ? .isSelected : [])
 
             iconButton(
                 feedback == .down ? "hand.thumbsdown.fill" : "hand.thumbsdown",
                 active: feedback == .down,
+                tint: AssistantLook.terra(scheme),
                 label: "Słaba odpowiedź",
                 bounce: feedback == .down
             ) {
@@ -139,7 +156,7 @@ struct AssistantAnswerFooter: View {
                     onRate(nil)
                 } else {
                     onRate(.down)
-                    onSuggest?()
+                    onSuggest?(.down)
                 }
             }
             .accessibilityAddTraits(feedback == .down ? .isSelected : [])
@@ -150,9 +167,14 @@ struct AssistantAnswerFooter: View {
                         Label("Udostępnij", systemImage: "square.and.arrow.up")
                     }
                 }
-                if feedback == .down, let onSuggest {
-                    Button(action: onSuggest) {
-                        Label(hasSuggestion ? "Popraw podpowiedź" : "Co poprawić?", systemImage: "lightbulb")
+                if let feedback, let onSuggest {
+                    Button {
+                        onSuggest(feedback)
+                    } label: {
+                        Label(
+                            hasSuggestion ? "Popraw podpowiedź" : (feedback == .up ? "Co było dobre?" : "Co nie zagrało?"),
+                            systemImage: "lightbulb"
+                        )
                     }
                 }
                 // Obiecane w FAQ i w regulaminie („Zgłoś odpowiedź”) — idzie na
@@ -173,25 +195,89 @@ struct AssistantAnswerFooter: View {
     private func iconButton(
         _ symbol: String,
         active: Bool,
+        tint: Color? = nil,
         label: String,
         bounce: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            iconLabel(symbol, active: active)
-                .symbolEffect(.bounce, value: bounce)
+            iconLabel(symbol, active: active, tint: tint)
+                .symbolEffect(.bounce.up.byLayer, value: bounce)
         }
         .buttonStyle(PlanPressStyle(scale: 0.9))
         .accessibilityLabel(label)
     }
 
-    private func iconLabel(_ symbol: String, active: Bool) -> some View {
+    /// Zaznaczony kciuk w kolorze systemu (27.09.2026: „zmień kolor like na
+    /// nasz systemowy”) — w górę szałwia (jak „zapisane”), w dół terakota.
+    private func iconLabel(_ symbol: String, active: Bool, tint: Color? = nil) -> some View {
         Image(systemName: symbol)
             .font(.system(size: 14.5, weight: .medium))
-            .foregroundStyle(active ? AssistantLook.ink(scheme) : AssistantLook.faint(scheme))
+            .foregroundStyle(active ? (tint ?? AssistantLook.ink(scheme)) : AssistantLook.faint(scheme))
             .contentTransition(.symbolEffect(.replace))
             .frame(width: Self.iconFrame, height: 30)
             .contentShape(Rectangle())
             .scTapHeight(drawn: 30)
+    }
+}
+
+/// „Wybuch” pod kciukiem w górę: sześć kropek w szałwii rozlatuje się
+/// z krążka i gaśnie (0,5 s), razem z podskokiem glifu i haptyką sukcesu.
+/// Trwałe widoki z `keyframeAnimator` na liczniku (wzór `BurstHeart`
+/// w ulubionych), nie wstawiane z `Task.sleep`. Przy Reduce Motion nie gra.
+private struct ThumbCheer: View {
+    let trigger: Int
+    let tint: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct Burst {
+        var spread: CGFloat = 0
+        var opacity: Double = 0
+        var scale: CGFloat = 0.4
+    }
+
+    var body: some View {
+        if !reduceMotion {
+            ZStack {
+                ForEach(0..<6, id: \.self) { index in
+                    dot(index)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private func dot(_ index: Int) -> some View {
+        let angle = Double(index) * .pi / 3 - .pi / 2
+        let size: CGFloat = index.isMultiple(of: 2) ? 4 : 3
+        return Circle()
+            .fill(tint)
+            .frame(width: size, height: size)
+            .keyframeAnimator(initialValue: Burst(), trigger: trigger) { content, burst in
+                content
+                    .scaleEffect(burst.scale)
+                    .offset(
+                        x: CGFloat(cos(angle)) * burst.spread,
+                        y: CGFloat(sin(angle)) * burst.spread
+                    )
+                    .opacity(burst.opacity)
+            } keyframes: { _ in
+                KeyframeTrack(\.spread) {
+                    MoveKeyframe(0)
+                    CubicKeyframe(15, duration: 0.42)
+                }
+                KeyframeTrack(\.opacity) {
+                    MoveKeyframe(0)
+                    LinearKeyframe(1, duration: 0.06)
+                    LinearKeyframe(1, duration: 0.18)
+                    LinearKeyframe(0, duration: 0.26)
+                }
+                KeyframeTrack(\.scale) {
+                    MoveKeyframe(0.4)
+                    SpringKeyframe(1, duration: 0.3, spring: .snappy)
+                }
+            }
     }
 }
