@@ -39,7 +39,8 @@ struct ShoppingHistorySheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ShoppingSheetHeader(title: "Historia", onClose: onClose) {
+                    // Glif „Historii list” z menu Zakupów.
+                    ShoppingSheetHeader(title: "Historia", icon: "clock.arrow.circlepath", onClose: onClose) {
                         overflowMenu
                     }
 

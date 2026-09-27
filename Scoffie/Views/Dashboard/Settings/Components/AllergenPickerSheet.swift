@@ -181,9 +181,13 @@ struct AllergenPickerSheet: View {
             VStack(spacing: 0) {
                 // „Wyczyść” jak w filtrach i w wykluczaniu składników —
                 // tylko wtedy, gdy coś jest zaznaczone.
+                // Tarcza w szałwii — jak karta „Jesz wszystko” pod spodem
+                // i etykieta alergenów w zachęcie Asystenta.
                 EditorialSheetHeader(
                     eyebrow: "Dieta",
                     title: "Alergeny",
+                    icon: "checkmark.shield.fill",
+                    accent: SCPalette.sage,
                     onClose: { dismiss() }
                 ) {
                     if !selected.isEmpty {

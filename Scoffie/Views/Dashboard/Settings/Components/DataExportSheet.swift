@@ -18,7 +18,11 @@ struct DataExportSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(eyebrow: "Konto i dane", title: "Pobierz moje dane") {
+                    EditorialSheetHeader(
+                        eyebrow: "Konto i dane",
+                        title: "Pobierz moje dane",
+                        icon: "square.and.arrow.down.fill"
+                    ) {
                         dismiss()
                     }
 

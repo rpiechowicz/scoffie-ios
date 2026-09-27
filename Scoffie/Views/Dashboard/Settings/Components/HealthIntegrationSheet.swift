@@ -38,6 +38,7 @@ struct HealthIntegrationSheet: View {
                     EditorialSheetHeader(
                         eyebrow: "Integracje",
                         title: "Zdrowie",
+                        icon: "figure.walk",
                         onClose: onClose
                     )
 

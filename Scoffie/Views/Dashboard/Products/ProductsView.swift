@@ -436,16 +436,14 @@ struct ProductsView: View {
         // „Zakupy”, nie „Produkty”: ekran wchodzi koszykiem z nagłówka Planu
         // i mówi o jednej czynności — kupowaniu na ten tydzień. „Produkty”
         // brzmiało jak katalog, którym ten ekran nigdy nie był.
-        EditorialPageHeader(title: "Zakupy") {
-            HStack(spacing: 6) {
-                overflowMenu
-
-                // Ekran Zakupów sam jest arkuszem (wchodzi koszykiem
-                // z nagłówka Planu), więc zamyka się tym samym krzyżykiem,
-                // co wszystko inne. Wcześniej jedyną drogą wyjścia było
-                // przeciągnięcie w dół — działa, ale trzeba na nie wpaść.
-                SCSheetCloseButton { dismiss() }
-            }
+        //
+        // Ekran Zakupów sam jest arkuszem (wchodzi koszykiem z nagłówka
+        // Planu), więc stoi na nagłówku arkuszy zakupów: kafelek z koszykiem
+        // (ten sam glif, co przycisk na Planie), tytuł, „…” i ten sam
+        // krzyżyk, co wszystko inne. Wcześniej jedyną drogą wyjścia było
+        // przeciągnięcie w dół — działa, ale trzeba na nie wpaść.
+        ShoppingSheetHeader(title: "Zakupy", icon: MenuConstans.Products.icon, onClose: { dismiss() }) {
+            overflowMenu
         }
         .padding(.horizontal, pageHorizontalPadding)
         .padding(.top, pageTopPadding)

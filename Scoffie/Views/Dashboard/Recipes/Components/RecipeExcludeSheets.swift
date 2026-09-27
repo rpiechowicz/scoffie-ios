@@ -331,10 +331,12 @@ struct RecipeExcludeSheet: View {
             VStack(spacing: 0) {
                 // „Wyczyść” jak w arkuszu działu — tutaj zdejmuje wszystkie
                 // wykluczenia naraz (profil z kłódką zostaje, bo nie jest
-                // wykluczeniem z tego arkusza).
+                // wykluczeniem z tego arkusza). Kafelek ten sam, co w sekcji
+                // „Wyklucz składniki” w Filtrach, która tu prowadzi.
                 EditorialSheetHeader(
                     eyebrow: "Filtry",
                     title: "Wyklucz składniki",
+                    icon: "nosign",
                     onClose: { dismiss() }
                 ) {
                     if !filters.excludedIngredients.isEmpty {

@@ -70,6 +70,7 @@ struct MealSlotsSheet: View {
                 EditorialSheetHeader(
                     eyebrow: "Gospodarstwo",
                     title: "Posiłki w planie",
+                    icon: "fork.knife",
                     onClose: onClose
                 )
                 .padding(.horizontal, 20)

@@ -42,6 +42,8 @@ struct CookidooIntegrationSheet: View {
                     EditorialSheetHeader(
                         eyebrow: "Integracje",
                         title: "Cookidoo",
+                        icon: "app.connected.to.app.below.fill",
+                        accent: SCPalette.sage,
                         onClose: onClose
                     )
 

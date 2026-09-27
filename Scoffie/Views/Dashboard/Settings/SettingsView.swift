@@ -837,7 +837,8 @@ struct SettingsView: View {
     // MARK: - Sheets
     //
     // Every sheet shares the same chassis as the main settings list — warm
-    // `SCPageBackground` canvas, editorial header (eyebrow + title + xmark),
+    // `SCPageBackground` canvas, editorial header (kafelek + eyebrow + title +
+    // xmark; kafelek i kolor z wiersza listy, który otwiera arkusz),
     // and `Color.scTileBg` cards with `Color.scTileStroke` hairlines. The
     // existing data wiring (createHousehold / leaveCurrentHousehold /
     // createInvitationLink, AppStorage flags) is preserved unchanged.
@@ -846,9 +847,13 @@ struct SettingsView: View {
         editorialSheet {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    // Kafelek domu w szałwii — jak wiersz „Gospodarstwo”
+                    // i arkusz istniejącego gospodarstwa.
                     EditorialSheetHeader(
                         eyebrow: "Nowe gospodarstwo",
-                        title: "Utwórz wspólną przestrzeń"
+                        title: "Utwórz wspólną przestrzeń",
+                        icon: "house.fill",
+                        accent: SCPalette.sage
                     ) {
                         showCreateHouseholdSheet = false
                     }
@@ -956,7 +961,9 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     EditorialSheetHeader(
                         eyebrow: "Personalizacja",
-                        title: "Powiadomienia"
+                        title: "Powiadomienia",
+                        icon: "bell.fill",
+                        accent: SettingsAccent.coral
                     ) {
                         showNotificationsSheet = false
                     }
@@ -1185,7 +1192,9 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     EditorialSheetHeader(
                         eyebrow: "Personalizacja",
-                        title: "Wygląd"
+                        title: "Wygląd",
+                        icon: "slider.horizontal.3",
+                        accent: SCPalette.indigo
                     ) {
                         showAppearanceSheet = false
                     }
@@ -1351,7 +1360,9 @@ struct SettingsView: View {
         pinnedEditorialSheet {
             EditorialSheetHeader(
                 eyebrow: "Personalizacja",
-                title: "Dieta i alergeny"
+                title: "Dieta i alergeny",
+                icon: "leaf.fill",
+                accent: SCPalette.sage
             ) {
                 showDietSheet = false
             }
@@ -1961,7 +1972,8 @@ struct SettingsView: View {
         pinnedEditorialSheet {
             EditorialSheetHeader(
                 eyebrow: "Wsparcie",
-                title: "Pomoc i FAQ"
+                title: "Pomoc i FAQ",
+                icon: "book.fill"
             ) {
                 showHelpSheet = false
                 expandedFAQ = nil

@@ -95,7 +95,7 @@ struct AssistantConsentGateView: View {
         .onAppear { if ageFromProfile { draftBinding.wrappedValue.confirmsAge = true } }
         .task { await consents.refresh() }
         .sheet(isPresented: $showPrivacyPolicy) {
-            LegalDocumentSheet(title: "Polityka prywatności") {
+            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) {
                 PrivacyPolicyContent()
             }
         }
@@ -117,6 +117,10 @@ struct AssistantConsentGateView: View {
             AssistantSheetScaffold(
                 eyebrow: "Prywatność",
                 title: isGranted ? "Zgoda na asystenta" : "Zanim zaczniemy",
+                // Ten sam kafelek, co nagłówek kroku zgody w zakładce
+                // (`SCStepHeader` niżej): prywatność w szałwii, nie funkcja.
+                icon: "lock.shield.fill",
+                accent: SCPalette.sage,
                 onClose: { dismiss() },
                 footer: { footer }
             ) {
