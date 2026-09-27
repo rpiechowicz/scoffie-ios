@@ -258,6 +258,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   odpowiedź to JEDEN widok: szkic jest wiadomością pozorną (`AgentStore.draftMessage`), ostatnia
   odpowiedź tury dostaje jego klucz (`liveKey` → `anchorID` = „turn-…”), a zegar żyje W WIADOMOŚCI
   (`AgentChatMessage.reveal`, `AgentRevealClock.finishing` — tempo szkicu płynie dalej, całość ≤ 3,5 s),
+  Odpowiedź, która szkicu NIE kontynuuje (zdanie serwera po planowaniu), nie urywa pisania w pół słowa
+  (27.09.2026): `letDraftFinish` czeka, aż szkic dopisze się do końca, + 0,8 s (≤ 5 s), a odpowiedź wchodzi BEZ
+  `liveKey` — nowy widok pisany od początku (`answerContinuesDraft` rozstrzyga: wspólny początek ≥ to, co widać).
   nie w `@State` widoku. Szkic pisze się od 18 zn/s (`draftMinRate`; pierwsza porcja z serwera
   to zwykle jedno słowo, a serwer zapisuje szkic najwyżej raz na sekundę), gotowa odpowiedź od 90.
   Tekst jest ZŁOŻONY od pierwszej klatki, nienapisane przezroczyste, ostatnie 14 znaków rampą krycia
@@ -283,8 +286,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   kafelek = stała ikona przebiegu `point.3.filled.connected.trianglepath.dotted` w terakocie, czas kapsułką obok krzyżyka.
   Runda 5 („serio pokazuj, co się działo”): oś z danych tury — krok = `done` (czas przeszły z serwera) + `detail` (fakty
   z wejścia i wyniku narzędzia) + sekunda tury („0:08”, od `thinking.startedAt`); przerwy ≥ 2 s na myślenie to ciche
-  wiersze na przerywanej osi, ostatni odcinek „Napisałem odpowiedź” BEZ czasu (całość w nagłówku), sekunda przy kroku
-  od 0:01; glify szare; bez „Wyniku” i bez „Odpowiedź gotowa” (runda 6). Kciuki i „⋯” TYLKO pod odpowiedzią modelu
+  wiersze… — ZASTĄPIONE w rundzie 8: wiersz = JEDNA akcja (ikona · zdanie w czasie przeszłym · fakty · czas trwania
+  po prawej), akcja trwa od swojego początku do początku następnej (pierwsza od startu, ostatnia do końca tury),
+  granice zaokrąglone przed odjęciem — suma = czas w nagłówku; BEZ wierszy przerw, „Napisałem odpowiedź”, „Wyniku”. Kciuki i „⋯” TYLKO pod odpowiedzią modelu
   (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
   i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
   kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”

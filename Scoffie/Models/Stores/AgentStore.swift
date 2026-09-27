@@ -1045,6 +1045,10 @@ final class AgentStore {
                 // Ostatniego kroku NIE przypisujemy — kroki trafią do „Myślałem"
                 // z `turn.progress`, a wskaźnik nie ma zmieniać koloru w klatce,
                 // w której gaśnie.
+                // Szkic, którego gotowa odpowiedź NIE kontynuuje, dopisuje się
+                // do końca i chwilę stoi — dopiero potem wchodzi odpowiedź.
+                await letDraftFinish(before: turn)
+                guard activeTurnToken == token, !Task.isCancelled else { return }
                 pendingTurnId = nil
                 // Komunikat z poprzedniej, nieudanej próby nie ma prawa wisieć
                 // pod świeżą odpowiedzią.
@@ -1085,6 +1089,33 @@ final class AgentStore {
         lastTurnErrorCode = "LOCAL_TIMEOUT"
         lastTurnWrote = false
         noteUnfinishedTurnInBackground()
+    }
+
+    /// Czy gotowa odpowiedź jest dalszym ciągiem tego, co szkic JUŻ pokazał.
+    /// Tak — pisze się dalej w tym samym widoku. Nie (np. zdanie serwera po
+    /// planowaniu zamiast wstępu modelu) — podmiana urwałaby pisanie w pół
+    /// słowa.
+    private func answerContinuesDraft(_ answer: String, at now: Date) -> Bool {
+        guard !draftText.isEmpty else { return true }
+        let shown = draftReveal.count(at: now, limit: draftText.count)
+        return AgentRevealClock.commonPrefixCount(draftText, answer) >= shown
+    }
+
+    /// 27.09.2026 (Rafał: „przerywa mu pisanie w połowie, bo już jest
+    /// odpowiedź z serwera — tak nie może być; niech dopisze, poczeka sekundę
+    /// i narysuje odpowiedź”): gdy odpowiedź NIE kontynuuje szkicu, szkic
+    /// dopisuje się do końca swoim tempem, stoi 0,8 s i dopiero wtedy
+    /// `apply(finished:)` wstawia odpowiedź — jako nowy tekst pisany od
+    /// początku. Najwyżej 5 s czekania.
+    private func letDraftFinish(before turn: AgentTurnDTO) async {
+        guard turn.status == "DONE", liveTurnId == turn.id, !draftText.isEmpty,
+              let answer = turn.messages?.last(where: { $0.role == "ASSISTANT" })
+        else { return }
+        let now = Date()
+        guard !answerContinuesDraft(answer.text, at: now) else { return }
+        let done = draftReveal.finishDate(total: draftText.count)
+        let wait = max(0, done.timeIntervalSince(now)) + 0.8
+        try? await Task.sleep(for: .seconds(min(wait, 5)))
     }
 
     /// Nowa porcja szkicu. Zegar zaczyna od tego, co już widać (i co nowy
@@ -1159,10 +1190,18 @@ final class AgentStore {
                 if answers[answers.count - 1].thinking == nil {
                     answers[answers.count - 1].thinking = Self.thinkingSummary(for: turn, localStart: turnStartedAt)
                 }
+                let now = Date()
+                let continues = liveTurnId == turn.id && !draftText.isEmpty
+                    && answerContinuesDraft(answers[answers.count - 1].text, at: now)
                 // Ostatnia odpowiedź zajmuje miejsce szkicu — ten sam klucz,
                 // więc to JEDEN widok: tekst pisze się dalej, zamiast
-                // przeniknąć w nowy widok, który zaczyna od siebie.
-                answers[answers.count - 1].liveKey = Self.liveKey(turnId: turn.id)
+                // przeniknąć w nowy widok, który zaczyna od siebie. Odpowiedź,
+                // która szkicu NIE kontynuuje (szkic dopisał się już do końca —
+                // `letDraftFinish`), wchodzi jako nowy widok i pisze się od
+                // początku, zamiast podmieniać litery w środku zdania.
+                if continues {
+                    answers[answers.count - 1].liveKey = Self.liveKey(turnId: turn.id)
+                }
                 // Odpowiedź ma się DOPISAĆ, nie wskoczyć: szkic w trakcie tury
                 // odsłaniał się znak po znaku, a gotowa odpowiedź podmieniała
                 // go całą naraz — najczęściej z pustego, bo szkic dochodzi
@@ -1181,9 +1220,7 @@ final class AgentStore {
                 // szkicu płynie dalej, a nie zmienia się skokowo w chwili
                 // końca tury. Zegar żyje w wiadomości, więc przebudowa wiersza
                 // nie zaczyna pisania od nowa.
-                let now = Date()
                 let shown = draftReveal.count(at: now, limit: draftText.count)
-                let continues = liveTurnId == turn.id && !draftText.isEmpty
                 lastAnswerContinuedDraft = continues && shown > 0
                 for index in answers.indices {
                     let isLast = index == answers.count - 1

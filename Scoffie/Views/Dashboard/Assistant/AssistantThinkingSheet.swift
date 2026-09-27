@@ -3,19 +3,11 @@ import SwiftUI
 /// „Jak pracowałem” — przebieg tury, otwierany z podpisu „✦ Myślałem 42 s ›”
 /// pod odpowiedzią (27.09.2026).
 ///
-/// Runda 5 (Rafał: „chcę tutaj serio pokazywać, co się działo, jak myślał —
-/// »Odpowiedź gotowa« jest bez sensu, stare pozycje daj szare, bo wygląda to
-/// zbyt cukierkowo”). Oś czasu z prawdziwych danych tury:
-/// - krok = zdanie w czasie PRZESZŁYM z serwera (`done`, zapas: `label`),
-///   pod nim fakty z wejścia i wyniku narzędzia (`detail`: „Kolacja · na
-///   środę · lekkie — 3 z 38 pasujących”), po prawej sekunda tury („0:08”);
-/// - przerwy między krokami, w których model myślał (≥ 2 s), są osobnymi,
-///   cichymi wierszami „Przemyślałem wyniki · 6 s” na przerywanej osi — tak
-///   widać, gdzie szedł czas;
-/// - ostatni odcinek to „Napisałem odpowiedź” — BEZ czasu (całość stoi
-///   w nagłówku), a sekunda przy kroku tylko od 0:01 („0:00” nic nie mówi);
-/// - bez „Wyniku” na końcu (runda 6: „usuń”) — wynik jest w rozmowie.
-/// Wszystkie glify osi szare (neutralny krążek).
+/// Oś czasu z prawdziwych danych tury — wiersz na AKCJĘ asystenta (runda 8,
+/// `ThinkingEntry`): zdanie w czasie przeszłym z serwera (`done`), pod nim
+/// fakty z wejścia i wyniku narzędzia (`detail`), po prawej ile trwała —
+/// od swojego początku do początku następnej, więc suma = czas w nagłówku.
+/// Bez „Napisałem odpowiedź”, „Wyniku” i wierszy przerw; glify szare.
 ///
 /// Nagłówek: tytuł = co tura zrobiła (`ThinkingHeadline`), stała ikona
 /// przebiegu, czas kapsułką obok krzyżyka. Nazwa narzędzia NIE wychodzi na
@@ -52,7 +44,8 @@ struct AssistantThinkingSheet: View {
                 }
             }
             .padding(.horizontal, 4)
-            .padding(.top, 2)
+            // Oddech pod nagłówkiem — oś nie klei się do tytułu.
+            .padding(.top, 14)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -88,54 +81,45 @@ struct AssistantThinkingSheet: View {
 
 // MARK: - Oś czasu
 
-/// Wpis osi: krok albo przerwa, w której model myślał / pisał.
-enum ThinkingEntry {
-    case step(AgentProgressStepDTO, offset: TimeInterval?)
-    /// `seconds == nil` = bez czasu (ostatni odcinek — całość jest w nagłówku).
-    case pause(text: String, icon: String, seconds: TimeInterval?)
-
-    /// Najkrótsza przerwa warta wiersza — krótsze to szum strumienia.
-    static let pauseThreshold: TimeInterval = 2
+/// Wiersz osi = JEDNA akcja asystenta (runda 8, Rafał: „wszystkie w czasie
+/// przeszłym, po prawej czas, nie może się powielać czynność… każda taka
+/// sama jak »układam ten dzień« — ikona, tekst i czas po prawej, a suma czasów
+/// ma być taka jak w nagłówku”; „napisałem odpowiedź — nie pokazuj, nic nie
+/// wnosi”).
+///
+/// Akcja trwa od swojego początku do początku następnej — pierwsza od startu
+/// tury (myślenie przed nią to część jej pracy), ostatnia do końca tury
+/// (pisanie odpowiedzi też). Granice zaokrąglone do sekundy PRZED odjęciem,
+/// więc suma wierszy = czas w nagłówku co do sekundy. Bez osobnych wierszy
+/// „przerwy” i „napisałem odpowiedź”: tyle wierszy, ile akcji.
+struct ThinkingEntry {
+    let step: AgentProgressStepDTO?
+    let seconds: Int?
 
     static func timeline(_ thinking: AgentThinkingSummary) -> [ThinkingEntry] {
         let steps = thinking.steps
         let times: [Date?] = steps.map { AgentStore.parseTimestamp($0.at) }
         let start: Date? = thinking.startedAt ?? times.compactMap { $0 }.first
-        var end: Date?
-        if let start, let duration = thinking.duration {
-            end = start.addingTimeInterval(duration)
-        }
+        let total: Int? = thinking.duration.map { Int($0.rounded()) }
 
         guard !steps.isEmpty else {
-            return [.pause(text: "Przemyślałem pytanie i napisałem odpowiedź", icon: "text.bubble", seconds: nil)]
+            return [ThinkingEntry(step: nil, seconds: total)]
         }
 
-        var entries: [ThinkingEntry] = []
-        if let start, let first = times[0] {
-            let gap = first.timeIntervalSince(start)
-            if gap >= pauseThreshold {
-                entries.append(.pause(text: "Zastanowiłem się, od czego zacząć", icon: "brain", seconds: gap))
-            }
+        // Sekunda tury, w której akcja ruszyła; pierwsza zawsze od 0.
+        let boundaries: [Int?] = times.enumerated().map { index, at in
+            if index == 0 { return 0 }
+            guard let at, let start else { return nil }
+            return max(0, Int(at.timeIntervalSince(start).rounded()))
         }
-        for (index, step) in steps.enumerated() {
-            let at = times[index]
-            var offset: TimeInterval?
-            if let at, let start { offset = at.timeIntervalSince(start) }
-            entries.append(.step(step, offset: offset))
 
-            let isLastStep = index + 1 == steps.count
-            let next: Date? = isLastStep ? end : times[index + 1]
-            guard let at, let next else { continue }
-            let gap = next.timeIntervalSince(at)
-            if !isLastStep {
-                if gap >= pauseThreshold {
-                    entries.append(.pause(text: "Przemyślałem wyniki", icon: "brain", seconds: gap))
-                }
-            } else if gap >= 1 {
-                entries.append(.pause(text: "Napisałem odpowiedź", icon: "text.bubble", seconds: nil))
-            }
+        return steps.indices.map { index in
+            let from = boundaries[index]
+            let to: Int? = index + 1 < steps.count ? boundaries[index + 1] : total
+            var seconds: Int?
+            if let from, let to { seconds = max(0, to - from) }
+            return ThinkingEntry(step: steps[index], seconds: seconds)
         }
-        return entries
     }
 }
 
@@ -147,60 +131,36 @@ private struct ThinkingRow: View {
     @Environment(\.colorScheme) private var scheme
 
     private static let disc: CGFloat = 28
-    private static let pauseMark: CGFloat = 20
 
-    private var isPause: Bool {
-        if case .pause = entry { return true }
-        return false
+    private var title: String {
+        guard let step = entry.step else { return "Przemyślałem i odpowiedziałem" }
+        return step.done ?? step.label
+    }
+
+    private var icon: String {
+        entry.step.map(ThinkingKind.icon) ?? "sparkles"
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            marker
-            content
-        }
-        .padding(.vertical, isPause ? 5 : 8)
-        .background(alignment: .leading) { axis }
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private var marker: some View {
-        switch entry {
-        case let .step(step, _):
             ZStack {
                 Circle().fill(Color.scPageBase(scheme))
                 Circle().fill(AssistantLook.quietTint(scheme))
-                Image(systemName: ThinkingKind.icon(step))
+                Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AssistantLook.muted(scheme))
             }
             .frame(width: Self.disc, height: Self.disc)
             .accessibilityHidden(true)
-        case let .pause(_, icon, _):
-            ZStack {
-                Capsule().fill(Color.scPageBase(scheme)).frame(width: 18)
-                Image(systemName: icon)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(AssistantLook.faint(scheme))
-            }
-            .frame(width: Self.disc, height: Self.pauseMark)
-            .accessibilityHidden(true)
-        }
-    }
 
-    @ViewBuilder
-    private var content: some View {
-        switch entry {
-        case let .step(step, offset):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(step.done ?? step.label)
+                    Text(title)
                         .font(.system(size: 15, weight: .medium))
                         .tracking(-0.2)
                         .foregroundStyle(AssistantLook.ink(scheme))
                         .fixedSize(horizontal: false, vertical: true)
-                    if let detail = step.detail, !detail.isEmpty {
+                    if let detail = entry.step?.detail, !detail.isEmpty {
                         Text(detail)
                             .font(.system(size: 13))
                             .lineSpacing(1)
@@ -209,32 +169,27 @@ private struct ThinkingRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 4)
 
-                if let offset, offset >= 1 {
-                    Text(Self.stamp(offset))
-                        .font(.system(size: 12, weight: .medium))
+                if let seconds = entry.seconds {
+                    Text(AssistantThoughtLine.clock(TimeInterval(seconds)))
+                        .font(.system(size: 13, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AssistantLook.faint(scheme))
-                        .padding(.top, 5)
                 }
             }
-        case let .pause(text, _, seconds):
-            Text(seconds.map { "\(text) · \(AssistantThoughtLine.clock($0))" } ?? text)
-                .font(.system(size: 13))
-                .foregroundStyle(AssistantLook.faint(scheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 2)
+            .padding(.top, 4)
         }
+        .padding(.vertical, 8)
+        .background(alignment: .leading) { axis }
+        .accessibilityElement(children: .combine)
     }
 
-    /// Oś: kreska przez środek znaczników, od sąsiada do sąsiada. Przy
-    /// przerwach przerywana — to czas bez kroku.
+    /// Oś: kreska przez środek krążków, od sąsiada do sąsiada.
     private var axis: some View {
         VStack(spacing: 0) {
             segment(visible: !isFirst)
-                .frame(height: isPause ? 5 : 8)
-            Color.clear.frame(height: isPause ? Self.pauseMark : Self.disc)
+                .frame(height: 8)
+            Color.clear.frame(height: Self.disc)
             segment(visible: !isLast)
         }
         .frame(width: 2)
@@ -243,21 +198,12 @@ private struct ThinkingRow: View {
 
     @ViewBuilder
     private func segment(visible: Bool) -> some View {
-        if !visible {
-            Color.clear
-        } else if isPause {
-            AxisLine()
-                .stroke(AssistantLook.hair(scheme), style: StrokeStyle(lineWidth: 1.5, dash: [2, 3]))
-        } else {
+        if visible {
             AxisLine()
                 .stroke(AssistantLook.hair(scheme), lineWidth: 1.5)
+        } else {
+            Color.clear
         }
-    }
-
-    /// „0:08”, „1:12” — sekunda tury, w której krok ruszył.
-    static func stamp(_ seconds: TimeInterval) -> String {
-        let whole = max(0, Int(seconds.rounded()))
-        return String(format: "%d:%02d", whole / 60, whole % 60)
     }
 }
 
