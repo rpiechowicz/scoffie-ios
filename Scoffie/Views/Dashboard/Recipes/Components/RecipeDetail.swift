@@ -231,8 +231,11 @@ struct RecipeDetailView: View {
     }
 
     private var totalUnitsRange: ClosedRange<Int> {
-        (Self.servingsRange.lowerBound * PlanPortions.unitsPerServing - PlanPortions.unitsPerServing + totalStepUnits)
-            ...(Self.servingsRange.upperBound * PlanPortions.unitsPerServing)
+        // `...` na początku linii Swift czyta jako osobną instrukcję
+        // (przedrostek), a nie ciąg zakresu — getter zostawał bez `return`.
+        let lower = Self.servingsRange.lowerBound * PlanPortions.unitsPerServing - PlanPortions.unitsPerServing + totalStepUnits
+        let upper = Self.servingsRange.upperBound * PlanPortions.unitsPerServing
+        return lower...upper
     }
 
     /// Całe porcje do zapisu i do listy zakupów (API przyjmuje liczby
