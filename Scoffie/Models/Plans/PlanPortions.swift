@@ -13,6 +13,9 @@ import Foundation
 /// ios-contract.md` i §16 raportu `per-user-portions-write-safety`):
 /// - porcja jednej osoby → wyłącznie `weeklyPlans:setPortion` z tokenem TEJ
 ///   osoby (`PlanMeal.portionRevisions`);
+/// - pierwsze ustawienie porcji osób (pozycja bez alokacji, nowe danie
+///   z „Dodaj do planu”) → `portionPolicy: REPLACE` + pełna mapa audytorium,
+///   z tokenem pozycji, gdy telefon ją zna;
 /// - zapis pozycji z alokacją (kto je, zamiana dania, dołączenie) →
 ///   `portionPolicy: PRESERVE` + token pozycji (przy zamianie para tokenów
 ///   źródła i celu); serwer sam przelicza porcje na nowe audytorium;
@@ -100,8 +103,8 @@ enum PlanPortions {
 
     // MARK: - Decyzja zapisu pozycji
 
-    /// Tokeny zapisu `PRESERVE` (`upsertWeekSlot`).
-    struct PreserveTokens: Equatable {
+    /// Tokeny zapisu pozycji (`upsertWeekSlot`) — `PRESERVE` i `REPLACE`.
+    struct RevisionTokens: Equatable {
         /// `items[].revision` pozycji zapisywanej — przy zamianie ŹRÓDŁA.
         let expectedRevision: Int
         /// Zamiana dania: token celu idzie ZAWSZE, `nil` = „celu w slocie nie
@@ -110,12 +113,21 @@ enum PlanPortions {
         let expectedTargetRevision: Int?
     }
 
+    /// Co zapis pozycji mówi serwerowi o porcjach osób.
+    enum PortionWrite: Equatable {
+        /// `PRESERVE` — zachowaj porcje; tokeny wymagane.
+        case preserve(RevisionTokens)
+        /// `REPLACE` — pełna mapa porcji audytorium (jednostki 1/20);
+        /// tokeny, gdy pozycja (albo źródło zamiany) jest znana telefonowi.
+        case replace(units: [String: Int], tokens: RevisionTokens?)
+    }
+
     /// Jak wysłać zapis pozycji.
     enum UpsertDecision: Equatable {
         /// Jak dotąd, bez tokenów — pozycje, których dotyka, nie mają alokacji.
         case send
-        /// Pozycja z alokacją: `portionPolicy: PRESERVE` + tokeny.
-        case preserve(PreserveTokens)
+        /// Z polityką porcji (`PRESERVE` / `REPLACE`).
+        case write(PortionWrite)
         /// Alokacja bez znanych tokenów — nie wysyłamy nic, odświeżamy.
         case blocked
     }
@@ -144,12 +156,87 @@ enum PlanPortions {
             guard let sourceRevision = source?.revision else { return .blocked }
             if let target {
                 guard let targetRevision = target.revision else { return .blocked }
-                return .preserve(PreserveTokens(expectedRevision: sourceRevision, isSwap: true, expectedTargetRevision: targetRevision))
+                return .write(.preserve(RevisionTokens(expectedRevision: sourceRevision, isSwap: true, expectedTargetRevision: targetRevision)))
             }
-            return .preserve(PreserveTokens(expectedRevision: sourceRevision, isSwap: true, expectedTargetRevision: nil))
+            return .write(.preserve(RevisionTokens(expectedRevision: sourceRevision, isSwap: true, expectedTargetRevision: nil)))
         }
         guard let targetRevision = target?.revision else { return .blocked }
-        return .preserve(PreserveTokens(expectedRevision: targetRevision, isSwap: false, expectedTargetRevision: nil))
+        return .write(.preserve(RevisionTokens(expectedRevision: targetRevision, isSwap: false, expectedTargetRevision: nil)))
+    }
+
+    /// Zapis z JAWNYMI porcjami osób (`REPLACE`) — pierwsze ustawienie porcji
+    /// na pozycji bez alokacji albo nowe danie z porcjami. Tokeny idą, gdy
+    /// telefon zna pozycję: nieaktualna kończy się konfliktem zamiast
+    /// nadpisania. `knownRevision` to token z migawki ekranu, na którym
+    /// użytkownik edytował (ma pierwszeństwo przed stanem store'u).
+    static func replaceDecision(
+        slot: [SlotMeal],
+        recipeId: UUID,
+        replacingRecipeId: UUID?,
+        units: [String: Int],
+        knownRevision: Int? = nil
+    ) -> UpsertDecision {
+        let replacing = replacingRecipeId == recipeId ? nil : replacingRecipeId
+        let target = slot.first { $0.recipeId == recipeId }
+        if let replacing {
+            guard let source = slot.first(where: { $0.recipeId == replacing }) else {
+                // Źródła telefon nie zna — zamiana bez tokenów (legacy),
+                // chyba że cel ma alokację, której bez tokenu nie wolno zastąpić.
+                return target?.hasPortions == true ? .blocked : .write(.replace(units: units, tokens: nil))
+            }
+            guard let sourceRevision = source.revision else {
+                return source.hasPortions || target?.hasPortions == true
+                    ? .blocked
+                    : .write(.replace(units: units, tokens: nil))
+            }
+            if let target {
+                guard let targetRevision = target.revision else { return .blocked }
+                return .write(.replace(units: units, tokens: RevisionTokens(
+                    expectedRevision: sourceRevision, isSwap: true, expectedTargetRevision: targetRevision
+                )))
+            }
+            return .write(.replace(units: units, tokens: RevisionTokens(
+                expectedRevision: sourceRevision, isSwap: true, expectedTargetRevision: nil
+            )))
+        }
+        if let target {
+            // Ekran bez tokenu nie widział alokacji, którą store ma już
+            // z serwera (inny telefon) — REPLACE ze świeżym tokenem nadpisałby
+            // ją bez konfliktu.
+            if knownRevision == nil, target.hasPortions { return .blocked }
+            guard let revision = knownRevision ?? target.revision else {
+                return .write(.replace(units: units, tokens: nil))
+            }
+            return .write(.replace(units: units, tokens: RevisionTokens(
+                expectedRevision: revision, isSwap: false, expectedTargetRevision: nil
+            )))
+        }
+        return .write(.replace(units: units, tokens: nil))
+    }
+
+    /// Porcje osób bez alokacji — podział `totalUnits` (np. `plannedServings`
+    /// × 20) po pół porcji, tak żeby suma się zgadzała: reszta idzie po 0,5
+    /// na pierwsze osoby (5 porcji na 3 → 2 / 1,5 / 1,5). Najmniej 0,5, najwięcej
+    /// 6 na osobę. Punkt startowy stepperów; na serwer idzie dopiero po zmianie.
+    static func seededUnits(eaters: [String], totalUnits: Int) -> [String: Int] {
+        let people = Array(Set(eaters)).sorted()
+        guard !people.isEmpty else { return [:] }
+        let steps = max(0, totalUnits) / stepUnits
+        let base = steps / people.count
+        let extra = steps % people.count
+        var result: [String: Int] = [:]
+        for (index, person) in people.enumerated() {
+            let units = (base + (index < extra ? 1 : 0)) * stepUnits
+            result[person] = min(unitsRange.upperBound, max(unitsRange.lowerBound, units))
+        }
+        return result
+    }
+
+    /// Czy łączne porcje da się rozpisać na osoby (najwyżej 6 na osobę).
+    /// Nie — zostaje stepper porcji łącznych (np. 8 porcji w domu
+    /// jednoosobowym: gotowanie na zapas).
+    static func fitsPerPerson(totalUnits: Int, eaterCount: Int) -> Bool {
+        eaterCount > 0 && totalUnits <= eaterCount * unitsRange.upperBound
     }
 
     /// Optymistyczna alokacja po zapisie `PRESERVE` ze zmianą „kto je” —

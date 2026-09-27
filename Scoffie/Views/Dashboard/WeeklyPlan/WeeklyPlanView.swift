@@ -617,15 +617,16 @@ struct WeeklyPlanView: View {
                     onSaveServings: { newValue in
                         saveServings(newValue, for: target)
                     },
-                    // Porcje per osoba: zamiast steppera porcji łącznych —
-                    // porcja każdego jedzącego ze stepperem co 0,5.
+                    // Porcja każdego jedzącego ze stepperem co 0,5 — przy
+                    // każdym posiłku; bez listy domowników zostaje stepper
+                    // porcji łącznych.
                     personalPortions: RecipeDetailPortions(
                         meal: target.meal,
                         members: sessionStore.householdMembers,
                         viewerId: sessionStore.currentUserId
                     ),
-                    onSavePortions: { units in
-                        savePortions(units, for: target)
+                    onSavePortions: { all, changed in
+                        savePortions(all: all, changed: changed, for: target)
                     }
                 )
                 .recipeDetailSheet()
@@ -855,12 +856,31 @@ struct WeeklyPlanView: View {
         }
     }
 
-    /// Zapisuje porcje osób zmienione w szczegółach — każda osoba osobnym
-    /// `setPortion` z własnym tokenem (`MealCalendarStore.setPortions`).
-    private func savePortions(_ units: [String: Int], for target: DetailTarget) {
+    /// Zapisuje porcje osób ustawione w szczegółach. Posiłek z porcjami osób
+    /// — każda zmieniona osoba osobnym `setPortion` z własnym tokenem;
+    /// posiłek bez nich — pierwsze ustawienie: pełna mapa audytorium
+    /// (`REPLACE`) z tokenem pozycji z tej samej migawki.
+    private func savePortions(all: [String: Int], changed: [String: Int], for target: DetailTarget) {
         Task { @MainActor in
+            if !target.meal.hasPortions {
+                _ = await mealStore.upsertWeekSlot(
+                    recipe: target.meal.recipe,
+                    // Audytorium = klucze mapy (bez byłych domowników), inaczej
+                    // serwer odrzuci mapę jako niepasującą do osób.
+                    participantIds: target.meal.isShared ? [] : all.keys.sorted(),
+                    householdMemberCount: knownHouseholdMemberCount,
+                    portions: all,
+                    expectedRevision: target.meal.revision,
+                    for: target.date,
+                    slot: target.slot,
+                    weekStart: datesViewModel.weekStartISO
+                )
+                detailTarget = nil
+                refreshShoppingList()
+                return
+            }
             _ = await mealStore.setPortions(
-                units,
+                changed,
                 // Tokeny z posiłku, na którym użytkownik edytował — nie
                 // z planu przeładowanego w tle (konflikt zamiast nadpisania).
                 expectedRevisions: target.meal.portionRevisions,
