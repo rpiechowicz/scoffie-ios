@@ -59,9 +59,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w trybie `.review` (`OptionsStoryMode`): tag = pora (· dzień), pod daniem „Zamień to danie” (wysyła
   „Zamień w tej propozycji …: X. Pokaż 3 inne dania na tę porę do wyboru.” → serwer oddaje OPTIONS →
   „Wybieram: …” → ta sama propozycja z nowym daniem), strona końcowa „Wszystko pasuje?” z zapisem.
-  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian. Od 24.09.2026 nad nazwą dania
-  stoją pigułki KIEDY (`ProposalWhenPills`: pora z ikoną w `cozyAccent` + „Dziś, 24 września”, po zapisie „W planie”),
-  a strona końcowa idzie za STANEM propozycji (`OptionsStoryMode.review(…, status:)`, `ProposalEndCopy`): „Wszystko
+  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian. Pigułki nad nazwą dania
+  (`ProposalWhenPills`: pora, dzień, „dla kogo”, „W planie”) USUNIĘTE w rundzie 13 (27.09) — nad nazwą sam eyebrow;
+  strona końcowa idzie za STANEM propozycji (`OptionsStoryMode.review(…, status:)`, `ProposalEndCopy`): „Wszystko
   pasuje?” z listą zestawu i zgodą w SZAŁWII (`ProposalAcceptButton`), zapis NIE zamyka arkusza — „Wstawiam do planu…”
   przechodzi w „Jest w planie” + „Otwórz plan”; cofnięta / nieaktualna / wygasła mają własne słowa.
   Runda 15 (24.09.2026): na dole strony końcowej JEDEN przycisk (zapis → „Otwórz plan” → przy stanie bez zapisu
@@ -83,8 +83,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Nazwa dania w `AssistantMealRow` ma do dwóch linii zamiast ucinania.
   „Kto co je” (27.09.2026 wieczorem, Rafał: „więcej dań, więcej osób — totalne zamieszanie, user gubi się w sekundę”):
   klocki w `AssistantProposalPeople.swift` — `ProposalAudience` („Cały dom” / „Ania i Ty”, w domu jednoosobowym nic),
-  `ProposalAudiencePill` (na `PlanWhoBadge` z Planu), `ProposalPersonFilter` („Wszyscy · Ty · Ania”). Strona dania ma
-  trzecią pigułkę „dla kogo” (przy braku miejsca dzień skraca się do nazwy dnia), kreski stron grupują się po dniu
+  `ProposalAudiencePill` (na `PlanWhoBadge` z Planu), `ProposalPersonFilter` („Wszyscy · Ty · Ania”). Kreski stron grupują się po dniu
   (większa przerwa między dniami). Strona końcowa (`ProposalRecap`) = filtr osób + karta NA DZIEŃ, w niej pora → danie;
   pora z kilkoma daniami (różne dla różnych osób) = nagłówek pory i dania pod nim, każde z „dla kogo”; kcal dnia tylko
   dla wybranej osoby (suma dań różnych osób nic nie znaczyła). Dawny tydzień „wiersz na dzień z trzema krążkami” odpadł.
@@ -317,8 +316,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   gdy filtr działa). Dom z kilku osób → `ProposalPersonSwitcher` W JEDNEJ LINII z „Zamień to danie” (domek
   + awatary, wybrany krążek przesuwa się `matchedGeometryEffect`; >3 osoby = krążek z menu). Osoba, pora
   i dzień idą JEDNĄ drogą `applyFilters` → `visibleDishes` (strony, kreski, `neighbor`); wybór dający zero dań
-  jest wyłączony, danie spoza filtra = skok na pierwsze pasujące. Nad daniem bez pory i dnia
-  (`ProposalWhenPills(showsWhen: false)`). Tytuły „Jak pracowałem” KRÓTKIE („Plan gotowy”, „Zamiennik”), kompaktowy
+  jest wyłączony, danie spoza filtra = skok na najbliższe pasujące. Nad daniem ŻADNYCH pigułek
+  (runda 13: „Cały dom” niepotrzebne — osoba jest w przełączniku). Tytuły „Jak pracowałem” KRÓTKIE („Plan gotowy”, „Zamiennik”), kompaktowy
   nagłówek arkusza ma tytuł zawsze w jednej linii. Kciuki i „⋯” TYLKO pod odpowiedzią modelu
   (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
   i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”

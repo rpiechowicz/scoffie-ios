@@ -2234,42 +2234,13 @@ private struct AssistantOptionsStorySheet: View {
         .padding(.horizontal, 20)
     }
 
-    /// Wysokość rzędu nad nazwą: pigułki pory i dnia w przeglądzie są
-    /// wyższe niż sam eyebrow przy wyborze.
-    private var eyebrowHeight: CGFloat { usesWhenRow ? 28 : 21 }
+    /// Wysokość rzędu nad nazwą.
+    private var eyebrowHeight: CGFloat { 21 }
 
-    /// Wiersz pigułek nad daniem ma treść tylko przy „dla kogo” (dom z kilku
-    /// osób) albo „W planie” — pora i dzień są w plakietce nagłówka.
-    private var usesWhenRow: Bool {
-        isReview && !contexts.isEmpty && (members.count > 1 || reviewStatus == .applied)
-    }
-
-    @ViewBuilder
-    private var eyebrowRow: some View {
-        if usesWhenRow {
-            whenRow
-        } else {
-            choiceEyebrowRow
-        }
-    }
-
-    /// Przegląd propozycji: KIEDY i NA CO, zanim przeczyta się nazwę —
-    /// „Śniadanie” w kolorze pory i „Dziś, 23 września”. Zmienia się razem
-    /// z daniem, tym samym ruchem co tag przy wyborze.
-    private var whenRow: some View {
-        ZStack(alignment: .leading) {
-            ForEach(options.indices, id: \.self) { index in
-                if let when = context(index) {
-                    swapping(
-                        index,
-                        shift: 10,
-                        ProposalWhenPills(context: when, saved: reviewStatus == .applied, members: members, me: me, showsWhen: false)
-                    )
-                }
-            }
-        }
-        .frame(minHeight: eyebrowHeight, alignment: .leading)
-    }
+    /// Nad nazwą sam eyebrow z tagiem — w przeglądzie bez pigułek „dla kogo”
+    /// i „W planie” (runda 13): osoba jest w przełączniku obok „Zamień to
+    /// danie”, pora i dzień w nagłówku.
+    private var eyebrowRow: some View { choiceEyebrowRow }
 
     /// Eyebrow stoi w miejscu; zmienia się tylko tag obok niego.
     private var choiceEyebrowRow: some View {
@@ -2784,84 +2755,6 @@ private struct ProposalPersonSwitcher: View {
 }
 
 // MARK: - Przegląd propozycji: kiedy, stan, zgoda
-
-/// „☀ Śniadanie” w kolorze pory + „Dziś, 23 września” (+ „W planie” po
-/// zapisie, gdy się mieści) — nad nazwą dania w arkuszu przeglądu.
-private struct ProposalWhenPills: View {
-    let context: ProposalStoryContext
-    let saved: Bool
-    /// Dom z kilku osób: trzecia pigułka „dla kogo” (27.09.2026 — „nie widzę,
-    /// co jest dla kogo”). Gdy się nie mieści, dzień skraca się do nazwy dnia.
-    var members: [HouseholdMemberSnapshot] = []
-    var me: String? = nil
-    /// Pora i dzień — `false`, gdy stoją już w plakietce nagłówka (przegląd
-    /// propozycji, runda 11): nad daniem zostaje „dla kogo” i „W planie”.
-    var showsWhen: Bool = true
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            pills(showsSaved: saved, shortDay: false)
-            pills(showsSaved: false, shortDay: false)
-            pills(showsSaved: false, shortDay: true)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func pills(showsSaved: Bool, shortDay: Bool) -> some View {
-        HStack(spacing: 6) {
-            if showsWhen {
-            HStack(spacing: 5) {
-                if let slot = context.slot {
-                    Image(systemName: slot.icon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(slot.cozyAccent)
-                }
-                Text(context.slot?.title ?? context.mealLabel)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-            }
-            .modifier(ProposalPill(fill: (context.slot?.cozyAccent ?? AssistantLook.terraFill(scheme)).opacity(scheme == .dark ? 0.22 : 0.16)))
-            }
-
-            if showsWhen, let day = context.day {
-                Text(shortDay ? (day.components(separatedBy: ",").first ?? day) : day)
-                    .font(.system(size: 13.5, weight: .medium))
-                    .tracking(-0.2)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-                    .modifier(ProposalPill(fill: AssistantLook.field(scheme)))
-            }
-
-            ProposalAudiencePill(participantIds: context.participantIds, members: members, me: me)
-
-            if showsSaved {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                    Text("W planie")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundStyle(AssistantLook.sage(scheme))
-                .modifier(ProposalPill(fill: AssistantLook.sageTint(scheme)))
-            }
-        }
-        .lineLimit(1)
-        .fixedSize()
-    }
-}
-
-private struct ProposalPill: ViewModifier {
-    let fill: Color
-
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(Capsule(style: .continuous).fill(fill))
-    }
-}
 
 /// Słowa strony końcowej przeglądu dla każdego stanu propozycji.
 private struct ProposalEndCopy {
