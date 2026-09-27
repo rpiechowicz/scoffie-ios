@@ -3,7 +3,8 @@
 # snapshot bez sufitu 4000, delta stronami z untilRevision, tombstone'y,
 # powtórzona dostawa, przerwany przebieg, RESET_REQUIRED, anulowanie i format
 # pliku cache oraz prawdziwy adapter DTO → domena (JSON → BackendRecipeDTO →
-# toAppRecipe) — bez Xcode GUI.
+# toAppRecipe) i cykl życia sesji (wylogowanie, zmiana konta, zapis w kolejce)
+# — bez Xcode GUI.
 #
 # Projekt nie ma targetu testów, więc — jak `card-contract-check.sh` —
 # kompilujemy czystą logikę (`CatalogSync.swift`, tylko Foundation)
@@ -15,6 +16,7 @@ cd "$(dirname "$0")/.."
 OUT=$(mktemp -d)/catalogsync
 xcrun swiftc -o "$OUT" \
   "Scoffie/Models/Components/CatalogSync.swift" \
+  "Scoffie/Models/Components/CatalogSyncCore.swift" \
   "Scoffie/Models/Components/MealSlot.swift" \
   "Scoffie/Models/Components/RecipesModel.swift" \
   "Scoffie/Networking/Recipes/BackendRecipeDTOs.swift" \

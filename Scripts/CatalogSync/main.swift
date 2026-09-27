@@ -482,5 +482,211 @@ await expectMappingError(
 dtoServer.breakPage = [:]
 check(dtoBase.revision == "\(epoch).10" && dtoBase.orderedItems.count == 5, "po wszystkich odrzuconych przebiegach stan wejściowy nietknięty")
 
+// MARK: - 13. Cykl życia sesji: wylogowanie i zmiana konta (review patch 2)
+//
+// Deterministycznie, bez sleepów: odpowiedź kończy się dopiero wtedy, gdy
+// sprawdzian wywoła `resume`, a kolejkę zapisu da się wstrzymać i opróżnić
+// (`flush`). Sprawdzany jest stan w pamięci ORAZ faktyczna zawartość plików.
+
+/// Odpowiedź, której koniec kontroluje sprawdzian. Metody rdzenia biegną
+/// poza głównym aktorem, więc stan pod zamkiem.
+final class Controlled<T> {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T, Error>?
+    private var onStart: CheckedContinuation<Void, Never>?
+    private var didStart = false
+
+    func wait() async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            self.continuation = continuation
+            didStart = true
+            let waiting = onStart
+            onStart = nil
+            lock.unlock()
+            waiting?.resume()
+        }
+    }
+
+    /// Czeka, aż zapytanie naprawdę wystartuje (continuation zapisana).
+    func started() async {
+        await withCheckedContinuation { (waiting: CheckedContinuation<Void, Never>) in
+            lock.lock()
+            if didStart {
+                lock.unlock()
+                waiting.resume()
+                return
+            }
+            onStart = waiting
+            lock.unlock()
+        }
+    }
+
+    func resume(_ value: T) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: value)
+    }
+}
+
+typealias StringCore = CatalogSyncCore<String>
+
+func makeFiles() -> CatalogCacheFiles {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("catalog-sync-\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return CatalogCacheFiles(directory: dir)
+}
+
+func householdOnDisk(_ files: CatalogCacheFiles) -> HouseholdRecipeCacheEnvelope<String>? {
+    guard let data = try? Data(contentsOf: files.householdURL) else { return nil }
+    return try? JSONDecoder().decode(HouseholdRecipeCacheEnvelope<String>.self, from: data)
+}
+
+func catalogRevisionOnDisk(_ files: CatalogCacheFiles) -> String?? {
+    guard let data = try? Data(contentsOf: files.catalogURL),
+          let envelope = try? JSONDecoder().decode(CatalogCacheEnvelope<String>.self, from: data) else { return nil }
+    return .some(envelope.revision)
+}
+
+func isCancelled(_ result: Result<Void, Error>) -> Bool {
+    if case .failure(let error) = result { return error is CancellationError }
+    return false
+}
+
+/// Silnik, którego strona delty czeka na `Controlled`.
+func controlledDeltaEngine(_ pending: Controlled<CatalogChangesPage<String>>) -> CatalogSyncEngine<String> {
+    CatalogSyncEngine(
+        pageLimit: 500,
+        fetchSnapshotPage: { _, _, _ in throw Boom() },
+        fetchChangesPage: { _, _, _, _ in try await pending.wait() }
+    )
+}
+
+let deltaPageA = CatalogChangesPage<String>(
+    resetRequired: false, revision: "e.9",
+    upserts: [(id: "r00000", item: "Przepis z żądania A")], tombstones: [], nextCursor: nil
+)
+
+// 13a. Żądanie A → wylogowanie → odpowiedź A.
+do {
+    let files = makeFiles()
+    let gate = CatalogCacheGate(queue: DispatchQueue(label: "check-13a"))
+    let coreA = StringCore(ownerKey: "u1_h1", files: files, gate: gate)
+    _ = try await coreA.syncCatalog(using: FakeServer(count: 3, revision: "e.1").engine())
+    try await coreA.refreshHousehold { StringCore.Household(items: ["Zupa A"], favoriteIds: ["r00001"]) }
+    gate.flush()
+    check(householdOnDisk(files)?.recipes == ["Zupa A"], "13a: przed wylogowaniem stan domu A na dysku")
+
+    let pendingA = Controlled<StringCore.Household>()
+    let requestA = Task { try await coreA.refreshHousehold { try await pendingA.wait() } }
+    await pendingA.started()
+    coreA.invalidate()
+    StringCore.clearPrivateFiles(files, gate: gate)
+    pendingA.resume(StringCore.Household(items: ["Tajny przepis A"], favoriteIds: ["r00002"]))
+    let resultA = await requestA.result
+    gate.flush()
+    check(isCancelled(resultA), "13a: spóźniona odpowiedź A kończy się anulowaniem")
+    check(coreA.household.items == ["Zupa A"], "13a: stan w pamięci A nie przyjął spóźnionej odpowiedzi")
+    check(householdOnDisk(files) == nil, "13a: prywatny plik domu nie wrócił po wylogowaniu")
+    check(catalogRevisionOnDisk(files) == .some("e.1"), "13a: publiczny katalog zostaje (polityka)")
+}
+
+// 13b. Żądanie A → przełączenie na B → odpowiedź B → spóźniona odpowiedź A.
+do {
+    let files = makeFiles()
+    let gate = CatalogCacheGate(queue: DispatchQueue(label: "check-13b"))
+    let serverA = FakeServer(count: 3, revision: "e.1")
+    let coreA = StringCore(ownerKey: "u1_h1", files: files, gate: gate)
+    _ = try await coreA.syncCatalog(using: serverA.engine())
+    try await coreA.refreshHousehold { StringCore.Household(items: ["Zupa A"], favoriteIds: []) }
+    gate.flush()
+
+    let pendingDeltaA = Controlled<CatalogChangesPage<String>>()
+    let pendingHouseholdA = Controlled<StringCore.Household>()
+    let syncA = Task { _ = try await coreA.syncCatalog(using: controlledDeltaEngine(pendingDeltaA)) }
+    await pendingDeltaA.started()
+    let householdA = Task { try await coreA.refreshHousehold { try await pendingHouseholdA.wait() } }
+    await pendingHouseholdA.started()
+
+    // Przełączenie konta: stara sesja unieważniona, nowa przejmuje zapis.
+    coreA.invalidate()
+    StringCore.clearPrivateFiles(files, gate: gate)
+    let coreB = StringCore(ownerKey: "u2_h2", files: files, gate: gate)
+    gate.flush()
+    coreB.loadFromDisk()
+    check(coreB.catalog.revision == "e.1" && coreB.household.items.isEmpty, "13b: B widzi publiczny katalog, nie widzi domu A")
+    serverA.changed = ["r00002"]
+    serverA.revision = "e.5"
+    _ = try await coreB.syncCatalog(using: serverA.engine())
+    try await coreB.refreshHousehold { StringCore.Household(items: ["Zupa B"], favoriteIds: ["r00000"]) }
+
+    // Spóźnione odpowiedzi A.
+    pendingDeltaA.resume(deltaPageA)
+    pendingHouseholdA.resume(StringCore.Household(items: ["Tajny przepis A"], favoriteIds: []))
+    let syncResult = await syncA.result
+    let householdResult = await householdA.result
+    gate.flush()
+    check(isCancelled(syncResult) && isCancelled(householdResult), "13b: spóźnione odpowiedzi A anulowane")
+    check(coreA.catalog.revision == "e.1" && coreA.household.items == ["Zupa A"], "13b: stan A nie przyjął spóźnionych odpowiedzi")
+    check(coreB.catalog.revision == "e.5" && coreB.household.items == ["Zupa B"], "13b: stan B nietknięty przez A")
+    let onDisk = householdOnDisk(files)
+    check(onDisk?.ownerKey == "u2_h2" && onDisk?.recipes == ["Zupa B"], "13b: plik domu = B (A go nie nadpisał)")
+    check(catalogRevisionOnDisk(files) == .some("e.5"), "13b: plik katalogu = rewizja B, nie spóźniona A (e.9)")
+}
+
+// 13c. Zapis czekający w kolejce w chwili unieważnienia.
+do {
+    let files = makeFiles()
+    let queue = DispatchQueue(label: "check-13c")
+    let gate = CatalogCacheGate(queue: queue)
+    let coreA = StringCore(ownerKey: "u1_h1", files: files, gate: gate)
+    queue.suspend()
+    try await coreA.refreshHousehold { StringCore.Household(items: ["Zapis w kolejce"], favoriteIds: []) }
+    coreA.invalidate()
+    queue.resume()
+    gate.flush()
+    check(householdOnDisk(files) == nil, "13c: zapis, który czekał w kolejce, nie odbył się po unieważnieniu")
+
+    // To samo przy przejęciu przez nową sesję (bez jawnego unieważnienia A).
+    let coreOld = StringCore(ownerKey: "u1_h1", files: files, gate: gate)
+    queue.suspend()
+    try await coreOld.refreshHousehold { StringCore.Household(items: ["Stara sesja"], favoriteIds: []) }
+    let coreNew = StringCore(ownerKey: "u2_h2", files: files, gate: gate)
+    try await coreNew.refreshHousehold { StringCore.Household(items: ["Nowa sesja"], favoriteIds: []) }
+    queue.resume()
+    gate.flush()
+    check(householdOnDisk(files)?.recipes == ["Nowa sesja"], "13c: nowa sesja odbiera prawo zapisu starej, także w kolejce")
+}
+
+// 13d. Ponowne logowanie na to samo konto.
+do {
+    let files = makeFiles()
+    let gate = CatalogCacheGate(queue: DispatchQueue(label: "check-13d"))
+    let first = StringCore(ownerKey: "u1_h1", files: files, gate: gate)
+    _ = try await first.syncCatalog(using: FakeServer(count: 3, revision: "e.1").engine())
+    try await first.refreshHousehold { StringCore.Household(items: ["Zupa 1"], favoriteIds: []) }
+    gate.flush()
+    let pendingFirst = Controlled<StringCore.Household>()
+    let late = Task { try await first.refreshHousehold { try await pendingFirst.wait() } }
+    await pendingFirst.started()
+
+    first.invalidate()
+    StringCore.clearPrivateFiles(files, gate: gate)
+    let second = StringCore(ownerKey: "u1_h1", files: files, gate: gate)
+    gate.flush()
+    second.loadFromDisk()
+    check(second.catalog.revision == "e.1" && second.household.items.isEmpty,
+          "13d: po ponownym logowaniu publiczny katalog jest, stan domu z pliku — nie (skasowany)")
+    try await second.refreshHousehold { StringCore.Household(items: ["Zupa 2"], favoriteIds: []) }
+    pendingFirst.resume(StringCore.Household(items: ["Spóźniona 1"], favoriteIds: []))
+    let lateResult = await late.result
+    gate.flush()
+    check(isCancelled(lateResult), "13d: spóźniona odpowiedź pierwszej sesji anulowana")
+    check(householdOnDisk(files)?.recipes == ["Zupa 2"], "13d: plik domu = druga sesja tego samego konta")
+    check(second.household.items == ["Zupa 2"], "13d: stan drugiej sesji nietknięty")
+}
+
 print(failures == 0 ? "\nWSZYSTKO OK" : "\nBŁĘDÓW: \(failures)")
 exit(failures == 0 ? 0 : 1)

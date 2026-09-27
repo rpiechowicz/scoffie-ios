@@ -807,6 +807,10 @@ final class SessionStore {
             currentUserId: userId,
             cacheNamespace: "\(userId)_\(householdId)"
         )
+        // Poprzednia sesja katalogu (inne konto, inny dom, ponowne logowanie)
+        // traci prawo zapisu i przestaje przyjmować spóźnione odpowiedzi,
+        // ZANIM powstanie nowa — patrz `RecipeCatalogStore.invalidate()`.
+        self.recipeCatalogStore?.invalidate()
         self.recipeCatalogStore = RecipeCatalogStore(
             repository: ApiRecipeRepository(client: recipeTransport),
             ownerKey: "\(userId)_\(householdId)"
@@ -970,6 +974,10 @@ final class SessionStore {
         // Stan domu w cache katalogu (przepisy gospodarstwa, ulubione) znika
         // razem z domem; publiczny katalog z rewizją zostaje — jest wspólny
         // dla wszystkich kont, a następne logowanie zrobi z niego deltę.
+        // Najpierw unieważnienie (zapis czekający w kolejce już się nie
+        // odbędzie, spóźniona odpowiedź niczego nie opublikuje), potem
+        // kasowanie prywatnego pliku tą samą kolejką.
+        recipeCatalogStore?.invalidate()
         RecipeCatalogStore.clearCache()
         recipeCatalogStore = nil
         shoppingListStore = nil

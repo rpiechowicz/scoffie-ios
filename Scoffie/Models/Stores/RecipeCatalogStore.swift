@@ -13,20 +13,21 @@ import SwiftUI
 ///   połączenia — tylko zmiany od zapisanej rewizji;
 /// - stan DOMU — `recipes:householdState`: przepisy gospodarstwa i ulubione.
 ///
+/// Stan, zapis na dysk i cykl życia sesji trzyma `CatalogSyncCore` (czysta
+/// logika ze sprawdzianem); ten typ to fasada dla SwiftUI.
+///
 /// Atomowość: przebieg składa nowy stan na kopii, a stan w pamięci i plik
 /// (katalog + rewizja w JEDNYM pliku, zapis `.atomic`) podmieniają się razem,
 /// dopiero po ostatniej stronie. Przerwany sync zostawia poprzedni katalog
 /// z poprzednią rewizją — nigdy pół snapshotu z rewizją końca.
 ///
-/// Czego sync nie kasuje: działający katalog zostaje na ekranie przy braku
-/// sieci, przy RESET_REQUIRED (do końca nowego snapshotu) i przy błędzie
-/// serwera. Plik jest odrzucany tylko wtedy, gdy nie da się go odczytać albo
-/// ma inny format (`CatalogCacheEnvelope.Load`).
+/// Cykl życia: `SessionStore` woła `invalidate()` przy wylogowaniu i przed
+/// zastąpieniem store'u nową sesją. Po tym spóźnione odpowiedzi i callbacki
+/// tej instancji nie zmieniają już ani jej stanu, ani plików.
 @Observable
 final class RecipeCatalogStore {
     private let repository: RecipeRepository
-    /// Konto i dom, do których należy stan domu w cache (`userId_householdId`).
-    private let ownerKey: String?
+    private let core: CatalogSyncCore<Recipe>
     private(set) var recipes: [Recipe] = []
     private(set) var didLoad: Bool = false
     var isLoading: Bool = false
@@ -39,58 +40,28 @@ final class RecipeCatalogStore {
     private let syncPageSize: Int = 500
     /// Tylko dla awaryjnej ścieżki starego backendu (`recipes:findAll`, max 100).
     private let legacyPageSize: Int = 100
-    private var catalogState = CatalogSyncState<Recipe>()
-    /// Katalog przyszedł starą drogą (plik v12 albo `recipes:findAll`) —
-    /// miesza przepisy domu z publicznymi, więc NIE trafia do pliku
-    /// publicznego katalogu (ten przeżywa wylogowanie).
-    private var catalogIsLegacy = false
-    private var householdRecipes: [Recipe] = []
-    private var favoriteIds: Set<UUID> = []
+    private var reloadTask: Task<Void, Never>?
     private var pendingRealtimeReloadTask: Task<Void, Never>?
     private var pendingHouseholdRefreshTask: Task<Void, Never>?
     private var pendingFavoriteTasks: [UUID: Task<Void, Never>] = [:]
     private var pendingFavoriteOriginalState: [UUID: Bool] = [:]
 
+    /// Czy ta instancja została unieważniona (wylogowanie, nowa sesja).
+    var isInvalidated: Bool { core.isInvalidated }
+
     /// Wylogowanie (`SessionStore`): znika stan DOMU (przepisy gospodarstwa,
     /// ulubione) i stare pliki sprzed synchronizacji, które go mieszały
     /// z katalogiem. Publiczny katalog zostaje — jest ten sam dla każdego
     /// konta, a następne logowanie zrobi z niego deltę zamiast snapshotu.
-    /// Przez tę samą kolejkę co zapis — inaczej zapis czekający w kolejce
-    /// odtworzyłby plik już po wylogowaniu.
+    /// Wołać PO `invalidate()` starej instancji — inaczej jej zapis, który
+    /// właśnie czeka w kolejce, mógłby przyjść po skasowaniu.
     static func clearCache() {
-        let householdURL = householdCacheURL
-        cacheWriteQueue.async {
-            try? FileManager.default.removeItem(at: householdURL)
-            removeLegacyCacheFiles()
-        }
-    }
-
-    private static var documentsURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-
-    /// Publiczny katalog z rewizją. Wersja formatu jest W pliku
-    /// (`CatalogCacheEnvelope.currentVersion`), nie w nazwie.
-    private static var catalogCacheURL: URL {
-        documentsURL.appendingPathComponent("recipe_catalog.json")
-    }
-
-    /// Przepisy domu i ulubione — z właścicielem w środku.
-    private static var householdCacheURL: URL {
-        documentsURL.appendingPathComponent("recipe_catalog_household.json")
+        CatalogSyncCore<Recipe>.clearPrivateFiles(.documents, gate: .shared)
     }
 
     /// Pliki sprzed synchronizacji rewizją: `recipes_catalog_cache_v<N>.json`
     /// (v8…v12) — pełna lista z ulubionymi i przepisami domu, ważna 12 h.
     private static let legacyCacheFileName = "recipes_catalog_cache_v12.json"
-
-    private static func removeLegacyCacheFiles() {
-        let fm = FileManager.default
-        guard let names = try? fm.contentsOfDirectory(atPath: documentsURL.path) else { return }
-        for name in names where name.hasPrefix("recipes_catalog_cache_v") && name.hasSuffix(".json") {
-            try? fm.removeItem(at: documentsURL.appendingPathComponent(name))
-        }
-    }
 
     init(
         repository: RecipeRepository = ApiRecipeRepository(
@@ -102,15 +73,15 @@ final class RecipeCatalogStore {
         ownerKey: String? = nil
     ) {
         self.repository = repository
-        self.ownerKey = ownerKey
+        self.core = CatalogSyncCore(ownerKey: ownerKey, files: .documents, gate: .shared)
         self.repository.observeFavoritesChanges { [weak self] recipeId, isFavorite in
             guard let self else { return }
             Task { @MainActor in
-                self.setFavoriteId(recipeId, isFavorite)
+                guard !self.isInvalidated else { return }
+                self.core.setFavorite(CatalogSyncMapping.key(recipeId.uuidString), isFavorite)
                 if let index = self.recipes.firstIndex(where: { $0.id == recipeId }) {
                     self.recipes[index].favourite = isFavorite
                 }
-                self.saveHouseholdCache()
             }
         }
         // Przepis GOSPODARSTWA zmieniony poza tym telefonem (domownik,
@@ -119,7 +90,7 @@ final class RecipeCatalogStore {
         self.repository.observeRecipeChanges { [weak self] in
             guard let self else { return }
             Task { @MainActor in
-                guard self.didLoad else { return }
+                guard self.didLoad, !self.isInvalidated else { return }
                 self.scheduleHouseholdRefresh()
             }
         }
@@ -128,10 +99,23 @@ final class RecipeCatalogStore {
         self.repository.observeRealtimeReconnect { [weak self] in
             guard let self else { return }
             Task { @MainActor in
-                guard self.didLoad else { return }
+                guard self.didLoad, !self.isInvalidated else { return }
                 self.scheduleRealtimeReload()
             }
         }
+    }
+
+    /// Koniec tej sesji katalogu. Odbiera prawo zapisu plików, anuluje
+    /// zadania w toku (sync przerywa się między stronami) i sprawia, że
+    /// spóźnione odpowiedzi niczego już nie publikują.
+    func invalidate() {
+        core.invalidate()
+        reloadTask?.cancel()
+        pendingRealtimeReloadTask?.cancel()
+        pendingHouseholdRefreshTask?.cancel()
+        pendingFavoriteTasks.values.forEach { $0.cancel() }
+        pendingFavoriteTasks = [:]
+        pendingFavoriteOriginalState = [:]
     }
 
     /// Synchronizacja po zdarzeniu z serwera, z krótkim opóźnieniem — kilka
@@ -146,7 +130,7 @@ final class RecipeCatalogStore {
             } catch {
                 return
             }
-            guard let self else { return }
+            guard let self, !self.isInvalidated else { return }
             await self.reload()
         }
     }
@@ -159,19 +143,21 @@ final class RecipeCatalogStore {
             } catch {
                 return
             }
-            guard let self else { return }
+            guard let self, !self.isInvalidated else { return }
             do {
                 try await self.refreshHouseholdState()
                 self.rebuildRecipes()
-                self.saveHouseholdCache()
+            } catch is CancellationError {
+                return
             } catch {
+                guard !self.isInvalidated else { return }
                 self.errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }
     }
 
     func loadIfNeeded() async {
-        guard !didLoad else { return }
+        guard !didLoad, !isInvalidated else { return }
         if loadCache() {
             didLoad = true
             errorMessage = nil
@@ -184,11 +170,22 @@ final class RecipeCatalogStore {
     }
 
     /// Synchronizacja katalogu (delta albo snapshot) i odświeżenie stanu domu.
+    /// Przebieg biegnie we własnym zadaniu, żeby `invalidate()` mogło go przerwać.
     func reload() async {
-        guard !isLoading else { return }
+        guard !isLoading, !isInvalidated else { return }
         isLoading = true
         isLoadingMore = false
         errorMessage = nil
+        let task = Task { [weak self] in
+            await self?.performReload()
+        }
+        reloadTask = task
+        await task.value
+        reloadTask = nil
+        isLoading = false
+    }
+
+    private func performReload() async {
         do {
             let usedLegacy = try await syncCatalog()
             // Stan domu osobno: jego błąd (np. chwilowy timeout) nie może
@@ -198,20 +195,23 @@ final class RecipeCatalogStore {
             if !usedLegacy {
                 do {
                     try await refreshHouseholdState()
-                    saveHouseholdCache()
+                } catch is CancellationError {
+                    return
                 } catch {
+                    guard !isInvalidated else { return }
                     errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
                 }
             }
+            guard !isInvalidated else { return }
             rebuildRecipes()
             didLoad = true
         } catch is CancellationError {
-            // Przerwany przebieg: nic nie zostało podmienione.
+            // Przerwany albo unieważniony przebieg: nic nie zostało podmienione.
         } catch {
             // Brak sieci / błąd serwera: poprzedni katalog zostaje na ekranie.
+            guard !isInvalidated else { return }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
-        isLoading = false
     }
 
     /// Katalog trzyma się w całości (synchronizacja do końca protokołu), więc
@@ -247,42 +247,19 @@ final class RecipeCatalogStore {
 
     /// Zwraca `true`, gdy katalog przyszedł starą drogą (`recipes:findAll`).
     private func syncCatalog() async throws -> Bool {
-        let engine = makeEngine()
         do {
-            if !catalogIsLegacy, catalogState.revision != nil {
-                let outcome = try await engine.pullDelta(onto: catalogState)
-                switch outcome {
-                case .applied(let next, _):
-                    commitCatalog(next)
-                    return false
-                case .resetRequired:
-                    // Serwer nie zna tej rewizji (nowa epoka, przycięty log).
-                    // Starego katalogu nie naprawiamy deltą — rewizja znika też
-                    // z pliku, a katalog zostaje na ekranie do końca snapshotu.
-                    catalogState.forgetRevision()
-                    saveCatalogCache()
-                }
-            }
-            commitCatalog(try await engine.pullSnapshot())
+            _ = try await core.syncCatalog(using: makeEngine())
             return false
         } catch {
             // Backend sprzed synchronizacji przyrostowej nie zna
             // `catalog:snapshot` (ack nie przychodzi) albo ma ją wyłączoną
             // (503 po wycofaniu migracji) — pełna lista starą drogą. Każdy
-            // inny błąd (sieć, 500, anulowanie) zostawia katalog jak był.
+            // inny błąd (sieć, 500, odrzucona strona, anulowanie) zostawia
+            // katalog jak był.
             guard Self.indicatesLegacyBackend(error) else { throw error }
             try await legacyFullReload()
             return true
         }
-    }
-
-    /// Nowy stan katalogu i jego plik — razem, po całym przebiegu.
-    private func commitCatalog(_ next: CatalogSyncState<Recipe>) {
-        catalogState = next
-        catalogIsLegacy = false
-        saveCatalogCache()
-        let queue = Self.cacheWriteQueue
-        queue.async { Self.removeLegacyCacheFiles() }
     }
 
     /// Stary backend: `catalog:snapshot` bez ack (socket sam ponawia 3×) albo
@@ -314,11 +291,16 @@ final class RecipeCatalogStore {
     }
 
     private func refreshHouseholdState() async throws {
-        let state = try await Self.retryingRateLimit {
-            try await self.repository.fetchHouseholdRecipeState()
+        let repository = repository
+        try await core.refreshHousehold {
+            let state = try await Self.retryingRateLimit {
+                try await repository.fetchHouseholdRecipeState()
+            }
+            return CatalogSyncCore<Recipe>.Household(
+                items: state.recipes,
+                favoriteIds: Set(state.favoriteRecipeIds.map { CatalogSyncMapping.key($0.uuidString) })
+            )
         }
-        householdRecipes = state.recipes
-        favoriteIds = state.favoriteRecipeIds
     }
 
     /// Awaryjnie, dla backendu bez `catalog:snapshot`: `recipes:findAll` do
@@ -330,50 +312,41 @@ final class RecipeCatalogStore {
         while true {
             try Task.checkCancellation()
             let fetched = try await repository.fetchRecipes(page: page, limit: legacyPageSize)
+            try core.checkValid()
             all.append(contentsOf: fetched.recipes)
             // Koniec poznajemy po liczbie wierszy z serwera — patrz `RecipePage`.
             if fetched.receivedCount < legacyPageSize { break }
             page += 1
         }
-        householdRecipes = []
-        favoriteIds = Set(all.filter(\.favourite).map(\.id))
-        let keyed = all.map { (ApiRecipeRepository.catalogKey($0.id.uuidString), $0) }
-        catalogState = CatalogSyncState(
-            ids: keyed.map(\.0),
-            items: Dictionary(keyed, uniquingKeysWith: { first, _ in first }),
-            revision: nil
+        core.adoptLegacyCatalog(
+            all.map { (id: CatalogSyncMapping.key($0.id.uuidString), item: $0) },
+            favoriteIds: Set(all.filter(\.favourite).map { CatalogSyncMapping.key($0.id.uuidString) }),
+            clearHousehold: true
         )
-        catalogIsLegacy = true
     }
 
     /// Przepisy domu na początku, potem katalog; ulubione z bieżącego stanu domu.
     /// Serduszko, którego zapis jeszcze czeka (`pendingFavoriteTasks`), zostaje
     /// takie, jak na ekranie — stan domu pobrany przed zapisem go nie cofa.
     private func rebuildRecipes() {
-        let householdIds = Set(householdRecipes.map(\.id))
+        guard !isInvalidated else { return }
+        let household = core.household
+        let householdIds = Set(household.items.map(\.id))
         let onScreen = Dictionary(
             recipes.map { ($0.id, $0.favourite) },
             uniquingKeysWith: { first, _ in first }
         )
-        var merged = householdRecipes
-        merged.append(contentsOf: catalogState.orderedItems.filter { !householdIds.contains($0.id) })
+        var merged = household.items
+        merged.append(contentsOf: core.catalog.orderedItems.filter { !householdIds.contains($0.id) })
         for index in merged.indices {
             let id = merged[index].id
             if pendingFavoriteTasks[id] != nil, let visible = onScreen[id] {
                 merged[index].favourite = visible
             } else {
-                merged[index].favourite = favoriteIds.contains(id)
+                merged[index].favourite = household.favoriteIds.contains(CatalogSyncMapping.key(id.uuidString))
             }
         }
         recipes = merged
-    }
-
-    private func setFavoriteId(_ recipeId: UUID, _ isFavorite: Bool) {
-        if isFavorite {
-            favoriteIds.insert(recipeId)
-        } else {
-            favoriteIds.remove(recipeId)
-        }
     }
 
     @MainActor
@@ -387,6 +360,7 @@ final class RecipeCatalogStore {
 
         do {
             let detailed = try await repository.fetchRecipeById(recipeId)
+            guard !isInvalidated else { return nil }
             if let index = recipes.firstIndex(where: { $0.id == recipeId }) {
                 recipes[index] = detailed
             } else {
@@ -394,16 +368,15 @@ final class RecipeCatalogStore {
             }
             // Pełna wersja także w stanie, z którego lista się przebudowuje —
             // inaczej następny sync cofałby ją do wersji z listy.
-            let key = ApiRecipeRepository.catalogKey(recipeId.uuidString)
-            if let index = householdRecipes.firstIndex(where: { $0.id == recipeId }) {
-                householdRecipes[index] = detailed
-                saveHouseholdCache()
-            } else if catalogState.items[key] != nil {
-                catalogState.replaceKnownItem(id: key, with: ApiRecipeRepository.catalogCopy(detailed))
-                saveCatalogCache()
-            }
+            core.replaceItem(
+                catalogKey: CatalogSyncMapping.key(recipeId.uuidString),
+                with: ApiRecipeRepository.catalogCopy(detailed),
+                householdItem: detailed,
+                isSame: { $0.id == recipeId }
+            )
             return detailed
         } catch {
+            guard !isInvalidated else { return nil }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return recipes.first(where: { $0.id == recipeId })
         }
@@ -423,14 +396,16 @@ final class RecipeCatalogStore {
     }
 
     func toggleFavorite(recipeId: UUID) async {
-        guard let index = recipes.firstIndex(where: { $0.id == recipeId }) else { return }
+        guard !isInvalidated,
+              let index = recipes.firstIndex(where: { $0.id == recipeId }) else { return }
         let previous = recipes[index].favourite
         let next = !previous
+        let key = CatalogSyncMapping.key(recipeId.uuidString)
 
         recipes[index].favourite = next
         // Od razu także w stanie domu: przebudowa listy (sync, odświeżenie
         // domu) w oknie przed odpowiedzią serwera nie cofa serduszka.
-        setFavoriteId(recipeId, next)
+        core.setFavorite(key, next)
 
         if pendingFavoriteTasks[recipeId] == nil {
             pendingFavoriteOriginalState[recipeId] = previous
@@ -439,7 +414,7 @@ final class RecipeCatalogStore {
 
         pendingFavoriteTasks[recipeId] = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
-            guard let self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled, !self.isInvalidated else { return }
 
             let originalState = self.pendingFavoriteOriginalState[recipeId] ?? previous
             self.pendingFavoriteTasks[recipeId] = nil
@@ -452,10 +427,11 @@ final class RecipeCatalogStore {
 
             do {
                 try await self.repository.setFavorite(recipeId: recipeId, isFavorite: finalState)
-                self.setFavoriteId(recipeId, finalState)
-                self.saveHouseholdCache()
+                guard !self.isInvalidated else { return }
+                self.core.setFavorite(key, finalState)
             } catch {
-                self.setFavoriteId(recipeId, originalState)
+                guard !self.isInvalidated else { return }
+                self.core.setFavorite(key, originalState)
                 if let rollbackIndex = self.recipes.firstIndex(where: { $0.id == recipeId }) {
                     self.recipes[rollbackIndex].favourite = originalState
                 }
@@ -466,67 +442,16 @@ final class RecipeCatalogStore {
 
     // MARK: - Cache
 
-    /// Jedna kolejka seryjna na wszystkie zapisy — ostatni snapshot wygrywa
-    /// (ten sam wzór co `ShoppingListStore.persistCache`).
-    private static let cacheWriteQueue = DispatchQueue(
-        label: "recipe-catalog-cache-write",
-        qos: .utility
-    )
-
-    /// Katalog + rewizja w jednym pliku, zapis `.atomic` (plik tymczasowy
-    /// i podmiana) — na dysku jest albo stary komplet, albo nowy. Encode poza
-    /// main threadem — katalog to tysiące przepisów.
-    private func saveCatalogCache() {
-        guard !catalogIsLegacy else { return }
-        let envelope = CatalogCacheEnvelope(state: catalogState, savedAt: Date())
-        let url = Self.catalogCacheURL
-        Self.cacheWriteQueue.async {
-            // Błąd zapisu cache świadomie pomijany — następny sync to naprawi.
-            guard let data = try? JSONEncoder().encode(envelope) else { return }
-            try? data.write(to: url, options: .atomic)
-        }
-    }
-
-    private func saveHouseholdCache() {
-        guard let ownerKey, !catalogIsLegacy else { return }
-        let envelope = HouseholdRecipeCacheEnvelope(
-            ownerKey: ownerKey,
-            recipes: householdRecipes,
-            favoriteRecipeIds: favoriteIds.map { $0.uuidString.lowercased() }.sorted(),
-            savedAt: Date()
-        )
-        let url = Self.householdCacheURL
-        Self.cacheWriteQueue.async {
-            guard let data = try? JSONEncoder().encode(envelope) else { return }
-            try? data.write(to: url, options: .atomic)
-        }
-    }
-
     /// Cache pokazuje katalog od razu; świeżość zapewnia następny sync (delta
     /// od zapisanej rewizji), a nie wiek pliku.
     private func loadCache() -> Bool {
-        switch CatalogCacheEnvelope<Recipe>.load(from: try? Data(contentsOf: Self.catalogCacheURL)) {
-        case .valid(let state):
-            catalogState = state
-            catalogIsLegacy = false
-        case .missing:
+        switch core.loadFromDisk() {
+        case .valid:
+            break
+        case .missing, .unsupportedVersion, .corrupted:
+            // Brak używalnego pliku — stary v12 (jeśli jest) pokaże katalog
+            // do końca pierwszego snapshotu.
             loadLegacyCatalogIfPresent()
-        case .unsupportedVersion, .corrupted:
-            // Pliku nie da się użyć — snapshot zbuduje go od nowa. Stary plik
-            // v12 (jeśli jest) pokaże katalog do tego czasu.
-            let url = Self.catalogCacheURL
-            Self.cacheWriteQueue.async { try? FileManager.default.removeItem(at: url) }
-            loadLegacyCatalogIfPresent()
-        }
-        // Stan domu tylko tego samego konta i domu — cudzy (inne konto na
-        // tym telefonie, inny dom) nie ma prawa się pokazać.
-        if let ownerKey,
-           let household = HouseholdRecipeCacheEnvelope<Recipe>.load(
-               from: try? Data(contentsOf: Self.householdCacheURL),
-               ownerKey: ownerKey
-           ) {
-            householdRecipes = household.recipes
-            favoriteIds = Set(household.favoriteRecipeIds.compactMap { UUID(uuidString: $0) })
         }
         rebuildRecipes()
         hasMore = false
@@ -543,19 +468,16 @@ final class RecipeCatalogStore {
     }
 
     private func loadLegacyCatalogIfPresent() {
-        let url = Self.documentsURL.appendingPathComponent(Self.legacyCacheFileName)
+        let url = core.files.directory.appendingPathComponent(Self.legacyCacheFileName)
         guard let data = try? Data(contentsOf: url),
               let payload = try? JSONDecoder().decode(LegacyCachePayload.self, from: data),
               Date().timeIntervalSince(payload.savedAt) <= 60 * 60 * 12,
               !payload.recipes.isEmpty else { return }
-        let keyed = payload.recipes.map { (ApiRecipeRepository.catalogKey($0.id.uuidString), $0) }
-        catalogState = CatalogSyncState(
-            ids: keyed.map(\.0),
-            items: Dictionary(keyed, uniquingKeysWith: { first, _ in first }),
-            revision: nil
+        core.adoptLegacyCatalog(
+            payload.recipes.map { (id: CatalogSyncMapping.key($0.id.uuidString), item: $0) },
+            favoriteIds: Set(payload.recipes.filter(\.favourite).map { CatalogSyncMapping.key($0.id.uuidString) }),
+            clearHousehold: false
         )
-        favoriteIds = Set(payload.recipes.filter(\.favourite).map(\.id))
-        catalogIsLegacy = true
     }
 }
 
