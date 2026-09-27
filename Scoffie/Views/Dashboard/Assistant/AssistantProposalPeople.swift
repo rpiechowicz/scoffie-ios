@@ -309,7 +309,7 @@ struct AssistantPlanChangesSheet: View {
     @Environment(\.colorScheme) private var scheme
     @State private var appeared = false
 
-    private static let thumb: CGFloat = 40
+    private static let thumb: CGFloat = 30
 
     var body: some View {
         AssistantSheetScaffold(
@@ -361,8 +361,12 @@ struct AssistantPlanChangesSheet: View {
         .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 
+    /// Pora jako JEDEN zwarty blok (runda 10, Rafał: „ściana tekstu i nic
+    /// nie rozumiem”): nagłówek pory z rodzajem zmiany, a pod nim „stare →
+    /// nowe” OBOK SIEBIE — dwie kolumny zamiast czterech pięter (stare,
+    /// strzałka w dół, nowe, pigułka).
     private func mealBlock(_ meal: ProposalChanges.Meal) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 if let slot = meal.slot {
                     Image(systemName: slot.icon)
@@ -377,21 +381,32 @@ struct AssistantPlanChangesSheet: View {
                 kindTag(meal)
             }
 
-            ForEach(meal.removed) { dish in
-                dishRow(dish, removed: true)
-            }
-            if meal.kind == .replace {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AssistantLook.faint(scheme))
-                    .frame(width: Self.thumb)
-                    .accessibilityHidden(true)
-            }
-            ForEach(meal.added) { dish in
-                dishRow(dish, removed: false)
+            switch meal.kind {
+            case .replace:
+                HStack(alignment: .center, spacing: 8) {
+                    column(meal.removed, removed: true)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AssistantLook.faint(scheme))
+                        .accessibilityHidden(true)
+                    column(meal.added, removed: false)
+                }
+            case .remove:
+                column(meal.removed, removed: true)
+            case .add:
+                column(meal.added, removed: false)
             }
         }
-        .padding(14)
+        .padding(12)
+    }
+
+    private func column(_ dishes: [ProposalChanges.Dish], removed: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(dishes) { dish in
+                dishRow(dish, removed: removed)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Rodzaj zmiany: zamiana (terakota), usunięcie z powodem (szary),
@@ -423,32 +438,40 @@ struct AssistantPlanChangesSheet: View {
         .fixedSize()
     }
 
+    /// Danie w kolumnie: mała miniatura (szara, gdy znika), nazwa do dwóch
+    /// linii (przekreślona, gdy znika), przy nowym — awatary jedzących, gdy
+    /// to nie cały dom.
     private func dishRow(_ dish: ProposalChanges.Dish, removed: Bool) -> some View {
-        HStack(spacing: 12) {
+        let people = members.filter { dish.participantIds.contains($0.id) }
+        let showsPeople = !removed && members.count > 1
+            && !ProposalAudience.isShared(dish.participantIds, members: members)
+        var spoken = removed ? "Zniknie: \(dish.title)" : "Będzie: \(dish.title)"
+        if showsPeople, let who = ProposalAudience.label(dish.participantIds, members: members, me: me) {
+            spoken += ", \(who)"
+        }
+        return HStack(alignment: .center, spacing: 8) {
             AssistantThumbnail(url: dish.imageURL, size: Self.thumb, dimmed: removed)
                 .saturation(removed ? 0 : 1)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(dish.title)
-                    .font(.system(size: 15, weight: removed ? .regular : .semibold))
+                    .font(.system(size: 13.5, weight: removed ? .regular : .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(removed ? AssistantLook.faint(scheme) : AssistantLook.ink(scheme))
                     .strikethrough(removed, color: AssistantLook.faint(scheme))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                if !removed {
-                    ProposalAudiencePill(
-                        participantIds: dish.participantIds,
-                        members: members,
-                        me: me,
-                        size: 16,
-                        filled: false
-                    )
+                if showsPeople {
+                    HStack(spacing: -5) {
+                        ForEach(people.prefix(3)) { member in
+                            MemberAvatar(member: member, members: members, size: 16)
+                                .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 1.2))
+                        }
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(removed ? "Zniknie: \(dish.title)" : "Będzie: \(dish.title)")
+        .accessibilityLabel(spoken)
     }
 }
