@@ -12,18 +12,16 @@ import SwiftUI
 /// - przerwy między krokami, w których model myślał (≥ 2 s), są osobnymi,
 ///   cichymi wierszami „Przemyślałem wyniki · 6 s” na przerywanej osi — tak
 ///   widać, gdzie szedł czas;
-/// - ostatni odcinek to „Napisałem odpowiedź · 4 s”;
-/// - na końcu „Wynik” — to, co faktycznie wyszło (karta: nadtytuł i tytuł,
-///   albo początek odpowiedzi), zamiast pustego „Odpowiedź gotowa”.
-/// Wszystkie glify osi szare (neutralny krążek); kolor zostaje tylko w wyniku.
+/// - ostatni odcinek to „Napisałem odpowiedź” — BEZ czasu (całość stoi
+///   w nagłówku), a sekunda przy kroku tylko od 0:01 („0:00” nic nie mówi);
+/// - bez „Wyniku” na końcu (runda 6: „usuń”) — wynik jest w rozmowie.
+/// Wszystkie glify osi szare (neutralny krążek).
 ///
 /// Nagłówek: tytuł = co tura zrobiła (`ThinkingHeadline`), stała ikona
 /// przebiegu, czas kapsułką obok krzyżyka. Nazwa narzędzia NIE wychodzi na
 /// ekran; służy tylko do wyboru glifu.
 struct AssistantThinkingSheet: View {
     let thinking: AgentThinkingSummary
-    /// Odpowiedź, której przebieg pokazujemy — z niej „Wynik”.
-    var message: AgentChatMessage? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -51,15 +49,6 @@ struct AssistantThinkingSheet: View {
                         isLast: index == entries.count - 1
                     )
                     .scReveal(appeared, order: min(index, 8))
-                }
-
-                if let result = ThinkingResult(message) {
-                    EditorialSheetSectionLabel(title: "Wynik")
-                        .padding(.top, 22)
-                        .padding(.bottom, 10)
-                        .scReveal(appeared, order: min(entries.count, 9))
-                    resultCard(result)
-                        .scReveal(appeared, order: min(entries.count, 9))
                 }
             }
             .padding(.horizontal, 4)
@@ -95,41 +84,6 @@ struct AssistantThinkingSheet: View {
             .accessibilityLabel("Czas odpowiedzi: \(AssistantThoughtLine.clock(duration))")
         }
     }
-
-    private func resultCard(_ result: ThinkingResult) -> some View {
-        let shape = RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-        return HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                Circle().fill(AssistantLook.terraTint(scheme))
-                SCMarkShape()
-                    .fill(AssistantLook.terraFill(scheme))
-                    .frame(width: 13, height: 13)
-            }
-            .frame(width: 30, height: 30)
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 3) {
-                if let eyebrow = result.eyebrow {
-                    Text(eyebrow.uppercased())
-                        .font(.system(size: 10.5, weight: .bold))
-                        .tracking(1.1)
-                        .foregroundStyle(AssistantLook.terra(scheme))
-                        .lineLimit(1)
-                }
-                Text(result.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(14)
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
-        .accessibilityElement(children: .combine)
-    }
 }
 
 // MARK: - Oś czasu
@@ -137,7 +91,8 @@ struct AssistantThinkingSheet: View {
 /// Wpis osi: krok albo przerwa, w której model myślał / pisał.
 enum ThinkingEntry {
     case step(AgentProgressStepDTO, offset: TimeInterval?)
-    case pause(text: String, icon: String, seconds: TimeInterval)
+    /// `seconds == nil` = bez czasu (ostatni odcinek — całość jest w nagłówku).
+    case pause(text: String, icon: String, seconds: TimeInterval?)
 
     /// Najkrótsza przerwa warta wiersza — krótsze to szum strumienia.
     static let pauseThreshold: TimeInterval = 2
@@ -152,7 +107,7 @@ enum ThinkingEntry {
         }
 
         guard !steps.isEmpty else {
-            return [.pause(text: "Przemyślałem pytanie i napisałem odpowiedź", icon: "text.bubble", seconds: thinking.duration ?? 0)]
+            return [.pause(text: "Przemyślałem pytanie i napisałem odpowiedź", icon: "text.bubble", seconds: nil)]
         }
 
         var entries: [ThinkingEntry] = []
@@ -177,7 +132,7 @@ enum ThinkingEntry {
                     entries.append(.pause(text: "Przemyślałem wyniki", icon: "brain", seconds: gap))
                 }
             } else if gap >= 1 {
-                entries.append(.pause(text: "Napisałem odpowiedź", icon: "text.bubble", seconds: gap))
+                entries.append(.pause(text: "Napisałem odpowiedź", icon: "text.bubble", seconds: nil))
             }
         }
         return entries
@@ -256,7 +211,7 @@ private struct ThinkingRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
 
-                if let offset {
+                if let offset, offset >= 1 {
                     Text(Self.stamp(offset))
                         .font(.system(size: 12, weight: .medium))
                         .monospacedDigit()
@@ -265,7 +220,7 @@ private struct ThinkingRow: View {
                 }
             }
         case let .pause(text, _, seconds):
-            Text("\(text) · \(AssistantThoughtLine.clock(seconds))")
+            Text(seconds.map { "\(text) · \(AssistantThoughtLine.clock($0))" } ?? text)
                 .font(.system(size: 13))
                 .foregroundStyle(AssistantLook.faint(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -313,66 +268,6 @@ private struct AxisLine: Shape {
         path.move(to: CGPoint(x: rect.midX, y: rect.minY))
         path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
         return path
-    }
-}
-
-// MARK: - Wynik
-
-/// Co faktycznie wyszło z tury — z karty (nadtytuł + tytuł) albo z tekstu.
-struct ThinkingResult {
-    let eyebrow: String?
-    let title: String
-
-    init?(_ message: AgentChatMessage?) {
-        guard let message else { return nil }
-        guard let card = message.card else {
-            let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return nil }
-            eyebrow = "Odpowiedź"
-            title = text
-            return
-        }
-        switch card {
-        case let .planWeek(card):
-            eyebrow = card.eyebrow ?? "Propozycja tygodnia"
-            title = card.title
-        case let .planDay(card):
-            eyebrow = card.eyebrow ?? "Propozycja dnia"
-            if let detail = card.eyebrowDetail, !detail.isEmpty {
-                title = String(detail.prefix(1)).uppercased() + String(detail.dropFirst()) + " · " + card.title
-            } else {
-                title = card.title
-            }
-        case let .options(card):
-            eyebrow = card.eyebrow
-            title = card.title
-        case let .swap(card):
-            eyebrow = card.eyebrow
-            title = card.title
-        case let .removeMeal(card):
-            eyebrow = card.eyebrow
-            title = card.title
-        case let .householdSplit(card):
-            eyebrow = card.eyebrow
-            title = card.title
-        case let .macroGap(card):
-            eyebrow = card.eyebrow
-            title = card.title
-        case let .shoppingList(card):
-            eyebrow = card.eyebrow
-            title = card.title
-        case let .clarify(card):
-            eyebrow = "Pytanie do Ciebie"
-            title = card.question
-        case let .applied(card):
-            eyebrow = "Zapisane w planie"
-            title = card.title
-        case .unknown:
-            let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return nil }
-            eyebrow = "Odpowiedź"
-            title = text
-        }
     }
 }
 

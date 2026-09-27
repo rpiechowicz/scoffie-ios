@@ -130,8 +130,10 @@ struct AssistantView: View {
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
-    /// Rozmowa przewinięta pod nagłówek — wtedy pod nim leży cień krawędzi.
-    @State private var isScrolledUnderHeader = false
+    /// Krycie cienia pod nagłówkiem, 0…1 — rośnie RAZEM z przesunięciem listy
+    /// (pełne po `headerShadeRamp`), co 1/12. Przełącznik z animacją 0,22 s
+    /// spóźniał się przy szybkim przewijaniu i cień „wskakiwał” po chwili.
+    @State private var headerShade: CGFloat = 0
     /// Rozwinięte karty tygodnia i listy kroków — PO ID WIADOMOŚCI, nie
     /// w `@State` wiersza: odpowiedź ostatniej tury rysuje slot, a po
     /// następnym pytaniu ta sama wiadomość przechodzi do części przed
@@ -219,8 +221,7 @@ struct AssistantView: View {
                                 header
                                     .background(alignment: .top) {
                                         AssistantHeaderShade()
-                                            .opacity(isScrolledUnderHeader && !isConversationEmpty && !store.isUnavailable ? 1 : 0)
-                                            .animation(.easeInOut(duration: 0.22), value: isScrolledUnderHeader)
+                                            .opacity(isConversationEmpty || store.isUnavailable ? 0 : headerShade)
                                     }
                             }
                     }
@@ -370,7 +371,7 @@ struct AssistantView: View {
         }
         .sheet(item: $thinkingOf) { message in
             if let thinking = message.thinking {
-                AssistantThinkingSheet(thinking: thinking, message: message)
+                AssistantThinkingSheet(thinking: thinking)
             }
         }
         .alert("Usunąć historię rozmów?", isPresented: $showDeleteAlert) {
@@ -952,12 +953,17 @@ struct AssistantView: View {
             // pisaną odpowiedzią.
             if phase == .interacting { followsAnswer = false }
         }
-        // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
-        // progu, a nie w każdej klatce przewijania.
-        .onScrollGeometryChange(for: Bool.self) { geometry in
-            geometry.contentOffset.y + geometry.contentInsets.top > 1
-        } action: { _, scrolled in
-            isScrolledUnderHeader = scrolled
+        // Cień pod nagłówkiem idzie za listą — patrz `headerShade`.
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            // Stopniami co 1/12: stan zmienia się najwyżej 12 razy na
+            // pierwszych punktach przewijania, potem stoi — nie w każdej klatce.
+            let travel = geometry.contentOffset.y + geometry.contentInsets.top
+            let ratio = min(1, max(0, travel / Self.headerShadeRamp))
+            return (ratio * 12).rounded() / 12
+        } action: { _, shade in
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { headerShade = shade }
         }
 
         let triggered = withScrollTriggers(scroll, proxy: proxy)
@@ -984,6 +990,9 @@ struct AssistantView: View {
     /// Ta sama wartość w historii i w slocie ostatniej tury, inaczej slot
     /// przeskoczyłby przy przejściu do historii.
     static let messageGap: CGFloat = 22
+
+    /// Po tylu punktach przewinięcia cień pod nagłówkiem jest pełny.
+    static let headerShadeRamp: CGFloat = 24
 
     private var messageStack: some View {
         LazyVStack(alignment: .leading, spacing: Self.messageGap) {
@@ -2023,20 +2032,29 @@ private struct MessageBubble: View {
                     // Pod CAŁĄ odpowiedzią (tekst i karta): „Myślałem 42 s”
                     // i akcje. Dawniej samo „Myślałem” stało pod tekstem,
                     // nad kartą, i tylko w tej sesji.
-                    AssistantAnswerFooter(
-                        text: message.card?.replacesText == true ? "" : message.text,
-                        thinking: showsThinking ? message.thinking : nil,
-                        feedback: message.feedback,
-                        isReported: message.report != nil,
-                        onRate: onRate,
-                        onReport: onReport,
-                        onShowThinking: onShowThinking,
-                        hasSuggestion: message.feedbackNote != nil,
-                        onSuggest: onSuggest
-                    )
-                    // Bliżej treści niż karta — to podpis odpowiedzi, nie
-                    // kolejny kawałek.
-                    .padding(.top, -8)
+                    //
+                    // Oceny i „⋯” tylko pod odpowiedzią MODELU (ma turę) —
+                    // potwierdzenia zapisu i cofnięcia (serwer pisze je bez
+                    // `turnId`) to nie odpowiedź, którą da się ocenić
+                    // (27.09.2026: „nie pod każdą”).
+                    let rateable = message.turnId != nil
+                    if rateable || (showsThinking && message.thinking != nil) {
+                        AssistantAnswerFooter(
+                            text: message.card?.replacesText == true ? "" : message.text,
+                            thinking: showsThinking ? message.thinking : nil,
+                            feedback: message.feedback,
+                            isReported: message.report != nil,
+                            onRate: onRate,
+                            onReport: onReport,
+                            onShowThinking: onShowThinking,
+                            hasSuggestion: message.feedbackNote != nil,
+                            onSuggest: onSuggest,
+                            showsActions: rateable
+                        )
+                        // Bliżej treści niż karta — to podpis odpowiedzi, nie
+                        // kolejny kawałek.
+                        .padding(.top, -8)
+                    }
                 }
                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
             }

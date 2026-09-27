@@ -43,6 +43,9 @@ struct AssistantAnswerFooter: View {
     /// Arkusz podpowiedzi dla kierunku oceny („Co było dobre?” / „Co nie
     /// zagrało?”); `nil` = bez podpowiedzi.
     var onSuggest: ((AgentFeedback) -> Void)? = nil
+    /// Kciuki i „⋯” — tylko pod odpowiedzią modelu; potwierdzenie zapisu
+    /// ma sam podpis (albo nic).
+    var showsActions: Bool = true
 
     @Environment(\.colorScheme) private var scheme
     /// Podbicie = kciuk w górę właśnie wstawiony — gra „wybuch” kropek.
@@ -66,7 +69,9 @@ struct AssistantAnswerFooter: View {
         HStack(spacing: 2) {
             leading
             Spacer(minLength: 8)
-            actions
+            if showsActions {
+                actions
+            }
         }
         .padding(.leading, Self.textInset)
         .padding(.trailing, Self.trailingInset)
