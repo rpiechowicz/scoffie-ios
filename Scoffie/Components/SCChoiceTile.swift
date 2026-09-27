@@ -14,10 +14,13 @@ enum SCChoiceMark: Equatable {
 /// Wymiary kafelka — poza typem generycznym, który nie może mieć stałych
 /// statycznych.
 private enum SCChoiceTileMetrics {
-    /// Szerokość zdjęcia — na CAŁĄ wysokość kafelka, przy lewej krawędzi,
-    /// przycięte rogiem karty (27.09.2026: „daj większe images, aby wypełniało
-    /// dobrze card”). Kwadracik 38/46 pt w środku zostawiał puste ramki.
-    static let media: CGFloat = 62
+    /// Miniatura W KARCIE (nie na całą wysokość — Rafał 27.09.2026: „jako
+    /// card było zdecydowanie lepsze”), tak duża, żeby odstęp od góry, dołu
+    /// i lewej był ten sam: (70 − 54) / 2 = 8 = `leading`.
+    static let media: CGFloat = 54
+    static let mediaRadius: CGFloat = 14
+    /// Odstęp miniatury od lewej krawędzi — równy odstępowi od góry i dołu.
+    static let leading: CGFloat = 8
     /// Jedna czcionka nazwy we WSZYSTKICH kafelkach — bez zmniejszania długich
     /// słów („Wysokobiałkowe” było mniejsze od „Mało soli”, Rafał: „wszystko
     /// takie samo, nie może się to różnić”).
@@ -138,6 +141,7 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
             }
+            .padding(.leading, SCChoiceTileMetrics.leading)
             .padding(.trailing, SCChoiceTileMetrics.inset)
             // Elastyczny w obu osiach: siatka daje każdemu kafelkowi tę samą
             // szerokość kolumny i wysokość najwyższego kafelka w siatce.
@@ -157,25 +161,29 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
         .accessibilityAddTraits(mark == .off ? .isButton : [.isButton, .isSelected])
     }
 
-    /// Zdjęcie na całą wysokość kafelka, przy lewej krawędzi — lewe rogi
-    /// to rogi karty, prawa krawędź prosta. Zaznaczenie mówi obwódka całego
-    /// kafelka, tint i znaczek na rogu zdjęcia.
+    /// Miniatura w karcie — kwadrat 54 pt z odstępem 8 pt od lewej, góry
+    /// i dołu. Zaznaczony: obwódka akcentu wokół miniatury i znaczek na rogu.
     private var mediaView: some View {
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 16,
-            bottomLeadingRadius: 16,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 0,
-            style: .continuous
-        )
-        // Stała ramka, nie `maxHeight: .infinity`: siatka mierzy kafelek bez
-        // wysokości i `scaledToFill` zgłosiłby naturalną wysokość zdjęcia.
+        let size = SCChoiceTileMetrics.media
+        let radius = SCChoiceTileMetrics.mediaRadius
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+
+        // Stała ramka: siatka mierzy kafelek bez wysokości, a `scaledToFill`
+        // zgłosiłby naturalną wysokość zdjęcia.
         return media()
-            .frame(width: SCChoiceTileMetrics.media, height: SCChoiceTileMetrics.height)
+            .frame(width: size, height: size)
             .clipShape(shape)
+            .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+            .overlay {
+                RoundedRectangle(cornerRadius: radius + 3, style: .continuous)
+                    .strokeBorder(accent, lineWidth: 1.5)
+                    .padding(-3)
+                    .opacity(mark == .on ? 1 : 0)
+                    .scaleEffect(mark == .on ? 1 : 0.92)
+            }
             .overlay(alignment: .bottomTrailing) {
                 badge
-                    .padding(5)
+                    .offset(x: 5, y: 5)
             }
     }
 

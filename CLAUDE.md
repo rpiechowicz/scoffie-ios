@@ -374,7 +374,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
   i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
   „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`; od 27.09.2026 STAŁA wysokość 70 pt
-  na dwie linie nazwy, zdjęcie 62 pt na CAŁĄ wysokość przy lewej krawędzi, nazwa ZAWSZE 14 pt bez zmniejszania —
+  na dwie linie nazwy, miniatura 54 pt W KARCIE z równym odstępem 8 pt od góry, dołu i lewej (wersja „na całą
+  wysokość” odrzucona — „jako card było lepsze”), nazwa ZAWSZE 14 pt bez zmniejszania —
   długie słowo łamie się miękkim dzieleniem „Wysoko-/białkowe”, `SCChoiceTile.hyphenated`) = miniatura ZDJĘCIA
   DANIA z tą cechą + nazwa + liczba przepisów; zaznaczenie = tint, obwódka wokół miniatury i znaczek
   z ptaszkiem (nie samo pole wyboru — „smutne”, Rafał 23.09). Zdjęcia dobiera `RecipeFilterCovers`
