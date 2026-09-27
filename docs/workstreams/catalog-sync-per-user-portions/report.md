@@ -480,3 +480,32 @@ istnieje — wtedy zgłoś błąd kompilacji, nie obchodź go. Potem przejście 
   na pozycji z alokacją (także `replaceRecipeId`, `applyWeekPlan`, apply/undo Asystenta, narzędzia AI), 409
   z bieżącym stanem, test interleavingu powyżej. Do tego czasu alokacji nie wolno tworzyć na prod — także poza
   planerem.
+
+## Addendum 3 — edycja porcji odblokowana, krok 0,5 (2026-09-27)
+
+Backend zamknął API GAP: rewizje i tokeny (#212), `portionPolicy` (#215), krok 0,5 (#222) — na produkcji,
+`AI_PLANNER_PER_USER_PORTIONS=true`. Kontrakt: `scoffie-backend/docs/workstreams/plan-portions-safe-editing/ios-contract.md`
++ §16 raportu `per-user-portions-write-safety`.
+
+### Co zmieniono
+
+| Obszar | Zmiana |
+| --- | --- |
+| Model | `PlanMeal.revision` + `portionRevisions` (z `items[].revision`, `portions[].revision`); `canEditPortions` = są tokeny pozycji i każdej osoby. Cache bez tokenów dekoduje się jako „nie znam” |
+| Porcja osoby | `MealCalendarStore.setPortions` → `weeklyPlans:setPortion` osobno dla każdej zmienionej osoby, z JEJ tokenem; ack podmienia porcje i tokeny (starszy ack nie cofa stanu) |
+| Zapis pozycji z alokacją | zamiast blokady: `portionPolicy: PRESERVE` + `expectedRevision`; przy zamianie zawsze `expectedTargetRevision` (`null` = celu nie ma); bez `plannedServings`. Alokacja bez tokenów → brak zapytania, odświeżenie |
+| Błędy | `PLAN_REVISION_CONFLICT` / `PLAN_REVISION_REQUIRED` / `PLAN_PORTIONS_CONFLICT` / `PLAN_ITEM_NOT_FOUND` → cofnięcie wpisu optymistycznego + odświeżenie tygodnia, bez ponowienia; nowe kopie w `UserFacingErrorMapper` |
+| UI | szczegóły posiłku: przy każdej osobie stepper co 0,5 (0,5–6, plus gaśnie przy sumie 12), makra i składniki liczą się na bieżąco, zapis „Zapisz porcje”. Ten sam `DetailServingsStepper` co porcje łączne (krok i etykieta z parametru). Etykiety „1”, „1,5”, „0,5” |
+| Arkusz porcji w slocie | danie z porcjami per osoba da się zawęzić „Zamień” (dotąd zostawało „obok”) — serwer przelicza przez `PRESERVE` |
+
+### Testy
+
+| Sprawdzian | Wynik |
+| --- | --- |
+| tree-sitter (składnia zmienionych plików + skryptów), CRLF, duplikaty typów | OK (Windows) |
+| `sh Scripts/plan-portions-check.sh` — przepisany: etykiety, stepper, decyzja `PRESERVE`/`blocked`/`send` | **NOT RUN** — macOS |
+| `sh Scripts/plan-store-check.sh` — `PRESERVE` z tokenami, zamiana z parą tokenów, `setPortion` per osoba, konflikt → cofnięcie bez ponowienia | **NOT RUN** — macOS |
+| build Xcode | **NOT RUN** — macOS |
+
+Polecenia jak w addendum 2. Ręcznie na TestFlight / symulatorze: plan ułożony przez Asystenta (porcje per osoba) → szczegóły
+posiłku → zmień porcję → „Zapisz porcje”; drugi telefon zmienia tę samą porcję w międzyczasie → komunikat i świeży plan.
