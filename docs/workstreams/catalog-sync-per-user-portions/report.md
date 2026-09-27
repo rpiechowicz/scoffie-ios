@@ -254,8 +254,9 @@ ze starej kopii cofa zmianę innego telefonu:
 „Odśwież tuż przed zapisem” okna nie zamyka, więc nie zostało użyte.
 
 **Poprawka:**
-- iOS nie wysyła pola `portions`. Usunięte z `WeeklyPlanRepository` i transportu, więc niebezpiecznego zapytania
-  nie da się zbudować.
+- iOS nie wysyła pola `portions` (usunięte z `WeeklyPlanRepository` i transportu). *Korekta (addendum 2): to NIE
+  czyni zapisu bezpiecznym — zapis bez `portions` serwer traktuje jako skasowanie alokacji, więc pozycja z alokacją
+  nieznaną telefonowi nadal może ją stracić.*
 - `PlanPortions.upsertDecision`: zapis, który dotyka pozycji z alokacją, jest odrzucany PRZED zapisem
   optymistycznym i przed repozytorium. Pozycja dotknięta to ten sam przepis w slocie (serwer ją przepisuje) albo
   danie podmieniane (serwer je usuwa). Użytkownik dostaje `editBlockedMessage` przez toast
@@ -353,3 +354,129 @@ Liczby z Pythona w sekcji „Testy” wyżej były pomocnicze; nie zastępują w
 - **Edycja porcji — BLOCKED (API GAP).** Świadomie wyłączona do czasu spełnienia kryteriów odblokowania.
 
 Nie deklaruję READY do merge'a: wymagane kontrole na macOS nie zostały wykonane.
+
+## Addendum 2 — review patch (2026-09-27)
+
+Backend, N2-1, Railway i flagi nietknięte; nic nie zmergowane. **Build i sprawdziany Swift: NOT RUN — do ręcznej
+weryfikacji na macOS** (lista poleceń niżej). Nie deklaruję, że przeszły.
+
+### Co zmieniono
+
+- **`23d43e8`** — `RecipeCatalogStore.reload()`: `Task<Void, Never> { [weak self] in guard let self … }` zamiast
+  `Task { [weak self] in await self?.performReload() }`. Tamta forma wyprowadzała `Task<Void?, Never>`, niezgodny
+  z polem `reloadTask`. Przejrzane pozostałe przechowywane zadania (`pendingRealtimeReloadTask`,
+  `pendingHouseholdRefreshTask`, `pendingFavoriteTasks`): mają ciała wielowyrażeniowe, więc typ jest `Void` — bez
+  zmian. Nieprzechowywane `Task { … }` nie tworzą konfliktu typu — bez zmian (bez refactoru).
+- **`321074f`** — komentarze (`PlanPortions`, `MealCalendarStore`, `WeeklyPlanStore`) rozdzielają trzy rzeczy:
+  gwarancję klienta, pozostały race i warunek serwera (poniżej).
+- **`de04177`** — test granicy store → repozytorium: prawdziwy `MealCalendarStore` i atrapa `WeeklyPlanRepository`
+  zapisująca wywołania. Szczegóły w „Testy”.
+- Korekta w addendum wyżej: zdanie „niebezpiecznego zapytania nie da się zbudować” było nieprawdziwe i zostało
+  poprawione. Zapis BEZ `portions` też jest niebezpieczny — serwer kasuje wtedy alokację.
+
+### Zakres gwarancji lokalnej blokady
+
+1. **Zabezpieczenie klienta — dotyczy tylko alokacji ZNANYCH telefonowi.** Zapis pozycji, która według lokalnego
+   stanu ma alokację (to samo danie w slocie albo danie podmieniane), nie wychodzi z telefonu: `false`, zero zapytań,
+   bez zmiany optymistycznej. iOS nigdy nie wysyła `portions`.
+2. **Pozostały race przy nieaktualnym stanie — NIE zamknięty.**
+   1. Telefon ma pozycję bez alokacji.
+   2. Serwer (planer, inny klient, narzędzie Asystenta) dodaje alokację.
+   3. Telefon nie dostał jeszcze `weekChanged` ani odświeżenia.
+   4. Zwykły zapis pozycji (zmiana „kto je”, stepper, zamiana dania) idzie bez `portions`, a serwer **kasuje**
+      alokację i wraca do równego podziału.
+
+   Usunięcie `portions` z transportu tego nie chroni — właśnie brak pola powoduje kasowanie. Odświeżenie tuż przed
+   zapisem też nie: alokacja może powstać między odczytem a zapisem.
+3. **Wymagane zabezpieczenie backendowe przed uruchomieniem alokacji** (poniżej). Flaga
+   `AI_PLANNER_PER_USER_PORTIONS=false` NIE jest kontrolą dostępu do zapisów alokacji. API przyjmuje i zapisuje
+   `portions` niezależnie od flagi — flaga steruje tylko planerem.
+
+### Backend API GAP — warunek przed uruchomieniem alokacji
+
+- **Atomowość:** odczyt bieżącego stanu pozycji (czy ma alokację, w jakiej wersji) i decyzja o zapisie muszą zapaść
+  w TEJ SAMEJ transakcji. Dziś zapisy planu i tak biorą `lockWeekForWrite` na początku transakcji.
+- **Legacy upsert nie może niejawnie kasować alokacji:** `upsertWeekSlot` bez `portions` na pozycji, która ma
+  alokację, kończy się odmową (albo jawną polityką), nie `deleteMany`.
+- **To samo dotyczy każdej operacji przepisującej pozycję:**
+  - `replaceRecipeId` (usuwa pozycję z porcjami);
+  - `applyWeekPlan` (slot bez `portions` na pozycji z alokacją = naruszenie, `applied:false`);
+  - apply i undo propozycji Asystenta;
+  - narzędzia AI (`toSlots` gubi porcje).
+- **Odpowiedź konfliktu:** `409` z kodem np. `PLAN_PORTIONS_CONFLICT`, `details: [planItemId]` i bieżącym stanem
+  pozycji (z `portions` i wersją). Nic się nie zapisuje i nie ma broadcastu. W `applyWeekPlan` —
+  `violations[{ index, code: 'PLAN_PORTIONS_CONFLICT' }]`, nic się nie zapisuje. Klient pokazuje komunikat
+  i odświeża tydzień.
+- **Kontrola wersji / pojedyncza porcja:** bez zmian względem addendum 1 (opcje A: `expectedVersion`,
+  B: `setPortion`). Dopiero z nimi można odblokować edycję porcji w iOS.
+
+**Wymagany test backendowy (e2e na żywej bazie, zatrzaski jak w `catalog-change-commit-order.e2e`):**
+1. Pozycja bez alokacji.
+2. Klient A czyta tydzień (brak porcji).
+3. Transakcja B ustawia alokację i trzyma zamek tygodnia.
+4. A wysyła `upsertWeekSlot` bez `portions` (zmiana audytorium) i czeka na zamek.
+5. B commituje.
+
+Oczekiwane: A dostaje `409 PLAN_PORTIONS_CONFLICT`, alokacja B nietknięta, `plannedServings` bez zmian, brak
+broadcastu od A.
+
+Warianty:
+- to samo dla `replaceRecipeId` i dla `applyWeekPlan` (naruszenie, `applied:false`);
+- wariant sekwencyjny: B commituje przed wysłaniem A — ten sam wynik;
+- kontrola: A na pozycji, która alokacji nie ma — zapis przechodzi jak dziś.
+
+### Testy
+
+| Kontrola | Status |
+|---|---|
+| Powłokowa część `plan-portions-check.sh` (regresja „zapis bez `"portions"`”) | uruchomiona: OK (bez zmian od addendum 1) |
+| `sh Scripts/catalog-sync-check.sh` | **NOT RUN** — przygotowane, do weryfikacji na macOS |
+| `sh Scripts/plan-portions-check.sh` (część Swift) | **NOT RUN** — przygotowane, do weryfikacji na macOS |
+| `sh Scripts/plan-store-check.sh` (nowy, 21 asercji) | **NOT RUN** — przygotowane, do weryfikacji na macOS |
+| build Xcode | **NOT RUN** — do weryfikacji na macOS |
+| pomocniczo (nie zastępuje powyższych): składnia tree-sitter | 0 błędów w zmienionych plikach |
+
+`plan-store-check.sh` kompiluje prawdziwy `MealCalendarStore.swift` z domknięciem zależności: 22 pliki, bez
+`ScoffieApp.swift`. Zaślepki są dwie: `AppEnvironment.apiBaseURL` oraz kolory `scCanvas`/`scLabel` z podglądu
+w `PolishPlural.swift` (`SCDesignSystem` jest na UIKit). Scenariusze:
+- 1a–c: pozycja ze znaną alokacją — kto je / stepper / ponowny zapis → `false`, zero zapytań, slot bez zmian,
+  komunikat;
+- 2: zamiana dania z alokacją → zero zapytań;
+- 3: zamiana na danie z alokacją → zero zapytań;
+- 4: nowe danie obok → dokładnie jedno zapytanie o oczekiwanych polach, sąsiednia alokacja nietknięta;
+- 5a–c: legacy (kto je / stepper / zamiana) → jedno zapytanie, dotychczasowy wpis optymistyczny.
+
+Program odmawia startu, jeśli Documents nie leży w katalogu z `CFFIXED_USER_HOME` — store pisze do Documents
+i przy starcie kasuje `saved_plan.json`.
+
+### Polecenia dla Rafała (macOS, katalog `scoffie-ios`)
+
+```sh
+git fetch origin && git checkout feature/catalog-sync-per-user-portions && git pull --ff-only
+sh Scripts/catalog-sync-check.sh
+sh Scripts/plan-portions-check.sh
+sh Scripts/plan-store-check.sh
+xcodebuild -project "Scoffie.xcodeproj" -scheme "Scoffie" -destination "generic/platform=iOS Simulator" build CODE_SIGNING_ALLOWED=NO
+```
+
+Każdy sprawdzian kończy się `WSZYSTKO OK` (kod 0) albo listą `BŁĄD …` (kod 1). Jeśli `plan-store-check.sh` nie
+skompiluje `#Preview` z `PolishPlural.swift`, skrypt już dodaje `-plugin-path` platformy macOS, gdy katalog
+istnieje — wtedy zgłoś błąd kompilacji, nie obchodź go. Potem przejście ręczne z sekcji „Testy” raportu głównego.
+
+### SHA
+
+| Commit | Opis |
+|---|---|
+| `23d43e8` | fix: jawny typ zadania w `RecipeCatalogStore.reload()` |
+| `321074f` | docs(plan): zakres blokady porcji — tylko alokacje znane lokalnie |
+| `de04177` | test(plan): granica `MealCalendarStore` → repozytorium |
+| (ten commit) | docs: addendum 2 |
+
+### Status (osobno)
+
+- **Gotowość kodu do kolejnego review:** TAK — poprawki z tej rundy w kodzie, komentarze i raport spójne.
+- **Weryfikacja na macOS:** OCZEKUJE — trzy sprawdziany i build NOT RUN; nic nie jest READY do merge'a przed nimi.
+- **Blocker backendowy przed bezpiecznym uruchomieniem alokacji:** OTWARTY. Atomowa odmowa zapisu bez `portions`
+  na pozycji z alokacją (także `replaceRecipeId`, `applyWeekPlan`, apply/undo Asystenta, narzędzia AI), 409
+  z bieżącym stanem, test interleavingu powyżej. Do tego czasu alokacji nie wolno tworzyć na prod — także poza
+  planerem.
