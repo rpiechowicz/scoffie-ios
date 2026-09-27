@@ -59,7 +59,6 @@ enum AssistantComposerHint {
         case .shoppingList:
             return pick([
                 "Np. odhacz mleko i jajka",
-                "Np. co mam kupić na weekend?",
                 "Np. mam już pomidory — odhacz",
                 "Napisz, co już kupiłeś…",
             ], seed: seed)
@@ -84,16 +83,16 @@ enum AssistantComposerHint {
                 "Np. ułóż mi przyszły tydzień",
                 "Np. mam kurczaka i paprykę — co z tego zrobić?",
                 "Np. ile białka mam w tym tygodniu?",
-                "Np. zrób listę zakupów na weekend",
+                "Np. czym zastąpić śmietanę w obiedzie?",
             ], seed: seed)
         }
     }
 
     // MARK: - Warianty
 
-    /// Po zapisie: następny krok, nie powtórka „Otwórz plan”.
+    /// Po zapisie: następny krok, nie powtórka „Otwórz plan”. Bez „pokaż
+    /// listę zakupów” — ta jest w Planie (`AssistantAppShortcut`).
     private static let afterSave = [
-        "Np. zrób listę zakupów na ten tydzień",
         "Np. ułóż jeszcze przyszły tydzień",
         "Co jeszcze zaplanować?",
         "Np. a co na jutro na kolację?",

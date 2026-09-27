@@ -303,7 +303,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   listy (`headerShade`: pełne po 24 pt, co 1/12, bez animacji) — przełącznik z animacją spóźniał się przy szybkim
   przewijaniu. Przykład w polu w rozmowie zależy od OSTATNIEJ odpowiedzi (`AssistantComposerHint`: propozycja — zmiana
   z nazwą dania z karty, zapis — następny krok, dania do wyboru — życzenie, zakupy, bilans, pytanie), wariant z ziarna
-  id wiadomości; nie powtarza przycisków karty. Oceny 👍/👎 wymagają backendu
+  id wiadomości; nie powtarza przycisków karty. Pytania z odpowiedzią W APLIKACJI („pokaż listę zakupów”, „jak ugotować…”, „daj przepis”) telefon
+  NIE wysyła (`AssistantAppShortcut`): nad polem karta z przejściem (Plan → Zakupy / Przepisy) i „Zapytaj mimo to” —
+  tura kosztuje i zjada wiadomość z puli; backend wycofał `show_shopping_list` z modelu i każe odsyłać jednym zdaniem. Oceny 👍/👎 wymagają backendu
   z `PUT agent/messages/:id/feedback` — aplikacja zawsze woła `api.scoffie.app`, więc bez backendu na `main` kciuk wraca
   z toastem „Nie zapisałem oceny”.
 - Pytanie wysłane w tej sesji stoi pod kluczem z telefonu (`clientMessageId` — od niego zależy
@@ -368,7 +370,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
   i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
   „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`; od 27.09.2026 STAŁA wysokość 70 pt
-  na dwie linie nazwy i miniatura 46 pt — dwuwierszowa nazwa nic nie rozpycha) = miniatura ZDJĘCIA
+  na dwie linie nazwy, zdjęcie 62 pt na CAŁĄ wysokość przy lewej krawędzi, nazwa ZAWSZE 14 pt bez zmniejszania —
+  długie słowo łamie się miękkim dzieleniem „Wysoko-/białkowe”, `SCChoiceTile.hyphenated`) = miniatura ZDJĘCIA
   DANIA z tą cechą + nazwa + liczba przepisów; zaznaczenie = tint, obwódka wokół miniatury i znaczek
   z ptaszkiem (nie samo pole wyboru — „smutne”, Rafał 23.09). Zdjęcia dobiera `RecipeFilterCovers`
   / `RecipeFacetCovers` raz na otwarcie, z puli przed filtrami, każdy przepis na jednym kafelku;

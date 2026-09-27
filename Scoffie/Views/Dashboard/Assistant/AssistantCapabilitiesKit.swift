@@ -144,8 +144,6 @@ enum AssistantCapabilities {
         .init(id: "macro", icon: "chart.bar.fill", accent: .indigo, title: "Domknięcie makro", example: "Czego brakuje w planie, żeby wyrobić się z białkiem?"),
         // `get_week_balance` z osobą
         .init(id: "scope", icon: "person.crop.circle.badge.checkmark", accent: .sage, title: "Dla kogo liczyć", example: "Policz bilans tylko dla mnie"),
-        // `show_shopping_list`
-        .init(id: "shopping", icon: "cart.fill", accent: .sage, title: "Lista zakupów z planu", example: "Co wyjdzie na liście zakupów z tego tygodnia?"),
         // `check_shopping_items` / `mark_meal_eaten`
         .init(id: "checkoff", icon: "checkmark.circle.fill", accent: .sage, title: "Odhaczanie zjedzonego i zakupów", example: "Kupiłem mleko i jajka"),
         // `get_recipe_details`
@@ -178,7 +176,9 @@ enum AssistantCapabilities {
     static let groups: [Group] = [
         .init(id: "plan", label: "Plan i posiłki", accent: .terracotta, lead: "Najczęściej", items: ["week", "day", "options", "swap", "remove"]),
         .init(id: "goal", label: "Cel i makro", accent: .indigo, lead: "Pod Twoje zapotrzebowanie", items: ["macro", "scope"]),
-        .init(id: "shopping", label: "Zakupy", accent: .sage, lead: "Z planu do sklepu", items: ["shopping", "checkoff"]),
+        // Bez „Lista zakupów z planu” (27.09.2026) — lista jest w Planie →
+        // Zakupy, a pytanie o nią telefon przechwytuje (`AssistantAppShortcut`).
+        .init(id: "shopping", label: "Zakupy", accent: .sage, lead: "Z planu do sklepu", items: ["checkoff"]),
         .init(id: "recipes", label: "Przepisy", accent: .butter, lead: "Katalog i Wasze dania", items: ["cook", "byingredient", "recipes"]),
         .init(id: "home", label: "Domownicy", accent: .sage, lead: "Różne osoby, jeden plan", items: ["split", "memory"]),
     ]
