@@ -277,9 +277,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Runda 3:
   👎 SAM otwiera arkusz „Słaba odpowiedź · Co poprawić?” (ocena zapisuje się od razu, krzyżyk zostawia sam kciuk) —
   pigułka w pasku odpadła, bo przestawiała układ („przeskakuje, jak zmieniam like”); pasek ma zawsze ten sam układ.
-  Arkusz = 4 kafle 2 × 2, każdy powód we własnym kolorze od razu, + pole; prawe wcięcie paska = lewe (glif „⋯” 28 pt
+  Arkusz = LISTA 4 powodów w jednej karcie (krążek w kolorze powodu · nazwa · `SCCheckbox`, bez `withAnimation`
+  i podmiany glifu — „animacje check za wolne”) + pole; prawe wcięcie paska = lewe (glif „⋯” 28 pt
   od brzegu). „Jak pracowałem”: tytuł = co tura zrobiła (`ThinkingHeadline`: „Ułożyłem plan”, „Dobrałem dania”…),
-  kafelek w kolorze tej pracy, czas kapsułką obok krzyżyka. Półarkusze „Jak pracowałem”
+  kafelek = stała ikona przebiegu `point.3.filled.connected.trianglepath.dotted` w terakocie, czas kapsułką obok krzyżyka. Półarkusze „Jak pracowałem”
   i „Co poprawić?” mają kompaktowy nagłówek (`EditorialSheetHeader(compact:)` / `AssistantSheetScaffold(compact:)`:
   kafelek 36, tytuł 19); oś kroków bez karty, kolor = rodzaj pracy (`ThinkingKind`). Bez kopiowania w pasku („co nam to daje
   realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz
