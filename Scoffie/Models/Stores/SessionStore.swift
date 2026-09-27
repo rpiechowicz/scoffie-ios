@@ -351,7 +351,10 @@ final class SessionStore {
                         title: meal.recipe.name,
                         prepMinutes: max(0, meal.recipe.prepTimeMinutes),
                         kcal: Int(
-                            meal.nutritionPerPerson(knownHouseholdMemberCount: memberCount)
+                            meal.nutritionPerPerson(
+                                knownHouseholdMemberCount: memberCount,
+                                memberId: userId
+                            )
                                 .kcal
                                 .rounded()
                         ),

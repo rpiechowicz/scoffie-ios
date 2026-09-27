@@ -69,10 +69,14 @@ struct PlanDayNutrition {
     ///     wchodzą WYŁĄCZNIE posiłki zjedzone, a reszta zostaje na liście
     ///     wygaszona. Zaplanowany obiad nie jest dowodem, że ktoś go zjadł,
     ///     ale nie jest też powodem, żeby zniknął z dnia.
+    ///   - memberId: czyj talerz liczymy — przy daniu z porcjami per osoba
+    ///     bierze porcję TEJ osoby (Asia 0,8, Rafał 1,3 tego samego obiadu).
+    ///     `nil` = średnia porcja; danie bez alokacji liczy się jak dotąd.
     static func make(
         slots: [MealSlot],
         meals: (MealSlot) -> [PlanMeal],
         knownHouseholdMemberCount: Int?,
+        memberId: String? = nil,
         isEaten: ((PlanMeal) -> Bool)? = nil
     ) -> PlanDayNutrition {
         // Dopasowanie wzorca zamiast `isEaten != nil`: domknięcie nie jest
@@ -109,7 +113,8 @@ struct PlanDayNutrition {
 
             for dish in dishes {
                 let nutrition = dish.nutritionPerPerson(
-                    knownHouseholdMemberCount: knownHouseholdMemberCount
+                    knownHouseholdMemberCount: knownHouseholdMemberCount,
+                    memberId: memberId
                 )
                 let eaten = isEaten?(dish) ?? false
 

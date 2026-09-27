@@ -35,6 +35,44 @@ enum RecipeDetailContext {
     case planned(day: Date, slot: MealSlot)
 }
 
+/// Porcje per osoba posiłku z planu (`PlanMeal.portionUnits`). Gdy są,
+/// ekran pokazuje porcję każdego jedzącego zamiast steppera porcji łącznych —
+/// zapis liczby łącznej skasowałby na serwerze alokację i wrócił do równego
+/// podziału.
+struct RecipeDetailPortions {
+    struct Person {
+        let memberId: String
+        let name: String
+    }
+
+    /// Jedzący, w kolejności do pokazania.
+    let people: [Person]
+    /// Jednostki 1/20 porcji (`PlanPortions`).
+    let units: [String: Int]
+    /// Kto patrzy — jego porcja idzie do „Twoja porcja” i do makr.
+    let viewerId: String?
+}
+
+extension RecipeDetailPortions {
+    /// Model dla posiłku z planu; `nil`, gdy posiłek nie ma porcji per osoba
+    /// (wtedy zostaje zwykły stepper porcji łącznych). Osoby = klucze
+    /// alokacji (serwer trzyma je równe audytorium), patrzący pierwszy.
+    init?(meal: PlanMeal, members: [HouseholdMemberSnapshot], viewerId: String?) {
+        guard meal.hasPortions else { return nil }
+        let names = Dictionary(members.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
+        let ids = meal.portionUnits.keys.sorted { lhs, rhs in
+            if lhs == viewerId { return true }
+            if rhs == viewerId { return false }
+            return (names[lhs] ?? lhs).localizedCompare(names[rhs] ?? rhs) == .orderedAscending
+        }
+        self.init(
+            people: ids.map { Person(memberId: $0, name: names[$0] ?? "Domownik") },
+            units: meal.portionUnits,
+            viewerId: viewerId
+        )
+    }
+}
+
 struct RecipeDetailView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.toasts) private var toasts
@@ -63,6 +101,15 @@ struct RecipeDetailView: View {
     /// Wołane po tym, jak `AddToPlanSheet` wstawi posiłek do planu — z dniem
     /// i slotem, na które trafił, żeby ekran pod spodem mógł się odświeżyć.
     var onAddedToPlan: ((Date, MealSlot) -> Void)?
+
+    /// Porcje per osoba (tylko `.planned`); `nil` = zwykły stepper porcji.
+    let personalPortions: RecipeDetailPortions?
+
+    /// Wołane przyciskiem „Zapisz porcje”, gdy posiłek ma porcje per osoba —
+    /// z PEŁNĄ alokacją (serwer przyjmuje tylko całość).
+    var onSavePortions: (([String: Int]) -> Void)?
+
+    @State private var portionUnits: [String: Int]
 
     /// Widełki są te same, co limit `plannedServings` w backendzie — powyżej
     /// dwunastu porcji to już nie jest gotowanie na tydzień, tylko catering.
@@ -124,8 +171,13 @@ struct RecipeDetailView: View {
         initialServings: Int = 1,
         context: RecipeDetailContext = .catalog,
         onSaveServings: ((Int) -> Void)? = nil,
-        onAddedToPlan: ((Date, MealSlot) -> Void)? = nil
+        onAddedToPlan: ((Date, MealSlot) -> Void)? = nil,
+        personalPortions: RecipeDetailPortions? = nil,
+        onSavePortions: (([String: Int]) -> Void)? = nil
     ) {
+        self.personalPortions = personalPortions
+        self.onSavePortions = onSavePortions
+        _portionUnits = State(initialValue: personalPortions?.units ?? [:])
         self.recipe = recipe
         self.onSetFavourite = onSetFavourite
         self.onClose = onClose
@@ -145,6 +197,44 @@ struct RecipeDetailView: View {
     /// Porcje jako `Double`, bo skalowanie makr i składników liczy się
     /// ułamkiem `porcje / recipe.servings`.
     private var portions: Double { Double(servings) }
+
+    /// Tryb porcji per osoba: posiłek z planu z alokacją.
+    private var isPortionMode: Bool {
+        guard case .planned = context, personalPortions != nil else { return false }
+        return !portionUnits.isEmpty
+    }
+
+    /// Porcja patrzącego, jeśli je to danie.
+    private var viewerUnits: Int? {
+        personalPortions?.viewerId.flatMap { portionUnits[$0] }
+    }
+
+    /// Na ile porcji liczą się makra: porcja patrzącego (albo średnia
+    /// jedzących, gdy sam tego nie je) — ten sam wzór co serwer.
+    private var nutritionServings: Double {
+        guard isPortionMode else { return portions }
+        if let viewerUnits { return PlanPortions.servings(fromUnits: viewerUnits) }
+        return PlanPortions.servings(fromUnits: PlanPortions.totalUnits(portionUnits)) / Double(portionUnits.count)
+    }
+
+    /// Na ile porcji liczą się składniki: przy alokacji dokładna Σ (tak liczy
+    /// lista zakupów na serwerze).
+    private var cookedServings: Double {
+        isPortionMode ? PlanPortions.servings(fromUnits: PlanPortions.totalUnits(portionUnits)) : portions
+    }
+
+    private var nutritionEyebrow: String {
+        guard isPortionMode else { return PolishPlural.servings(servings) }
+        if let viewerUnits { return "Twoja porcja: \(PlanPortions.label(units: viewerUnits))" }
+        let mean = PlanPortions.totalUnits(portionUnits) / max(1, portionUnits.count)
+        return "Średnio: \(PlanPortions.label(units: mean))"
+    }
+
+    private var ingredientsEyebrow: String {
+        guard isPortionMode else { return PolishPlural.servings(servings) }
+        // Ułamek porcji łączy się z dopełniaczem: „2,05 porcji”.
+        return "\(PlanPortions.label(units: PlanPortions.totalUnits(portionUnits))) porcji"
+    }
 
     private var look: DetailLook { DetailLook(scheme: scheme) }
 
@@ -349,19 +439,65 @@ struct RecipeDetailView: View {
     private var nutritionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             DetailSectionHeader(
-                eyebrow: PolishPlural.servings(servings),
+                eyebrow: nutritionEyebrow,
                 title: "Wartości odżywcze",
                 accent: SCPalette.terracotta
             ) {
-                DetailServingsStepper(
-                    value: $servings,
-                    range: Self.servingsRange,
-                    onChange: { didTouchStepper = true }
-                )
+                if !isPortionMode {
+                    DetailServingsStepper(
+                        value: $servings,
+                        range: Self.servingsRange,
+                        onChange: { didTouchStepper = true }
+                    )
+                }
             }
 
-            DetailNutritionCard(nutrition: recipe.nutrition(forServings: portions))
+            DetailNutritionCard(nutrition: recipe.nutrition(forServings: nutritionServings))
             .padding(.horizontal, 20)
+
+            if isPortionMode, let personalPortions {
+                portionsCard(personalPortions)
+                    .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    /// Porcja każdego jedzącego — „Rafał 1,25”, „Asia 0,80” — ze stepperem co
+    /// 0,05 porcji (krok serwera). Zapis idzie całością przyciskiem na dole.
+    private func portionsCard(_ model: RecipeDetailPortions) -> some View {
+        DetailCard {
+            VStack(spacing: 0) {
+                ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
+                    portionRow(person, model: model, isFirst: index == 0)
+                }
+            }
+        }
+    }
+
+    private func portionRow(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions, isFirst: Bool) -> some View {
+        let units = portionUnits[person.memberId] ?? PlanPortions.joinerUnits
+        let total = PlanPortions.totalUnits(portionUnits)
+        let name = person.memberId == model.viewerId ? "\(person.name) (Ty)" : person.name
+        return HStack(spacing: 12) {
+            Text(name)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(look.fg)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            DetailPortionStepper(
+                label: PlanPortions.label(units: units),
+                canDecrease: units > PlanPortions.minUnits,
+                canIncrease: units < PlanPortions.maxUnits && total < PlanPortions.maxTotalUnits,
+                onStep: { delta in
+                    portionUnits = PlanPortions.adjusting(portionUnits, memberId: person.memberId, by: delta)
+                }
+            )
+            .accessibilityLabel("Porcja: \(person.name)")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) {
+            if !isFirst { DetailHairline() }
         }
     }
 
@@ -396,12 +532,12 @@ struct RecipeDetailView: View {
     private var ingredientsSection: some View {
         // Gramatury są przeliczone tym samym współczynnikiem co makra wyżej —
         // i eyebrow mówi wprost, na ile porcji.
-        let scaled = recipe.ingredients(forServings: portions)
+        let scaled = recipe.ingredients(forServings: cookedServings)
         let groups = DetailIngredientGroup.make(from: scaled)
 
         return VStack(alignment: .leading, spacing: 12) {
             DetailSectionHeader(
-                eyebrow: PolishPlural.servings(servings),
+                eyebrow: ingredientsEyebrow,
                 title: "Składniki",
                 accent: SCPalette.indigo
             ) {
@@ -839,7 +975,9 @@ struct RecipeDetailView: View {
     private var isPrimaryActionEnabled: Bool {
         switch context {
         case .catalog: return true
-        case .planned: return servings != initialServings
+        case .planned:
+            if isPortionMode { return portionUnits != (personalPortions?.units ?? [:]) }
+            return servings != initialServings
         }
     }
 
@@ -850,7 +988,11 @@ struct RecipeDetailView: View {
         case .planned:
             guard !isSavingServings else { return }
             isSavingServings = true
-            onSaveServings?(servings)
+            if isPortionMode {
+                onSavePortions?(portionUnits)
+            } else {
+                onSaveServings?(servings)
+            }
             onClose?()
         }
     }
@@ -1218,6 +1360,66 @@ private struct DetailHairline: View {
 }
 
 // MARK: - Stepper porcji
+
+/// Porcja jednej osoby „−  1,25  +” co 0,05 porcji (jednostka serwera).
+/// Granice (0,1…6 na osobę, Σ ≤ 12) liczy rodzic — `PlanPortions.adjusting`.
+private struct DetailPortionStepper: View {
+    let label: String
+    let canDecrease: Bool
+    let canIncrease: Bool
+    let onStep: (Int) -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let look = DetailLook(scheme: scheme)
+
+        HStack(spacing: 0) {
+            stepButton(systemName: "minus", enabled: canDecrease, look: look) { onStep(-1) }
+
+            Text(label)
+                .font(.system(size: 15, weight: .heavy))
+                .monospacedDigit()
+                .foregroundStyle(look.fg)
+                .frame(minWidth: 44)
+                .contentTransition(.numericText())
+
+            stepButton(systemName: "plus", enabled: canIncrease, look: look) { onStep(1) }
+        }
+        .background(Capsule().fill(look.chip))
+        .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
+        .sensoryFeedback(.selection, trigger: label)
+        .accessibilityElement(children: .ignore)
+        .accessibilityValue("\(label) porcji")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                if canIncrease { onStep(1) }
+            case .decrement:
+                if canDecrease { onStep(-1) }
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func stepButton(
+        systemName: String,
+        enabled: Bool,
+        look: DetailLook,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(enabled ? SCPalette.terracotta : look.faint)
+                .frame(width: 36, height: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.86))
+        .disabled(!enabled)
+    }
+}
 
 /// `DStepper` z wartością: „−  1  +” na pigułce. Minus gaśnie na dolnej
 /// granicy, plus świeci terakotą. Cyfra przewija się w miejscu, a każde

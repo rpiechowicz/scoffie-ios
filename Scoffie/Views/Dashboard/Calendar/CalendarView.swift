@@ -208,6 +208,7 @@ struct CalendarView: View {
             slots: visibleSlots(on: date),
             meals: { myMeals(for: $0, on: date) },
             knownHouseholdMemberCount: knownHouseholdMemberCount,
+            memberId: userId,
             isEaten: { $0.isEaten(by: userId) }
         )
     }
@@ -240,7 +241,8 @@ struct CalendarView: View {
         PlanDayNutrition.make(
             slots: visibleSlots(on: date),
             meals: { myMeals(for: $0, on: date) },
-            knownHouseholdMemberCount: knownHouseholdMemberCount
+            knownHouseholdMemberCount: knownHouseholdMemberCount,
+            memberId: sessionStore.currentUserId
         )
     }
 
@@ -410,6 +412,14 @@ struct CalendarView: View {
     /// „2 porcje” — dopisek pod talerzem tylko wtedy, gdy ktoś świadomie
     /// odszedł od reguły auto. To, że coś jest domyślne, nie jest informacją.
     private func servingsNote(_ meal: PlanMeal) -> String? {
+        // Porcje per osoba: „porcja 1,25” tego, kto trzyma telefon — tylko
+        // gdy różni się od jednej.
+        if meal.hasPortions {
+            guard let person = sessionStore.currentUserId,
+                  let units = meal.portionUnits[person],
+                  units != PlanPortions.unitsPerServing else { return nil }
+            return "porcja \(PlanPortions.label(units: units))"
+        }
         guard let count = knownHouseholdMemberCount,
               meal.isCustomServings(householdMemberCount: count)
         else { return nil }
@@ -649,7 +659,10 @@ struct CalendarView: View {
     /// pokazuje w pigułce i którą sumuje pigułka celu nad dolnym menu.
     private func perPersonKcal(_ meal: PlanMeal) -> Int {
         Int(
-            meal.nutritionPerPerson(knownHouseholdMemberCount: knownHouseholdMemberCount)
+            meal.nutritionPerPerson(
+                knownHouseholdMemberCount: knownHouseholdMemberCount,
+                memberId: sessionStore.currentUserId
+            )
                 .kcal
                 .rounded()
         )
@@ -824,6 +837,16 @@ struct CalendarView: View {
                     context: .planned(day: target.date, slot: target.slot),
                     onSaveServings: { newValue in
                         saveServings(newValue, for: target)
+                    },
+                    // Porcje per osoba: zamiast steppera porcji łącznych —
+                    // porcja każdego jedzącego, zapisywana całą alokacją.
+                    personalPortions: RecipeDetailPortions(
+                        meal: target.meal,
+                        members: sessionStore.householdMembers,
+                        viewerId: sessionStore.currentUserId
+                    ),
+                    onSavePortions: { units in
+                        savePortions(units, for: target)
                     }
                 )
                 .recipeDetailSheet()
@@ -1318,6 +1341,27 @@ struct CalendarView: View {
                 recipe: target.meal.recipe,
                 participantIds: target.meal.participantIds,
                 plannedServings: servings,
+                householdMemberCount: knownHouseholdMemberCount,
+                for: target.date,
+                slot: target.slot,
+                weekStart: datesViewModel.weekStartISO
+            )
+            detailTarget = nil
+            await shoppingListStore.load(
+                weekStart: datesViewModel.weekStartISO,
+                force: true
+            )
+        }
+    }
+
+    /// Zapisuje porcje per osoba zmienione w szczegółach — CAŁĄ alokację
+    /// (patrz `WeeklyPlanView.savePortions`).
+    private func savePortions(_ units: [String: Int], for target: DetailTarget) {
+        Task { @MainActor in
+            _ = await mealStore.upsertWeekSlot(
+                recipe: target.meal.recipe,
+                participantIds: target.meal.participantIds,
+                portionUnits: units,
                 householdMemberCount: knownHouseholdMemberCount,
                 for: target.date,
                 slot: target.slot,

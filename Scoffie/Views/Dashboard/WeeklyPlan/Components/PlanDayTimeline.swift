@@ -307,7 +307,8 @@ struct PlanDayTimeline: View {
                 onTapMeal: { onTapMeal(row.slot, $0) },
                 onEditMeal: { onEditMeal(row.slot, $0) },
                 onAddVariant: { onAddVariant(row.slot) },
-                onRemoveMeal: { onRemoveMeal(row.slot, $0) }
+                onRemoveMeal: { onRemoveMeal(row.slot, $0) },
+                kcalPersonId: profile.memberId ?? sessionStore.currentUserId
             )
         }
     }
@@ -470,6 +471,9 @@ struct PlanTimelineRow: View {
     let onEditMeal: (PlanMeal) -> Void
     let onAddVariant: () -> Void
     let onRemoveMeal: (PlanMeal) -> Void
+    /// Czyją porcję pokazują kalorie dań (porcje per osoba) — osoba
+    /// z soczewki Planu albo ten, kto trzyma telefon.
+    var kcalPersonId: String? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
@@ -564,7 +568,8 @@ struct PlanTimelineRow: View {
                 members: members,
                 audience: audience(for: meal),
                 showsWhoBadge: showsWhoBadge,
-                isAlternative: isAlternative
+                isAlternative: isAlternative,
+                kcalPersonId: kcalPersonId
             )
         }
         .buttonStyle(PlanPressStyle())
@@ -605,6 +610,8 @@ struct PlanTimelineDish: View {
     let audience: [String]
     let showsWhoBadge: Bool
     let isAlternative: Bool
+    /// Patrz `PlanTimelineRow.kcalPersonId`.
+    var kcalPersonId: String? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.sessionStore) private var sessionStore
@@ -751,15 +758,31 @@ struct PlanTimelineDish: View {
     }
 
     private var perPersonKcal: Int {
-        Int(
-            meal.nutritionPerPerson(knownHouseholdMemberCount: knownHouseholdMemberCount)
+        // Porcja osoby tylko przy daniu, które ona je; cudze danie osobiste
+        // (widok „Cały dom") pokazuje średnią porcję swoich jedzących, a nie
+        // jedynkę „osoby bez wpisu".
+        let person = kcalPersonId ?? sessionStore.currentUserId
+        let eats = meal.isShared || meal.participantIds.contains(person ?? "")
+        return Int(
+            meal.nutritionPerPerson(
+                knownHouseholdMemberCount: knownHouseholdMemberCount,
+                memberId: eats ? person : nil
+            )
                 .kcal
                 .rounded()
         )
     }
 
     /// „3 porcje”, ale tylko gdy użytkownik świadomie odszedł od reguły auto.
+    /// Przy porcjach per osoba — „porcja 1,25” osoby z soczewki, tylko gdy
+    /// różni się od jednej (domyślne to nie informacja).
     private var customServingsText: String? {
+        if meal.hasPortions {
+            guard let person = kcalPersonId ?? sessionStore.currentUserId,
+                  let units = meal.portionUnits[person],
+                  units != PlanPortions.unitsPerServing else { return nil }
+            return "porcja \(PlanPortions.label(units: units))"
+        }
         guard let count = knownHouseholdMemberCount,
               meal.isCustomServings(householdMemberCount: count) else { return nil }
         return PolishPlural.servings(meal.effectiveServings(householdMemberCount: count))

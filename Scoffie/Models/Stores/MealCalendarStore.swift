@@ -143,7 +143,8 @@ class MealCalendarStore {
                         recipe: slot.recipe,
                         participantIds: slot.participantIds,
                         eatenByUserIds: slot.eatenByUserIds,
-                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId]
+                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId],
+                        portionUnits: slot.portionUnits
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -178,12 +179,26 @@ class MealCalendarStore {
     /// `max(1, 0)`, czyli jedną porcję, i ta jedynka utrwalała się w pliku
     /// planu. Lepiej zostawić „nie wiem" i podmienić je na prawdę z
     /// potwierdzenia zapisu.
+    ///
+    /// Porcje per osoba (`PlanMeal.portionUnits`): serwer KASUJE alokację
+    /// przy każdym zapisie bez pola `portions`. Dlatego tutaj, w jednym
+    /// miejscu, zapada decyzja (`PlanPortions.forWrite`):
+    /// - `portionUnits` od wołającego (edytor porcji) idzie jak jest;
+    /// - jawne `plannedServings` = świadomy powrót do równego podziału;
+    /// - każdy inny zapis pozycji z alokacją — zmiana „kto je”, podmiana dania,
+    ///   dołączenie do tego samego dania — przenosi ją na nowe audytorium:
+    ///   zostający zachowują porcję, dochodzący dostają jedną, odchodzący znikają.
+    /// Audytorium „Wspólne” to wszyscy domownicy (`householdMemberIds`); gdy
+    /// ich lista nie dojechała, a alokacja jest i musiałaby się zmienić, zapis
+    /// jest wstrzymany — cicho skasowana alokacja byłaby gorsza niż odmowa.
     @MainActor
     func upsertWeekSlot(
         recipe: Recipe,
         participantIds: [String] = [],
         plannedServings: Int? = nil,
+        portionUnits explicitPortions: [String: Int]? = nil,
         householdMemberCount: Int?,
+        householdMemberIds: [String]? = nil,
         replacingRecipeId: UUID? = nil,
         for date: Date,
         slot: MealSlot,
@@ -191,24 +206,51 @@ class MealCalendarStore {
     ) async -> Bool {
         let previous = meals(for: date, slot: slot)
 
+        // Pozycja, której alokacja ma przetrwać zapis: to samo danie (zmiana
+        // audytorium, dołączenie), a przy podmianie — danie podmieniane.
+        let source = previous.first { $0.recipe.id == recipe.id }
+            ?? replacingRecipeId.flatMap { replaced in previous.first { $0.recipe.id == replaced } }
+        let audience: [String]? = {
+            if !participantIds.isEmpty { return participantIds }
+            if let householdMemberIds, !householdMemberIds.isEmpty { return householdMemberIds }
+            // „Wspólne” bez listy domowników: alokacja wspólnej pozycji to
+            // już cały dom (serwer dopisuje i zdejmuje domowników sam).
+            if let source, source.isShared, source.hasPortions { return Array(source.portionUnits.keys) }
+            return nil
+        }()
+        let portionsToSend = PlanPortions.forWrite(
+            existing: source?.portionUnits ?? [:],
+            audience: audience,
+            explicit: explicitPortions,
+            explicitTotal: plannedServings != nil
+        )
+        if let source, source.hasPortions, plannedServings == nil, portionsToSend == nil {
+            errorMessage = "Skład domu jeszcze się wczytuje — spróbuj za chwilę."
+            return false
+        }
+
         // Optymistyczny wpis musi mieć konkretną liczbę porcji już teraz, więc
         // powtarzamy tu regułę serwera co do joty: liczba uczestników, a dla
         // „Wspólne" liczba domowników. Wcześniej stała tu jedynka i to ona
         // trafiała do `meal_plans.json` — wspólna kolacja w dwuosobowym domu
         // utrwalała się jako jedna porcja i nikt jej już potem nie poprawiał.
-        let optimisticServings = plannedServings
+        // Przy alokacji serwer bierze `ceil(Σ)`.
+        let optimisticServings = portionsToSend.map(PlanPortions.derivedPlannedServings)
+            ?? plannedServings
             ?? (participantIds.isEmpty ? householdMemberCount.map { max(1, $0) } : participantIds.count)
 
         var optimistic = previous.filter { $0.recipe.id != replacingRecipeId }
         if let index = optimistic.firstIndex(where: { $0.recipe.id == recipe.id }) {
             optimistic[index].participantIds = participantIds
             optimistic[index].plannedServings = optimisticServings
+            optimistic[index].portionUnits = portionsToSend ?? [:]
         } else {
             optimistic.append(
                 PlanMeal(
                     recipe: recipe,
                     participantIds: participantIds,
-                    plannedServings: optimisticServings
+                    plannedServings: optimisticServings,
+                    portionUnits: portionsToSend ?? [:]
                 )
             )
         }
@@ -224,6 +266,7 @@ class MealCalendarStore {
                 recipeId: recipe.id,
                 participantIds: participantIds,
                 plannedServings: plannedServings,
+                portionUnits: portionsToSend,
                 replaceRecipeId: replacingRecipeId
             )
             // Wpis optymistyczny miał syntetyczne `id` i zgadywane porcje.
@@ -242,7 +285,10 @@ class MealCalendarStore {
                         // `nil` z serwera znaczy „nie znam tego pola" (starszy
                         // backend), więc zostawiamy własną wartość zamiast
                         // zerować ją do reguły auto.
-                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings
+                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings,
+                        // Prawda z serwera — pusta alokacja w odpowiedzi znaczy
+                        // „równy podział”, a nie „nie wiem” (pole jest zawsze).
+                        portionUnits: saved.portionUnits
                     )
                     setMeals(confirmed, for: date, slot: slot)
                 }

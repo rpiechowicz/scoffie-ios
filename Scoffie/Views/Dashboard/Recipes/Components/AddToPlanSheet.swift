@@ -1084,6 +1084,7 @@ struct AddToPlanSheet: View {
                 // liczba zjadłaby porcję tamtej osoby, więc też jej nie ma.
                 plannedServings: didOverrideServings && samePlanned == nil ? servings : nil,
                 householdMemberCount: members.isEmpty ? nil : members.count,
+                householdMemberIds: members.isEmpty ? nil : members.map(\.id),
                 replacingRecipeId: replacing,
                 for: date,
                 slot: slot,
