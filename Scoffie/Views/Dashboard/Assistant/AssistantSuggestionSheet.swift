@@ -21,6 +21,13 @@ import SwiftUI
 /// „Słaba odpowiedź · Co poprawić?” z kciukiem w kafelku; każdy powód ma
 /// własny kolor od razu (nie dopiero po zaznaczeniu) — zaznaczenie to tint
 /// tego koloru i ptaszek w krążku.
+///
+/// Runda 4 („zmień układ tych wartości, usuń animacje z check, bo są za
+/// wolne”): powody to LISTA w jednej karcie — krążek w kolorze powodu,
+/// nazwa, `SCCheckbox` po prawej (wybór „wiele” w całej aplikacji), wiersze
+/// rozdzielone włoskowatą kreską jak w Ustawieniach. Bez `withAnimation`
+/// i bez podmiany glifu: pole wyboru ma własną krótką sprężynę (0,28 s),
+/// reszta zmienia się w tej samej klatce.
 struct AssistantSuggestionSheet: View {
     let message: AgentChatMessage
     /// Oddaje komunikat błędu albo `nil` przy sukcesie.
@@ -82,14 +89,7 @@ struct AssistantSuggestionSheet: View {
             footer: { sendButton }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
-                    spacing: 10
-                ) {
-                    ForEach(Self.options) { option in
-                        tile(option)
-                    }
-                }
+                reasonList
 
                 TextField("Jak powinno być? (opcjonalnie)", text: $comment, axis: .vertical)
                     .lineLimit(2...5)
@@ -124,42 +124,53 @@ struct AssistantSuggestionSheet: View {
         .onAppear(perform: prefill)
     }
 
-    /// Kafel powodu: glif w krążku w kolorze powodu, podpis; wybrany — tint
-    /// tego koloru i ptaszek w krążku.
-    private func tile(_ option: Option) -> some View {
+    /// Powody w jednej karcie, wiersz pod wierszem.
+    private var reasonList: some View {
+        let shape = RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
+        return VStack(spacing: 0) {
+            ForEach(Array(Self.options.enumerated()), id: \.element.id) { index, option in
+                if index > 0 {
+                    Rectangle()
+                        .fill(AssistantLook.hair(scheme))
+                        .frame(height: 1)
+                        .padding(.leading, 56)
+                }
+                row(option)
+            }
+        }
+        .background(shape.fill(Color.scTileBg(scheme)))
+        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+    }
+
+    /// Wiersz powodu: krążek w kolorze powodu, nazwa, pole wyboru.
+    private func row(_ option: Option) -> some View {
         let isOn = tags.contains(option.id)
         let accent = color(option.tone)
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return Button {
-            withAnimation(.smooth(duration: 0.2)) {
-                if isOn { tags.remove(option.id) } else { tags.insert(option.id) }
-            }
+            if isOn { tags.remove(option.id) } else { tags.insert(option.id) }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 ZStack {
-                    Circle().fill(accent.opacity(isOn ? 0.22 : (scheme == .dark ? 0.16 : 0.12)))
-                    Image(systemName: isOn ? "checkmark" : option.icon)
-                        .font(.system(size: 13, weight: .bold))
+                    Circle().fill(accent.opacity(scheme == .dark ? 0.18 : 0.13))
+                    Image(systemName: option.icon)
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(accent)
-                        .contentTransition(.symbolEffect(.replace))
                 }
-                .frame(width: 32, height: 32)
+                .frame(width: 30, height: 30)
 
                 Text(option.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(AssistantLook.ink(scheme))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.9)
-                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                SCCheckbox(on: isOn, accent: AssistantLook.terra(scheme), size: 22)
             }
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 58)
-            .scChoiceSurface(shape, isOn: isOn, accent: accent, offFill: Color.scTileBg(scheme), style: .tile)
-            .contentShape(shape)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PlanPressStyle(scale: 0.97))
+        .buttonStyle(.plain)
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }
 
@@ -175,7 +186,7 @@ struct AssistantSuggestionSheet: View {
         )
         .disabled(!canSend || isDone)
         .opacity(canSend || isDone ? 1 : 0.45)
-        .animation(.smooth(duration: 0.2), value: canSend)
+        .animation(.easeOut(duration: 0.12), value: canSend)
     }
 
     /// Istniejąca podpowiedź wchodzi do pól RAZ — jak w arkuszu zgłoszenia

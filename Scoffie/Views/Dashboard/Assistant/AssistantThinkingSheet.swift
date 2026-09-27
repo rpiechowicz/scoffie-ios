@@ -13,8 +13,8 @@ import SwiftUI
 ///
 /// Runda 3 („header do poprawy, po prawej daj czas, daj jakiś unikalny
 /// title”): tytuł mówi, CO asystent zrobił w tej turze (`ThinkingHeadline`:
-/// „Ułożyłem plan”, „Dobrałem dania”, „Znalazłem zamiennik”…), kafelek ma
-/// glif i kolor tej pracy, a czas stoi kapsułką obok krzyżyka. Etykiety
+/// „Ułożyłem plan”, „Dobrałem dania”, „Znalazłem zamiennik”…), a czas stoi
+/// kapsułką obok krzyżyka. Kafelek: stała ikona przebiegu (runda 4). Etykiety
 /// z faktami pod nagłówkiem odpadły — tytuł i czas mówią to samo.
 ///
 /// Kroki przychodzą z serwera gotowymi zdaniami (`AgentThinkingSummary.steps`,
@@ -33,8 +33,11 @@ struct AssistantThinkingSheet: View {
         AssistantSheetScaffold(
             eyebrow: "Jak pracowałem",
             title: headline.title,
-            icon: headline.icon,
-            accent: headline.kind.tint(scheme),
+            // Kafelek mówi „przebieg”, nie ostatnie narzędzie: glif kroku
+            // (kalendarz, lupa…) zmieniał się z arkusza na arkusz i nie
+            // tłumaczył, czym jest ten ekran (runda 4). Kolor pracy zostaje
+            // na osi.
+            icon: "point.3.filled.connected.trianglepath.dotted",
             compact: true,
             onClose: { dismiss() },
             action: { durationChip },
@@ -98,12 +101,9 @@ struct AssistantThinkingSheet: View {
 }
 
 /// Tytuł arkusza — NAJWAŻNIEJSZA rzecz, którą tura zrobiła, po priorytecie:
-/// zapis > plan > zamiana > dania > reszta > samo sprawdzanie. Glif i kolor
-/// idą za tym samym krokiem.
+/// zapis > plan > zamiana > dania > reszta > samo sprawdzanie.
 struct ThinkingHeadline {
     let title: String
-    let icon: String
-    let kind: ThinkingKind
 
     private static let priority: [(tools: Set<String>, title: String)] = [
         (["apply_week_plan"], "Zapisałem w planie"),
@@ -123,23 +123,12 @@ struct ThinkingHeadline {
 
     init(_ steps: [AgentProgressStepDTO]) {
         for entry in Self.priority {
-            if let step = steps.last(where: { entry.tools.contains($0.tool) }) {
-                let kind = ThinkingKind(step)
+            if steps.contains(where: { entry.tools.contains($0.tool) }) {
                 title = entry.title
-                icon = kind.icon(step)
-                self.kind = kind
                 return
             }
         }
-        if let step = steps.last {
-            title = "Sprawdziłem plan"
-            icon = ThinkingKind(step).icon(step)
-            kind = .check
-        } else {
-            title = "Odpowiedziałem od razu"
-            icon = "sparkles"
-            kind = .pick
-        }
+        title = steps.isEmpty ? "Odpowiedziałem od razu" : "Sprawdziłem plan"
     }
 }
 
