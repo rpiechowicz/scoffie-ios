@@ -73,6 +73,9 @@ struct AgentThinkingSummary: Equatable {
     /// się policzyć (brak znaczników z serwera i lokalnie).
     let duration: TimeInterval?
     let steps: [AgentProgressStepDTO]
+    /// Start tury (zegar serwera) — oś „Jak pracowałem” liczy od niego
+    /// sekundy kroków. `nil` = starszy serwer; oś liczy wtedy od 1. kroku.
+    var startedAt: Date? = nil
 }
 
 /// Stan rozmowy z asystentem AI.
@@ -290,8 +293,9 @@ final class AgentStore {
         let previousNote = messages[index].feedbackNote
         guard previous != rating else { return nil }
         messages[index].feedback = rating
-        // Serwer czyści podpowiedź przy „w górę” i przy zdjęciu oceny.
-        if rating != .down { messages[index].feedbackNote = nil }
+        // Każda zmiana oceny (kierunek albo zdjęcie) zdejmuje podpowiedź —
+        // serwer robi to samo.
+        messages[index].feedbackNote = nil
         do {
             try await client.rateMessage(id: messageId, rating: rating?.rawValue)
             return nil
@@ -306,19 +310,25 @@ final class AgentStore {
         }
     }
 
-    /// „Co poprawić?” — kciuk w dół z podpowiedzią (powody + zdanie). Oddaje
+    /// Ocena z podpowiedzią (powody + zdanie; w dół „co nie zagrało”, w górę
+    /// „co było dobre”). Oddaje
     /// komunikat błędu albo `nil`. Ekran zmienia się dopiero po odpowiedzi
     /// serwera — arkusz czeka na wynik i sam pokazuje błąd.
-    func suggest(messageId: String, tags: [String], comment: String?) async -> String? {
+    func suggest(
+        messageId: String,
+        rating: AgentFeedback,
+        tags: [String],
+        comment: String?
+    ) async -> String? {
         do {
             try await client.rateMessage(
                 id: messageId,
-                rating: AgentFeedback.down.rawValue,
+                rating: rating.rawValue,
                 tags: tags,
                 comment: comment
             )
             if let index = messages.firstIndex(where: { $0.id == messageId }) {
-                messages[index].feedback = .down
+                messages[index].feedback = rating
                 messages[index].feedbackNote = tags.isEmpty && comment == nil
                     ? nil
                     : AgentFeedbackNoteDTO(tags: tags, comment: comment)
@@ -1467,7 +1477,8 @@ final class AgentStore {
         // je zdejmuje przy domknięciu; filtr zostaje dla starszego serwera.
         return AgentThinkingSummary(
             duration: duration,
-            steps: turn.progress.filter { !$0.isTransient }
+            steps: turn.progress.filter { !$0.isTransient },
+            startedAt: start
         )
     }
 
@@ -1484,7 +1495,8 @@ final class AgentStore {
             thinking: dto.thinking.map { thinking in
                 AgentThinkingSummary(
                     duration: thinking.durationMs.map { Double($0) / 1000 },
-                    steps: thinking.steps.filter { !$0.isTransient }
+                    steps: thinking.steps.filter { !$0.isTransient },
+                    startedAt: parseTimestamp(thinking.startedAt)
                 )
             },
             turnId: dto.turnId,
