@@ -202,9 +202,6 @@ struct PlanSlotPickerSheet: View {
             meal.recipe.id != recipe.id
                 && meal.recipe.id != editing?.recipe.id
                 && !eaters(of: meal).isDisjoint(with: audience)
-                // Danie z porcjami per osoba nie da się zawęzić z tego
-                // arkusza (serwer blokuje edycję) — zostaje „obok”.
-                && !(meal.hasPortions && !eaters(of: meal).isSubset(of: audience))
         }
     }
 

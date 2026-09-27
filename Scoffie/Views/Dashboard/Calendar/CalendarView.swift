@@ -839,12 +839,15 @@ struct CalendarView: View {
                         saveServings(newValue, for: target)
                     },
                     // Porcje per osoba: zamiast steppera porcji łącznych —
-                    // porcja każdego jedzącego, tylko do odczytu (API GAP).
+                    // porcja każdego jedzącego ze stepperem co 0,5.
                     personalPortions: RecipeDetailPortions(
                         meal: target.meal,
                         members: sessionStore.householdMembers,
                         viewerId: sessionStore.currentUserId
-                    )
+                    ),
+                    onSavePortions: { units in
+                        savePortions(units, for: target)
+                    }
                 )
                 .recipeDetailSheet()
             }
@@ -1339,6 +1342,28 @@ struct CalendarView: View {
                 participantIds: target.meal.participantIds,
                 plannedServings: servings,
                 householdMemberCount: knownHouseholdMemberCount,
+                for: target.date,
+                slot: target.slot,
+                weekStart: datesViewModel.weekStartISO
+            )
+            detailTarget = nil
+            await shoppingListStore.load(
+                weekStart: datesViewModel.weekStartISO,
+                force: true
+            )
+        }
+    }
+
+    /// Zapisuje porcje osób zmienione w szczegółach — każda osoba osobnym
+    /// `setPortion` z własnym tokenem (`MealCalendarStore.setPortions`).
+    private func savePortions(_ units: [String: Int], for target: DetailTarget) {
+        Task { @MainActor in
+            _ = await mealStore.setPortions(
+                units,
+                // Tokeny z posiłku, na którym użytkownik edytował — nie
+                // z planu przeładowanego w tle (konflikt zamiast nadpisania).
+                expectedRevisions: target.meal.portionRevisions,
+                itemId: target.meal.id,
                 for: target.date,
                 slot: target.slot,
                 weekStart: datesViewModel.weekStartISO
