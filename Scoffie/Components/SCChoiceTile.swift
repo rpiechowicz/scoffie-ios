@@ -14,10 +14,14 @@ enum SCChoiceMark: Equatable {
 /// Wymiary kafelka — poza typem generycznym, który nie może mieć stałych
 /// statycznych.
 private enum SCChoiceTileMetrics {
-    /// 46, nie 38: przy stałej wysokości kafelka (`height`) miniatura
-    /// wypełnia go jak pełny kafel, także przy nazwie w jednej linii.
-    static let media: CGFloat = 46
-    static let mediaRadius: CGFloat = 13
+    /// Szerokość zdjęcia — na CAŁĄ wysokość kafelka, przy lewej krawędzi,
+    /// przycięte rogiem karty (27.09.2026: „daj większe images, aby wypełniało
+    /// dobrze card”). Kwadracik 38/46 pt w środku zostawiał puste ramki.
+    static let media: CGFloat = 62
+    /// Jedna czcionka nazwy we WSZYSTKICH kafelkach — bez zmniejszania długich
+    /// słów („Wysokobiałkowe” było mniejsze od „Mało soli”, Rafał: „wszystko
+    /// takie samo, nie może się to różnić”).
+    static let titleSize: CGFloat = 14
     /// JEDNA wysokość dla każdego kafelka w każdej siatce — mieści dwie linie
     /// nazwy i dopowiedzenie. Wcześniej wysokość brała się z treści i siatka
     /// z jedną dwuwierszową nazwą („Ryby i owoce morza”) była wyższa od
@@ -88,10 +92,29 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
         }
     }
 
-    /// Kilka słów („Ryby i owoce morza”) może zejść do drugiej linii.
-    /// Jedno słowo zostaje w jednej linii i najwyżej lekko maleje — w dwóch
-    /// złamałoby się w pół wyrazu.
-    private var isSingleWord: Bool { !title.contains(" ") }
+    /// Długie pojedyncze słowo dostaje miękkie dzielenie (U+00AD) — łamie się
+    /// z dywizem („Wysoko-/białkowe”) zamiast maleć albo pękać w przypadkowym
+    /// miejscu. Najpierw znane przedrostki, potem granica sylaby w połowie.
+    static func hyphenated(_ title: String) -> String {
+        title.split(separator: " ", omittingEmptySubsequences: false).map { word -> String in
+            let text = String(word)
+            guard text.count > 10 else { return text }
+            let lower = text.lowercased()
+            for prefix in ["wysoko", "nisko", "bez", "wege", "pesce", "mało", "pełno", "dużo"]
+            where lower.hasPrefix(prefix) && text.count - prefix.count >= 4 {
+                let index = text.index(text.startIndex, offsetBy: prefix.count)
+                return String(text[..<index]) + "\u{00AD}" + String(text[index...])
+            }
+            let vowels = Set("aąeęioóuy")
+            let characters = Array(text)
+            var cut = characters.count / 2
+            while cut < characters.count - 3, !vowels.contains(Character(characters[cut - 1].lowercased())) {
+                cut += 1
+            }
+            return String(characters[..<cut]) + "\u{00AD}" + String(characters[cut...])
+        }
+        .joined(separator: " ")
+    }
 
     var body: some View {
         Button(action: action) {
@@ -99,25 +122,23 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
                 mediaView
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .tracking(-0.25)
+                    Text(Self.hyphenated(title))
+                        .font(.system(size: SCChoiceTileMetrics.titleSize, weight: .semibold))
+                        .tracking(-0.2)
                         .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(isSingleWord ? 1 : 2)
-                        .minimumScaleFactor(isSingleWord ? 0.8 : 1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     detail()
                         .font(.system(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
             }
-            .padding(.leading, 8)
             .padding(.trailing, SCChoiceTileMetrics.inset)
-            .padding(.vertical, 9)
             // Elastyczny w obu osiach: siatka daje każdemu kafelkowi tę samą
             // szerokość kolumny i wysokość najwyższego kafelka w siatce.
             .frame(maxWidth: .infinity, minHeight: SCChoiceTileMetrics.height, maxHeight: .infinity, alignment: .leading)
@@ -136,28 +157,25 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
         .accessibilityAddTraits(mark == .off ? .isButton : [.isButton, .isSelected])
     }
 
+    /// Zdjęcie na całą wysokość kafelka, przy lewej krawędzi — lewe rogi
+    /// to rogi karty, prawa krawędź prosta. Zaznaczenie mówi obwódka całego
+    /// kafelka, tint i znaczek na rogu zdjęcia.
     private var mediaView: some View {
-        let size = SCChoiceTileMetrics.media
-        let radius = SCChoiceTileMetrics.mediaRadius
-
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 16,
+            bottomLeadingRadius: 16,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 0,
+            style: .continuous
+        )
+        // Stała ramka, nie `maxHeight: .infinity`: siatka mierzy kafelek bez
+        // wysokości i `scaledToFill` zgłosiłby naturalną wysokość zdjęcia.
         return media()
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            // Zaznaczony: obwódka akcentu 2 pt od miniatury.
-            .overlay {
-                RoundedRectangle(cornerRadius: radius + 3.5, style: .continuous)
-                    .strokeBorder(accent, lineWidth: 1.5)
-                    .padding(-3.5)
-                    .opacity(mark == .on ? 1 : 0)
-                    .scaleEffect(mark == .on ? 1 : 0.92)
-            }
+            .frame(width: SCChoiceTileMetrics.media, height: SCChoiceTileMetrics.height)
+            .clipShape(shape)
             .overlay(alignment: .bottomTrailing) {
                 badge
-                    .offset(x: 6, y: 6)
+                    .padding(5)
             }
     }
 

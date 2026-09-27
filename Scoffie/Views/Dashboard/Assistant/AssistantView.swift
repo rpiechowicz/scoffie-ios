@@ -127,6 +127,9 @@ struct AssistantView: View {
     /// Odpowiedź i kierunek oceny, do których piszemy podpowiedź („Co było
     /// dobre?” / „Co nie zagrało?”).
     @State private var suggesting: SuggestionTarget?
+    /// Pytanie z odpowiedzią w aplikacji (lista zakupów, przepis) — karta
+    /// nad polem zamiast tury (`AssistantAppShortcut`).
+    @State private var appShortcut: AssistantAppShortcut?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
@@ -1244,6 +1247,19 @@ struct AssistantView: View {
                     .transition(.opacity)
             }
 
+            if let appShortcut {
+                AssistantAppShortcutCard(
+                    shortcut: appShortcut,
+                    onOpen: { openShortcut(appShortcut) },
+                    onAskAnyway: {
+                        self.appShortcut = nil
+                        send(force: true)
+                    },
+                    onDismiss: { self.appShortcut = nil }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Wykorzystana pula na próbę: pole, w które nie da się pisać, jest
             // wyłącznie frustracją. W rozmowie stoi zamiast niego karta
             // z jednym przyciskiem, który coś zmienia; na pustym ekranie
@@ -1309,6 +1325,10 @@ struct AssistantView: View {
             .focused($isComposerFocused)
             .disabled(store.isUnavailable || store.isLocked)
             .submitLabel(.send)
+            // Zmiana pytania zdejmuje kartę „masz to w aplikacji”.
+            .onChange(of: draft) { _, _ in
+                if appShortcut != nil { appShortcut = nil }
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
             .frame(minHeight: 50)
@@ -1450,9 +1470,17 @@ struct AssistantView: View {
         let originalText: String
     }
 
-    private func send() {
+    /// `force` = „Zapytaj mimo to” z karty `AssistantAppShortcut`.
+    private func send(force: Bool = false) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, store.canSend else { return }
+
+        // Lista zakupów i przepis krok po kroku są w aplikacji — zamiast
+        // płatnej tury karta z przejściem. Tekst zostaje w polu.
+        if !force, editing == nil, let shortcut = AssistantAppShortcut.match(text) {
+            withAnimation(.smooth(duration: 0.25)) { appShortcut = shortcut }
+            return
+        }
 
         let edited = editing
         draft = ""
@@ -1471,6 +1499,21 @@ struct AssistantView: View {
                     weekStart: datesViewModel.weekStartISO
                 )
             }
+        }
+    }
+
+    /// Przejście z karty `AssistantAppShortcut` do ekranu z odpowiedzią.
+    private func openShortcut(_ shortcut: AssistantAppShortcut) {
+        appShortcut = nil
+        draft = ""
+        isComposerFocused = false
+        switch shortcut {
+        case .shopping:
+            // Lista zakupów jest arkuszem w Planie, więc sama zakładka to za mało.
+            sessionStore.opensShoppingList = true
+            sessionStore.dashboardTab = .plan
+        case .recipe:
+            sessionStore.dashboardTab = .recipes
         }
     }
 

@@ -509,9 +509,11 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .weekReady,
                 headline: "Do niedzieli wszystko jest w planie.",
-                supporting: "Zbiorę listę zakupów albo podsunę coś nowego na odmianę.",
+                supporting: "Lista zakupów jest już gotowa, a ja podsunę coś nowego na odmianę.",
                 visual: .plates(plates(today, focus: nil)),
-                primary: .ask("Lista zakupów", "Co muszę kupić na ten tydzień?"),
+                // Otwiera listę w Planie — bez tury Asystenta (27.09.2026:
+                // „szkoda kasy i rozmów” na coś, co aplikacja pokazuje sama).
+                primary: AssistantBriefing.Action(title: "Lista zakupów", kind: .openShopping),
                 alternatives: [.ask("Coś nowego na weekend", "Pokaż 3 nowe pomysły na obiad na sobotę do wyboru"), .compose],
                 placeholder: "Np. zamień piątkową kolację na rybę"
             )
