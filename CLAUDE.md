@@ -81,6 +81,19 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`lineLimit(1)` ucinał datę); inne karty dostają meta obok nadtytułu tylko, gdy cała się mieści (`ViewThatFits`).
   Pod „Przeglądaj dania” NIE ma wiersza „3 posiłki · 1460 kcal · zostaje 640” / „Śr. … kcal dziennie” — nie wracać.
   Nazwa dania w `AssistantMealRow` ma do dwóch linii zamiast ucinania.
+  „Kto co je” (27.09.2026 wieczorem, Rafał: „więcej dań, więcej osób — totalne zamieszanie, user gubi się w sekundę”):
+  klocki w `AssistantProposalPeople.swift` — `ProposalAudience` („Cały dom” / „Ania i Ty”, w domu jednoosobowym nic),
+  `ProposalAudiencePill` (na `PlanWhoBadge` z Planu), `ProposalPersonFilter` („Wszyscy · Ty · Ania”). Strona dania ma
+  trzecią pigułkę „dla kogo” (przy braku miejsca dzień skraca się do nazwy dnia), kreski stron grupują się po dniu
+  (większa przerwa między dniami). Strona końcowa (`ProposalRecap`) = filtr osób + karta NA DZIEŃ, w niej pora → danie;
+  pora z kilkoma daniami (różne dla różnych osób) = nagłówek pory i dania pod nim, każde z „dla kogo”; kcal dnia tylko
+  dla wybranej osoby (suma dań różnych osób nic nie znaczyła). Dawny tydzień „wiersz na dzień z trzema krążkami” odpadł.
+  W karcie w rozmowie przy porze dopisek z imieniem, gdy danie NIE jest dla całego domu. `ProposalStoryContext` niesie
+  `participantIds`, domownicy idą do arkusza jawnie (`members`, `me`), nie przez środowisko.
+  „Zniknie z planu” pod „Przeglądaj dania” (`RemovalsSection`, usunięte) → wiersz „Co się zmieni” (`OptionsBrowseRow`
+  z `icon:`, podtytuł „2 zamiany · 1 usunięcie · 3 nowe”) otwierający półarkusz `AssistantPlanChangesSheet`
+  (`ProposalChanges`: dzień → pora; zamiana = stare przekreślone i szare nad nowym ze strzałką, usunięcie z powodem od
+  modelu, nowe z plakietką; przy nowym „dla kogo”; zdjęcie usuwanego z katalogu po `recipeId`).
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
