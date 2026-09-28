@@ -106,6 +106,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Gałęzie z `develop` po `git fetch --prune`, od razu `git push -u origin <gałąź>`; PR → `develop`
   → `main` → TestFlight przez **Xcode Cloud** (po stronie Rafała). GitHub Actions NIE buduje iOS od 23.09.2026
   (minuty macOS ×10 wyczerpywały limit) — jedyna kontrola kompilacji to Xcode Cloud albo Mac. Commity po polsku, `Co-Authored-By: Claude <noreply@anthropic.com>`.
+  Merge do `main` bez buildu (28.09.2026: f7d10e3 — zdarzenie doszło do Xcode Cloud, check suite „queued”,
+  build nie wystartował, Apple bez awarii): ręczny Start Build workflow „Default” na `main` (App Store Connect
+  → Xcode Cloud albo Xcode → Product → Xcode Cloud) albo kolejny commit na `main`. Czy build ruszył, widać po
+  check runie „Scoffie | Default | Archive - iOS” przy commicie (`gh api …/commits/<sha>/check-runs`).
 - **Sentry** (od 23.09.2026, projekt `scoffie/scoffie-ios`, region DE): `Models/Observability/CrashReporting.swift`,
   start w `ScoffieApp.init`, użytkownik (samo id) przez `CrashReporting.setUser` przy każdym przypisaniu
   `SessionStore.currentUserId`. Środowiska: `development` (DEBUG) / `testflight` / `production`. Bez zrzutów
