@@ -267,13 +267,13 @@ if case .corrupted = CatalogCacheEnvelope<String>.load(from: Data("{\"version\":
 } else {
     check(false, "plik: ucięty JSON → uszkodzony")
 }
-let inconsistent = #"{"version":1,"revision":"e.1","ids":["a","b"],"items":{"a":"A"},"savedAt":0}"#.data(using: .utf8)!
+let inconsistent = #"{"version":\#(CatalogCacheEnvelope<String>.currentVersion),"revision":"e.1","ids":["a","b"],"items":{"a":"A"},"savedAt":0}"#.data(using: .utf8)!
 if case .corrupted = CatalogCacheEnvelope<String>.load(from: inconsistent) {
     check(true, "plik: id bez przepisu → uszkodzony")
 } else {
     check(false, "plik: id bez przepisu → uszkodzony")
 }
-let badRevision = #"{"version":1,"revision":" ","ids":["a"],"items":{"a":"A"},"savedAt":0}"#.data(using: .utf8)!
+let badRevision = #"{"version":\#(CatalogCacheEnvelope<String>.currentVersion),"revision":" ","ids":["a"],"items":{"a":"A"},"savedAt":0}"#.data(using: .utf8)!
 if case .corrupted = CatalogCacheEnvelope<String>.load(from: badRevision) {
     check(true, "plik: pusta rewizja → uszkodzony")
 } else {
@@ -686,6 +686,38 @@ do {
     check(isCancelled(lateResult), "13d: spóźniona odpowiedź pierwszej sesji anulowana")
     check(householdOnDisk(files)?.recipes == ["Zupa 2"], "13d: plik domu = druga sesja tego samego konta")
     check(second.household.items == ["Zupa 2"], "13d: stan drugiej sesji nietknięty")
+}
+
+// MARK: - 14. Taksonomia (katalog 1000, 28.09.2026)
+//
+// Pola kuchni, rodzaju dania i okazji przechodzą z JSON-a serwera do
+// przepisu i przeżywają zapis do pliku cache (`Recipe` ma własne
+// `CodingKeys` — zapomniany klucz gubiłby je po cichu przy każdym zapisie).
+
+do {
+    var json = recipeDict(recipeUUID(900), "Karp smażony")
+    json["cuisine"] = "POLISH"
+    json["dishType"] = "MAIN"
+    json["seasons"] = ["WINTER"]
+    json["occasions"] = ["CHRISTMAS_EVE"]
+    json["equipment"] = [String]()
+    json["features"] = ["OCCASIONAL"]
+    let dto = try JSONDecoder().decode(BackendRecipeDTO.self, from: try JSONSerialization.data(withJSONObject: json))
+    let recipe = dto.toAppRecipe()
+    check(recipe?.taxonomy?.cuisine == "POLISH" && recipe?.taxonomy?.dishType == "MAIN"
+          && recipe?.taxonomy?.occasions == ["CHRISTMAS_EVE"] && recipe?.taxonomy?.features == ["OCCASIONAL"],
+          "14: taksonomia z JSON-a serwera trafia do przepisu")
+    let cached = try JSONDecoder().decode(Recipe.self, from: try JSONEncoder().encode(recipe!))
+    check(cached.taxonomy == recipe?.taxonomy, "14: taksonomia przeżywa zapis do pliku cache")
+
+    let old = try JSONDecoder().decode(BackendRecipeDTO.self, from: try JSONSerialization.data(withJSONObject: recipeDict(recipeUUID(901), "Stary backend")))
+    check(old.toAppRecipe()?.taxonomy == nil, "14: stary backend bez kuchni → taksonomia nil (heurystyka filtrów)")
+
+    var odd = recipeDict(recipeUUID(902), "Obce pole")
+    odd["cuisine"] = "ITALIAN"
+    odd["seasons"] = "SUMMER"
+    let oddDTO = try JSONDecoder().decode(BackendRecipeDTO.self, from: try JSONSerialization.data(withJSONObject: odd))
+    check(oddDTO.toAppRecipe()?.taxonomy?.seasons == [], "14: obcy kształt jednego pola gubi tylko to pole, nie przepis")
 }
 
 print(failures == 0 ? "\nWSZYSTKO OK" : "\nBŁĘDÓW: \(failures)")

@@ -76,6 +76,18 @@ struct RecipeFilterIndex {
         return count(next, fit: fit)
     }
 
+    func count(adding cuisine: RecipeCuisine, to options: RecipeFilterOptions, fit: Bool) -> Int {
+        var next = options
+        next.cuisines.insert(cuisine)
+        return count(next, fit: fit)
+    }
+
+    func count(adding moment: RecipeMoment, to options: RecipeFilterOptions, fit: Bool) -> Int {
+        var next = options
+        next.moments.insert(moment)
+        return count(next, fit: fit)
+    }
+
     /// Rozkład kalorii na porcję pod suwak: przedziały po 50 kcal od zera do
     /// `calorieScaleMax` i jeden ostatni na wszystko powyżej („1000+”).
     ///

@@ -5,12 +5,12 @@ import Foundation
 // swoje aspekty: śniadanie wybiera się po smaku i rodzaju dania, obiad po
 // rodzaju dania i mięsie, przekąskę po smaku, rodzaju i porze.
 //
-// Katalog nie niesie tagów „na słodko”, „zupa” czy „drób”, więc wartości
-// liczą się tu z nazwy dania i składników. Reguły powstały na pełnym
-// katalogu (495 przepisów z `prisma/catalog` backendu, 23.09.2026) i dają
-// pełne pokrycie tam, gdzie dało się je dać: każdy deser i każda przekąska
-// ma rodzaj, każde śniadanie poza jednym — też. Dania, których nie da się
-// uczciwie przypisać (np. „Golonka z kapustą” w rodzaju obiadu), nie mają
+// Rodzaj dania, kuchnia, okazje i pory roku przychodzą od katalogu 1000
+// (28.09.2026) z serwera (`RecipeTaxonomy`) — redakcja przypisała je każdemu
+// przepisowi. Heurystyka z nazwy dania i składników zostaje dla przepisów bez
+// taksonomii (stary backend, cache sprzed zmiany, przepisy domu) oraz dla
+// smaku i mięsa, których serwer nie niesie. Dania, których nie da się
+// uczciwie przypisać (np. „Karp smażony” w rodzaju obiadu), nie mają
 // wartości w tym aspekcie: wypadają przy zawężeniu rodzaju, ale zostają,
 // gdy rodzaj jest dowolny.
 
@@ -25,6 +25,14 @@ enum RecipeFacetKind: String, Hashable, CaseIterable {
     case protein
     /// Pora z planu (II śniadanie, podwieczorek, przekąska) — tylko przekąski.
     case slot
+    /// Kuchnia (`RecipeCuisine`) — z taksonomii serwera.
+    case cuisine
+    /// Okazje i pory roku (`RecipeMoment`) — z taksonomii serwera.
+    case moment
+
+    /// Aspekty, których opcje zależą od katalogu (w kolacjach prawie nie ma
+    /// kuchni tajskiej) — arkusz chowa opcje bez przepisów.
+    var hidesEmptyOptions: Bool { self == .cuisine || self == .moment }
 }
 
 struct RecipeFacetOption: Identifiable, Hashable {
@@ -92,7 +100,7 @@ enum RecipeCategoryFacets {
                 .init(id: "bread", title: "Kanapki i tosty"),
                 .init(id: "pancakes", title: "Placki i naleśniki"),
                 .init(id: "yogurt", title: "Jogurty i smoothie")
-            ])]
+            ]), cuisineFacet, momentFacet]
         case .lunch:
             return [RecipeFacet(kind: .dish, title: "Rodzaj dania", options: [
                 .init(id: "soup", title: "Zupy"),
@@ -100,8 +108,10 @@ enum RecipeCategoryFacets {
                 .init(id: "grains", title: "Z ryżem lub kaszą"),
                 .init(id: "pasta", title: "Makarony"),
                 .init(id: "dumplings", title: "Pierogi i kluski"),
-                .init(id: "stew", title: "Gulasze i curry")
-            ]), proteinFacet]
+                .init(id: "stew", title: "Gulasze i curry"),
+                .init(id: "bake", title: "Zapiekanki"),
+                .init(id: "sandwich", title: "Burgery i tortille")
+            ]), proteinFacet, cuisineFacet, momentFacet]
         case .dinner:
             return [RecipeFacet(kind: .dish, title: "Rodzaj dania", options: [
                 .init(id: "salad", title: "Sałatki"),
@@ -109,8 +119,9 @@ enum RecipeCategoryFacets {
                 .init(id: "bake", title: "Zapiekanki i pizza"),
                 .init(id: "grains", title: "Makaron, ryż, kasze"),
                 .init(id: "potatoes", title: "Z ziemniakami"),
-                .init(id: "soup", title: "Zupy i kremy")
-            ]), proteinFacet]
+                .init(id: "soup", title: "Zupy i kremy"),
+                .init(id: "pancakes", title: "Placki i naleśniki")
+            ]), proteinFacet, cuisineFacet, momentFacet]
         case .snacks:
             return [tasteFacet, RecipeFacet(kind: .dish, title: "Rodzaj", options: [
                 .init(id: "bake", title: "Ciasta i wypieki"),
@@ -118,10 +129,11 @@ enum RecipeCategoryFacets {
                 .init(id: "crunchy", title: "Chrupiące"),
                 .init(id: "bites", title: "Małe przekąski"),
                 .init(id: "dip", title: "Dipy i pasty"),
-                .init(id: "drink", title: "Koktajle")
+                .init(id: "salad", title: "Sałatki"),
+                .init(id: "drink", title: "Napoje i koktajle")
             ]), RecipeFacet(kind: .slot, title: "Pora w planie", options: [
                 MealSlot.secondBreakfast, .afternoonSnack, .snack
-            ].map { RecipeFacetOption(id: $0.rawValue, title: $0.title) })]
+            ].map { RecipeFacetOption(id: $0.rawValue, title: $0.title) }), cuisineFacet, momentFacet]
         case .all, .favourite:
             return []
         }
@@ -139,6 +151,18 @@ enum RecipeCategoryFacets {
         .init(id: "sweet", title: "Na słodko"),
         .init(id: "savory", title: "Na słono")
     ])
+
+    private static let cuisineFacet = RecipeFacet(
+        kind: .cuisine,
+        title: "Kuchnia",
+        options: RecipeCuisine.allCases.map { RecipeFacetOption(id: $0.rawValue, title: $0.title) }
+    )
+
+    private static let momentFacet = RecipeFacet(
+        kind: .moment,
+        title: "Okazje i sezon",
+        options: RecipeMoment.allCases.map { RecipeFacetOption(id: $0.rawValue, title: $0.title) }
+    )
 
     private static let proteinFacet = RecipeFacet(kind: .protein, title: "Mięso i ryby", options: [
         .init(id: "poultry", title: "Drób"),
@@ -166,26 +190,114 @@ enum RecipeCategoryFacets {
             FoldedIngredient(name: RecipeDietClassifier.normalize($0.name), department: $0.department ?? "")
         }
 
+        // Rodzaj dania z serwera wygrywa; bez niego — heurystyka z nazwy.
+        // Każdy przepis katalogu ma rodzaj (pilnuje test złoty backendu),
+        // `nil` mają przepisy domu (kolumna bez wartości) i stary backend.
+        let dishType = recipe.taxonomy?.dishType
+
         var values: [RecipeFacetKind: Set<String>] = [:]
         switch category {
         case .breakfast:
             values[.taste] = [taste(title: title, ingredients: ingredients)]
-            if let dish = firstMatch(in: title, table: breakfastDishes) { values[.dish] = [dish] }
+            let dish = dishType.map { breakfastDish(forType: $0) } ?? firstMatch(in: title, table: breakfastDishes)
+            if let dish { values[.dish] = [dish] }
         case .lunch:
-            if let dish = lunchDish(title: title, ingredients: ingredients) { values[.dish] = [dish] }
+            let dish = dishType.map { lunchDish(forType: $0, ingredients: ingredients) }
+                ?? lunchDish(title: title, ingredients: ingredients)
+            if let dish { values[.dish] = [dish] }
             values[.protein] = proteins(ingredients)
         case .dinner:
-            if let dish = dinnerDish(title: title, ingredients: ingredients) { values[.dish] = [dish] }
+            let dish = dishType.map { dinnerDish(forType: $0, ingredients: ingredients) }
+                ?? dinnerDish(title: title, ingredients: ingredients)
+            if let dish { values[.dish] = [dish] }
             values[.protein] = proteins(ingredients)
         case .snacks:
             values[.taste] = [taste(title: title, ingredients: ingredients)]
-            if let dish = firstMatch(in: title, table: snackDishes) { values[.dish] = [dish] }
+            let dish = dishType.map { snackDish(forType: $0) } ?? firstMatch(in: title, table: snackDishes)
+            if let dish { values[.dish] = [dish] }
             let slots = recipe.effectiveSlots.filter { $0.baseCategory == .snacks }.map(\.rawValue)
             values[.slot] = Set(slots)
         case .all, .favourite:
-            break
+            return values
         }
+        if let cuisine = recipe.cuisine { values[.cuisine] = [cuisine.rawValue] }
+        let moments = recipe.moments
+        if !moments.isEmpty { values[.moment] = Set(moments.map(\.rawValue)) }
         return values
+    }
+
+    // MARK: Rodzaj dania z serwera
+
+    // Słownik serwera (`RECIPE_DISH_TYPES`) jest wspólny dla całego katalogu,
+    // a opcje kafelków — per kategoria: „BAKE” to w obiadach zapiekanka,
+    // w przekąskach wypiek. Typ bez kafelka w danej kategorii (sernik wśród
+    // śniadań) zostaje bez wartości — nie zgadujemy go z nazwy.
+
+    private static func breakfastDish(forType type: String) -> String? {
+        switch type {
+        case "PORRIDGE":        return "porridge"
+        case "EGGS":            return "eggs"
+        case "SANDWICH":        return "bread"
+        case "PANCAKES":        return "pancakes"
+        case "YOGURT", "DRINK": return "yogurt"
+        // Upma (kasza manna) to owsianka w innym stroju, leniwe — placki.
+        case "GRAINS":          return "porridge"
+        case "DUMPLINGS":       return "pancakes"
+        default:                return nil
+        }
+    }
+
+    private static func lunchDish(forType type: String, ingredients: [FoldedIngredient]) -> String? {
+        switch type {
+        case "SOUP":      return "soup"
+        case "PASTA":     return "pasta"
+        case "GRAINS":    return "grains"
+        case "POTATOES":  return "potatoes"
+        case "DUMPLINGS": return "dumplings"
+        case "STEW":      return "stew"
+        case "BAKE":      return "bake"
+        case "SANDWICH":  return "sandwich"
+        // Mięso albo ryba z dodatkiem — kafelek wybiera dodatek („Z ziemniakami”).
+        case "MAIN":
+            let side = sides(ingredients)
+            if side.pasta { return "pasta" }
+            if side.grains { return "grains" }
+            if side.potatoes { return "potatoes" }
+            return nil
+        default:          return nil
+        }
+    }
+
+    private static func dinnerDish(forType type: String, ingredients: [FoldedIngredient]) -> String? {
+        switch type {
+        case "SALAD":           return "salad"
+        case "SANDWICH":        return "sandwich"
+        case "BAKE":            return "bake"
+        case "SOUP":            return "soup"
+        case "GRAINS", "PASTA": return "grains"
+        case "POTATOES":        return "potatoes"
+        // Placki ziemniaczane i kopytka na kolację stoją przy naleśnikach.
+        case "PANCAKES", "DUMPLINGS": return "pancakes"
+        case "MAIN":
+            let side = sides(ingredients)
+            if side.pasta || side.grains { return "grains" }
+            if side.potatoes { return "potatoes" }
+            return nil
+        default:                return nil
+        }
+    }
+
+    private static func snackDish(forType type: String) -> String? {
+        switch type {
+        case "CAKE", "BAKE":                      return "bake"
+        case "DESSERT", "YOGURT":                 return "spoon"
+        case "CRUNCHY":                           return "crunchy"
+        case "BITES", "SANDWICH", "EGGS", "MAIN": return "bites"
+        case "DIP":                               return "dip"
+        case "SALAD":                             return "salad"
+        case "DRINK":                             return "drink"
+        default:                                  return nil
+        }
     }
 
     // MARK: Składniki

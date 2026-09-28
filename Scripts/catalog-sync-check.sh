@@ -19,6 +19,7 @@ xcrun swiftc -o "$OUT" \
   "Scoffie/Models/Components/CatalogSyncCore.swift" \
   "Scoffie/Models/Components/MealSlot.swift" \
   "Scoffie/Models/Components/RecipesModel.swift" \
+  "Scoffie/Models/Components/RecipeTaxonomy.swift" \
   "Scoffie/Networking/Recipes/BackendRecipeDTOs.swift" \
   "Scoffie/Networking/Recipes/BackendCatalogSyncDTOs.swift" \
   "Scoffie/Networking/Recipes/CatalogSyncMapping.swift" \

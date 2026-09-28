@@ -8,7 +8,8 @@ import SwiftUI
 // `scScrollEdgeFade`). Pod nim: zasięg („Wszystkie przepisy — działają
 // w każdej kategorii”), dopasowanie do profilu, czas i trudność, kalorie
 // (wykres rozkładu, który sam jest suwakiem), dieta i cechy (kafelki 2 × 3
-// ze zdjęciem dania i liczbą przepisów), wykluczanie składników (osobny
+// ze zdjęciem dania i liczbą przepisów), kuchnia oraz okazje i sezon
+// (katalog 1000 — kafelki tak samo), wykluczanie składników (osobny
 // arkusz). Na dole wspólna stopka: ile zostaje łącznie i w każdej kategorii,
 // i „Pokaż”.
 //
@@ -63,7 +64,7 @@ struct RecipeFilterSheet: View {
         return index
     }
 
-    /// Zdjęcia kafelków Diety i Cech — tak samo leniwie i raz na otwarcie.
+    /// Zdjęcia kafelków Diety, Cech, Kuchni i Okazji — tak samo leniwie i raz na otwarcie.
     /// Dania ukryte przez profil (np. z alergenem z Ustawień) biorą się
     /// dopiero, gdy nic innego nie pasuje — niezależnie od przełącznika
     /// „Dopasowane do Ciebie”, żeby zdjęcie nie zmieniało się z nim.
@@ -150,6 +151,8 @@ struct RecipeFilterSheet: View {
                         caloriesSection
                         dietSection
                         traitsSection
+                        cuisineSection
+                        momentsSection
                         excludeSection
                     }
                     .padding(.horizontal, 20)
@@ -167,6 +170,8 @@ struct RecipeFilterSheet: View {
         .animation(.smooth(duration: 0.22), value: draft.activeCount > 0)
         .sensoryFeedback(.selection, trigger: draft.diets)
         .sensoryFeedback(.selection, trigger: draft.traits)
+        .sensoryFeedback(.selection, trigger: draft.cuisines)
+        .sensoryFeedback(.selection, trigger: draft.moments)
         .sensoryFeedback(.impact(weight: .light), trigger: fitDraft)
         .sheet(isPresented: $isExcludePresented) {
             RecipeExcludeSheet(
@@ -375,6 +380,57 @@ struct RecipeFilterSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: - Kuchnia, okazje i sezon
+
+    /// W obrębie sekcji LUB — druga kuchnia POSZERZA wynik, jak opcje
+    /// w filtrach kategorii; mówi o tym dopisek przy tytule.
+    private var cuisineSection: some View {
+        RecipeFilterSection(title: "Kuchnia") {
+            if draft.cuisines.count > 1 {
+                Text("dowolna z zaznaczonych")
+                    .transition(.opacity)
+            }
+        } content: {
+            RecipeFilterTileGrid(items: RecipeCuisine.allCases) { cuisine in
+                RecipeFilterOptionTile(
+                    title: cuisine.title,
+                    count: index.count(adding: cuisine, to: draft, fit: fitDraft),
+                    mark: draft.cuisines.contains(cuisine) ? .on : .off,
+                    cover: covers.cuisines[cuisine],
+                    icon: cuisine.tileIcon,
+                    accessibilityDetail: "kuchnia \(cuisine.title.lowercased())"
+                ) {
+                    withAnimation(.smooth(duration: 0.18)) { draft.toggle(cuisine: cuisine) }
+                }
+            }
+        }
+        .animation(.smooth(duration: 0.2), value: draft.cuisines.count > 1)
+    }
+
+    /// Święta, grill, impreza i pory roku — jedno pytanie „na kiedy gotuję”.
+    /// Pora roku łapie tylko dania sezonowe, nie całoroczne.
+    private var momentsSection: some View {
+        RecipeFilterSection(title: "Okazje i sezon") {
+            if draft.moments.count > 1 {
+                Text("dowolna z zaznaczonych")
+                    .transition(.opacity)
+            }
+        } content: {
+            RecipeFilterTileGrid(items: RecipeMoment.allCases) { moment in
+                RecipeFilterOptionTile(
+                    title: moment.title,
+                    count: index.count(adding: moment, to: draft, fit: fitDraft),
+                    mark: draft.moments.contains(moment) ? .on : .off,
+                    cover: covers.moments[moment],
+                    icon: moment.tileIcon
+                ) {
+                    withAnimation(.smooth(duration: 0.18)) { draft.toggle(moment: moment) }
+                }
+            }
+        }
+        .animation(.smooth(duration: 0.2), value: draft.moments.count > 1)
     }
 
     // MARK: - Wykluczanie
@@ -639,6 +695,8 @@ private extension RecipeTraitFilter {
         case .lowFat:      return "drop.fill"
         case .highFiber:   return "leaf"
         case .lowSalt:     return "aqi.low"
+        case .airfryer:    return "fan.fill"
+        case .lunchbox:    return "takeoutbag.and.cup.and.straw.fill"
         case .favourites:  return "heart.fill"
         case .thermomix:   return "cooktop.fill"
         }
