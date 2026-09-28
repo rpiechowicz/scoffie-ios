@@ -26,7 +26,9 @@ import SwiftUI
 ///   Lista wierszy z rundy 14 odpadła 24.09 — „nie do końca podoba mi się
 ///   design tego”.
 /// - **Dla kogo** — `PlanAudienceChips` (tylko w domu wieloosobowym).
-/// - **Porcje** — jeden wiersz: „Porcje”, rolująca liczba, `SCStepper`.
+/// - **Porcje** — porcja każdej jedzącej osoby co 0,5 (`SCStepper`, krok
+///   10 jednostek 1/20). Dopóki lista domowników nie dojechała — jeden
+///   wiersz porcji łącznych jak dawniej.
 /// - **Stopka** (`scSheetFooter`, cień `SCEdgeShade`) — rolujące zdanie
 ///   „Środa, 24 września · Obiad” i przycisk, którego tytuł też roluje.
 ///
@@ -56,21 +58,29 @@ struct AddToPlanSheet: View {
     let initialServings: Int
     var onAdded: ((Date, MealSlot) -> Void)? = nil
 
+    /// Porcje ze szczegółów w jednostkach 1/20 (stepper co 0,5) — `nil` =
+    /// `initialServings` całych porcji.
+    let initialUnits: Int
+
     init(
         recipe: Recipe,
         initialServings: Int,
+        initialUnits: Int? = nil,
         didOverrideServings: Bool = false,
         onAdded: ((Date, MealSlot) -> Void)? = nil
     ) {
         self.recipe = recipe
         self.initialServings = initialServings
         self.onAdded = onAdded
+        let units = initialUnits ?? initialServings * PlanPortions.unitsPerServing
+        self.initialUnits = units
         // Klamrujemy już przy wejściu: `initialServings` przychodzi z innego
         // ekranu i arkusz nie ma jak pokazać wartości spoza widełek steppera.
-        _servings = State(initialValue: min(12, max(1, initialServings)))
+        _servings = State(initialValue: min(12, PlanPortions.plannedServings(forTotalUnits: units)))
         // Stepper w szczegółach i tutaj regulują to samo — świadome „gotuję
         // 4 porcje” ustawione ekran wcześniej nie może zniknąć przy otwarciu.
         _didOverrideServings = State(initialValue: didOverrideServings)
+        _seedTotalUnits = State(initialValue: didOverrideServings ? units : nil)
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -93,6 +103,12 @@ struct AddToPlanSheet: View {
     /// przepisu. Dopóki `false`, porcje nadążają za audytorium i nie lecą na
     /// serwer (patrz `save()`); potem są jego decyzją i chipy ich nie ruszają.
     @State private var didOverrideServings = false
+    /// Porcje osób ruszone stepperem tutaj (jednostki 1/20); reszta osób ma
+    /// `seedUnits`. Klucz = id domownika.
+    @State private var touchedUnits: [String: Int] = [:]
+    /// Porcje łączne, od których startują porcje osób: ze szczegółów przepisu
+    /// albo ze steppera łącznego tutaj; `nil` = nikt nie wybierał (po 1).
+    @State private var seedTotalUnits: Int?
     @State private var isSaving = false
     /// Kaskada sekcji (`scReveal`) — przestawiana w `.task` po klatce oddechu.
     @State private var hasAppeared = false
@@ -400,26 +416,9 @@ struct AddToPlanSheet: View {
             Spacer(minLength: 6)
 
             if weekOffset != 0 {
-                Button {
+                SCWeekTodayButton {
                     changeWeek { selectedDate = Date() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 9.5, weight: .bold))
-                        Text("Wróć do dziś")
-                            .scFont(11, weight: .semibold, relativeTo: .caption2)
-                            .tracking(-0.1)
-                    }
-                    .foregroundStyle(SCPalette.terracotta)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .scSoftCapsule()
-                    .frame(minWidth: 44)
-                    .scTapHeight(drawn: 22)
                 }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                .accessibilityLabel("Wróć do bieżącego tygodnia")
             }
 
             weekArrow(
@@ -803,8 +802,130 @@ struct AddToPlanSheet: View {
 
     // MARK: - Porcje
 
-    /// Porcje w jednym wierszu: etykieta, rolująca liczba i stepper.
+    /// Kto je nowe danie — osoby, których porcje pokazujemy. „Wspólne” =
+    /// cały dom. Puste, dopóki lista domowników nie dojechała.
+    private var eaterIds: [String] {
+        let ids = participantsToSave.isEmpty ? members.map(\.id) : participantsToSave
+        return ids
+    }
+
+    /// Porcje osób liczymy tylko dla NOWEJ pozycji — dołączenie do dania,
+    /// które już stoi w porze, zostawia jego porcje (ustawia się je w planie).
+    /// Więcej niż 6 porcji na osobę (na zapas) — zostaje stepper łączny.
+    private var showsPersonalPortions: Bool {
+        guard !eaterIds.isEmpty, samePlanned == nil else { return false }
+        guard let seedTotalUnits else { return true }
+        return PlanPortions.fitsPerPerson(totalUnits: seedTotalUnits, eaterCount: eaterIds.count)
+    }
+
+    /// Punkt startowy porcji osób: wybrane porcje łączne rozpisane po pół
+    /// porcji (suma się zgadza) albo po 1 — jak reguła serwera.
+    private var seedMap: [String: Int] {
+        guard let seedTotalUnits else { return [:] }
+        return PlanPortions.seededUnits(eaters: eaterIds, totalUnits: seedTotalUnits)
+    }
+
+    /// Po pierwszym ruszeniu osoby nowi w audytorium zaczynają od 1.
+    private func units(for memberId: String) -> Int {
+        if let touched = touchedUnits[memberId] { return touched }
+        if touchedUnits.isEmpty, let seeded = seedMap[memberId] { return seeded }
+        return PlanPortions.missingEntryUnits
+    }
+
+    /// Mapa do wysłania — tylko gdy ktoś świadomie ustawił porcje; inaczej
+    /// serwer liczy sam z audytorium (jak dotąd).
+    private var portionsToSave: [String: Int]? {
+        guard showsPersonalPortions, didOverrideServings else { return nil }
+        return Dictionary(eaterIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    @ViewBuilder
     private var servingsSection: some View {
+        if showsPersonalPortions {
+            personalPortionsSection
+        } else {
+            totalServingsSection
+        }
+    }
+
+    /// Porcja każdej osoby co pół porcji. W domu jednoosobowym — jeden
+    /// wiersz „Porcje”.
+    private var personalPortionsSection: some View {
+        let ids = eaterIds
+        let names = Dictionary(members.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
+        return VStack(spacing: 0) {
+            ForEach(Array(ids.enumerated()), id: \.element) { index, memberId in
+                portionRow(
+                    title: ids.count == 1 ? "Porcje" : (names[memberId] ?? "Domownik"),
+                    memberId: memberId,
+                    allIds: ids
+                )
+                .overlay(alignment: .top) {
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.scTileStroke(scheme))
+                            .frame(height: 1)
+                            .padding(.leading, 16)
+                    }
+                }
+            }
+        }
+        .background(cardShape.fill(Color.scTileBg(scheme)))
+        .overlay(cardShape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+    }
+
+    private func portionRow(title: String, memberId: String, allIds: [String]) -> some View {
+        let value = units(for: memberId)
+        let total = allIds.reduce(0) { $0 + units(for: $1) }
+        // Suma pozycji ≤ 12 — plus nie przekroczy jej (serwer i tak by odmówił).
+        let upper = min(PlanPortions.unitsRange.upperBound, value + (PlanPortions.maxTotalUnits - total))
+        let binding = Binding<Int>(
+            get: { units(for: memberId) },
+            set: { next in
+                // Pierwsze ruszenie utrwala porcje wszystkich (dotąd liczone
+                // z punktu startowego), żeby nie przeskoczyły — migawka PRZED
+                // zapisem, bo `units(for:)` czyta punkt startowy tylko przy
+                // pustym słowniku.
+                if touchedUnits.isEmpty {
+                    touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
+                }
+                touchedUnits[memberId] = next
+            }
+        )
+        return HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(Color.scLabel(scheme))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(PlanPortions.label(units: value))
+                .font(.system(size: 20, weight: .heavy))
+                .tracking(-0.3)
+                .monospacedDigit()
+                .foregroundStyle(Color.scLabel(scheme))
+                .contentTransition(.numericText(value: Double(value)))
+                .frame(minWidth: 34, alignment: .trailing)
+                .accessibilityHidden(true)
+
+            SCStepper(
+                value: binding,
+                range: PlanPortions.unitsRange.lowerBound...max(PlanPortions.unitsRange.lowerBound, upper),
+                step: PlanPortions.stepUnits,
+                accessibilityTitle: allIds.count == 1 ? "Liczba porcji" : "Porcja: \(title)",
+                accessibilityValue: PlanPortions.spokenServings(units: value, plural: PolishPlural.servings),
+                onChange: { _ in didOverrideServings = true }
+            )
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
+        .frame(minHeight: 54)
+    }
+
+    /// Porcje łączne w jednym wierszu — zanim lista domowników dojedzie
+    /// albo przy dołączaniu do dania, które już stoi w porze.
+    private var totalServingsSection: some View {
         HStack(spacing: 12) {
             Text("Porcje")
                 .font(.system(size: 15, weight: .semibold))
@@ -827,7 +948,11 @@ struct AddToPlanSheet: View {
                 value: $servings,
                 accessibilityTitle: "Liczba porcji",
                 accessibilityValue: PolishPlural.servings(servings),
-                onChange: { _ in didOverrideServings = true }
+                onChange: { next in
+                    didOverrideServings = true
+                    seedTotalUnits = next * PlanPortions.unitsPerServing
+                    touchedUnits = [:]
+                }
             )
         }
         .padding(.leading, 16)
@@ -956,6 +1081,11 @@ struct AddToPlanSheet: View {
     /// Selekcja przychodzi parametrem: w domknięciu siedzi jeszcze wartość
     /// sprzed zapisu do bindingu.
     private func audienceChanged(_ selection: Set<String>) {
+        // Porcje osób spoza nowego wyboru znikają; nowi zaczynają od 1.
+        let kept = Set(PlanAudienceChips.collapsed(selection, members: members).isEmpty
+            ? members.map(\.id)
+            : PlanAudienceChips.collapsed(selection, members: members))
+        touchedUnits = touchedUnits.filter { kept.contains($0.key) }
         applyAutoServings(for: selection, animated: true)
     }
 
@@ -1062,6 +1192,7 @@ struct AddToPlanSheet: View {
         let replacedName = conflictingMeal?.recipe.name
         let audience = audienceToSave
         let becameShared = mergesIntoShared
+        let portions = portionsToSave
 
         // Dismiss od razu, jak w PlanSlotPickerSheet: wpis optymistyczny
         // ląduje w store przed siecią. Kolejkę toastów bierzemy do stałej
@@ -1082,9 +1213,12 @@ struct AddToPlanSheet: View {
                 // znaczy dla serwera „policz sam z audytorium” na świeżej
                 // liście domowników. Przy łączeniu z istniejącą pozycją ręczna
                 // liczba zjadłaby porcję tamtej osoby, więc też jej nie ma.
-                plannedServings: didOverrideServings && samePlanned == nil ? servings : nil,
+                // Porcje osób (gdy ktoś je ustawił) idą jako pełna mapa
+                // audytorium; wtedy liczbę łączną liczy serwer.
+                plannedServings: portions == nil && didOverrideServings && samePlanned == nil ? servings : nil,
                 householdMemberCount: members.isEmpty ? nil : members.count,
                 replacingRecipeId: replacing,
+                portions: portions,
                 for: date,
                 slot: slot,
                 weekStart: PlanWeek.dateKey(PlanWeek.monday(of: date))

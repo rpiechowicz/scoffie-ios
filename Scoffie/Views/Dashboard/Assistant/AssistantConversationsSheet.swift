@@ -19,6 +19,8 @@ struct AssistantConversationsSheet: View {
         NavigationStack {
             AssistantSheetScaffold(
                 title: "Rozmowy",
+                // Ten sam zegar, co „Historia rozmów” w menu ⋯.
+                icon: "clock.fill",
                 onClose: { dismiss() },
                 action: {
                     // Ten sam krążek, co krzyżyk obok (`SCSheetIconButton`) —

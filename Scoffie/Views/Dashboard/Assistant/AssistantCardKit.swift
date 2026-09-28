@@ -335,6 +335,9 @@ struct AssistantCardHead<Right: View>: View {
     let eyebrow: String
     /// „22–28 wrz” — doklejone kropką po eyebrow, jak na makiecie.
     var eyebrowDetail: String?
+    /// Meta zawsze we własnym wierszu, z ikoną kalendarza — propozycje planu
+    /// (data dnia, zakres tygodnia).
+    var detailBelow: Bool = false
     var eyebrowColor: Color? = nil
     var mark: Bool = false
     var tone: AssistantTone = .neutral
@@ -354,32 +357,27 @@ struct AssistantCardHead<Right: View>: View {
         }
     }
 
+    private var detail: String? {
+        guard let eyebrowDetail, !eyebrowDetail.isEmpty else { return nil }
+        return eyebrowDetail
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 10) {
-                HStack(alignment: .center, spacing: 8) {
-                    if mark {
-                        SCMarkShape()
-                            .fill(tone == .sage ? AssistantLook.sage(scheme) : (tone == .muted ? AssistantLook.faint(scheme) : AssistantLook.terraFill(scheme)))
-                            .frame(width: 16, height: 16)
-                            .accessibilityHidden(true)
-                    }
-                    Text(eyebrow)
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(0.9)
-                        .textCase(.uppercase)
-                        .foregroundStyle(eyeColor)
-                        .lineLimit(1)
-                    if let eyebrowDetail, !eyebrowDetail.isEmpty {
-                        Text("· " + eyebrowDetail)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AssistantLook.faint(scheme))
-                            .lineLimit(1)
-                    }
+            // Nadtytuł, meta i plakietka w jednym wierszu z `lineLimit(1)`
+            // ucinały datę w pół słowa („PROPOZYCJA DNIA · sobota, 27 wr…”,
+            // 27.09.2026). Meta idzie do wiersza obok nadtytułu TYLKO wtedy,
+            // gdy cała się mieści; propozycje planu stawiają ją zawsze niżej
+            // (`detailBelow`), żeby zmiana plakietki nie przestawiała układu.
+            if let detail, detailBelow {
+                stackedTop(detail, icon: true)
+            } else if let detail {
+                ViewThatFits(in: .horizontal) {
+                    eyebrowRow(inlineDetail: detail)
+                    stackedTop(detail, icon: false)
                 }
-                .layoutPriority(1)
-                Spacer(minLength: 0)
-                right()
+            } else {
+                eyebrowRow(inlineDetail: nil)
             }
 
             if let title, !title.isEmpty {
@@ -406,12 +404,61 @@ struct AssistantCardHead<Right: View>: View {
         .padding(.horizontal, AssistantCardMetrics.inset)
         .padding(.top, AssistantCardMetrics.headTop)
     }
+
+    private func eyebrowRow(inlineDetail: String?) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: 8) {
+                if mark {
+                    SCMarkShape()
+                        .fill(tone == .sage ? AssistantLook.sage(scheme) : (tone == .muted ? AssistantLook.faint(scheme) : AssistantLook.terraFill(scheme)))
+                        .frame(width: 16, height: 16)
+                        .accessibilityHidden(true)
+                }
+                Text(eyebrow)
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.9)
+                    .textCase(.uppercase)
+                    .foregroundStyle(eyeColor)
+                    .lineLimit(1)
+                if let inlineDetail {
+                    Text("· " + inlineDetail)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AssistantLook.faint(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .layoutPriority(1)
+            Spacer(minLength: 0)
+            right()
+        }
+    }
+
+    /// Meta we własnym wierszu pod nadtytułem: zdanie od wielkiej litery
+    /// („Sobota, 27 września”), zawijane, nigdy ucinane.
+    private func stackedTop(_ detail: String, icon: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            eyebrowRow(inlineDetail: nil)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if icon {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
+                Text(String(detail.prefix(1)).uppercased() + String(detail.dropFirst()))
+                    .font(.system(size: 13, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(AssistantLook.muted(scheme))
+            .opacity(tone == .muted ? 0.7 : 1)
+        }
+    }
 }
 
 extension AssistantCardHead where Right == EmptyView {
     init(
         eyebrow: String,
         eyebrowDetail: String? = nil,
+        detailBelow: Bool = false,
         eyebrowColor: Color? = nil,
         mark: Bool = false,
         tone: AssistantTone = .neutral,
@@ -421,6 +468,7 @@ extension AssistantCardHead where Right == EmptyView {
         self.init(
             eyebrow: eyebrow,
             eyebrowDetail: eyebrowDetail,
+            detailBelow: detailBelow,
             eyebrowColor: eyebrowColor,
             mark: mark,
             tone: tone,
@@ -435,6 +483,7 @@ extension AssistantCardHead where Right == AssistantStatusChip {
     init(
         eyebrow: String,
         eyebrowDetail: String? = nil,
+        detailBelow: Bool = false,
         eyebrowColor: Color? = nil,
         mark: Bool = false,
         title: String?,
@@ -444,6 +493,7 @@ extension AssistantCardHead where Right == AssistantStatusChip {
         self.init(
             eyebrow: eyebrow,
             eyebrowDetail: eyebrowDetail,
+            detailBelow: detailBelow,
             eyebrowColor: eyebrowColor,
             mark: mark,
             tone: status.tone,
@@ -600,8 +650,11 @@ struct AssistantMealRow: View {
                     .font(.system(size: 15, weight: titleWeight))
                     .tracking(-0.25)
                     .foregroundStyle(AssistantLook.ink(scheme))
-                    .lineLimit(1)
+                    // Dwie linie: „Kurczak w sosie curry z ryżem…” ucięte
+                    // w pół nazwy nie mówiło, co jest na talerzu.
+                    .lineLimit(2)
                     .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 8)
@@ -843,6 +896,8 @@ struct AssistantCardActions: View {
     var tone: AssistantTone = .neutral
     var style: Style = .buttons
     var isBusy: Bool = false
+    /// Kolor głównej — `nil` = terakota. Zapis propozycji: szałwia.
+    var primaryTint: Color? = nil
     /// Kreska nad stopką — wyłączana, gdy sekcja wyżej sama ją rysuje.
     var showsRule: Bool = true
     /// Zostało dla zgodności wywołań; główna akcja jest zawsze wypełniona.
@@ -859,6 +914,7 @@ struct AssistantCardActions: View {
         tone: AssistantTone = .neutral,
         style: Style = .buttons,
         isBusy: Bool = false,
+        primaryTint: Color? = nil,
         showsRule: Bool = true,
         filledPrimary: Bool = true
     ) {
@@ -867,6 +923,7 @@ struct AssistantCardActions: View {
         self.tone = tone
         self.style = style
         self.isBusy = isBusy
+        self.primaryTint = primaryTint
         self.showsRule = showsRule
         self.filledPrimary = filledPrimary
     }
@@ -914,6 +971,40 @@ struct AssistantCardActions: View {
 
     @ViewBuilder
     private var buttons: some View {
+        // Poboczna z glifem obok głównej = SAMA ikona w krążku (jak „Wyczyść”
+        // w Filtrach), a główna bierze resztę szerokości (27.09.2026, Rafał:
+        // „inny daj jako ikonę, a zapisz na resztę wolnego space”). Tytuł
+        // pobocznej zostaje dla VoiceOver. Bez glifu („Zapisz mimo to”) —
+        // para słów, jak dotąd.
+        if let secondary, let icon = secondary.icon, let primary {
+            HStack(spacing: 8) {
+                AssistantIconActionButton(
+                    action: marked(secondary, as: .secondary),
+                    icon: icon,
+                    isBusy: busySlot == .secondary
+                )
+                .disabled(isBusy)
+                .opacity(isBusy && busySlot != .secondary ? 0.5 : 1)
+
+                AssistantPrimaryButton(
+                    action: marked(primary, as: .primary),
+                    isBusy: busySlot == .primary,
+                    size: .compact,
+                    tint: primaryTint
+                )
+                .disabled(isBusy)
+                .opacity(isBusy && busySlot != .primary ? 0.5 : 1)
+            }
+            .animation(.smooth(duration: 0.2), value: isBusy)
+            .padding(.top, 12)
+            .padding(.horizontal, AssistantCardMetrics.footerInset)
+            .padding(.bottom, AssistantCardMetrics.footerInset)
+        } else {
+            pair
+        }
+    }
+
+    private var pair: some View {
         AssistantActionPair(spacing: 8) {
             if let secondary {
                 AssistantGhostButton(
@@ -928,7 +1019,8 @@ struct AssistantCardActions: View {
                 AssistantPrimaryButton(
                     action: marked(primary, as: .primary),
                     isBusy: busySlot == .primary,
-                    size: .compact
+                    size: .compact,
+                    tint: primaryTint
                 )
                 .disabled(isBusy)
                 .opacity(isBusy && busySlot != .primary ? 0.5 : 1)
@@ -1037,23 +1129,64 @@ struct AssistantPrimaryButton: View {
     let action: AssistantCardAction
     var isBusy: Bool = false
     var size: AssistantButtonSize = .regular
+    /// Kolor „soft” — domyślnie terakota; zapis propozycji idzie w szałwii.
+    var tint: Color? = nil
 
     @Environment(\.colorScheme) private var scheme
 
-    private var tint: Color { AssistantLook.terra(scheme) }
+    private var resolvedTint: Color { tint ?? AssistantLook.terra(scheme) }
 
     var body: some View {
         Button(action: action.action) {
-            AssistantButtonLabel(title: action.title, icon: action.icon, isBusy: isBusy, size: size, tint: tint)
-                .foregroundStyle(tint)
+            AssistantButtonLabel(title: action.title, icon: action.icon, isBusy: isBusy, size: size, tint: resolvedTint)
+                .foregroundStyle(resolvedTint)
                 .padding(.horizontal, size.horizontalPadding)
                 .frame(maxWidth: .infinity)
                 .frame(height: size.height)
-                .scSoftCapsule(tint)
+                .scSoftCapsule(resolvedTint)
                 .scTapHeight(44, drawn: size.height)
         }
         .buttonStyle(PlanPressStyle(scale: size.pressScale))
         .disabled(isBusy)
+        .animation(.smooth(duration: 0.2), value: isBusy)
+    }
+}
+
+/// Poboczna akcja karty jako sam glif w krążku — kształt przycisku „Wyczyść”
+/// z Filtrów, w wysokości przycisku obok, ale SZARY (strój
+/// `AssistantGhostButton`: pole o ton od karty + obwódka kafla) — Rafał
+/// 27.09.2026: „ponów ma być szary, a zapisz na zielono”. Praca = kręciołek
+/// w miejscu glifu.
+struct AssistantIconActionButton: View {
+    let action: AssistantCardAction
+    let icon: String
+    var isBusy: Bool = false
+    var size: AssistantButtonSize = .compact
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Button(action: action.action) {
+            ZStack {
+                if isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(AssistantLook.muted(scheme))
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: size.iconSize + 3, weight: .bold))
+                        .foregroundStyle(AssistantLook.muted(scheme))
+                }
+            }
+            .frame(width: size.height, height: size.height)
+            .background(Circle().fill(AssistantLook.field(scheme)))
+            .overlay(Circle().strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1.2))
+            .contentShape(Circle())
+            .scTapHeight(44, drawn: size.height)
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .disabled(isBusy)
+        .accessibilityLabel(action.title)
         .animation(.smooth(duration: 0.2), value: isBusy)
     }
 }
@@ -1141,6 +1274,8 @@ struct AssistantProposalFooter: View {
     var onUndo: (() -> Void)? = nil
     var onOpenPlan: (() -> Void)? = nil
 
+    @Environment(\.colorScheme) private var scheme
+
     private var status: AssistantCardStatus { AssistantCardStatus(state) }
 
     var body: some View {
@@ -1154,10 +1289,13 @@ struct AssistantProposalFooter: View {
     private var actions: some View {
         switch status {
         case .pending where state.canApply:
+            // Zapis w szałwii — kolorze „zapisane”, tym samym co zgoda
+            // na stronie „Wszystko pasuje?” (`ProposalAcceptButton`).
             AssistantCardActions(
                 primary: AssistantCardAction(title: applyLabel, icon: applyIcon) { onApply(false) },
                 secondary: AssistantCardAction(title: reviseLabel, icon: reviseIcon, action: onRevise),
-                isBusy: isBusy
+                isBusy: isBusy,
+                primaryTint: AssistantLook.sage(scheme)
             )
         case .applied where state.canUndo:
             if let onUndo {
@@ -1335,7 +1473,7 @@ struct AssistantQuickReplies: View {
                 AssistantCardHead(eyebrow: "Propozycja", title: "Plan dnia", status: .pending)
                 AssistantCardActions(
                     primary: AssistantCardAction(title: "Zapisz dzień") {},
-                    secondary: AssistantCardAction(title: "Inny zestaw") {}
+                    secondary: AssistantCardAction(title: "Inny zestaw", icon: "arrow.triangle.2.circlepath") {}
                 )
                 .padding(.top, 16)
             }

@@ -66,9 +66,9 @@ struct ProfileDetailsSheet: View {
 
     // Te same wartości startowe co w kreatorze powitalnym — arkusz nie może
     // pokazać innych liczb niż ekran, który je pierwszy zapisał.
-    private static let defaultYearOfBirth = 1992
-    private static let defaultHeightCm = 178
-    private static let defaultWeightKg: Double = 74
+    private static let defaultYearOfBirth = BodyMetrics.defaultYearOfBirth
+    private static let defaultHeightCm = BodyMetrics.defaultHeightCm
+    private static let defaultWeightKg = BodyMetrics.defaultWeightKg
 
     private static let heightRange = 120...230
     private static let weightRange: ClosedRange<Double> = 30...250
@@ -90,7 +90,8 @@ struct ProfileDetailsSheet: View {
             VStack(spacing: 0) {
                 // Przypięty nad treścią: arkusz jest dłuższy niż ekran,
                 // a nagłówek w `ScrollView` odjeżdżał razem z krzyżykiem.
-                EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane") {
+                // Sylwetka — ten sam kafelek, co pierwszy krok kreatora.
+                EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane", icon: "person.fill") {
                     commitAndClose()
                 }
                 .padding(.horizontal, 20)
@@ -281,9 +282,7 @@ struct ProfileDetailsSheet: View {
                     )
                 }
 
-                if let metrics {
-                    BodyMetricsSummaryRow(metrics: metrics)
-                }
+                BodyMetricsSummaryRow(metrics: metrics)
 
             }
             .padding(18)
@@ -292,9 +291,9 @@ struct ProfileDetailsSheet: View {
     }
 
     /// Sylwetka policzona z aktualnie ZAPISANYCH wartości, nie z draftów —
-    /// BMI nie ma migać przy każdej wpisanej cyfrze.
-    private var metrics: BodyMetrics? {
-        BodyMetrics(
+    /// BMI nie ma migać przy każdej wpisanej cyfrze. Zawsze jest (`BodyMetrics.preview`).
+    private var metrics: BodyMetrics {
+        BodyMetrics.preview(
             heightCm: heightCm,
             weightKg: weightKg,
             yearOfBirth: yearOfBirth,

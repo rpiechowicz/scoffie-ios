@@ -88,7 +88,8 @@ struct ShoppingTodaySheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ShoppingSheetHeader(title: "Na dziś", onClose: onClose)
+            // Zegar — jak wiersz „Na dziś” na Zakupach, który tu prowadzi.
+            ShoppingSheetHeader(title: "Na dziś", icon: "clock.fill", onClose: onClose)
 
             ShoppingEyebrowRow(
                 eyebrow: "\(dayLabel) · \(PolishPlural.dishes(visibleDishes.count))",

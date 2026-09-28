@@ -216,6 +216,11 @@ enum UserFacingErrorMapper {
         "PLAN_SLOT_LIMIT_REACHED": "Ten typ posiłku ma już komplet dań w tym tygodniu.",
         "PLAN_SLOT_VARIANT_LIMIT_REACHED": "W tym slocie nie zmieści się więcej dań.",
         "PLAN_PARTICIPANT_NOT_IN_HOUSEHOLD": "Wybrana osoba nie należy do gospodarstwa.",
+        "PLAN_PORTIONS_INVALID": "Porcja osoby to od 0,5 do 6 (co pół porcji), a razem najwyżej 12.",
+        // Po tych trzech (i PLAN_ITEM_NOT_FOUND) store sam odświeża tydzień (`PlanPortions.staleStateCodes`).
+        "PLAN_REVISION_CONFLICT": "Ktoś właśnie zmienił ten posiłek. Plan jest już odświeżony — spróbuj jeszcze raz.",
+        "PLAN_REVISION_REQUIRED": "Plan był nieaktualny. Jest już odświeżony — spróbuj jeszcze raz.",
+        "PLAN_PORTIONS_CONFLICT": "Porcje tego posiłku właśnie się zmieniły. Plan jest już odświeżony — spróbuj jeszcze raz.",
         "PLAN_TOTAL_LIMIT_REACHED": "Plan tygodnia jest pełny.",
         "PLAN_SLOT_DUPLICATE": "Ten przepis jest już w tym slocie.",
         "RECIPE_NOT_SUITABLE_FOR_SLOT": "Ten przepis nie pasuje do tego posiłku.",

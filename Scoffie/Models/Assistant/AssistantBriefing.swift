@@ -414,7 +414,11 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .cookSoon,
                 headline: cookSoonHeadline(slot: soon.slot, minutesLeft: minutesLeft),
-                supporting: "Rozpiszę kroki albo podmienię na coś szybszego.",
+                // Bez „Jak to ugotować?” (27.09.2026, Rafał: „to wszystko
+                // jest w detail meal, więc bez sensu”) — kroki i skład są
+                // w szczegółach posiłku. Asystent robi to, czego ekran nie
+                // umie: szybsze danie i zamiennik brakującego składnika.
+                supporting: "Podmienię na coś szybszego albo podpowiem, czym zastąpić składnik.",
                 visual: .meal(AssistantBriefing.MealPreview(
                     eyebrow: "\(soon.slot.title) · \(clock(time(soon.slot)))",
                     title: soon.title,
@@ -422,12 +426,12 @@ enum AssistantBriefingResolver {
                     kcal: soon.kcal,
                     imageURL: soon.imageURL
                 )),
-                primary: .ask("Jak to ugotować?", "Jak ugotować \(soon.title)? Rozpisz kroki."),
+                primary: .ask("Coś szybszego", "Zamień \(soon.slot.accusative) na dziś (\(soon.title)) na coś szybszego: pokaż 3 dania do wyboru"),
                 alternatives: [
-                    .ask("Coś szybszego", "Zamień \(soon.slot.accusative) na dziś (\(soon.title)) na coś szybszego: pokaż 3 dania do wyboru"),
+                    .ask("Brakuje składnika", "Gotuję dziś \(soon.title), ale nie mam wszystkich składników — czym je zastąpić?"),
                     .compose,
                 ],
-                placeholder: "Np. czym zastąpić składnik, którego nie mam"
+                placeholder: "Np. zrób to danie bez glutenu"
             )
         }
 
@@ -505,9 +509,11 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .weekReady,
                 headline: "Do niedzieli wszystko jest w planie.",
-                supporting: "Zbiorę listę zakupów albo podsunę coś nowego na odmianę.",
+                supporting: "Lista zakupów jest już gotowa, a ja podsunę coś nowego na odmianę.",
                 visual: .plates(plates(today, focus: nil)),
-                primary: .ask("Lista zakupów", "Co muszę kupić na ten tydzień?"),
+                // Otwiera listę w Planie — bez tury Asystenta (27.09.2026:
+                // „szkoda kasy i rozmów” na coś, co aplikacja pokazuje sama).
+                primary: AssistantBriefing.Action(title: "Lista zakupów", kind: .openShopping),
                 alternatives: [.ask("Coś nowego na weekend", "Pokaż 3 nowe pomysły na obiad na sobotę do wyboru"), .compose],
                 placeholder: "Np. zamień piątkową kolację na rybę"
             )

@@ -34,18 +34,44 @@ struct PlanMeal: Codable, Identifiable, Hashable {
     /// `effectiveServings(householdMemberCount:)`.
     var plannedServings: Int?
 
+    /// Porcje per osoba (backend `PlanItem.portions`): id domownika → jego
+    /// porcja w JEDNOSTKACH 1/20 porcji przepisu (`PlanPortions`), np. Asia
+    /// 16 (0,80), Rafał 25 (1,25) tego samego wspólnego obiadu.
+    ///
+    /// Puste = pozycja bez alokacji i wszystko liczy się jak dotąd, z równego
+    /// podziału `plannedServings`. Niepuste = źródło prawdy dla porcji osoby;
+    /// `plannedServings` jest wtedy tylko `ceil(Σ)` dla starszych buildów.
+    var portionUnits: [String: Int]
+
+    /// Token pozycji (`PlanItem.revision`) — `expectedRevision` zapisu
+    /// `PRESERVE` i zamiany dania. `nil` = backend bez wersji albo wpis
+    /// optymistyczny przed ackiem; pozycji z alokacją bez tokenu nie
+    /// zapisujemy. Nigdy nie liczony lokalnie; stemple rosną w obrębie
+    /// tygodnia, więc wyższy = nowszy (spóźniony ack nie cofa stanu, §1.3).
+    var revision: Int?
+
+    /// Tokeny porcji per osoba (`portions[].revision`) — `expectedRevision`
+    /// `weeklyPlans:setPortion` dla TEJ osoby.
+    var portionRevisions: [String: Int]
+
     init(
         id: String = UUID().uuidString,
         recipe: Recipe,
         participantIds: [String] = [],
         eatenByUserIds: [String] = [],
-        plannedServings: Int? = nil
+        plannedServings: Int? = nil,
+        portionUnits: [String: Int] = [:],
+        revision: Int? = nil,
+        portionRevisions: [String: Int] = [:]
     ) {
         self.id = id
         self.recipe = recipe
         self.participantIds = participantIds
         self.eatenByUserIds = eatenByUserIds
         self.plannedServings = plannedServings
+        self.portionUnits = portionUnits
+        self.revision = revision
+        self.portionRevisions = portionRevisions
     }
 
     // Plans persisted before eaten-marks existed have no `eatenByUserIds` key.
@@ -67,9 +93,38 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         // samo jak przed wprowadzeniem tego pola. Podstawiona tu jedynka
         // utrwaliłaby przy pierwszym zapisie połowę składników i połowę kalorii.
         self.plannedServings = try container.decodeIfPresent(Int.self, forKey: .plannedServings)
+        // Plany zapisane przed porcjami per osoba nie mają tego klucza — pusta
+        // alokacja znaczy „równy podział”, czyli dokładnie to, co liczyły.
+        // Następne odświeżenie tygodnia i tak przyniesie alokację z serwera.
+        self.portionUnits = try container.decodeIfPresent([String: Int].self, forKey: .portionUnits) ?? [:]
+        // Tokeny z cache'u sprzed wersji — brak = „nie znam”, więc zapis
+        // porcji czeka na odświeżenie tygodnia.
+        self.revision = try container.decodeIfPresent(Int.self, forKey: .revision)
+        self.portionRevisions = try container.decodeIfPresent([String: Int].self, forKey: .portionRevisions) ?? [:]
     }
 
     var isShared: Bool { participantIds.isEmpty }
+
+    /// Czy pozycja niesie porcje per osoba.
+    var hasPortions: Bool { !portionUnits.isEmpty }
+
+    /// Czy porcje da się edytować z telefonu: jest token pozycji i token
+    /// porcji każdej osoby z alokacji (backend z wersjami, świeży odczyt).
+    var canEditPortions: Bool {
+        hasPortions && revision != nil && portionUnits.keys.allSatisfy { portionRevisions[$0] != nil }
+    }
+
+    /// Porcja osoby w porcjach przepisu; `nil` = pozycja bez alokacji (licz
+    /// z `plannedServings`). Tak jak serwer (`daily-balance.util`): osoba bez
+    /// wpisu je jedną porcję, a bez wskazania osoby — średnia porcja jedzących.
+    func portion(for memberId: String?) -> Double? {
+        guard hasPortions else { return nil }
+        guard let memberId else {
+            return PlanPortions.servings(fromUnits: PlanPortions.totalUnits(portionUnits))
+                / Double(portionUnits.count)
+        }
+        return PlanPortions.servings(fromUnits: portionUnits[memberId] ?? PlanPortions.missingEntryUnits)
+    }
 
     /// Did this member mark the meal as eaten?
     func isEaten(by memberId: String?) -> Bool {
@@ -104,7 +159,9 @@ struct PlanMeal: Codable, Identifiable, Hashable {
     /// każdy posiłek sprzed tej zmiany doklejałby sobie plakietkę „1 porcja"
     /// w domu, w którym mieszka więcej niż jedna osoba.
     func isCustomServings(householdMemberCount: Int) -> Bool {
-        guard plannedServings != nil else { return false }
+        // Przy porcjach per osoba `plannedServings` to tylko `ceil(Σ)` —
+        // plakietka „3 porcje” przy 0,80 + 1,25 mówiłaby nieprawdę.
+        guard !hasPortions, plannedServings != nil else { return false }
         return effectiveServings(householdMemberCount: householdMemberCount)
             != eaterCount(householdMemberCount: householdMemberCount)
     }
@@ -116,16 +173,28 @@ struct PlanMeal: Codable, Identifiable, Hashable {
     /// wprowadzeniem porcji. To jest zamierzone: sam stepper zmienia listę
     /// zakupów, a makra dopiero wtedy, gdy ktoś ręcznie ugotuje więcej lub
     /// mniej, niż wynika z audytorium.
-    func servingsPerPerson(householdMemberCount: Int) -> Double {
-        Double(effectiveServings(householdMemberCount: householdMemberCount))
+    ///
+    /// `memberId` wybiera porcję tej osoby, gdy pozycja ma porcje per osoba;
+    /// bez alokacji nie zmienia niczego.
+    func servingsPerPerson(householdMemberCount: Int, memberId: String? = nil) -> Double {
+        if let portion = portion(for: memberId) { return portion }
+        return Double(effectiveServings(householdMemberCount: householdMemberCount))
             / Double(eaterCount(householdMemberCount: householdMemberCount))
     }
 
-    /// Makra przypadające na jedną osobę.
-    func nutritionPerPerson(householdMemberCount: Int) -> Nutrition {
+    /// Makra przypadające na jedną osobę (`memberId` — patrz wyżej). Ten sam
+    /// wzór co serwer: porcja / porcje przepisu × makra całego przepisu.
+    func nutritionPerPerson(householdMemberCount: Int, memberId: String? = nil) -> Nutrition {
         recipe.nutrition(
-            forServings: servingsPerPerson(householdMemberCount: householdMemberCount)
+            forServings: servingsPerPerson(householdMemberCount: householdMemberCount, memberId: memberId)
         )
+    }
+
+    /// Ile porcji ugotować łącznie: przy alokacji dokładna Σ (tak liczy lista
+    /// zakupów na serwerze), bez niej — `effectiveServings`.
+    func cookedServings(householdMemberCount: Int) -> Double {
+        if hasPortions { return PlanPortions.servings(fromUnits: PlanPortions.totalUnits(portionUnits)) }
+        return Double(effectiveServings(householdMemberCount: householdMemberCount))
     }
 
     // `Recipe` isn't Hashable, so identity is carried by the ids that actually
@@ -136,6 +205,9 @@ struct PlanMeal: Codable, Identifiable, Hashable {
             && lhs.participantIds == rhs.participantIds
             && lhs.eatenByUserIds == rhs.eatenByUserIds
             && lhs.plannedServings == rhs.plannedServings
+            && lhs.portionUnits == rhs.portionUnits
+            && lhs.revision == rhs.revision
+            && lhs.portionRevisions == rhs.portionRevisions
     }
 
     func hash(into hasher: inout Hasher) {
@@ -144,6 +216,9 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         hasher.combine(participantIds)
         hasher.combine(eatenByUserIds)
         hasher.combine(plannedServings)
+        hasher.combine(portionUnits)
+        hasher.combine(revision)
+        hasher.combine(portionRevisions)
     }
 }
 
@@ -161,7 +236,13 @@ extension PlanMeal {
     /// Dopóki nie wiadomo, udział jednej osoby to pełna porcja przepisu —
     /// czyli dokładnie ta liczba, którą reguła auto pokaże po wczytaniu listy.
     /// Ekran nie miga wtedy w ogóle.
-    func nutritionPerPerson(knownHouseholdMemberCount: Int?) -> Nutrition {
+    ///
+    /// Porcja per osoba nie zależy od składu domu, więc przy alokacji liczy
+    /// się od razu — także zanim lista domowników dojedzie.
+    func nutritionPerPerson(knownHouseholdMemberCount: Int?, memberId: String? = nil) -> Nutrition {
+        if let portion = portion(for: memberId) {
+            return recipe.nutrition(forServings: portion)
+        }
         guard let knownHouseholdMemberCount else { return recipe.nutritionPerServing }
         return nutritionPerPerson(householdMemberCount: knownHouseholdMemberCount)
     }

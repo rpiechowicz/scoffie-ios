@@ -186,10 +186,12 @@ struct PlanDayGoalSheet: View {
     /// sensu”): liczba pór powtarzała listę dań pod spodem, a czyj to dzień
     /// mówi wybrany awatar w przełączniku. W Kalendarzu („1 z 5 zjedzone”)
     /// zniknął rundę wcześniej. Detent jest mierzony, więc pusty wiersz nie zostaje.
+    /// Kafelek z płomieniem — glif kalorii i celu kalorycznego w całej aplikacji.
     private var header: some View {
         EditorialSheetHeader(
             eyebrow: Self.longDayFormatter.string(from: date),
             title: "Cel dnia",
+            icon: "flame.fill",
             subtitle: nil,
             subtitleTransition: .opacity,
             onClose: { dismiss() }

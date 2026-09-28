@@ -19,7 +19,10 @@ import SwiftUI
 //   kategorii, eyebrow 10 pt z trackingiem 2 w wyborze przepisu, pełny kafel
 //   z gradientem w gospodarstwie — czyli ten sam nagłówek w kilku krojach;
 // - `subtitle` — jedno zdanie pod spodem (data i pora posiłku, liczba
-//   przepisów, zasięg filtrów).
+//   przepisów, zasięg filtrów);
+// - `compact` — mały arkusz (półarkusz): kafelek 36, tytuł 19 zamiast 24.
+//   „Jak pracowałem” i „Co poprawić?” u Asystenta (27.09.2026 — „header
+//   jest zbyt duży”); ten sam układ, tylko w skali połowy ekranu.
 //
 // Bez tych dodatków wywołanie zostaje takie jak było:
 // `EditorialSheetHeader(eyebrow:title:) { zamknij }`.
@@ -32,6 +35,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
     /// Jak podtytuł zmienia treść. Domyślnie rolują cyfry („3 z 4”);
     /// podtytuł z imieniem woli przenikanie, bo rolowanie przetacza litery.
     let subtitleTransition: ContentTransition
+    let compact: Bool
     let onClose: () -> Void
     let accessory: () -> Accessory
 
@@ -42,6 +46,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
         accent: Color = SCPalette.terracotta,
         subtitle: String? = nil,
         subtitleTransition: ContentTransition = .numericText(),
+        compact: Bool = false,
         onClose: @escaping () -> Void,
         @ViewBuilder accessory: @escaping () -> Accessory
     ) {
@@ -51,6 +56,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
         self.accent = accent
         self.subtitle = subtitle
         self.subtitleTransition = subtitleTransition
+        self.compact = compact
         self.onClose = onClose
         self.accessory = accessory
     }
@@ -62,9 +68,9 @@ struct EditorialSheetHeader<Accessory: View>: View {
             // Z kafelkiem wszystko stoi na jego środku; bez — przy górnej
             // krawędzi, bo tytuł bywa dwuwierszową nazwą dania.
             HStack(alignment: icon == nil ? .top : .center, spacing: 12) {
-                HStack(spacing: 11) {
+                HStack(spacing: compact ? 10 : 11) {
                     if let icon {
-                        SCHeaderIconWell(icon: icon, accent: accent)
+                        SCHeaderIconWell(icon: icon, accent: accent, size: compact ? 36 : 44)
                     }
 
                     VStack(alignment: .leading, spacing: icon == nil ? 4 : 2) {
@@ -75,11 +81,12 @@ struct EditorialSheetHeader<Accessory: View>: View {
                             .lineLimit(1)
 
                         Text(title)
-                            .font(.system(size: 24, weight: .heavy))
-                            .tracking(-0.4)
+                            .font(.system(size: compact ? 19 : 24, weight: compact ? .bold : .heavy))
+                            .tracking(compact ? -0.3 : -0.4)
                             .foregroundStyle(Color.scLabel(scheme))
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.85)
+                            // Kompaktowy (półarkusz) — zawsze jedna linia.
+                            .lineLimit(compact ? 1 : 2)
+                            .minimumScaleFactor(compact ? 0.8 : 0.85)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -114,6 +121,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
         accent: Color = SCPalette.terracotta,
         subtitle: String? = nil,
         subtitleTransition: ContentTransition = .numericText(),
+        compact: Bool = false,
         onClose: @escaping () -> Void
     ) {
         self.init(
@@ -123,6 +131,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
             accent: accent,
             subtitle: subtitle,
             subtitleTransition: subtitleTransition,
+            compact: compact,
             onClose: onClose,
             accessory: { EmptyView() }
         )

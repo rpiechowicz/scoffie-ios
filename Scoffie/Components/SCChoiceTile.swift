@@ -14,8 +14,23 @@ enum SCChoiceMark: Equatable {
 /// Wymiary kafelka — poza typem generycznym, który nie może mieć stałych
 /// statycznych.
 private enum SCChoiceTileMetrics {
-    static let media: CGFloat = 38
-    static let mediaRadius: CGFloat = 11
+    /// Miniatura W KARCIE (nie na całą wysokość — Rafał 27.09.2026: „jako
+    /// card było zdecydowanie lepsze”), tak duża, żeby odstęp od góry, dołu
+    /// i lewej był ten sam: (70 − 54) / 2 = 8 = `leading`.
+    static let media: CGFloat = 54
+    static let mediaRadius: CGFloat = 14
+    /// Odstęp miniatury od lewej krawędzi — równy odstępowi od góry i dołu.
+    static let leading: CGFloat = 8
+    /// Jedna czcionka nazwy we WSZYSTKICH kafelkach — bez zmniejszania długich
+    /// słów („Wysokobiałkowe” było mniejsze od „Mało soli”, Rafał: „wszystko
+    /// takie samo, nie może się to różnić”).
+    static let titleSize: CGFloat = 14
+    /// JEDNA wysokość dla każdego kafelka w każdej siatce — mieści dwie linie
+    /// nazwy i dopowiedzenie. Wcześniej wysokość brała się z treści i siatka
+    /// z jedną dwuwierszową nazwą („Ryby i owoce morza”) była wyższa od
+    /// sąsiedniej (27.09.2026, Rafał: „znów się rozpycha 2-liniowe title od
+    /// 1-liniowego… zrób takie wszystkie, by było jednakowo”).
+    static let height: CGFloat = 70
     static let badge: CGFloat = 18
     /// Wcięcie treści z prawej.
     static let inset: CGFloat = 10
@@ -32,8 +47,10 @@ private enum SCChoiceTileMetrics {
 /// dwupiętrowy i siatka urosła dwukrotnie — Rafał, 24.09.2026: „podobało mi
 /// się bardziej, jak jest w 1 linii”. Długie jedno słowo („Niskotłuszczowe”)
 /// zostaje w jednej linii i lekko maleje, kilka słów schodzi do drugiej.
-/// Wysokość kafelków wyrównuje siatka (`RecipeFilterTileGrid`): każdy dostaje
-/// wysokość najwyższego w CAŁEJ siatce.
+/// Każdy kafelek ma tę samą wysokość (`SCChoiceTileMetrics.height`, 70 pt)
+/// z miniaturą 46 pt, więc dwuwierszowa nazwa niczego nie rozpycha, a siatki
+/// w różnych arkuszach mają ten sam rytm. Siatka (`RecipeFilterTileGrid`)
+/// dalej wyrównuje do najwyższego — przy dużym Dynamic Type.
 ///
 /// Miniatura to zwykle zdjęcie dania z tą cechą („Z rybą” — dorsz, „Zupy” —
 /// zupa), a bez zdjęcia glif w tincie akcentu. Pierwsza wersja miała w tym
@@ -54,7 +71,7 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
     /// samo, bo kafelek jest jednym elementem (`children: .ignore`).
     var accessibilityValue: String? = nil
     let action: () -> Void
-    /// Treść miniatury — kafelek przycina ją do zaokrąglonego kwadratu 38 pt.
+    /// Treść miniatury — kafelek przycina ją do zaokrąglonego kwadratu 46 pt.
     @ViewBuilder var media: () -> Media
     @ViewBuilder var detail: () -> Detail
 
@@ -78,10 +95,29 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
         }
     }
 
-    /// Kilka słów („Ryby i owoce morza”) może zejść do drugiej linii.
-    /// Jedno słowo zostaje w jednej linii i najwyżej lekko maleje — w dwóch
-    /// złamałoby się w pół wyrazu.
-    private var isSingleWord: Bool { !title.contains(" ") }
+    /// Długie pojedyncze słowo dostaje miękkie dzielenie (U+00AD) — łamie się
+    /// z dywizem („Wysoko-/białkowe”) zamiast maleć albo pękać w przypadkowym
+    /// miejscu. Najpierw znane przedrostki, potem granica sylaby w połowie.
+    static func hyphenated(_ title: String) -> String {
+        title.split(separator: " ", omittingEmptySubsequences: false).map { word -> String in
+            let text = String(word)
+            guard text.count > 10 else { return text }
+            let lower = text.lowercased()
+            for prefix in ["wysoko", "nisko", "bez", "wege", "pesce", "mało", "pełno", "dużo"]
+            where lower.hasPrefix(prefix) && text.count - prefix.count >= 4 {
+                let index = text.index(text.startIndex, offsetBy: prefix.count)
+                return String(text[..<index]) + "\u{00AD}" + String(text[index...])
+            }
+            let vowels = Set("aąeęioóuy")
+            let characters = Array(text)
+            var cut = characters.count / 2
+            while cut < characters.count - 3, !vowels.contains(Character(characters[cut - 1].lowercased())) {
+                cut += 1
+            }
+            return String(characters[..<cut]) + "\u{00AD}" + String(characters[cut...])
+        }
+        .joined(separator: " ")
+    }
 
     var body: some View {
         Button(action: action) {
@@ -89,28 +125,27 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
                 mediaView
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .tracking(-0.25)
+                    Text(Self.hyphenated(title))
+                        .font(.system(size: SCChoiceTileMetrics.titleSize, weight: .semibold))
+                        .tracking(-0.2)
                         .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(isSingleWord ? 1 : 2)
-                        .minimumScaleFactor(isSingleWord ? 0.8 : 1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     detail()
                         .font(.system(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
             }
-            .padding(.leading, 8)
+            .padding(.leading, SCChoiceTileMetrics.leading)
             .padding(.trailing, SCChoiceTileMetrics.inset)
-            .padding(.vertical, 9)
             // Elastyczny w obu osiach: siatka daje każdemu kafelkowi tę samą
             // szerokość kolumny i wysokość najwyższego kafelka w siatce.
-            .frame(maxWidth: .infinity, minHeight: 58, maxHeight: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: SCChoiceTileMetrics.height, maxHeight: .infinity, alignment: .leading)
             .background(shape.fill(fill))
             .overlay(shape.strokeBorder(stroke, lineWidth: mark == .on ? 1.2 : 1))
             .contentShape(shape)
@@ -126,28 +161,29 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
         .accessibilityAddTraits(mark == .off ? .isButton : [.isButton, .isSelected])
     }
 
+    /// Miniatura w karcie — kwadrat 54 pt z odstępem 8 pt od lewej, góry
+    /// i dołu. Zaznaczony: obwódka akcentu wokół miniatury i znaczek na rogu.
     private var mediaView: some View {
         let size = SCChoiceTileMetrics.media
         let radius = SCChoiceTileMetrics.mediaRadius
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
 
+        // Stała ramka: siatka mierzy kafelek bez wysokości, a `scaledToFill`
+        // zgłosiłby naturalną wysokość zdjęcia.
         return media()
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            // Zaznaczony: obwódka akcentu 2 pt od miniatury.
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
             .overlay {
-                RoundedRectangle(cornerRadius: radius + 3.5, style: .continuous)
+                RoundedRectangle(cornerRadius: radius + 3, style: .continuous)
                     .strokeBorder(accent, lineWidth: 1.5)
-                    .padding(-3.5)
+                    .padding(-3)
                     .opacity(mark == .on ? 1 : 0)
                     .scaleEffect(mark == .on ? 1 : 0.92)
             }
             .overlay(alignment: .bottomTrailing) {
                 badge
-                    .offset(x: 6, y: 6)
+                    .offset(x: 5, y: 5)
             }
     }
 

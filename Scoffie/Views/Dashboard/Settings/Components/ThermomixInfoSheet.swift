@@ -20,9 +20,12 @@ struct ThermomixInfoSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    // Płyta w szałwii — znaczek „Thermomix” przy przepisach.
                     EditorialSheetHeader(
                         eyebrow: "Integracje",
                         title: "Gotuj z Thermomixem",
+                        icon: "cooktop.fill",
+                        accent: SCPalette.sage,
                         onClose: onClose
                     )
                     .padding(.bottom, 4)

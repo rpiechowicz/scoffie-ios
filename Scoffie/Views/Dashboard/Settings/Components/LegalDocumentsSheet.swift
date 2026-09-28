@@ -18,7 +18,12 @@ struct LegalDocumentsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(eyebrow: "Informacje", title: "Prywatność i regulamin") {
+                    EditorialSheetHeader(
+                        eyebrow: "Informacje",
+                        title: "Prywatność i regulamin",
+                        icon: "hand.raised.fill",
+                        accent: SCPalette.indigo
+                    ) {
                         dismiss()
                     }
 
@@ -78,7 +83,7 @@ struct LegalDocumentsSheet: View {
         }
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności") {
+            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) {
                 PrivacyPolicyContent()
             }
         }

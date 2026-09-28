@@ -59,16 +59,40 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w trybie `.review` (`OptionsStoryMode`): tag = pora (· dzień), pod daniem „Zamień to danie” (wysyła
   „Zamień w tej propozycji …: X. Pokaż 3 inne dania na tę porę do wyboru.” → serwer oddaje OPTIONS →
   „Wybieram: …” → ta sama propozycja z nowym daniem), strona końcowa „Wszystko pasuje?” z zapisem.
-  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian. Od 24.09.2026 nad nazwą dania
-  stoją pigułki KIEDY (`ProposalWhenPills`: pora z ikoną w `cozyAccent` + „Dziś, 24 września”, po zapisie „W planie”),
-  a strona końcowa idzie za STANEM propozycji (`OptionsStoryMode.review(…, status:)`, `ProposalEndCopy`): „Wszystko
+  Po zapisaniu / nieaktualna propozycja = sam podgląd, bez przycisków zmian. Pigułki nad nazwą dania
+  (`ProposalWhenPills`: pora, dzień, „dla kogo”, „W planie”) USUNIĘTE w rundzie 13 (27.09) — nad nazwą sam eyebrow;
+  strona końcowa idzie za STANEM propozycji (`OptionsStoryMode.review(…, status:)`, `ProposalEndCopy`): „Wszystko
   pasuje?” z listą zestawu i zgodą w SZAŁWII (`ProposalAcceptButton`), zapis NIE zamyka arkusza — „Wstawiam do planu…”
   przechodzi w „Jest w planie” + „Otwórz plan”; cofnięta / nieaktualna / wygasła mają własne słowa.
   Runda 15 (24.09.2026): na dole strony końcowej JEDEN przycisk (zapis → „Otwórz plan” → przy stanie bez zapisu
   „Napisz, co zmienić”), lista zestawu (`ProposalRecap`) = miniatura dania, pora z ikoną w kolorze pory, nazwa, kcal
   (tydzień: wiersz na dzień z trzema krążkami zdjęć), nad nią dzień i suma kcal; pod listą cichy odnośnik
-  „Zaproponuj inne dania” (`ProposalRegenerateLink`, wysyła prośbę o nowy zestaw). Świeża propozycja dnia/tygodnia
+  „Zaproponuj inne dania” (`ProposalRegenerateLink`, wysyła prośbę o nowy zestaw). Od 27.09.2026 („ten ostatni
+  widok da się lepiej zrobić”) nad pytaniem stoi WACHLARZ dań zestawu (`ProposalHero`: do trzech zdjęć,
+  tydzień — po jednym z trzech dni, „+N”), rozkładany sprężyną przy wejściu na stronę; stan mówi odznaka
+  na środkowym zdjęciu (zapis w toku — kręciołek, zapisane — szałwiowy ptaszek + podskok + haptyka
+  sukcesu, reszta — cicha ikona i przygaszone zdjęcia), a nie puste kółko z ptaszkiem, które PRZED
+  zapisem mówiło „zapisane”. Ptaszki na liście dopiero po zapisie, na miniaturach, kaskadą; wiersze
+  wchodzą po kolei, suma kcal roluje od 0, eyebrow/tytuł/opis rolują przy zmianie stanu. Zrzut:
+  `SCOFFIE_DEBUG_OPTIONS=propozycja` (sam przechodzi na stronę końcową i „zapisuje”). Świeża propozycja dnia/tygodnia
   (PENDING, przyszła na żywo) otwiera ten arkusz SAMA, raz na wiadomość (`ProposalAutoPresent`), jak karta OPTIONS.
+  Karta propozycji w ROZMOWIE (27.09.2026, „tekst się psuje”): data/zakres tygodnia stoi we własnym wierszu pod
+  nadtytułem z ikoną kalendarza (`AssistantCardHead(detailBelow: true)`), nie w jednym wierszu z plakietką stanu
+  (`lineLimit(1)` ucinał datę); inne karty dostają meta obok nadtytułu tylko, gdy cała się mieści (`ViewThatFits`).
+  Pod „Przeglądaj dania” NIE ma wiersza „3 posiłki · 1460 kcal · zostaje 640” / „Śr. … kcal dziennie” — nie wracać.
+  Nazwa dania w `AssistantMealRow` ma do dwóch linii zamiast ucinania.
+  „Kto co je” (27.09.2026 wieczorem, Rafał: „więcej dań, więcej osób — totalne zamieszanie, user gubi się w sekundę”):
+  klocki w `AssistantProposalPeople.swift` — `ProposalAudience` („Cały dom” / „Ania i Ty”, w domu jednoosobowym nic),
+  `ProposalAudiencePill` (na `PlanWhoBadge` z Planu), `ProposalPersonFilter` („Wszyscy · Ty · Ania”). Kreski stron grupują się po dniu
+  (większa przerwa między dniami). Strona końcowa (`ProposalRecap`) = filtr osób + karta NA DZIEŃ, w niej pora → danie;
+  pora z kilkoma daniami (różne dla różnych osób) = nagłówek pory i dania pod nim, każde z „dla kogo”; kcal dnia tylko
+  dla wybranej osoby (suma dań różnych osób nic nie znaczyła). Dawny tydzień „wiersz na dzień z trzema krążkami” odpadł.
+  W karcie w rozmowie przy porze dopisek z imieniem, gdy danie NIE jest dla całego domu. `ProposalStoryContext` niesie
+  `participantIds`, domownicy idą do arkusza jawnie (`members`, `me`), nie przez środowisko.
+  „Zniknie z planu” pod „Przeglądaj dania” (`RemovalsSection`, usunięte) → wiersz „Co się zmieni” (`OptionsBrowseRow`
+  z `icon:`, podtytuł „2 zamiany · 1 usunięcie · 3 nowe”) otwierający półarkusz `AssistantPlanChangesSheet`
+  (`ProposalChanges`: dzień → pora; zamiana = stare przekreślone i szare nad nowym ze strzałką, usunięcie z powodem od
+  modelu, nowe z plakietką; przy nowym „dla kogo”; zdjęcie usuwanego z katalogu po `recipeId`).
 - **Kontrakt kart asystenta**: `sh Scripts/card-contract-check.sh` — kompiluje DTO kart razem
   z wzorcem odpowiedzi serwera i sprawdza, czy wszystko się dekoduje. Jedyna automatyczna
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
@@ -178,7 +202,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   po lewej i główna po prawej, nawigacja = wiersz z chevronem; `AssistantProposalFooter` liczy
   akcje ze stanu z serwera). Stan propozycji jest TEKSTEM (`AssistantCardStatus.title`), nie
   tylko kolorem. Porażka tury to `AssistantOutcomeCard` (bez czerwieni; „Nic nie zmieniłem
-  w planie” tylko gdy `AgentStore.lastTurnWrote == false`), nie notka z wykrzyknikiem. Na żywo
+  w planie” tylko gdy `AgentStore.lastTurnWrote == false`), nie notka z wykrzyknikiem. Od 27.09.2026
+  w stroju nagłówka arkusza: kafelek z ikoną sytuacji · eyebrow · tytuł w 1. osobie bez kropki, JEDNO
+  zdanie, „Plan bez zmian” jako `SCTag` w szałwii i „Spróbuj ponownie” jako `AssistantPrimaryButton`
+  w treści (bez stopki z kreską); wchodzi łagodnie, po zwinięciu wiersza „myślę” (`outcomeTransition`). Na żywo
   wiersz „myślę” pokazuje JEDEN bieżący status + `AssistantArcSpinner` (łuk krąży i oddycha, sygnał, nie procent)
   + kontekst słowami z aplikacji — nazwy narzędzi nie wychodzą na ekran. Podglądy kart biorą
   wzorce z `Previews/AssistantPreviewFixtures.swift` (kopia JSON-ów z `Scripts/CardContract`).
@@ -230,10 +257,96 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `AssistantActionPair`: równe połowy, gdy oba tytuły się mieszczą, inaczej stos z główną NA DOLE — główna
   zawsze ostatnia. Ikony: strzałki/szewrony za tytułem, reszta przed. Praca = kółko na STUKNIĘTYM przycisku
   w miejscu ikony, szerokość bez zmian, drugi przygaszony. Chipy `AssistantChip` 38 pt / 44 dotyk.
-  Wysokości nie ustawiać ręcznie — `size:`.
+  Wysokości nie ustawiać ręcznie — `size:`. Od 27.09.2026 („inny daj jako ikonę, a zapisz na resztę”): poboczna
+  Z GLIFEM obok głównej = sam krążek `AssistantIconActionButton` (kształt „Wyczyść” z Filtrów, ale SZARY — pole
+  + obwódka jak `AssistantGhostButton`; tytuł tylko dla VoiceOver), główna na resztę szerokości; bez glifu („Zapisz
+  mimo to”) zostaje para słów. Zapis propozycji („Zapisz niedzielę”, „Dodaj do planu”) w SZAŁWII
+  (`AssistantCardActions(primaryTint:)`, `AssistantPrimaryButton(tint:)`) — „ponów szary, zapisz na zielono”.
+  Poboczne propozycji mają glify (`reviseIcon`): Zmień coś ✎, Inny zestaw / Zmień danie ⟳, Szukaj dalej 🔍, Zostaw ✕.
 - Szkic odpowiedzi i jej dopisywanie liczą się z JEDNEGO zegara (`AgentStore.draftReveal`,
-  `AgentRevealClock`, 70–320 znaków/s): gotowa odpowiedź rusza od znaku, który JEST na ekranie
-  (i od wspólnego początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz.
+  `AgentRevealClock`): gotowa odpowiedź rusza od znaku, który JEST na ekranie (i od wspólnego
+  początku ze szkicem), nie od długości szkicu z serwera — inaczej wskakuje naraz. Od 27.09.2026
+  (Rafał: „pisze jedno słowo, a potem przeskakuje i pokazuje całą odpowiedź”) szkic i gotowa
+  odpowiedź to JEDEN widok: szkic jest wiadomością pozorną (`AgentStore.draftMessage`), ostatnia
+  odpowiedź tury dostaje jego klucz (`liveKey` → `anchorID` = „turn-…”), a zegar żyje W WIADOMOŚCI
+  (`AgentChatMessage.reveal`, `AgentRevealClock.finishing` — tempo szkicu płynie dalej, całość ≤ 3,5 s),
+  Odpowiedź, która szkicu NIE kontynuuje (zdanie serwera po planowaniu), nie urywa pisania w pół słowa
+  (27.09.2026): `letDraftFinish` czeka, aż szkic dopisze się do końca, + 0,8 s (≤ 5 s), a odpowiedź wchodzi BEZ
+  `liveKey` — nowy widok pisany od początku (`answerContinuesDraft` rozstrzyga: wspólny początek ≥ to, co widać).
+  nie w `@State` widoku. Szkic pisze się od 18 zn/s (`draftMinRate`; pierwsza porcja z serwera
+  to zwykle jedno słowo, a serwer zapisuje szkic najwyżej raz na sekundę), gotowa odpowiedź od 90.
+  Tekst jest ZŁOŻONY od pierwszej klatki, nienapisane przezroczyste, ostatnie 14 znaków rampą krycia
+  (`AssistantReveal` w `AssistantAnswer.swift`) — słowa nie przeskakują do następnej linii, a dalsze
+  akapity i listy czekają w zarezerwowanym miejscu. Wiersz „myślę” zwija się przy PIERWSZYM słowie
+  szkicu, nie na końcu tury (tekst nie podskakuje). Rozmowa idzie za porcjami szkicu (`scrollTo`
+  początku odpowiedzi), dopóki użytkownik sam nie chwyci listy (`followsAnswer`, `onScrollPhaseChange`).
+- Odpowiedź asystenta (27.09.2026, „odpowiedzi są ściśnięte”): kolejne linie to JEDEN akapit
+  (złamanie w środku), pusta linia go zamyka; akapit 16 pt, interlinia 6, bez ujemnego trackingu,
+  16 pt między kawałkami, nagłówek sekcji 15/600 (nie wersaliki 11 pt), lista 15 pt. Pod CAŁĄ
+  odpowiedzią (tekst + karta) pasek `AssistantAnswerFooter`: podpis „✦ Myślałem 42 s ›” (rozwijana karta
+  z krokami W ROZMOWIE odpadła: „do usunięcia”; wieczorem tego dnia podpis otwiera półarkusz
+  `AssistantThinkingSheet` — kroki tury po kolei z glifem rodzaju pracy, zapisy w szałwii, „Odpowiedź gotowa”) oraz
+  👍 · 👎 · „⋯” (udostępnij, zgłoś / popraw zgłoszenie, przy podpowiedzi „Popraw podpowiedź”). Po 👎 wiersz
+  „Co poprawić? Podpowiedz” → `AssistantSuggestionSheet` (powody `AGENT_FEEDBACK_TAGS` + zdanie, ten sam PUT
+  feedback z `tags`/`comment`, historia oddaje `feedbackNote`); to NIE zgłoszenie — działa też przy odpowiedzi
+  zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Runda 3:
+  👎 SAM otwiera arkusz „Słaba odpowiedź · Co poprawić?” (ocena zapisuje się od razu, krzyżyk zostawia sam kciuk) —
+  pigułka w pasku odpadła, bo przestawiała układ („przeskakuje, jak zmieniam like”); pasek ma zawsze ten sam układ.
+  Arkusz = LISTA 4 powodów w jednej karcie (krążek w kolorze powodu · nazwa · `SCCheckbox`, bez `withAnimation`
+  i podmiany glifu — „animacje check za wolne”) + pole; prawe wcięcie paska = lewe (glif „⋯” 28 pt
+  od brzegu). „Jak pracowałem”: tytuł = co tura zrobiła (`ThinkingHeadline`: „Ułożyłem plan”, „Dobrałem dania”…),
+  kafelek = stała ikona przebiegu `point.3.filled.connected.trianglepath.dotted` w terakocie, czas kapsułką obok krzyżyka.
+  Runda 5 („serio pokazuj, co się działo”): oś z danych tury — krok = `done` (czas przeszły z serwera) + `detail` (fakty
+  z wejścia i wyniku narzędzia) + sekunda tury („0:08”, od `thinking.startedAt`); przerwy ≥ 2 s na myślenie to ciche
+  wiersze… — ZASTĄPIONE w rundzie 8: wiersz = JEDNA akcja (ikona · zdanie w czasie przeszłym · fakty · czas trwania
+  po prawej), akcja trwa od swojego początku do początku następnej (pierwsza od startu, ostatnia do końca tury),
+  granice zaokrąglone przed odjęciem — suma = czas w nagłówku; BEZ wierszy przerw, „Napisałem odpowiedź”, „Wyniku”.
+  Runda 9: ZAWSZE pierwszy wiersz „Przemyślałem, od czego zacząć” (mózg) — prawdziwe myślenie przed 1. akcją
+  w widełkach 2–10 s (`ThinkingEntry.startRange`), różnica zjeżdża z/do pierwszej akcji, suma bez zmian.
+  Runda 10: tytuł nagłówka = EFEKT jako rzeczownik („Propozycja planu gotowa”, „Dania do wyboru”, „Plan zapisany”),
+  nie czasownik — „Ułożyłem plan” powtarzał wiersz osi; fakty pod krokiem najwyżej 2 linie (backend skraca plan do
+  zakresu i wyniku). Strona końcowa przeglądu propozycji: filtr zaczyna od „Ty” (lista „co ja jem”), przy „Wszyscy”
+  pora z kilkoma daniami = zwarte linie „awatary · danie · kcal” bez miniatur, przycisk w `SCSheetFooter` (cień).
+  Półarkusz „Co się zmieni” (`AssistantPlanChangesSheet`): pora = JEDEN blok — nagłówek pory z rodzajem zmiany,
+  pod nim „stare → nowe” OBOK SIEBIE (miniatury 30 pt, stare szare i przekreślone), „dla kogo” tylko jako awatary
+  przy nowym daniu i tylko, gdy nie cały dom (runda 10: „ściana tekstu” z czterema piętrami na zmianę).
+  Runda 12 (runda 11 z plakietką na środku i chipami nad przyciskiem ODRZUCONA): strony dań przeglądu BEZ
+  „Asystent” — z LEWEJ „Obiad · Środa” pełnymi słowami (ikona pory, `numericText` przy zmianie), stuknięcie
+  = `Menu` z sekcjami „Pora” i „Dzień”; ten sam wybór pod przyciskiem filtra obok krzyżyka (soft terakota,
+  gdy filtr działa). Dom z kilku osób → `ProposalPersonSwitcher` W JEDNEJ LINII z „Zamień to danie” (domek
+  + awatary, wybrany krążek przesuwa się `matchedGeometryEffect`; >3 osoby = krążek z menu). Osoba, pora
+  i dzień idą JEDNĄ drogą `applyFilters` → `visibleDishes` (strony, kreski, `neighbor`); wybór dający zero dań
+  jest wyłączony, danie spoza filtra = skok na najbliższe pasujące. Nad daniem ŻADNYCH pigułek
+  (runda 13: „Cały dom” niepotrzebne — osoba jest w przełączniku). Tytuły „Jak pracowałem” KRÓTKIE („Plan gotowy”, „Zamiennik”), kompaktowy
+  nagłówek arkusza ma tytuł zawsze w jednej linii. Kciuki i „⋯” TYLKO pod odpowiedzią modelu
+  (`turnId != nil`) — potwierdzenia zapisu/cofnięcia serwer pisze bez tury i odmawia ich oceny. Arkusz podpowiedzi = pełny ekran (zdanie, cytat odpowiedzi, powody z opisem
+  i `SCCheckbox`, pole, „Pomiń”/„Wyślij”, podziękowanie) dla OBU kierunków: 👍 („Co było dobre?”, szałwia, po „wybuchu”
+  kropek `ThumbCheer` i haptyce) i 👎 („Co nie zagrało?”); zaznaczony kciuk w górę szałwia, w dół terakota. Półarkusze „Jak pracowałem”
+  i „Co poprawić?” mają kompaktowy nagłówek (`EditorialSheetHeader(compact:)` / `AssistantSheetScaffold(compact:)`:
+  kafelek 36, tytuł 19); oś kroków bez karty, kolor = rodzaj pracy (`ThinkingKind`). Bez kopiowania w pasku („co nam to daje
+  realnego?”) — „Kopiuj” zostaje pod przytrzymaniem. 👎 pokazuje „Co było nie tak? Opisz” → arkusz
+  zgłoszenia. Zgłoszenie JEDNO na osobę i odpowiedź: serwer poprawia istniejące (`AgentReport`
+  po `userId+messageId`, wraca do panelu jako NEW), historia oddaje własne (`AgentMessageDTO.report`),
+  a arkusz otwiera się jako „Popraw zgłoszenie” z tym samym powodem i komentarzem. Czas i kroki przychodzą z serwera (`AgentMessageDTO.thinking`, także
+  w HISTORII — wcześniej „Myślałem” żyło tylko w pamięci sesji), ocena to `feedback` +
+  `PUT agent/messages/:id/feedback {rating: UP|DOWN|null}` (backend: `AgentMessageFeedback`,
+  migracja `20260927120000_agent_message_feedback`). Zrzuty: `SCOFFIE_DEBUG_OPTIONS=rozmowa|rozmowa-pisze`.
+- Nagłówek rozmowy (27.09.2026, „shadow jak na detail meal, a nie divider”) stoi w `safeAreaInset(edge: .top)`
+  jak pole na dole: rozmowa przejeżdża POD nim, a gdy jest przewinięta, pod nagłówkiem leży `AssistantHeaderShade`
+  (tło strony przez maskę — poświata się zgadza; 16 pt na nagłówku + 28 pod nim). Krycie cienia idzie ZA przesunięciem
+  listy (`headerShade`: pełne po 24 pt, co 1/12, bez animacji) — przełącznik z animacją spóźniał się przy szybkim
+  przewijaniu. Przykład w polu w rozmowie zależy od OSTATNIEJ odpowiedzi (`AssistantComposerHint`: propozycja — zmiana
+  z nazwą dania z karty, zapis — następny krok, dania do wyboru — życzenie, zakupy, bilans, pytanie), wariant z ziarna
+  id wiadomości; nie powtarza przycisków karty. Pytania z odpowiedzią W APLIKACJI („pokaż listę zakupów”, „jak ugotować…”, „daj przepis”) telefon
+  NIE wysyła (`AssistantAppShortcut`): nad polem karta z przejściem (Plan → Zakupy / Przepisy) i „Zapytaj mimo to” —
+  tura kosztuje i zjada wiadomość z puli; backend wycofał `show_shopping_list` z modelu i każe odsyłać jednym zdaniem. Oceny 👍/👎 wymagają backendu
+  z `PUT agent/messages/:id/feedback` — aplikacja zawsze woła `api.scoffie.app`, więc bez backendu na `main` kciuk wraca
+  z toastem „Nie zapisałem oceny”.
+- Pytanie wysłane w tej sesji stoi pod kluczem z telefonu (`clientMessageId` — od niego zależy
+  `slotKey`), a serwer ma je pod własnym id: `AgentChatMessage.serverId` (z `202 messageId`). „Popraw
+  pytanie” wysyła `serverId ?? id` (sam `clientMessageId` dawał 404). „Spróbuj ponownie” po nieudanej
+  turze idzie drogą poprawki (`editMessage` z tą samą treścią), nie nową wiadomością — rozmowa nie ma
+  dwóch identycznych pytań pod rząd. Nieudana tura za 0 zł oddaje wiadomość z puli (backend, 27.09.2026).
 - Loader startu stoi NAD korzeniem (`ScoffieApp.showsStartupLoader`), nie w gałęzi pulpitu:
   krycie kontenera bez `compositingGroup` schodzi na dzieci, więc przy przejściu korzenia przez
   loader prześwitywała zakładka. Gesty w arkuszach: poziome przewijanie przez
@@ -290,7 +403,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`SCCircleIconLabel(highlighted:)`), nie pełna terakota. Przełącznik „Dopasowane do Ciebie” jest
   TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
   i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
-  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`) = miniatura ZDJĘCIA
+  „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`; od 27.09.2026 STAŁA wysokość 70 pt
+  na dwie linie nazwy, miniatura 54 pt W KARCIE z równym odstępem 8 pt od góry, dołu i lewej (wersja „na całą
+  wysokość” odrzucona — „jako card było lepsze”), nazwa ZAWSZE 14 pt bez zmniejszania —
+  długie słowo łamie się miękkim dzieleniem „Wysoko-/białkowe”, `SCChoiceTile.hyphenated`) = miniatura ZDJĘCIA
   DANIA z tą cechą + nazwa + liczba przepisów; zaznaczenie = tint, obwódka wokół miniatury i znaczek
   z ptaszkiem (nie samo pole wyboru — „smutne”, Rafał 23.09). Zdjęcia dobiera `RecipeFilterCovers`
   / `RecipeFacetCovers` raz na otwarcie, z puli przed filtrami, każdy przepis na jednym kafelku;
@@ -483,12 +599,29 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (24.09.2026: „Twój dzień · 3 z 3 posiłków — bez sensu”; w Kalendarzu „1 z 5 zjedzone” też usunięte) — nie wracać. Pełnoszerokościowe zakładki z rundy 11
   odpadły. Kalendarz NIE ma przełącznika — tylko „ja” (runda 11).
   Oś dnia dalej pokazuje dania wszystkich obok siebie — zmieniło się tylko to, co się sumuje.
+- „Wybierz przepis” w Planie, gdy w porze stoi INNE danie kogoś z wybranego „Dla kogo” (27.09.2026): nad przyciskiem
+  `PlanSlotConflictCard` (strój „ZAMIENISZ”: zdjęcie, „OBIAD · ANIA MA JUŻ”, przełącznik „Zamień dla wszystkich /
+  Dodaj obok”, domyślnie zamiana); przycisk idzie za wyborem („Zamień w planie”). Zamiana zabiera tamtemu daniu TYLKO
+  osoby, które dostają nowe — danie bez nikogo znika (`removeWeekSlot`), reszta zostaje przy swoim (zawężone „Dla kogo”).
 - `DayPager` (runda 11): nowy dzień wchodzi do drzewa BEZ animacji, gdy strona jest niewidoczna
   (między zjazdem a wjazdem), a przewijanie ma `.id` dnia — pełny ↔ pusty dzień szarpał wjazdem.
-  Powrót do bieżącego tygodnia w pasku dni = „↩ Wróć do dziś” (samo „DZIŚ” czytało się jak znacznik dnia).
+  Powrót do bieżącego tygodnia w pasku dni = SAM krążek z ikoną cofania (`SCWeekTodayButton`, 26 pt jak strzałki,
+  terakota soft; 27.09.2026) — pigułka „↩ Wróć do dziś” zabierała miejsce i podpis tygodnia malał. Jeden komponent
+  w pasku Planu/Kalendarza (`EditorialWeekBar`) i w „Dodaj do planu”.
 - Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
-  podświetlone kółko z iskierkami; karta pustego tygodnia w `PlanDayTimeline` = kafelek, „ASYSTENT”,
-  tytuł, jedno zdanie i `EditorialPrimaryActionButton` (runda 9, „przerób na aktualne standardy”).
+  podświetlone kółko z iskierkami. Karty pustego tygodnia nad osią dnia NIE MA (27.09.2026, „usuń ten
+  design”) — pusty tydzień z choć jednym dniem do zaplanowania = pigułka ODDYCHA (`invites:`, poświata
+  pod kapsułą, krycie ≤ 0,21, skala 1,028 — dobrane między „za mocno” a „ciut mocniej”, okres 2,6 s jak `attentive` w `SCLivingMark`, `TimelineView`, staje na
+  niewybranej zakładce, przy Reduce Motion stoi w połowie). Odstęp pasek dni → nazwa dnia = 14 pt
+  w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Pigułka otwiera `PlanAssistantIntroSheet`
+  („Ułożę Ci ten tydzień”): jedno zdanie, trzy `SCTag` w jednym wierszu (sprawdzone w planerze — lista
+  w komentarzu pliku; bez „kilku sekund”, „do 30 minut”, „sezonowych”), podgląd tygodnia w stroju
+  `ProposalRecap` z dań `AssistantIntroDish.week` (dieta i alergeny z Ustawień, bez powtórek) i JEDEN
+  przycisk „Ułóż z Asystentem” — „Wolę ułożyć sam” dublowało krzyżyk. Podgląd „wow” (runda 2): tydzień
+  SKŁADA SIĘ na oczach (szkielet → krążki wskakują sprężyną, nazwa pisze się `SCTypedText`, ptaszek
+  w szałwii, licznik posiłków roluje, `SCLivingMark` „myśli” i podskakuje), potem pętla ZAMIANY co ~3,4 s
+  (dzień w tincie terakoty, kręcące się strzałki, danie z `AssistantIntroDish.spares` przenika, nazwa roluje)
+  — to obietnica „każde danie możesz potem zamienić”. Reduce Motion = gotowy tydzień, bez pętli.
 - Puste stany Zakupów (`ProductsView`, 24.09.2026 — „design jest stary, uspójnij”) stoją na `RecipeListEmptyState` (ma teraz opcjonalny `eyebrow`): tydzień bez planu = „LISTA ZAKUPÓW · Tydzień bez planu” + „Ułóż z Asystentem” (przełącza zakładkę i zamyka arkusz) i „Wróć do Planu”; plan jest, lista pusta = „Lista jest pusta” bez akcji; „Na dziś” bez produktów i otwarta rewizja bez nowych = ptaszek w szałwii („Na dziś masz wszystko” + „Pokaż całą listę”); pusta historia — ten sam klocek. Karta z koszykiem 78 pt i dwoma szarymi chipami usunięta.
 - Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
@@ -501,6 +634,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   posiłku u Asystenta); `DayNavigationMotion.plateFade` to ta sama stała, więc zdjęcie kończy z tekstem. Nowe rolowanie tekstu
   gdziekolwiek → `SCMotion.textRoll`. Arkusz „Cel dnia” (Kalendarz i Plan) nie ma podtytułu.
   Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
+- KAŻDY arkusz poza szczegółami posiłku (27.09.2026, Rafał: „image, subtitle, title, X”) ma nagłówek
+  jak „Ułożę Ci ten tydzień”: kafelek z ikoną (`SCHeaderIconWell`) · eyebrow w kolorze akcentu · tytuł ·
+  krzyżyk. `AssistantSheetScaffold`/`AssistantSheetHeader`, `LegalDocumentSheet` i `ShoppingSheetHeader`
+  mają `icon:`/`accent:`; w arkuszach Ustawień kafelek i eyebrow biorą kolor wiersza, który je otwiera.
+  Świadomie bez kafelka: `AddToPlanSheet` (tę rolę gra zdjęcie dania), `AssistantOptionsStorySheet`
+  (pełne zdjęcie jak szczegóły posiłku), `AssistantHowItWorksView` (przepływ kroków). Nowy arkusz =
+  od razu z `icon:`.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
@@ -534,7 +674,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
   nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
 - Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień

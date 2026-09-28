@@ -13,6 +13,12 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
     var eyebrow: String = "Asystent"
     let title: String
     var subtitle: String? = nil
+    /// Kafelek przed tytułem (`SCHeaderIconWell`) — jak w każdym arkuszu
+    /// aplikacji: glif tej samej sprawy, co pozycja menu ⋯, która go otwiera.
+    var icon: String? = nil
+    var accent: Color = SCPalette.terracotta
+    /// Półarkusz: mniejszy nagłówek (`EditorialSheetHeader(compact:)`).
+    var compact: Bool = false
     var onClose: () -> Void
     @ViewBuilder var action: () -> Action
     @ViewBuilder var footer: () -> Footer
@@ -28,8 +34,17 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
             // przewijał się razem z treścią i w długich arkuszach (plany,
             // zgoda) krzyżyk uciekał z ekranu.
             VStack(spacing: 0) {
-                AssistantSheetHeader(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: action)
-                    .padding(.bottom, 8)
+                AssistantSheetHeader(
+                    eyebrow: eyebrow,
+                    title: title,
+                    subtitle: subtitle,
+                    icon: icon,
+                    accent: accent,
+                    compact: compact,
+                    onClose: onClose,
+                    action: action
+                )
+                .padding(.bottom, compact ? 4 : 8)
 
                 // Stopka przez `safeAreaInset` (`scSheetFooter`), nie nad listą
                 // w `ZStack` — treść kończy się nad nią sama, bez 140 pt zapasu.
@@ -65,11 +80,25 @@ extension AssistantSheetScaffold where Action == EmptyView {
         eyebrow: String = "Asystent",
         title: String,
         subtitle: String? = nil,
+        icon: String? = nil,
+        accent: Color = SCPalette.terracotta,
+        compact: Bool = false,
         onClose: @escaping () -> Void,
         @ViewBuilder footer: @escaping () -> Footer,
         @ViewBuilder content: @escaping () -> Content
     ) {
-        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() }, footer: footer, content: content)
+        self.init(
+            eyebrow: eyebrow,
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            accent: accent,
+            compact: compact,
+            onClose: onClose,
+            action: { EmptyView() },
+            footer: footer,
+            content: content
+        )
     }
 }
 
@@ -78,16 +107,30 @@ extension AssistantSheetScaffold where Action == EmptyView, Footer == EmptyView 
         eyebrow: String = "Asystent",
         title: String,
         subtitle: String? = nil,
+        icon: String? = nil,
+        accent: Color = SCPalette.terracotta,
+        compact: Bool = false,
         onClose: @escaping () -> Void,
         @ViewBuilder content: @escaping () -> Content
     ) {
-        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() }, footer: { EmptyView() }, content: content)
+        self.init(
+            eyebrow: eyebrow,
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            accent: accent,
+            compact: compact,
+            onClose: onClose,
+            action: { EmptyView() },
+            footer: { EmptyView() },
+            content: content
+        )
     }
 }
 
 /// Nagłówek arkusza — TEN SAM dla każdego arkusza asystenta, także tych,
-/// które nie przewijają listy (onboarding z kartami): eyebrow · tytuł ·
-/// podtytuł po lewej, opcjonalna akcja i X po prawej.
+/// które nie przewijają listy (onboarding z kartami): kafelek · eyebrow ·
+/// tytuł · podtytuł po lewej, opcjonalna akcja i X po prawej.
 ///
 /// Rysuje go `EditorialSheetHeader`, domyślny nagłówek arkusza w aplikacji.
 /// Wcześniej asystent miał własny krój (eyebrow 11 pt, tytuł 26 bold)
@@ -97,6 +140,9 @@ struct AssistantSheetHeader<Action: View>: View {
     var eyebrow: String = "Asystent"
     let title: String
     var subtitle: String? = nil
+    var icon: String? = nil
+    var accent: Color = SCPalette.terracotta
+    var compact: Bool = false
     var onClose: () -> Void
     @ViewBuilder var action: () -> Action
 
@@ -104,18 +150,38 @@ struct AssistantSheetHeader<Action: View>: View {
         EditorialSheetHeader(
             eyebrow: eyebrow,
             title: title,
+            icon: icon,
+            accent: accent,
             subtitle: subtitle,
+            compact: compact,
             onClose: onClose,
             accessory: action
         )
         .padding(.horizontal, 20)
-        .padding(.top, 18)
+        .padding(.top, compact ? 16 : 18)
     }
 }
 
 extension AssistantSheetHeader where Action == EmptyView {
-    init(eyebrow: String = "Asystent", title: String, subtitle: String? = nil, onClose: @escaping () -> Void) {
-        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, onClose: onClose, action: { EmptyView() })
+    init(
+        eyebrow: String = "Asystent",
+        title: String,
+        subtitle: String? = nil,
+        icon: String? = nil,
+        accent: Color = SCPalette.terracotta,
+        compact: Bool = false,
+        onClose: @escaping () -> Void
+    ) {
+        self.init(
+            eyebrow: eyebrow,
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            accent: accent,
+            compact: compact,
+            onClose: onClose,
+            action: { EmptyView() }
+        )
     }
 }
 

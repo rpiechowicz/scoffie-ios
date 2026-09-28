@@ -8,6 +8,10 @@ import SwiftUI
 // Od góry: zdjęcie 340 pt wtapiające się w tło arkusza, wiersz tagów
 // (kategoria · „pasuje też na” przerywaną obwódką · czas), duży tytuł z lede,
 // a pod nim trzy sekcje z akcentowym pręcikiem:
+//   • (tylko posiłek z planu z porcjami osób) „Kto ile je” (masło) — pasek
+//     podziału garnka w kolorach osób i wiersz na osobę: awatar, „TY”, kcal
+//     jej porcji, stepper co 0,5. Stoi PRZED makrami, które liczą się
+//     z porcji patrzącego.
 //   • „Wartości odżywcze” (terakota) — stepper porcji siedzi W NAGŁÓWKU tej
 //     sekcji, a nie w osobnej karcie: porcje zmieniają wszystko niżej naraz
 //     (makra i gramatury), więc eyebrow każdej sekcji mówi, na ile porcji są
@@ -33,6 +37,66 @@ import SwiftUI
 enum RecipeDetailContext {
     case catalog
     case planned(day: Date, slot: MealSlot)
+}
+
+/// Porcje osób posiłku z planu — KAŻDEGO, nie tylko ułożonego przez
+/// Asystenta. Ekran pokazuje porcję każdego jedzącego ze stepperem co 0,5
+/// zamiast steppera porcji łącznych. Posiłek bez alokacji startuje od
+/// równego podziału; pierwsze zapisanie ustawia porcje osób (`REPLACE`).
+struct RecipeDetailPortions {
+    struct Person {
+        let memberId: String
+        let name: String
+        /// Domownik z listy gospodarstwa — awatar i kolor osoby (ten sam co
+        /// w Planie). `nil`, gdy ktoś z alokacji już z domu wyszedł.
+        var member: HouseholdMemberSnapshot? = nil
+    }
+
+    /// Jedzący, w kolejności do pokazania.
+    let people: [Person]
+    /// Jednostki 1/20 porcji (`PlanPortions`).
+    let units: [String: Int]
+    /// Kto patrzy — jego porcja idzie do „Twoja porcja” i do makr.
+    let viewerId: String?
+    /// Są tokeny do zapisu (`PlanMeal.canEditPortions`); bez nich porcje
+    /// tylko do odczytu, do najbliższego odświeżenia planu.
+    let isEditable: Bool
+}
+
+extension RecipeDetailPortions {
+    /// Model dla posiłku z planu. Osoby = klucze alokacji (serwer trzyma je
+    /// równe audytorium), a bez alokacji — audytorium („Wspólne” = cały dom);
+    /// patrzący pierwszy. `nil`, gdy nie wiadomo, kto je (lista domowników
+    /// jeszcze nie dojechała) — wtedy zostaje stepper porcji łącznych.
+    init?(meal: PlanMeal, members: [HouseholdMemberSnapshot], viewerId: String?) {
+        let byId = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let names = byId.mapValues(\.displayName)
+        let units: [String: Int]
+        if meal.hasPortions {
+            units = meal.portionUnits
+        } else {
+            let current = Set(members.map(\.id))
+            let eaters = meal.isShared ? Array(current) : meal.participantIds.filter { current.contains($0) }
+            let total = meal.effectiveServings(householdMemberCount: members.count) * PlanPortions.unitsPerServing
+            // Więcej niż 6 na osobę (gotowanie na zapas) — zostaje stepper
+            // porcji łącznych, żeby nie obciąć liczby.
+            guard PlanPortions.fitsPerPerson(totalUnits: total, eaterCount: eaters.count) else { return nil }
+            units = PlanPortions.seededUnits(eaters: eaters, totalUnits: total)
+        }
+        let ids = units.keys.sorted { lhs, rhs in
+            if lhs == viewerId { return true }
+            if rhs == viewerId { return false }
+            return (names[lhs] ?? lhs).localizedCompare(names[rhs] ?? rhs) == .orderedAscending
+        }
+        self.init(
+            people: ids.map { Person(memberId: $0, name: names[$0] ?? "Domownik", member: byId[$0]) },
+            units: units,
+            viewerId: viewerId,
+            // Bez alokacji token pozycji jest opcjonalny — pozycję z syntetycznym
+            // id (przed ackiem) i tak zna serwer po parze (pora, przepis).
+            isEditable: meal.hasPortions ? meal.canEditPortions : true
+        )
+    }
 }
 
 struct RecipeDetailView: View {
@@ -64,11 +128,27 @@ struct RecipeDetailView: View {
     /// i slotem, na które trafił, żeby ekran pod spodem mógł się odświeżyć.
     var onAddedToPlan: ((Date, MealSlot) -> Void)?
 
+    /// Porcje per osoba (tylko `.planned`); `nil` = zwykły stepper porcji.
+    let personalPortions: RecipeDetailPortions?
+
+    /// Wołane „Zapisz porcje” w trybie porcji osób: pełna mapa (dla
+    /// posiłku bez alokacji — `REPLACE`) i ZMIENIONE osoby (dla posiłku
+    /// z alokacją — osobne `setPortion`). Jednostki 1/20.
+    var onSavePortions: ((_ all: [String: Int], _ changed: [String: Int]) -> Void)?
+
+    /// Porcje per osoba w edycji — makra i składniki liczą się na bieżąco
+    /// z tego, co widać na stepperach, a nie z zapisanego stanu.
+    @State private var draftPortions: [String: Int]
+
+    private var portionUnits: [String: Int] { draftPortions }
+
     /// Widełki są te same, co limit `plannedServings` w backendzie — powyżej
     /// dwunastu porcji to już nie jest gotowanie na tydzień, tylko catering.
     private static let servingsRange = 1...12
 
-    @State private var servings: Int
+    /// Porcje łączne w jednostkach 1/20: w katalogu stepper co 0,5, w planie
+    /// (gdy nie ma porcji osób) co 1 — `plannedServings` to liczba całkowita.
+    @State private var servingsUnits: Int
     @State private var isAddToPlanPresented = false
 
     /// Czy użytkownik dotknął steppera na tym ekranie.
@@ -124,8 +204,13 @@ struct RecipeDetailView: View {
         initialServings: Int = 1,
         context: RecipeDetailContext = .catalog,
         onSaveServings: ((Int) -> Void)? = nil,
-        onAddedToPlan: ((Date, MealSlot) -> Void)? = nil
+        onAddedToPlan: ((Date, MealSlot) -> Void)? = nil,
+        personalPortions: RecipeDetailPortions? = nil,
+        onSavePortions: ((_ all: [String: Int], _ changed: [String: Int]) -> Void)? = nil
     ) {
+        self.personalPortions = personalPortions
+        self.onSavePortions = onSavePortions
+        _draftPortions = State(initialValue: personalPortions?.units ?? [:])
         self.recipe = recipe
         self.onSetFavourite = onSetFavourite
         self.onClose = onClose
@@ -139,14 +224,77 @@ struct RecipeDetailView: View {
         // po otwarciu ekranu.
         let seed = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, initialServings))
         self.initialServings = seed
-        _servings = State(initialValue: seed)
+        _servingsUnits = State(initialValue: seed * PlanPortions.unitsPerServing)
     }
 
     /// Porcje jako `Double`, bo skalowanie makr i składników liczy się
     /// ułamkiem `porcje / recipe.servings`.
-    private var portions: Double { Double(servings) }
+    private var portions: Double { PlanPortions.servings(fromUnits: servingsUnits) }
+
+    /// Krok steppera porcji łącznych: w katalogu pół porcji, w planie cała
+    /// (zapis `plannedServings` przyjmuje tylko liczby całkowite).
+    private var totalStepUnits: Int {
+        if case .planned = context { return PlanPortions.unitsPerServing }
+        return PlanPortions.stepUnits
+    }
+
+    private var totalUnitsRange: ClosedRange<Int> {
+        // `...` na początku linii Swift czyta jako osobną instrukcję
+        // (przedrostek), a nie ciąg zakresu — getter zostawał bez `return`.
+        let lower = Self.servingsRange.lowerBound * PlanPortions.unitsPerServing - PlanPortions.unitsPerServing + totalStepUnits
+        let upper = Self.servingsRange.upperBound * PlanPortions.unitsPerServing
+        return lower...upper
+    }
+
+    /// Całe porcje do zapisu i do listy zakupów (API przyjmuje liczby
+    /// całkowite) — w górę, żeby nie zabrakło.
+    private var wholeServings: Int {
+        min(Self.servingsRange.upperBound, PlanPortions.plannedServings(forTotalUnits: servingsUnits))
+    }
+
+    /// Tryb porcji per osoba: posiłek z planu z alokacją.
+    private var isPortionMode: Bool {
+        guard case .planned = context, personalPortions != nil else { return false }
+        return !portionUnits.isEmpty
+    }
+
+    /// Porcja patrzącego, jeśli je to danie.
+    private var viewerUnits: Int? {
+        personalPortions?.viewerId.flatMap { portionUnits[$0] }
+    }
+
+    /// Na ile porcji liczą się makra: porcja patrzącego (albo średnia
+    /// jedzących, gdy sam tego nie je) — ten sam wzór co serwer.
+    private var nutritionServings: Double {
+        guard isPortionMode else { return portions }
+        if let viewerUnits { return PlanPortions.servings(fromUnits: viewerUnits) }
+        return PlanPortions.servings(fromUnits: PlanPortions.totalUnits(portionUnits)) / Double(portionUnits.count)
+    }
+
+    /// Na ile porcji liczą się składniki: przy alokacji dokładna Σ (tak liczy
+    /// lista zakupów na serwerze).
+    private var cookedServings: Double {
+        isPortionMode ? PlanPortions.servings(fromUnits: PlanPortions.totalUnits(portionUnits)) : portions
+    }
+
+    private var nutritionEyebrow: String {
+        guard isPortionMode else { return PlanPortions.spokenServings(units: servingsUnits, plural: PolishPlural.servings) }
+        if let viewerUnits { return "Twoja porcja · \(PlanPortions.label(units: viewerUnits))" }
+        let mean = PlanPortions.totalUnits(portionUnits) / max(1, portionUnits.count)
+        return "Średnio · \(PlanPortions.label(units: mean))"
+    }
+
+    private var ingredientsEyebrow: String {
+        guard isPortionMode else { return PlanPortions.spokenServings(units: servingsUnits, plural: PolishPlural.servings) }
+        // Ułamek porcji łączy się z dopełniaczem: „2,5 porcji”; pełna liczba
+        // odmienia się jak zwykle („3 porcje”).
+        return PlanPortions.spokenServings(units: PlanPortions.totalUnits(portionUnits), plural: PolishPlural.servings)
+    }
 
     private var look: DetailLook { DetailLook(scheme: scheme) }
+
+    /// Sekcja porcji osób wchodzi w kaskadę jako druga — reszta o krok dalej.
+    private var revealShift: Int { isPortionMode ? 1 : 0 }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -162,20 +310,28 @@ struct RecipeDetailView: View {
                         .padding(.top, 6)
                         .detailReveal(hasAppeared, order: 0)
 
+                    // Porcje osób PRZED makrami: najpierw kto ile je, potem
+                    // co to znaczy dla Twojego dnia.
+                    if isPortionMode, let personalPortions {
+                        portionsSection(personalPortions)
+                            .padding(.top, 24)
+                            .detailReveal(hasAppeared, order: 1)
+                    }
+
                     nutritionSection
                         .padding(.top, 24)
-                        .detailReveal(hasAppeared, order: 1)
+                        .detailReveal(hasAppeared, order: 1 + revealShift)
 
                     if !recipe.preparationSteps.isEmpty {
                         preparationSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 2)
+                            .detailReveal(hasAppeared, order: 2 + revealShift)
                     }
 
                     if !recipe.ingredients.isEmpty {
                         ingredientsSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 3)
+                            .detailReveal(hasAppeared, order: 3 + revealShift)
                     }
 
                     // Zapas pod dolny pasek: przycisk z marginesami (~72 pt)
@@ -251,7 +407,8 @@ struct RecipeDetailView: View {
             // dodawaniu wyglądałoby na zgubienie jego wyboru.
             AddToPlanSheet(
                 recipe: recipe,
-                initialServings: servings,
+                initialServings: wholeServings,
+                initialUnits: servingsUnits,
                 // Stepper startuje od jedynki, więc każda inna wartość znaczy,
                 // że użytkownik świadomie go ruszył — i arkusz nie ma prawa
                 // nadpisać jej regułą auto z chipów.
@@ -349,20 +506,176 @@ struct RecipeDetailView: View {
     private var nutritionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             DetailSectionHeader(
-                eyebrow: PolishPlural.servings(servings),
+                eyebrow: nutritionEyebrow,
                 title: "Wartości odżywcze",
                 accent: SCPalette.terracotta
             ) {
-                DetailServingsStepper(
-                    value: $servings,
-                    range: Self.servingsRange,
-                    onChange: { didTouchStepper = true }
-                )
+                if !isPortionMode {
+                    DetailServingsStepper(
+                        value: $servingsUnits,
+                        range: totalUnitsRange,
+                        label: { PlanPortions.label(units: $0) },
+                        accessibilityValueText: { PlanPortions.spokenServings(units: $0, plural: PolishPlural.servings) },
+                        next: { current, direction in
+                            let candidate = current + direction * totalStepUnits
+                            return totalUnitsRange.contains(candidate) ? candidate : nil
+                        },
+                        onChange: { didTouchStepper = true }
+                    )
+                }
             }
 
-            DetailNutritionCard(nutrition: recipe.nutrition(forServings: portions))
+            DetailNutritionCard(nutrition: recipe.nutrition(forServings: nutritionServings))
             .padding(.horizontal, 20)
         }
+    }
+
+    /// „Kto ile je” — porcja każdego jedzącego ze stepperem co pół porcji.
+    /// Na górze karty pasek podziału garnka w kolorach osób (te same co
+    /// awatary w Planie), pod nim wiersz na osobę: awatar, imię z „TY”, kcal
+    /// JEJ porcji i stepper. Zapis dopiero „Zapisz porcje”, każda osoba
+    /// osobno (`setPortion` z jej tokenem). Bez tokenów (stary cache) — sam
+    /// odczyt i jedno zdanie, co zrobić.
+    ///
+    /// Dawniej: goła karta „Rafał (Ty)  − 1,5 +” pod pierścieniami — bez
+    /// awatarów, bez sumy i bez tego, ile to znaczy w kaloriach (Rafał
+    /// 27.09.2026: „nie podoba mi się ten design”).
+    private func portionsSection(_ model: RecipeDetailPortions) -> some View {
+        let total = PlanPortions.totalUnits(portionUnits)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            DetailSectionHeader(
+                eyebrow: "Razem \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))",
+                title: "Kto ile je",
+                accent: SCPalette.butter
+            ) { EmptyView() }
+
+            VStack(alignment: .leading, spacing: 8) {
+                DetailCard {
+                    VStack(spacing: 0) {
+                        if model.people.count > 1 {
+                            DetailPortionSplitBar(
+                                segments: model.people.map { person in
+                                    DetailPortionSplitBar.Segment(
+                                        id: person.memberId,
+                                        units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
+                                        color: person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
+                                    )
+                                }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                            .padding(.bottom, 4)
+                            .accessibilityHidden(true)
+                        }
+
+                        ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
+                            portionRow(person, model: model, isFirst: index == 0)
+                        }
+                    }
+                }
+                if !model.isEditable {
+                    Text(PlanPortions.readOnlyMessage)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(look.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func portionRow(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions, isFirst: Bool) -> some View {
+        let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
+        let isViewer = person.memberId == model.viewerId
+        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: units)).kcal.rounded())
+        let avatarSize: CGFloat = 36
+        // Z stepperem VoiceOver czyta wiersz osoby i stepper osobno; bez — jedno zdanie.
+        let spoken = "\(person.name), \(kcal) kilokalorii"
+            + (model.isEditable ? "" : ", \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))")
+
+        return HStack(spacing: 12) {
+            HStack(spacing: 12) {
+                ProfileAvatar(
+                    avatarUrl: person.member?.avatarUrl,
+                    displayName: person.name,
+                    size: avatarSize,
+                    colorIndex: person.member?.avatarColor,
+                    seed: person.memberId
+                )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(person.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(-0.2)
+                            .foregroundStyle(look.fg)
+                            .lineLimit(1)
+                        if isViewer {
+                            DetailPersonBadge(text: "TY")
+                        }
+                    }
+                    Text(verbatim: "\(kcal) kcal")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(look.muted)
+                        .contentTransition(.numericText(value: Double(kcal)))
+                        .animation(SCMotion.textRoll, value: kcal)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spoken)
+
+            if model.isEditable {
+                DetailServingsStepper(
+                    value: portionBinding(for: person.memberId),
+                    range: PlanPortions.unitsRange,
+                    label: { PlanPortions.label(units: $0) },
+                    accessibilityName: "Porcja: \(person.name)",
+                    accessibilityValueText: { PlanPortions.spokenServings(units: $0, plural: PolishPlural.servings) },
+                    next: { current, direction in
+                        PlanPortions.stepped(
+                            units: current,
+                            direction: direction,
+                            totalUnits: PlanPortions.totalUnits(draftPortions)
+                        )
+                    }
+                )
+            } else {
+                Text(PlanPortions.label(units: units))
+                    .font(.system(size: 17, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(look.fg)
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: model.isEditable ? .contain : .combine)
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) {
+            // Kreska od tekstu, nie od krawędzi — awatary stoją w jednej kolumnie.
+            if !isFirst {
+                DetailHairline()
+                    .padding(.leading, 16 + avatarSize + 12)
+            }
+        }
+    }
+
+    /// Stepper osoby pisze do szkicu; brak wpisu = 1 porcja (reguła serwera).
+    private func portionBinding(for memberId: String) -> Binding<Int> {
+        Binding(
+            get: { draftPortions[memberId] ?? PlanPortions.missingEntryUnits },
+            set: { draftPortions[memberId] = $0 }
+        )
+    }
+
+    /// Osoby, których porcja różni się od zapisanej.
+    private var changedPortions: [String: Int] {
+        let saved = personalPortions?.units ?? [:]
+        return draftPortions.filter { saved[$0.key] != $0.value }
     }
 
     // MARK: - Przygotowanie
@@ -396,12 +709,12 @@ struct RecipeDetailView: View {
     private var ingredientsSection: some View {
         // Gramatury są przeliczone tym samym współczynnikiem co makra wyżej —
         // i eyebrow mówi wprost, na ile porcji.
-        let scaled = recipe.ingredients(forServings: portions)
+        let scaled = recipe.ingredients(forServings: cookedServings)
         let groups = DetailIngredientGroup.make(from: scaled)
 
         return VStack(alignment: .leading, spacing: 12) {
             DetailSectionHeader(
-                eyebrow: PolishPlural.servings(servings),
+                eyebrow: ingredientsEyebrow,
                 title: "Składniki",
                 accent: SCPalette.indigo
             ) {
@@ -590,7 +903,7 @@ struct RecipeDetailView: View {
     }
 
     private var currentShoppingSignature: ShoppingSendState.Signature {
-        .init(missing: Set(missingIngredientIds), servings: servings)
+        .init(missing: Set(missingIngredientIds), servings: servingsUnits)
     }
 
     /// Wysłane i od tamtej pory nic się nie zmieniło — ani odhaczenia, ani
@@ -617,7 +930,8 @@ struct RecipeDetailView: View {
 
         let signature = currentShoppingSignature
         let weekStart = targetWeekStart
-        let requestedServings = servings
+        // Lista zakupów przyjmuje całe porcje — 1,5 idzie jako 2.
+        let requestedServings = wholeServings
         withAnimation { shoppingSend = .sending }
 
         Task { @MainActor in
@@ -839,7 +1153,11 @@ struct RecipeDetailView: View {
     private var isPrimaryActionEnabled: Bool {
         switch context {
         case .catalog: return true
-        case .planned: return servings != initialServings
+        case .planned:
+            if isPortionMode {
+                return personalPortions?.isEditable == true && !changedPortions.isEmpty
+            }
+            return servingsUnits != initialServings * PlanPortions.unitsPerServing
         }
     }
 
@@ -849,8 +1167,16 @@ struct RecipeDetailView: View {
             isAddToPlanPresented = true
         case .planned:
             guard !isSavingServings else { return }
+            if isPortionMode {
+                let changed = changedPortions
+                guard personalPortions?.isEditable == true, !changed.isEmpty else { return }
+                isSavingServings = true
+                onSavePortions?(draftPortions, changed)
+                onClose?()
+                return
+            }
             isSavingServings = true
-            onSaveServings?(servings)
+            onSaveServings?(wholeServings)
             onClose?()
         }
     }
@@ -865,7 +1191,8 @@ struct RecipeDetailView: View {
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         if let raw = environment["SCOFFIE_DEBUG_DETAIL_SERVINGS"], let count = Int(raw) {
-            servings = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, count))
+            let whole = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, count))
+            servingsUnits = whole * PlanPortions.unitsPerServing
         }
         if let raw = environment["SCOFFIE_DEBUG_DETAIL_HAVE"], let count = Int(raw) {
             let ordered = DetailIngredientGroup.make(from: recipe.ingredients).flatMap(\.ingredients)
@@ -888,6 +1215,7 @@ private enum ShoppingSendState: Equatable {
     /// coś się zmieniło.
     struct Signature: Equatable {
         let missing: Set<UUID>
+        /// Porcje w jednostkach 1/20 — 1,5 i 2 to różne wysyłki.
         let servings: Int
     }
 
@@ -1217,15 +1545,83 @@ private struct DetailHairline: View {
     }
 }
 
+// MARK: - Porcje osób
+
+/// Podział garnka: odcinek na osobę, szerokość = jej porcja, kolor = kolor
+/// jej awatara. Odcinki przesuwają się razem ze stepperem.
+private struct DetailPortionSplitBar: View {
+    struct Segment: Identifiable {
+        let id: String
+        let units: Int
+        let color: Color
+    }
+
+    let segments: [Segment]
+
+    private static let gap: CGFloat = 3
+    private static let height: CGFloat = 8
+
+    var body: some View {
+        GeometryReader { proxy in
+            let total = max(1, segments.reduce(0) { $0 + $1.units })
+            let usable = max(0, proxy.size.width - Self.gap * CGFloat(max(0, segments.count - 1)))
+
+            HStack(spacing: Self.gap) {
+                ForEach(segments) { segment in
+                    Capsule()
+                        .fill(segment.color)
+                        .frame(width: usable * CGFloat(segment.units) / CGFloat(total))
+                }
+            }
+        }
+        .frame(height: Self.height)
+        .animation(.snappy(duration: 0.3), value: segments.map(\.units))
+    }
+}
+
+/// „TY” przy imieniu — ta sama plakietka co przy domownikach w Ustawieniach.
+private struct DetailPersonBadge: View {
+    let text: String
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .heavy))
+            .tracking(0.8)
+            .foregroundStyle(SCPalette.terracotta)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
+            .fixedSize()
+    }
+}
+
 // MARK: - Stepper porcji
 
 /// `DStepper` z wartością: „−  1  +” na pigułce. Minus gaśnie na dolnej
 /// granicy, plus świeci terakotą. Cyfra przewija się w miejscu, a każde
 /// stuknięcie daje krótki takt.
+///
+/// Ten sam stepper liczy porcje łączne (co 1) i porcję osoby (jednostki
+/// 1/20, co 0,5 — `PlanPortions.stepped`): krok, etykietę i opis dla
+/// VoiceOver podaje wołający.
 private struct DetailServingsStepper: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
+    var label: (Int) -> String = { "\($0)" }
+    var accessibilityName: String = "Liczba porcji"
+    var accessibilityValueText: (Int) -> String = { PolishPlural.servings($0) }
+    /// Wartość po kroku w stronę `direction` (+1 / −1) albo `nil`, gdy krok
+    /// jest niedozwolony. Domyślnie ±1 w widełkach `range`.
+    var next: ((Int, Int) -> Int?)? = nil
     var onChange: () -> Void = {}
+
+    private func target(_ direction: Int) -> Int? {
+        if let next { return next(value, direction) }
+        let candidate = min(range.upperBound, max(range.lowerBound, value + direction))
+        return candidate == value ? nil : candidate
+    }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -1233,18 +1629,18 @@ private struct DetailServingsStepper: View {
         let look = DetailLook(scheme: scheme)
 
         HStack(spacing: 0) {
-            stepButton(systemName: "minus", enabled: value > range.lowerBound, look: look) {
+            stepButton(systemName: "minus", enabled: target(-1) != nil, look: look) {
                 adjust(by: -1)
             }
 
-            Text("\(value)")
+            Text(label(value))
                 .font(.system(size: 16, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(look.fg)
                 .frame(minWidth: 28)
                 .contentTransition(.numericText(value: Double(value)))
 
-            stepButton(systemName: "plus", enabled: value < range.upperBound, look: look) {
+            stepButton(systemName: "plus", enabled: target(1) != nil, look: look) {
                 adjust(by: 1)
             }
         }
@@ -1252,8 +1648,8 @@ private struct DetailServingsStepper: View {
         .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Liczba porcji")
-        .accessibilityValue(PolishPlural.servings(value))
+        .accessibilityLabel(accessibilityName)
+        .accessibilityValue(accessibilityValueText(value))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: adjust(by: 1)
@@ -1263,9 +1659,8 @@ private struct DetailServingsStepper: View {
         }
     }
 
-    private func adjust(by delta: Int) {
-        let next = min(range.upperBound, max(range.lowerBound, value + delta))
-        guard next != value else { return }
+    private func adjust(by direction: Int) {
+        guard let next = target(direction), next != value else { return }
         withAnimation(.snappy(duration: 0.25)) { value = next }
         onChange()
     }

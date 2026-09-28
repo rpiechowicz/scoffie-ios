@@ -1,17 +1,24 @@
 import SwiftUI
 
-/// Karta wyniku nieudanej tury — 1:1 z makietą „13 · Timeout”: spokojnie,
-/// bez alertu i bez czerwieni. Znak marki w szarości, eyebrow, plakietka
-/// „Przerwane”; tytuł mówi, co się stało; drugie zdanie — co się NIE
-/// stało („Nic nie zmieniłem w planie.”, tylko gdy to prawda); trzecie —
-/// „Spróbujmy mniejszy zakres.”; pigułki z mniejszym zakresem;
-/// „Spróbuj ponownie” jako poboczna w stopce.
+/// Karta wyniku nieudanej tury — spokojnie, bez alertu i bez czerwieni.
+///
+/// Od 27.09.2026 (Rafał: „dopracuj design i żeby nie przeskakiwało”) w stroju
+/// nagłówków arkuszy: kafelek z ikoną sytuacji · cichy eyebrow · tytuł
+/// w pierwszej osobie, bez kropki. Pod spodem JEDNO zdanie — dawniej tytuł
+/// „Nie udało się dokończyć.”, pogrubione „Nic nie zmieniłem w planie.”
+/// i zdanie z mappera „…nie mógł dokończyć zadania” mówiły trzy razy to samo,
+/// a eyebrow i plakietka „Przerwane” — dwa razy. „Nic nie zmieniłem w planie”
+/// jest teraz etykietą w szałwii („Plan bez zmian”, tylko gdy to prawda),
+/// a „Spróbuj ponownie” — główną akcją w wariancie „soft”, bez kreski nad nią.
+/// Przy przekroczonym czasie i „Stop” — pigułki z mniejszym zakresem.
+///
+/// Wejście (łagodne, z opóźnieniem po zwinięciu wiersza „myślę”) ustawia
+/// slot tury w `AssistantView`, nie karta.
 struct AssistantOutcomeCard: View {
     /// Kod porażki tury (`AgentStore.lastTurnErrorCode`); `nil` = błąd
     /// wysyłki, nie tury.
     let code: String?
-    /// Zdanie z mappera — zostaje jako druga linia, gdy karta nie ma
-    /// własnego nagłówka dla tego kodu.
+    /// Zdanie z mappera — opis pod tytułem, gdy karta nie ma własnego.
     let message: String
     /// Czy tura zdążyła coś zapisać.
     let wrote: Bool
@@ -38,13 +45,13 @@ struct AssistantOutcomeCard: View {
         }
     }
 
-    private var headline: String {
+    private var icon: String {
         switch shape {
-        case .timeout: return "To trwało za długo."
-        case .cancelled: return "Zatrzymane."
-        case .limited: return "Pula wykorzystana."
-        case .failed: return "Nie udało się dokończyć."
-        case .delivery: return "Wiadomość nie doszła."
+        case .timeout: return "hourglass"
+        case .cancelled: return "pause.fill"
+        case .limited: return "gauge.with.dots.needle.33percent"
+        case .failed: return "exclamationmark.bubble"
+        case .delivery: return "wifi.exclamationmark"
         }
     }
 
@@ -53,20 +60,34 @@ struct AssistantOutcomeCard: View {
         case .timeout: return "Przekroczony czas"
         case .cancelled: return "Zatrzymano"
         case .limited: return "Limit"
-        case .failed: return "Nie dokończono"
+        case .failed: return "Przerwane"
         case .delivery: return "Wysyłka"
         }
     }
 
-    private var badge: String {
-        shape == .limited ? "Limit" : "Przerwane"
+    private var headline: String {
+        switch shape {
+        case .timeout: return "To trwało za długo"
+        case .cancelled: return "Zatrzymałem się"
+        case .limited: return "Pula wykorzystana"
+        case .failed: return "Nie dokończyłem odpowiedzi"
+        case .delivery: return "Wiadomość nie doszła"
+        }
     }
 
-    /// Czy pokazać własne zdanie z mappera pod nagłówkiem.
-    private var showsMessage: Bool {
+    /// Porażka po stronie serwera bez konkretu dla użytkownika — zdanie
+    /// z mappera powtarzałoby tytuł („nie mógł dokończyć zadania”).
+    private static let genericFailures: Set<String> = ["AI_PROVIDER_ERROR", "INTERNAL_ERROR"]
+
+    /// JEDNO zdanie pod tytułem.
+    private var detail: String? {
         switch shape {
-        case .timeout, .cancelled: return false
-        case .limited, .failed, .delivery: return true
+        case .timeout, .cancelled:
+            return "Spróbujmy mniejszego zakresu."
+        case .failed where Self.genericFailures.contains(code ?? ""):
+            return "Coś zacięło się po mojej stronie. Spróbuj jeszcze raz za chwilę."
+        case .failed, .limited, .delivery:
+            return message.isEmpty ? nil : message
         }
     }
 
@@ -89,78 +110,84 @@ struct AssistantOutcomeCard: View {
         }
     }
 
+    /// „Spróbuj ponownie” — wysyłka, która nie doszła, albo nowa tura.
+    private var retryAction: AssistantCardAction? {
+        if let onRetry {
+            return AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onRetry)
+        }
+        if let onAskAgain, shape != .limited {
+            return AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onAskAgain)
+        }
+        return nil
+    }
+
     var body: some View {
+        let action = retryAction
         AssistantCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center, spacing: 10) {
-                    HStack(spacing: 8) {
-                        SCMarkShape()
-                            .fill(AssistantLook.ink(scheme).opacity(0.35))
-                            .frame(width: 16, height: 16)
-                            .accessibilityHidden(true)
-                        Text(eyebrow)
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(0.9)
-                            .textCase(.uppercase)
-                            .foregroundStyle(AssistantLook.faint(scheme))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Text(badge)
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(0.3)
-                        .foregroundStyle(AssistantLook.faint(scheme))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(AssistantLook.quietTint(scheme)))
-                }
+                header
 
-                Text(headline)
-                    .font(.system(size: 21, weight: .bold))
-                    .tracking(-0.5)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-
-                if !wrote {
-                    Text("Nic nie zmieniłem w planie.")
-                        .font(.system(size: 15.5, weight: .semibold))
-                        .tracking(-0.3)
-                        .foregroundStyle(AssistantLook.ink(scheme))
-                        .padding(.top, 6)
-                }
-
-                if showsMessage, !message.isEmpty {
-                    Text(message)
-                        .font(.system(size: 14))
-                        .lineSpacing(2)
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 15))
+                        .lineSpacing(3)
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 2)
+                        .padding(.top, 12)
+                }
+
+                if !wrote {
+                    SCTag(title: "Plan bez zmian", icon: "checkmark.shield.fill", accent: SCPalette.sage)
+                        .padding(.top, 12)
+                        .accessibilityLabel("Nic nie zmieniłem w planie")
                 }
 
                 if offersSmallerScope {
-                    Text("Spróbujmy mniejszy zakres.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AssistantLook.muted(scheme))
-                        .padding(.top, 2)
-
                     AssistantQuickReplies(items: scopePrompts) { onAsk(Self.prompt(for: $0)) }
                         .padding(.top, 14)
                 }
             }
             .padding(.horizontal, AssistantCardMetrics.inset)
-            .padding(.vertical, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 16)
             .accessibilityElement(children: .combine)
 
-            if let onRetry {
-                AssistantCardActions(
-                    secondary: AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onRetry)
+            if let action {
+                // Główna, nie poboczna: na karcie porażki to jest TA akcja.
+                // Wprost w treści, bez stopki `AssistantCardActions` — jej
+                // pas tła ma sens tylko z kreską nad nim, a kreska dzieliła
+                // tę małą kartę na dwie.
+                AssistantPrimaryButton(action: action, size: .compact)
+                    .padding(.horizontal, AssistantCardMetrics.inset)
+                    .padding(.bottom, AssistantCardMetrics.inset)
+            }
+        }
+    }
+
+    /// Kafelek z ikoną sytuacji, eyebrow i tytuł — jak nagłówek arkusza.
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(AssistantLook.quietTint(scheme))
+                .frame(width: 38, height: 38)
+                .overlay(
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AssistantLook.muted(scheme))
                 )
-            } else if let onAskAgain, shape != .limited {
-                AssistantCardActions(
-                    secondary: AssistantCardAction(title: "Spróbuj ponownie", icon: "arrow.clockwise", action: onAskAgain)
-                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(eyebrow.uppercased())
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(AssistantLook.faint(scheme))
+                    .lineLimit(1)
+                Text(headline)
+                    .font(.system(size: 17, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(AssistantLook.ink(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

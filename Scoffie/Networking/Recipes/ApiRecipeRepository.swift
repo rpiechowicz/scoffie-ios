@@ -17,6 +17,47 @@ final class ApiRecipeRepository: RecipeRepository {
         )
     }
 
+    /// Niemapowalny przepis albo niekompletna strona odrzuca cały przebieg
+    /// (`CatalogSyncMapping`) — katalog i rewizja zostają, jakie były.
+    func fetchCatalogSnapshotPage(revision: String?, cursor: String?, limit: Int) async throws -> CatalogSnapshotPage<Recipe> {
+        let dto = try await client.fetchCatalogSnapshot(revision: revision, cursor: cursor, limit: limit)
+        return try CatalogSyncMapping.snapshotPage(dto, map: Self.catalogRecipe)
+    }
+
+    func fetchCatalogChangesPage(sinceRevision: String, untilRevision: String?, cursor: String?, limit: Int) async throws -> CatalogChangesPage<Recipe> {
+        let dto = try await client.fetchCatalogChanges(
+            sinceRevision: sinceRevision,
+            untilRevision: untilRevision,
+            cursor: cursor,
+            limit: limit
+        )
+        return try CatalogSyncMapping.changesPage(dto, sinceRevision: sinceRevision, map: Self.catalogRecipe)
+    }
+
+    func fetchHouseholdRecipeState() async throws -> HouseholdRecipeState {
+        let dto = try await client.fetchHouseholdRecipeState()
+        return HouseholdRecipeState(
+            recipes: dto.recipes.compactMap { $0.toAppRecipe() },
+            favoriteRecipeIds: Set(dto.favoriteRecipeIds.compactMap { UUID(uuidString: $0) })
+        )
+    }
+
+    /// Klucz przepisu w stanie katalogu — patrz `CatalogSyncMapping.key`.
+    static func catalogKey(_ id: String) -> String { CatalogSyncMapping.key(id) }
+
+    /// DTO → przepis publicznego katalogu (bez serca); `nil` = niemapowalny.
+    static func catalogRecipe(_ dto: BackendRecipeDTO) -> Recipe? {
+        dto.toAppRecipe().map(catalogCopy)
+    }
+
+    /// Publiczny katalog nie niesie ulubionych (to stan DOMU) — kopia bez serca,
+    /// żeby plik katalogu, który przeżywa wylogowanie, nie trzymał cudzych ulubionych.
+    static func catalogCopy(_ recipe: Recipe) -> Recipe {
+        var copy = recipe
+        copy.favourite = false
+        return copy
+    }
+
     func fetchRecipeById(_ recipeId: UUID) async throws -> Recipe {
         let id = recipeId.uuidString
         guard !id.isEmpty else { throw RecipeDataError.invalidRecipeId }

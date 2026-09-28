@@ -61,6 +61,8 @@ struct PlanSlotPickerSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.mealCalendarStore) private var mealStore
+    /// Wybór z karty `PlanSlotConflictCard` — domyślnie zamiana.
+    @State private var conflictChoice: PlanSlotConflictChoice = .replace
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
@@ -174,6 +176,53 @@ struct PlanSlotPickerSheet: View {
     /// żeby oba wejścia do planu wysyłały identyczny payload.
     private var participantsToSave: [String] {
         PlanAudienceChips.collapsed(selectedParticipants, members: roster)
+    }
+
+    // MARK: - Inne danie w tej porze
+
+    /// Kto je posiłek: „Wspólne” = cały skład domu. Tylko obecni domownicy —
+    /// id kogoś, kto wyszedł z domu, zamieniłoby zawężone danie we „Wspólne”.
+    private func eaters(of meal: PlanMeal) -> Set<String> {
+        let current = Set(roster.map(\.id))
+        return meal.isShared ? current : Set(meal.participantIds).intersection(current)
+    }
+
+    /// Kto dostanie wybrane danie.
+    private var audienceIds: Set<String> {
+        participantsToSave.isEmpty ? Set(roster.map(\.id)) : Set(participantsToSave)
+    }
+
+    /// INNE dania w tej porze, które je ktoś z wybranych — o nich jest karta
+    /// „Zamień / Dodaj obok”. Ten sam przepis łączy osoby sam (`merged`),
+    /// a edytowany posiłek podmienia się jak dotąd.
+    private var slotConflicts: [PlanMeal] {
+        guard let recipe = selectedRecipe else { return [] }
+        let audience = audienceIds
+        return mealStore.meals(for: date, slot: slot).filter { meal in
+            meal.recipe.id != recipe.id
+                && meal.recipe.id != editing?.recipe.id
+                && !eaters(of: meal).isDisjoint(with: audience)
+        }
+    }
+
+    private var replacesConflicts: Bool {
+        !slotConflicts.isEmpty && conflictChoice == .replace
+    }
+
+    /// „ANIA MA JUŻ”, „ANIA I RAFAŁ MAJĄ JUŻ”, „CAŁY DOM MA JUŻ”, „MASZ JUŻ”.
+    private var conflictOwners: String {
+        let ids = slotConflicts.reduce(into: Set<String>()) { $0.formUnion(eaters(of: $1)) }
+            .intersection(audienceIds)
+        if roster.count <= 1 { return "MASZ JUŻ" }
+        if ids.count >= roster.count { return "CAŁY DOM MA JUŻ" }
+        let names = roster.filter { ids.contains($0.id) }
+            .map { ($0.displayName.split(separator: " ").first.map(String.init) ?? $0.displayName).uppercased() }
+        switch names.count {
+        case 0: return "MA JUŻ"
+        case 1: return "\(names[0]) MA JUŻ"
+        case 2: return "\(names[0]) I \(names[1]) MAJĄ JUŻ"
+        default: return "\(names.count) OSOBY MAJĄ JUŻ"
+        }
     }
 
     private var selectedRecipe: Recipe? {
@@ -419,6 +468,19 @@ struct PlanSlotPickerSheet: View {
 
             audience
 
+            // Inne danie w tej porze dla kogoś z wybranych — decyzja nad
+            // przyciskiem, zanim cokolwiek się zapisze.
+            if !slotConflicts.isEmpty {
+                PlanSlotConflictCard(
+                    slot: slot,
+                    meals: slotConflicts,
+                    whoHasIt: conflictOwners,
+                    replacesForEveryone: participantsToSave.isEmpty && roster.count > 1,
+                    choice: $conflictChoice
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
             // Ten sam przycisk, co w każdym innym arkuszu aplikacji: terakota
             // w wariancie „soft” (tint + obwódka, bez gradientu i cienia).
             EditorialPrimaryActionButton(
@@ -490,11 +552,13 @@ struct PlanSlotPickerSheet: View {
     }
 
     private var ctaTitle: String {
+        if replacesConflicts { return "Zamień w planie" }
         guard let editing else { return "Dodaj do planu" }
         return selectedRecipeId == editing.recipe.id ? "Zapisz zmiany" : "Zamień przepis"
     }
 
     private var ctaIcon: String {
+        if replacesConflicts { return "arrow.2.squarepath" }
         guard let editing else { return "plus" }
         return selectedRecipeId == editing.recipe.id ? "checkmark" : "arrow.2.squarepath"
     }
@@ -529,8 +593,21 @@ struct PlanSlotPickerSheet: View {
             $0.recipe.id == recipe.id && $0.recipe.id != editing?.recipe.id
         }
         let participants = PlanAudienceChips.merged(participantsToSave, with: existing, members: roster)
+        // „Zamień”: inne dania w porze tracą osoby, które dostają nowe —
+        // danie bez nikogo znika, a ktoś spoza wyboru zostaje przy swoim.
+        let audience = audienceIds
+        let displaced: [(meal: PlanMeal, keep: [String])] = replacesConflicts
+            ? slotConflicts.map { meal in
+                (meal: meal, keep: PlanAudienceChips.collapsed(eaters(of: meal).subtracting(audience), members: roster))
+            }
+            : []
+        let displacedEmpty = Set(displaced.filter { eaters(of: $0.meal).isSubset(of: audience) }.map { $0.meal.recipe.id })
+        let memberCount: Int? = roster.isEmpty ? nil : roster.count
+        let day = date
+        let mealSlot = slot
+        let week = weekStartISO
         Task { @MainActor in
-            _ = await store.upsertWeekSlot(
+            let saved = await store.upsertWeekSlot(
                 recipe: recipe,
                 participantIds: participants,
                 // Ten arkusz nie ma steppera porcji, więc świadomie nie wysyła
@@ -552,6 +629,26 @@ struct PlanSlotPickerSheet: View {
                 slot: slot,
                 weekStart: weekStartISO
             )
+            // Nowe danie się nie zapisało — stare zostaje, nikt nie zostaje
+            // bez posiłku.
+            guard saved else {
+                completion?()
+                return
+            }
+            for entry in displaced {
+                if displacedEmpty.contains(entry.meal.recipe.id) {
+                    _ = await store.removeWeekSlot(for: day, slot: mealSlot, weekStart: week, recipe: entry.meal.recipe)
+                } else {
+                    _ = await store.upsertWeekSlot(
+                        recipe: entry.meal.recipe,
+                        participantIds: entry.keep,
+                        householdMemberCount: memberCount,
+                        for: day,
+                        slot: mealSlot,
+                        weekStart: week
+                    )
+                }
+            }
             completion?()
         }
         dismiss()

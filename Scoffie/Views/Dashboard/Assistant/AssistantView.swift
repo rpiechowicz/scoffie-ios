@@ -122,9 +122,21 @@ struct AssistantView: View {
     }
     /// Odpowiedź asystenta w trakcie zgłaszania („Zgłoś odpowiedź").
     @State private var reporting: AgentChatMessage?
+    /// Odpowiedź, której przebieg („Myślałem 42 s ›”) jest otwarty.
+    @State private var thinkingOf: AgentChatMessage?
+    /// Odpowiedź i kierunek oceny, do których piszemy podpowiedź („Co było
+    /// dobre?” / „Co nie zagrało?”).
+    @State private var suggesting: SuggestionTarget?
+    /// Pytanie z odpowiedzią w aplikacji (lista zakupów, przepis) — karta
+    /// nad polem zamiast tury (`AssistantAppShortcut`).
+    @State private var appShortcut: AssistantAppShortcut?
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
+    /// Krycie cienia pod nagłówkiem, 0…1 — rośnie RAZEM z przesunięciem listy
+    /// (pełne po `headerShadeRamp`), co 1/12. Przełącznik z animacją 0,22 s
+    /// spóźniał się przy szybkim przewijaniu i cień „wskakiwał” po chwili.
+    @State private var headerShade: CGFloat = 0
     /// Rozwinięte karty tygodnia i listy kroków — PO ID WIADOMOŚCI, nie
     /// w `@State` wiersza: odpowiedź ostatniej tury rysuje slot, a po
     /// następnym pytaniu ta sama wiadomość przechodzi do części przed
@@ -140,7 +152,11 @@ struct AssistantView: View {
     /// pytanie dodawało ~60 pt, mniej niż luz, i tego nie było.
     @State private var isAutoScrolling = false
     @State private var autoScrollGeneration = 0
+    /// Rozmowa idzie za pisaną odpowiedzią — do chwili, w której użytkownik
+    /// sam chwyci listę (czyta coś wyżej). Wraca z następnym pytaniem.
+    @State private var followsAnswer = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toasts) private var toasts
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.scTabIsActive) private var isActiveTab
     @FocusState private var isComposerFocused: Bool
@@ -191,14 +207,26 @@ struct AssistantView: View {
                         .transition(.assistantIntroStep)
                 } else {
                     VStack(spacing: 0) {
-                        header
                         // Pole jako wcięcie bezpiecznego obszaru, nie wiersz
                         // pod listą: rozmowa przewija się POD szkłem pola
                         // i widać ją przez nie — tak samo jak pod dolnym menu,
                         // nad którym pole stoi. To jest cała różnica między
                         // „pole w stylu iOS" a paskiem z kreską.
+                        //
+                        // Nagłówek tak samo (27.09.2026, Rafał: „od góry daj
+                        // ten shadow jak na detail meal, a nie taki divider”):
+                        // rozmowa przejeżdża POD nim i gaśnie w cieniu
+                        // krawędzi, zamiast urywać się twardą linią na jego
+                        // dolnym brzegu.
                         conversation
                             .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                            .safeAreaInset(edge: .top, spacing: 0) {
+                                header
+                                    .background(alignment: .top) {
+                                        AssistantHeaderShade()
+                                            .opacity(isConversationEmpty || store.isUnavailable ? 0 : headerShade)
+                                    }
+                            }
                     }
                     // Tytuł ma siadać 78 pt od GÓRY EKRANU — dokładnie tam,
                     // gdzie na pozostałych zakładkach. Tam robi to ScrollView
@@ -332,6 +360,21 @@ struct AssistantView: View {
         .sheet(item: $reporting) { message in
             AssistantReportSheet(message: message) { reason, comment in
                 await store.report(messageId: message.id, reason: reason, comment: comment)
+            }
+        }
+        .sheet(item: $suggesting) { target in
+            AssistantSuggestionSheet(message: target.message, rating: target.rating) { tags, comment in
+                await store.suggest(
+                    messageId: target.message.id,
+                    rating: target.rating,
+                    tags: tags,
+                    comment: comment
+                )
+            }
+        }
+        .sheet(item: $thinkingOf) { message in
+            if let thinking = message.thinking {
+                AssistantThinkingSheet(thinking: thinking)
             }
         }
         .alert("Usunąć historię rozmów?", isPresented: $showDeleteAlert) {
@@ -688,7 +731,10 @@ struct AssistantView: View {
             guard let briefingSlot = AssistantBriefingSlot(rawValue: slot.rawValue) else { continue }
             let visible = visibleMeals(on: date, slot: slot)
             guard let meal = visible.first else { continue }
-            let nutrition = meal.nutritionPerPerson(knownHouseholdMemberCount: memberCount)
+            let nutrition = meal.nutritionPerPerson(
+                knownHouseholdMemberCount: memberCount,
+                memberId: sessionStore.currentUserId
+            )
             meals.append(
                 AssistantBriefingDay.Meal(
                     slot: briefingSlot,
@@ -749,7 +795,8 @@ struct AssistantView: View {
             let day = PlanDayNutrition.make(
                 slots: slots,
                 meals: { visibleMeals(on: date, slot: $0) },
-                knownHouseholdMemberCount: memberCount
+                knownHouseholdMemberCount: memberCount,
+                memberId: sessionStore.currentUserId
             )
             guard !day.isEmpty else { continue }
             total += day.total.protein
@@ -904,6 +951,23 @@ struct AssistantView: View {
         } action: { _, atBottom in
             isPinnedToBottom = atBottom
         }
+        .onScrollPhaseChange { _, phase in
+            // Palec na liście = użytkownik czyta sam; nie ciągniemy go za
+            // pisaną odpowiedzią.
+            if phase == .interacting { followsAnswer = false }
+        }
+        // Cień pod nagłówkiem idzie za listą — patrz `headerShade`.
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            // Stopniami co 1/12: stan zmienia się najwyżej 12 razy na
+            // pierwszych punktach przewijania, potem stoi — nie w każdej klatce.
+            let travel = geometry.contentOffset.y + geometry.contentInsets.top
+            let ratio = min(1, max(0, travel / Self.headerShadeRamp))
+            return (ratio * 12).rounded() / 12
+        } action: { _, shade in
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { headerShade = shade }
+        }
 
         let triggered = withScrollTriggers(scroll, proxy: proxy)
         // Wibracja tylko przy NOWEJ odpowiedzi i przy NOWYM błędzie.
@@ -929,6 +993,9 @@ struct AssistantView: View {
     /// Ta sama wartość w historii i w slocie ostatniej tury, inaczej slot
     /// przeskoczyłby przy przejściu do historii.
     static let messageGap: CGFloat = 22
+
+    /// Po tylu punktach przewinięcia cień pod nagłówkiem jest pełny.
+    static let headerShadeRamp: CGFloat = 24
 
     private var messageStack: some View {
         LazyVStack(alignment: .leading, spacing: Self.messageGap) {
@@ -984,7 +1051,16 @@ struct AssistantView: View {
                 // jedno, więc liczba stoi w miejscu.
                 guard store.isSending, store.hasLiveTurnSlot,
                       store.messages.last?.author == .user else { return }
+                followsAnswer = true
                 scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
+            }
+            .onChange(of: store.draftText) { _, draft in
+                // Porcja szkicu (najwyżej raz na sekundę) rezerwuje w układzie
+                // miejsce na swój tekst — rozmowa idzie za nią, aż początek
+                // odpowiedzi dojdzie pod górną krawędź; potem `scrollTo` nic
+                // już nie rusza. Tylko dopóki użytkownik nie przewinął sam.
+                guard !draft.isEmpty, followsAnswer, let answer = store.draftMessage else { return }
+                scroll(proxy, to: answer.anchorID, anchor: .top)
             }
             .onChange(of: store.messages.count) { old, _ in
                 // Własne pytanie ma swoje przewinięcie wyżej (`slotKey`)
@@ -998,13 +1074,14 @@ struct AssistantView: View {
                 }
                 if old == 0 {
                     scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
-                } else if old < store.messages.count,
+                } else if old < store.messages.count, followsAnswer,
                           let last = store.messages.last, last.author == .assistant {
-                    // Nowa odpowiedź rośnie od dolnej krawędzi w dół
-                    // (dopisuje się znak po znaku), więc jej początek
-                    // idzie pod górną krawędź — `scrollTo` i tak zatrzyma
-                    // się na końcu treści, gdy odpowiedź jest krótka.
-                    scroll(proxy, to: last.id, anchor: .top)
+                    // Gotowa odpowiedź ma już całe miejsce w układzie (pisze
+                    // się w nim), więc jej początek idzie pod górną krawędź —
+                    // `scrollTo` i tak zatrzyma się na końcu treści, gdy
+                    // odpowiedź jest krótka. Ten sam widok, co szkic
+                    // (`anchorID`), więc to ruch w dół, nie przeskok.
+                    scroll(proxy, to: last.anchorID, anchor: .top)
                 }
             }
             .onChange(of: store.isSending) { _, sending in
@@ -1024,12 +1101,13 @@ struct AssistantView: View {
             }
             .onChange(of: isComposerFocused) { _, focused in
                 guard focused, let last = store.messages.last else { return }
-                scroll(proxy, to: last.id, anchor: .bottom)
+                scroll(proxy, to: last.anchorID, anchor: .bottom)
             }
     }
 
     private func scrollToBottomPill(_ proxy: ScrollViewProxy) -> some View {
         Button {
+            followsAnswer = true
             scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
         } label: {
             Image(systemName: "arrow.down")
@@ -1144,15 +1222,20 @@ struct AssistantView: View {
     }
 
     /// Przykład w polu: na pustym ekranie pasuje do sytuacji z powitania
-    /// („Np. mam kurczaka i paprykę”), w rozmowie — zwykłe zaproszenie.
+    /// („Np. mam kurczaka i paprykę”), w rozmowie — do OSTATNIEJ odpowiedzi
+    /// (`AssistantComposerHint`: propozycja, zapis, dania do wyboru…).
     private var composerPrompt: String {
         if store.isUnavailable { return "Asystent jest teraz niedostępny" }
         if store.isLocked { return "Chwila przerwy — spróbuj za moment" }
-        if isConversationEmpty, editing == nil {
+        if editing != nil { return "Popraw pytanie…" }
+        if isConversationEmpty {
             let example = briefing.placeholder
             if !example.isEmpty { return example }
         }
-        return "Napisz do asystenta…"
+        return AssistantComposerHint.text(
+            after: store.messages.last(where: { $0.author == .assistant }),
+            isSending: store.isSending
+        )
     }
 
     // MARK: - Pole wiadomości
@@ -1162,6 +1245,19 @@ struct AssistantView: View {
             if editing != nil {
                 editingBar
                     .transition(.opacity)
+            }
+
+            if let appShortcut {
+                AssistantAppShortcutCard(
+                    shortcut: appShortcut,
+                    onOpen: { openShortcut(appShortcut) },
+                    onAskAnyway: {
+                        self.appShortcut = nil
+                        send(force: true)
+                    },
+                    onDismiss: { self.appShortcut = nil }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             // Wykorzystana pula na próbę: pole, w które nie da się pisać, jest
@@ -1229,6 +1325,10 @@ struct AssistantView: View {
             .focused($isComposerFocused)
             .disabled(store.isUnavailable || store.isLocked)
             .submitLabel(.send)
+            // Zmiana pytania zdejmuje kartę „masz to w aplikacji”.
+            .onChange(of: draft) { _, _ in
+                if appShortcut != nil { appShortcut = nil }
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
             .frame(minHeight: 50)
@@ -1370,9 +1470,17 @@ struct AssistantView: View {
         let originalText: String
     }
 
-    private func send() {
+    /// `force` = „Zapytaj mimo to” z karty `AssistantAppShortcut`.
+    private func send(force: Bool = false) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, store.canSend else { return }
+
+        // Lista zakupów i przepis krok po kroku są w aplikacji — zamiast
+        // płatnej tury karta z przejściem. Tekst zostaje w polu.
+        if !force, editing == nil, let shortcut = AssistantAppShortcut.match(text) {
+            withAnimation(.smooth(duration: 0.25)) { appShortcut = shortcut }
+            return
+        }
 
         let edited = editing
         draft = ""
@@ -1391,6 +1499,21 @@ struct AssistantView: View {
                     weekStart: datesViewModel.weekStartISO
                 )
             }
+        }
+    }
+
+    /// Przejście z karty `AssistantAppShortcut` do ekranu z odpowiedzią.
+    private func openShortcut(_ shortcut: AssistantAppShortcut) {
+        appShortcut = nil
+        draft = ""
+        isComposerFocused = false
+        switch shortcut {
+        case .shopping:
+            // Lista zakupów jest arkuszem w Planie, więc sama zakładka to za mało.
+            sessionStore.opensShoppingList = true
+            sessionStore.dashboardTab = .plan
+        case .recipe:
+            sessionStore.dashboardTab = .recipes
         }
     }
 
@@ -1448,9 +1571,19 @@ struct AssistantView: View {
         store.messages.last { $0.author == .user }?.text
     }
 
+    /// „Spróbuj ponownie” po nieudanej turze — drogą „Popraw pytanie” (27.09.2026):
+    /// serwer chowa nieudane pytanie i zadaje je od nowa w jego miejscu.
+    /// Dawniej szło jako nowa wiadomość i rozmowa miała to samo pytanie dwa
+    /// razy pod rząd, a nad nim nic.
     private func askAgain() {
-        guard let text = lastUserText else { return }
-        ask(text)
+        guard let last = store.messages.last(where: { $0.author == .user }) else { return }
+        Task {
+            await store.editMessage(
+                messageId: last.id,
+                text: last.text,
+                weekStart: datesViewModel.weekStartISO
+            )
+        }
     }
 
     private func scroll(_ proxy: ScrollViewProxy, to id: String?, anchor: UnitPoint) {
@@ -1509,6 +1642,20 @@ struct AssistantView: View {
         return "assistant.slot." + store.messages[index].id
     }
 
+    /// Wejście karty porażki tury: z opóźnieniem po zwinięciu wiersza „myślę”,
+    /// przenikanie + 10 pt w górę + ledwie widoczne powiększenie. Wyjście
+    /// (np. „Spróbuj ponownie”) — samo krótkie przenikanie.
+    private var outcomeTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .asymmetric(
+            insertion: .opacity
+                .combined(with: .offset(y: 10))
+                .combined(with: .scale(scale: 0.98, anchor: .top))
+                .animation(.smooth(duration: 0.5).delay(0.18)),
+            removal: .opacity.animation(.easeOut(duration: 0.18))
+        )
+    }
+
     /// Jawna właściwość zamiast `reduceMotion ? nil : …` w argumencie (SE-0418).
     private var slotAnimation: Animation? {
         if reduceMotion { return nil }
@@ -1540,7 +1687,6 @@ struct AssistantView: View {
             showsThinking: showsThinking,
             isEditing: editing?.id == message.id,
             isCardExpanded: expansion(of: message.id, in: $expandedCards),
-            isThoughtExpanded: expansion(of: message.id, in: $expandedThoughts),
             onOpenPlan: { sessionStore.dashboardTab = .plan },
             onOpenShopping: {
                 // Lista zakupów jest arkuszem w Planie, więc sama zakładka
@@ -1560,35 +1706,40 @@ struct AssistantView: View {
             onAsk: { prompt in ask(prompt) },
             onEdit: { beginEditing(message) },
             onReport: { reporting = message },
+            onShowThinking: { thinkingOf = message },
+            onSuggest: { rating in suggesting = SuggestionTarget(message: message, rating: rating) },
+            onRate: { rating in
+                Task {
+                    if let problem = await store.setFeedback(rating, for: message.id) {
+                        toasts.show(SCToast(style: .error, title: "Nie zapisałem oceny", message: problem))
+                    }
+                }
+            },
             onRevealed: { store.markRevealed(id: message.id) },
             onCompose: { isComposerFocused = true }
         )
-        .id(message.id)
+        // Klucz miejsca, nie id: szkic i gotowa odpowiedź tej samej tury mają
+        // ten sam (`anchorID`), więc to jeden widok, a nie dwa po sobie.
+        .id(message.anchorID)
     }
 
-    /// Pierwsza odpowiedź asystenta w slocie, jeśli niesie ślad tury — to
-    /// nad nią stoi wiersz „myślę", który przeżył turę.
-    private var slotThinkingAnswer: AgentChatMessage? {
-        let index = slotStart + 1
-        guard index < store.messages.count else { return nil }
-        let answer = store.messages[index]
-        guard answer.author == .assistant, answer.thinking != nil else { return nil }
-        return answer
+    /// Wiersz „myślę” w slocie: tylko gdy tura biegnie, a tekst jeszcze nie
+    /// płynie. `.distantPast` nie ma prawa wejść: `send()`, `editMessage()`
+    /// i start `followTurn` ustawiają epokę razem z `isSending`.
+    private var workingPhase: AssistantThoughtLine.Phase? {
+        guard store.isSending, store.draftText.isEmpty else { return nil }
+        return .working(startedAt: store.turnStartedAt ?? .distantPast, isStopping: store.isStopping)
     }
 
-    /// Faza wiersza „myślę" w slocie: praca, dopóki tura biegnie; osiadła,
-    /// dopóki odpowiedź z tej sesji stoi w slocie; `nil` = wiersza nie ma
-    /// (historia z serwera, błąd tury bez odpowiedzi).
-    private var thoughtPhase: AssistantThoughtLine.Phase? {
+    /// Odpowiedzi w slocie: w trakcie tury — szkic (wiadomość pozorna),
+    /// po turze — odpowiedzi tej tury. Indeks globalny (szkic nie ma
+    /// swojego miejsca w `messages`, dostaje pozycję za listą).
+    private var slotAnswers: [(index: Int, message: AgentChatMessage)] {
         if store.isSending {
-            // `.distantPast` nie ma prawa wejść: `send()`, `editMessage()`
-            // i start `followTurn` ustawiają epokę razem z `isSending`.
-            return .working(startedAt: store.turnStartedAt ?? .distantPast, isStopping: store.isStopping)
+            guard let draft = store.draftMessage else { return [] }
+            return [(store.messages.count, draft)]
         }
-        if let thinking = slotThinkingAnswer?.thinking {
-            return .settled(duration: thinking.duration)
-        }
-        return nil
+        return store.messages.enumerated().dropFirst(slotStart + 1).map { (index: $0.offset, message: $0.element) }
     }
 
     /// Nowy krok postępu zmienia wysokość śladu pod wierszem „myślę" — całe
@@ -1600,28 +1751,25 @@ struct AssistantView: View {
         return .easeOut(duration: 0.25)
     }
 
-    /// Slot ostatniej tury: pytanie + wiersz „myślę" + ALBO szkic odpowiedzi,
-    /// ALBO odpowiedzi tej tury (i ewentualna notka błędu). Insert/remove
-    /// dzieje się w zwykłym `ZStack`, nie na poziomie `LazyVStack` — tam
-    /// przejścia są przewidywalne, a tu `apply(finished:)` i `defer`
-    /// w `followTurn` przełączają obie strony w jednej transakcji: wiersz
-    /// osiada w miejscu, szkic przenika w odpowiedź, treść wyrasta pod nim.
+    /// Slot ostatniej tury: pytanie + wiersz „myślę" (dopóki nie płynie
+    /// tekst) + szkic, który PRZECHODZI w odpowiedź tej tury (ten sam widok,
+    /// `anchorID`), i ewentualna notka błędu. Wstawianie i zdejmowanie dzieje
+    /// się tu, nie na poziomie `LazyVStack` — tam przejścia są przewidywalne,
+    /// a `apply(finished:)` i `defer` w `followTurn` przełączają wszystko
+    /// w jednej transakcji.
     private var turnSlot: some View {
         VStack(alignment: .leading, spacing: Self.messageGap) {
             if slotStart < store.messages.count {
                 bubble(at: slotStart, store.messages[slotStart])
             }
             VStack(alignment: .leading, spacing: 16) {
-                // JEDEN wiersz na całe życie tury: ten sam widok w tym samym
-                // miejscu drzewa od pierwszej klatki do końca życia odpowiedzi
-                // w slocie. Domknięcie tury nie podmienia go na inny widok,
-                // tylko przełącza fazę — dlatego etykieta rozmywa się
-                // w „Myślałem", licznik zjeżdża, ślad zwija się pod chevron,
-                // a odpowiedź wyrasta pod nim. Odpowiedź w slocie NIE rysuje
-                // własnego wiersza (`showsThinking: false`); dostaje go
-                // z powrotem od `MessageBubble`, gdy po następnym pytaniu
-                // przejdzie do części przed slotem.
-                if store.isSending, let phase = thoughtPhase {
+                // Wiersz „myślę” pracuje, dopóki nie popłynie tekst — wtedy
+                // zwija się, a odpowiedź pisze się w jego miejscu (27.09.2026).
+                // Dawniej stał do końca tury i znikał razem z nią, więc
+                // napisany już tekst podskakiwał o jego wysokość w chwili,
+                // w której dopisywał się koniec. „Myślałem 42 s” stoi potem
+                // w pasku POD odpowiedzią (`AssistantAnswerFooter`).
+                if let phase = workingPhase {
                     AssistantThoughtLine(
                         phase: phase,
                         steps: store.progress,
@@ -1633,47 +1781,32 @@ struct AssistantView: View {
                     .transition(.opacity)
                 }
 
-                ZStack(alignment: .topLeading) {
-                    if store.isSending {
-                        // Odpowiedź pisze się POD wierszem, zanim tura się
-                        // domknie — a po domknięciu ten sam tekst zostaje
-                        // w miejscu jako `AssistantAnswer`, więc crossfade
-                        // niżej podmienia identyczne piksele.
-                        Group {
-                            if !store.draftText.isEmpty {
-                                AssistantDraftAnswer(text: store.draftText, clock: store.draftReveal)
-                                    .transition(.opacity)
-                            }
-                        }
-                        .animation(.easeInOut(duration: 0.2), value: store.draftText.isEmpty)
-                        // Wyjście (szkic → odpowiedź) animuje ten `ZStack`;
-                        // wejście pod NOWYM pytaniem robi sam wiersz
-                        // (`appeared`), bo `.id(slotKey)` niżej stawia go
-                        // w nieanimowanej transakcji.
-                        .transition(.opacity)
-                    } else {
-                        VStack(alignment: .leading, spacing: Self.messageGap) {
-                            ForEach(Array(store.messages.enumerated().dropFirst(slotStart + 1)), id: \.element.id) { index, message in
-                                bubble(at: index, message)
-                            }
-                            if let errorMessage = store.errorMessage {
-                                AssistantOutcomeCard(
-                                    code: store.lastTurnErrorCode,
-                                    message: errorMessage,
-                                    wrote: store.lastTurnWrote,
-                                    suggestions: store.suggestions,
-                                    onAsk: { prompt in ask(prompt) },
-                                    // Domknięcia, nie referencje do metod: pod
-                                    // `InferSendableFromCaptures` (SE-0418) referencja
-                                    // obok `nil` w wyrażeniu warunkowym wywraca typowanie
-                                    // CAŁEGO `ScrollView` („ambiguous use of 'init'").
-                                    onRetry: store.retryText == nil ? nil : { retry() },
-                                    onAskAgain: lastUserText == nil ? nil : { askAgain() }
-                                )
-                                .id(Self.errorAnchor)
-                            }
-                        }
-                        .transition(.opacity)
+                // Szkic i odpowiedzi w JEDNEJ liście: ostatnia odpowiedź tury
+                // ma klucz szkicu (`anchorID`), więc koniec tury nie podmienia
+                // widoku — ten sam tekst pisze się dalej.
+                VStack(alignment: .leading, spacing: Self.messageGap) {
+                    ForEach(slotAnswers, id: \.message.anchorID) { item in
+                        bubble(at: item.index, item.message)
+                    }
+                    if !store.isSending, let errorMessage = store.errorMessage {
+                        AssistantOutcomeCard(
+                            code: store.lastTurnErrorCode,
+                            message: errorMessage,
+                            wrote: store.lastTurnWrote,
+                            suggestions: store.suggestions,
+                            onAsk: { prompt in ask(prompt) },
+                            // Domknięcia, nie referencje do metod: pod
+                            // `InferSendableFromCaptures` (SE-0418) referencja
+                            // obok `nil` w wyrażeniu warunkowym wywraca typowanie
+                            // CAŁEGO `ScrollView` („ambiguous use of 'init'").
+                            onRetry: store.retryText == nil ? nil : { retry() },
+                            onAskAgain: lastUserText == nil ? nil : { askAgain() }
+                        )
+                        .id(Self.errorAnchor)
+                        // Łagodnie, nie skokiem (27.09.2026): karta czeka, aż
+                        // wiersz „myślę” zacznie się zwijać, i dopiero wtedy
+                        // wypływa — przenikanie z lekkim uniesieniem.
+                        .transition(outcomeTransition)
                     }
                 }
             }
@@ -1681,6 +1814,8 @@ struct AssistantView: View {
             // wiersz „myślę" przechodzi w „Myślałem", ślad się zwija,
             // szkic przenika w odpowiedź — i wszystko to zjeżdża razem.
             .animation(slotAnimation, value: store.isSending)
+            // Pierwsze słowo szkicu zwija wiersz „myślę” — jednym ruchem.
+            .animation(slotAnimation, value: store.draftText.isEmpty)
             .animation(stepAnimation, value: store.progress.count)
             .id(slotKey)
         }
@@ -1801,16 +1936,13 @@ private struct MessageBubble: View {
     /// Treść następnej wiadomości użytkownika; `nil`, gdy jeszcze nie
     /// odpowiedział. Tylko karta pytania z tego korzysta.
     var reply: String? = nil
-    /// Czy rysować wiersz „Myślałem" nad odpowiedzią. `false` dla odpowiedzi
-    /// w slocie ostatniej tury — tam wiersz stoi NAD dymkiem, jako ten sam
-    /// widok, który pracował przez całą turę (`AssistantView.turnSlot`).
+    /// Czy rysować „Myślałem” w pasku pod odpowiedzią.
     var showsThinking: Bool = true
     /// Pytanie właśnie poprawiane — dymek dostaje obrys terakoty.
     var isEditing: Bool = false
     /// Rozwinięcia trzyma ekran (po id wiadomości), nie wiersz — wiersz
     /// zmienia miejsce w drzewie między slotem a częścią przed nim.
     @Binding var isCardExpanded: Bool
-    @Binding var isThoughtExpanded: Bool
     let onOpenPlan: () -> Void
     let onOpenShopping: () -> Void
     let onAskAgain: () -> Void
@@ -1822,7 +1954,13 @@ private struct MessageBubble: View {
     let onAsk: (String) -> Void
     let onEdit: () -> Void
     let onReport: () -> Void
-    /// Odpowiedź dopisała się do końca — sklep zdejmuje `revealFrom`.
+    /// „Myślałem 42 s ›” — przebieg tury w arkuszu.
+    var onShowThinking: () -> Void = {}
+    /// Podpowiedź do oceny — kierunek z kciuka.
+    var onSuggest: (AgentFeedback) -> Void = { _ in }
+    /// Kciuk pod odpowiedzią (`nil` = zdjęty).
+    var onRate: (AgentFeedback?) -> Void = { _ in }
+    /// Odpowiedź dopisała się do końca — sklep zdejmuje `reveal`.
     let onRevealed: () -> Void
     /// Fokus na polu rozmowy (arkusz wyboru: „Napisz, na co masz ochotę”).
     var onCompose: () -> Void = {}
@@ -1830,15 +1968,18 @@ private struct MessageBubble: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Wiadomość przyszła w tej sesji (a nie z historii) — karta wyboru
-    /// otwiera wtedy arkusz sama. `revealFrom` znika po dopisaniu tekstu,
+    /// otwiera wtedy arkusz sama. `reveal` znika po dopisaniu tekstu,
     /// czyli zanim karta się pokaże, więc zapamiętujemy go przy wejściu.
+    /// Szkic i gotowa odpowiedź to jeden widok, więc wejście szkicu też się
+    /// liczy.
     @State private var arrivedLive = false
 
-    /// Czy tekst jeszcze się dopisuje — reszta (karta, ślad, „Uwzględniłem”)
-    /// czeka pod nim i wchodzi dopiero po ostatnim znaku.
+    /// Czy tekst jeszcze się pisze — reszta (karta, pasek akcji) czeka pod
+    /// nim i wchodzi dopiero po ostatnim znaku. Szkic pisze się zawsze.
     private var isRevealing: Bool {
-        message.author == .assistant && message.revealFrom != nil && !message.text.isEmpty
-            && message.card?.replacesText != true
+        guard message.author == .assistant else { return false }
+        if message.isDraft { return true }
+        return message.reveal != nil && !message.text.isEmpty && message.card?.replacesText != true
     }
 
     /// Jawna właściwość zamiast `reduceMotion ? nil : …` w argumencie (SE-0418).
@@ -1857,7 +1998,7 @@ private struct MessageBubble: View {
                 .contextMenu { menuItems }
                 .accessibilityLabel("Asystent: \(message.text)")
                 .onAppear {
-                    if message.revealFrom != nil { arrivedLive = true }
+                    if message.reveal != nil { arrivedLive = true }
                 }
         }
     }
@@ -1882,11 +2023,15 @@ private struct MessageBubble: View {
             Button(action: onAskAgain) {
                 Label("Zapytaj jeszcze raz", systemImage: "arrow.clockwise")
             }
-        } else {
+        } else if !message.isDraft {
             // Obiecane w FAQ i w regulaminie („Zgłoś odpowiedź”) — idzie na
-            // `POST /agent/messages/:id/report`, nie zmienia rozmowy.
-            Button(role: .destructive, action: onReport) {
-                Label("Zgłoś odpowiedź", systemImage: "flag")
+            // `POST /agent/messages/:id/report`, nie zmienia rozmowy. To samo
+            // stoi pod „⋯” w pasku pod odpowiedzią.
+            Button(role: message.report == nil ? .destructive : nil, action: onReport) {
+                Label(
+                    message.report == nil ? "Zgłoś odpowiedź" : "Popraw zgłoszenie",
+                    systemImage: message.report == nil ? "flag" : "flag.fill"
+                )
             }
         }
     }
@@ -1905,33 +2050,23 @@ private struct MessageBubble: View {
         // 20 pt między tekstem a kartą: karta to osobna rzecz do obejrzenia,
         // nie dalszy ciąg akapitu.
         VStack(alignment: .leading, spacing: 20) {
-            // `LAsstMsg` + `LThought`: znak marki obok treści, a POD nią
-            // „Myślałem 42 s” wcięte pod tekst. Karta pytania NIESIE treść
+            // `LAsstMsg`: znak marki obok treści. Karta pytania NIESIE treść
             // wypowiedzi, więc obok niej nie ma `text`.
             if !message.text.isEmpty, message.card?.replacesText != true {
-                VStack(alignment: .leading, spacing: 10) {
-                    // Świeża odpowiedź: znak przy niej raz podskakuje.
-                    AssistantVoice(greets: message.revealFrom != nil) {
-                        if let from = message.revealFrom {
-                            AssistantRevealedAnswer(text: message.text, from: from, onDone: onRevealed)
-                        } else {
-                            AssistantAnswer(text: message.text)
-                        }
-                    }
-                    if !isRevealing, showsThinking, let thinking = message.thinking {
-                        AssistantThoughtLine(
-                            phase: .settled(duration: thinking.duration),
-                            steps: thinking.steps,
-                            isExpanded: $isThoughtExpanded
+                // Świeża odpowiedź: znak przy niej raz podskakuje — przy
+                // pierwszym słowie szkicu, bo to ten sam widok do końca.
+                AssistantVoice(greets: message.reveal != nil) {
+                    if let clock = message.reveal {
+                        AssistantRevealedAnswer(
+                            text: message.text,
+                            clock: clock,
+                            // Szkic nie kończy się sam — kończy go tura.
+                            onDone: message.isDraft ? nil : onRevealed
                         )
+                    } else {
+                        AssistantAnswer(text: message.text)
                     }
                 }
-            } else if showsThinking, let thinking = message.thinking {
-                AssistantThoughtLine(
-                    phase: .settled(duration: thinking.duration),
-                    steps: thinking.steps,
-                    isExpanded: $isThoughtExpanded
-                )
             }
 
             if !isRevealing {
@@ -1941,6 +2076,33 @@ private struct MessageBubble: View {
                     }
 
                     card
+
+                    // Pod CAŁĄ odpowiedzią (tekst i karta): „Myślałem 42 s”
+                    // i akcje. Dawniej samo „Myślałem” stało pod tekstem,
+                    // nad kartą, i tylko w tej sesji.
+                    //
+                    // Oceny i „⋯” tylko pod odpowiedzią MODELU (ma turę) —
+                    // potwierdzenia zapisu i cofnięcia (serwer pisze je bez
+                    // `turnId`) to nie odpowiedź, którą da się ocenić
+                    // (27.09.2026: „nie pod każdą”).
+                    let rateable = message.turnId != nil
+                    if rateable || (showsThinking && message.thinking != nil) {
+                        AssistantAnswerFooter(
+                            text: message.card?.replacesText == true ? "" : message.text,
+                            thinking: showsThinking ? message.thinking : nil,
+                            feedback: message.feedback,
+                            isReported: message.report != nil,
+                            onRate: onRate,
+                            onReport: onReport,
+                            onShowThinking: onShowThinking,
+                            hasSuggestion: message.feedbackNote != nil,
+                            onSuggest: onSuggest,
+                            showsActions: rateable
+                        )
+                        // Bliżej treści niż karta — to podpis odpowiedzi, nie
+                        // kolejny kawałek.
+                        .padding(.top, -8)
+                    }
                 }
                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
             }
@@ -2077,4 +2239,11 @@ private struct ChatSkeleton: View {
             if !isMine { Spacer(minLength: 40) }
         }
     }
+}
+
+/// Arkusz podpowiedzi: która odpowiedź i w którą stronę ocena.
+private struct SuggestionTarget: Identifiable {
+    let message: AgentChatMessage
+    let rating: AgentFeedback
+    var id: String { "\(message.id)-\(rating.rawValue)" }
 }

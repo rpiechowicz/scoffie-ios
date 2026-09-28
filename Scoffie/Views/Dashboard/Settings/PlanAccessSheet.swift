@@ -57,6 +57,8 @@ struct PlanAccessSheet: View {
             AssistantSheetScaffold(
                 eyebrow: "Konto",
                 title: "Asystent i plan",
+                // Glif wiersza „Asystent i plan” w Ustawieniach.
+                icon: MenuConstans.Assistant.icon,
                 onClose: { dismiss() },
                 footer: {
                     if let usage, accessState(for: usage) == .trial {
@@ -80,7 +82,7 @@ struct PlanAccessSheet: View {
             LegalDocumentSheet(title: "Regulamin") { TermsOfServiceContent() }
         }
         .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności") { PrivacyPolicyContent() }
+            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) { PrivacyPolicyContent() }
         }
         .onChange(of: subscriptions.state) { _, _ in
             // TRANSAKCJA POTRAFI DOJŚĆ, GDY ARKUSZ JEST OTWARTY: odnowienie,

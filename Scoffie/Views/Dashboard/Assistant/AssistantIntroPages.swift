@@ -623,6 +623,7 @@ private struct AssistantIntroDecisionScene: View {
     let day: [AssistantIntroDish]
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
 
     @State private var shown = false
     @State private var busy = false
@@ -641,7 +642,7 @@ private struct AssistantIntroDecisionScene: View {
     private var secondary: AssistantCardAction {
         saved
             ? AssistantCardAction(title: "Cofnij", icon: "arrow.uturn.backward", action: {})
-            : AssistantCardAction(title: "Inny zestaw", action: {})
+            : AssistantCardAction(title: "Inny zestaw", icon: "arrow.triangle.2.circlepath", action: {})
     }
 
     var body: some View {
@@ -678,7 +679,9 @@ private struct AssistantIntroDecisionScene: View {
                 primary: primary,
                 secondary: secondary,
                 tone: status.tone,
-                isBusy: busy
+                isBusy: busy,
+                // Jak w rozmowie: „Zapisz dzień” w szałwii.
+                primaryTint: saved ? nil : AssistantLook.sage(scheme)
             )
         }
         .opacity(shown ? 1 : 0)
@@ -823,6 +826,43 @@ struct AssistantIntroDish: Identifiable {
             picked.append(AssistantIntroDish(recipe: recipe, slot: slot))
         }
         return picked
+    }
+
+    /// Tydzień do podglądu w arkuszu „Ułożę Ci ten tydzień”
+    /// (`PlanAssistantIntroSheet`): siedem dni, w każdym po daniu na pory
+    /// domu — do trzech, śniadanie, obiad i kolacja przed dodatkowymi — z tej
+    /// samej puli co scenki (dieta i alergeny z Ustawień). Bez powtórek
+    /// w tygodniu, dopóki pula starcza: arkusz obiecuje „Bez powtórek”.
+    /// Pusta lista, gdy żadnej pory nie da się obsadzić.
+    @MainActor
+    static func week(from recipes: [Recipe], slots: [MealSlot]) -> [[AssistantIntroDish]] {
+        let core = slots.filter { MealSlot.core.contains($0) }
+        let shown = (core.isEmpty ? slots : core).sorted().prefix(3)
+        let pools = shown
+            .map { slot in (slot: slot, recipes: pool(from: recipes, slot: slot, maxMinutes: .max).shuffled()) }
+            .filter { !$0.recipes.isEmpty }
+        guard !pools.isEmpty else { return [] }
+
+        var used = Set<UUID>()
+        return (0..<7).map { _ in
+            pools.map { entry in
+                let recipe = entry.recipes.first { !used.contains($0.id) }
+                    ?? entry.recipes[Int.random(in: entry.recipes.indices)]
+                used.insert(recipe.id)
+                return AssistantIntroDish(recipe: recipe, slot: entry.slot)
+            }
+        }
+    }
+
+    /// Zapas dań do pokazu podmiany w tym samym podglądzie — ta sama pula co
+    /// `week`, bez dań, które już w tygodniu stoją.
+    @MainActor
+    static func spares(from recipes: [Recipe], slot: MealSlot, excluding used: Set<String>, limit: Int = 12) -> [AssistantIntroDish] {
+        pool(from: recipes, slot: slot, maxMinutes: .max)
+            .filter { !used.contains($0.id.uuidString) }
+            .shuffled()
+            .prefix(limit)
+            .map { AssistantIntroDish(recipe: $0, slot: slot) }
     }
 
     /// Zanim katalog się wczyta (albo gdy jest pusty) — dania z katalogu

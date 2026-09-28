@@ -188,14 +188,14 @@ check("poza pulą przykład w polu nie jest pusty", everyone.allSatisfy { !resol
 check("bez liczenia braków w otwarciu", everyone.allSatisfy { !resolve($0).headline.contains(" z ") })
 
 // Zdanie z powitania nie może zmuszać asystenta do dopytania: każde mówi,
-// na kiedy. Wyjątki: pytanie o możliwości i kroki konkretnego dania.
+// na kiedy. Wyjątek: pytanie o możliwości.
 let whenWords = ["dziś", "jutr", "tydzień", "tygodni", "dni", "poniedziałek", "sobotę"]
 let everyPrompt = everyone.flatMap { c -> [String] in
     let b = resolve(c)
     return ([b.primary] + b.alternatives).compactMap(asks)
 }
 let vague = everyPrompt.filter { prompt in
-    !prompt.hasPrefix("Co potrafisz") && !prompt.hasPrefix("Jak ugotować")
+    !prompt.hasPrefix("Co potrafisz")
         && !whenWords.contains { prompt.lowercased().contains($0) }
 }
 check("każde zdanie z powitania mówi, na kiedy" + (vague.isEmpty ? "" : ": \(vague)"), vague.isEmpty)

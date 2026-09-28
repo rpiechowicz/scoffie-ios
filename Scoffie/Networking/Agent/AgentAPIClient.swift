@@ -143,6 +143,45 @@ final class AgentAPIClient {
         )
     }
 
+    /// Kciuk pod odpowiedzią: `UP` / `DOWN`, `nil` zdejmuje ocenę. PUT, bo to
+    /// stan — powtórzone żądanie niczego nie psuje.
+    @discardableResult
+    func rateMessage(
+        id: String,
+        rating: String?,
+        tags: [String]? = nil,
+        comment: String? = nil
+    ) async throws -> AgentMessageRatingDTO {
+        struct RateRequestDTO: Encodable {
+            let rating: String?
+            /// Podpowiedź przy kciuku w dół; `nil` = pola nie wysyłamy
+            /// (sam kciuk nie kasuje napisanej wcześniej podpowiedzi).
+            let tags: [String]?
+            let comment: String?
+
+            // Jawne `null` przy zdjęciu oceny — syntetyzowany koder pominąłby
+            // pole, a serwer traktuje brak pola jako błąd (literówka nie ma
+            // po cichu kasować ocen). Komentarz idzie razem z powodami, też
+            // jako jawne `null` — wtedy serwer go czyści.
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(rating, forKey: .rating)
+                if let tags {
+                    try container.encode(tags, forKey: .tags)
+                    try container.encode(comment, forKey: .comment)
+                }
+            }
+
+            enum CodingKeys: String, CodingKey { case rating, tags, comment }
+        }
+        let body = try JSONEncoder().encode(RateRequestDTO(rating: rating, tags: tags, comment: comment))
+        return try await perform(
+            path: "agent/messages/\(id)/feedback",
+            method: "PUT",
+            bodyData: body
+        )
+    }
+
     /// Cofnięcie zapisu. Serwer odmówi, jeśli ktoś w domu ruszył plan PO
     /// zatwierdzeniu — cofnięcie nie ma prawa skasować cudzej zmiany.
     func undoProposal(id: String) async throws -> AgentProposalActionResultDTO {

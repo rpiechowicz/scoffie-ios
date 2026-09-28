@@ -72,6 +72,45 @@ struct AgentMessageDTO: Decodable, Identifiable, Equatable {
     /// dla kogo, cel). Tylko przy odpowiedziach asystenta; starszy serwer
     /// nie oddaje pola.
     let usedContext: [String]?
+    /// „Myślałem 42 s" z serwera — czas i kroki tury, która napisała tę
+    /// odpowiedź. Tylko przy OSTATNIEJ odpowiedzi zakończonej tury, w historii
+    /// i w turze DONE (od 27.09.2026). Starszy serwer nie oddaje pola.
+    var thinking: AgentMessageThinkingDTO? = nil
+    /// Kciuk pytającego: `UP` | `DOWN`; brak = nie oceniał.
+    var feedback: String? = nil
+    /// Podpowiedź do kciuka w dół (powody + zdanie) — do poprawienia.
+    var feedbackNote: AgentFeedbackNoteDTO? = nil
+    /// WŁASNE zgłoszenie tej odpowiedzi — jedno na osobę (27.09.2026);
+    /// ponowne „Zgłoś” je poprawia.
+    var report: AgentMessageReportDTO? = nil
+}
+
+/// Podpowiedź przy kciuku w dół — `AGENT_FEEDBACK_TAGS` z serwera i zdanie.
+/// To NIE zgłoszenie: trafia do działu „Oceny” w panelu, nie do kolejki.
+struct AgentFeedbackNoteDTO: Decodable, Equatable {
+    let tags: [String]
+    let comment: String?
+}
+
+struct AgentMessageReportDTO: Decodable, Equatable {
+    let reason: String
+    let comment: String?
+}
+
+struct AgentMessageThinkingDTO: Decodable, Equatable {
+    /// `finishedAt − startedAt` tury — ta sama liczba, którą telefon liczy
+    /// na żywo. `nil`, gdy zegary się rozjechały.
+    let durationMs: Int?
+    let steps: [AgentProgressStepDTO]
+    /// Start tury — od niego liczymy sekundę każdego kroku i przerwy na
+    /// myślenie. Starszy serwer go nie oddaje.
+    var startedAt: String? = nil
+}
+
+/// Odpowiedź `PUT agent/messages/:id/feedback`.
+struct AgentMessageRatingDTO: Decodable {
+    let messageId: String
+    let rating: String?
 }
 
 struct AgentMessagesResponseDTO: Decodable {
@@ -107,6 +146,12 @@ struct AgentProgressStepDTO: Decodable, Equatable {
     /// dalej — pokazywany na żywo, pomijany w podsumowaniu po turze. Brak
     /// pola = zwykły krok (starszy serwer go nie oddaje).
     let transient: Bool?
+    /// To samo zdanie w czasie przeszłym („Ułożyłem propozycję dnia”) —
+    /// arkusz „Jak pracowałem”. Starszy serwer go nie oddaje.
+    var done: String? = nil
+    /// Fakty z wejścia i wyniku narzędzia („Kolacja · na środę — 3 z 38
+    /// pasujących”). Starszy serwer go nie oddaje.
+    var detail: String? = nil
 
     var isHandoff: Bool { phase == "PLANNING" }
     var isTransient: Bool { transient == true }

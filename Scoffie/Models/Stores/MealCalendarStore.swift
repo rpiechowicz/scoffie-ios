@@ -143,7 +143,10 @@ class MealCalendarStore {
                         recipe: slot.recipe,
                         participantIds: slot.participantIds,
                         eatenByUserIds: slot.eatenByUserIds,
-                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId]
+                        plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId],
+                        portionUnits: slot.portionUnits,
+                        revision: slot.revision,
+                        portionRevisions: slot.portionRevisions
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -178,6 +181,15 @@ class MealCalendarStore {
     /// `max(1, 0)`, czyli jedną porcję, i ta jedynka utrwalała się w pliku
     /// planu. Lepiej zostawić „nie wiem" i podmienić je na prawdę z
     /// potwierdzenia zapisu.
+    ///
+    /// Porcje per osoba (`PlanMeal.portionUnits`): zapis dotykający pozycji
+    /// z alokacją (to samo danie w slocie albo danie podmieniane) idzie
+    /// z `PRESERVE` i tokenami (`PlanPortions.upsertDecision`) — serwer
+    /// zachowuje porcje zostających, nowym daje 1, a przy zamianie przenosi
+    /// porcje na nowe danie. Alokacja bez znanych tokenów (stary cache) nie
+    /// jest wysyłana wcale — odświeżamy tydzień. Konflikt wersji albo
+    /// alokacja, której telefon nie znał, kończy się cofnięciem wpisu
+    /// optymistycznego i odświeżeniem, nigdy cichym ponowieniem.
     @MainActor
     func upsertWeekSlot(
         recipe: Recipe,
@@ -185,11 +197,39 @@ class MealCalendarStore {
         plannedServings: Int? = nil,
         householdMemberCount: Int?,
         replacingRecipeId: UUID? = nil,
+        portions: [String: Int]? = nil,
+        expectedRevision: Int? = nil,
         for date: Date,
         slot: MealSlot,
         weekStart: String
     ) async -> Bool {
         let previous = meals(for: date, slot: slot)
+
+        // Jawne porcje osób (`portions`) = `REPLACE`; `expectedRevision` to
+        // token pozycji z migawki ekranu, na którym je ustawiono.
+        let slotMeals = previous.map {
+            PlanPortions.SlotMeal(recipeId: $0.recipe.id, hasPortions: $0.hasPortions, revision: $0.revision)
+        }
+        let decision = portions.map {
+            PlanPortions.replaceDecision(
+                slot: slotMeals,
+                recipeId: recipe.id,
+                replacingRecipeId: replacingRecipeId,
+                units: $0,
+                knownRevision: expectedRevision
+            )
+        } ?? PlanPortions.upsertDecision(slot: slotMeals, recipeId: recipe.id, replacingRecipeId: replacingRecipeId)
+        let portionWrite: PlanPortions.PortionWrite?
+        switch decision {
+        case .send:
+            portionWrite = nil
+        case .write(let write):
+            portionWrite = write
+        case .blocked:
+            errorMessage = PlanPortions.editBlockedMessage
+            scheduleRefreshForObservedState()
+            return false
+        }
 
         // Optymistyczny wpis musi mieć konkretną liczbę porcji już teraz, więc
         // powtarzamy tu regułę serwera co do joty: liczba uczestników, a dla
@@ -199,10 +239,43 @@ class MealCalendarStore {
         let optimisticServings = plannedServings
             ?? (participantIds.isEmpty ? householdMemberCount.map { max(1, $0) } : participantIds.count)
 
-        var optimistic = previous.filter { $0.recipe.id != replacingRecipeId }
+        // Przy zamianie z `PRESERVE` nowe danie przejmuje porcje starego,
+        // przy `REPLACE` dostaje jawne.
+        let carriedPortions: [String: Int]
+        switch portionWrite {
+        case .replace(let units, _)?:
+            carriedPortions = units
+        case .preserve(let tokens)? where tokens.isSwap:
+            carriedPortions = previous.first(where: { $0.recipe.id == replacingRecipeId })?.portionUnits ?? [:]
+        default:
+            carriedPortions = [:]
+        }
+        // Równe `recipeId` to nie zamiana (transport pomija pole) — pozycja
+        // zostaje w slocie ze swoimi porcjami i tokenami.
+        let replaced = replacingRecipeId == recipe.id ? nil : replacingRecipeId
+        var optimistic = previous.filter { $0.recipe.id != replaced }
         if let index = optimistic.firstIndex(where: { $0.recipe.id == recipe.id }) {
             optimistic[index].participantIds = participantIds
-            optimistic[index].plannedServings = optimisticServings
+            if case .replace(let units, _)? = portionWrite {
+                optimistic[index].portionUnits = units
+                optimistic[index].plannedServings = PlanPortions.plannedServings(forTotalUnits: PlanPortions.totalUnits(units))
+            } else if optimistic[index].hasPortions {
+                let units = PlanPortions.preservedAllocation(optimistic[index].portionUnits, participantIds: participantIds)
+                optimistic[index].portionUnits = units
+                optimistic[index].plannedServings = PlanPortions.plannedServings(forTotalUnits: PlanPortions.totalUnits(units))
+            } else {
+                optimistic[index].plannedServings = optimisticServings
+            }
+        } else if !carriedPortions.isEmpty {
+            let units = PlanPortions.preservedAllocation(carriedPortions, participantIds: participantIds)
+            optimistic.append(
+                PlanMeal(
+                    recipe: recipe,
+                    participantIds: participantIds,
+                    plannedServings: PlanPortions.plannedServings(forTotalUnits: PlanPortions.totalUnits(units)),
+                    portionUnits: units
+                )
+            )
         } else {
             optimistic.append(
                 PlanMeal(
@@ -223,8 +296,9 @@ class MealCalendarStore {
                 mealSlot: slot,
                 recipeId: recipe.id,
                 participantIds: participantIds,
-                plannedServings: plannedServings,
-                replaceRecipeId: replacingRecipeId
+                plannedServings: portionWrite == nil ? plannedServings : nil,
+                replaceRecipeId: replacingRecipeId,
+                portionWrite: portionWrite
             )
             // Wpis optymistyczny miał syntetyczne `id` i zgadywane porcje.
             // Podmieniamy go na to, co naprawdę leży w bazie — dzięki temu
@@ -242,7 +316,12 @@ class MealCalendarStore {
                         // `nil` z serwera znaczy „nie znam tego pola" (starszy
                         // backend), więc zostawiamy własną wartość zamiast
                         // zerować ją do reguły auto.
-                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings
+                        plannedServings: saved.plannedServings ?? confirmed[index].plannedServings,
+                        // Prawda z serwera — pusta alokacja w odpowiedzi znaczy
+                        // „równy podział”, a nie „nie wiem” (pole jest zawsze).
+                        portionUnits: saved.portionUnits,
+                        revision: saved.revision,
+                        portionRevisions: saved.portionRevisions
                     )
                     setMeals(confirmed, for: date, slot: slot)
                 }
@@ -252,8 +331,116 @@ class MealCalendarStore {
         } catch {
             setMeals(previous, for: date, slot: slot)
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            refreshIfStale(error)
             return false
         }
+    }
+
+    /// Zapisuje porcje osób jednej pozycji — każda osoba osobnym
+    /// `weeklyPlans:setPortion` z WŁASNYM tokenem, więc dwie osoby edytujące
+    /// różne porcje z tego samego odczytu nie kolidują.
+    ///
+    /// `expectedRevisions` to tokeny porcji z ODCZYTU, na którym użytkownik
+    /// edytował (migawka posiłku z chwili otwarcia arkusza), a nie z bieżącego
+    /// stanu store'u — tydzień przeładowuje się w tle po zmianie innego
+    /// telefonu, a świeży token przepuściłby zapis nadpisujący tamtą zmianę.
+    /// Stary token kończy się `PLAN_REVISION_CONFLICT` → odświeżenie.
+    /// Tokeny innych osób po zapisie jednej zostają ważne (serwer podbija
+    /// tylko wiersz tej osoby).
+    ///
+    /// Kolejno, najpierw zmniejszenia: serwer sprawdza sumę ≤ 12 po KAŻDYM
+    /// zapisie, więc przy sumie 12 zwiększenie przed zmniejszeniem zostałoby
+    /// odrzucone. Pierwsza odmowa kończy serię: wpis tej osoby wraca do stanu
+    /// sprzed zapisu, a przy nieaktualnym stanie tydzień się odświeża — już
+    /// zapisane porcje innych osób zostają (są na serwerze).
+    /// Zwraca, czy zapisały się wszystkie.
+    @MainActor
+    func setPortions(
+        _ units: [String: Int],
+        expectedRevisions: [String: Int],
+        itemId: String,
+        for date: Date,
+        slot: MealSlot,
+        weekStart: String
+    ) async -> Bool {
+        let before = meals(for: date, slot: slot).first(where: { $0.id == itemId })?.portionUnits ?? [:]
+        let ordered = units.sorted { lhs, rhs in
+            let lhsDelta = lhs.value - (before[lhs.key] ?? PlanPortions.missingEntryUnits)
+            let rhsDelta = rhs.value - (before[rhs.key] ?? PlanPortions.missingEntryUnits)
+            return lhsDelta != rhsDelta ? lhsDelta < rhsDelta : lhs.key < rhs.key
+        }
+        for (memberId, value) in ordered {
+            let previous = meals(for: date, slot: slot)
+            guard let index = previous.firstIndex(where: { $0.id == itemId }) else {
+                errorMessage = UserFacingErrorMapper.message(from: RecipeDataError.server(
+                    code: "PLAN_ITEM_NOT_FOUND", message: "", status: 404, requestId: nil
+                ))
+                scheduleRefreshForObservedState()
+                return false
+            }
+            let meal = previous[index]
+            guard meal.portionUnits[memberId] != value else { continue }
+            guard PlanPortions.isValid(units: value) else {
+                errorMessage = UserFacingErrorMapper.message(from: RecipeDataError.server(
+                    code: "PLAN_PORTIONS_INVALID", message: "", status: 400, requestId: nil
+                ))
+                return false
+            }
+            guard let expectedRevision = expectedRevisions[memberId] else {
+                errorMessage = PlanPortions.editBlockedMessage
+                scheduleRefreshForObservedState()
+                return false
+            }
+
+            var optimistic = previous
+            optimistic[index].portionUnits[memberId] = value
+            optimistic[index].plannedServings = PlanPortions.plannedServings(
+                forTotalUnits: PlanPortions.totalUnits(optimistic[index].portionUnits)
+            )
+            setMeals(optimistic, for: date, slot: slot)
+
+            guard let weeklyPlanRepository else { continue }
+
+            do {
+                let saved = try await weeklyPlanRepository.setPortion(
+                    weekStart: weekStart,
+                    planItemId: itemId,
+                    userId: memberId,
+                    units: value,
+                    expectedRevision: expectedRevision
+                )
+                if let saved { applyPortionAck(saved, itemId: itemId, for: date, slot: slot) }
+            } catch {
+                setMeals(previous, for: date, slot: slot)
+                errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+                refreshIfStale(error)
+                return false
+            }
+        }
+        errorMessage = nil
+        return true
+    }
+
+    /// Ack `setPortion` → pozycja z nowymi porcjami i tokenami. Spóźniony,
+    /// starszy ack (niższy token pozycji niż znany) nie cofa stanu (§1.3).
+    @MainActor
+    private func applyPortionAck(_ saved: WeekPlanSlot, itemId: String, for date: Date, slot: MealSlot) {
+        var current = meals(for: date, slot: slot)
+        guard let index = current.firstIndex(where: { $0.id == itemId }) else { return }
+        if let known = current[index].revision, let incoming = saved.revision, incoming < known { return }
+        current[index].portionUnits = saved.portionUnits
+        current[index].plannedServings = saved.plannedServings ?? current[index].plannedServings
+        current[index].revision = saved.revision
+        current[index].portionRevisions = saved.portionRevisions
+        setMeals(current, for: date, slot: slot)
+    }
+
+    /// Po odmowie z powodu nieaktualnego stanu (konflikt wersji, alokacja,
+    /// której telefon nie znał, pozycja już usunięta) — świeży odczyt tygodnia.
+    private func refreshIfStale(_ error: Error) {
+        guard let code = UserFacingErrorMapper.code(from: error),
+              PlanPortions.staleStateCodes.contains(code) else { return }
+        scheduleRefreshForObservedState()
     }
 
     /// Removes one variant from a slot, or the whole slot when `recipe` is nil.

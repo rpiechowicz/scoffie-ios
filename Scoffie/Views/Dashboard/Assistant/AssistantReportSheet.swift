@@ -3,6 +3,10 @@ import SwiftUI
 /// „Zgłoś odpowiedź" — cztery powody z serwera (`AGENT_REPORT_REASONS`)
 /// i opcjonalny komentarz. Zgłoszenie idzie na `POST /agent/messages/:id/report`;
 /// serwer zapisuje treść zgłoszonej odpowiedzi razem z powodem.
+///
+/// Jedno zgłoszenie na odpowiedź (27.09.2026): gdy już jest
+/// (`message.report`), arkusz otwiera się jako „Popraw zgłoszenie” z tym
+/// samym powodem i komentarzem, a wysłanie je poprawia — drugiego nie ma.
 struct AssistantReportSheet: View {
     let message: AgentChatMessage
     /// Oddaje komunikat błędu albo `nil` przy sukcesie.
@@ -13,9 +17,12 @@ struct AssistantReportSheet: View {
 
     @State private var reason: String = "WRONG"
     @State private var comment: String = ""
+    @State private var didPrefill = false
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var isDone = false
+
+    private var isEditing: Bool { message.report != nil }
 
     private static let reasons: [(code: String, title: String, detail: String)] = [
         ("WRONG", "Błąd merytoryczny", "Zły przepis, zła liczba, zignorowany alergen."),
@@ -29,7 +36,12 @@ struct AssistantReportSheet: View {
             VStack(spacing: 0) {
                 // Nagłówek przypięty nad treścią, jak w pozostałych arkuszach —
                 // przy otwartej klawiaturze krzyżyk nie ucieka w górę.
-                EditorialSheetHeader(eyebrow: "Asystent", title: "Zgłoś odpowiedź") {
+                // Flaga — ta sama, co „Zgłoś odpowiedź” w menu dymka.
+                EditorialSheetHeader(
+                    eyebrow: "Asystent",
+                    title: isEditing ? "Popraw zgłoszenie" : "Zgłoś odpowiedź",
+                    icon: "flag.fill"
+                ) {
                     dismiss()
                 }
                 .padding(.horizontal, 20)
@@ -99,7 +111,7 @@ struct AssistantReportSheet: View {
                                     Image(systemName: isDone ? "checkmark" : "flag.fill")
                                         .font(.system(size: 14, weight: .bold))
                                 }
-                                Text(isDone ? "Zgłoszono" : "Wyślij zgłoszenie")
+                                Text(isDone ? (isEditing ? "Poprawiono" : "Zgłoszono") : (isEditing ? "Zapisz zmiany" : "Wyślij zgłoszenie"))
                                     .font(.system(size: 15, weight: .bold))
                             }
                             .foregroundStyle(reportTone)
@@ -110,7 +122,9 @@ struct AssistantReportSheet: View {
                         .buttonStyle(.plain)
                         .disabled(isSending || isDone)
 
-                        Text("Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
+                        Text(isEditing
+                             ? "Poprawione zgłoszenie zastąpi poprzednie i wróci do administratora. Nie zmienia planu ani rozmowy."
+                             : "Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
                             .font(.system(size: 12))
                             .foregroundStyle(Color.scFaint(scheme))
                             .fixedSize(horizontal: false, vertical: true)
@@ -127,6 +141,20 @@ struct AssistantReportSheet: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)
+        .onAppear(perform: prefillExistingReport)
+    }
+
+    /// Istniejące zgłoszenie wchodzi do pól RAZ, przy pierwszym pojawieniu się.
+    /// Celowo nie przez własny `init` z `State(initialValue:)`: z nim wysyłka
+    /// padała w `AgentAPIClient.reportMessage` na nieczytelnym `reason`
+    /// (27.09.2026) — arkusz wrócił do inicjalizatora generowanego przez
+    /// Swifta, z którym działał wcześniej.
+    private func prefillExistingReport() {
+        guard !didPrefill else { return }
+        didPrefill = true
+        guard let report = message.report else { return }
+        reason = report.reason
+        comment = report.comment ?? ""
     }
 
     private func submit() {
