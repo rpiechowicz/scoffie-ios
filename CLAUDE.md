@@ -513,6 +513,24 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   stopka „Filtrów” i liczniki liczą się jedną regułą; `activeCount` (plakietka w nagłówku) liczy
   TYLKO filtry globalne, „Wyczyść” w każdym arkuszu czyści tylko swoje piętro (`resetGlobal`)
   i działa od razu, bez „Pokaż”.
+- Taksonomia katalogu 1000 (28.09.2026): serwer dowozi w liście, synchronizacji katalogu i szczególe
+  `cuisine`, `dishType`, `seasons`, `occasions`, `equipment`, `features` → `Recipe.taxonomy`
+  (`Models/Components/RecipeTaxonomy.swift`; `nil` = stary backend / cache sprzed zmiany → heurystyka).
+  Plik cache katalogu podbity do wersji 2 (stary nie ma taksonomii, delta nie dośle niezmienionych).
+  „Filtry”: sekcje „Kuchnia” (`RecipeCuisine`, 8 kafelków, bez OTHER) i „Okazje i sezon” (`RecipeMoment`:
+  Wigilia, Boże Narodzenie, Wielkanoc, Grill, Impreza + 4 pory roku; pora łapie tylko dania SEZONOWE) —
+  w obrębie sekcji LUB; w „Cechach” doszły „Airfryer” i „Do pudełka” (AND jak reszta cech).
+  Filtry kategorii: rodzaj dania z `dishType` serwera (mapowanie per kategoria w `RecipeCategoryFacets`,
+  `MAIN` → kafelek dodatku ze składników; heurystyka z nazwy, gdy `dishType == nil` — przepisy domu, stary backend) + te same aspekty
+  „Kuchnia” i „Okazje i sezon”, które chowają opcje bez przepisów w puli (`hidesEmptyOptions`).
+  Kontrola: `sh Scripts/catalog-sync-check.sh` (sekcja 14 — taksonomia z JSON-a i przez plik cache).
+- „Więcej filtrów” (28.09.2026, Rafał: „mnóstwo podkategorii, nieczytelne — sheet na pół ekranu”): w „Filtrach”
+  na wierzchu zostają dopasowanie, czas i trudność, kalorie i dieta; Cechy, Kuchnia oraz Okazje i sezon to WIERSZE
+  jednej karty (`RecipeFilterPickerRow` w `RecipeFilterPickerGroup`: ikona w tincie — cechy indygo, kuchnia szałwia,
+  okazje róż — tytuł, wybrane jako pigułki + plakietka, bez wyboru przykłady opcji). Stuknięcie = półarkusz
+  `RecipeFilterPickerSheet` (`.medium/.large`, nagłówek `compact`, „Wyczyść” tylko swojej grupy, stopka „N z M” +
+  „Gotowe”) z TYMI SAMYMI kafelkami, piszącymi na żywo do kopii roboczej rodzica. Wszystkie podarkusze „Filtrów”
+  idą jednym `sheet(item: $openPane)`. Filtry kategorii: kuchnia i okazje (`hidesEmptyOptions`) tak samo.
 - Karuzela na Przepisach: karta 330 pt (nie 420 z makiety) — zdjęcia są kwadratowe i przy 420
   `scaledToFill` skalował je do wysokości, przybliżając talerz. Kolejność kart jest ZAMROŻONA
   (`featuredOrder`) między ułożeniami (wyszukiwanie, filtry, dopasowanie, doba, katalog): ranking

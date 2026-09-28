@@ -226,9 +226,11 @@ struct CatalogSyncEngine<Item> {
 /// (`HouseholdRecipeCacheEnvelope`), przypisane do konta i domu.
 struct CatalogCacheEnvelope<Item: Codable>: Codable {
     /// 1: pierwszy format z rewizją (zastępuje `recipes_catalog_cache_v12.json`).
+    /// 2: przepisy z taksonomią (kuchnia, rodzaj dania, okazje — 28.09.2026);
+    ///    plik z 1 ich nie ma, a delta nie dośle niezmienionych przepisów.
     /// Zmiana kształtu `Item` albo znaczenia pól = podbij; stary plik zostanie
     /// odrzucony i katalog przyjdzie snapshotem.
-    static var currentVersion: Int { 1 }
+    static var currentVersion: Int { 2 }
 
     let version: Int
     let revision: String?
