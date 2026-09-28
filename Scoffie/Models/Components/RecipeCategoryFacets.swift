@@ -35,6 +35,11 @@ enum RecipeFacetKind: String, Hashable, CaseIterable {
     var hidesEmptyOptions: Bool { self == .cuisine || self == .moment }
 }
 
+/// Półarkusz aspektu w filtrach kategorii (`sheet(item:)`).
+extension RecipeFacetKind: Identifiable {
+    var id: String { rawValue }
+}
+
 struct RecipeFacetOption: Identifiable, Hashable {
     let id: String
     let title: String

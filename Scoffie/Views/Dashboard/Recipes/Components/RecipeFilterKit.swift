@@ -912,10 +912,13 @@ struct RecipeFilterExclusionChip: View {
     var small: Bool = false
     /// Świeżo dodany — mocniej podświetlony przez chwilę.
     var fresh: Bool = false
+    /// Kolor chipa bez kłódki — terakota w wykluczaniu, kolor grupy
+    /// w wierszach „Więcej filtrów” (tam terakota czytałaby się jak „wykluczone”).
+    var accent: Color = SCPalette.terracotta
 
     @Environment(\.colorScheme) private var scheme
 
-    private var tint: Color { locked ? SCPalette.sage : SCPalette.terracotta }
+    private var tint: Color { locked ? SCPalette.sage : accent }
 
     var body: some View {
         HStack(spacing: small ? 4 : 6) {
@@ -969,6 +972,7 @@ struct RecipeFilterMoreChip: View {
 struct RecipeFilterCountBadge: View {
     let count: Int
     var locked: Bool = false
+    var accent: Color = SCPalette.terracotta
 
     var body: some View {
         HStack(spacing: 3) {
@@ -984,7 +988,7 @@ struct RecipeFilterCountBadge: View {
         .foregroundStyle(.white)
         .padding(.horizontal, locked ? 7 : 6)
         .frame(minWidth: 20, minHeight: 20)
-        .background(Capsule(style: .continuous).fill(locked ? SCPalette.sage : SCPalette.terracotta))
+        .background(Capsule(style: .continuous).fill(locked ? SCPalette.sage : accent))
         .animation(.easeOut(duration: 0.25), value: count)
     }
 }
@@ -1000,6 +1004,7 @@ struct RecipeFilterChipLine: View {
 
     let chips: [Chip]
     var maxVisible: Int = 3
+    var accent: Color = SCPalette.terracotta
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -1015,7 +1020,7 @@ struct RecipeFilterChipLine: View {
     private func line(visible: Int) -> some View {
         HStack(spacing: 5) {
             ForEach(chips.prefix(visible)) { chip in
-                RecipeFilterExclusionChip(title: chip.title, locked: chip.locked, small: true)
+                RecipeFilterExclusionChip(title: chip.title, locked: chip.locked, small: true, accent: accent)
             }
             if chips.count > visible {
                 RecipeFilterMoreChip(label: "+\(chips.count - visible)", small: true)
