@@ -132,7 +132,9 @@ enum RecipeDietFilter: String, CaseIterable, Identifiable {
 ///
 /// Makieta miała tu „Jedno naczynie”, „Do pudełka”, „Budżetowe” i „Na zimno”
 /// — katalog tych cech nie niesie, więc kafelek niczego by nie odsiał albo
-/// odsiał na zgadywanie. Stoją tu cechy, które da się policzyć z danych.
+/// odsiał na zgadywanie. Stoją tu cechy, które da się policzyć z danych,
+/// i od katalogu 1000 (28.09.2026) dwie z taksonomii serwera: „Airfryer”
+/// i „Do pudełka”.
 /// „Niskowęglowodanowe” nie ma osobnego kafelka, bo to ten sam próg co
 /// „Keto” w Diecie.
 enum RecipeTraitFilter: String, CaseIterable, Identifiable {
@@ -140,6 +142,8 @@ enum RecipeTraitFilter: String, CaseIterable, Identifiable {
     case lowFat
     case highFiber
     case lowSalt
+    case airfryer
+    case lunchbox
     case favourites
     case thermomix
 
@@ -151,6 +155,8 @@ enum RecipeTraitFilter: String, CaseIterable, Identifiable {
         case .lowFat:      return RecipeNutritionTag.lowFat.title
         case .highFiber:   return RecipeNutritionTag.highFiber.title
         case .lowSalt:     return RecipeNutritionTag.lowSalt.title
+        case .airfryer:    return "Airfryer"
+        case .lunchbox:    return "Do pudełka"
         case .favourites:  return "Ulubione"
         case .thermomix:   return "Thermomix"
         }
@@ -163,6 +169,8 @@ enum RecipeTraitFilter: String, CaseIterable, Identifiable {
         case .lowFat:      return RecipeNutritionTag.lowFat.thresholdDescription + " na porcję"
         case .highFiber:   return RecipeNutritionTag.highFiber.thresholdDescription + " na porcję"
         case .lowSalt:     return RecipeNutritionTag.lowSalt.thresholdDescription + " na porcję"
+        case .airfryer:    return "przepisy na airfryer, każdy z wariantem na piekarnik"
+        case .lunchbox:    return "dania, które znoszą transport w pudełku"
         case .favourites:  return "przepisy z serduszkiem"
         case .thermomix:   return "przepisy z odpowiednikiem w Cookidoo"
         }
@@ -174,6 +182,8 @@ enum RecipeTraitFilter: String, CaseIterable, Identifiable {
         case .lowFat:      return RecipeNutritionTag.lowFat.matches(recipe)
         case .highFiber:   return RecipeNutritionTag.highFiber.matches(recipe)
         case .lowSalt:     return RecipeNutritionTag.lowSalt.matches(recipe)
+        case .airfryer:    return recipe.isAirfryer
+        case .lunchbox:    return recipe.isLunchbox
         case .favourites:  return recipe.favourite
         case .thermomix:   return recipe.isThermomix
         }
@@ -288,6 +298,10 @@ struct RecipeFilterOptions: Equatable {
 
     var diets: Set<RecipeDietFilter> = []
     var traits: Set<RecipeTraitFilter> = []
+    /// Kuchnie — w obrębie sekcji LUB („włoska albo grecka”).
+    var cuisines: Set<RecipeCuisine> = []
+    /// Okazje i pory roku — w obrębie sekcji LUB („Lato albo Grill”).
+    var moments: Set<RecipeMoment> = []
     var excludedIngredients: Set<IngredientExclusion> = []
 
     /// Filtry „tylko w tej kategorii” — z arkusza otwieranego w liście
@@ -321,6 +335,8 @@ struct RecipeFilterOptions: Equatable {
         if difficulty != nil               { count += 1 }
         if !diets.isEmpty                  { count += 1 }
         if !traits.isEmpty                 { count += 1 }
+        if !cuisines.isEmpty               { count += 1 }
+        if !moments.isEmpty                { count += 1 }
         if !excludedIngredients.isEmpty    { count += 1 }
         return count
     }
@@ -353,6 +369,14 @@ struct RecipeFilterOptions: Equatable {
         labels += RecipeTraitFilter.allCases.filter { traits.contains($0) }.map {
             $0 == .thermomix ? $0.title : $0.title.lowercased()
         }
+        let chosenCuisines = RecipeCuisine.allCases.filter { cuisines.contains($0) }
+        if chosenCuisines.count == 1, let cuisine = chosenCuisines.first {
+            labels.append("kuchnia \(cuisine.title.lowercased())")
+        } else if chosenCuisines.count > 1 {
+            // Najwyżej osiem kuchni: 2–4 „kuchnie”, 5–8 „kuchni”.
+            labels.append("\(chosenCuisines.count) \(chosenCuisines.count < 5 ? "kuchnie" : "kuchni")")
+        }
+        labels += RecipeMoment.allCases.filter { moments.contains($0) }.map(\.summaryTitle)
         if !excludedIngredients.isEmpty {
             let count = excludedIngredients.count
             labels.append(count == 1 ? "bez 1 składnika" : "bez \(count) składników")
@@ -388,6 +412,10 @@ struct RecipeFilterOptions: Equatable {
         if let difficulty, facts.difficulty != difficulty { return false }
         if !diets.isSubset(of: facts.diets) { return false }
         if !traits.isSubset(of: facts.traits) { return false }
+        if !cuisines.isEmpty {
+            guard let cuisine = facts.cuisine, cuisines.contains(cuisine) else { return false }
+        }
+        if !moments.isEmpty, moments.isDisjoint(with: facts.moments) { return false }
         if !excludedIngredients.isDisjoint(with: facts.exclusionKeys) { return false }
         if let categoryFilter = categoryFilters[facts.category], categoryFilter.isActive,
            !categoryFilter.matches(facts.facetValues) { return false }
@@ -420,6 +448,14 @@ struct RecipeFilterOptions: Equatable {
 
     mutating func toggle(trait: RecipeTraitFilter) {
         if traits.contains(trait) { traits.remove(trait) } else { traits.insert(trait) }
+    }
+
+    mutating func toggle(cuisine: RecipeCuisine) {
+        if cuisines.contains(cuisine) { cuisines.remove(cuisine) } else { cuisines.insert(cuisine) }
+    }
+
+    mutating func toggle(moment: RecipeMoment) {
+        if moments.contains(moment) { moments.remove(moment) } else { moments.insert(moment) }
     }
 
     /// Wyklucza albo przywraca. Przywrócenie jednego rodzaju z wykluczonej
@@ -460,6 +496,9 @@ struct RecipeFilterFacts {
     let difficulty: Difficulty
     let diets: Set<RecipeDietFilter>
     let traits: Set<RecipeTraitFilter>
+    /// Kuchnia z kafelka; `nil` = inna albo brak danych.
+    let cuisine: RecipeCuisine?
+    let moments: Set<RecipeMoment>
     let exclusionKeys: Set<IngredientExclusion>
     /// Wartości w aspektach kategorii (smak, rodzaj dania, mięso, pora).
     let facetValues: [RecipeFacetKind: Set<String>]
@@ -472,6 +511,8 @@ struct RecipeFilterFacts {
         difficulty = recipe.difficulty
         diets = Set(RecipeDietFilter.allCases.filter { $0.matches(recipe) })
         traits = Set(RecipeTraitFilter.allCases.filter { $0.matches(recipe) })
+        cuisine = recipe.cuisine
+        moments = recipe.moments
         exclusionKeys = Set(recipe.ingredients.flatMap {
             IngredientExclusion.keys(forIngredientNamed: $0.name, department: $0.department)
         })
@@ -536,6 +577,8 @@ enum RecipeFilterFactsCache {
         hasher.combine(recipe.sourceRecipeId)
         hasher.combine(recipe.dietTags)
         hasher.combine(recipe.allergens)
+        // Taksonomia: z niej liczą się kuchnia, okazje, cechy i rodzaj dania.
+        hasher.combine(recipe.taxonomy)
         hasher.combine(recipe.ingredients.count)
         for ingredient in recipe.ingredients {
             hasher.combine(ingredient.name)

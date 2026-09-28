@@ -236,6 +236,11 @@ struct Recipe: Identifiable, Codable {
     var allergens: [String]?
     var dietTags: [String]?
 
+    /// Kuchnia, rodzaj dania, pory roku, okazje, sprzęt, cechy — z serwera
+    /// (`RecipeTaxonomy`). `nil` = serwer ich nie przysłał; czytać przez
+    /// `cuisine`, `moments`, `isAirfryer`, `isLunchbox`.
+    var taxonomy: RecipeTaxonomy?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -254,7 +259,8 @@ struct Recipe: Identifiable, Codable {
         sourceProvider: String? = nil,
         sourceRecipeId: String? = nil,
         allergens: [String]? = nil,
-        dietTags: [String]? = nil
+        dietTags: [String]? = nil,
+        taxonomy: RecipeTaxonomy? = nil
     ) {
         self.id = id
         self.name = name
@@ -274,6 +280,7 @@ struct Recipe: Identifiable, Codable {
         self.sourceRecipeId = sourceRecipeId
         self.allergens = allergens
         self.dietTags = dietTags
+        self.taxonomy = taxonomy
     }
 }
 
@@ -291,6 +298,7 @@ extension Recipe {
         case ingredients, preparationSteps, nutrition
         case sourceProvider, sourceRecipeId
         case allergens, dietTags
+        case taxonomy
     }
 
     init(from decoder: Decoder) throws {
@@ -322,6 +330,8 @@ extension Recipe {
         // (także pusta) = tagi z serwera.
         allergens = try container.decodeIfPresent([String].self, forKey: .allergens)
         dietTags = try container.decodeIfPresent([String].self, forKey: .dietTags)
+        // Brak klucza (cache sprzed katalogu 1000) = nil = heurystyka filtrów.
+        taxonomy = try? container.decodeIfPresent(RecipeTaxonomy.self, forKey: .taxonomy)
     }
 }
 

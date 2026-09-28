@@ -20,6 +20,8 @@ import Foundation
 struct RecipeFilterCovers {
     private(set) var diets: [RecipeDietFilter: Recipe] = [:]
     private(set) var traits: [RecipeTraitFilter: Recipe] = [:]
+    private(set) var cuisines: [RecipeCuisine: Recipe] = [:]
+    private(set) var moments: [RecipeMoment: Recipe] = [:]
 
     /// `isAvoided(i)` — przepis `recipes[i]` ukrywa profil.
     @MainActor
@@ -31,6 +33,12 @@ struct RecipeFilterCovers {
         }
         for trait in RecipeTraitFilter.allCases {
             traits[trait] = picker.pick { facts[$0].traits.contains(trait) }
+        }
+        for cuisine in RecipeCuisine.allCases {
+            cuisines[cuisine] = picker.pick { facts[$0].cuisine == cuisine }
+        }
+        for moment in RecipeMoment.allCases {
+            moments[moment] = picker.pick { facts[$0].moments.contains(moment) }
         }
     }
 }

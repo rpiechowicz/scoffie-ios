@@ -58,6 +58,7 @@ struct RecipeCategoryFilterSheet: View {
     }
 
     private var facets: [RecipeFacet] { RecipeCategoryFacets.facets(forPicking: category, slot: slot) }
+    private var shownFacets: [RecipeFacet] { facets.filter { !visibleOptions($0).isEmpty } }
     private var accent: Color { slot?.cozyAccent ?? RecipeAccent.accent(for: category) }
 
     /// Wartości aspektów każdego przepisu puli — liczone raz na otwarcie
@@ -117,7 +118,9 @@ struct RecipeCategoryFilterSheet: View {
                             favouritesSection
                         }
 
-                        ForEach(Array(facets.enumerated()), id: \.element.id) { index, facet in
+                        // Aspekt bez żadnej opcji w puli (okazje w kategorii, która
+                        // ich nie ma) znika cały, a nie zostaje pustym nagłówkiem.
+                        ForEach(Array(shownFacets.enumerated()), id: \.element.id) { index, facet in
                             facetSection(facet, top: index == 0 && favouritesOnly == nil ? 8 : 24)
                         }
                     }
@@ -185,6 +188,17 @@ struct RecipeCategoryFilterSheet: View {
         let id = "favourites"
     }
 
+    /// Opcje aspektu na kafelkach. Kuchnia i okazje chowają opcje, których
+    /// w puli nie ma wcale (tajska wśród śniadań) — zaznaczona zostaje
+    /// zawsze, żeby dało się ją odznaczyć.
+    private func visibleOptions(_ facet: RecipeFacet) -> [RecipeFacetOption] {
+        guard facet.kind.hidesEmptyOptions else { return facet.options }
+        return facet.options.filter { option in
+            draft.contains(option.id, in: facet.kind)
+                || values.contains { $0[facet.kind]?.contains(option.id) == true }
+        }
+    }
+
     private func facetSection(_ facet: RecipeFacet, top: CGFloat) -> some View {
         let picked = draft.picks[facet.kind]?.count ?? 0
 
@@ -196,7 +210,7 @@ struct RecipeCategoryFilterSheet: View {
                     .transition(.opacity)
             }
         } content: {
-            RecipeFilterTileGrid(items: facet.options) { option in
+            RecipeFilterTileGrid(items: visibleOptions(facet)) { option in
                 RecipeFilterOptionTile(
                     title: option.title,
                     count: count(draft.adding(option.id, in: facet.kind), favourites: draftFavourites),

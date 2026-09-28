@@ -49,6 +49,14 @@ struct BackendRecipeDTO: Codable {
     /// Pusta lista to fakt, nie brak danych — dlatego `nil` ≠ `[]`.
     let allergens: [String]?
     let dietTags: [String]?
+    /// Taksonomia (katalog 1000). Opcjonalna — starszy backend jej nie dowozi
+    /// i wtedy filtry kategorii wracają do heurystyki po nazwie dania.
+    let cuisine: String?
+    let dishType: String?
+    let seasons: [String]?
+    let occasions: [String]?
+    let equipment: [String]?
+    let features: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -74,6 +82,12 @@ struct BackendRecipeDTO: Codable {
         case sourceRecipeId
         case allergens
         case dietTags
+        case cuisine
+        case dishType
+        case seasons
+        case occasions
+        case equipment
+        case features
     }
 
     init(from decoder: Decoder) throws {
@@ -103,6 +117,13 @@ struct BackendRecipeDTO: Codable {
         // zostaje heurystyka.
         allergens = try? container.decodeIfPresent([String].self, forKey: .allergens)
         dietTags = try? container.decodeIfPresent([String].self, forKey: .dietTags)
+        // Tak samo: obcy kształt jednego pola taksonomii gubi tylko to pole.
+        cuisine = try? container.decodeIfPresent(String.self, forKey: .cuisine)
+        dishType = try? container.decodeIfPresent(String.self, forKey: .dishType)
+        seasons = try? container.decodeIfPresent([String].self, forKey: .seasons)
+        occasions = try? container.decodeIfPresent([String].self, forKey: .occasions)
+        equipment = try? container.decodeIfPresent([String].self, forKey: .equipment)
+        features = try? container.decodeIfPresent([String].self, forKey: .features)
     }
 }
 
@@ -166,6 +187,21 @@ extension BackendRecipeDTO {
             slots.append(base)
         }
         return slots.sortedByDay
+    }
+
+    /// Taksonomia albo `nil`, gdy serwer jej nie przysłał — kuchnia jest
+    /// w każdej odpowiedzi nowego backendu (domyślnie `OTHER`), więc jej brak
+    /// znaczy „stary backend”, a nie „przepis bez kuchni”.
+    var appTaxonomy: RecipeTaxonomy? {
+        guard let cuisine else { return nil }
+        return RecipeTaxonomy(
+            cuisine: cuisine,
+            dishType: dishType,
+            seasons: seasons ?? [],
+            occasions: occasions ?? [],
+            equipment: equipment ?? [],
+            features: features ?? []
+        )
     }
 
     var appDifficulty: Difficulty {
@@ -234,7 +270,8 @@ extension BackendRecipeDTO {
             sourceProvider: sourceProvider,
             sourceRecipeId: sourceRecipeId,
             allergens: allergens,
-            dietTags: dietTags
+            dietTags: dietTags,
+            taxonomy: appTaxonomy
         )
     }
 }
