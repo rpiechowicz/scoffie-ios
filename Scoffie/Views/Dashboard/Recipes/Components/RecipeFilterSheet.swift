@@ -7,11 +7,11 @@ import SwiftUI
 // Nagłówek stoi przypięty nad przewijaną treścią (jak w każdym arkuszu,
 // `scScrollEdgeFade`). Pod nim: zasięg („Wszystkie przepisy — działają
 // w każdej kategorii”), dopasowanie do profilu, czas i trudność, kalorie
-// (wykres rozkładu, który sam jest suwakiem), dieta i cechy (kafelki 2 × 3
-// ze zdjęciem dania i liczbą przepisów), kuchnia oraz okazje i sezon
-// (katalog 1000 — kafelki tak samo), wykluczanie składników (osobny
-// arkusz). Na dole wspólna stopka: ile zostaje łącznie i w każdej kategorii,
-// i „Pokaż”.
+// (wykres rozkładu, który sam jest suwakiem), dieta (kafelki 2 × 3 ze
+// zdjęciem dania i liczbą przepisów), karta „Więcej filtrów” (cechy,
+// kuchnia, okazje i sezon — wiersze otwierające półarkusz z kafelkami,
+// `RecipeFilterPickerSheet`) i wykluczanie składników (osobny arkusz). Na
+// dole wspólna stopka: ile zostaje łącznie i w każdej kategorii, i „Pokaż”.
 //
 // Zmiany idą na kopię roboczą (`draft`, `fitDraft`) — dopiero „Pokaż”
 // zapisuje je do Przepisów. Zamknięcie arkusza gestem nie zostawia listy
@@ -33,7 +33,9 @@ struct RecipeFilterSheet: View {
     @State private var draft: RecipeFilterOptions
     @State private var fitDraft: Bool
     @State private var indexBox: IndexBox
-    @State private var isExcludePresented = false
+    /// Otwarty półarkusz — grupa „Więcej filtrów” albo wykluczanie składników.
+    /// Jeden `sheet(item:)` zamiast kilku `sheet(isPresented:)` na tym samym widoku.
+    @State private var openPane: Pane?
 
     /// Przepisy po wyszukiwarce Przepisów, ale PRZED dopasowaniem i filtrami.
     private let recipes: [Recipe]
@@ -150,9 +152,7 @@ struct RecipeFilterSheet: View {
                         timeAndDifficultySection
                         caloriesSection
                         dietSection
-                        traitsSection
-                        cuisineSection
-                        momentsSection
+                        moreSection
                         excludeSection
                     }
                     .padding(.horizontal, 20)
@@ -173,16 +173,7 @@ struct RecipeFilterSheet: View {
         .sensoryFeedback(.selection, trigger: draft.cuisines)
         .sensoryFeedback(.selection, trigger: draft.moments)
         .sensoryFeedback(.impact(weight: .light), trigger: fitDraft)
-        .sheet(isPresented: $isExcludePresented) {
-            RecipeExcludeSheet(
-                index: index,
-                filters: $draft,
-                fit: fitDraft,
-                profileChips: profileChips
-            )
-            .presentationDetents([.large])
-            .dashboardLiquidSheet()
-        }
+        .sheet(item: $openPane) { pane($0) }
     }
 
     // MARK: - Nagłówek
@@ -331,7 +322,7 @@ struct RecipeFilterSheet: View {
         }
     }
 
-    // MARK: - Dieta i cechy
+    // MARK: - Dieta
 
     private var dietSection: some View {
         let locked = lockedDiets
@@ -365,13 +356,88 @@ struct RecipeFilterSheet: View {
         }
     }
 
-    private var traitsSection: some View {
-        RecipeFilterSection(title: "Cechy") {
-            RecipeFilterTileGrid(items: RecipeTraitFilter.allCases) { trait in
+    // MARK: - Więcej filtrów
+
+    /// Grupy, które w arkuszu stoją wierszem, a wybiera się je w półarkuszu
+    /// (`RecipeFilterPickerSheet`). Trzy siatki kafelków jedna pod drugą —
+    /// cechy, kuchnie, okazje i pory roku, ponad 25 kafelków — robiły z arkusza
+    /// nieczytelną ścianę (Rafał, 28.09.2026).
+    enum Pane: String, Identifiable {
+        case traits, cuisines, moments, exclude
+        var id: String { rawValue }
+    }
+
+    /// „z 1072 przepisów” — dopełniacz liczby wszystkich przepisów w stopkach.
+    private var totalNoun: String { index.total == 1 ? "przepisu" : "przepisów" }
+
+    private var moreSection: some View {
+        let traits = RecipeTraitFilter.allCases.filter { draft.traits.contains($0) }
+        let cuisines = RecipeCuisine.allCases.filter { draft.cuisines.contains($0) }
+        let moments = RecipeMoment.allCases.filter { draft.moments.contains($0) }
+
+        return RecipeFilterSection(title: "Więcej filtrów") {
+            RecipeFilterPickerGroup {
+                RecipeFilterPickerRow(
+                    icon: "sparkles",
+                    title: "Cechy",
+                    placeholder: RecipeFilterPickerRow.placeholder(
+                        from: RecipeFilterPickerRow.sentence(RecipeTraitFilter.allCases.map { $0.title.lowercased() })
+                    ),
+                    chips: traits.map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title) },
+                    accent: SCPalette.indigo
+                ) { openPane = .traits }
+
+                RecipeFilterPickerDivider()
+
+                RecipeFilterPickerRow(
+                    icon: "globe.europe.africa.fill",
+                    title: "Kuchnia",
+                    placeholder: RecipeFilterPickerRow.placeholder(
+                        from: RecipeFilterPickerRow.sentence(RecipeCuisine.allCases.map { $0.title.lowercased() })
+                    ),
+                    chips: cuisines.map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title) },
+                    accent: SCPalette.sage
+                ) { openPane = .cuisines }
+
+                RecipeFilterPickerDivider()
+
+                RecipeFilterPickerRow(
+                    icon: "calendar",
+                    title: "Okazje i sezon",
+                    placeholder: RecipeFilterPickerRow.placeholder(
+                        from: RecipeFilterPickerRow.sentence(RecipeMoment.allCases.map(\.summaryTitle))
+                    ),
+                    chips: moments.map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title) },
+                    accent: SCPalette.rose
+                ) { openPane = .moments }
+            }
+        }
+    }
+
+    /// Półarkusz grupy — te same kafelki, co wcześniej w arkuszu, piszące do
+    /// tej samej kopii roboczej (liczby na kafelkach i w stopce na żywo).
+    @ViewBuilder
+    private func pane(_ pane: Pane) -> some View {
+        switch pane {
+        case .traits:
+            RecipeFilterPickerSheet(
+                eyebrow: "Filtry",
+                title: "Cechy",
+                icon: "sparkles",
+                accent: SCPalette.indigo,
+                hint: "Wszystkie zaznaczone naraz",
+                items: RecipeTraitFilter.allCases,
+                selectedCount: draft.traits.count,
+                resultCount: resultCount,
+                totalCount: index.total,
+                totalContext: totalNoun,
+                onClear: { draft.traits = [] }
+            ) { trait in
                 RecipeFilterOptionTile(
                     title: trait.title,
                     count: index.count(adding: trait, to: draft, fit: fitDraft),
                     mark: draft.traits.contains(trait) ? .on : .off,
+                    accent: SCPalette.indigo,
                     cover: covers.traits[trait],
                     icon: trait.tileIcon,
                     accessibilityDetail: trait.accessibilityDetail
@@ -379,25 +445,27 @@ struct RecipeFilterSheet: View {
                     withAnimation(.smooth(duration: 0.18)) { draft.toggle(trait: trait) }
                 }
             }
-        }
-    }
-
-    // MARK: - Kuchnia, okazje i sezon
-
-    /// W obrębie sekcji LUB — druga kuchnia POSZERZA wynik, jak opcje
-    /// w filtrach kategorii; mówi o tym dopisek przy tytule.
-    private var cuisineSection: some View {
-        RecipeFilterSection(title: "Kuchnia") {
-            if draft.cuisines.count > 1 {
-                Text("dowolna z zaznaczonych")
-                    .transition(.opacity)
-            }
-        } content: {
-            RecipeFilterTileGrid(items: RecipeCuisine.allCases) { cuisine in
+            .presentationDetents([.fraction(0.62), .large])
+            .dashboardLiquidSheet()
+        case .cuisines:
+            RecipeFilterPickerSheet(
+                eyebrow: "Filtry",
+                title: "Kuchnia",
+                icon: "globe.europe.africa.fill",
+                accent: SCPalette.sage,
+                hint: "Dowolna z zaznaczonych",
+                items: RecipeCuisine.allCases,
+                selectedCount: draft.cuisines.count,
+                resultCount: resultCount,
+                totalCount: index.total,
+                totalContext: totalNoun,
+                onClear: { draft.cuisines = [] }
+            ) { cuisine in
                 RecipeFilterOptionTile(
                     title: cuisine.title,
                     count: index.count(adding: cuisine, to: draft, fit: fitDraft),
                     mark: draft.cuisines.contains(cuisine) ? .on : .off,
+                    accent: SCPalette.sage,
                     cover: covers.cuisines[cuisine],
                     icon: cuisine.tileIcon,
                     accessibilityDetail: "kuchnia \(cuisine.title.lowercased())"
@@ -405,32 +473,45 @@ struct RecipeFilterSheet: View {
                     withAnimation(.smooth(duration: 0.18)) { draft.toggle(cuisine: cuisine) }
                 }
             }
-        }
-        .animation(.smooth(duration: 0.2), value: draft.cuisines.count > 1)
-    }
-
-    /// Święta, grill, impreza i pory roku — jedno pytanie „na kiedy gotuję”.
-    /// Pora roku łapie tylko dania sezonowe, nie całoroczne.
-    private var momentsSection: some View {
-        RecipeFilterSection(title: "Okazje i sezon") {
-            if draft.moments.count > 1 {
-                Text("dowolna z zaznaczonych")
-                    .transition(.opacity)
-            }
-        } content: {
-            RecipeFilterTileGrid(items: RecipeMoment.allCases) { moment in
+            .presentationDetents([.fraction(0.62), .large])
+            .dashboardLiquidSheet()
+        case .moments:
+            RecipeFilterPickerSheet(
+                eyebrow: "Filtry",
+                title: "Okazje i sezon",
+                icon: "calendar",
+                accent: SCPalette.rose,
+                hint: "Dowolna z zaznaczonych · pora roku to dania sezonowe",
+                items: RecipeMoment.allCases,
+                selectedCount: draft.moments.count,
+                resultCount: resultCount,
+                totalCount: index.total,
+                totalContext: totalNoun,
+                onClear: { draft.moments = [] }
+            ) { moment in
                 RecipeFilterOptionTile(
                     title: moment.title,
                     count: index.count(adding: moment, to: draft, fit: fitDraft),
                     mark: draft.moments.contains(moment) ? .on : .off,
+                    accent: SCPalette.rose,
                     cover: covers.moments[moment],
                     icon: moment.tileIcon
                 ) {
                     withAnimation(.smooth(duration: 0.18)) { draft.toggle(moment: moment) }
                 }
             }
+            .presentationDetents([.fraction(0.62), .large])
+            .dashboardLiquidSheet()
+        case .exclude:
+            RecipeExcludeSheet(
+                index: index,
+                filters: $draft,
+                fit: fitDraft,
+                profileChips: profileChips
+            )
+            .presentationDetents([.large])
+            .dashboardLiquidSheet()
         }
-        .animation(.smooth(duration: 0.2), value: draft.moments.count > 1)
     }
 
     // MARK: - Wykluczanie
@@ -451,7 +532,7 @@ struct RecipeFilterSheet: View {
             }
         } content: {
             Button {
-                isExcludePresented = true
+                openPane = .exclude
             } label: {
                 HStack(spacing: 12) {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)

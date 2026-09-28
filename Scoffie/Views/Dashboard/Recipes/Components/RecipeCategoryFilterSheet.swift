@@ -35,6 +35,8 @@ struct RecipeCategoryFilterSheet: View {
     @State private var draft: RecipeCategoryFilter
     @State private var draftFavourites: Bool
     @State private var valuesBox: ValuesBox
+    /// Aspekt otwarty w półarkuszu (kuchnia, okazje i sezon).
+    @State private var openFacet: RecipeFacetKind?
 
     /// Przepisy tej kategorii po dopasowaniu i filtrach wszystkich przepisów,
     /// ale PRZED filtrami tej kategorii — na nich liczą się kafelki.
@@ -59,6 +61,11 @@ struct RecipeCategoryFilterSheet: View {
 
     private var facets: [RecipeFacet] { RecipeCategoryFacets.facets(forPicking: category, slot: slot) }
     private var shownFacets: [RecipeFacet] { facets.filter { !visibleOptions($0).isEmpty } }
+    /// Aspekty rodzaju, smaku, mięsa i pory — kafelkami na wierzchu arkusza.
+    private var inlineFacets: [RecipeFacet] { shownFacets.filter { !$0.kind.hidesEmptyOptions } }
+    /// Kuchnia, okazje i sezon — wierszami w karcie „Więcej filtrów”, wybierane
+    /// w półarkuszu, jak w arkuszu „Filtry”.
+    private var pickerFacets: [RecipeFacet] { shownFacets.filter { $0.kind.hidesEmptyOptions } }
     private var accent: Color { slot?.cozyAccent ?? RecipeAccent.accent(for: category) }
 
     /// Wartości aspektów każdego przepisu puli — liczone raz na otwarcie
@@ -120,8 +127,12 @@ struct RecipeCategoryFilterSheet: View {
 
                         // Aspekt bez żadnej opcji w puli (okazje w kategorii, która
                         // ich nie ma) znika cały, a nie zostaje pustym nagłówkiem.
-                        ForEach(Array(shownFacets.enumerated()), id: \.element.id) { index, facet in
+                        ForEach(Array(inlineFacets.enumerated()), id: \.element.id) { index, facet in
                             facetSection(facet, top: index == 0 && favouritesOnly == nil ? 8 : 24)
+                        }
+
+                        if !pickerFacets.isEmpty {
+                            moreSection
                         }
                     }
                     .padding(.horizontal, 20)
@@ -136,6 +147,16 @@ struct RecipeCategoryFilterSheet: View {
         .animation(.smooth(duration: 0.22), value: isDraftActive)
         .sensoryFeedback(.selection, trigger: draft)
         .sensoryFeedback(.selection, trigger: draftFavourites)
+        .sheet(item: $openFacet) { kind in
+            // Z pełnej listy, nie z `pickerFacets`: aspekt widoczny tylko dzięki
+            // zaznaczonej opcji znika z karty po jej odznaczeniu — otwarty arkusz
+            // nie może wtedy zostać pusty.
+            if let facet = facets.first(where: { $0.kind == kind }) {
+                pickerSheet(facet)
+                    .presentationDetents([.fraction(0.62), .large])
+                    .dashboardLiquidSheet()
+            }
+        }
     }
 
     // MARK: - Nagłówek
@@ -228,6 +249,68 @@ struct RecipeCategoryFilterSheet: View {
         .animation(.smooth(duration: 0.2), value: picked > 1)
     }
 
+    // MARK: - Więcej filtrów
+
+    private var moreSection: some View {
+        RecipeFilterSection(title: "Więcej filtrów") {
+            RecipeFilterPickerGroup {
+                ForEach(Array(pickerFacets.enumerated()), id: \.element.id) { index, facet in
+                    if index > 0 {
+                        RecipeFilterPickerDivider()
+                    }
+                    RecipeFilterPickerRow(
+                        icon: facet.kind.pickerIcon,
+                        title: facet.title,
+                        placeholder: RecipeFilterPickerRow.placeholder(
+                            from: RecipeFilterPickerRow.sentence(visibleOptions(facet).map {
+                                RecipeMoment(rawValue: $0.id)?.summaryTitle ?? $0.title.lowercased()
+                            })
+                        ),
+                        chips: facet.options
+                            .filter { draft.contains($0.id, in: facet.kind) }
+                            .map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.title) },
+                        accent: accent
+                    ) { openFacet = facet.kind }
+                }
+            }
+        }
+    }
+
+    /// Półarkusz aspektu — te same kafelki, co `facetSection`, na tej samej
+    /// kopii roboczej.
+    private func pickerSheet(_ facet: RecipeFacet) -> some View {
+        RecipeFilterPickerSheet(
+            eyebrow: slot?.title ?? RecipesConstants.displayName(for: category),
+            title: facet.title,
+            icon: facet.kind.pickerIcon,
+            accent: accent,
+            hint: facet.kind == .moment
+                ? "Dowolna z zaznaczonych · pora roku to dania sezonowe"
+                : "Dowolna z zaznaczonych",
+            items: visibleOptions(facet),
+            selectedCount: draft.picks[facet.kind]?.count ?? 0,
+            resultCount: resultCount,
+            totalCount: recipes.count,
+            totalContext: totalContext,
+            onClear: { draft.picks[facet.kind] = nil }
+        ) { option in
+            RecipeFilterOptionTile(
+                title: option.title,
+                count: count(draft.adding(option.id, in: facet.kind), favourites: draftFavourites),
+                mark: draft.contains(option.id, in: facet.kind) ? .on : .off,
+                accent: accent,
+                cover: covers.cover(for: option.id, in: facet.kind),
+                icon: RecipeCuisine(rawValue: option.id)?.tileIcon
+                    ?? RecipeMoment(rawValue: option.id)?.tileIcon
+                    ?? facet.kind.pickerIcon
+            ) {
+                withAnimation(.smooth(duration: 0.18)) {
+                    draft.toggle(option.id, in: facet.kind)
+                }
+            }
+        }
+    }
+
     // MARK: - Stopka
 
     private var footer: some View {
@@ -304,5 +387,17 @@ struct RecipeCategoryFilterSheet: View {
     private final class ValuesBox {
         var values: [[RecipeFacetKind: Set<String>]]?
         var covers: RecipeFacetCovers?
+    }
+}
+
+// MARK: - Glify aspektów w półarkuszu
+
+private extension RecipeFacetKind {
+    var pickerIcon: String {
+        switch self {
+        case .cuisine: return "globe.europe.africa.fill"
+        case .moment:  return "calendar"
+        default:       return "line.3.horizontal.decrease"
+        }
     }
 }
