@@ -24,6 +24,9 @@ import SwiftUI
 //     PRAWDZIWĄ listę zakupów tygodnia (`weeklyPlans:addRecipeExtras`) —
 //     serwer liczy ilości sam, z tych samych danych co listę z planu.
 // Na dole pasek z jednym przyciskiem, którego rola zależy od `context`.
+// Obok krzyżyka „Udostępnij” (link do przepisu, `RecipeShareKit.swift`), a cudzy
+// przepis z linku (`.shared`) jest tylko do odczytu: bez serca, zakupów
+// i „mam w domu”, za to z „Zapisz u siebie” obok planu.
 //
 // Makra w kolorach `SCMacroPalette`, a przyciski w wariancie „soft” — jak
 // wszędzie indziej w aplikacji, a nie jak w makiecie (decyzja Rafała 21.09).
@@ -37,6 +40,12 @@ import SwiftUI
 enum RecipeDetailContext {
     case catalog
     case planned(day: Date, slot: MealSlot)
+    /// Przepis INNEGO domu otwarty linkiem (`recipes:openShared`, `SHARED`).
+    /// Tylko do odczytu: serwer odrzuci na nim ulubione, zakupy i plan, więc
+    /// wszystko, co go zmienia, idzie przez kopię — „Zapisz u siebie”
+    /// (`recipes:saveShared`) i plan na zapisanej kopii. `savedRecipeId` =
+    /// kopia, którą dom już ma: przycisk od razu mówi „Zapisano”.
+    case shared(token: String, savedRecipeId: UUID?)
 }
 
 /// Porcje osób posiłku z planu — KAŻDEGO, nie tylko ułożonego przez
@@ -104,6 +113,7 @@ struct RecipeDetailView: View {
     @Environment(\.toasts) private var toasts
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.shoppingListStore) private var shoppingListStore
+    @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -193,6 +203,14 @@ struct RecipeDetailView: View {
     /// przyciskami i u góry arkusza potrzebne jest wygaszenie.
     @State private var isPastPhoto = false
 
+    /// „Zapisz u siebie” (tylko `.shared`).
+    @State private var sharedSave: SharedSaveState
+    /// Kopia cudzego przepisu w tym domu — na nią idzie „Dodaj do planu”
+    /// (plan przyjmuje tylko przepisy katalogu i tego domu).
+    @State private var savedCopy: Recipe?
+    /// „Dodaj do planu” w `.shared` najpierw zapisuje kopię.
+    @State private var isPreparingPlan = false
+
     /// Jawny `init` zamiast memberwise'owego, bo `@State` z porcjami trzeba
     /// zasiać `initialServings`. Kolejność i domyślne wartości są dobrane tak,
     /// żeby dotychczasowe wywołania `RecipeDetailView(recipe:onSetFavourite:onClose:)`
@@ -215,6 +233,11 @@ struct RecipeDetailView: View {
         self.onSetFavourite = onSetFavourite
         self.onClose = onClose
         self.context = context
+        if case .shared(_, let savedRecipeId) = context, savedRecipeId != nil {
+            _sharedSave = State(initialValue: .saved)
+        } else {
+            _sharedSave = State(initialValue: .idle)
+        }
         self.onSaveServings = onSaveServings
         self.onAddedToPlan = onAddedToPlan
 
@@ -384,10 +407,17 @@ struct RecipeDetailView: View {
             .detailChrome(hasAppeared)
         }
         .overlay(alignment: .topTrailing) {
-            SCSheetCloseButton(onImage: true) { onClose?() }
-                .padding(.trailing, 20)
-                .padding(.top, 16)
-                .detailChrome(hasAppeared)
+            HStack(spacing: 10) {
+                // Cudzy przepis (`.shared`) nie ma własnego linku do
+                // przekazania dalej — wysyła go tylko jego dom.
+                if showsShareButton {
+                    RecipeShareButton(recipe: recipe)
+                }
+                SCSheetCloseButton(onImage: true) { onClose?() }
+            }
+            .padding(.trailing, 20)
+            .padding(.top, 16)
+            .detailChrome(hasAppeared)
         }
         .overlay(alignment: .bottom) {
             primaryActionBar
@@ -406,7 +436,8 @@ struct RecipeDetailView: View {
             // użytkownik właśnie na nią patrzył, więc przestawienie jej przy
             // dodawaniu wyglądałoby na zgubienie jego wyboru.
             AddToPlanSheet(
-                recipe: recipe,
+                // Cudzy przepis idzie do planu jako kopia tego domu.
+                recipe: savedCopy ?? recipe,
                 initialServings: wholeServings,
                 initialUnits: servingsUnits,
                 // Stepper startuje od jedynki, więc każda inna wartość znaczy,
@@ -748,8 +779,10 @@ struct RecipeDetailView: View {
                         }
                     }
 
-                    ingredientsFooter
-                        .overlay(alignment: .top) { DetailHairline() }
+                    if showsIngredientsFooter {
+                        ingredientsFooter
+                            .overlay(alignment: .top) { DetailHairline() }
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -881,10 +914,24 @@ struct RecipeDetailView: View {
     // MARK: - Lista zakupów: brakujące
 
     /// Dopisywać da się tylko z katalogu. Posiłek z planu ma już składniki
-    /// na liście tygodnia — drugi raz podwoiłby zakupy.
+    /// na liście tygodnia — drugi raz podwoiłby zakupy, a cudzego przepisu
+    /// (`.shared`) serwer na listę nie przyjmie.
     private var canSendToShopping: Bool {
         if case .catalog = context { return true }
         return false
+    }
+
+    /// Linijka pod składnikami mówi o zakupach — przy cudzym przepisie nie
+    /// ma o czym.
+    private var showsIngredientsFooter: Bool {
+        if case .shared = context { return false }
+        return true
+    }
+
+    /// „Udostępnij” obok krzyżyka — wszędzie poza cudzym przepisem.
+    private var showsShareButton: Bool {
+        if case .shared = context { return false }
+        return true
     }
 
     /// „Do zakupów” pojawia się dopiero, gdy użytkownik zaczął odhaczać, co
@@ -989,7 +1036,12 @@ struct RecipeDetailView: View {
         AssistantStickyFooter(base: look.background) {
             thermomixFeedback
 
-            if showsThermomixSplit {
+            if case .shared = context {
+                HStack(spacing: 10) {
+                    saveSharedButton
+                    planActionButton(title: splitPlanTitle)
+                }
+            } else if showsThermomixSplit {
                 HStack(spacing: 10) {
                     planActionButton(title: splitPlanTitle)
                     thermomixButton
@@ -1030,7 +1082,10 @@ struct RecipeDetailView: View {
     /// Split tylko przy potwierdzonym połączeniu — `.unknown` i brak
     /// integracji rysują zwykły pojedynczy przycisk.
     private var showsThermomixSplit: Bool {
-        recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
+        // Cudzego przepisu Cookidoo nie dostanie (serwer nie wyda go temu
+        // domowi) — najpierw kopia, potem gotowanie z niej.
+        if case .shared = context { return false }
+        return recipe.isThermomix && sessionStore.cookidooIntegrationStore?.isConnected == true
     }
 
     /// Błąd wysyłki — jedna linijka nad przyciskami.
@@ -1056,6 +1111,7 @@ struct RecipeDetailView: View {
         switch context {
         case .catalog: return "Dodaj"
         case .planned: return "Zapisz"
+        case .shared: return "Do planu"
         }
     }
 
@@ -1135,14 +1191,14 @@ struct RecipeDetailView: View {
 
     private var primaryActionTitle: String {
         switch context {
-        case .catalog: return "Dodaj do planu"
+        case .catalog, .shared: return "Dodaj do planu"
         case .planned: return "Zapisz porcje"
         }
     }
 
     private var primaryActionIcon: String {
         switch context {
-        case .catalog: return "plus"
+        case .catalog, .shared: return "plus"
         case .planned: return "checkmark"
         }
     }
@@ -1153,6 +1209,7 @@ struct RecipeDetailView: View {
     private var isPrimaryActionEnabled: Bool {
         switch context {
         case .catalog: return true
+        case .shared: return !isPreparingPlan && sharedSave != .saving
         case .planned:
             if isPortionMode {
                 return personalPortions?.isEditable == true && !changedPortions.isEmpty
@@ -1165,6 +1222,8 @@ struct RecipeDetailView: View {
         switch context {
         case .catalog:
             isAddToPlanPresented = true
+        case .shared:
+            addSharedToPlan()
         case .planned:
             guard !isSavingServings else { return }
             if isPortionMode {
@@ -1178,6 +1237,84 @@ struct RecipeDetailView: View {
             isSavingServings = true
             onSaveServings?(wholeServings)
             onClose?()
+        }
+    }
+
+    // MARK: - Cudzy przepis (`.shared`)
+
+    /// Lewa połowa paska: „Zapisz u siebie” → „Zapisano”. Szałwia jak
+    /// „Gotuj w TM”, bo to ta sama para — akcja poboczna obok planu.
+    private var saveSharedButton: some View {
+        let isSaved = sharedSave == .saved
+        return Button(action: saveSharedCopy) {
+            HStack(spacing: 7) {
+                Group {
+                    if sharedSave == .saving {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(SCPalette.sage)
+                    } else {
+                        Image(systemName: isSaved ? "checkmark" : "bookmark")
+                            .font(.system(size: 13, weight: .heavy))
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .frame(width: 16, height: 17)
+
+                Text(isSaved ? "Zapisano" : "Zapisz u siebie")
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(-0.1)
+                    .lineLimit(1)
+                    .contentTransition(.interpolate)
+            }
+            .foregroundStyle(SCPalette.sage)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .scSoftCapsule(SCPalette.sage)
+        }
+        .buttonStyle(.plain)
+        .disabled(sharedSave != .idle)
+        .animation(.smooth(duration: 0.2), value: sharedSave)
+        .sensoryFeedback(.success, trigger: isSaved) { _, new in new }
+        .accessibilityLabel(isSaved ? "Zapisano w Twoich przepisach" : "Zapisz u siebie")
+    }
+
+    private func saveSharedCopy() {
+        guard case .shared(let token, _) = context, sharedSave == .idle else { return }
+        sharedSave = .saving
+        Task { @MainActor in
+            do {
+                savedCopy = try await recipeCatalogStore.saveSharedRecipe(token: token)
+                sharedSave = .saved
+            } catch {
+                sharedSave = .idle
+                guard !UserFacingErrorMapper.isCancellation(error) else { return }
+                toasts.error("Nie udało się zapisać przepisu", RecipeLinkErrorCopy.message(for: error))
+            }
+        }
+    }
+
+    /// Plan przyjmuje tylko przepisy tego domu — najpierw kopia (serwer
+    /// oddaje istniejącą, gdy dom już ją ma), potem zwykłe „Dodaj do planu”
+    /// na niej.
+    private func addSharedToPlan() {
+        guard case .shared(let token, _) = context, !isPreparingPlan else { return }
+        if savedCopy != nil {
+            isAddToPlanPresented = true
+            return
+        }
+        isPreparingPlan = true
+        Task { @MainActor in
+            do {
+                savedCopy = try await recipeCatalogStore.saveSharedRecipe(token: token)
+                sharedSave = .saved
+                isPreparingPlan = false
+                isAddToPlanPresented = true
+            } catch {
+                isPreparingPlan = false
+                guard !UserFacingErrorMapper.isCancellation(error) else { return }
+                toasts.error("Nie udało się dodać do planu", RecipeLinkErrorCopy.message(for: error))
+            }
         }
     }
 
@@ -1206,6 +1343,14 @@ struct RecipeDetailView: View {
         }
         #endif
     }
+}
+
+// MARK: - „Zapisz u siebie”
+
+private enum SharedSaveState: Equatable {
+    case idle
+    case saving
+    case saved
 }
 
 // MARK: - Stan wysyłki na listę zakupów
@@ -1310,6 +1455,48 @@ extension View {
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(40)
             .presentationBackground { DetailBackground() }
+    }
+}
+
+// MARK: - Zarys na czas wczytywania
+
+/// Szczegół, zanim przyjdzie przepis — arkusz z linku wjeżdża od razu, więc
+/// przez chwilę stoi na nim zarys: to samo tło, migoczące miejsce na zdjęcie
+/// i tytuł, krzyżyk w tym samym miejscu. Treść wchodzi potem przenikaniem
+/// (`RecipeLinkSheet`), bez przeskoku układu.
+struct RecipeDetailPlaceholder: View {
+    var onClose: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            DetailBackground()
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+                DetailHeroPhoto(url: nil)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    EditorialShimmerBlock(cornerRadius: 8)
+                        .frame(width: 120, height: 24)
+                    EditorialShimmerBlock(cornerRadius: 10)
+                        .frame(height: 34)
+                    EditorialShimmerBlock(cornerRadius: 10)
+                        .frame(width: 200, height: 34)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
+
+                Spacer(minLength: 0)
+            }
+            .ignoresSafeArea(.container, edges: .top)
+        }
+        .overlay(alignment: .topTrailing) {
+            SCSheetCloseButton(onImage: true, action: onClose)
+                .padding(.trailing, 20)
+                .padding(.top, 16)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Wczytywanie przepisu")
     }
 }
 

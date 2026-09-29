@@ -333,6 +333,13 @@ enum ImagePrefetcher {
             }
         }
     }
+
+    /// Obraz z tego samego potoku co ekran (pamięć → dysk → sieć) — dla
+    /// miejsc, które potrzebują `UIImage`, a nie widoku: podgląd linku
+    /// w systemowym arkuszu udostępniania. `nil` przy błędzie.
+    static func image(for url: URL, variant: CachedImageVariant = .thumbnail) async -> UIImage? {
+        try? await SharedImagePipeline.shared.image(for: url, variant: variant)
+    }
 }
 
 struct CachedAsyncImage<Content: View>: View {

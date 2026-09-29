@@ -220,6 +220,9 @@ struct RecipeRowStack: View {
                     accent: accent,
                     action: { onTap(recipe) }
                 )
+                // Przytrzymanie → „Udostępnij” — tylko przy przeglądaniu;
+                // w wyborze do planu wiersz jest polem wyboru, nie przepisem.
+                .recipeShareContextMenu(recipe, isEnabled: mode == .browse)
                 .task {
                     await recipeCatalogStore.loadNextPageIfNeeded(
                         currentItemId: recipe.id,

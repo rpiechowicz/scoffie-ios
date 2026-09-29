@@ -28,6 +28,33 @@ struct HouseholdRecipeState {
     let favoriteRecipeIds: Set<UUID>
 }
 
+/// Adres przepisu do wysłania (`recipes:shareLink`).
+struct RecipeShareLink {
+    let url: URL
+    /// Link przepisu DOMU (z tokenem) — ten da się wyłączyć; link katalogu
+    /// jest publiczny i nic po stronie serwera nie zakłada.
+    let isHouseholdLink: Bool
+}
+
+/// Przepis otwarty linkiem (`recipes:openShared`).
+struct OpenedRecipeLink {
+    enum Origin {
+        /// Przepis katalogu — zwykły szczegół.
+        case catalog
+        /// Przepis TEGO domu (domownik wysłał link domownikowi) — zwykły szczegół.
+        case household
+        /// Przepis innego domu — tylko do odczytu, z „Zapisz u siebie”.
+        case shared
+    }
+
+    let origin: Origin
+    let recipe: Recipe
+    /// Kopia, którą ten dom już zapisał (tylko `.shared`).
+    let savedRecipeId: UUID?
+    /// Token linku, gdy otwarto po tokenie.
+    let shareToken: String?
+}
+
 protocol RecipeRepository {
     func fetchRecipes(page: Int, limit: Int) async throws -> RecipePage
     /// Strona `catalog:snapshot`. `revision` = znacznik z PIERWSZEJ strony
@@ -47,6 +74,17 @@ protocol RecipeRepository {
     /// a jeden przepis wyjęty z kontekstu potrafi być niespójny z resztą.
     func observeRecipeChanges(_ onChange: @escaping () -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
+
+    // Udostępnianie (kontrakt 29.09.2026).
+    func createShareLink(recipeId: UUID) async throws -> RecipeShareLink
+    /// `false` = aktywnego linku już nie było.
+    func revokeShareLink(recipeId: UUID) async throws -> Bool
+    /// Licznik „udostępniono” — PO wysłaniu, nie przy otwarciu arkusza.
+    func markRecipeShared(recipeId: UUID) async throws
+    func openRecipeLink(_ target: RecipeLinkTarget) async throws -> OpenedRecipeLink
+    /// Kopia cudzego przepisu w tym domu (idempotentne — druga prośba oddaje
+    /// tę samą kopię).
+    func saveSharedRecipe(token: String) async throws -> Recipe
 }
 
 protocol RecipeTransportClient {
@@ -59,6 +97,12 @@ protocol RecipeTransportClient {
     func observeFavoritesChanges(_ onChange: @escaping (_ recipeId: String, _ isFavorite: Bool) -> Void)
     func observeRecipeChanges(_ onChange: @escaping () -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
+    func createShareLink(recipeId: String) async throws -> BackendRecipeShareLinkDTO
+    func revokeShareLink(recipeId: String) async throws -> BackendRecipeRevokeShareDTO
+    func markRecipeShared(recipeId: String) async throws
+    /// Dokładnie jedno z dwóch: `slug` (albo UUID przepisu katalogu) lub `token`.
+    func openSharedRecipe(slug: String?, token: String?) async throws -> BackendOpenSharedRecipeDTO
+    func saveSharedRecipe(token: String) async throws -> BackendSaveSharedRecipeDTO
 }
 
 protocol RecipeSocketClient {

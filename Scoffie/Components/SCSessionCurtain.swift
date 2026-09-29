@@ -63,16 +63,38 @@ final class SCSessionCurtain {
     /// Alerty zostają: alert zaproszenia wisi nad korzeniem, nie w nim,
     /// a zamknięty z zewnątrz rozjechałby się ze swoim `isPresented`.
     func dismissPresentedScreens() {
-        let windows = UIApplication.shared.connectedScenes
+        for root in Self.presentingRoots() {
+            root.dismiss(animated: false)
+        }
+    }
+
+    /// To samo, ale Z animacją i z czekaniem na jej koniec — bez zasłony.
+    /// Dla przepisu z linku otwieranego nad działającym pulpitem: nowy arkusz
+    /// może wjechać dopiero, gdy stary zjedzie (UIKit nie pokaże drugiego
+    /// nad kontrolerem, który już coś przedstawia), a zniknięcie bez ruchu
+    /// wyglądałoby jak błąd, nie jak przejście.
+    func dismissPresentedScreensAnimated() async {
+        for root in Self.presentingRoots() {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                root.dismiss(animated: true) {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// Korzenie okien aplikacji, które coś przedstawiają (poza alertem).
+    private static func presentingRoots() -> [UIViewController] {
+        UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
             .filter { !($0 is SCSessionCurtainWindow) }
-        for window in windows {
-            guard let root = window.rootViewController,
-                  let presented = root.presentedViewController,
-                  !(presented is UIAlertController) else { continue }
-            root.dismiss(animated: false)
-        }
+            .compactMap { window -> UIViewController? in
+                guard let root = window.rootViewController,
+                      let presented = root.presentedViewController,
+                      !(presented is UIAlertController) else { return nil }
+                return root
+            }
     }
 
     fileprivate func didCover() {

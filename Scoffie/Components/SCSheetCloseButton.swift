@@ -38,33 +38,65 @@ struct SCSheetIconButton: View {
     /// krążek znikał. Tu dostaje kryjące tło arkusza pod szkłem i miękki
     /// cień; rozmiar, glif i obwódka zostają te same.
     var onImage: Bool = false
+    /// Praca w toku — kręciołek w krążku (patrz `SCSheetIconLabel.isBusy`).
+    var isBusy: Bool = false
     let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            SCSheetIconLabel(systemName: systemName, tint: tint, onImage: onImage, isBusy: isBusy)
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.9))
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+/// Sam krążek `SCSheetIconButton` — bez przycisku wokół.
+///
+/// Dla kontrolek, które nie są zwykłym `Button`, a mają stać w tym samym
+/// komplecie: `Menu` („Udostępnij” / „Wyłącz link” w szczegółach przepisu)
+/// rysuje ten sam krążek jako swoją etykietę, zamiast drugiej kopii rysunku.
+struct SCSheetIconLabel: View {
+    let systemName: String
+    var tint: Color? = nil
+    var onImage: Bool = false
+    /// Praca w toku (np. pobieranie linku) — kręciołek w miejscu glifu,
+    /// krążek zostaje ten sam, więc sąsiedzi nie drgną.
+    var isBusy: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(tint ?? (onImage ? Color.scLabel(scheme) : Color.scMuted(scheme)))
-                // W górę: stary glif odjeżdża do góry, nowy wjeżdża od dołu —
-                // serce „napełnia się” ruchem, a nie przenikaniem.
-                .contentTransition(.symbolEffect(.replace.upUp))
-                .frame(width: 36, height: 36)
-                .background {
-                    if onImage {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(Color.scCanvas(scheme).opacity(0.78)))
-                    }
-                    Circle().fill(Color.scChipBg(scheme))
-                }
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-                .shadow(color: .black.opacity(onImage ? (scheme == .dark ? 0.35 : 0.16) : 0), radius: 6, x: 0, y: 2)
-                .contentShape(Circle())
+        let glyph = tint ?? (onImage ? Color.scLabel(scheme) : Color.scMuted(scheme))
+        Group {
+            if isBusy {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(glyph)
+                    .transition(.opacity)
+            } else {
+                Image(systemName: systemName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(glyph)
+                    // W górę: stary glif odjeżdża do góry, nowy wjeżdża od dołu —
+                    // serce „napełnia się” ruchem, a nie przenikaniem.
+                    .contentTransition(.symbolEffect(.replace.upUp))
+                    .transition(.opacity)
+            }
         }
-        .buttonStyle(PlanPressStyle(scale: 0.9))
-        .accessibilityLabel(accessibilityLabel)
+        .frame(width: 36, height: 36)
+        .background {
+            if onImage {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Circle().fill(Color.scCanvas(scheme).opacity(0.78)))
+            }
+            Circle().fill(Color.scChipBg(scheme))
+        }
+        .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+        .shadow(color: .black.opacity(onImage ? (scheme == .dark ? 0.35 : 0.16) : 0), radius: 6, x: 0, y: 2)
+        .contentShape(Circle())
+        .animation(.smooth(duration: 0.2), value: isBusy)
     }
 }
 

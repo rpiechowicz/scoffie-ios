@@ -31,7 +31,9 @@ struct EditorialRecipeStoryCard: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private let cornerRadius: CGFloat = 26
+    /// Na zewnątrz dla kształtu podglądu przytrzymanej karty (`contextMenu`).
+    static let cornerRadius: CGFloat = 26
+
     private var height: CGFloat { Self.cardHeight }
 
     var body: some View {
@@ -57,9 +59,9 @@ struct EditorialRecipeStoryCard: View {
             bottomContent
         }
         .frame(height: height)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         )
         // Bez cienia pod kartą. Karuzela to poziomy `ScrollView`, który

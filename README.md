@@ -41,7 +41,8 @@ For local backend development on a physical iPhone, override `API_BASE_URL` in y
 
 ## Runtime notes
 
-- URL scheme: `scoffie://`
+- URL scheme: `scoffie://` (`invite?token=`, `recipe?slug=`, `recipe?token=`)
+- Universal Links: `applinks:scoffie.app` only (`www` is a redirect to the apex, and Apple does not follow redirects for the association file) — `/zaproszenie/#<token>`, `/przepis/<slug>`, `/przepis/u/<token>`; one parser, `DeepLink`. The Associated Domains capability must be enabled on the App ID
 - Bundle identifier: `app.scoffie.ios`
 - Push token registration happens automatically after app launch and login
 - APNs testing requires a physical iPhone

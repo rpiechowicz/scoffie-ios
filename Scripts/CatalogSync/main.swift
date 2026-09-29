@@ -720,5 +720,37 @@ do {
     check(oddDTO.toAppRecipe()?.taxonomy?.seasons == [], "14: obcy kształt jednego pola gubi tylko to pole, nie przepis")
 }
 
+// MARK: - 15. Udostępnianie (kontrakt 29.09.2026)
+//
+// `slug` katalogu i `shareUrl` przepisu domu przechodzą z JSON-a do przepisu
+// i przeżywają plik cache; stary plik bez tych kluczy dalej się czyta.
+
+do {
+    var json = recipeDict(recipeUUID(950), "Bigos")
+    json["slug"] = "bigos-staropolski"
+    json["shareUrl"] = "https://scoffie.app/przepis/u/aaaaaaaaaaaaaaaaaaaaaa"
+    let dto = try JSONDecoder().decode(BackendRecipeDTO.self, from: try JSONSerialization.data(withJSONObject: json))
+    let recipe = dto.toAppRecipe()
+    check(recipe?.slug == "bigos-staropolski", "15: slug z JSON-a serwera trafia do przepisu")
+    check(recipe?.shareUrl?.absoluteString == "https://scoffie.app/przepis/u/aaaaaaaaaaaaaaaaaaaaaa",
+          "15: shareUrl z JSON-a serwera trafia do przepisu")
+    let cached = try JSONDecoder().decode(Recipe.self, from: try JSONEncoder().encode(recipe!))
+    check(cached.slug == recipe?.slug && cached.shareUrl == recipe?.shareUrl, "15: slug i shareUrl przeżywają zapis do pliku cache")
+
+    var nulls = recipeDict(recipeUUID(951), "Przepis domu")
+    nulls["slug"] = NSNull()
+    nulls["shareUrl"] = NSNull()
+    let nullDTO = try JSONDecoder().decode(BackendRecipeDTO.self, from: try JSONSerialization.data(withJSONObject: nulls))
+    check(nullDTO.toAppRecipe()?.slug == nil && nullDTO.toAppRecipe()?.shareUrl == nil, "15: null z serwera → nil")
+
+    // Plik cache sprzed udostępniania: przepis bez kluczy `slug` / `shareUrl`.
+    var legacy = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(recipe!)) as! [String: Any]
+    legacy.removeValue(forKey: "slug")
+    legacy.removeValue(forKey: "shareUrl")
+    let legacyRecipe = try JSONDecoder().decode(Recipe.self, from: try JSONSerialization.data(withJSONObject: legacy))
+    check(legacyRecipe.slug == nil && legacyRecipe.shareUrl == nil && legacyRecipe.name == "Bigos",
+          "15: stary plik cache bez nowych kluczy czyta się bez nich")
+}
+
 print(failures == 0 ? "\nWSZYSTKO OK" : "\nBŁĘDÓW: \(failures)")
 exit(failures == 0 ? 0 : 1)
