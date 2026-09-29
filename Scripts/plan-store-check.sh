@@ -48,6 +48,7 @@ xcrun swiftc $PLUGIN_ARGS -o "$OUT" \
   "Scoffie/Networking/Recipes/BackendRecipeDTOs.swift" \
   "Scoffie/Networking/Recipes/BackendCatalogSyncDTOs.swift" \
   "Scoffie/Networking/Recipes/RecipeProtocols.swift" \
+  "Scoffie/Models/Session/DeepLink.swift" \
   "Scoffie/Networking/ShoppingList/BackendShoppingListDTOs.swift" \
   "Scoffie/Networking/Integrations/IntegrationsAPIClient.swift" \
   "Scoffie/Networking/Integrations/IntegrationsDTOs.swift" \
