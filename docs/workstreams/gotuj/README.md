@@ -68,9 +68,12 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D9 | 29.09 | Poziom szczegółu „pośredni”: nie tłumaczymy podstaw, tłumaczymy techniki (§5.1) | przyjęte |
 | D10 | 29.09 | Przepis wzorcowy do designu i do promptu: **Kotlet de volaille z ziemniakami i mizerią** (§10) | propozycja |
 | D11 | 29.09 | Porcje: domyślnie tyle, ile w planie; na powitaniu widać „Gotujesz 2 porcje” i można zmienić tylko na tę sesję, bez ruszania planu (§4.3) | propozycja |
-| D12 | 29.09 | Wejścia: szczegóły posiłku/przepisu + skrót na wielkim talerzu Kalendarza w oknie „Pora gotować” + akcja w powiadomieniu „Pora gotować” (§4.1) | propozycja |
+| D12 | 29.09 | ~~Wejścia: szczegóły posiłku/przepisu + skrót na wielkim talerzu Kalendarza w oknie „Pora gotować” + akcja w powiadomieniu „Pora gotować” (§4.1)~~ → D16 | zastąpione |
 | D13 | 29.09 | Paywall: v1 za darmo dla wszystkich, gotowe pod flagę; decyzja o płatności razem z v2 (§12) | propozycja |
 | D14 | 29.09 | Kolejność prac: dokument → scenariusz wzorcowy → Claude Design → model danych → system → iOS (§11) | propozycja |
+| D15 | 29.09 | Scenariusz jest **zapisany w bazie na stałe** przy każdym przepisie — jak składniki i kroki. Uzupełnienie całego katalogu dopiero po designie | przyjęte |
+| D16 | 29.09 | Gotuj na talerzu Kalendarza **zawsze** (nie tylko w oknie „Pora gotować”) — ktoś może gotować 2 h wcześniej, nie blokujemy. W oknie „Pora gotować” pigułka tylko mocniej akcentowana (§4.1) | przyjęte |
+| D17 | 29.09 | Design startuje od ekranu kroku: 4 kierunki na kanwie (A Karta, B Scena, C Oś pracy, D Mikrokroki) — https://claude.ai/artifact/DEnbNj45aY4X9Xaq1siV4D | w toku |
 
 ## 4. Przepływ użytkownika
 
@@ -79,10 +82,10 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 1. **Szczegóły posiłku / przepisu** — przycisk **Gotuj** w stopce akcji (`AssistantStickyFooter`),
    obok akcji planu. Jedno miejsce implementacji, działa i z Kalendarza (zdjęcie talerza otwiera
    szczegóły), i z Przepisów.
-2. **Wielki talerz w Kalendarzu** — gdy danie jest w oknie „Pora gotować” (`CalendarPlate`,
-   `isCooking`), obok pieczątki pojawia się mała pigułka **Gotuj** (wariant soft). Talerz już
-   „oddycha” w tym oknie — pigułka jest odpowiedzią na pytanie, które ten oddech zadaje.
-   Poza oknem pigułki nie ma (Gotuj zostaje w szczegółach), żeby talerz nie dostał trzeciej akcji na stałe.
+2. **Wielki talerz w Kalendarzu** — pigułka **Gotuj** (wariant soft) obok pieczątki, **zawsze**
+   dla dania ze scenariuszem (D16): kto chce gotować 2 h wcześniej, nie może być blokowany.
+   W oknie „Pora gotować” (`CalendarPlate`, `isCooking`) pigułka jest mocniej akcentowana,
+   razem z „oddechem” talerza; poza oknem stoi spokojnie. Zjedzone danie — pigułki nie ma.
 3. **Powiadomienie „Pora gotować”** (`MealReminderService`) — akcja **Gotuj** otwiera od razu
    powitanie trybu gotowania.
 4. **Trwająca sesja** — na talerzu i w szczegółach zamiast „Gotuj” stoi **Wróć do gotowania**
