@@ -440,6 +440,12 @@ struct RecipesView: View {
                                 .frame(height: EditorialRecipeStoryCard.cardHeight)
                         }
                         .buttonStyle(.plain)
+                        // Przytrzymanie → „Udostępnij”; podgląd w kształcie karty.
+                        .contentShape(
+                            .contextMenuPreview,
+                            RoundedRectangle(cornerRadius: EditorialRecipeStoryCard.cornerRadius, style: .continuous)
+                        )
+                        .recipeShareContextMenu(recipe)
                         // Serce NAD przyciskiem karty, a nie w nim: stuknięcie
                         // przełącza ulubione i nie otwiera szczegółów. Wcześniej
                         // było samym obrazkiem — trafiało w kartę.

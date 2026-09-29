@@ -174,6 +174,82 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
             onReconnect()
         }
     }
+
+    // MARK: - Udostępnianie
+    //
+    // Płaski ładunek jak `recipes:householdState`: serwer bierze tożsamość
+    // z socketu, a `householdId` sprawdza członkostwem — cudzy dom to
+    // `NOT_HOUSEHOLD_MEMBER`, cudzy przepis bez tokenu `RECIPE_NOT_FOUND`.
+
+    func createShareLink(recipeId: String) async throws -> BackendRecipeShareLinkDTO {
+        try await emitHouseholdEvent(
+            "recipes:shareLink",
+            fields: ["recipeId": recipeId],
+            as: BackendRecipeShareLinkDTO.self
+        )
+    }
+
+    func revokeShareLink(recipeId: String) async throws -> BackendRecipeRevokeShareDTO {
+        try await emitHouseholdEvent(
+            "recipes:revokeShare",
+            fields: ["recipeId": recipeId],
+            as: BackendRecipeRevokeShareDTO.self
+        )
+    }
+
+    func markRecipeShared(recipeId: String) async throws {
+        _ = try await emitHouseholdEvent(
+            "recipes:shared",
+            fields: ["recipeId": recipeId],
+            as: BackendRecipeSharedAckDTO.self
+        )
+    }
+
+    func openSharedRecipe(slug: String?, token: String?) async throws -> BackendOpenSharedRecipeDTO {
+        var fields: [String: Any] = [:]
+        if let token {
+            fields["token"] = token
+        } else if let slug {
+            fields["slug"] = slug
+        }
+        return try await emitHouseholdEvent(
+            "recipes:openShared",
+            fields: fields,
+            as: BackendOpenSharedRecipeDTO.self
+        )
+    }
+
+    func saveSharedRecipe(token: String) async throws -> BackendSaveSharedRecipeDTO {
+        try await emitHouseholdEvent(
+            "recipes:saveShared",
+            fields: ["token": token],
+            as: BackendSaveSharedRecipeDTO.self
+        )
+    }
+
+    /// Zdarzenie gospodarstwa: `userId` + `householdId` + pola zdarzenia,
+    /// odpowiedź z koperty albo błąd z jej kodem.
+    private func emitHouseholdEvent<T: Decodable>(
+        _ event: String,
+        fields: [String: Any],
+        as type: T.Type
+    ) async throws -> T {
+        guard let householdId, !householdId.isEmpty else {
+            throw RecipeDataError.serverError(message: "Brak gospodarstwa dla \(event).")
+        }
+        var payload = fields
+        payload["userId"] = userId
+        payload["householdId"] = householdId
+        let envelope: WsEnvelope<T> = try await socket.emitWithAck(
+            event: event,
+            payload: payload,
+            as: WsEnvelope<T>.self
+        )
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd \(event).")
+    }
 }
 
 // MARK: - Internal DTO (only used by the transport client above)
@@ -181,8 +257,10 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
 private struct BackendRecipeChangedDTO: Codable {
     let householdId: String
     let recipeId: String
-    /// `UPDATED` albo `DELETED` — dziś nie rozróżniamy, bo obie kończą się
-    /// przeładowaniem katalogu.
+    /// `CREATED` (kopia z „Zapisz u siebie”), `UPDATED` (także nowy albo
+    /// wyłączony link) albo `DELETED` — nie rozróżniamy: każda, również
+    /// nieznana, kończy się przeładowaniem stanu domu. Dlatego `String`,
+    /// a nie wyliczenie — nowa wartość z serwera nie może zgubić zdarzenia.
     let action: String
     let changedByUserId: String?
 }

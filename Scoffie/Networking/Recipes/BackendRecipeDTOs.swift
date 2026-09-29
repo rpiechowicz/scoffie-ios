@@ -57,6 +57,11 @@ struct BackendRecipeDTO: Codable {
     let occasions: [String]?
     let equipment: [String]?
     let features: [String]?
+    /// Publiczny slug przepisu katalogu (udostępnianie). Opcjonalny — starszy
+    /// backend go nie dowozi, a przepisy domu mają `null`.
+    let slug: String?
+    /// Aktywny link przepisu domu — tylko w `recipes:householdState`.
+    let shareUrl: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -88,6 +93,8 @@ struct BackendRecipeDTO: Codable {
         case occasions
         case equipment
         case features
+        case slug
+        case shareUrl
     }
 
     init(from decoder: Decoder) throws {
@@ -124,7 +131,45 @@ struct BackendRecipeDTO: Codable {
         occasions = try? container.decodeIfPresent([String].self, forKey: .occasions)
         equipment = try? container.decodeIfPresent([String].self, forKey: .equipment)
         features = try? container.decodeIfPresent([String].self, forKey: .features)
+        slug = try? container.decodeIfPresent(String.self, forKey: .slug)
+        shareUrl = try? container.decodeIfPresent(String.self, forKey: .shareUrl)
     }
+}
+
+// MARK: - Udostępnianie (kontrakt 29.09.2026)
+
+/// `recipes:shareLink` — adres do wysłania. Katalog: `/przepis/<slug>`
+/// i `token == nil`; przepis domu: `/przepis/u/<token>`.
+struct BackendRecipeShareLinkDTO: Decodable {
+    let url: String
+    let kind: String
+    let token: String?
+}
+
+/// `recipes:revokeShare` — `false`, gdy aktywnego linku już nie było.
+struct BackendRecipeRevokeShareDTO: Decodable {
+    let revoked: Bool
+}
+
+/// `recipes:shared` — sam licznik; odpowiedź czytamy pobłażliwie.
+struct BackendRecipeSharedAckDTO: Decodable {
+    let ok: Bool?
+}
+
+/// `recipes:openShared` — przepis spod linku i to, kim jest dla tego domu.
+struct BackendOpenSharedRecipeDTO: Decodable {
+    /// `CATALOG` / `HOUSEHOLD` / `SHARED` (przepis innego domu, tylko odczyt).
+    let origin: String
+    let recipe: BackendRecipeDTO
+    /// Kopia, którą ten dom już zapisał (tylko `SHARED`).
+    let savedRecipeId: String?
+    let shareToken: String?
+}
+
+/// `recipes:saveShared` — kopia w tym domu (albo istniejąca, `created: false`).
+struct BackendSaveSharedRecipeDTO: Decodable {
+    let recipe: BackendRecipeDTO
+    let created: Bool?
 }
 
 struct BackendRecipeInstructionDTO: Codable {
@@ -271,7 +316,9 @@ extension BackendRecipeDTO {
             sourceRecipeId: sourceRecipeId,
             allergens: allergens,
             dietTags: dietTags,
-            taxonomy: appTaxonomy
+            taxonomy: appTaxonomy,
+            slug: slug.flatMap { $0.isEmpty ? nil : $0 },
+            shareUrl: shareUrl.flatMap { URL(string: $0) }
         )
     }
 }

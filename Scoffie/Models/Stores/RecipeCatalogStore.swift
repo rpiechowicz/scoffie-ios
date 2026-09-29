@@ -364,25 +364,108 @@ final class RecipeCatalogStore {
         do {
             let detailed = try await repository.fetchRecipeById(recipeId)
             guard !isInvalidated else { return nil }
-            if let index = recipes.firstIndex(where: { $0.id == recipeId }) {
-                recipes[index] = detailed
-            } else {
-                recipes.append(detailed)
-            }
-            // Pełna wersja także w stanie, z którego lista się przebudowuje —
-            // inaczej następny sync cofałby ją do wersji z listy.
-            core.replaceItem(
-                catalogKey: CatalogSyncMapping.key(recipeId.uuidString),
-                with: ApiRecipeRepository.catalogCopy(detailed),
-                householdItem: detailed,
-                isSame: { $0.id == recipeId }
-            )
-            return detailed
+            return adoptDetailed(detailed)
         } catch {
             guard !isInvalidated else { return nil }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return recipes.first(where: { $0.id == recipeId })
         }
+    }
+
+    /// Pełna wersja przepisu (szczegóły) na liście i w stanie, z którego lista
+    /// się przebudowuje — inaczej następny sync cofałby ją do wersji z listy.
+    @discardableResult
+    private func adoptDetailed(_ detailed: Recipe) -> Recipe {
+        var detailed = detailed
+        let recipeId = detailed.id
+        if let index = recipes.firstIndex(where: { $0.id == recipeId }) {
+            // Szczegół (`recipes:findById`, `recipes:openShared`) nie niesie
+            // aktywnego linku domu — ten przychodzi tylko ze stanem domu.
+            // Bez tego pełna wersja gasiła „Wyłącz link” do następnego
+            // odświeżenia.
+            if detailed.shareUrl == nil {
+                detailed.shareUrl = recipes[index].shareUrl
+            }
+            recipes[index] = detailed
+        } else {
+            recipes.append(detailed)
+        }
+        core.replaceItem(
+            catalogKey: CatalogSyncMapping.key(recipeId.uuidString),
+            with: ApiRecipeRepository.catalogCopy(detailed),
+            householdItem: detailed,
+            isSame: { $0.id == recipeId }
+        )
+        return detailed
+    }
+
+    // MARK: - Udostępnianie
+
+    /// Adres przepisu do wysłania. Link przepisu DOMU od razu zostaje na
+    /// przepisie (`shareUrl`), więc „Wyłącz link” pojawia się bez czekania
+    /// na `recipes:changed`, które dostają pozostali domownicy.
+    func shareLink(for recipeId: UUID) async throws -> URL {
+        let link = try await repository.createShareLink(recipeId: recipeId)
+        if link.isHouseholdLink {
+            applyShareUrl(link.url, to: recipeId)
+        }
+        return link.url
+    }
+
+    /// „Wyłącz link” — na zawsze; następne „Udostępnij” wyda nowy adres.
+    /// `revoked == false` (link zgasił już ktoś inny) to dla użytkownika ten
+    /// sam wynik, więc nie ma osobnej ścieżki.
+    func revokeShareLink(for recipeId: UUID) async throws {
+        _ = try await repository.revokeShareLink(recipeId: recipeId)
+        applyShareUrl(nil, to: recipeId)
+    }
+
+    /// Licznik „udostępniono” — po faktycznym wysłaniu. Cichy: jego błąd
+    /// niczego nie zmienia po stronie użytkownika.
+    func markShared(_ recipeId: UUID) async {
+        try? await repository.markRecipeShared(recipeId: recipeId)
+    }
+
+    /// Przepis spod linku. Przepis katalogu i przepis tego domu trafiają na
+    /// listę w pełnej wersji (jak po `loadRecipeDetail`), żeby szczegół mógł
+    /// brać ŻYWY przepis — z sercem, które nadąża za zapisem. Cudzy przepis
+    /// (`.shared`) nie należy ani do katalogu, ani do domu — nie wchodzi nigdzie.
+    func openRecipeLink(_ target: RecipeLinkTarget) async throws -> OpenedRecipeLink {
+        let opened = try await repository.openRecipeLink(target)
+        guard !isInvalidated else { throw CancellationError() }
+        if opened.origin != .shared {
+            adoptDetailed(opened.recipe)
+        }
+        return opened
+    }
+
+    /// „Zapisz u siebie” — kopia cudzego przepisu w tym domu. Stan domu
+    /// odświeża się od razu (kopia ma być na liście, zanim ktoś zamknie
+    /// arkusz), a nie dopiero po `recipes:changed` (`CREATED`), które tu
+    /// i tak przyjdzie.
+    func saveSharedRecipe(token: String) async throws -> Recipe {
+        let copy = try await repository.saveSharedRecipe(token: token)
+        guard !isInvalidated else { throw CancellationError() }
+        do {
+            try await refreshHouseholdState()
+            rebuildRecipes()
+        } catch {
+            // Kopia jest zapisana — lista dojedzie ze zdarzeniem albo przy
+            // następnym odświeżeniu.
+        }
+        return copy
+    }
+
+    private func applyShareUrl(_ url: URL?, to recipeId: UUID) {
+        guard !isInvalidated, let index = recipes.firstIndex(where: { $0.id == recipeId }) else { return }
+        recipes[index].shareUrl = url
+        let updated = recipes[index]
+        core.replaceItem(
+            catalogKey: CatalogSyncMapping.key(recipeId.uuidString),
+            with: ApiRecipeRepository.catalogCopy(updated),
+            householdItem: updated,
+            isSame: { $0.id == recipeId }
+        )
     }
 
     /// Ustawia ulubione na podaną wartość — nic nie robi, gdy przepis już ją ma.

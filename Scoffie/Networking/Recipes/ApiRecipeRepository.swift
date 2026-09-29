@@ -88,4 +88,62 @@ final class ApiRecipeRepository: RecipeRepository {
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void) {
         client.observeRealtimeReconnect(onReconnect)
     }
+
+    // MARK: - Udostępnianie
+
+    func createShareLink(recipeId: UUID) async throws -> RecipeShareLink {
+        let dto = try await client.createShareLink(recipeId: Self.wireId(recipeId))
+        guard let url = URL(string: dto.url) else {
+            throw RecipeDataError.serverError(message: "Nieprawidłowy adres z recipes:shareLink.")
+        }
+        return RecipeShareLink(url: url, isHouseholdLink: dto.kind == "HOUSEHOLD")
+    }
+
+    func revokeShareLink(recipeId: UUID) async throws -> Bool {
+        try await client.revokeShareLink(recipeId: Self.wireId(recipeId)).revoked
+    }
+
+    func markRecipeShared(recipeId: UUID) async throws {
+        try await client.markRecipeShared(recipeId: Self.wireId(recipeId))
+    }
+
+    func openRecipeLink(_ target: RecipeLinkTarget) async throws -> OpenedRecipeLink {
+        let dto: BackendOpenSharedRecipeDTO
+        switch target {
+        case .catalog(let slug):
+            dto = try await client.openSharedRecipe(slug: slug, token: nil)
+        case .shared(let token):
+            dto = try await client.openSharedRecipe(slug: nil, token: token)
+        }
+        guard let recipe = dto.recipe.toAppRecipe() else {
+            throw RecipeDataError.serverError(message: "Nie udało się zmapować recipes:openShared.")
+        }
+        let origin: OpenedRecipeLink.Origin
+        switch dto.origin {
+        case "CATALOG": origin = .catalog
+        case "HOUSEHOLD": origin = .household
+        // Nieznane pochodzenie traktujemy jak obce: tylko odczyt to jedyny
+        // tryb, w którym telefon nie wyśle zapisu, którego serwer nie przyjmie.
+        default: origin = .shared
+        }
+        return OpenedRecipeLink(
+            origin: origin,
+            recipe: recipe,
+            savedRecipeId: dto.savedRecipeId.flatMap { UUID(uuidString: $0) },
+            shareToken: dto.shareToken ?? target.shareToken
+        )
+    }
+
+    func saveSharedRecipe(token: String) async throws -> Recipe {
+        let dto = try await client.saveSharedRecipe(token: token)
+        guard let recipe = dto.recipe.toAppRecipe() else {
+            throw RecipeDataError.serverError(message: "Nie udało się zmapować recipes:saveShared.")
+        }
+        return recipe
+    }
+
+    /// UUID małymi literami — tak, jak trzyma je baza i jak wracają w odpowiedziach.
+    private static func wireId(_ id: UUID) -> String {
+        id.uuidString.lowercased()
+    }
 }

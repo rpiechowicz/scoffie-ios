@@ -241,6 +241,17 @@ struct Recipe: Identifiable, Codable {
     /// `cuisine`, `moments`, `isAirfryer`, `isLunchbox`.
     var taxonomy: RecipeTaxonomy?
 
+    /// Publiczny adres przepisu KATALOGU (`/przepis/<slug>`). Nadaje go baza
+    /// i nie zmienia się z tytułem; przepisy domu go nie mają. `nil` też
+    /// w cache'u sprzed udostępniania — link i tak buduje serwer
+    /// (`recipes:shareLink`), więc brak nic nie psuje.
+    var slug: String?
+
+    /// Aktywny link przepisu własnego gospodarstwa (`recipes:householdState`)
+    /// albo `nil`. Z niego szczegóły wiedzą, czy obok „Udostępnij” pokazać
+    /// „Wyłącz link” — także na telefonie domownika, który linku nie wysyłał.
+    var shareUrl: URL?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -260,7 +271,9 @@ struct Recipe: Identifiable, Codable {
         sourceRecipeId: String? = nil,
         allergens: [String]? = nil,
         dietTags: [String]? = nil,
-        taxonomy: RecipeTaxonomy? = nil
+        taxonomy: RecipeTaxonomy? = nil,
+        slug: String? = nil,
+        shareUrl: URL? = nil
     ) {
         self.id = id
         self.name = name
@@ -281,6 +294,8 @@ struct Recipe: Identifiable, Codable {
         self.allergens = allergens
         self.dietTags = dietTags
         self.taxonomy = taxonomy
+        self.slug = slug
+        self.shareUrl = shareUrl
     }
 }
 
@@ -299,6 +314,7 @@ extension Recipe {
         case sourceProvider, sourceRecipeId
         case allergens, dietTags
         case taxonomy
+        case slug, shareUrl
     }
 
     init(from decoder: Decoder) throws {
@@ -332,6 +348,10 @@ extension Recipe {
         dietTags = try container.decodeIfPresent([String].self, forKey: .dietTags)
         // Brak klucza (cache sprzed katalogu 1000) = nil = heurystyka filtrów.
         taxonomy = try? container.decodeIfPresent(RecipeTaxonomy.self, forKey: .taxonomy)
+        // Brak klucza (cache sprzed udostępniania) = nil — bez podbijania
+        // wersji pliku: oba pola są tylko podpowiedzią dla przycisku.
+        slug = try? container.decodeIfPresent(String.self, forKey: .slug)
+        shareUrl = try? container.decodeIfPresent(URL.self, forKey: .shareUrl)
     }
 }
 

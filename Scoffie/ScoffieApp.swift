@@ -556,7 +556,9 @@ struct ScoffieApp: App {
         recipeCatalogStore: RecipeCatalogStore,
         shoppingListStore: ShoppingListStore
     ) -> some View {
-        DashboardView()
+        // `isRevealed`: przepis z linku otwiera się dopiero nad WIDOCZNYM
+        // pulpitem — arkusz pokazany pod loaderem startu wjechałby nad niego.
+        DashboardView(isRevealed: !showsStartupLoader)
             // Inne gospodarstwo = inny pulpit: stan ekranów (wybrany
             // dzień, filtry, przewinięcie) nie przechodzi między domami.
             .id(sessionStore.currentHouseholdId ?? "")
@@ -676,6 +678,8 @@ struct ScoffieApp: App {
                     }
                 }
             }
+            // Każdy link: Universal Link z `scoffie.app` (zaproszenie, przepis)
+            // i schemat `scoffie://` — jeden parser, `DeepLink`.
             .onOpenURL { url in
                 sessionStore.handleIncomingURL(url)
             }
