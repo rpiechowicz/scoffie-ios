@@ -1,0 +1,550 @@
+# Gotuj — tryb gotowania krok po kroku
+
+Data założenia: 2026-09-29 · Status: **wizja v1, przed designem** · Platforma v1: iOS (backend globalny)
+
+Ten plik jest jedynym źródłem prawdy o funkcji. Każda decyzja trafia do tabeli [Decyzje](#3-decyzje)
+z datą; zmiana decyzji = nowy wiersz, stary zostaje przekreślony, nie znika.
+
+---
+
+## 1. Wizja w jednym akapicie
+
+Użytkownik stoi w kuchni, stuka **Gotuj** i przechodzi w pełnoekranowy tryb, który prowadzi go przez
+posiłek jak ktoś, kto gotował to danie sto razy. Na starcie widzi, co gotuje, dla ilu porcji, co
+wyjąć i przygotować, i dostaje kilka rad od kucharza. Potem idzie krok po kroku: każdy krok mówi
+jednym zdaniem, co zrobić teraz, a pod spodem prostymi słowami — jak. Ilości stoją przy kroku
+(„2 jajka”, „połowa koperku, 5 g”), więc nikt nie przewija listy składników. Tam, gdzie coś się
+gotuje, piecze albo chłodzi, jednym stuknięciem startuje systemowy timer — widoczny na ekranie
+blokady, w Dynamic Island i dzwoniący nawet przy wyciszonym telefonie. Scenariusz układa pracę tak,
+żeby wszystko było gotowe naraz: piekarnik nagrzewa się wtedy, kiedy będzie potrzebny, a mizerię
+robisz, gdy kotlety dochodzą w piekarniku.
+
+## 2. Zakres
+
+### v1 (budujemy)
+
+- Scenariusz gotowania dla **każdego przepisu katalogu** (1072) — napisany i sprawdzony **przed**
+  wejściem użytkownika na widok. Żadnego generowania w locie.
+- Scenariusze dla **przepisów domów** (asystent, własne, kopie z udostępnienia) — generowane w tle
+  przy zapisie przepisu tym samym systemem (§7.6). Też gotowe przed wejściem.
+- Pełnoekranowy widok Gotuj: powitanie → kroki → zakończenie.
+- Skalowanie ilości do liczby porcji z zaokrąglaniem (§5.4).
+- Timery systemowe (AlarmKit), Live Activity, Dynamic Island, ekran blokady, StandBy.
+- Trwała sesja: wyjście, zablokowanie telefonu, zabicie apki przez system → wracasz tam, gdzie byłeś.
+- Pełne animacje przejść, timerów i zakończenia.
+
+### Poza v1
+
+- Przepisy z Cookidoo — tam gotuje Thermomix, zostaje „Gotuj w Thermomixie”.
+- Android — backend od początku globalny, więc Android podłączy się później bez zmian w danych.
+- Kilka przepisów na jednej osi czasu (danie + dodatek `SIDE`) — model danych ma to dopuszczać (§6).
+
+### v2 — pomysły zapisane, żeby nie uciekły
+
+- **Zapytaj asystenta w trakcie gotowania** („czy dobrze mi idzie?”, „czym zastąpić śmietanę?”)
+  z kontekstem sesji: przepis, krok, działające timery, porcje.
+- **Zdjęcie potrawy** („czy tak ma wyglądać?”). Twarda zasada na przyszłość: asystent **nigdy**
+  nie potwierdza bezpieczeństwa (np. dopieczenia drobiu) na podstawie zdjęcia — zawsze odsyła do
+  temperatury w środku / czasu / wskazówki z kroku. Do zrobienia przy v2: koszt modelu z obrazem,
+  polityka prywatności, zgoda asystenta.
+- Czytanie kroków na głos (polski głos systemowy) i sterowanie głosem („dalej”, „ile zostało?”).
+- Siri / App Shortcuts: „następny krok w Scoffie”.
+
+Co v1 robi dla v2 już teraz: sesja gotowania ma jeden serializowalny stan (§8.6), który da się
+przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przycisk asystenta.
+
+## 3. Decyzje
+
+| # | Data | Decyzja | Status |
+|---|---|---|---|
+| D1 | 29.09 | Scenariusz osobno dla każdego posiłku, oparty o przygotowanie i kroki; każdy krok rozbudowany tekstowo, prostym językiem | przyjęte |
+| D2 | 29.09 | Scenariusz powstaje przez system (prompt budowany automatem → AI → walidatory → przegląd), nie ręcznie i nie w locie | przyjęte |
+| D3 | 29.09 | Scenariusz globalny (backend, niezależny od platformy) | przyjęte |
+| D4 | 29.09 | Ilości przy kroku, skalowane do porcji i zaokrąglane | przyjęte |
+| D5 | 29.09 | Timery na AlarmKit (dzwonią mimo wyciszenia i Focus), prezentacja w Live Activity / Dynamic Island | przyjęte |
+| D6 | 29.09 | Widok Gotuj jako pełny ekran (`fullScreenCover`), nie arkusz — nie da się go zamknąć przypadkiem | przyjęte |
+| D7 | 29.09 | Bez listy do odhaczania składników — powitanie pokazuje, co przygotować, i tyle | przyjęte |
+| D8 | 29.09 | Cookidoo poza zakresem; Android i Windows nie są ograniczeniem planu | przyjęte |
+| D9 | 29.09 | Poziom szczegółu „pośredni”: nie tłumaczymy podstaw, tłumaczymy techniki (§5.1) | przyjęte |
+| D10 | 29.09 | Przepis wzorcowy do designu i do promptu: **Kotlet de volaille z ziemniakami i mizerią** (§10) | propozycja |
+| D11 | 29.09 | Porcje: domyślnie tyle, ile w planie; na powitaniu widać „Gotujesz 2 porcje” i można zmienić tylko na tę sesję, bez ruszania planu (§4.3) | propozycja |
+| D12 | 29.09 | Wejścia: szczegóły posiłku/przepisu + skrót na wielkim talerzu Kalendarza w oknie „Pora gotować” + akcja w powiadomieniu „Pora gotować” (§4.1) | propozycja |
+| D13 | 29.09 | Paywall: v1 za darmo dla wszystkich, gotowe pod flagę; decyzja o płatności razem z v2 (§12) | propozycja |
+| D14 | 29.09 | Kolejność prac: dokument → scenariusz wzorcowy → Claude Design → model danych → system → iOS (§11) | propozycja |
+
+## 4. Przepływ użytkownika
+
+### 4.1 Wejścia
+
+1. **Szczegóły posiłku / przepisu** — przycisk **Gotuj** w stopce akcji (`AssistantStickyFooter`),
+   obok akcji planu. Jedno miejsce implementacji, działa i z Kalendarza (zdjęcie talerza otwiera
+   szczegóły), i z Przepisów.
+2. **Wielki talerz w Kalendarzu** — gdy danie jest w oknie „Pora gotować” (`CalendarPlate`,
+   `isCooking`), obok pieczątki pojawia się mała pigułka **Gotuj** (wariant soft). Talerz już
+   „oddycha” w tym oknie — pigułka jest odpowiedzią na pytanie, które ten oddech zadaje.
+   Poza oknem pigułki nie ma (Gotuj zostaje w szczegółach), żeby talerz nie dostał trzeciej akcji na stałe.
+3. **Powiadomienie „Pora gotować”** (`MealReminderService`) — akcja **Gotuj** otwiera od razu
+   powitanie trybu gotowania.
+4. **Trwająca sesja** — na talerzu i w szczegółach zamiast „Gotuj” stoi **Wróć do gotowania**
+   (krok 5/12 · najbliższy timer). Stuknięcie w Live Activity też wraca do sesji.
+
+Przycisk Gotuj jest tylko tam, gdzie scenariusz ma status `PUBLISHED` i jest w pamięci telefonu (§7.7).
+Brak scenariusza = brak przycisku, bez wyszarzonych obietnic.
+
+### 4.2 Szkielet widoku
+
+```
+Powitanie ──► Krok 1 ──► Krok 2 ──► … ──► Krok N ──► Smacznego
+                 ▲                              │
+                 └──── wstecz / skok z paska ◄──┘
+Tacka timerów: przez cały czas, ponad krokami
+```
+
+- Pełny ekran, `interactiveDismissDisabled`. Zamknięcie (✕) pyta: **Wstrzymaj** (sesja zostaje,
+  timery lecą) albo **Zakończ gotowanie** (timery kasowane).
+- Ekran nie gaśnie (`isIdleTimerDisabled`) przez cały czas trybu.
+- Nawigacja: duży przycisk **Dalej** w strefie kciuka + przesunięcie w bok. Wstecz zawsze możliwe.
+- Pasek postępu z segmentami — stuknięcie w segment pokazuje listę kroków do skoku.
+
+### 4.3 Powitanie
+
+- Zdjęcie dania (wejście: to samo zdjęcie co w szczegółach, przejście `matchedGeometryEffect`),
+  nazwa, czas łączny, trudność.
+- **„Gotujesz 2 porcje”** ze stepperem. Domyślnie: suma porcji domowników na ten posiłek z planu;
+  wejście z Przepisów (poza planem) — porcje przepisu. Zmiana działa tylko w tej sesji, plan zostaje.
+  Krok steppera: 1 porcja (połówki z planu zaokrąglamy w górę do dania, patrz §5.4).
+- **Sprzęt** — ikony (piekarnik, patelnia, garnek, folia, tłuczek…).
+- **Składniki** — lista z ilościami już przeskalowanymi. Tylko do przeczytania, bez odhaczania (D7).
+- **Rady kucharza** — 2–3 krótkie pro tipy, które zmieniają wynik (np. „zawijaj ciasno i zakładaj
+  boki do środka — od tego zależy, czy masło zostanie w kotlecie”).
+- Przycisk **Zaczynamy**.
+
+### 4.4 Krok
+
+Warstwy od najważniejszej (czytelne z metra, gdy telefon stoi oparty o ścianę):
+
+1. **Nagłówek** — jedno zdanie w trybie rozkazującym: co robisz teraz. Duży krój.
+2. **Składniki kroku** — pigułki z ilością: „masło · 30 g”, „koperek · połowa, 5 g”. Kolor pory
+   posiłku / kategorii, ikona produktu.
+3. **Jak** — 1–4 zdania prostym językiem.
+4. Opcjonalnie jedna z adnotacji: **Po czym poznać** (wskazówka zmysłowa lub temperatura),
+   **Uwaga** (bezpieczeństwo), **Rada**.
+5. **Karta timera** (jeśli krok ma czas) — w strefie kciuka, nad „Dalej”:
+   nazwa + czas + przycisk startu, którego etykieta mówi, kiedy go nacisnąć:
+   „Schowane — odliczaj 15 min”, „Woda wrze — odliczaj 20 min”.
+6. **W międzyczasie** — gdy krok da się robić, podczas gdy coś się gotuje, nagłówek dostaje
+   wstęgę „Ziemniaki się gotują — w tym czasie:”.
+
+### 4.5 Timery
+
+- Start tylko z karty w kroku, jednym stuknięciem. Po starcie karta **odlatuje do tacki timerów**
+  (animacja lotu) i żyje tam niezależnie od kroków.
+- **Timer oczekujący**: gdy start zależy od zdarzenia („gdy woda zawrze”), a użytkownik poszedł
+  dalej, timer czeka w tacce jako „Ziemniaki · 20 min · Start”. Nie gubi się.
+- **Zakres** („10–12 min”): odliczamy do dolnej granicy, alarm mówi „Sprawdź kolor — jeśli blade,
+  jeszcze 2 min” z akcjami **Gotowe** / **+2 min** (górna granica jako podpowiedź).
+- Kilka timerów naraz — tacka pokazuje wszystkie, najbliższy na górze.
+- Koniec timera w apce: pełnoekranowa nakładka z haptyką i dźwiękiem, akcje z definicji timera.
+  Poza apką: alert AlarmKit (dzwoni mimo wyciszenia i Focus), te same akcje przez App Intents.
+- Timer pamiętany jako **data końca**, nie licznik — przeżywa zabicie apki (§8.6).
+
+### 4.6 Zakończenie
+
+„Smacznego” z animacją, podsumowanie (czas gotowania), **Oznacz jako zjedzone** (istniejące
+`eatenByUserIds`) i kciuk oceny (istniejące oceny). Zamyka sesję i Live Activity.
+
+### 4.7 Przerwania
+
+| Sytuacja | Zachowanie |
+|---|---|
+| Wyjście z apki / blokada | Sesja trwa, timery w AlarmKit, Live Activity pokazuje krok i najbliższy timer |
+| System zabił apkę | Po starcie: „Wróć do gotowania” (talerz, szczegóły, Live Activity) |
+| Druga sesja na inny przepis | v1: jedna sesja naraz; start nowej pyta o zakończenie starej |
+| Scenariusz zmienił się w trakcie | Sesja dokańcza na swojej wersji (trzymana lokalnie) |
+| Brak sieci w kuchni | Scenariusz i zdjęcie w pamięci telefonu, tryb działa w całości offline |
+
+## 5. Zasady pisania scenariusza
+
+To jest serce promptu i walidatorów (§7). Zmiana zasad = nowa `rulesVersion` i ponowne przejście.
+
+### 5.1 Poziom szczegółu (D9)
+
+- **Nie tłumaczymy podstaw**: jak pokroić cebulę, jak obrać ziemniaki, jak zagotować wodę.
+- **Tłumaczymy techniki**, od których zależy wynik: zawijanie roladek, panierka, zeszklenie,
+  zasmażka, ubijanie piany, temperowanie czekolady, wyrabianie ciasta.
+- **Zawsze mówimy, po czym poznać**, że etap skończony: kolor, zapach, konsystencja, temperatura
+  w środku.
+- Jeden krok = jedna czynność z perspektywy rąk (może mieć kilka ruchów, ale jeden cel).
+  Typowo 8–14 kroków na obiad, 3–6 na śniadanie. Bez sztucznego rozdrabniania.
+
+### 5.2 Język i ton
+
+- Druga osoba, tryb rozkazujący, polszczyzna kuchenna, bez żargonu („podsmaż”, nie „zrumień
+  metodą Maillarda”).
+- Nagłówek ≤ 60 znaków, „jak” ≤ 320 znaków, adnotacja ≤ 140 znaków, rada kucharza ≤ 140 znaków.
+- Każda informacja raz: nie powtarzamy w „jak” tego, co jest w nagłówku albo pigułce.
+- Liczby w tekście **tylko przez tokeny** (§5.4), żeby skalowały się z porcjami — z wyjątkiem
+  czasów, temperatur i rozmiarów („0,5 cm”, „180°C”).
+
+### 5.3 Układ pracy
+
+- Scenariusz **wolno przestawiać** względem kroków przepisu, jeśli dzięki temu wszystko jest gotowe
+  naraz (np. ziemniaki startują wcześniej, piekarnik nagrzewa się ~15 min przed użyciem, a nie na
+  starcie).
+- **Nie wolno** zmieniać składników, ilości, temperatur ani czasów poza zakresem przepisu.
+- Każdy czas oczekiwania (gotowanie, pieczenie, chłodzenie, marynowanie) to timer.
+- Kroki „w międzyczasie” wskazują timer, pod którym się mieszczą.
+
+### 5.4 Ilości, porcje, zaokrąglanie
+
+- Składnik wchodzi do kroku **z ilością** tam, gdzie trafia do dania; później może być tylko
+  przywołany bez ilości („z talerzy z panierką”). Suma ilości danego składnika = ilość w przepisie.
+- Części opisujemy słowem i liczbą: „połowa koperku, 5 g”, „reszta oleju, 15 ml”.
+- Skalowanie liniowe, potem zaokrąglenie wg typu:
+  - sztuki (jajka, ząbki czosnku) — do całości, w górę od połowy; jajko w panierce zawsze w górę;
+  - gramy — 5 g poniżej 100 g, 10 g powyżej; mililitry analogicznie;
+  - przyprawy < 3 g — „szczypta” / „½ łyżeczki” (istniejący `KitchenAmountFormatter`);
+  - łyżki/łyżeczki — do ½.
+- **Sztuki dania** (kotlety, wałeczki masła, gołąbki) liczone od porcji zaokrąglonych w górę:
+  2,5 porcji z planu = 3 kotlety. Tekst używa tokenu z odmianą: `{count:rolls|wałeczek|wałeczki|wałeczków}`.
+- Czasy **nie skalują się** w v1. Scenariusz może dodać notę skali („przy 4+ porcjach smaż w dwóch
+  turach”), pokazywaną tylko, gdy porcje przekroczą próg.
+
+### 5.5 Bezpieczeństwo
+
+- Drób: w kroku kończącym obróbkę zawsze „Po czym poznać” z 74°C w środku albo „sok przezroczysty,
+  bez różowego w środku”. Wieprzowina mielona: 71°C. Analogiczne reguły dla jajek na surowo i ryb.
+- Alergeny: scenariusz nie może dodać składnika spoza przepisu — nawet „dla smaku”.
+- Ostrzeżenia przy gorącym tłuszczu, parze, ostrzach — tylko tam, gdzie realnie grozi oparzenie.
+
+## 6. Model danych scenariusza (szkic)
+
+Szkic do potwierdzenia po designie (Etap 2). Nazwy pól po angielsku jak w reszcie API.
+
+```jsonc
+{
+  "recipeId": "70d8db3e-…",
+  "version": 3,                      // rośnie z każdą publikacją dla przepisu
+  "recipeContentHash": "sha256:…",   // z tytułu, składników, kroków, porcji — zmiana = STALE
+  "rulesVersion": "2026-09-29",
+  "basePortions": 2,
+  "portionUnit": { "id": "cutlet", "forms": ["kotlet", "kotlety", "kotletów"] }, // opcjonalne
+  "totalMinutes": 50,
+  "equipment": ["OVEN", "FRYING_PAN", "POT", "CLING_FILM", "MEAT_MALLET"],
+  "tips": [ { "text": "…" } ],
+  "steps": [
+    {
+      "id": "s1",
+      "phase": "PREP",               // PREP | COOK | FINISH | SERVE — dla koloru i paska postępu
+      "title": "Zrób masło koperkowe i schowaj je do zamrażarki",
+      "body": "…",
+      "ingredients": [
+        { "recipeIngredientId": "…", "amount": 30, "unit": "g", "part": "ALL" },
+        { "recipeIngredientId": "…", "amount": 5, "unit": "g", "part": "HALF" }
+      ],
+      "mentions": [],                // przywołania bez ilości
+      "note": { "kind": "CUE" | "WARNING" | "TIP", "text": "…" },
+      "timer": {
+        "id": "t-butter",
+        "label": "Masło",            // ≤ 14 znaków — Dynamic Island compact
+        "minSeconds": 900, "maxSeconds": 900,
+        "startLabel": "Schowane — odliczaj 15 min",
+        "trigger": "NOW" | "EVENT",  // EVENT = „gdy woda zawrze” → timer oczekujący
+        "alert": { "title": "Masło gotowe", "body": "Wyjmij wałeczki z zamrażarki" },
+        "actions": ["DONE", "PLUS_2_MIN"]
+      },
+      "during": null,                // id timera, pod którym krok się mieści („w międzyczasie”)
+      "scaleNote": null              // { "fromPortions": 4, "text": "…" }
+    }
+  ]
+}
+```
+
+Przyszłość (nie v1): scenariusz złożony z kilku przepisów = te same kroki z polem `recipeId` na
+kroku i wspólną osią timerów. Dlatego timer ma własne `id`, a nie numer kroku.
+
+## 7. System pisania scenariuszy
+
+Cel: 1072 scenariusze katalogu + scenariusze domów, spójne, poprawne i w jednym tonie. AI pisze
+treść, ale **nie decyduje**, czy jest dobra — decyduje system.
+
+### 7.1 Przebieg
+
+```
+przepis ──► budowa promptu ──► model (Structured Outputs) ──► walidatory twarde
+                                                                   │ błąd → ponów z raportem (≤ 2×)
+                                                                   ▼
+                                                     recenzent AI (rubryka, ocena 1–5)
+                                                                   │ < 4 → ponów / do ręki
+                                                                   ▼
+                                                    VALIDATED ──► przegląd w panelu ──► PUBLISHED
+```
+
+### 7.2 Budowa promptu
+
+- Zasady z §5 (wersjonowane, `rulesVersion`), schemat JSON, słownik sprzętu i jednostek.
+- Przepis: tytuł, porcje, trudność, sprzęt, składniki z `recipeIngredientId`, kroki, czas.
+- **Wzorce**: scenariusz wzorcowy (§10) + z czasem 3–5 kolejnych z różnych typów dań (zupa,
+  ciasto, sałatka bez obróbki, śniadanie w 5 minut). Wzorce są w repo i przechodzą te same walidatory.
+- Model i parametry wybieramy przy implementacji (najnowszy dostępny Claude, Batch API dla katalogu).
+
+### 7.3 Walidatory twarde (deterministyczne, w kodzie)
+
+- Zgodność ze schematem i limity długości.
+- Każdy składnik przepisu użyty; żaden spoza przepisu; suma ilości = ilość w przepisie (tolerancja
+  zaokrąglenia).
+- Liczby w tekście tylko w tokenach albo jako czas/temperatura/rozmiar.
+- Timery: czasy mieszczą się w czasach z przepisu; `label` ≤ 14 znaków; każdy czas z przepisu ma timer.
+- Układ: piekarnik nagrzany przed pierwszym użyciem; krok „w międzyczasie” mieści się w swoim timerze;
+  żaden krok nie wymaga dwóch par rąk naraz.
+- Bezpieczeństwo (§5.5): drób/mięso mielone/ryby mają wskazówkę dopieczenia.
+- Czas łączny w rozsądnym zakresie od `prepTimeMinutes` (do ustalenia, np. ±30%).
+
+### 7.4 Recenzent AI
+
+Drugie, niezależne wywołanie ocenia wg rubryki: wierność przepisowi, jasność dla początkującego,
+brak protekcjonalności (§5.1), ton, sensowność kolejności. Wynik i uzasadnienie zapisywane przy wersji.
+
+### 7.5 Statusy, wersje, panel
+
+- `DRAFT → VALIDATED → PUBLISHED`, poboczne `REJECTED`, `STALE` (przepis się zmienił — hash).
+- Każda wersja zapisuje: prompt/rulesVersion, model, raport walidatorów, ocenę recenzenta, kto opublikował.
+- **Panel admina**: lista z filtrem statusów, podgląd kroku tak jak na telefonie, diff między wersjami,
+  **Opublikuj / Odrzuć / Wygeneruj ponownie**. Katalog: przegląd ręczny próbki (np. pierwsze 30 +
+  losowe 5%), reszta publikuje się po przejściu walidatorów i recenzenta ≥ 4.
+- Edycja przepisu w panelu → scenariusz `STALE` → automatyczne ponowne wygenerowanie.
+- Scenariusz ujawnia błąd przepisu (np. kolejność) → poprawiamy przepis, nie łatamy scenariusza.
+
+### 7.6 Przepisy domów
+
+Generowanie w tle **przy zapisie** przepisu (kolejka, ten sam system, bez przeglądu ręcznego —
+publikuje się po walidatorach i recenzencie). Zanim skończy, przycisku Gotuj nie ma. Nie przeszedł —
+przycisku nie ma, a panel dostaje sygnał. Kopia z udostępnienia dziedziczy scenariusz oryginału
+(hash się zgadza) zamiast generować nowy.
+
+### 7.7 Dostarczenie do iOS
+
+- Osobne zapytanie po scenariusz (nie w synchronizacji katalogu — to ciężkie dane, a potrzebne rzadko).
+- Telefon **pobiera z wyprzedzeniem** scenariusze dań dzisiejszego i jutrzejszego planu oraz przy
+  otwarciu szczegółów przepisu; trzyma je w pamięci razem ze zdjęciem. Dzięki temu Gotuj działa
+  offline i „jest gotowe przed wejściem”.
+- Odpowiedź z `version`; telefon ma najwyżej jedną wersję na przepis (+ tę z trwającej sesji).
+
+## 8. iOS
+
+### 8.1 Ekrany
+
+Powitanie, Krok, Tacka timerów, Nakładka końca timera, Wstrzymaj/Zakończ, Smacznego, Wróć do gotowania
+(talerz + szczegóły). Komponenty z `Scoffie/Components/` (wariant soft, `SCSheetFooter`,
+`EditorialPrimaryActionButton`), karty `scTileBg + scTileStroke` bez cienia.
+
+### 8.2 Ruch
+
+- Wejście: zdjęcie ze szczegółów rośnie w tło powitania (`matchedGeometryEffect`).
+- Kroki: przejście boczne z lekkim przesunięciem warstw (nagłówek szybciej niż „jak”), pigułki składników
+  wchodzą kaskadą.
+- Timer: start → karta odlatuje do tacki; odliczanie to pierścień/pasek z płynnym ubywaniem;
+  ostatnia minuta — wyraźniejszy puls; koniec — nakładka + haptyka.
+- Zakończenie: „Smacznego” z animacją talerza (nawiązanie do talerza z Kalendarza).
+- Uwaga z doświadczenia: przejścia wstawiane przez `AnyTransition.modifier` nie animują — ruch opieramy
+  na stanie (`Animatable` + `.modifier`), patrz notatki o `CalendarPlate`.
+
+### 8.3 Timery — AlarmKit
+
+- iOS 26 (target apki 26.0) → AlarmKit dostępny. Daje to, co aplikacja Zegar: alert pełnoekranowy,
+  dźwięk mimo wyciszenia i Focus, odliczanie na ekranie blokady, w Dynamic Island i w StandBy.
+- Każdy alarm ma stany: odliczanie, pauza, alert — każdy z własnymi tytułami i przyciskami
+  (App Intents: **Gotowe**, **+2 min**).
+- Wymaga `NSAlarmKitUsageDescription` i zgody użytkownika. Prośba o zgodę **przy pierwszym starcie
+  timera**, nie na starcie trybu. Odmowa → timer działa w apce + zwykłe powiadomienie, a karta
+  timera mówi uczciwie, że przy wyciszeniu nie zadzwoni.
+
+### 8.4 Live Activity i Dynamic Island
+
+- Nowy target Widget Extension + App Group (zakłada Rafał w Xcode).
+- **Do rozstrzygnięcia spike'iem S1**: AlarmKit pokazuje odliczanie przez Live Activity z atrybutami
+  alarmu — każdy timer to osobna aktywność, a Dynamic Island mieści sensownie dwie. Dwa warianty:
+  - **A.** Tylko aktywności AlarmKit (po jednej na timer). Proste, ale nie widać kroku.
+  - **B.** Jedna aktywność sesji (ActivityKit: krok N/M, najbliższy timer, liczba pozostałych) +
+    AlarmKit jako sam alarm na godzinę końca, bez własnego odliczania. Lepsze UX, sprawdzić, czy
+    AlarmKit pozwala na alarm bez prezentacji odliczania i jak to wygląda z dwoma timerami.
+- Widoki do zaprojektowania: compact (leading: ikona dania/timera, trailing: czas), minimal, expanded
+  (nazwa kroku, timery, **Dalej** / **Gotowe**), ekran blokady, StandBy.
+- Apple Watch: Live Activity pojawia się w Smart Stack — sprawdzić w S1, czy i jak dzwoni na zegarku.
+
+### 8.5 Czytelność w kuchni
+
+Duży krój nagłówka (czytelny z ~1 m), obsługa Dynamic Type, cele dotyku ≥ 56 pt w strefie kciuka,
+tryb poziomy na później, jasny i ciemny motyw.
+
+### 8.6 Stan sesji
+
+```
+CookSession { recipeId, scenarioVersion, scenario (kopia), portions, stepId,
+              timers: [{ id, state: pending|running|paused|done, endDate?, remaining?, alarmId? }],
+              startedAt }
+```
+
+Zapis lokalny przy każdej zmianie. Jedna sesja naraz. Ten sam stan w przyszłości zasila asystenta (v2).
+
+## 9. Brief dla Claude Design
+
+**Wejście**: ten dokument + scenariusz wzorcowy z §10 (prawdziwe teksty, żadnego lorem ipsum —
+długość tekstów jest częścią testu). Tokeny kolorów i typografii z `SCDesignSystem`.
+
+**Ekrany i stany do zaprojektowania**:
+
+1. Szczegóły posiłku z przyciskiem Gotuj + talerz Kalendarza z pigułką Gotuj w oknie „Pora gotować”.
+2. Powitanie (2 porcje, zmiana na 3 — co się dzieje z ilościami).
+3. Krok bez timera (s2), krok z timerem przed startem (s1), krok „w międzyczasie” (s10),
+   krok z timerem oczekującym „gdy woda zawrze” (s3), krok z trudną techniką i długim „jak” (s6).
+4. Tacka timerów: 1, 2 i 3 timery naraz; oczekujący; zakres 10–12 min.
+5. Nakładka końca timera (w apce).
+6. Wstrzymaj / Zakończ.
+7. Smacznego.
+8. Dynamic Island: compact, minimal, expanded; ekran blokady; StandBy; alert AlarmKit.
+9. Ruch: wejście, przejście kroku, start timera (lot do tacki), koniec timera, zakończenie.
+
+**Zasady**: tylko najważniejsze, każda informacja raz; „życie” przez kolor pór, ikony, zdjęcie
+i pigułki, nie przez tekst; karty w jednym kolorze bez cienia (bez białych kart); kontrolki
+z komponentów apki, nie rysowane od nowa; czytelność z metra.
+
+**Pytania, na które design ma odpowiedzieć**: czy 12 kroków to nie za dużo dla kotleta; gdzie
+naturalnie ląduje kciuk przy starcie timera; czy „w międzyczasie” czyta się bez objaśnień;
+czy tacka nie zasłania treści przy 3 timerach.
+
+## 10. Przepis wzorcowy: Kotlet de volaille z ziemniakami i mizerią
+
+Wybrany, bo sprawdza wszystko naraz: trudna technika (zawijanie, podwójna panierka), timer
+chłodzenia pracujący w tle, timer z oczekiwaniem na zdarzenie (woda zawrze), zakres (10–12 min),
+trzy timery naraz, piekarnik nagrzewany w środku pracy, części składników (koperek, sól, pieprz),
+sztuki do zaokrąglania (jajko, kotlety), drób (bezpieczeństwo), krok „w międzyczasie” i przestawienie
+kolejności względem przepisu (w przepisie ziemniaki startują za późno). Drugi kandydat do sprawdzenia
+później: Pieczeń rzymska z jajkiem i ziemniakami.
+
+Id `70d8db3e-e896-460e-ba96-d53d02c1357f` · MEDIUM · 60 min · 2 porcje · sprzęt: OVEN.
+
+### 10.1 Przepis dziś (źródło)
+
+Składniki: filet z kurczaka 320 g, masło 30 g, koperek 10 g, jajko 1 szt, mąka pszenna 20 g,
+bułka tarta 50 g, olej rzepakowy 30 ml, ziemniak 500 g, ogórek 250 g, śmietana 12% 60 g, sól 3 g,
+pieprz czarny 1 g.
+
+1. Miękkie masło wymieszaj z połową posiekanego koperku, uformuj 2 wałeczki i schowaj do zamrażarki na 15 minut.
+2. Filet przekrój na 2 płaty, rozbij przez folię na cienkie kotlety (0,5 cm), posól i popieprz. Na każdym połóż wałeczek masła i zwiń ciasno, zakładając boki do środka, by masło nie wyciekło.
+3. Obtocz roladki w mące, jajku i bułce tartej, potem jeszcze raz w jajku i bułce — podwójna panierka trzyma masło w środku.
+4. Obierz ziemniaki i ugotuj w osolonej wodzie przez 20 minut.
+5. Smaż kotlety na oleju na średnim ogniu 10–12 minut, obracając, aż będą złote ze wszystkich stron. Dopiecz 5 minut w piekarniku nagrzanym do 180°C (góra–dół).
+6. Ogórek pokrój w cienkie plasterki, lekko posól, odciśnij i wymieszaj ze śmietaną i pieprzem. Podawaj kotlety z ziemniakami posypanymi resztą koperku i mizerią.
+
+### 10.2 Scenariusz wzorcowy (wersja robocza do oceny tonu)
+
+Pisany ręcznie wg §5 — ma skalibrować poziom szczegółu, zanim powstanie prompt. Oś czasu ~50 min:
+masło chłodzi się od 0', ziemniaki gotują od ~25', kotlety smażą się 31'–43', piekarnik 43'–48'.
+
+**Powitanie** — 2 porcje · ok. 50 min · średnio trudne
+Sprzęt: piekarnik, patelnia, garnek, folia spożywcza, tłuczek (albo dno rondla), 3 głębokie talerze.
+Rady kucharza:
+- Masło musi być miękkie. Jeśli jest prosto z lodówki, rozgnieć je widelcem w ciepłej miseczce.
+- Zawijaj ciasno i zakładaj boki do środka — od tego zależy, czy masło zostanie w kotlecie.
+- Kotlet przekrój dopiero na talerzu, ostrożnie: w środku jest gorące masło.
+
+**s1 · Zrób masło koperkowe i schowaj je do zamrażarki**
+Pigułki: masło · 30 g · koperek · połowa, 5 g
+Jak: Posiekaj cały koperek drobno i odłóż połowę — przyda się do ziemniaków. Masło rozgnieć
+widelcem z koperkiem na gładką masę. Na folii uformuj {count:rolls|wałeczek|wałeczki|wałeczków}
+grubości palca, zawiń szczelnie i połóż płasko w zamrażarce.
+Timer: **Masło** · 15 min · „Schowane — odliczaj 15 min”
+
+**s2 · W międzyczasie rozbij filety na cienkie kotlety** — *Masło twardnieje — w tym czasie:*
+Pigułki: filet z kurczaka · 320 g · sól · 1 g · pieprz · ½ g
+Jak: Każdy filet połóż płasko i przetnij poziomo na dwa cieńsze płaty, jak otwierając książkę —
+z dwóch filetów wychodzą {count:cutlets|kotlet|kotlety|kotletów}. Przykryj folią i rozbijaj tłuczkiem od środka na zewnątrz, aż mięso będzie
+miało ok. 0,5 cm grubości. Równa grubość = równe smażenie. Posól i popieprz z obu stron.
+Rada: Folia nie pozwala mięsu się porwać i pryskać po kuchni.
+
+**s3 · Obierz ziemniaki i nastaw wodę**
+Pigułki: ziemniaki · 500 g · sól · 1,5 g
+Jak: Większe ziemniaki przekrój na pół, żeby wszystkie ugotowały się w tym samym czasie. Zalej
+je zimną wodą tak, by były przykryte, posól i postaw na dużym ogniu. Gdy woda zawrze, zmniejsz
+ogień do średniego i włącz odliczanie.
+Timer: **Ziemniaki** · 20 min · wyzwalacz: zdarzenie · „Woda wrze — odliczaj 20 min”
+Alert końca: „Ziemniaki gotowe? Nóż ma wchodzić bez oporu.” · Gotowe / +2 min
+
+**s4 · Przygotuj trzy talerze do panierki**
+Pigułki: mąka · 20 g · jajko · 1 · bułka tarta · 50 g
+Jak: Do pierwszego talerza wsyp mąkę, w drugim roztrzep jajko widelcem, do trzeciego wsyp bułkę
+tartą. Ustaw je w rzędzie w tej kolejności — przyda się to przy podwójnej panierce.
+
+**s5 · Nagrzej piekarnik do 180°C**
+Jak: Góra–dół, bez termoobiegu. Za kwadrans kotlety trafią do środka na 5 minut.
+*(nagrzewanie w środku pracy, nie na starcie — dokładnie tam, gdzie jest potrzebne)*
+
+**s6 · Zawiń kotlety z masłem** — wymaga masła z s1 (tacka pokazuje, czy timer „Masło” już się skończył)
+Jak: Wyjmij wałeczki z zamrażarki. Każdy połóż na brzegu kotleta, krótszym bokiem do siebie.
+Zawiń raz, załóż boki kotleta do środka, jak przy naleśniku z nadzieniem, i zwijaj dalej ciasno
+do końca. Łączeniem do dołu — tak roladka się nie rozwinie.
+Po czym poznać: Z żadnej strony nie widać masła. Jeśli widać — dociśnij mięso palcami.
+
+**s7 · Obtocz roladki podwójnie**
+Wspomniane: mąka, jajko, bułka tarta (z talerzy z s4)
+Jak: Każdą roladkę obtocz kolejno w mące, jajku i bułce tartej, a potem jeszcze raz w jajku
+i bułce. Dociśnij panierkę dłońmi. Druga warstwa to zabezpieczenie — trzyma masło w środku
+podczas smażenia.
+
+**s8 · Smaż kotlety na złoto**
+Pigułki: olej · 30 ml
+Jak: Rozgrzej olej na patelni na średnim ogniu — jest gotowy, gdy okruch bułki od razu zaczyna
+skwierczeć. Połóż kotlety łączeniem do dołu, żeby się zasklepiły. Obracaj co 3 minuty, aż będą
+złote ze wszystkich stron.
+Uwaga: Olej pryska — kładź kotlety od siebie.
+Timer: **Kotlety** · 10–12 min · „Na patelni — odliczaj”
+Alert (10 min): „Sprawdź kolor — jeśli blade, jeszcze 2 min.” · Gotowe / +2 min
+
+**s9 · Przełóż kotlety do piekarnika na 5 minut**
+Jak: Przełóż je do naczynia żaroodpornego albo na blachę i wstaw na środkową półkę.
+Po czym poznać: W środku 74°C albo po nakłuciu wypływa przezroczysty sok, bez różowego.
+Timer: **Piekarnik** · 5 min · „W piekarniku — odliczaj 5 min”
+
+**s10 · W międzyczasie zrób mizerię** — *Kotlety w piekarniku — w tym czasie:*
+Pigułki: ogórek · 250 g · sól · ½ g · śmietana · 60 g · pieprz · ½ g
+Jak: Pokrój ogórek w cienkie plasterki, posól i odstaw na chwilę. Odciśnij wodę dłońmi —
+mizeria nie będzie wodnista. Wymieszaj ze śmietaną i pieprzem.
+
+**s11 · Odcedź ziemniaki i posyp koperkiem**
+Pigułki: koperek · reszta, 5 g
+Jak: Odcedź ziemniaki i odstaw na chwilę na gorącej płycie bez pokrywki, żeby odparowały. Posyp koperkiem.
+
+**s12 · Podaj**
+Jak: Na talerz połóż kotlet, ziemniaki i mizerię.
+Uwaga: Kotlet przekrój dopiero na talerzu i ostrożnie — z środka wypłynie gorące masło.
+
+Kontrola sum: sól 1 + 1,5 + 0,5 = 3 g ✓ · pieprz 0,5 + 0,5 = 1 g ✓ · koperek 5 + 5 = 10 g ✓ ·
+pozostałe w całości raz ✓. Przy 3 porcjach: filet 480 g, 3 kotlety, 3 wałeczki, jajko 1,5 → **2**
+(panierka zawsze w górę), bułka tarta 75 g, ogórek 380 g (zaokr. do 10 g).
+
+## 11. Kolejność prac (Etapy)
+
+| Etap | Co | Kto / gdzie | Wyjście |
+|---|---|---|---|
+| E0 | Ten dokument + scenariusz wzorcowy | Claude, repo | Rafał koryguje ton i poziom szczegółu §10.2 |
+| E1 | Design w Claude Design na wzorcu (ekrany + ruch) | Rafał + Claude Design | zatwierdzone ekrany, odpowiedzi na pytania z §9 |
+| S1 | Spike AlarmKit + Live Activity (warianty A/B z §8.4), 3 timery naraz, zegarek | Claude pisze, Rafał buduje na Macu | wybór wariantu, zdjęcia z urządzenia — **równolegle z E1**, bo ogranicza design Dynamic Island |
+| E2 | Model danych i API scenariusza (backend) | Claude, backend | migracja, endpoint, wzorzec w seedzie |
+| E3 | System pisania: prompt, walidatory, recenzent, panel | Claude, backend + dashboard | pilot 20 przepisów różnych typów → przegląd → cały katalog |
+| E4 | iOS: widok Gotuj na wzorcu, potem na API | Claude, iOS | tryb działa end-to-end bez timerów systemowych |
+| E5 | iOS: AlarmKit, Live Activity, Dynamic Island, wejścia z Kalendarza i powiadomienia | Claude + target od Rafała | pełne v1 |
+| E6 | Scenariusze przepisów domów (generowanie przy zapisie) | Claude, backend | kolejka + sygnały w panelu |
+| E7 | TestFlight, poprawki, prod za flagą | Rafał | premiera |
+
+## 12. Ryzyka i otwarte pytania
+
+| Ryzyko / pytanie | Co z tym robimy |
+|---|---|
+| Jakość 1072 scenariuszy | walidatory twarde + recenzent + pilot 20 + próbka ręczna (§7.5) |
+| Tekst w scenariuszu rozjeżdża się z krokami w szczegółach przepisu | na razie dwa widoki tego samego; po v1 rozważyć krótkie kroki w szczegółach z nagłówków scenariusza |
+| AlarmKit + Live Activity przy 2–3 timerach | spike S1 przed zamknięciem designu Dynamic Island |
+| Użytkownik odmówi zgody na alarmy | tryb działa, karta timera uczciwie mówi o wyciszeniu (§8.3) |
+| Odmiana liczebników po polsku przy skalowaniu | tokeny z formami (§5.4), walidator liczb w tekście |
+| Przepisy trywialne (jogurt z granolą) | pytanie otwarte: pokazywać Gotuj przy < 3 krokach bez obróbki? |
+| Paywall (D13) | rekomendacja: v1 za darmo — koszt jest jednorazowy (katalog) i niski (domy), a funkcja to najlepszy materiał na zrzuty App Store i pierwsze wrażenie; płatność sensowna przy v2, gdzie każde pytanie ze zdjęciem realnie kosztuje. Flaga gotowa od początku |
