@@ -133,6 +133,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Alergeny: `enum Allergen` rawValue = id z `src/common/allergens.ts`; nowa wartość NAJPIERW na
   serwerze. Przepis niesie `allergens`/`dietTags` z serwera (`RecipeDietProfile.fromServerTags`);
   heurystyka `RecipeDietClassifier` tylko gdy pola są `nil`. Pusta lista = fakt, nie brak danych.
+- Udostępnianie przepisów (29.09.2026, kontrakt w repo backendu): KAŻDY link idzie przez `DeepLink`
+  (`Models/Session/DeepLink.swift`, sprawdzian `sh Scripts/deep-link-check.sh`) — zaproszenie, przepis
+  katalogu (`/przepis/<slug|uuid>`), przepis domu (`/przepis/u/<token>`), schemat `scoffie://`. Link przed
+  zalogowaniem leży w `session.pendingDeepLink` (adres, stary klucz zaproszenia czytany przy migracji);
+  przepis otwiera `DashboardView` dopiero nad odsłoniętym pulpitem (`RecipeLinkSheet`, `recipes:openShared`).
+  Cudzy przepis = `RecipeDetailContext.shared`: tylko odczyt, „Zapisz u siebie” i plan na KOPII
+  (`recipes:saveShared`). „Udostępnij” w szczegółach i pod przytrzymaniem karty to jedna droga
+  (`RecipeShareKit.swift` → `SCShareSheet`, `recipes:shared` dopiero po `completed`); „Wyłącz link” tylko przy
+  `Recipe.shareUrl` (z `recipes:householdState`).
 - Cache katalogu `recipes_catalog_cache_v12.json` — po zmianie kształtu `Recipe` podbić wersję
   (komentarz w `RecipeCatalogStore.cacheFileURL`); kasowany przy wylogowaniu.
 - `plannedServings` = porcje łączne; sloty per gospodarstwo + `suitableMealTypes`; tydzień od

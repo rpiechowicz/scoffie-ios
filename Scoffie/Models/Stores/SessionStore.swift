@@ -922,8 +922,9 @@ final class SessionStore {
         // wyłączona, a bez tego pobrania nie ma jak się o nim dowiedzieć.
         Task { @MainActor [weak self] in
             // Najpierw link odłożony przed zalogowaniem: dopiero on dopisuje
-            // zaproszenie do skrzynki, więc kolejność ma znaczenie.
-            await self?.replayStoredInvitationIfNeeded()
+            // zaproszenie do skrzynki, więc kolejność ma znaczenie. Przepis
+            // z linku idzie stąd do kolejki pulpitu.
+            await self?.replayStoredDeepLinkIfNeeded()
             await self?.refreshPendingInvitations()
         }
 
@@ -1573,14 +1574,10 @@ final class SessionStore {
         // Token idzie we FRAGMENCIE (`#…`), nie w ścieżce: fragment nigdy nie
         // opuszcza przeglądarki — nie trafia do serwera ani logów Cloudflare,
         // nie ma go w nagłówku Referer, a roboty podglądu linków go nie
-        // dostają. Universal Links fragment zachowują, więc ten sam adres
-        // obsłuży kiedyś aplikacja bez strony — `invitationToken(from:)` już go zna.
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = Self.invitationHost
-        components.path = "/zaproszenie/"
-        components.fragment = invitation.token
-        guard let url = components.url else {
+        // dostają. Universal Links fragment zachowują, więc u kogoś, kto ma
+        // aplikację, ten sam adres otwiera ją wprost (`DeepLink`), a strona
+        // zostaje dla tych, którzy jej jeszcze nie mają.
+        guard let url = DeepLink.invitation(token: invitation.token).url else {
             throw RecipeDataError.serverError(message: "Nie udało się zbudować linku zaproszenia.")
         }
         return url
@@ -1758,77 +1755,109 @@ final class SessionStore {
         invitationPrompt = nil
     }
 
-    /// Token zaproszenia, który przyszedł, zanim było wiadomo, kim jest
-    /// użytkownik.
+    /// Link, który przyszedł w chwili, gdy nie było go jak otworzyć.
     ///
-    /// Link otwarty przed zalogowaniem przepadał: `previewInvitation` wymaga
-    /// `userId`, więc kończyło się komunikatem „Zaloguj się" i tokenem
+    /// Zaproszenie otwarte przed zalogowaniem przepadało: `previewInvitation`
+    /// wymaga `userId`, więc kończyło się komunikatem „Zaloguj się" i tokenem
     /// wyrzuconym do kosza — a po zalogowaniu nie było już czego otworzyć.
+    /// Przepis czeka dłużej: aż będzie pulpit (logowanie, kreator, loader).
     /// Trzymany w `UserDefaults`, bo logowanie przez Apple potrafi odesłać
-    /// użytkownika poza aplikację.
-    private static let pendingInvitationTokenKey = "session.pendingInvitationToken"
+    /// użytkownika poza aplikację, a kreator — trwać do następnego uruchomienia.
+    ///
+    /// Jeden slot, ostatni link wygrywa: kto otworzył dwa, chce drugiego.
+    /// W środku leży ADRES (`DeepLink.url`), nie własny format — czyta go
+    /// ten sam parser, który czyta linki z zewnątrz.
+    private static let pendingDeepLinkKey = "session.pendingDeepLink"
+    /// Klucz sprzed `DeepLink` — sam token zaproszenia. Czytany, żeby
+    /// zaproszenie odłożone przez poprzedni build nie zginęło przy
+    /// aktualizacji; kasowany przy pierwszym zapisie.
+    private static let legacyPendingInvitationTokenKey = "session.pendingInvitationToken"
 
-    private var storedInvitationToken: String? {
-        get { UserDefaults.standard.string(forKey: Self.pendingInvitationTokenKey) }
+    private var storedDeepLink: DeepLink? {
+        get {
+            let defaults = UserDefaults.standard
+            if let raw = defaults.string(forKey: Self.pendingDeepLinkKey),
+               let url = URL(string: raw),
+               let link = DeepLink(url: url) {
+                return link
+            }
+            if let token = defaults.string(forKey: Self.legacyPendingInvitationTokenKey), !token.isEmpty {
+                return .invitation(token: token)
+            }
+            return nil
+        }
         set {
-            if let newValue, !newValue.isEmpty {
-                UserDefaults.standard.set(newValue, forKey: Self.pendingInvitationTokenKey)
+            let defaults = UserDefaults.standard
+            defaults.removeObject(forKey: Self.legacyPendingInvitationTokenKey)
+            if let raw = newValue?.url?.absoluteString {
+                defaults.set(raw, forKey: Self.pendingDeepLinkKey)
             } else {
-                UserDefaults.standard.removeObject(forKey: Self.pendingInvitationTokenKey)
+                defaults.removeObject(forKey: Self.pendingDeepLinkKey)
             }
         }
     }
 
-    /// Odtwarza zaproszenie odłożone przed zalogowaniem. Woła się po
-    /// bootstrapie sesji.
-    @MainActor
-    private func replayStoredInvitationIfNeeded() async {
-        guard let token = storedInvitationToken, !token.isEmpty else { return }
-        guard let userId = currentUserId, !userId.isEmpty else { return }
-        storedInvitationToken = nil
-        await presentInvitation(token: token)
-    }
+    /// Przepis z linku, który czeka na pulpit (`DashboardView` otwiera go,
+    /// gdy loader startu zejdzie). W pamięci — do obserwowania przez widok;
+    /// na dysku leży równolegle w `storedDeepLink`, dopóki się nie otworzy.
+    private(set) var pendingRecipeLink: RecipeLinkTarget?
 
-    /// Host strony z zaproszeniami — ten sam, na który wskazuje karta OG.
-    static let invitationHost = "scoffie.app"
-
-    /// Token zaproszenia z linku, w obu postaciach:
-    ///  - `scoffie://invite?token=…` — schemat, którym strona zaproszenia
-    ///    otwiera aplikację;
-    ///  - `https://scoffie.app/zaproszenie/#<token>` (awaryjnie `?t=<token>`) —
-    ///    link, który udostępnia domownik. Dziś trafia tu wyłącznie przez
-    ///    Universal Links, gdy je włączymy; bez nich otwiera go Safari.
-    static func invitationToken(from url: URL) -> String? {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        let token: String?
-        if url.scheme == "scoffie", url.host == "invite" {
-            token = components.queryItems?.first(where: { $0.name == "token" })?.value
-        } else if url.scheme == "https",
-                  url.host == invitationHost || url.host == "www.\(invitationHost)" {
-            let parts = url.pathComponents.filter { $0 != "/" }
-            guard parts == ["zaproszenie"] else { return nil }
-            token = components.fragment
-                ?? components.queryItems?.first(where: { $0.name == "t" })?.value
-        } else {
-            return nil
+    /// Zdejmuje przepis z kolejki — w chwili, w której pulpit go otwiera.
+    func takePendingRecipeLink() -> RecipeLinkTarget? {
+        guard let target = pendingRecipeLink else { return nil }
+        pendingRecipeLink = nil
+        if case .recipe = storedDeepLink {
+            storedDeepLink = nil
         }
-        guard let token, !token.isEmpty else { return nil }
-        return token
+        return target
     }
 
+    /// Odtwarza link odłożony przed zalogowaniem. Woła się po bootstrapie
+    /// sesji: zaproszenie pokazuje się od razu, przepis idzie do kolejki
+    /// pulpitu (zostaje też na dysku, dopóki pulpit go nie otworzy).
+    @MainActor
+    private func replayStoredDeepLinkIfNeeded() async {
+        guard let link = storedDeepLink else { return }
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        switch link {
+        case .invitation(let token):
+            storedDeepLink = nil
+            await presentInvitation(token: token)
+        case .recipe(let target):
+            pendingRecipeLink = target
+        }
+    }
+
+    /// Wejście każdego linku — Universal Link z `scoffie.app` albo schemat
+    /// `scoffie://` (`ScoffieApp.onOpenURL`). Rozpoznaje `DeepLink`, reszta
+    /// jest ignorowana.
     func handleIncomingURL(_ url: URL) {
-        guard let token = Self.invitationToken(from: url) else { return }
+        guard let link = DeepLink(url: url) else { return }
 
         guard currentUserId?.isEmpty == false else {
             // Odkładamy i wracamy do tego po zalogowaniu — zamiast kazać
             // użytkownikowi szukać linku po raz drugi.
-            storedInvitationToken = token
-            authError = "Zaloguj się, aby przyjąć zaproszenie do gospodarstwa."
+            storedDeepLink = link
+            switch link {
+            case .invitation:
+                authError = "Zaloguj się, aby przyjąć zaproszenie do gospodarstwa."
+            case .recipe:
+                authError = "Zaloguj się, aby zobaczyć przepis."
+            }
             return
         }
 
-        Task {
-            await presentInvitation(token: token)
+        switch link {
+        case .invitation(let token):
+            Task {
+                await presentInvitation(token: token)
+            }
+        case .recipe(let target):
+            // Przepis otwiera pulpit — dopiero gdy jest (dom, koniec kreatora,
+            // zejście loadera). Na dysk też: kreator potrafi trwać do
+            // następnego uruchomienia aplikacji.
+            storedDeepLink = link
+            pendingRecipeLink = target
         }
     }
 
@@ -2081,9 +2110,10 @@ final class SessionStore {
         // użytkownik (albo ten sam po usunięciu konta) ma je zobaczyć od nowa.
         AssistantIntroState.reset()
         ConsentStore.clearCache()
-        // Odłożone zaproszenie należy do osoby, która je otworzyła — następna
+        // Odłożony link należy do osoby, która go otworzyła — następna
         // zalogowana dostawała alert z cudzym domem i mogła do niego dołączyć.
-        storedInvitationToken = nil
+        storedDeepLink = nil
+        pendingRecipeLink = nil
         // Cały Keychain aplikacji, nie sześć kluczy z nazwiska. Lista wpisów
         // do skasowania musiała być pilnowana ręcznie i pierwszy nowy klucz
         // zapisany przy logowaniu zostawał na telefonie po wylogowaniu —
