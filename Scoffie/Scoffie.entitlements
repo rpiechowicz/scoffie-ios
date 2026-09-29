@@ -5,6 +5,7 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:scoffie.app</string>
+		<string>applinks:scoffie.app?mode=developer</string>
 	</array>
 	<key>com.apple.developer.applesignin</key>
 	<array>
