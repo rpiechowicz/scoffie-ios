@@ -72,7 +72,7 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D10 | 29.09 | Przepis wzorcowy do designu i do promptu: **Kotlet de volaille z ziemniakami i mizerią** (§10) | przyjęte |
 | D11 | 29.09 | Porcje: domyślnie tyle, ile w planie; na powitaniu widać „Gotujesz 2 porcje” i można zmienić tylko na tę sesję, bez ruszania planu (§4.3) | propozycja |
 | D12 | 29.09 | ~~Wejścia: szczegóły posiłku/przepisu + skrót na wielkim talerzu Kalendarza w oknie „Pora gotować” + akcja w powiadomieniu „Pora gotować” (§4.1)~~ → D16 | zastąpione |
-| D13 | 29.09 | Paywall: v1 za darmo dla wszystkich, gotowe pod flagę; decyzja o płatności razem z v2 (§12) | propozycja |
+| D13 | 29.09 | Paywall: v1 za darmo dla wszystkich, gotowe pod flagę; decyzja o płatności razem z v2 (§12) | przyjęte 30.09 |
 | D14 | 29.09 | Kolejność prac: dokument → scenariusz wzorcowy → Claude Design → model danych → system → iOS (§11) | propozycja |
 | D15 | 29.09 | Scenariusz jest **zapisany w bazie na stałe** przy każdym przepisie — jak składniki i kroki. Uzupełnienie całego katalogu dopiero po designie | przyjęte |
 | D16 | 29.09 | Gotuj na talerzu Kalendarza **zawsze** (nie tylko w oknie „Pora gotować”) — ktoś może gotować 2 h wcześniej, nie blokujemy. W oknie „Pora gotować” pigułka tylko mocniej akcentowana (§4.1) | przyjęte |
@@ -87,6 +87,8 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D25 | 30.09 | Dynamic Island, ekran blokady: jedna reguła — działa timer → wokół zdjęcia pierścień timera, brak → pierścień kroków; stany 0/1/2/czeka (§13.7) | przyjęte |
 | D26 | 30.09 | Kapsuła u góry ekranu kroku pokazuje tylko timery **spoza** bieżącego kroku — nic się nie dubluje (§13.2) | przyjęte |
 | D27 | 30.09 | Scenariusz dostaje pola: rada „na następny raz”, zakres czasu timera (min–max); uwagi z oceny zbieramy z sesji (§13.8) | przyjęte |
+| D28 | 30.09 | Auto-wpis do planu (§13.4): dania w tej porze **nikt nie zjadł → zastępujemy; ktoś już odhaczył → dopisujemy obok** | przyjęte |
+| D29 | 30.09 | Przepisy trywialne (np. jogurt z granolą) **bez Gotuj** — system pisania oznacza je jako `SKIPPED` z powodem, przycisku nie ma | przyjęte |
 
 ## 4. Przepływ użytkownika
 
@@ -562,9 +564,9 @@ pozostałe w całości raz ✓. Przy 3 porcjach: filet 480 g, 3 kotlety, 3 wałe
 | AlarmKit + Live Activity przy 2–3 timerach | spike S1 przed zamknięciem designu Dynamic Island |
 | Użytkownik odmówi zgody na alarmy | tryb działa, karta timera uczciwie mówi o wyciszeniu (§8.3) |
 | Odmiana liczebników po polsku przy skalowaniu | tokeny z formami (§5.4), walidator liczb w tekście |
-| Przepisy trywialne (jogurt z granolą) | pytanie otwarte: pokazywać Gotuj przy < 3 krokach bez obróbki? |
+| Przepisy trywialne (jogurt z granolą) | ✅ D29: bez Gotuj; kryterium ustala system pisania (brak obróbki cieplnej i timerów, ≤ 3 kroki) |
 | Paywall (D13) | rekomendacja: v1 za darmo — koszt jest jednorazowy (katalog) i niski (domy), a funkcja to najlepszy materiał na zrzuty App Store i pierwsze wrażenie; płatność sensowna przy v2, gdzie każde pytanie ze zdjęciem realnie kosztuje. Flaga gotowa od początku |
-| Auto-wpis do planu (D21) a danie, które już stało w tej porze | zasada w §13.4; do potwierdzenia przy specyfikacji backendu |
+| Auto-wpis do planu (D21) a danie, które już stało w tej porze | ✅ D28 |
 | Zmiana pieczątki „zjedzone” w Kalendarzu (D23) | dotyczy całej apki, nie tylko Gotuj — wchodzi razem z wejściem na talerzu |
 
 ## 13. Design v1 — zatwierdzone ekrany (30.09.2026)
