@@ -85,7 +85,7 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D23 | 30.09 | Wejście z Kalendarza: przycisk play **na talerzu, z prawej**; pieczątka „zjedzone” z lewej jako **kółko z ptaszkiem** — zmiana istniejącego talerza (§13.6) | przyjęte |
 | D24 | 30.09 | Wejście ze szczegółów przepisu: stopka „Dodaj do planu \| Gotuj” (Przepisy) albo „Zapisz porcje \| Gotuj” (Kalendarz); Cookidoo bez Gotuj (§13.6) | przyjęte |
 | D25 | 30.09 | Dynamic Island, ekran blokady: jedna reguła — działa timer → wokół zdjęcia pierścień timera, brak → pierścień kroków; stany 0/1/2/czeka (§13.7) | przyjęte |
-| D26 | 30.09 | Kapsuła u góry ekranu kroku pokazuje tylko timery **spoza** bieżącego kroku — nic się nie dubluje (§13.2) | przyjęte |
+| D26 | 30.09 | ~~Kapsuła u góry ekranu kroku pokazuje tylko timery **spoza** bieżącego kroku~~ → timery przeniesione na dół (D34) | zastąpione |
 | D27 | 30.09 | Scenariusz dostaje pola: rada „na następny raz”, zakres czasu timera (min–max); uwagi z oceny zbieramy z sesji (§13.8) | przyjęte |
 | D28 | 30.09 | Auto-wpis do planu (§13.4): dania w tej porze **nikt nie zjadł → zastępujemy; ktoś już odhaczył → dopisujemy obok** | przyjęte |
 | D29 | 30.09 | Przepisy trywialne (np. jogurt z granolą) **bez Gotuj** — system pisania oznacza je jako `SKIPPED` z powodem, przycisku nie ma | przyjęte |
@@ -93,6 +93,9 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D31 | 30.09 | Praktyczne wskazówki są pożądane — zawsze mówimy, **jak ustawić piekarnik** (góra–dół / termoobieg / grill; domyślnie góra–dół), czym wyłożyć blachę itp. Nadal nie zmieniamy składników, ilości, czasów ani temperatur | przyjęte |
 | D32 | 30.09 | Literówki i brak polskich znaków = błąd do poprawy przed publikacją | przyjęte |
 | D33 | 30.09 | **Najwyżej dwa odliczania naraz**; timer tylko na czekanie od 4 min — krótka, aktywna czynność przy garnku idzie tekstem z „po czym poznać” | przyjęte |
+| D34 | 30.09 | **Dok na dole ekranu kroku**: wyspa ‹ · Składniki N · › zawsze w tym samym miejscu; **timery osobno nad nią** — każdy jako własna kapsuła, bez wspólnego kontenera. Jeden timer = cała szerokość (nazwa, czas, jeden przycisk, nic więcej); dwa = dwie kapsuły obok siebie. Najwyżej 2 (1 aktywny + 1 do włączenia albo 2 aktywne). Timer kroku startuje w kapsule (pulsuje łagodnie), nie w treści; w nagłówku nie ma już kapsuły timera (§13.2) | przyjęte |
+| D35 | 30.09 | Koniec timera w apce = **pełny ekran**: pierścień, czas po terminie liczony w górę (zewnętrzny łuk co minutę), „Jeszcze chwilę?” +1 / +2 / +5 min, **Gotowe — dalej**, Wycisz; inne trwające timery wierszem „leci dalej”. Po „Wycisz” kapsuła timera pulsuje mocno, dopóki nie klikniesz Gotowe | przyjęte |
+| D36 | 30.09 | Składniki: ikona produktu w kolorze **kategorii** (warzywa, nabiał, przyprawy, mięso, zboża/tłuszcze), ilości neutralne i pogrubione; „już w daniu” przygaszone z ptaszkiem. Przyprawy w miarach kuchennych (`kitchenMeasure`) | przyjęte |
 
 ## 4. Przepływ użytkownika
 
@@ -606,22 +609,30 @@ Sprzętu nie pokazujemy (pole może zostać w scenariuszu dla walidatora piekarn
 
 ### 13.2 Krok
 
-- **Pasek u góry (T2)**: z lewej pierścień z 12 odcinków (zrobione szałwia, bieżący terakota) z numerem kroku;
-  na środku czarna kapsuła timera (pierścień, nazwa, czas); z prawej krzyżyk. Kapsuła pokazuje **tylko timery spoza
-  bieżącego kroku** (D26); timer bieżącego kroku żyje w karcie na dole.
+- **Pasek u góry**: z lewej pierścień z 12 odcinków (zrobione szałwia, bieżący terakota) z numerem kroku, z prawej
+  krzyżyk. **Timerów w nagłówku nie ma** (D34 — zastępuje D26).
 - **Scena (S3)**: etap małymi literami w szałwii („SMAŻENIE”, „W MIĘDZYCZASIE”), tytuł 40 pt, opis 17 pt,
-  ostrzeżenie maślaną linijką z ikoną. Numeru kroku nad tytułem nie ma — mówi go pierścień.
-- **Stopka (F2b)**, strefa kciuka:
-  - krok z timerem: kwadrat 72×72 ze składnikami (ikona + licznik) i karta timera „KOTLETY / 10:00 / ▶” (72 pt);
-    w trakcie ta sama karta odlicza na miejscu (9:41, pauza, cienki pasek postępu w dolnej krawędzi);
-  - krok bez timera: szuflada składników na całą szerokość („Składniki · 4” + skrót ilości);
-  - pod spodem zawsze Wstecz (kółko) + **Dalej →**.
-- **Arkusz składników** (z szuflady): przełącznik **Ten krok / Cały przepis**; sekcje **TERAZ · KROK N**,
-  **ZA CHWILĘ · KROK N+1** („odłóż — reszta z kroku 1”), **JUŻ W DANIU** (przekreślone, z numerem kroku).
-  Wiersz 1:1 z Zakupów (`ShoppingProductRow`) **bez pola wyboru**, z ikoną produktu w kolorze działu;
-  przy częściach dopisek („reszta — 2,5 g już w daniu”).
-- **Koniec timera w apce**: arkusz z pulsującym dzwonkiem, „KOTLETY · 10 MIN / Sprawdź kolor / Blade? Dosmaż jeszcze
-  chwilę.”, przyciski **+2 min** i **Gotowe**.
+  ostrzeżenie maślaną linijką z ikoną. Numeru kroku nad tytułem nie ma — mówi go pierścień. Karty timera w treści
+  też nie ma — timer kroku startuje w doku.
+- **Dok (D34)**, strefa kciuka, pływający 16 pt od boków i 24 pt od dołu:
+  - **wyspa** (68 pt, kapsuła): Wstecz (kółko 52) · **Składniki N** (koszyk + liczba; otwiera arkusz) · **Dalej**
+    (sama strzałka, kółko 52); w ostatnim kroku strzałka → zielony ptaszek „Zakończ”; w pierwszym Wstecz przygaszone;
+  - **timery nad wyspą** (10 pt odstępu), każdy osobną kapsułą 56 pt z nieprzezroczystym tłem i cieniem:
+    - jeden → cała szerokość: pierścień, nazwa, czas i jeden przycisk (pauza / **▶ Start** / **Wznów** / **Gotowe**);
+    - dwa → dwie kapsuły obok siebie (pierścień, nazwa, czas); dotknięcie otwiera arkusz Timery;
+    - **do włączenia** — obwódka terakoty, łagodne pulsowanie; **po czasie** — pełna terakota, dzwonek, mocne
+      pulsowanie; **pauza** — przygaszona;
+  - nic nie trwa i nic nie czeka → sama wyspa.
+- **Arkusz Timery** (z kapsuły timera; wyspa zostaje pod nim): sekcje **TRWA** (pierścień = pauza, nazwa, „krok 3 ·
+  z 20 min”, czas w kolorze timera), **W TYM KROKU** (karta z **▶ Start**, pulsuje), **WSTRZYMANY** (przycisk wznowienia,
+  „Stoi, dopóki go nie wznowisz — nie zadzwoni”).
+- **Arkusz składników** (z wyspy; timery wiszą nad nim): przełącznik **Ten krok / Cały przepis**; sekcje
+  **TERAZ**, **ZA CHWILĘ · KROK N+1** („odłóż — reszta z kroku 1”), **JUŻ W DANIU** (przygaszone, z ptaszkiem i numerem
+  kroku). Wiersz: ikona produktu w kolorze kategorii (D36), nazwa, dopisek przy częściach, ilość z prawej.
+- **Koniec timera w apce (D35)**: pełny ekran — przygaszone zdjęcie, pierścień „KOTLETY / +0:18 / po czasie · było
+  10 min” (łuk zewnętrzny co minutę, dzwonek się kołysze), „Sprawdź, czy są złote” + wskazówka, inne timery
+  („Ziemniaki 14:32 · leci dalej”), na dole „Jeszcze chwilę?” **+1 / +2 / +5 min** i **Gotowe — dalej**; Wycisz w rogu.
+- Wszystkie stany doku i arkuszy: sekcja kanwy **„Dla developmentu — dok”**.
 
 ### 13.3 Zakończenie
 
@@ -644,9 +655,10 @@ Użytkownik gotuje przepis, którego nie ma dziś w planie. Po **Zjedzone** syst
 
 ### 13.5 Wyjście i wstrzymanie
 
-- **X w trakcie** → arkusz „Wychodzisz?”: timery jako kafle jak w Dynamic Island (0 / 1 / 2), karty **Wstrzymaj**
-  („Timery lecą dalej, wrócisz w każdej chwili” / bez timerów: „Wrócisz w każdej chwili”) i **Zakończ gotowanie**
-  („Timery się wyłączą” / „Zamkniesz tryb gotowania”), na dole **Gotuj dalej**. Bez drugiego potwierdzenia.
+- **X w trakcie** → arkusz **„Wychodzisz z gotowania?”** + „Krok 8 z 12 · nazwa dania”, trwające timery jako
+  pigułki na środku (0 / 1 / 2), dwa równe kafle obok siebie: **Wstrzymaj** („Timery lecą dalej” / bez timerów:
+  „Wrócisz do tego kroku”; lekko wyróżniony) i **Zakończ** („Timery się wyłączą” / „Wyjdziesz z przepisu”),
+  na dole **Gotuj dalej**. Bez krzyżyka w arkuszu i bez drugiego potwierdzenia.
 - **Po wstrzymaniu** — Kalendarz (odtworzony 1:1 z `CalendarPlate`): obręcz talerza zamienia się w pierścień
   12 kroków, kicker „OBIAD · GOTUJESZ”, wielka linia „Krok 8 z 12”, pigułki działających timerów, play z prawej.
 
