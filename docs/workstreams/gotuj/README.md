@@ -202,7 +202,10 @@ To jest serce promptu i walidatorów (§7). Zmiana zasad = nowa `rulesVersion` i
 - Nagłówek ≤ 60 znaków, „jak” ≤ 320 znaków, adnotacja ≤ 140 znaków, rada kucharza ≤ 140 znaków.
 - Każda informacja raz: nie powtarzamy w „jak” tego, co jest w nagłówku albo pigułce.
 - Liczby w tekście **tylko przez tokeny** (§5.4), żeby skalowały się z porcjami — z wyjątkiem
-  czasów, temperatur i rozmiarów („0,5 cm”, „180°C”).
+  czasów, temperatur i rozmiarów („0,5 cm”, „180°C”) oraz liczby z jednostką przepisanej
+  **dosłownie z kroków przepisu**, gdy nie jest ilością składnika z listy („naczynie ok. 1,5 l”,
+  „100 ml zimnej wody”, gdy wody nie ma w składnikach — telefon jej przy kroku nie pokaże).
+  _Zasady 2026-09-30.2, po pilocie E3b._
 
 ### 5.3 Układ pracy
 
@@ -211,6 +214,8 @@ To jest serce promptu i walidatorów (§7). Zmiana zasad = nowa `rulesVersion` i
   starcie).
 - **Nie wolno** zmieniać składników, ilości, temperatur ani czasów poza zakresem przepisu.
 - Każdy czas oczekiwania (gotowanie, pieczenie, chłodzenie, marynowanie) to timer.
+- Jeden czas z przepisu = jeden timer. „Piecz 20–25 min, w połowie obróć” to jeden timer, a „w połowie
+  obróć” idzie do treści kroku albo alarmu (zasady 2026-09-30.2).
 - Kroki „w międzyczasie” wskazują timer, pod którym się mieszczą.
 
 ### 5.4 Ilości, porcje, zaokrąglanie
@@ -549,7 +554,7 @@ pozostałe w całości raz ✓. Przy 3 porcjach: filet 480 g, 3 kotlety, 3 wałe
 | E1 | ✅ Design w Claude Design na wzorcu — **zamknięty 30.09** (§13); ruch opisany w §8.2, do dopracowania przy S1 | Rafał + Claude Design | zatwierdzone ekrany |
 | S1 | Spike AlarmKit + Live Activity (warianty A/B z §8.4), 3 timery naraz, zegarek | Claude pisze, Rafał buduje na Macu | wybór wariantu, zdjęcia z urządzenia — **równolegle z E1**, bo ogranicza design Dynamic Island |
 | E2 | ✅ Model danych i API scenariusza (backend) — **na develop 30.09** (backend #256): tabela `RecipeCookScenario`, `Recipe.cookScenarioVersion` w delcie katalogu, WS `recipes:cookScenario`, loader `pnpm cook-scenarios:load` z wzorcem kotleta; zmiana przepisu unieważnia scenariusz w bazie (STALE) | Claude, backend | wzorzec na prod po wdrożeniu na main (loader przez `railway ssh`) |
-| E3 | System pisania: prompt, walidatory, recenzent, panel | Claude, backend + dashboard | pilot 20 przepisów różnych typów → przegląd → cały katalog |
+| E3 | System pisania: prompt, walidatory, recenzent, panel — **E3a na develop 30.09** (backend #257: autor Opus 5.5, walidatory, recenzent Sonnet 5.5, `pnpm cook-scenarios:write`, tylko lokalnie); pilot 3/20: 0/3 za pierwszym podejściem → poprawki E3a.1 (#258) | Claude, backend + dashboard | pilot 20 przepisów różnych typów → przegląd → cały katalog |
 | E4 | iOS: widok Gotuj na wzorcu, potem na API | Claude, iOS | tryb działa end-to-end bez timerów systemowych |
 | E5 | iOS: AlarmKit, Live Activity, Dynamic Island, wejścia z Kalendarza i powiadomienia | Claude + target od Rafała | pełne v1 |
 | E6 | Scenariusze przepisów domów (generowanie przy zapisie) | Claude, backend | kolejka + sygnały w panelu |
