@@ -1,6 +1,9 @@
 # Gotuj — tryb gotowania krok po kroku
 
-Data założenia: 2026-09-29 · Status: **wizja v1, przed designem** · Platforma v1: iOS (backend globalny)
+Data założenia: 2026-09-29 · Status: **design v1 zatwierdzony 30.09 (§13)** · Platforma v1: iOS (backend globalny)
+
+Kanwa designu (Claude Design): https://claude.ai/artifact/DEnbNj45aY4X9Xaq1siV4D — tylko ekrany zatwierdzone.
+Gdzie §4 i §8 mówią co innego niż §13, **§13 ma pierwszeństwo**.
 
 Ten plik jest jedynym źródłem prawdy o funkcji. Każda decyzja trafia do tabeli [Decyzje](#3-decyzje)
 z datą; zmiana decyzji = nowy wiersz, stary zostaje przekreślony, nie znika.
@@ -66,14 +69,24 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D7 | 29.09 | Bez listy do odhaczania składników — powitanie pokazuje, co przygotować, i tyle | przyjęte |
 | D8 | 29.09 | Cookidoo poza zakresem; Android i Windows nie są ograniczeniem planu | przyjęte |
 | D9 | 29.09 | Poziom szczegółu „pośredni”: nie tłumaczymy podstaw, tłumaczymy techniki (§5.1) | przyjęte |
-| D10 | 29.09 | Przepis wzorcowy do designu i do promptu: **Kotlet de volaille z ziemniakami i mizerią** (§10) | propozycja |
+| D10 | 29.09 | Przepis wzorcowy do designu i do promptu: **Kotlet de volaille z ziemniakami i mizerią** (§10) | przyjęte |
 | D11 | 29.09 | Porcje: domyślnie tyle, ile w planie; na powitaniu widać „Gotujesz 2 porcje” i można zmienić tylko na tę sesję, bez ruszania planu (§4.3) | propozycja |
 | D12 | 29.09 | ~~Wejścia: szczegóły posiłku/przepisu + skrót na wielkim talerzu Kalendarza w oknie „Pora gotować” + akcja w powiadomieniu „Pora gotować” (§4.1)~~ → D16 | zastąpione |
 | D13 | 29.09 | Paywall: v1 za darmo dla wszystkich, gotowe pod flagę; decyzja o płatności razem z v2 (§12) | propozycja |
 | D14 | 29.09 | Kolejność prac: dokument → scenariusz wzorcowy → Claude Design → model danych → system → iOS (§11) | propozycja |
 | D15 | 29.09 | Scenariusz jest **zapisany w bazie na stałe** przy każdym przepisie — jak składniki i kroki. Uzupełnienie całego katalogu dopiero po designie | przyjęte |
 | D16 | 29.09 | Gotuj na talerzu Kalendarza **zawsze** (nie tylko w oknie „Pora gotować”) — ktoś może gotować 2 h wcześniej, nie blokujemy. W oknie „Pora gotować” pigułka tylko mocniej akcentowana (§4.1) | przyjęte |
-| D17 | 29.09 | Design startuje od ekranu kroku: 4 kierunki na kanwie (A Karta, B Scena, C Oś pracy, D Mikrokroki) — https://claude.ai/artifact/DEnbNj45aY4X9Xaq1siV4D | w toku |
+| D17 | 29.09 | ~~Design startuje od ekranu kroku: 4 kierunki na kanwie~~ → design zamknięty, D18–D27 | zastąpione |
+| D18 | 30.09 | Ekran kroku: pasek T2, scena ze zdjęciem, składniki w szufladzie → arkusz, stopka F2b (§13.2) | przyjęte |
+| D19 | 30.09 | Powitanie P1: porcje ze stepperem, szuflady **Składniki** i **Rady kucharza**, bez sprzętu (§13.1) | przyjęte |
+| D20 | 30.09 | Zakończenie minimalistyczne: statystyki, rada „na następny raz”, ocena w wierszu, „Zjedzone”; uwagi po kciuku w arkuszu (§13.3) | przyjęte |
+| D21 | 30.09 | Gotowanie spoza planu: po „Zjedzone” przepis **sam** trafia do dzisiejszego planu i jest odhaczony — bez żadnego UI (§13.4) | przyjęte |
+| D22 | 30.09 | X w trakcie → arkusz „Wychodzisz?” (stany 0/1/2 timery); po wstrzymaniu talerz w Kalendarzu z pierścieniem kroków (§13.5) | przyjęte |
+| D23 | 30.09 | Wejście z Kalendarza: przycisk play **na talerzu, z prawej**; pieczątka „zjedzone” z lewej jako **kółko z ptaszkiem** — zmiana istniejącego talerza (§13.6) | przyjęte |
+| D24 | 30.09 | Wejście ze szczegółów przepisu: stopka „Dodaj do planu \| Gotuj” (Przepisy) albo „Zapisz porcje \| Gotuj” (Kalendarz); Cookidoo bez Gotuj (§13.6) | przyjęte |
+| D25 | 30.09 | Dynamic Island, ekran blokady: jedna reguła — działa timer → wokół zdjęcia pierścień timera, brak → pierścień kroków; stany 0/1/2/czeka (§13.7) | przyjęte |
+| D26 | 30.09 | Kapsuła u góry ekranu kroku pokazuje tylko timery **spoza** bieżącego kroku — nic się nie dubluje (§13.2) | przyjęte |
+| D27 | 30.09 | Scenariusz dostaje pola: rada „na następny raz”, zakres czasu timera (min–max); uwagi z oceny zbieramy z sesji (§13.8) | przyjęte |
 
 ## 4. Przepływ użytkownika
 
@@ -531,7 +544,7 @@ pozostałe w całości raz ✓. Przy 3 porcjach: filet 480 g, 3 kotlety, 3 wałe
 | Etap | Co | Kto / gdzie | Wyjście |
 |---|---|---|---|
 | E0 | Ten dokument + scenariusz wzorcowy | Claude, repo | Rafał koryguje ton i poziom szczegółu §10.2 |
-| E1 | Design w Claude Design na wzorcu (ekrany + ruch) | Rafał + Claude Design | zatwierdzone ekrany, odpowiedzi na pytania z §9 |
+| E1 | ✅ Design w Claude Design na wzorcu — **zamknięty 30.09** (§13); ruch opisany w §8.2, do dopracowania przy S1 | Rafał + Claude Design | zatwierdzone ekrany |
 | S1 | Spike AlarmKit + Live Activity (warianty A/B z §8.4), 3 timery naraz, zegarek | Claude pisze, Rafał buduje na Macu | wybór wariantu, zdjęcia z urządzenia — **równolegle z E1**, bo ogranicza design Dynamic Island |
 | E2 | Model danych i API scenariusza (backend) | Claude, backend | migracja, endpoint, wzorzec w seedzie |
 | E3 | System pisania: prompt, walidatory, recenzent, panel | Claude, backend + dashboard | pilot 20 przepisów różnych typów → przegląd → cały katalog |
@@ -551,3 +564,95 @@ pozostałe w całości raz ✓. Przy 3 porcjach: filet 480 g, 3 kotlety, 3 wałe
 | Odmiana liczebników po polsku przy skalowaniu | tokeny z formami (§5.4), walidator liczb w tekście |
 | Przepisy trywialne (jogurt z granolą) | pytanie otwarte: pokazywać Gotuj przy < 3 krokach bez obróbki? |
 | Paywall (D13) | rekomendacja: v1 za darmo — koszt jest jednorazowy (katalog) i niski (domy), a funkcja to najlepszy materiał na zrzuty App Store i pierwsze wrażenie; płatność sensowna przy v2, gdzie każde pytanie ze zdjęciem realnie kosztuje. Flaga gotowa od początku |
+| Auto-wpis do planu (D21) a danie, które już stało w tej porze | zasada w §13.4; do potwierdzenia przy specyfikacji backendu |
+| Zmiana pieczątki „zjedzone” w Kalendarzu (D23) | dotyczy całej apki, nie tylko Gotuj — wchodzi razem z wejściem na talerzu |
+
+## 13. Design v1 — zatwierdzone ekrany (30.09.2026)
+
+Wszystkie ekrany na kanwie: https://claude.ai/artifact/DEnbNj45aY4X9Xaq1siV4D (przykład: Kotlet de volaille).
+Wspólne: ciemne tło `scPageBase`, akcenty z `SCPalette` (terakota = akcja i timery, szałwia = zrobione / zjedzone,
+masło = rady, indygo i kolory działów tylko tam, gdzie niosą znaczenie). Odstęp w stopkach 12 pt, promień kafli 24 pt,
+arkusze promień 40 z uchwytem, krzyżyk zawsze po prawej jak `SCSheetCloseButton`.
+
+**Zdjęcie w nagłówku każdego ekranu trybu**: 330 pt, krycie 0,85, wtopione w tło (170 pt gradientu),
+tytuł zaczyna się ~290 pt od góry — przejścia między ekranami nie skaczą.
+
+### 13.1 Powitanie (P1)
+
+Krzyżyk · zdjęcie · „GOTUJEMY · OBIAD” · tytuł + dopisek dania · meta (ok. 50 min · średnio trudne · 12 kroków) ·
+karta „Gotujesz 2 porcje / tyle, ile w planie” ze stepperem 1:1 z `DetailServingsStepper` · szuflada **Składniki · 12**
+(stos ikon produktów + skrót ilości) · szuflada **Rady kucharza · 3** · przycisk **Zaczynamy →**.
+Sprzętu nie pokazujemy (pole może zostać w scenariuszu dla walidatora piekarnika).
+
+### 13.2 Krok
+
+- **Pasek u góry (T2)**: z lewej pierścień z 12 odcinków (zrobione szałwia, bieżący terakota) z numerem kroku;
+  na środku czarna kapsuła timera (pierścień, nazwa, czas); z prawej krzyżyk. Kapsuła pokazuje **tylko timery spoza
+  bieżącego kroku** (D26); timer bieżącego kroku żyje w karcie na dole.
+- **Scena (S3)**: etap małymi literami w szałwii („SMAŻENIE”, „W MIĘDZYCZASIE”), tytuł 40 pt, opis 17 pt,
+  ostrzeżenie maślaną linijką z ikoną. Numeru kroku nad tytułem nie ma — mówi go pierścień.
+- **Stopka (F2b)**, strefa kciuka:
+  - krok z timerem: kwadrat 72×72 ze składnikami (ikona + licznik) i karta timera „KOTLETY / 10:00 / ▶” (72 pt);
+    w trakcie ta sama karta odlicza na miejscu (9:41, pauza, cienki pasek postępu w dolnej krawędzi);
+  - krok bez timera: szuflada składników na całą szerokość („Składniki · 4” + skrót ilości);
+  - pod spodem zawsze Wstecz (kółko) + **Dalej →**.
+- **Arkusz składników** (z szuflady): przełącznik **Ten krok / Cały przepis**; sekcje **TERAZ · KROK N**,
+  **ZA CHWILĘ · KROK N+1** („odłóż — reszta z kroku 1”), **JUŻ W DANIU** (przekreślone, z numerem kroku).
+  Wiersz 1:1 z Zakupów (`ShoppingProductRow`) **bez pola wyboru**, z ikoną produktu w kolorze działu;
+  przy częściach dopisek („reszta — 2,5 g już w daniu”).
+- **Koniec timera w apce**: arkusz z pulsującym dzwonkiem, „KOTLETY · 10 MIN / Sprawdź kolor / Blade? Dosmaż jeszcze
+  chwilę.”, przyciski **+2 min** i **Gotowe**.
+
+### 13.3 Zakończenie
+
+Zdjęcie · „UGOTOWANE” · **Smacznego!** · nazwa dania · rząd trzech liczb między cienkimi liniami (czas · kroki ·
+kcal porcji) · karta **NA NASTĘPNY RAZ** z ikoną żarówki w kolorze masła i jedną radą ze scenariusza ·
+„Jak wyszło?” z dwoma kciukami w jednym wierszu · przycisk **✓ Zjedzone** (szałwia). Bez konfetti, bez pigułek.
+Po kciuku arkusz do połowy **„Co byś zmienił?”**: ikona wybranego kciuka, pigułki (pierwsza podpowiedziana z sesji,
+np. „Kotlety +4 min”, gdy dwa razy dodano +2 min), pole tekstowe, **Wyślij**. Kciuk zapisuje się także bez uwag.
+Uwagi zasilają panel: wiele „+min” przy tym samym kroku = scenariusz do poprawki.
+
+### 13.4 Gotowanie spoza planu (D21)
+
+Użytkownik gotuje przepis, którego nie ma dziś w planie. Po **Zjedzone** system sam:
+1. wybiera porę po godzinie i `suitableMealTypes` przepisu;
+2. dopisuje przepis do dzisiejszego planu w tej porze i odhacza go jako zjedzony (per osoba, `PlanItemConsumption`);
+3. danie, które stało w tej porze (slot może mieć kilka przepisów — `@@unique` dzień+pora+przepis):
+   **nikt go jeszcze nie zjadł → zastępujemy je; ktoś już odhaczył → dopisujemy obok**, żeby nie kasować cudzego
+   „zjedzone”. Plan jest wspólny dla domu — do potwierdzenia przy specyfikacji backendu.
+Żadnego UI dla tej decyzji.
+
+### 13.5 Wyjście i wstrzymanie
+
+- **X w trakcie** → arkusz „Wychodzisz?”: timery jako kafle jak w Dynamic Island (0 / 1 / 2), karty **Wstrzymaj**
+  („Timery lecą dalej, wrócisz w każdej chwili” / bez timerów: „Wrócisz w każdej chwili”) i **Zakończ gotowanie**
+  („Timery się wyłączą” / „Zamkniesz tryb gotowania”), na dole **Gotuj dalej**. Bez drugiego potwierdzenia.
+- **Po wstrzymaniu** — Kalendarz (odtworzony 1:1 z `CalendarPlate`): obręcz talerza zamienia się w pierścień
+  12 kroków, kicker „OBIAD · GOTUJESZ”, wielka linia „Krok 8 z 12”, pigułki działających timerów, play z prawej.
+
+### 13.6 Wejścia
+
+- **Kalendarz**: na talerzu **play z prawej** (pod kciukiem), zawsze dla dania ze scenariuszem, mocniejszy w oknie
+  „Pora gotować”; **pieczątka „zjedzone” z lewej jako kółko z ptaszkiem** zamiast kropki (zmiana dla całej apki).
+- **Szczegóły przepisu** (arkusz 1:1 z `RecipeDetail`): stopka dwóch przycisków — z Przepisów „+ Dodaj do planu” |
+  **„▶ Gotuj”** (pełna terakota), z Kalendarza „✓ Zapisz porcje” (przygaszony do zmiany) | **„▶ Gotuj”**.
+  Przepisy Cookidoo: tylko „Gotuj w Thermomixie”.
+
+### 13.7 Poza apką
+
+Jedna reguła: **działa timer → wokół zdjęcia pierścień timera; brak timera → pierścień kroków**.
+- **Dynamic Island, kompakt**: zdjęcie w pierścieniu + „9:41” (bez timera: „8/12” w szałwii).
+- **Minimal** (obok inna aktywność): samo zdjęcie w pierścieniu (timer / kroki wg reguły).
+- **Rozwinięta**: nagłówek = zdjęcie w pierścieniu kroków + okrągły terakotowy **Dalej →**, „KROK 8 Z 12” + tytuł;
+  pod nim stan: **1 timer** (kafel + „+1 min”), **2 timery** (dwa kafle), **bez timera** („Dalej: Przełóż do
+  piekarnika · 5 min”), **timer czeka** (przerywany kafel „ZIEMNIAKI · CZEKA / Woda wrze? 20:00” + play).
+  Treść omija aparat na środku.
+- **Ekran blokady**: te same stany i ten sam nagłówek w większej karcie Live Activity.
+- **Alarm (AlarmKit)**: systemowy; ustawiamy tytuł („Kotlety”), tekst i przyciski **+2 min** / **Gotowe**.
+
+### 13.8 Co design dokłada do danych
+
+- `tips[]` na powitaniu (już w §6) + **rada „na następny raz”** na zakończeniu (nowe pole scenariusza);
+- timer: `label` ≤ 14 znaków (kompakt), `minSeconds`/`maxSeconds` (alert po min, „+2 min” do max);
+- „Dalej: …” w wyspie i na ekranie blokady = tytuł następnego kroku + czas jego timera;
+- uwagi z oceny: kciuk + pigułki + tekst + zdarzenia sesji (ile razy „+min”, przy którym kroku).
