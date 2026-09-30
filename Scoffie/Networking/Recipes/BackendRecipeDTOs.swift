@@ -16,6 +16,8 @@ struct BackendRecipeIngredientDTO: Codable {
     /// w szczególe przepisu, na liście brak → `nil`.
     let normalizedAmount: Double?
     let normalizedUnit: String?
+    /// Tylko przyprawy w g/ml; starszy backend pola nie zna → `nil`.
+    let kitchenMeasure: KitchenMeasure?
 }
 
 struct BackendRecipeDTO: Codable {
@@ -276,7 +278,8 @@ extension BackendRecipeDTO {
                 department: item.department,
                 rawUnit: unit == .other ? item.unit : nil,
                 normalizedAmount: item.normalizedAmount,
-                normalizedUnit: item.normalizedUnit
+                normalizedUnit: item.normalizedUnit,
+                kitchenMeasure: item.kitchenMeasure
             )
         }
 

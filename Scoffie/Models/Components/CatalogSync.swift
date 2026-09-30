@@ -228,9 +228,11 @@ struct CatalogCacheEnvelope<Item: Codable>: Codable {
     /// 1: pierwszy format z rewizją (zastępuje `recipes_catalog_cache_v12.json`).
     /// 2: przepisy z taksonomią (kuchnia, rodzaj dania, okazje — 28.09.2026);
     ///    plik z 1 ich nie ma, a delta nie dośle niezmienionych przepisów.
+    /// 3: składniki przypraw z `kitchenMeasure` (łyżeczki zamiast gramów —
+    ///    30.09.2026); plik z 2 go nie ma.
     /// Zmiana kształtu `Item` albo znaczenia pól = podbij; stary plik zostanie
     /// odrzucony i katalog przyjdzie snapshotem.
-    static var currentVersion: Int { 2 }
+    static var currentVersion: Int { 3 }
 
     let version: Int
     let revision: String?

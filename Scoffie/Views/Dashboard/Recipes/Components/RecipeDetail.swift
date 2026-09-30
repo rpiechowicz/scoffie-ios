@@ -2269,7 +2269,8 @@ private enum RecipeDetailFormat {
             amount: ingredient.amount,
             unit: ingredient.unit,
             rawUnit: ingredient.rawUnit,
-            department: ingredient.department
+            department: ingredient.department,
+            measure: ingredient.kitchenMeasure
         )
     }
 }
