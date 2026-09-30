@@ -548,7 +548,7 @@ pozostałe w całości raz ✓. Przy 3 porcjach: filet 480 g, 3 kotlety, 3 wałe
 | E0 | Ten dokument + scenariusz wzorcowy | Claude, repo | Rafał koryguje ton i poziom szczegółu §10.2 |
 | E1 | ✅ Design w Claude Design na wzorcu — **zamknięty 30.09** (§13); ruch opisany w §8.2, do dopracowania przy S1 | Rafał + Claude Design | zatwierdzone ekrany |
 | S1 | Spike AlarmKit + Live Activity (warianty A/B z §8.4), 3 timery naraz, zegarek | Claude pisze, Rafał buduje na Macu | wybór wariantu, zdjęcia z urządzenia — **równolegle z E1**, bo ogranicza design Dynamic Island |
-| E2 | Model danych i API scenariusza (backend) | Claude, backend | migracja, endpoint, wzorzec w seedzie |
+| E2 | ✅ Model danych i API scenariusza (backend) — **na develop 30.09** (backend #256): tabela `RecipeCookScenario`, `Recipe.cookScenarioVersion` w delcie katalogu, WS `recipes:cookScenario`, loader `pnpm cook-scenarios:load` z wzorcem kotleta; zmiana przepisu unieważnia scenariusz w bazie (STALE) | Claude, backend | wzorzec na prod po wdrożeniu na main (loader przez `railway ssh`) |
 | E3 | System pisania: prompt, walidatory, recenzent, panel | Claude, backend + dashboard | pilot 20 przepisów różnych typów → przegląd → cały katalog |
 | E4 | iOS: widok Gotuj na wzorcu, potem na API | Claude, iOS | tryb działa end-to-end bez timerów systemowych |
 | E5 | iOS: AlarmKit, Live Activity, Dynamic Island, wejścia z Kalendarza i powiadomienia | Claude + target od Rafała | pełne v1 |
