@@ -89,6 +89,10 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D27 | 30.09 | Scenariusz dostaje pola: rada „na następny raz”, zakres czasu timera (min–max); uwagi z oceny zbieramy z sesji (§13.8) | przyjęte |
 | D28 | 30.09 | Auto-wpis do planu (§13.4): dania w tej porze **nikt nie zjadł → zastępujemy; ktoś już odhaczył → dopisujemy obok** | przyjęte |
 | D29 | 30.09 | Przepisy trywialne (np. jogurt z granolą) **bez Gotuj** — system pisania oznacza je jako `SKIPPED` z powodem, przycisku nie ma | przyjęte |
+| D30 | 30.09 | Czas „po ludzku”: kroki „w międzyczasie” mogą rozjechać się z timerem o minutę–dwie — nie liczymy co do sekundy (zapas max(2 min, 20%)) | przyjęte |
+| D31 | 30.09 | Praktyczne wskazówki są pożądane — zawsze mówimy, **jak ustawić piekarnik** (góra–dół / termoobieg / grill; domyślnie góra–dół), czym wyłożyć blachę itp. Nadal nie zmieniamy składników, ilości, czasów ani temperatur | przyjęte |
+| D32 | 30.09 | Literówki i brak polskich znaków = błąd do poprawy przed publikacją | przyjęte |
+| D33 | 30.09 | **Najwyżej dwa odliczania naraz**; timer tylko na czekanie od 4 min — krótka, aktywna czynność przy garnku idzie tekstem z „po czym poznać” | przyjęte |
 
 ## 4. Przepływ użytkownika
 
@@ -213,10 +217,16 @@ To jest serce promptu i walidatorów (§7). Zmiana zasad = nowa `rulesVersion` i
   naraz (np. ziemniaki startują wcześniej, piekarnik nagrzewa się ~15 min przed użyciem, a nie na
   starcie).
 - **Nie wolno** zmieniać składników, ilości, temperatur ani czasów poza zakresem przepisu.
-- Każdy czas oczekiwania (gotowanie, pieczenie, chłodzenie, marynowanie) to timer.
+- Każdy czas oczekiwania **od 4 minut** (gotowanie, pieczenie, chłodzenie, marynowanie) to timer.
+  Krótka, aktywna czynność przy garnku („podsmaż cebulę ok. 3 min”, „smaż po 3 min z każdej strony”)
+  idzie tekstem z czasem i „po czym poznać” — bez timera (D33).
+- **Najwyżej dwa odliczania naraz** — przy trzecim użytkownik się gubi (D33, stany wyspy 0/1/2).
 - Jeden czas z przepisu = jeden timer. „Piecz 20–25 min, w połowie obróć” to jeden timer, a „w połowie
   obróć” idzie do treści kroku albo alarmu (zasady 2026-09-30.2).
-- Kroki „w międzyczasie” wskazują timer, pod którym się mieszczą.
+- Kroki „w międzyczasie” wskazują timer, pod którym się mieszczą — **po ludzku**: minuta–dwie różnicy
+  to nie problem (D30).
+- Krok nagrzewania zawsze mówi, jak ustawić piekarnik; praktyczne wskazówki (papier na blachę, jaki
+  garnek) są mile widziane (D31). _Zasady 2026-09-30.3._
 
 ### 5.4 Ilości, porcje, zaokrąglanie
 
