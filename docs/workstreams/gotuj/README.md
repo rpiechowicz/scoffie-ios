@@ -236,8 +236,11 @@ To jest serce promptu i walidatorów (§7). Zmiana zasad = nowa `rulesVersion` i
 - Skalowanie liniowe, potem zaokrąglenie wg typu:
   - sztuki (jajka, ząbki czosnku) — do całości, w górę od połowy; jajko w panierce zawsze w górę;
   - gramy — 5 g poniżej 100 g, 10 g powyżej; mililitry analogicznie;
-  - przyprawy < 3 g — „szczypta” / „½ łyżeczki” (istniejący `KitchenAmountFormatter`);
-  - łyżki/łyżeczki — do ½.
+  - przyprawy — miarą kuchenną z `KitchenAmount.format` (`measure:` = `Ingredient.kitchenMeasure`
+    z backendu, od 30.09.2026): szczypta · ¼ · ½ · 1 · 1½ · 2 łyżeczki · łyżki co ½ do 4, więcej
+    = gramy; liść laurowy, ziele angielskie, goździki w sztukach („2 liście”). Scenariusz trzyma
+    gramy — konwersja tylko przy wyświetlaniu, ekran kroku Gotuj ma iść przez ten sam formatter;
+  - łyżki/łyżeczki z przepisu — ta sama drabina.
 - **Sztuki dania** (kotlety, wałeczki masła, gołąbki) liczone od porcji zaokrąglonych w górę:
   2,5 porcji z planu = 3 kotlety. Tekst używa tokenu z odmianą: `{count:rolls|wałeczek|wałeczki|wałeczków}`.
 - Czasy **nie skalują się** w v1. Scenariusz może dodać notę skali („przy 4+ porcjach smaż w dwóch

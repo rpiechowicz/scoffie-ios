@@ -97,6 +97,10 @@ struct Ingredient: Identifiable, Codable, Hashable {
     var normalizedAmount: Double?
     var normalizedUnit: String?
 
+    /// Przyprawy w g/ml: jak pokazać ilość w kuchni (`KitchenAmount.format`).
+    /// `nil` = jak dotąd (nie przyprawa, starszy serwer, stara kopia katalogu).
+    var kitchenMeasure: KitchenMeasure?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -105,7 +109,8 @@ struct Ingredient: Identifiable, Codable, Hashable {
         department: String? = nil,
         rawUnit: String? = nil,
         normalizedAmount: Double? = nil,
-        normalizedUnit: String? = nil
+        normalizedUnit: String? = nil,
+        kitchenMeasure: KitchenMeasure? = nil
     ) {
         self.id = id
         self.name = name
@@ -115,7 +120,23 @@ struct Ingredient: Identifiable, Codable, Hashable {
         self.rawUnit = rawUnit
         self.normalizedAmount = normalizedAmount
         self.normalizedUnit = normalizedUnit
+        self.kitchenMeasure = kitchenMeasure
     }
+}
+
+/// Miara kuchenna przypraw z backendu (`kitchenMeasure`): `per` gramów (ml
+/// przy ml) na łyżeczkę płaską (`spoon`) albo na sztukę (`piece` — z formami
+/// odmiany: „liść / liście / liści”). Dane zostają w gramach; to tylko
+/// przepis na wyświetlenie.
+struct KitchenMeasure: Codable, Hashable {
+    static let spoon = "spoon"
+    static let piece = "piece"
+
+    let kind: String
+    let per: Double
+    let one: String?
+    let few: String?
+    let many: String?
 }
 
 /// Pojedynczy krok przygotowania posiłku

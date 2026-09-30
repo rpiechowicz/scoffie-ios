@@ -12,6 +12,8 @@ struct ShoppingItem: Identifiable, Codable, Hashable {
     /// pozycja wyłącznie z planu. Opcjonalne, żeby lista z cache'u sprzed
     /// tego pola dalej się dekodowała.
     var addedFrom: [String]? = nil
+    /// Przyprawy: jak pokazać ilość w kuchni. Opcjonalne jak `addedFrom`.
+    var kitchenMeasure: KitchenMeasure? = nil
 
     /// Czy na pozycji jest dopisana część, którą da się zdjąć z listy.
     var hasAddedPart: Bool { !(addedFrom ?? []).isEmpty }
@@ -25,7 +27,8 @@ struct ShoppingItem: Identifiable, Codable, Hashable {
             amount: totalAmount,
             unit: mappedUnit,
             rawUnit: unit,
-            department: department
+            department: department,
+            measure: kitchenMeasure
         )
     }
 }
