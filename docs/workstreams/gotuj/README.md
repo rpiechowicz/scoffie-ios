@@ -97,6 +97,7 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D35 | 30.09 | Koniec timera w apce = **pełny ekran**: pierścień, czas po terminie liczony w górę (zewnętrzny łuk co minutę), „Jeszcze chwilę?” +1 / +2 / +5 min, **Gotowe — dalej**, Wycisz; inne trwające timery wierszem „leci dalej”. Po „Wycisz” kapsuła timera pulsuje mocno, dopóki nie klikniesz Gotowe | przyjęte |
 | D36 | 30.09 | Składniki: ikona produktu w kolorze **kategorii** (warzywa, nabiał, przyprawy, mięso, zboża/tłuszcze), ilości neutralne i pogrubione; „już w daniu” przygaszone z ptaszkiem. Przyprawy w miarach kuchennych (`kitchenMeasure`) | przyjęte |
 | D37 | 30.09 | Teksty scenariusza pod dok (zasady .5, zmierzone w przeglądarce): **tytuł kroku ≤ 30 znaków** — krótkie polecenie, dwie linijki przy 40 pt (gdyby wyszły trzy, iOS zmniejsza do 32 pt); **treść ≤ 260** (tytuł + treść + adnotacja mieszczą się nad dokiem z dwoma timerami; scena i tak przewija się pod dokiem); **`startLabel` ≤ 20** — sam warunek startu („Gdy woda zawrze”, „Kotlety na patelni”), bez czasu: kapsuła „do włączenia” pokazuje go zamiast nazwy, arkusz Timery jako „Start: gdy woda zawrze” | przyjęte |
+| D38 | 1.10 | Zasady .6 (przegląd całego systemu z Codexem, noc 30.09/1.10) — kontrakt dla telefonu: **token `{count:…}` tylko w `body`** (telefon podstawia liczbę wyłącznie tam); **„+1/+2/+5 min” z D35 przedłuża TEN SAM krok** — scenariusz planuje, że następny krok główny rusza po „Gotowe — dalej”, stąd najwyżej 2 odliczania naraz; **nazwa timera to rzecz** („Ziemniaki”, „Ciasto”), dwa biegnące razem mają różne nazwy; **oczekiwanie „na noc” albo ponad 12 h bez timera** — krok „Wstaw do lodówki na noc”, następny zaczyna się od „Rano…” (sesja musi przetrwać do następnego dnia, §8.6); **drugi wariant urządzenia** (zdanie „W piekarniku: …” w przepisach airfryera) tylko jako rada kucharza na powitaniu | przyjęte |
 
 ## 4. Przepływ użytkownika
 
@@ -590,6 +591,7 @@ pozostałe w całości raz ✓. Przy 3 porcjach: filet 480 g, 3 kotlety, 3 wałe
 | Paywall (D13) | rekomendacja: v1 za darmo — koszt jest jednorazowy (katalog) i niski (domy), a funkcja to najlepszy materiał na zrzuty App Store i pierwsze wrażenie; płatność sensowna przy v2, gdzie każde pytanie ze zdjęciem realnie kosztuje. Flaga gotowa od początku |
 | Auto-wpis do planu (D21) a danie, które już stało w tej porze | ✅ D28 |
 | Zmiana pieczątki „zjedzone” w Kalendarzu (D23) | dotyczy całej apki, nie tylko Gotuj — wchodzi razem z wejściem na talerzu |
+| **Otwarte (do decyzji Rafała):** trzy timery naraz poza planem scenariusza — użytkownik przedłuży timer (D35) i mimo to przejdzie dalej strzałką ‹ › (D34), a tam włączy kolejny | scenariusz tego nie planuje (D38, walidator: najwyżej 2), ale telefon musi to obsłużyć bez rozjechania doku — np. trzeci timer jako „+1” otwierający arkusz Timery. Do ustalenia przy E4 |
 
 ## 13. Design v1 — zatwierdzone ekrany (30.09.2026)
 
