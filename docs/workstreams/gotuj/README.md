@@ -96,6 +96,7 @@ przekazać asystentowi, a układ ekranu kroku ma zarezerwowane miejsce na przyci
 | D34 | 30.09 | **Dok na dole ekranu kroku**: wyspa ‹ · Składniki N · › zawsze w tym samym miejscu; **timery osobno nad nią** — każdy jako własna kapsuła, bez wspólnego kontenera. Jeden timer = cała szerokość (nazwa, czas, jeden przycisk, nic więcej); dwa = dwie kapsuły obok siebie. Najwyżej 2 (1 aktywny + 1 do włączenia albo 2 aktywne). Timer kroku startuje w kapsule (pulsuje łagodnie), nie w treści; w nagłówku nie ma już kapsuły timera (§13.2) | przyjęte |
 | D35 | 30.09 | Koniec timera w apce = **pełny ekran**: pierścień, czas po terminie liczony w górę (zewnętrzny łuk co minutę), „Jeszcze chwilę?” +1 / +2 / +5 min, **Gotowe — dalej**, Wycisz; inne trwające timery wierszem „leci dalej”. Po „Wycisz” kapsuła timera pulsuje mocno, dopóki nie klikniesz Gotowe | przyjęte |
 | D36 | 30.09 | Składniki: ikona produktu w kolorze **kategorii** (warzywa, nabiał, przyprawy, mięso, zboża/tłuszcze), ilości neutralne i pogrubione; „już w daniu” przygaszone z ptaszkiem. Przyprawy w miarach kuchennych (`kitchenMeasure`) | przyjęte |
+| D37 | 30.09 | Teksty scenariusza pod dok (zasady .5, zmierzone w przeglądarce): **tytuł kroku ≤ 30 znaków** — krótkie polecenie, dwie linijki przy 40 pt (gdyby wyszły trzy, iOS zmniejsza do 32 pt); **treść ≤ 260** (tytuł + treść + adnotacja mieszczą się nad dokiem z dwoma timerami; scena i tak przewija się pod dokiem); **`startLabel` ≤ 20** — sam warunek startu („Gdy woda zawrze”, „Kotlety na patelni”), bez czasu: kapsuła „do włączenia” pokazuje go zamiast nazwy, arkusz Timery jako „Start: gdy woda zawrze” | przyjęte |
 
 ## 4. Przepływ użytkownika
 
@@ -619,12 +620,14 @@ Sprzętu nie pokazujemy (pole może zostać w scenariuszu dla walidatora piekarn
     (sama strzałka, kółko 52); w ostatnim kroku strzałka → zielony ptaszek „Zakończ”; w pierwszym Wstecz przygaszone;
   - **timery nad wyspą** (10 pt odstępu), każdy osobną kapsułą 56 pt z nieprzezroczystym tłem i cieniem:
     - jeden → cała szerokość: pierścień, nazwa, czas i jeden przycisk (pauza / **▶ Start** / **Wznów** / **Gotowe**);
+      w kapsule **do włączenia** zamiast nazwy stoi warunek startu ze scenariusza (`startLabel`, D37):
+      „Kotlety na patelni · 10:00 · ▶ Start”;
     - dwa → dwie kapsuły obok siebie (pierścień, nazwa, czas); dotknięcie otwiera arkusz Timery;
     - **do włączenia** — obwódka terakoty, łagodne pulsowanie; **po czasie** — pełna terakota, dzwonek, mocne
       pulsowanie; **pauza** — przygaszona;
   - nic nie trwa i nic nie czeka → sama wyspa.
 - **Arkusz Timery** (z kapsuły timera; wyspa zostaje pod nim): sekcje **TRWA** (pierścień = pauza, nazwa, „krok 3 ·
-  z 20 min”, czas w kolorze timera), **W TYM KROKU** (karta z **▶ Start**, pulsuje), **WSTRZYMANY** (przycisk wznowienia,
+  z 20 min”, czas w kolorze timera), **W TYM KROKU** (karta z **▶ Start**, pulsuje, podpis „Start: kotlety na patelni”), **WSTRZYMANY** (przycisk wznowienia,
   „Stoi, dopóki go nie wznowisz — nie zadzwoni”).
 - **Arkusz składników** (z wyspy; timery wiszą nad nim): przełącznik **Ten krok / Cały przepis**; sekcje
   **TERAZ**, **ZA CHWILĘ · KROK N+1** („odłóż — reszta z kroku 1”), **JUŻ W DANIU** (przygaszone, z ptaszkiem i numerem
