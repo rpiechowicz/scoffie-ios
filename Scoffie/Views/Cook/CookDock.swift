@@ -340,7 +340,10 @@ struct CookTimerCapsule: View {
             .scTapTarget(44, drawn: side)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isSingle ? CookDockLabels.accessibility(item) : item.primaryLabel)
+        .accessibilityLabel(item.primaryLabel)
+        // W pojedynczej robi to samo co reszta kapsuły — VoiceOver czytałby
+        // kapsułę dwa razy.
+        .accessibilityHidden(isSingle)
     }
 
     /// Glif w pierścieniu: w parze — ruch (▶ / pauza / ✓), w pojedynczej —

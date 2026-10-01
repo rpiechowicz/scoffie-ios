@@ -144,6 +144,10 @@ struct CookModeView: View {
                             }
                         }
                     )
+                    // Nowy timer = nowy ekran: drugi alarm zaraz po pierwszym
+                    // nie dziedziczy jego tarczy (wskazówka cofałaby się po
+                    // obwodzie do krótszego „po czasie”).
+                    .id(ringing.id)
                     .transition(.opacity)
                 }
             }
