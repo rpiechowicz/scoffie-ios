@@ -3,14 +3,20 @@ import SwiftUI
 /// Powitanie (WL1): co gotujesz, dla ilu porcji, szuflady Składniki i Rady
 /// kucharza, „Zaczynamy”. Porcje zmieniają się tylko w tej sesji — plan
 /// zostaje (D11). Sprzętu nie pokazujemy (§13.1).
+///
+/// Ruch: zdjęcie osiada, sekcje wjeżdżają kaskadą (jak szczegóły posiłku),
+/// liczby w meta liczą się od zera, a zmiana porcji roluje liczby w karcie,
+/// stepperze i skrócie składników.
 struct CookWelcomeView: View {
     let session: CookSession
     let recipe: CookRecipeFacts
+    let isPhotoRevealed: Bool
     let onPortions: (Int) -> Void
     let onStart: () -> Void
     let onClose: () -> Void
 
     @State private var drawer: Drawer?
+    @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
 
     enum Drawer: String, Identifiable {
@@ -25,13 +31,18 @@ struct CookWelcomeView: View {
 
             ScrollView {
                 ZStack(alignment: .topLeading) {
-                    CookHeaderPhoto(url: session.imageURL)
+                    CookHeaderPhoto(url: session.imageURL, isRevealed: isPhotoRevealed)
                     content
                 }
+                // Szerokość treści = szerokość ekranu (wzór szczegółów posiłku).
+                .containerRelativeFrame(.horizontal)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
             .ignoresSafeArea(edges: .top)
+            .scSheetFooter(horizontalPadding: SCCook.Spacing.page) {
+                footer
+            }
 
             HStack {
                 Spacer()
@@ -39,19 +50,7 @@ struct CookWelcomeView: View {
             }
             .padding(.horizontal, SCCook.Spacing.page)
             .padding(.top, 11)
-        }
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 12) {
-                drawerButton(.ingredients)
-                if !session.scenario.tips.isEmpty {
-                    drawerButton(.tips)
-                }
-                CookPrimaryButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
-            }
-            .padding(.horizontal, SCCook.Spacing.page)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            .background(Color.scPageBase(scheme).ignoresSafeArea())
+            .cookChrome(hasAppeared)
         }
         .sheet(item: $drawer) { drawer in
             CookWelcomeDrawerSheet(session: session, drawer: drawer)
@@ -60,39 +59,64 @@ struct CookWelcomeView: View {
                 .presentationCornerRadius(40)
                 .presentationBackground(Color.scCanvas(scheme))
         }
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
+    }
+
+    private var footer: some View {
+        VStack(spacing: 12) {
+            drawerButton(.ingredients)
+                .cookReveal(hasAppeared, order: 3)
+            if !session.scenario.tips.isEmpty {
+                drawerButton(.tips)
+                    .cookReveal(hasAppeared, order: 4)
+            }
+            CookPrimaryButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
+                .cookReveal(hasAppeared, order: 5)
+        }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: SCCook.Spacing.titleTop)
 
-            Text(eyebrow)
-                .cookText(SCCook.Typography.stage)
-                .foregroundStyle(SCPalette.sage)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(eyebrow)
+                    .cookText(SCCook.Typography.stage)
+                    .foregroundStyle(SCPalette.sage)
 
-            Text(recipe.headline)
-                .cookText(SCCook.Typography.welcomeTitle)
-                .foregroundStyle(Color.scLabel(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
-                .accessibilityAddTraits(.isHeader)
+                Text(recipe.headline)
+                    .cookText(SCCook.Typography.welcomeTitle)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+                    .accessibilityAddTraits(.isHeader)
 
-            if let subtitle = recipe.subtitle {
-                Text(subtitle)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .padding(.top, 4)
+                if let subtitle = recipe.subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                }
             }
+            .cookReveal(hasAppeared, order: 0)
 
             meta
                 .padding(.top, 12)
+                .cookReveal(hasAppeared, order: 1)
 
             servingsCard
                 .padding(.top, 20)
+                .cookReveal(hasAppeared, order: 2)
 
             Color.clear.frame(height: 24)
         }
         .padding(.horizontal, SCCook.Spacing.page)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var eyebrow: String {
@@ -100,22 +124,31 @@ struct CookWelcomeView: View {
         return "GOTUJEMY · \(slot.title.uppercased(with: Locale(identifier: "pl_PL")))"
     }
 
+    /// Liczby liczą się od zera przy wejściu (`SCCountingText`) — razem
+    /// z kaskadą, a nie zanim rząd się pokaże.
     private var meta: some View {
-        HStack(spacing: 16) {
-            metaItem(icon: "clock", text: "ok. \(session.scenario.totalMinutes) min")
-            metaItem(icon: "chart.bar.fill", text: recipe.difficultyText)
-            metaItem(icon: "list.bullet", text: "\(session.stepCount) \(PolishPlural.form(session.stepCount, one: "krok", few: "kroki", many: "kroków"))")
+        let count = session.stepCount
+        return HStack(spacing: 16) {
+            metaItem(icon: "clock", text: "ok. \(session.scenario.totalMinutes) min", counts: true)
+            metaItem(icon: "chart.bar.fill", text: recipe.difficultyText, counts: false)
+            metaItem(icon: "list.bullet", text: "\(count) \(PolishPlural.form(count, one: "krok", few: "kroki", many: "kroków"))", counts: true)
         }
         .font(.system(size: 14, weight: .semibold))
         .foregroundStyle(Color.scMuted(scheme))
+        // Wąski ekran: rząd maleje, zamiast ucinać słowa.
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 
-    private func metaItem(icon: String, text: String) -> some View {
+    private func metaItem(icon: String, text: String, counts: Bool) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
-            Text(text)
-                .lineLimit(1)
+            if counts {
+                SCCountingText(text, loadAnimation: .easeOut(duration: 0.9).delay(0.2))
+            } else {
+                Text(text)
+            }
         }
     }
 
@@ -130,7 +163,7 @@ struct CookWelcomeView: View {
                 Text(servingsCaption)
                     .font(.system(size: 13))
                     .foregroundStyle(Color.scMuted(scheme))
-                    .contentTransition(.opacity)
+                    .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -170,6 +203,8 @@ struct CookWelcomeView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
+                        // Ilości w skrócie idą za porcjami — rolują.
+                        .contentTransition(.numericText())
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.up")
@@ -331,6 +366,7 @@ struct CookWelcomeDrawerSheet: View {
     let session: CookSession
     let drawer: CookWelcomeView.Drawer
 
+    @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
@@ -351,13 +387,18 @@ struct CookWelcomeDrawerSheet: View {
                     switch drawer {
                     case .ingredients:
                         ForEach(Array(lines.enumerated()), id: \.element.id) { offset, line in
-                            ingredientRow(line)
-                            if offset < lines.count - 1 {
-                                Rectangle().fill(Color.scChipBg(scheme)).frame(height: 1)
+                            VStack(spacing: 0) {
+                                ingredientRow(line)
+                                if offset < lines.count - 1 {
+                                    Rectangle().fill(Color.scChipBg(scheme)).frame(height: 1)
+                                }
                             }
+                            // Wiersze wchodzą kaskadą — pierwsze osiem po
+                            // kolei, reszta razem z ósmym.
+                            .cookReveal(hasAppeared, order: min(offset, 8))
                         }
                     case .tips:
-                        ForEach(Array(session.scenario.tips.enumerated()), id: \.offset) { _, tip in
+                        ForEach(Array(session.scenario.tips.enumerated()), id: \.offset) { offset, tip in
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 Image(systemName: "lightbulb")
                                     .font(.system(size: 14, weight: .semibold))
@@ -369,6 +410,7 @@ struct CookWelcomeDrawerSheet: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(.vertical, 12)
+                            .cookReveal(hasAppeared, order: min(offset, 8))
                         }
                     }
                 }
@@ -376,6 +418,11 @@ struct CookWelcomeDrawerSheet: View {
                 .padding(.vertical, 16)
             }
             .scScrollEdgeFade()
+        }
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
         }
     }
 

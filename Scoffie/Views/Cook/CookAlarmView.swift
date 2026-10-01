@@ -14,6 +14,7 @@ struct CookAlarmView: View {
     let onSilence: () -> Void
     let onDone: () -> Void
 
+    @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -32,24 +33,27 @@ struct CookAlarmView: View {
 
     var body: some View {
         ZStack {
-            Color.scPageBase(scheme).ignoresSafeArea()
-            CachedAsyncImage(url: session.imageURL, variant: .large) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().scaledToFill()
-                } else {
-                    Color.clear
-                }
+            // Tło wchodzi szybko (dok TimelineView nie niesie animacji, więc
+            // przenikanie idzie ze stanu), tarcza i reszta — kaskadą za nim.
+            ZStack {
+                Color.scPageBase(scheme).ignoresSafeArea()
+                CookBackdropPhoto(url: session.imageURL, opacity: SCCook.Opacity.alarmPhoto)
+                SCCook.Palette.alarmVeil(scheme).ignoresSafeArea()
             }
-            .opacity(SCCook.Opacity.alarmPhoto)
-            .ignoresSafeArea()
-            SCCook.Palette.alarmVeil(scheme).ignoresSafeArea()
+            .opacity(hasAppeared ? 1 : 0)
+            .animation(.easeOut(duration: 0.25), value: hasAppeared)
 
             VStack(spacing: 0) {
                 topBar
+                    .cookChrome(hasAppeared)
                 dial
+                    .scaleEffect(hasAppeared || reduceMotion ? 1 : 0.86)
+                    .opacity(hasAppeared ? 1 : 0)
+                    .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.72), value: hasAppeared)
                     .padding(.top, 34)
                 texts
                     .padding(.top, 26)
+                    .cookReveal(hasAppeared, order: 1)
                 if !others.isEmpty {
                     VStack(spacing: 8) {
                         ForEach(others) { other in
@@ -57,9 +61,11 @@ struct CookAlarmView: View {
                         }
                     }
                     .padding(.top, 16)
+                    .cookReveal(hasAppeared, order: 2)
                 }
                 Spacer(minLength: 16)
                 panel
+                    .cookReveal(hasAppeared, order: 3)
             }
             .padding(.horizontal, SCCook.Spacing.page)
             .padding(.top, 11)
@@ -67,6 +73,13 @@ struct CookAlarmView: View {
         }
         .sensoryFeedback(.warning, trigger: Int(over) / 4)
         .task(id: item.id) { await ring() }
+        .task {
+            // Dźwięk i haptyka ruszają od razu, obraz — po klatce oddechu
+            // (w klatce wstawienia animacja wejścia nie grała).
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
         .accessibilityAction(named: "Gotowe — dalej", onDone)
     }
 
@@ -105,6 +118,8 @@ struct CookAlarmView: View {
     private var dial: some View {
         let lap = over.truncatingRemainder(dividingBy: 60) / 60
         let minutes = Int(over) / 60
+        let counter = CookClock.overdueText(over)
+        let caption = minutes > 0 ? "\(minutes) min po czasie · było \(CookClock.duration(item.timer))" : "po czasie · było \(CookClock.duration(item.timer))"
         return ZStack {
             CookAlarmHalos()
             Circle()
@@ -115,6 +130,9 @@ struct CookAlarmView: View {
                 .stroke(SCPalette.terracotta, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .frame(width: 216, height: 216)
+                // Łuk okrąża tarczę raz na minutę płynnie; na początku nowej
+                // minuty wraca na start bez cofania się po obwodzie.
+                .animation(reduceMotion || lap < 0.01 ? nil : .linear(duration: 1), value: lap)
             Circle()
                 .fill(Color.scPageBase(scheme))
                 .overlay(Circle().strokeBorder(SCPalette.terracotta, lineWidth: SCCook.Stroke.alarmDisc))
@@ -126,15 +144,16 @@ struct CookAlarmView: View {
                         .cookText(SCCook.Typography.stage)
                 }
                 .foregroundStyle(SCPalette.terracotta)
-                Text(CookClock.overdueText(over))
+                Text(counter)
                     .cookText(SCCook.Typography.alarmCounter)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
-                    .contentTransition(.numericText(countsDown: false))
+                    .cookTicking(counter, countsDown: false)
                     .padding(.top, 2)
-                Text(minutes > 0 ? "\(minutes) min po czasie · było \(CookClock.duration(item.timer))" : "po czasie · było \(CookClock.duration(item.timer))")
+                Text(caption)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
+                    .cookRoll(caption)
             }
         }
         .frame(width: SCCook.Size.alarmDial, height: SCCook.Size.alarmDial)

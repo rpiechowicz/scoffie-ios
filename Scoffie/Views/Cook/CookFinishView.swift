@@ -3,16 +3,24 @@ import SwiftUI
 /// Zakończenie (EF8, D20): „Smacznego!”, trzy liczby (czas · kroki · kcal
 /// porcji), rada „na następny raz”, ocena w wierszu i „✓ Zjedzone”. Po
 /// kciuku arkusz uwag (EF2); kciuk zapisuje się także bez uwag.
+///
+/// Ruch: sekcje wjeżdżają kaskadą, liczby liczą się od zera razem z wejściem
+/// swojego rzędu, kciuk podmienia glif i podskakuje, a kciuk w górę dostaje
+/// „wybuch” kropek w szałwii i haptykę sukcesu (jak ocena odpowiedzi
+/// Asystenta).
 struct CookFinishView: View {
     let session: CookSession
     let recipe: CookRecipeFacts
     let now: Date
+    let isPhotoRevealed: Bool
     let onEaten: () -> Void
     let onClose: () -> Void
     let onFeedback: (CookFeedback) -> Void
 
     @State private var rating: CookFeedback.Rating?
     @State private var isFeedbackSheetPresented = false
+    @State private var hasAppeared = false
+    @State private var cheer = 0
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -21,13 +29,25 @@ struct CookFinishView: View {
 
             ScrollView {
                 ZStack(alignment: .top) {
-                    CookHeaderPhoto(url: session.imageURL)
+                    CookHeaderPhoto(url: session.imageURL, isRevealed: isPhotoRevealed)
                     content
                 }
+                // Szerokość treści = szerokość ekranu (wzór szczegółów posiłku).
+                .containerRelativeFrame(.horizontal)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
             .ignoresSafeArea(edges: .top)
+            .scSheetFooter(horizontalPadding: SCCook.Spacing.page) {
+                CookPrimaryButton(
+                    title: "Zjedzone",
+                    leadingIcon: "checkmark",
+                    accent: SCPalette.sage,
+                    style: SCCook.Typography.buttonQuiet,
+                    action: onEaten
+                )
+                .cookReveal(hasAppeared, order: 5)
+            }
 
             HStack {
                 Spacer()
@@ -35,19 +55,7 @@ struct CookFinishView: View {
             }
             .padding(.horizontal, SCCook.Spacing.page)
             .padding(.top, 11)
-        }
-        .safeAreaInset(edge: .bottom) {
-            CookPrimaryButton(
-                title: "Zjedzone",
-                leadingIcon: "checkmark",
-                accent: SCPalette.sage,
-                style: SCCook.Typography.buttonQuiet,
-                action: onEaten
-            )
-            .padding(.horizontal, SCCook.Spacing.page)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            .background(Color.scPageBase(scheme).ignoresSafeArea())
+            .cookChrome(hasAppeared)
         }
         .sheet(isPresented: $isFeedbackSheetPresented) {
             if let rating {
@@ -65,37 +73,51 @@ struct CookFinishView: View {
                 .presentationBackground(Color.scCanvas(scheme))
             }
         }
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
     }
 
     private var content: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: SCCook.Spacing.titleTop - 20)
 
-            Text("UGOTOWANE")
-                .font(.system(size: 12, weight: .bold))
-                .tracking(1.44)
-                .foregroundStyle(Color.scMuted(scheme))
-            Text("Smacznego!")
-                .cookText(SCCook.Typography.finishTitle)
-                .foregroundStyle(Color.scLabel(scheme))
-                .padding(.top, 8)
-                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                Text("UGOTOWANE")
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(1.44)
+                    .foregroundStyle(Color.scMuted(scheme))
+                Text("Smacznego!")
+                    .cookText(SCCook.Typography.finishTitle)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .padding(.top, 8)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            .cookReveal(hasAppeared, order: 0)
+
             Text(recipe.headline)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 8)
+                .cookReveal(hasAppeared, order: 1)
 
             stats
                 .padding(.top, 26)
+                .cookReveal(hasAppeared, order: 2)
 
             if let tip = session.scenario.nextTimeTip {
                 nextTimeCard(tip)
                     .padding(.top, 20)
+                    .cookReveal(hasAppeared, order: 3)
             }
 
             ratingRow
                 .padding(.top, 22)
+                .cookReveal(hasAppeared, order: 4)
 
             Color.clear.frame(height: 24)
         }
@@ -120,12 +142,13 @@ struct CookFinishView: View {
         .overlay(alignment: .bottom) { rule.frame(height: 1) }
     }
 
+    /// Liczba liczy się od zera, gdy jej rząd wjeżdża (opóźnienie = miejsce
+    /// rzędu w kaskadzie), a co minutę czasu — dolicza się do nowej.
     private func stat(value: String, caption: String) -> some View {
         VStack(spacing: 3) {
-            Text(value)
+            SCCountingText(value, loadAnimation: .easeOut(duration: 0.9).delay(0.3))
                 .font(.system(size: 20, weight: .bold))
                 .tracking(-0.4)
-                .monospacedDigit()
                 .foregroundStyle(Color.scLabel(scheme))
             Text(caption)
                 .font(.system(size: 12))
@@ -178,22 +201,30 @@ struct CookFinishView: View {
     private func thumb(_ value: CookFeedback.Rating, systemName: String, selectedName: String, label: String) -> some View {
         let selected = rating == value
         return Button {
-            rating = value
+            withAnimation(.snappy(duration: 0.25)) { rating = value }
+            if value == .up { cheer += 1 }
             onFeedback(CookFeedback(rating: value, tags: [], comment: "", session: session))
             isFeedbackSheetPresented = true
         } label: {
             Image(systemName: selected ? selectedName : systemName)
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(Color.scLabel(scheme))
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce.up.byLayer, value: selected)
                 .frame(width: 56, height: 44)
                 .background(Capsule().fill(selected ? SCCook.Palette.badge(scheme) : Color.scTileStroke(scheme)))
                 .overlay(Capsule().strokeBorder(selected ? Color.scLabel(scheme).opacity(0.4) : Color.scTileStroke(scheme), lineWidth: 1))
+                .overlay {
+                    if value == .up {
+                        ThumbCheer(trigger: cheer, tint: SCPalette.sage)
+                    }
+                }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .sensoryFeedback(.selection, trigger: selected)
+        .sensoryFeedback(value == .up ? .success : .selection, trigger: selected) { _, isOn in isOn }
     }
 }
 

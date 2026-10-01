@@ -117,10 +117,11 @@ struct CookDock: View {
                         Text("\(count)")
                             .font(.system(size: 12, weight: .heavy))
                             .monospacedDigit()
+                            .cookRoll(count)
                             .padding(.horizontal, 6)
                             .frame(minWidth: SCCook.Size.islandBadge, minHeight: SCCook.Size.islandBadge)
                             .background(Capsule().fill(SCCook.Palette.badge(scheme)))
-                            .contentTransition(.numericText(value: Double(count)))
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
                     }
                 }
                 .foregroundStyle(Color.scLabel(scheme))
@@ -132,25 +133,17 @@ struct CookDock: View {
             .buttonStyle(.plain)
             .accessibilityLabel(count > 0 ? "Składniki, \(count)" : "Składniki")
 
-            if session.isLastStep {
-                islandCircle(
-                    systemName: "checkmark",
-                    fill: SCPalette.sage.opacity(SCCook.Opacity.finishFill),
-                    stroke: SCPalette.sage.opacity(SCCook.Opacity.finishStroke),
-                    tint: SCPalette.sage,
-                    label: "Zakończ gotowanie",
-                    action: onNext
-                )
-            } else {
-                islandCircle(
-                    systemName: "arrow.right",
-                    fill: SCCook.Palette.ringTodo(scheme),
-                    stroke: SCCook.Palette.badge(scheme),
-                    tint: Color.scLabel(scheme),
-                    label: "Następny krok",
-                    action: onNext
-                )
-            }
+            // Jeden krążek: w ostatnim kroku strzałka PRZECHODZI w ptaszek
+            // na szałwii (glif się podmienia, kolory przenikają).
+            let isLast = session.isLastStep
+            islandCircle(
+                systemName: isLast ? "checkmark" : "arrow.right",
+                fill: isLast ? SCPalette.sage.opacity(SCCook.Opacity.finishFill) : SCCook.Palette.ringTodo(scheme),
+                stroke: isLast ? SCPalette.sage.opacity(SCCook.Opacity.finishStroke) : SCCook.Palette.badge(scheme),
+                tint: isLast ? SCPalette.sage : Color.scLabel(scheme),
+                label: isLast ? "Zakończ gotowanie" : "Następny krok",
+                action: onNext
+            )
         }
         .padding(SCCook.Spacing.islandPadding)
         .frame(height: SCCook.Height.island)
@@ -169,6 +162,7 @@ struct CookDock: View {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(tint)
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: SCCook.Size.islandButton, height: SCCook.Size.islandButton)
                 .background(Circle().fill(fill))
                 .overlay(Circle().strokeBorder(stroke, lineWidth: 1))
@@ -235,16 +229,20 @@ struct CookTimerCapsule: View {
         HStack(spacing: layout == .single ? 10 : 9) {
             leading
             VStack(alignment: .leading, spacing: 1) {
-                Text(CookDockLabels.capsuleLabel(item))
+                let label = CookDockLabels.capsuleLabel(item)
+                let time = CookDockLabels.time(item.status)
+                // Start / po czasie / pauza zmieniają etykietę — słowa rolują.
+                Text(label)
                     .cookText(SCCook.Typography.timerLabel)
                     .foregroundStyle(labelColor)
                     .lineLimit(1)
-                Text(CookDockLabels.time(item.status))
+                    .cookRoll(label)
+                Text(time)
                     .cookText(layout == .single ? SCCook.Typography.timerTime : SCCook.Typography.timerTimePair)
                     .monospacedDigit()
                     .foregroundStyle(timeColor)
                     .lineLimit(1)
-                    .contentTransition(.numericText(countsDown: !isOverdue))
+                    .cookTicking(time, countsDown: !isOverdue)
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             if layout == .single {

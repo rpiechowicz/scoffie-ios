@@ -3,11 +3,19 @@ import SwiftUI
 /// Ekran kroku (Y3K1–3): u góry pierścień kroków i krzyżyk, scena (etap ·
 /// tytuł · opis · adnotacja) pod zdjęciem dania, na dole dok. Tekst przewija
 /// się pod dokiem, a jego koniec staje nad nim (`spacing.cookDockReserve`).
+///
+/// Ruch (§8.2, `motion.cookStep`): przy wejściu sekcje wjeżdżają kaskadą,
+/// przy zmianie kroku nagłówek (etap i tytuł) ROLUJE się w miejscu jak danie
+/// w arkuszu wyboru posiłku, a opis wjeżdża z boku, z którego przyszedł krok,
+/// o chwilę później — nagłówek szybciej niż „jak”. Układ zostaje jeden: nowy
+/// opis i stary leżą w tym samym `ZStack`, więc nic pod nimi nie skacze.
 struct CookStepView: View {
     let session: CookSession
     let step: CookStep
     /// Skąd przyszedł krok — nowy wjeżdża z tej strony.
     let direction: Edge
+    /// Zdjęcie osiada raz, przy wejściu w tryb (`CookModeView`).
+    let isPhotoRevealed: Bool
     @Binding var card: CookDock.Card?
     let onClose: () -> Void
     let onBack: () -> Void
@@ -15,7 +23,9 @@ struct CookStepView: View {
     let onTimer: (CookTimerAction) -> Void
 
     @State private var scrollPosition = ScrollPosition(edge: .top)
+    @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -23,23 +33,25 @@ struct CookStepView: View {
 
             ScrollView {
                 ZStack(alignment: .topLeading) {
-                    CookHeaderPhoto(url: session.imageURL)
+                    CookHeaderPhoto(url: session.imageURL, isRevealed: isPhotoRevealed)
                     scene
-                        .id(step.id)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: direction).combined(with: .opacity),
-                            removal: .opacity
-                        ))
                 }
+                // Szerokość treści = szerokość ekranu (wzór szczegółów
+                // posiłku): żaden element nie poszerzy obszaru przewijania.
+                .containerRelativeFrame(.horizontal)
             }
             .scrollIndicators(.hidden)
             .scrollPosition($scrollPosition)
-            .ignoresSafeArea(edges: .top)
+            // Treść od krawędzi do krawędzi: zdjęcie pod paskiem stanu, koniec
+            // tekstu liczony od dołu ekranu, jak dok (`cookDockReserve`).
+            .ignoresSafeArea(edges: .vertical)
             .simultaneousGesture(swipe)
             // Nowy krok zaczyna się od tytułu, nie od miejsca, w którym
             // skończyło się czytanie poprzedniego.
             .onChange(of: step.id) {
-                scrollPosition.scrollTo(edge: .top)
+                withAnimation(SCCook.Motion.step) {
+                    scrollPosition.scrollTo(edge: .top)
+                }
             }
 
             topBar
@@ -65,8 +77,17 @@ struct CookStepView: View {
                     onTimer: onTimer
                 )
             }
+            .cookReveal(hasAppeared, order: 3)
+            // `spacing.cookDockBottom` od dołu EKRANU, jak w makiecie —
+            // nad wskaźnikiem home, nie nad całym dolnym marginesem.
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .animation(SCCook.Motion.dock, value: card)
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
     }
 
     private var topBar: some View {
@@ -77,17 +98,42 @@ struct CookStepView: View {
         }
         .padding(.horizontal, SCCook.Spacing.page)
         .padding(.top, 11)
+        .cookChrome(hasAppeared)
     }
 
     private var scene: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: SCCook.Spacing.titleTop)
 
+            header
+                .cookReveal(hasAppeared, order: 0)
+
+            ZStack(alignment: .topLeading) {
+                details
+                    .id(step.id)
+                    .transition(detailsTransition)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cookReveal(hasAppeared, order: 1)
+
+            Color.clear.frame(height: SCCook.Spacing.dockReserve + 24)
+        }
+        .padding(.horizontal, SCCook.Spacing.page)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Etap i tytuł — ten sam widok przez wszystkie kroki, tekst roluje się
+    /// w miejscu (wstecz = w drugą stronę).
+    private var header: some View {
+        let backwards = direction == .leading
+        return VStack(alignment: .leading, spacing: 0) {
             if let stage = step.stageLabel {
                 Text(stage)
                     .cookText(SCCook.Typography.stage)
                     .foregroundStyle(SCPalette.sage)
+                    .cookRoll(stage, countsDown: backwards)
                     .padding(.bottom, 8)
+                    .transition(.opacity)
             }
 
             Text(step.title)
@@ -96,8 +142,16 @@ struct CookStepView: View {
                 .lineLimit(3)
                 .minimumScaleFactor(0.85)
                 .fixedSize(horizontal: false, vertical: true)
+                .cookRoll(step.title, countsDown: backwards)
                 .accessibilityAddTraits(.isHeader)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
+    /// Opis, adnotacja i dopisek o porcjach — nowy krok = nowy widok, który
+    /// wjeżdża z boku.
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 0) {
             Text(session.package.body(for: step, portions: session.portions))
                 .cookText(SCCook.Typography.stepBody)
                 .foregroundStyle(SCCook.Palette.body(scheme))
@@ -113,11 +167,23 @@ struct CookStepView: View {
                 CookNoteLine(kind: .tip, text: scaleNote, systemImage: "person.2")
                     .padding(.top, 10)
             }
-
-            Color.clear.frame(height: SCCook.Spacing.dockReserve + 24)
         }
-        .padding(.horizontal, SCCook.Spacing.page)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Nowy opis wjeżdża z boku z lekkim opóźnieniem za nagłówkiem, stary
+    /// gaśnie od razu w miejscu. Przy „Ogranicz ruch” — samo przenikanie.
+    private var detailsTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity.animation(.easeInOut(duration: 0.2))
+        }
+        let shift: CGFloat = direction == .trailing ? 44 : -44
+        return .asymmetric(
+            insertion: .offset(x: shift)
+                .combined(with: .opacity)
+                .animation(SCCook.Motion.step.delay(0.06)),
+            removal: .opacity.animation(.easeOut(duration: 0.12))
+        )
     }
 
     /// Tytuł ≤ 30 znaków mieści się w dwóch liniach 40 pt (zasady .5, D37);

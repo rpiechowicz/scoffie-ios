@@ -117,6 +117,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   to karty w doku za zasłoną, nie arkusze systemu. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
   otwiera tryb), w tle zwykłe powiadomienie (`CookTimerNotifications`) — AlarmKit dopiero w E5. Zrzuty:
   `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-alarm|gotuj-wyjscie|gotuj-koniec`.
+  Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
+  — `scaledToFill` w samej ramce wysokości zgłaszał szerokość kadru (~580 pt) i tekst uciekał za lewą krawędź („bez
+  marginesów”, 1.10.2026). Ruch (`CookLook.swift`): teksty `cookRoll` (`SCMotion.textRoll`), zegary `cookTicking`
+  (0,3 s), łuki timerów dojeżdżają liniowo przez sekundę, wejście ekranów `cookReveal` (= `scReveal`), zmiana kroku =
+  nagłówek roluje się w miejscu, opis wjeżdża z boku o 0,06 s później (`motion.cookStep`).
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

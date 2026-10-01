@@ -10,6 +10,7 @@ struct CookExitSheet: View {
     let onEnd: () -> Void
     let onContinue: () -> Void
 
+    @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -21,16 +22,19 @@ struct CookExitSheet: View {
                 }
             }
             VStack(spacing: 0) {
-                Text("Wychodzisz z gotowania?")
-                    .cookText(SCCook.Typography.exitTitle)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 26)
-                Text("Krok \(session.stepIndex + 1) z \(session.stepCount) · \(CookRecipeFacts.shortTitle(session.recipeTitle))")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 4)
+                VStack(spacing: 0) {
+                    Text("Wychodzisz z gotowania?")
+                        .cookText(SCCook.Typography.exitTitle)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .multilineTextAlignment(.center)
+                    Text("Krok \(session.stepIndex + 1) z \(session.stepCount) · \(CookRecipeFacts.shortTitle(session.recipeTitle))")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
+                }
+                .padding(.top, 26)
+                .cookReveal(hasAppeared, order: 0)
 
                 if !running.isEmpty {
                     HStack(spacing: 8) {
@@ -39,6 +43,7 @@ struct CookExitSheet: View {
                         }
                     }
                     .padding(.top, 14)
+                    .cookReveal(hasAppeared, order: 1)
                 }
 
                 HStack(spacing: 12) {
@@ -60,6 +65,7 @@ struct CookExitSheet: View {
                     )
                 }
                 .padding(.top, 18)
+                .cookReveal(hasAppeared, order: 2)
 
                 Spacer(minLength: 16)
 
@@ -73,9 +79,15 @@ struct CookExitSheet: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .cookReveal(hasAppeared, order: 3)
             }
             .padding(.horizontal, SCCook.Spacing.page)
             .padding(.bottom, 8)
+        }
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
         }
     }
 

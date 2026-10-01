@@ -82,6 +82,7 @@ struct CookTimersCard: View {
                     .font(.system(size: 13))
                     .foregroundStyle(SCCook.Palette.caption(scheme))
                     .lineLimit(1)
+                    .cookRoll(summary)
             }
 
             if !active.isEmpty {
@@ -150,6 +151,7 @@ struct CookTimersCard: View {
                     Image(systemName: isOverdue ? "checkmark" : "pause.fill")
                         .font(.system(size: 13, weight: .heavy))
                         .foregroundStyle(color)
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: SCCook.Size.sheetTimerRing, height: SCCook.Size.sheetTimerRing)
                 .contentShape(Circle())
@@ -172,7 +174,7 @@ struct CookTimersCard: View {
                 .cookText(SCCook.Typography.sheetTime)
                 .monospacedDigit()
                 .foregroundStyle(color)
-                .contentTransition(.numericText(countsDown: !isOverdue))
+                .cookTicking(CookDockLabels.time(item.status), countsDown: !isOverdue)
         }
         .frame(minHeight: SCCook.Height.timerRow)
     }
@@ -268,6 +270,7 @@ struct CookIngredientsCard<IslandRow: View>: View {
     @ViewBuilder let islandRow: () -> IslandRow
 
     @State private var scope: Scope = .step
+    @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
 
     private struct LineGroup: Identifiable {
@@ -307,7 +310,9 @@ struct CookIngredientsCard<IslandRow: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // Raz na przebieg: dok przerysowuje się co sekundę (zegary).
+        let groups = sections
+        return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("Składniki")
@@ -324,15 +329,21 @@ struct CookIngredientsCard<IslandRow: View>: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(sections) { section in
+                        // Karta rozwija się z wyspy, a wiersze wchodzą kaskadą
+                        // (§8.2: „pigułki składników wchodzą kaskadą”).
+                        ForEach(Array(groups.enumerated()), id: \.element.id) { sectionIndex, section in
                             CookSectionHeader(title: section.title, color: section.color, count: section.lines.count)
+                                .cookReveal(hasAppeared, order: revealOrder(groups, sectionIndex, row: -1))
                             ForEach(Array(section.lines.enumerated()), id: \.element.id) { offset, line in
-                                row(line, isDone: section.isDone)
-                                if offset < section.lines.count - 1 {
-                                    Rectangle()
-                                        .fill(Color.scChipBg(scheme))
-                                        .frame(height: 1)
+                                VStack(spacing: 0) {
+                                    row(line, isDone: section.isDone)
+                                    if offset < section.lines.count - 1 {
+                                        Rectangle()
+                                            .fill(Color.scChipBg(scheme))
+                                            .frame(height: 1)
+                                    }
                                 }
+                                .cookReveal(hasAppeared, order: revealOrder(groups, sectionIndex, row: offset))
                             }
                         }
                     }
@@ -353,6 +364,18 @@ struct CookIngredientsCard<IslandRow: View>: View {
             islandRow()
         }
         .modifier(CookDockCardSurface())
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
+    }
+
+    /// Kolejność w kaskadzie: nagłówki i wiersze po kolei przez wszystkie
+    /// sekcje, od dziewiątego razem.
+    private func revealOrder(_ groups: [LineGroup], _ sectionIndex: Int, row: Int) -> Int {
+        let before = groups.prefix(sectionIndex).reduce(0) { $0 + $1.lines.count + 1 }
+        return min(before + row + 1, 8)
     }
 
     private var scopePicker: some View {

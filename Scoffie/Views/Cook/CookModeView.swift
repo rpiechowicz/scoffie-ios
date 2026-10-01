@@ -16,7 +16,11 @@ struct CookModeView: View {
     @State private var card: CookDock.Card?
     @State private var isExitPresented = false
     @State private var direction: Edge = .trailing
+    /// Zdjęcie dania osiada RAZ, przy wejściu w tryb — przejście powitanie →
+    /// kroki → koniec go nie powtarza (to samo zdjęcie w tym samym miejscu).
+    @State private var isPhotoRevealed = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// `initialCard` / `showsExit` — tylko ekran debug (zrzut otwartej karty
     /// albo arkusza wyjścia).
@@ -44,6 +48,11 @@ struct CookModeView: View {
         .interactiveDismissDisabled()
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .task {
+            guard !isPhotoRevealed else { return }
+            await CookEntrance.breathe()
+            isPhotoRevealed = true
+        }
         .sheet(isPresented: $isExitPresented) {
             if let session = store.session {
                 CookExitSheet(
@@ -79,7 +88,13 @@ struct CookModeView: View {
             CookWelcomeView(
                 session: session,
                 recipe: facts,
-                onPortions: { value in store.update { $0.setPortions(value) } },
+                isPhotoRevealed: isPhotoRevealed,
+                // Porcje rolują liczby w karcie, stepperze i skrócie składników.
+                onPortions: { value in
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : SCMotion.textRoll) {
+                        store.update { $0.setPortions(value) }
+                    }
+                },
                 onStart: {
                     withAnimation(SCCook.Motion.step) {
                         store.update { $0.begin(now: Date()) }
@@ -94,6 +109,7 @@ struct CookModeView: View {
                     session: session,
                     step: step,
                     direction: direction,
+                    isPhotoRevealed: isPhotoRevealed,
                     card: $card,
                     onClose: { isExitPresented = true },
                     onBack: { move(forward: false) },
@@ -108,9 +124,15 @@ struct CookModeView: View {
                                 item: ringing,
                                 now: context.date,
                                 onExtend: { seconds in
-                                    store.update { $0.extendTimer(ringing.id, by: seconds, now: Date()) }
+                                    withAnimation(.easeOut(duration: 0.25)) {
+                                        store.update { $0.extendTimer(ringing.id, by: seconds, now: Date()) }
+                                    }
                                 },
-                                onSilence: { store.update { $0.silenceTimer(ringing.id) } },
+                                onSilence: {
+                                    withAnimation(.easeOut(duration: 0.25)) {
+                                        store.update { $0.silenceTimer(ringing.id) }
+                                    }
+                                },
                                 onDone: {
                                     card = nil
                                     direction = .trailing
@@ -130,6 +152,7 @@ struct CookModeView: View {
                     session: session,
                     recipe: facts,
                     now: context.date,
+                    isPhotoRevealed: isPhotoRevealed,
                     onEaten: {
                         onEaten(session)
                         store.end()
