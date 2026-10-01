@@ -136,8 +136,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Runda 2 testów (1.10.2026): dok stoi jak dolne menu aplikacji (wyspa 60 pt, 20 pt od boków, na krawędzi
   bezpiecznego obszaru; powierzchnia `cook.dockSurface` — w jasnym motywie ciepła biel, bo płótno = tło strony).
   Kapsuły: najwyżej DWIE (`CookSession.dockCapsules` — dwa najdawniej włączone timery, wolne miejsce bierze timer
-  do włączenia: najpierw z bieżącego kroku, potem pominięte od najbliższego; timer PO CZASIE stoi w doku zawsze; runda 3
-  cofnęła trójkę), w kolejności kroków, nowa wjeżdża z boku, po którym staje; w parze pierścień = przycisk
+  do włączenia, też od najstarszego: nowy NIE wypycha kapsuły, która już stoi, tylko idzie do plakietki — runda 5,
+  „nie powinien 1 przesuwać”; timer PO CZASIE stoi w doku zawsze; runda 3 cofnęła trójkę), w kolejności kroków, nowa
+  wjeżdża z boku, po którym staje; w parze pierścień = przycisk
   start / pauza / wznów / gotowe, „do włączenia” zawsze z warunkiem startu (D37). Arkusz Timery = jedna lista bez
   sekcji (`timerLineup`) — start ani pauza nie przestawiają timerów. Łuki timerów ubywają zgodnie ze wskazówkami
   zegara. Pierścień kroków 36 pt jak krzyżyk (`scSheetIconSurface`): pełne zaokrąglone odcinki odsłaniane KLINEM
@@ -154,13 +155,19 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   dok rósł, a wyspa jechała inną krzywą niż kapsuły i podskakiwała — nie wracać. Kapsuła to JEDEN układ dla pojedynczej
   i pary (`CookTimerCapsule`: pierścień rośnie i dostaje glif, pigułka gaśnie, czas zmniejsza SKALA, nie krój) — `switch`
   na układzie podmieniał treść i przeskakiwał. Zamiast „+N” plakietka nad kapsułami (`CookOverflowTab`,
-  `CookSession.dockOverflow`): znaczki stanu ukrytych timerów (`CookTimerMark`) + nazwa i stan słowem („włącz”, czas,
-  „pauza”, „po czasie”) albo „+2 · 1 trwa · 1 do włączenia”. Tarcza końca timera = stoper (`CookAlarmBezel`: 60 kresek,
+  `CookSession.dockOverflow`): znaczki stanu ukrytych timerów (`CookTimerMark`) + JEDNO krótkie zdanie bez powtórzeń
+  (runda 5: „+2 · 2 trwają”): jeden — „Ziemniaki · 12:04”, „W piekarniku · włącz”; kilka w tym samym stanie — „2 timery
+  trwają”; różne — „3 timery · 1 do włączenia”. Tarcza końca timera = stoper (`CookAlarmBezel`: 60 kresek,
   kropka ze smugą okrąża ją raz na minutę, kąt rośnie bez końca), w krążku trzy krótkie wiersze w szerokościach
   wpisanych w koło (`size.cookAlarmTextWidth` / `cookAlarmCounterWidth`, dłuższe maleją), „było 10 min” w panelu
   „Jeszcze chwilę?”. Składniki w DZIAŁACH sklepu (`CookIngredientAisle`, kolejność `ProductConstants.isDepartment` —
   jak Zakupy i szczegóły przepisu): szuflada powitania i „Cały przepis” działami (wiersz mówi krok, „teraz”
   w terakocie), „Ten krok” zostaje TERAZ / ZA CHWILĘ, w środku działami.
+  Runda 5: krok bez składników ma pusty stan (`RecipeListEmptyState` „Ten krok bez składników” z drogą do całego
+  przepisu, a gdy coś przyjdzie za chwilę — cichy wiersz pod TERAZ). Trwające timery NIGDZIE nie są ucinane do dwóch:
+  arkusz „Wychodzisz z gotowania?” zawija pigułki na środku (`AllergenChipFlow(alignment: .center)`) i ma wysokość
+  z pomiaru treści, talerz PS1 w Kalendarzu stawia wszystkie w JEDNYM rzędzie w najbogatszej postaci, która się mieści
+  (`ViewThatFits`: z nazwami → same pierścienie z czasem → trzy i „+N”).
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

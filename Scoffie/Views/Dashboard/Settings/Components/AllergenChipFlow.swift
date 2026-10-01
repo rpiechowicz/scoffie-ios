@@ -10,7 +10,8 @@ import SwiftUI
 struct AllergenChipFlow: Layout {
     var spacing: CGFloat = 8
     /// `.trailing` dosuwa każdy wiersz do prawej krawędzi (podpowiedzi
-    /// asystenta nad polem — jak dymki użytkownika).
+    /// asystenta nad polem — jak dymki użytkownika), `.center` stawia go na
+    /// środku (trwające timery w arkuszu „Wychodzisz z gotowania?”).
     var alignment: HorizontalAlignment = .leading
 
     func sizeThatFits(
@@ -42,7 +43,12 @@ struct AllergenChipFlow: Layout {
         var y = bounds.minY
 
         for row in rows {
-            var x = alignment == .trailing ? bounds.maxX - row.width : bounds.minX
+            var x: CGFloat
+            switch alignment {
+            case .trailing: x = bounds.maxX - row.width
+            case .center: x = bounds.minX + (bounds.width - row.width) / 2
+            default: x = bounds.minX
+            }
             for item in row.items {
                 let size = item.size
                 subviews[item.index].place(

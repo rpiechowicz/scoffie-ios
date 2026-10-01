@@ -358,10 +358,12 @@ struct CookSession: Codable, Equatable {
     /// Kapsuły nad wyspą — najwyżej dwie (D33; runda 3 testów: „max 2 —
     /// te najstarsze, które już działają”). Pierwszeństwo mają włączone
     /// timery (trwa, wstrzymany) od najdawniej włączonego; miejsce, które
-    /// zostanie, bierze timer do włączenia — najpierw ten z bieżącego kroku,
-    /// potem pominięte od najbliższego. Wyjątek: timer PO CZASIE stoi w doku
-    /// zawsze — wyciszony pulsuje, dopóki nie padnie „Gotowe”, więc nie może
-    /// czekać za plakietką. Reszta jest w plakietce nad kapsułami
+    /// zostanie, bierze timer do włączenia — też od najstarszego (wcześniejszy
+    /// krok). Nowy timer do włączenia NIE wypycha kapsuły, która już stoi,
+    /// tylko idzie do plakietki (runda 5: „nie powinien 1 przesuwać, tylko
+    /// 3 powinien być w tym chipie u góry”). Wyjątek: timer PO CZASIE stoi
+    /// w doku zawsze — wyciszony pulsuje, dopóki nie padnie „Gotowe”, więc nie
+    /// może czekać za plakietką. Reszta jest w plakietce nad kapsułami
     /// (`dockOverflow`) i w arkuszu Timery. Na ekranie kapsuły stoją
     /// w kolejności kroków.
     func dockCapsules(now: Date, limit: Int = 2) -> [CookDockTimer] {
@@ -377,7 +379,7 @@ struct CookSession: Codable, Equatable {
             .sorted { (timers[$0.id]?.startedAt ?? .distantFuture) < (timers[$1.id]?.startedAt ?? .distantFuture) }
         let waiting = all
             .filter { if case .pending = $0.status { true } else { false } }
-            .sorted { $0.stepIndex > $1.stepIndex }
+            .sorted { $0.stepIndex < $1.stepIndex }
         let chosen = Set((overdue + started + waiting).prefix(limit).map(\.id))
         return all.filter { chosen.contains($0.id) }.sorted { $0.stepIndex < $1.stepIndex }
     }

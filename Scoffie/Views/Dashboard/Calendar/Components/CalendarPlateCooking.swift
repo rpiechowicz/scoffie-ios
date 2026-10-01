@@ -22,6 +22,12 @@ enum CalendarPlateCooking: Equatable {
 /// mini-pierścień, nazwa i czas w kolorze timera, tykające co sekundę.
 /// Bez trwających timerów — zwykły rząd pigułek (`fallback`), żeby rząd
 /// nigdy nie był pusty i podpis trzymał wysokość.
+///
+/// WSZYSTKIE timery w jednym rzędzie (runda 5: „ograniczenie do 2 — ubierz
+/// to w UX, jak są np. 4 włączone”), w najbogatszej postaci, która się
+/// mieści (`ViewThatFits`): z nazwami, potem same pierścienie z czasem
+/// (każdy timer ma swój kolor), a gdy i to za mało — trzy pierwsze i „+N”.
+/// Rząd zostaje jeden: drugi rząd podnosiłby wszystko pod talerzem.
 struct CalendarCookTimerPills<Fallback: View>: View {
     let session: CookSession
     @ViewBuilder let fallback: () -> Fallback
@@ -32,16 +38,28 @@ struct CalendarCookTimerPills<Fallback: View>: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1, paused: !isActiveTab)) { context in
-            let timers = Array(running(at: context.date).prefix(2))
+            let timers = running(at: context.date)
             if timers.isEmpty {
                 fallback()
             } else {
-                HStack(spacing: 6) {
-                    ForEach(timers) { item in
-                        CalendarCookTimerPill(item: item)
-                            .transition(.opacity)
-                    }
+                ViewThatFits(in: .horizontal) {
+                    pills(timers, compact: false)
+                    pills(timers, compact: true)
+                    pills(Array(timers.prefix(3)), compact: true, more: timers.count - 3)
                 }
+            }
+        }
+    }
+
+    private func pills(_ timers: [CookDockTimer], compact: Bool, more: Int = 0) -> some View {
+        HStack(spacing: 6) {
+            ForEach(timers) { item in
+                CalendarCookTimerPill(item: item, compact: compact)
+                    .transition(.opacity)
+            }
+            if more > 0 {
+                CalendarPlateChip(text: "+\(more)")
+                    .accessibilityLabel("Jeszcze \(more) \(PolishPlural.form(more, one: "timer", few: "timery", many: "timerów"))")
             }
         }
     }
@@ -60,9 +78,11 @@ struct CalendarCookTimerPills<Fallback: View>: View {
 
 /// Jedna pigułka timera — skorupa `CalendarPlateChip` (30 pt, `chipBg`,
 /// `tileStroke`, 12,5 / 700), w środku pierścień 13 pt z łukiem POZOSTAŁEGO
-/// czasu (jak w doku), nazwa w piśmie i czas w kolorze timera.
+/// czasu (jak w doku), nazwa w piśmie i czas w kolorze timera. Zwarta —
+/// bez nazwy: kolor pierścienia i czasu mówi, który to timer.
 private struct CalendarCookTimerPill: View {
     let item: CookDockTimer
+    var compact = false
 
     @Environment(\.colorScheme) private var scheme
 
@@ -72,8 +92,10 @@ private struct CalendarCookTimerPill: View {
         HStack(spacing: 6) {
             CookTimerRing(fraction: item.status.remainingFraction, color: color, lineWidth: 2)
                 .frame(width: 13, height: 13)
-            Text(item.timer.label)
-                .foregroundStyle(Color.scLabel(scheme))
+            if !compact {
+                Text(item.timer.label)
+                    .foregroundStyle(Color.scLabel(scheme))
+            }
             Text(time)
                 .monospacedDigit()
                 .foregroundStyle(color)
@@ -83,7 +105,7 @@ private struct CalendarCookTimerPill: View {
         .tracking(-0.15)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, compact ? 10 : 12)
         .frame(height: 30)
         .background(Capsule().fill(Color.scChipBg(scheme)))
         .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))

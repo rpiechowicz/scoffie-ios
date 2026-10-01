@@ -275,27 +275,11 @@ struct CookIngredientsSheet: View {
     @State private var scope: Scope = .step
     @Environment(\.colorScheme) private var scheme
 
-    private struct LineGroup: Identifiable {
-        let id: String
-        let title: String
-        let color: Color
-        let lines: [CookIngredientLine]
-    }
-
     private var index: Int { session.stepIndex }
 
     private func lines(at stepIndex: Int) -> [CookIngredientLine] {
         guard session.steps.indices.contains(stepIndex) else { return [] }
         return session.package.lines(for: session.steps[stepIndex], portions: session.portions)
-    }
-
-    /// „Ten krok”: TERAZ i ZA CHWILĘ, w każdej sekcji działami.
-    private var stepSections: [LineGroup] {
-        [
-            LineGroup(id: "now", title: "TERAZ", color: SCPalette.terracotta, lines: CookIngredientAisle.sorted(lines(at: index))),
-            LineGroup(id: "next", title: "ZA CHWILĘ · KROK \(index + 2)", color: SCCook.Palette.caption(scheme), lines: CookIngredientAisle.sorted(lines(at: index + 1))),
-        ]
-        .filter { !$0.lines.isEmpty }
     }
 
     /// „Cały przepis”: każdy wiersz każdego kroku, w działach.
@@ -331,10 +315,7 @@ struct CookIngredientsSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     switch scope {
                     case .step:
-                        ForEach(stepSections) { section in
-                            CookSectionHeader(title: section.title, color: section.color, count: section.lines.count)
-                            lineRows(section.lines)
-                        }
+                        stepList
                     case .recipe:
                         ForEach(recipeAisles) { aisle in
                             CookSectionHeader(title: aisle.title, color: SCCook.Palette.caption(scheme), count: aisle.lines.count)
@@ -348,6 +329,58 @@ struct CookIngredientsSheet: View {
             .scrollIndicators(.hidden)
             .scScrollEdgeFade()
         }
+    }
+
+    /// „Ten krok”: TERAZ i ZA CHWILĘ. Krok bez składników nie zostawia
+    /// pustego arkusza (runda 5: „daj empty state, żeby nie było pustki”):
+    /// gdy nic nie przyjdzie też za chwilę — karta pustego stanu z drogą do
+    /// całego przepisu, a gdy coś przyjdzie — cichy wiersz pod TERAZ.
+    @ViewBuilder
+    private var stepList: some View {
+        let now = CookIngredientAisle.sorted(lines(at: index))
+        let next = CookIngredientAisle.sorted(lines(at: index + 1))
+        if now.isEmpty, next.isEmpty {
+            RecipeListEmptyState(
+                icon: "checkmark",
+                accent: SCPalette.sage,
+                title: "Ten krok bez składników",
+                message: "Nic tu nie odmierzasz — pełna lista jest w „Całym przepisie”.",
+                actions: [
+                    .init(title: "Pokaż cały przepis", icon: "list.bullet") {
+                        withAnimation(.smooth(duration: 0.25)) { scope = .recipe }
+                    },
+                ]
+            )
+            .padding(.top, 12)
+        } else {
+            CookSectionHeader(title: "TERAZ", color: SCPalette.terracotta, count: now.isEmpty ? nil : now.count)
+            if now.isEmpty {
+                emptyNowRow
+            } else {
+                lineRows(now)
+            }
+            if !next.isEmpty {
+                CookSectionHeader(title: "ZA CHWILĘ · KROK \(index + 2)", color: SCCook.Palette.caption(scheme), count: next.count)
+                lineRows(next)
+            }
+        }
+    }
+
+    /// Wiersz pod TERAZ, gdy krok nic nie dodaje — w rytmie wierszy składników.
+    private var emptyNowRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(SCPalette.sage)
+                .frame(width: SCCook.Size.ingredientIcon, height: SCCook.Size.ingredientIcon)
+                .background(Circle().fill(SCPalette.sage.opacity(0.12)))
+            Text("W tym kroku nic nie dodajesz")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SCCook.Palette.caption(scheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: SCCook.Height.ingredientRow)
+        .accessibilityElement(children: .combine)
     }
 
     private func lineRows(_ lines: [CookIngredientLine]) -> some View {

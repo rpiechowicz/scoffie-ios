@@ -545,9 +545,13 @@ struct CookTimerCapsule: View {
 /// Plakietka nad kapsułami: timery, które się w nich nie zmieściły (runda 4:
 /// zamiast gołego „+1” — „info, że timer idzie, że trzeba włączyć, że jest
 /// wstrzymany”). Każdy ukryty timer to znaczek stanu w swoim kolorze
-/// (`CookTimerMark`); przy jednym obok stoi jego nazwa i stan słowem —
-/// „włącz”, czas, gdy trwa, „pauza”, „po czasie” — przy kilku: ile ich i co
-/// z nimi. Stuknięcie otwiera arkusz Timery.
+/// (`CookTimerMark`), a obok JEDNO krótkie zdanie (runda 5: „+2 · 2 trwają”
+/// powtarzało liczbę):
+/// - jeden timer — nazwa i stan: „Ziemniaki · 12:04”, „W piekarniku · włącz”;
+/// - kilka w tym samym stanie — liczba ze stanem: „2 timery trwają”;
+/// - kilka różnych — liczba i to, co czeka na ruch: „3 timery · 1 do
+///   włączenia” (resztę mówią znaczki).
+/// Stuknięcie otwiera arkusz Timery.
 struct CookOverflowTab: View {
     let items: [CookDockTimer]
     let onOpen: () -> Void
@@ -591,7 +595,18 @@ struct CookOverflowTab: View {
         if items.count == 1, let item = items.first {
             return "\(Self.name(item)) · \(Self.state(item))"
         }
-        return "+\(items.count) · " + Self.summary(items)
+        let count = items.count
+        let timers = "\(count) \(PolishPlural.form(count, one: "timer", few: "timery", many: "timerów"))"
+        let phases = Set(items.map(\.status.phase))
+        if phases.count == 1, let item = items.first {
+            return "\(timers) \(Self.groupState(item.status, count: count))"
+        }
+        // Różne stany — słowem tylko to, co czeka na ruch; resztę mówią znaczki.
+        let pending = items.filter { if case .pending = $0.status { true } else { false } }.count
+        if pending > 0 { return "\(timers) · \(pending) do włączenia" }
+        let overdue = items.filter { if case .overdue = $0.status { true } else { false } }.count
+        if overdue > 0 { return "\(timers) · \(overdue) po czasie" }
+        return timers
     }
 
     private var accessibilityText: String {
@@ -615,31 +630,15 @@ struct CookOverflowTab: View {
         }
     }
 
-    /// „1 trwa · 1 do włączenia” — te same słowa co nagłówek arkusza Timery.
-    private static func summary(_ items: [CookDockTimer]) -> String {
-        var running = 0
-        var pending = 0
-        var paused = 0
-        var overdue = 0
-        for item in items {
-            switch item.status {
-            case .running: running += 1
-            case .pending: pending += 1
-            case .paused: paused += 1
-            case .overdue: overdue += 1
-            case .finished: break
-            }
+    /// Stan kilku timerów naraz, po „2 timery …”.
+    private static func groupState(_ status: CookTimerStatus, count: Int) -> String {
+        switch status {
+        case .pending: "do włączenia"
+        case .running: PolishPlural.form(count, one: "trwa", few: "trwają", many: "trwa")
+        case .paused: PolishPlural.form(count, one: "wstrzymany", few: "wstrzymane", many: "wstrzymanych")
+        case .overdue: "po czasie"
+        case .finished: "gotowe"
         }
-        var parts: [String] = []
-        if overdue > 0 { parts.append("\(overdue) po czasie") }
-        if running > 0 {
-            parts.append("\(running) \(PolishPlural.form(running, one: "trwa", few: "trwają", many: "trwa"))")
-        }
-        if pending > 0 { parts.append("\(pending) do włączenia") }
-        if paused > 0 {
-            parts.append("\(paused) \(PolishPlural.form(paused, one: "wstrzymany", few: "wstrzymane", many: "wstrzymanych"))")
-        }
-        return parts.joined(separator: " · ")
     }
 }
 

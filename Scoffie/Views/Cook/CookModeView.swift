@@ -201,7 +201,7 @@ struct CookModeView: View {
                 },
                 onContinue: { sheet = nil }
             )
-            .presentationDetents([.height(440)])
+            // Wysokość podaje arkusz sam — z treści (liczba trwających timerów).
         }
     }
 
