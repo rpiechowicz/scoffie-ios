@@ -9,17 +9,37 @@ import SwiftUI
 ///
 /// Tarcza, aureole, dzwonek i „Gotowe — dalej” są w kolorze TEGO timera
 /// (runda 3: „każdy inny timer inny kolor”) — ten sam kolor co jego kapsuła.
+///
+/// Kilka dzwoni naraz (runda 8: „lepszy design i płynne przełączenie”): nad
+/// tarczą przełącznik — kapsuła każdego dzwoniącego timera (dzwonek w jego
+/// kolorze, nazwa, czas po terminie), wybrana na tincie swojego koloru,
+/// zaznaczenie przejeżdża między kapsułami. Stuknięcie albo przeciągnięcie
+/// tarczy w bok zmienia timer W MIEJSCU: ekran, tło i panel stoją, tarcza
+/// i aureole przenikają (wskazówka nie cofa się po obwodzie), kolor przechodzi
+/// płynnie, nazwa, tytuł i „było … min” rolują. „Gotowe — dalej” przy jednym
+/// zostawia ekran drugiemu tym samym ruchem; „Wycisz” ucisza wszystkie.
 struct CookAlarmView: View {
     let session: CookSession
-    let item: CookDockTimer
+    /// Dzwoniące timery w kolejności kroków (`CookSession.ringingTimers`) —
+    /// nigdy puste (ekran stoi tylko, gdy coś dzwoni).
+    let items: [CookDockTimer]
     let now: Date
-    let onExtend: (Int) -> Void
+    let onExtend: (String, Int) -> Void
     let onSilence: () -> Void
-    let onDone: () -> Void
+    let onDone: (String) -> Void
 
     @State private var hasAppeared = false
+    /// Pokazywany timer; `nil` albo timer, który przestał dzwonić = pierwszy.
+    @State private var selectedId: String?
+    /// Przełączenia ręką — haptyka tylko dla nich, nie dla wyboru z kodu.
+    @State private var switches = 0
+    @Namespace private var chipSpace
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var item: CookDockTimer {
+        items.first { $0.id == selectedId } ?? items[0]
+    }
 
     private var color: Color { item.accent.color }
 
@@ -51,11 +71,21 @@ struct CookAlarmView: View {
             VStack(spacing: 0) {
                 topBar
                     .cookChrome(hasAppeared)
+                ZStack {
+                    if items.count > 1 {
+                        switcher
+                            .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                    }
+                }
+                .padding(.top, items.count > 1 ? 14 : 0)
+                .cookReveal(hasAppeared, order: 0)
                 dial
                     .scaleEffect(hasAppeared || reduceMotion ? 1 : 0.86)
                     .opacity(hasAppeared ? 1 : 0)
                     .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.72), value: hasAppeared)
-                    .padding(.top, 34)
+                    .contentShape(Circle())
+                    .gesture(dialSwipe)
+                    .padding(.top, items.count > 1 ? 18 : 34)
                 texts
                     .padding(.top, 26)
                     .cookReveal(hasAppeared, order: 1)
@@ -79,7 +109,16 @@ struct CookAlarmView: View {
             .padding(.bottom, 8)
         }
         .sensoryFeedback(.warning, trigger: Int(over) / 4)
-        .task(id: item.id) { await ring() }
+        .sensoryFeedback(.selection, trigger: switches)
+        // Drugi timer zaczyna dzwonić — przełącznik wchodzi łagodnie.
+        .animation(.smooth(duration: 0.35), value: items.count > 1)
+        .onChange(of: items.map(\.id), initial: true) { _, ids in
+            // Pokazywany przestał dzwonić („Gotowe”, „+1 min”) — ekran już
+            // pokazuje pierwszy z reszty (`item`), wybór idzie za nim.
+            if let selectedId, ids.contains(selectedId) { return }
+            selectedId = ids.first
+        }
+        .task { await ring() }
         .task {
             // Dźwięk i haptyka ruszają od razu, obraz — po klatce oddechu
             // (w klatce wstawienia animacja wejścia nie grała).
@@ -87,7 +126,88 @@ struct CookAlarmView: View {
             await CookEntrance.breathe()
             hasAppeared = true
         }
-        .accessibilityAction(named: "Gotowe — dalej", onDone)
+        .accessibilityAction(named: "Gotowe — dalej") { onDone(item.id) }
+    }
+
+    // MARK: - Kilka naraz
+
+    private func select(_ id: String) {
+        guard id != item.id else { return }
+        switches += 1
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : SCMotion.textRoll) {
+            selectedId = id
+        }
+    }
+
+    /// Przeciągnięcie tarczy w bok = sąsiedni dzwoniący timer.
+    private var dialSwipe: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                guard items.count > 1,
+                      abs(value.translation.width) > 40,
+                      abs(value.translation.width) > abs(value.translation.height),
+                      let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+                let next = value.translation.width < 0 ? index + 1 : index - 1
+                guard items.indices.contains(next) else { return }
+                select(items[next].id)
+            }
+    }
+
+    /// Kapsuły dzwoniących timerów — zaznaczenie (tint i obwódka w kolorze
+    /// wybranego) przejeżdża między nimi.
+    private var switcher: some View {
+        AllergenChipFlow(spacing: 8, alignment: .center) {
+            ForEach(items) { other in
+                chip(other)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Dzwonią \(items.count) \(PolishPlural.form(items.count, one: "timer", few: "timery", many: "timerów"))")
+    }
+
+    private func chip(_ other: CookDockTimer) -> some View {
+        let selected = other.id == item.id
+        let tint = other.accent.color
+        let overText: String = {
+            if case let .overdue(over, _, _) = other.status { return CookClock.overdueText(over) }
+            return ""
+        }()
+        return Button { select(other.id) } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(tint)
+                Text(other.timer.label)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+                Text(overText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(tint)
+                    .cookTicking(overText, countsDown: false)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: SCCook.Height.alarmChip)
+            .background {
+                ZStack {
+                    Capsule()
+                        .fill(Color.scCanvas(scheme).opacity(0.78))
+                        .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                    if selected {
+                        Capsule()
+                            .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
+                            .overlay(Capsule().strokeBorder(tint, lineWidth: 1.5))
+                            .matchedGeometryEffect(id: "alarm-chip", in: chipSpace)
+                    }
+                }
+            }
+            .contentShape(Capsule())
+            .scTapHeight(44, drawn: SCCook.Height.alarmChip)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(other.timer.label), po czasie \(overText)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     /// Dźwięk alarmu co 2 s, dopóki nie padnie „Wycisz” albo „Gotowe” —
@@ -133,9 +253,19 @@ struct CookAlarmView: View {
         let minutes = Int(over) / 60
         let counter = CookClock.overdueText(over)
         return ZStack {
-            CookAlarmHalos(accent: item.accent)
-            CookAlarmBezel(color: color, over: over)
-                .frame(width: SCCook.Size.alarmRing, height: SCCook.Size.alarmRing)
+            // Inny timer = inna tarcza: aureole i podziałka przenikają (nowy
+            // widok), zamiast cofać wskazówkę po obwodzie do krótszego czasu.
+            ZStack {
+                CookAlarmHalos(accent: item.accent)
+                    .id(item.id)
+                    .transition(.opacity)
+            }
+            ZStack {
+                CookAlarmBezel(color: color, over: over)
+                    .id(item.id)
+                    .transition(.opacity)
+            }
+            .frame(width: SCCook.Size.alarmRing, height: SCCook.Size.alarmRing)
             Circle()
                 .fill(Color.scPageBase(scheme))
                 .overlay(Circle().strokeBorder(color, lineWidth: SCCook.Stroke.alarmDisc))
@@ -147,6 +277,7 @@ struct CookAlarmView: View {
                         .cookText(SCCook.Typography.stage)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+                        .cookRoll(item.timer.label)
                 }
                 .foregroundStyle(color)
                 .frame(maxWidth: SCCook.Size.alarmTextWidth)
@@ -177,12 +308,19 @@ struct CookAlarmView: View {
                 .cookText(SCCook.Typography.alarmTitle)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
+                .cookRoll(item.timer.alert.title)
                 .accessibilityAddTraits(.isHeader)
-            Text(item.timer.alert.body)
-                .font(.system(size: 17))
-                .lineSpacing(4)
-                .foregroundStyle(SCCook.Palette.alarmBody(scheme))
-                .multilineTextAlignment(.center)
+            // Treść alertu przenika przy zmianie timera — akapit rolowany
+            // literami był nieczytelny.
+            ZStack {
+                Text(item.timer.alert.body)
+                    .font(.system(size: 17))
+                    .lineSpacing(4)
+                    .foregroundStyle(SCCook.Palette.alarmBody(scheme))
+                    .multilineTextAlignment(.center)
+                    .id(item.id)
+                    .transition(.opacity)
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -202,11 +340,12 @@ struct CookAlarmView: View {
                     .monospacedDigit()
                     .foregroundStyle(SCCook.Palette.caption(scheme))
                     .lineLimit(1)
+                    .cookRoll(item.timer.id)
             }
             .padding(.horizontal, 4)
             HStack(spacing: 8) {
                 ForEach([1, 2, 5], id: \.self) { minutes in
-                    Button { onExtend(minutes * 60) } label: {
+                    Button { onExtend(item.id, minutes * 60) } label: {
                         Text("+\(minutes) min")
                             .font(.system(size: 16, weight: .bold))
                             .monospacedDigit()
@@ -220,7 +359,7 @@ struct CookAlarmView: View {
                     .buttonStyle(.plain)
                 }
             }
-            Button(action: onDone) {
+            Button { onDone(item.id) } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 16, weight: .bold))

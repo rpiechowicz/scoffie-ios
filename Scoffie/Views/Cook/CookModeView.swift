@@ -121,42 +121,48 @@ struct CookModeView: View {
     /// Ekran końca timera nad krokami. Arkusza nie da się przykryć widokiem
     /// spod niego, więc dzwoniący timer najpierw zamyka otwarty arkusz
     /// (Timery, Składniki, „Wychodzisz…”) — alarm jest ważniejszy.
+    ///
+    /// Jeden ekran na WSZYSTKIE dzwoniące timery (runda 8): kilka naraz =
+    /// przełącznik w samym ekranie, a „Gotowe” przy jednym zostawia ekran
+    /// drugiemu bez gaśnięcia (dawniej każdy alarm był osobnym widokiem
+    /// z `.id` — drugi wchodził od nowa przez zaciemnienie).
     private func alarm(_ session: CookSession) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            let ringing = session.ringingTimer(now: context.date)
+            let ringing = session.ringingTimers(now: context.date)
             ZStack {
-                if let ringing {
+                if !ringing.isEmpty {
                     CookAlarmView(
                         session: session,
-                        item: ringing,
+                        items: ringing,
                         now: context.date,
-                        onExtend: { seconds in
+                        onExtend: { id, seconds in
                             withAnimation(.easeOut(duration: 0.25)) {
-                                store.update { $0.extendTimer(ringing.id, by: seconds, now: Date()) }
+                                store.update { $0.extendTimer(id, by: seconds, now: Date()) }
                             }
                         },
                         onSilence: {
+                            // Dźwięk jest jeden — „Wycisz” ucisza każdy
+                            // dzwoniący timer, kapsuły dalej mocno pulsują.
+                            let ids = ringing.map(\.id)
                             withAnimation(.easeOut(duration: 0.25)) {
-                                store.update { $0.silenceTimer(ringing.id) }
+                                store.update { session in
+                                    for id in ids { session.silenceTimer(id) }
+                                }
                             }
                         },
-                        onDone: {
+                        onDone: { id in
                             sheet = nil
                             direction = .trailing
                             withAnimation(SCCook.Motion.step) {
-                                store.update { $0.finishTimerAndAdvance(ringing.id, now: Date()) }
+                                store.update { $0.finishTimerAndAdvance(id, now: Date()) }
                             }
                         }
                     )
-                    // Nowy timer = nowy ekran: drugi alarm zaraz po pierwszym
-                    // nie dziedziczy jego tarczy (wskazówka cofałaby się po
-                    // obwodzie do krótszego „po czasie”).
-                    .id(ringing.id)
                     .transition(.opacity)
                 }
             }
-            .onChange(of: ringing?.id, initial: true) { _, id in
-                if id != nil { sheet = nil }
+            .onChange(of: ringing.isEmpty, initial: true) { _, isEmpty in
+                if !isEmpty { sheet = nil }
             }
         }
     }

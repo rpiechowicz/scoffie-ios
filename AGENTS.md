@@ -121,7 +121,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Timery na wysokość treści (pomiar jak `PlanDayGoalSheet`); dzwoniący timer zamyka otwarty arkusz, bo widoku
   spod arkusza nie da się położyć nad nim. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
   otwiera tryb), w tle zwykłe powiadomienie (`CookTimerNotifications`) — AlarmKit dopiero w E5. Zrzuty:
-  `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-kroki|gotuj-alarm|gotuj-wyjscie|gotuj-koniec`.
+  `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-kroki|gotuj-alarm|gotuj-alarm-dwa|gotuj-wyjscie|gotuj-koniec`.
   Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
   — `scaledToFill` w samej ramce wysokości zgłaszał szerokość kadru (~580 pt) i tekst uciekał za lewą krawędź („bez
   marginesów”, 1.10.2026). Ruch (`CookLook.swift`): teksty `cookRoll` (`SCMotion.textRoll`), zegary `cookTicking`
@@ -186,6 +186,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   samo `glassEffect(.regular)`, barwa stanu nad szkłem, bez obwódki i cienia doku; „Dalej” w miękkiej terakocie).
   Runda 6 dała wyspie szkło paska zakładek z warstwą `scPageBase` 0,72 — matowa plama „strasznie różniąca się od
   reszty”; nie wracać. Ciemny motyw doku bez zmian. Zrzut: `SCOFFIE_DEBUG_OPTIONS=gotuj-kroki`.
+  Runda 8: adnotacja kroku i „Na następny raz” na zakończeniu to JEDNA zwarta karta `CookNoteCard` (krążek
+  `size.cookNoteIcon` z ikoną w kolorze rodzaju, nadtytuł „UWAGA” / „PO CZYM POZNAĆ” / „RADA” / „WIĘCEJ PORCJI” /
+  „NA NASTĘPNY RAZ”, zdanie 14/500, `radius.cookNote`; uwaga na tincie masła, reszta na kaflu) — dawna linijka
+  `CookNoteLine` i duża karta zakończenia usunięte. Ekran końca timera to JEDEN widok na wszystkie dzwoniące
+  (`CookSession.ringingTimers`, kolejność kroków): przy kilku nad tarczą przełącznik kapsuł (dzwonek w kolorze timera,
+  nazwa, czas po terminie, zaznaczenie przejeżdża `matchedGeometryEffect`), przełączenie stuknięciem albo przeciągnięciem
+  tarczy — tło i panel stoją, aureole i podziałka przenikają (`.id` timera NA NICH, nie na całym ekranie — dawne
+  `.id(ringing.id)` gasiło i zapalało cały alarm), kolor płynie, nazwa / tytuł / „było … min” rolują, treść przenika.
+  „Gotowe” przy jednym zostawia ekran drugiemu, „Wycisz” ucisza WSZYSTKIE dzwoniące. Zrzut: `gotuj-alarm-dwa`.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

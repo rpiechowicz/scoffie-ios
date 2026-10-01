@@ -431,6 +431,18 @@ struct CookSession: Codable, Equatable {
         }
     }
 
+    /// WSZYSTKIE dzwoniące timery, w kolejności kroków (jak arkusz Timery) —
+    /// ekran końca timera przełącza się między nimi, gdy dzwoni kilka naraz
+    /// (runda 8: „jak skończą np. 2 timery, zrób na to lepszy design i płynne
+    /// przełączenie”). Kolejność kroków, a nie pilność: kapsuły przełącznika
+    /// nie zamieniają się miejscami, gdy przybywa minut po czasie.
+    func ringingTimers(now: Date) -> [CookDockTimer] {
+        timerLineup(now: now).filter {
+            if case let .overdue(_, _, silenced) = $0.status { return !silenced }
+            return false
+        }
+    }
+
     /// Czas gotowania na zakończeniu („52 min”) — od „Zaczynamy”.
     func cookingMinutes(now: Date) -> Int {
         let start = cookingStartedAt ?? startedAt

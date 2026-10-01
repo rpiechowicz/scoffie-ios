@@ -193,6 +193,9 @@ enum SCCook {
         /// Krążek numeru kroku na osi arkusza Kroki (runda 6: stuknięcie w pierścień kroków): zrobiony — ptaszek w szałwii, bieżący — numer na pełnej terakocie, dalszy — numer na polu chipa.
         static let stepBadge: CGFloat = 30
 
+        /// Krążek ikony w karcie rady (runda 8): adnotacja kroku (uwaga, po czym poznać, rada, więcej porcji) i „Na następny raz” na zakończeniu — ta sama zwarta karta w obu miejscach.
+        static let noteIcon: CGFloat = 26
+
         /// Tarcza ekranu końca timera: aureole, pierścień podziałki z wskazówką sekund (size.cookAlarmRing) i krążek (size.cookAlarmDisc) — ST4, runda 4.
         static let alarmDial: CGFloat = 244
 
@@ -275,6 +278,9 @@ enum SCCook {
 
         /// „✓ Gotowe — dalej” na ekranie końca timera.
         static let alarmDone: CGFloat = 60
+
+        /// Kapsuła timera w przełączniku ekranu końca timera, gdy dzwoni kilka naraz (runda 8): kropka koloru timera, nazwa, czas po terminie.
+        static let alarmChip: CGFloat = 36
 
         /// Kafle „Wstrzymaj” / „Zakończ” obok siebie w arkuszu „Wychodzisz z gotowania?”.
         static let exitTile: CGFloat = 132
@@ -362,6 +368,9 @@ enum SCCook {
 
         /// Panel „Jeszcze chwilę?” na dole ekranu końca timera.
         static let alarmPanel: CGFloat = 28
+
+        /// Karta rady (adnotacja kroku, „Na następny raz”) — zwarta, mniejszy promień niż kafle 24 (runda 8).
+        static let note: CGFloat = 18
     }
 
     enum Typography {

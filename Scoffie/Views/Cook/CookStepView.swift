@@ -83,13 +83,13 @@ struct CookStepScene: View {
                 .padding(.top, 16)
 
             if let note = step.note {
-                CookNoteLine(kind: note.kind, text: note.text)
-                    .padding(.top, 12)
+                CookNoteCard(kind: note.kind, text: note.text)
+                    .padding(.top, 14)
             }
 
             if let scaleNote = session.package.scaleNote(for: step, portions: session.portions) {
-                CookNoteLine(kind: .tip, text: scaleNote, systemImage: "person.2")
-                    .padding(.top, 10)
+                CookNoteCard(kind: .tip, text: scaleNote, label: "WIĘCEJ PORCJI", systemImage: "person.2")
+                    .padding(.top, step.note == nil ? 14 : 8)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -117,11 +117,17 @@ struct CookStepScene: View {
     }
 }
 
-/// Adnotacja kroku: ostrzeżenie w maśle z trójkątem (makieta), „po czym
-/// poznać” i rada — cicha linijka z ikoną.
-struct CookNoteLine: View {
+/// Karta rady — adnotacja kroku (uwaga, po czym poznać, rada, więcej
+/// porcji) i „Na następny raz” na zakończeniu: JEDNA zwarta karta w obu
+/// miejscach (runda 8: „tipy na kroku zrób tak samo jak na zakończeniu, tylko
+/// bardziej skondensowane, tu i tu”). Krążek z ikoną w kolorze rodzaju,
+/// nadtytuł w tym kolorze, zdanie 14 pt. Uwaga stoi na tincie masła, reszta
+/// na kaflu aplikacji (`scTileBg` + `scTileStroke`).
+struct CookNoteCard: View {
     let kind: CookNoteKind
     let text: String
+    /// Nadtytuł; `nil` = z rodzaju („UWAGA”, „PO CZYM POZNAĆ”, „RADA”).
+    var label: String? = nil
     var systemImage: String? = nil
 
     @Environment(\.colorScheme) private var scheme
@@ -143,29 +149,51 @@ struct CookNoteLine: View {
         }
     }
 
-    private var textColor: Color {
-        kind == .warning ? SCPalette.butter : SCCook.Palette.body(scheme)
+    private var eyebrow: String {
+        if let label { return label }
+        switch kind {
+        case .warning: return "UWAGA"
+        case .cue: return "PO CZYM POZNAĆ"
+        case .tip, .unknown: return "RADA"
+        }
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.note, style: .continuous)
+        let isWarning = kind == .warning
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(tint)
-            Text(text)
-                .cookText(SCCook.Typography.note)
-                .foregroundStyle(textColor)
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: SCCook.Size.noteIcon, height: SCCook.Size.noteIcon)
+                .background(Circle().fill(tint.opacity(scheme == .dark ? 0.18 : 0.14)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(eyebrow)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(1)
+                    .foregroundStyle(tint)
+                Text(text)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineSpacing(2)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(shape.fill(isWarning ? tint.opacity(scheme == .dark ? 0.12 : 0.09) : Color.scTileBg(scheme)))
+        .overlay(shape.strokeBorder(isWarning ? tint.opacity(0.3) : Color.scTileStroke(scheme), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityPrefix + text)
     }
 
     private var accessibilityPrefix: String {
+        if let label { return label + ": " }
         switch kind {
-        case .warning: "Uwaga: "
-        case .cue: "Po czym poznać: "
-        case .tip, .unknown: "Rada: "
+        case .warning: return "Uwaga: "
+        case .cue: return "Po czym poznać: "
+        case .tip, .unknown: return "Rada: "
         }
     }
 }

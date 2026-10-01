@@ -202,6 +202,21 @@ equal(dock(at(16)).first, "t-butter:po czasie:terracotta", "Wycisz: kapsuła dal
 session.finishTimer("t-butter")
 equal(dock(at(16)), ["t-potatoes:trwa:sage"], "Gotowe: masło znika z doku")
 
+// Dwa dzwonią naraz (runda 8): przełącznik na ekranie końca timera dostaje
+// oba, w kolejności kroków; „Gotowe” przy jednym zostawia drugi.
+var duo = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
+duo.begin(now: t0)
+duo.startTimer("t-butter", now: t0)
+duo.jump(to: 2)
+duo.startTimer("t-potatoes", now: t0)
+equal(duo.ringingTimers(now: at(10)).map(\.timer.id), [], "dwa alarmy: przed czasem nic nie dzwoni")
+equal(duo.ringingTimers(now: at(21)).map(\.timer.id), ["t-butter", "t-potatoes"], "dwa alarmy: oba dzwonią, w kolejności kroków")
+duo.finishTimer("t-butter")
+equal(duo.ringingTimers(now: at(21)).map(\.timer.id), ["t-potatoes"], "dwa alarmy: po „Gotowe” zostaje drugi")
+equal(duo.ringingTimer(now: at(21))?.timer.id, "t-potatoes", "dwa alarmy: pełny ekran zostaje dla drugiego")
+duo.silenceTimer("t-potatoes")
+equal(duo.ringingTimers(now: at(21)).map(\.timer.id), [], "dwa alarmy: „Wycisz” — cisza")
+
 session.pauseTimer("t-potatoes", now: at(20))
 equal(dock(at(30)), ["t-potatoes:pauza:sage"], "pauza: stoi, nie dzwoni")
 session.resumeTimer("t-potatoes", now: at(30))

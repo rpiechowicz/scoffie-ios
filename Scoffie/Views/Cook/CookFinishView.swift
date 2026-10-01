@@ -77,8 +77,9 @@ struct CookFinishContent: View {
                 .cookReveal(hasAppeared, order: 2)
 
             if let tip = session.scenario.nextTimeTip {
-                nextTimeCard(tip)
-                    .padding(.top, 20)
+                // Ta sama zwarta karta co adnotacja kroku (runda 8).
+                CookNoteCard(kind: .tip, text: tip, label: "NA NASTĘPNY RAZ")
+                    .padding(.top, 18)
                     .cookReveal(hasAppeared, order: 3)
             }
 
@@ -123,33 +124,6 @@ struct CookFinishContent: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-    }
-
-    private func nextTimeCard(_ tip: String) -> some View {
-        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.tile, style: .continuous)
-        return HStack(spacing: 12) {
-            Image(systemName: "lightbulb")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(SCPalette.butter)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.scButterTint(scheme)))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("NA NASTĘPNY RAZ")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.88)
-                    .foregroundStyle(SCPalette.butter)
-                Text(tip)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineSpacing(3)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 
     private var ratingRow: some View {
