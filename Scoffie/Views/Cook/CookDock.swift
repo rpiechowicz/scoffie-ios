@@ -81,18 +81,30 @@ struct CookDock: View {
         return HStack(spacing: SCCook.Spacing.capsuleGap) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 CookTimerCapsule(item: item, layout: layout, onTimer: onTimer, onOpen: { onOpen(.timers) })
-                    // Nowa kapsuła wjeżdża z tej strony, po której staje —
+                    // Kapsuła wjeżdża z tej strony, po której staje —
                     // pominięty timer z wcześniejszego kroku staje z lewej.
-                    .transition(capsuleTransition(from: index == items.count - 1 ? .trailing : .leading))
+                    // Z pary schodzi swoim bokiem; pojedyncza w lewo (gdy
+                    // miejsce bierze następna, ta wjeżdża z prawej).
+                    .transition(capsuleTransition(
+                        in: index == items.count - 1 ? .trailing : .leading,
+                        out: items.count > 1 && index == items.count - 1 ? .trailing : .leading
+                    ))
             }
         }
     }
 
-    private func capsuleTransition(from edge: Edge) -> AnyTransition {
+    /// Wejście i zejście tą samą stroną (runda 9: „jak pominę timer, to jego
+    /// animacja się buguje”): zejście było malejącą kapsułą w miejscu, a druga
+    /// z pary w tym samym czasie rozciągała się NA nią — dwie kapsuły (w jasnym
+    /// motywie dwa szkła) nachodziły na siebie. Teraz schodząca usuwa się na
+    /// swój bok, a sąsiednia zajmuje zwolnione miejsce.
+    private func capsuleTransition(in insertionEdge: Edge, out removalEdge: Edge) -> AnyTransition {
         if reduceMotion { return .opacity }
         return .asymmetric(
-            insertion: .move(edge: edge).combined(with: .opacity),
-            removal: .scale(scale: 0.85).combined(with: .opacity)
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge)
+                .combined(with: .opacity)
+                .animation(.easeIn(duration: 0.22))
         )
     }
 
@@ -530,16 +542,26 @@ struct CookTimerCapsule: View {
 
     // MARK: Przytrzymanie
 
+    /// Akcja z menu kontekstowego rusza PO jego zamknięciu (runda 9). Zmiana
+    /// kapsuły w trakcie zamykania menu — podgląd wraca na miejsce, którego
+    /// już nie ma albo które właśnie się zmienia — szarpała animacją.
+    private func afterMenu(_ action: @escaping () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            action()
+        }
+    }
+
     @ViewBuilder
     private var menu: some View {
         if isPending {
             Button {
-                onTimer(.start(item.id))
+                afterMenu { onTimer(.start(item.id)) }
             } label: {
                 Label("Włącz", systemImage: "play.fill")
             }
             Button(role: .destructive) {
-                onTimer(.skip(item.id))
+                afterMenu { onTimer(.skip(item.id)) }
             } label: {
                 Label("Pomiń timer", systemImage: "forward.end")
             }

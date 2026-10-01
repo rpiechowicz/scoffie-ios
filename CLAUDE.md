@@ -195,13 +195,18 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   tarczy — tło i panel stoją, aureole i podziałka przenikają (`.id` timera NA NICH, nie na całym ekranie — dawne
   `.id(ringing.id)` gasiło i zapalało cały alarm), kolor płynie, nazwa / tytuł / „było … min” rolują, treść przenika.
   „Gotowe” przy jednym zostawia ekran drugiemu, „Wycisz” ucisza WSZYSTKIE dzwoniące. Zrzut: `gotuj-alarm-dwa`.
-  Runda 9 („czytelniej”; „całość nieruszalna”; „opis i reszta z tą samą animacją tekstu co w aplikacji”): krok =
-  nadtytuł w JEDNYM stałym wierszu „KROK 4 Z 12 · ETAP” (numer zawsze, etap dochodzi obok — tytuł nie skacze, gdy etap
-  się pojawia) · tytuł · kapsułki składników kroku (`CookStepIngredientChip`: nazwa + ilość w terakocie, kolejność
-  działów, `height.cookStepChip`) · opis · karty rad. Przy zmianie kroku widoki STOJĄ, tytuł / etap / numer / opis /
-  rady rolują się w miejscu (`cookRoll`, wstecz w drugą stronę), kapsułki przenikają — `.id(step.id)` z wjazdem opisu
-  z boku usunięte, nie wracać. Arkusz Składniki „Ten krok”: etykiety `SCTag` „Teraz · krok 4” / „Za chwilę · krok 5”,
-  pod nimi DZIAŁY z ikoną i kolorem alejki jak w „Całym przepisie” (`aisleRows`, jedna droga dla obu widoków).
+  Runda 9 („całość nieruszalna”; „opis i reszta z tą samą animacją tekstu co w aplikacji”): krok = nadtytuł w JEDNYM
+  stałym wierszu „KROK 4 Z 12 · ETAP” (numer zawsze, etap dochodzi obok — tytuł nie skacze, gdy etap się pojawia) ·
+  tytuł · opis · karty rad. Przy zmianie kroku widoki STOJĄ, tytuł / etap / numer / opis / rady rolują się w miejscu
+  (`cookRoll`, wstecz w drugą stronę) — `.id(step.id)` z wjazdem opisu z boku usunięte, nie wracać. Składników NA
+  kroku nie ma (kapsułki pod tytułem odrzucone: „mam je w sheet, wcześniej było lepiej”). Arkusz Składniki „Ten krok”
+  = same składniki bieżącego kroku w DZIAŁACH z ikoną i kolorem alejki jak „Cały przepis” (`aisleRows`, jedna droga dla
+  obu widoków); „Teraz” / „Za chwilę” i sekcja następnego kroku usunięte („totalnie niepotrzebne”). Arkusz Kroki
+  (runda 9): pasek postępu + „3 zrobione · 9 przed Tobą”, kroki w ETAPACH (nagłówek etapu z liczbą; bez etapu w danych —
+  faza), zrobione zwinięte do jednej linii, bieżący na karcie z CAŁYM opisem, dalsze z dwiema liniami.
+  „Pomiń” bez szarpania: akcje z menu przytrzymania kapsuły ruszają PO zamknięciu menu (`afterMenu`, 0,35 s — zmiana
+  kapsuły pod zamykającym się podglądem szarpała), kapsuła schodzi z pary SWOIM bokiem (pojedyncza w lewo), zamiast
+  maleć w miejscu pod rozciągającą się sąsiadką; wiersz arkusza Timery zjeżdża w prawo.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

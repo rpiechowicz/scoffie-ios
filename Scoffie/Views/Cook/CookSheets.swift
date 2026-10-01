@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Nagłówek sekcji listy składników: „TERAZ”, „ZA CHWILĘ · KROK 4”,
-/// dział sklepu („WARZYWA”) — arkusz Składniki i szuflada powitania.
+/// Nagłówek sekcji listy składników — dział sklepu („WARZYWA”): arkusz
+/// Składniki (oba widoki) i szuflada powitania.
 /// Dział ma ikonę i kolor alejki z Zakupów; to JEDYNE miejsce ikony —
 /// wiersze składników są bez niej (runda 7: „ikonę daj tylko przy
 /// kategorii, a nie przy składniku”).
@@ -113,7 +113,13 @@ struct CookTimersSheet: View {
 
             ForEach(items) { item in
                 CookTimerRow(item: item, onTimer: onTimer)
-                    .transition(.opacity)
+                    // Pominięty / zrobiony wiersz zjeżdża w bok, a reszta
+                    // dosuwa się pod nim (runda 9) — samo przenikanie
+                    // zostawiało dziurę, w którą wiersze wskakiwały.
+                    .transition(.asymmetric(
+                        insertion: .opacity,
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
             }
         }
         .padding(.horizontal, SCCook.Spacing.page)
@@ -268,11 +274,10 @@ private struct CookTimerRow: View {
 /// Arkusz Składniki — z wyspy (KM1, KM2). Otwiera się na pół ekranu,
 /// a przewijanie listy rozwija go na cały (runda 3). Bez odhaczania (D7).
 ///
-/// „Ten krok” idzie za czasem (TERAZ, ZA CHWILĘ), „Cały przepis” — za
-/// działami sklepu (runda 4: „poukładaj składniki względem kategorii”):
-/// pod działem każdy wiersz mówi, w którym kroku wchodzi, a te z kroków już
-/// zrobionych są przygaszone z ptaszkiem. W obu widokach składniki jednego
-/// działu stoją obok siebie.
+/// Oba widoki stoją w działach sklepu (runda 4 i 9: „poukładaj składniki
+/// względem kategorii”): „Ten krok” — składniki bieżącego kroku, „Cały
+/// przepis” — wszystkie, a pod działem każdy wiersz mówi, w którym kroku
+/// wchodzi; te z kroków już zrobionych są przygaszone z ptaszkiem.
 struct CookIngredientsSheet: View {
     enum Scope: Hashable {
         case step
@@ -333,18 +338,16 @@ struct CookIngredientsSheet: View {
         }
     }
 
-    /// „Ten krok”: TERAZ i ZA CHWILĘ, a w każdym działy sklepu z ikoną
-    /// i kolorem alejki — jak w „Całym przepisie” (runda 9: „na składniki per
-    /// krok też sortuj po kategoriach, jak ogólnie”). Czas to etykieta
-    /// (`SCTag`), dział — nagłówek sekcji, więc dwa poziomy się nie mylą.
-    /// Krok bez składników nie zostawia pustego arkusza (runda 5): gdy nic
-    /// nie przyjdzie też za chwilę — karta pustego stanu z drogą do całego
-    /// przepisu, a gdy coś przyjdzie — cichy wiersz pod TERAZ.
+    /// „Ten krok”: składniki bieżącego kroku w działach sklepu z ikoną
+    /// i kolorem alejki — jak w „Całym przepisie” (runda 9: „per krok też
+    /// sortuj po kategoriach”; etykiety „Teraz” / „Za chwilę” i sekcja
+    /// następnego kroku odpadły jako „totalnie niepotrzebne”). Krok bez
+    /// składników nie zostawia pustego arkusza (runda 5): karta pustego stanu
+    /// z drogą do całego przepisu.
     @ViewBuilder
     private var stepList: some View {
         let now = lines(at: index)
-        let next = lines(at: index + 1)
-        if now.isEmpty, next.isEmpty {
+        if now.isEmpty {
             RecipeListEmptyState(
                 icon: "checkmark",
                 accent: SCPalette.sage,
@@ -358,24 +361,8 @@ struct CookIngredientsSheet: View {
             )
             .padding(.top, 12)
         } else {
-            timeTag("Teraz · krok \(index + 1)", icon: "arrow.right", accent: SCPalette.terracotta)
-                .padding(.top, 10)
-            if now.isEmpty {
-                emptyNowRow
-            } else {
-                aisleRows(now)
-            }
-            if !next.isEmpty {
-                timeTag("Za chwilę · krok \(index + 2)", icon: "clock", accent: Color.scMuted(scheme))
-                    .padding(.top, 22)
-                aisleRows(next)
-            }
+            aisleRows(now)
         }
-    }
-
-    private func timeTag(_ title: String, icon: String, accent: Color) -> some View {
-        SCTag(title: title, icon: icon, accent: accent)
-            .accessibilityAddTraits(.isHeader)
     }
 
     /// Działy sklepu z nagłówkiem (ikona i kolor alejki) i wierszami — ten
@@ -390,21 +377,6 @@ struct CookIngredientsSheet: View {
             )
             lineRows(aisle.lines)
         }
-    }
-
-    /// Wiersz pod TERAZ, gdy krok nic nie dodaje — w rytmie wierszy składników.
-    private var emptyNowRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(SCPalette.sage)
-            Text("W tym kroku nic nie dodajesz")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(SCCook.Palette.caption(scheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(minHeight: SCCook.Height.ingredientRow)
-        .accessibilityElement(children: .combine)
     }
 
     private func lineRows(_ lines: [CookIngredientLine]) -> some View {
