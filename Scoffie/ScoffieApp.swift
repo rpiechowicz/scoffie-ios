@@ -592,7 +592,7 @@ struct ScoffieApp: App {
     private var cookModeBinding: Binding<Bool> {
         Binding(
             get: { sessionStore.cookSessionStore?.isPresented ?? false },
-            set: { sessionStore.cookSessionStore?.isPresented = $0 }
+            set: { sessionStore.cookSessionStore?.setPresented($0) }
         )
     }
 

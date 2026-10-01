@@ -16,8 +16,9 @@ import UserNotifications
 @Observable
 final class CookSessionStore {
     private(set) var session: CookSession?
-    /// Pełny ekran trybu Gotuj nad pulpitem.
-    var isPresented = false
+    /// Pełny ekran trybu Gotuj nad pulpitem. Zmienia się WYŁĄCZNIE przez
+    /// `setPresented` — bez systemowego wsuwania od dołu.
+    private(set) var isPresented = false
     /// Konto i dom (`userId_householdId`) — sesja z pliku innego właściciela
     /// nie wraca.
     let ownerKey: String
@@ -77,7 +78,7 @@ final class CookSessionStore {
         self.session = session
         save()
         scheduleRingWatch()
-        isPresented = true
+        setPresented(true)
     }
 
     private static func kcalPerServing(_ recipe: Recipe) -> Int? {
@@ -92,11 +93,23 @@ final class CookSessionStore {
             // Przełącznik został na `true`, a ekranu nie ma (pokazanie nad
             // arkuszem przepadło) — przejście false → true, żeby SwiftUI
             // pokazało go od nowa.
-            isPresented = false
-            Task { @MainActor [weak self] in self?.isPresented = true }
+            setPresented(false)
+            Task { @MainActor [weak self] in self?.setPresented(true) }
         } else {
-            isPresented = true
+            setPresented(true)
         }
+    }
+
+    /// Pełny ekran pokazuje się i chowa BEZ animacji systemu (wsuwanie od
+    /// dołu zasłaniało talerz, z którego ruszało gotowanie — „ucina talerz
+    /// i wsuwa się ekran”). Ruch robi `CookModeView`: przy wejściu przenika
+    /// nad pulpitem, przy wyjściu najpierw gaśnie, a dopiero potem woła
+    /// `pause` / `end`.
+    func setPresented(_ value: Bool) {
+        guard isPresented != value else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { isPresented = value }
     }
 
     /// Sesja dla tego przepisu — „Wróć do gotowania” zamiast „Gotuj”.
@@ -117,12 +130,12 @@ final class CookSessionStore {
 
     /// „Wstrzymaj”: widok znika, sesja i timery zostają.
     func pause() {
-        isPresented = false
+        setPresented(false)
     }
 
     /// „Zakończ gotowanie” / „Zjedzone”: koniec sesji.
     func end() {
-        isPresented = false
+        setPresented(false)
         session = nil
         ringWatch?.cancel()
         ringWatch = nil
@@ -169,7 +182,7 @@ final class CookSessionStore {
                 if let onRing = self.onRing {
                     onRing()
                 } else {
-                    self.isPresented = true
+                    self.setPresented(true)
                 }
             }
             if !ringsNow {

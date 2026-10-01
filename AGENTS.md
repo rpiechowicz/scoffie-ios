@@ -207,6 +207,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Pomiń” bez szarpania: akcje z menu przytrzymania kapsuły ruszają PO zamknięciu menu (`afterMenu`, 0,35 s — zmiana
   kapsuły pod zamykającym się podglądem szarpała), kapsuła schodzi z pary SWOIM bokiem (pojedyncza w lewo), zamiast
   maleć w miejscu pod rozciągającą się sąsiadką; wiersz arkusza Timery zjeżdża w prawo.
+  Wejście w tryb i wyjście: pełny ekran BEZ wsuwania od dołu („ucina talerz i wsuwa się ekran”) — `isPresented` zmienia
+  wyłącznie `CookSessionStore.setPresented` (transakcja `disablesAnimations`), `CookModeView` ma `presentationBackground
+  (.clear)` i sam przenika nad pulpitem (0,32 s), a przy wyjściu najpierw gaśnie (`leave`, 0,22 s), dopiero potem woła
+  `pause` / `end`. Koszyk na wyspie potrząsa się (`symbolEffect(.wiggle)`), gdy krok przynosi składniki — przy kroku bez
+  składników stoi.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.
@@ -774,6 +779,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   posiłku u Asystenta); `DayNavigationMotion.plateFade` to ta sama stała, więc zdjęcie kończy z tekstem. Nowe rolowanie tekstu
   gdziekolwiek → `SCMotion.textRoll`. Arkusz „Cel dnia” (Kalendarz i Plan) nie ma podtytułu.
   Stuknięcie w talerzyk, który talerz pokazałby sam (następny za zegarem), ZDEJMUJE przypięcie.
+  Jasny motyw Kalendarza (1.10.2026, „dark super, light trochę gorzej”): światło sceny było strojone na czerni. W jasnym
+  poświata i aureola świecą JASNĄ wersją koloru pory (`MealSlot.cozyGlow`, gotowanie — `cookingGlow`) i tylko pod
+  talerzem, który woła (`CalendarPlateItem.glow(in:)`; przygaszone talerze bez poświaty — dawała szarą winietę), gęstszy
+  środek poświaty, aureola o 40 % ciszej; cień talerza ciepły brąz 0,14 na promieniu 16 (czarny 0,22 / 26 zostawiał
+  szary półksiężyc); zjedzone bez krycia (prześwitywał cień) — słabsze kolory + krem 0,3 na zdjęciu; obwódka talerza
+  0,14; krążki pod pieczątką i „play” = `scCardSurface` + `scCardStroke` (`CalendarPlateWell`); talerz bez zdjęcia —
+  ciepła biel z tintem pory i ikona w kolorze pory zamiast gradientu z czernią; talerzyki w pasku przygaszone słabiej
+  (0,92 / zjedzone 0,72). Ciemny motyw bez zmian.
 - KAŻDY arkusz poza szczegółami posiłku (27.09.2026, Rafał: „image, subtitle, title, X”) ma nagłówek
   jak „Ułożę Ci ten tydzień”: kafelek z ikoną (`SCHeaderIconWell`) · eyebrow w kolorze akcentu · tytuł ·
   krzyżyk. `AssistantSheetScaffold`/`AssistantSheetHeader`, `LegalDocumentSheet` i `ShoppingSheetHeader`

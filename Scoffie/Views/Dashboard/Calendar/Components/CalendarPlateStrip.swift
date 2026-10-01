@@ -183,8 +183,12 @@ struct CalendarPlateStrip: View {
 
     private func plate(_ item: CalendarPlateItem, size: CGFloat, isSelected: Bool) -> some View {
         CalendarPlateFace(item: item, size: size)
-            .saturation(item.isEaten ? 0.45 : 1)
-            .opacity(item.isEaten ? 0.6 : isSelected ? 1 : 0.78)
+            // Przygaszanie kryciem działa na czerni; na kremie talerzyki
+            // robiły się bladymi duchami — w jasnym motywie słabiej.
+            .saturation(item.isEaten ? (scheme == .dark ? 0.45 : 0.35) : 1)
+            .opacity(scheme == .dark
+                ? (item.isEaten ? 0.6 : isSelected ? 1 : 0.78)
+                : (item.isEaten ? 0.72 : isSelected ? 1 : 0.92))
             .overlay {
                 if let ring = ringColor(item, isSelected: isSelected) {
                     Circle()

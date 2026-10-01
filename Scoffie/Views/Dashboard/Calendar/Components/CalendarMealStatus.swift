@@ -149,6 +149,25 @@ extension MealSlot {
     /// Tło talerza, gdy przepis nie ma zdjęcia.
     var cozyTint: Color { cozyAccent }
 
+    /// Światło pod talerzem w JASNYM motywie — jasna, świecąca wersja koloru
+    /// pory (wartości ciemnego motywu palety), w obu motywach ta sama.
+    /// `cozyAccent` w jasnym motywie jest przyciemniony pod tekst na kremie
+    /// i jako poświata dawał szarą plamę (1.10.2026, jasny Kalendarz).
+    var cozyGlow: Color {
+        switch self {
+        case .breakfast:       return Color(red: 232 / 255, green: 207 / 255, blue: 133 / 255)
+        case .secondBreakfast: return Color(red: 224 / 255, green: 154 / 255, blue: 164 / 255)
+        case .lunch:           return Color(red: 135 / 255, green: 194 / 255, blue: 165 / 255)
+        case .afternoonSnack:  return Color(red: 111 / 255, green: 185 / 255, blue: 204 / 255)
+        case .dinner:          return Color(red: 101 / 255, green: 115 / 255, blue: 202 / 255)
+        case .snack:           return Color(red: 183 / 255, green: 155 / 255, blue: 224 / 255)
+        }
+    }
+
+    /// Światło pod talerzem wstrzymanego gotowania w jasnym motywie — jasna
+    /// terakota (jak `cozyGlow`).
+    static let cookingGlow = Color(red: 219 / 255, green: 132 / 255, blue: 82 / 255)
+
     /// Gradient pory pod ikoną dania bez zdjęcia — ten sam ułamek i ten sam
     /// mikser (gamma sRGB, `mix(black:)`), którym Plan tygodnia rysuje kafel
     /// bez fotografii. Jedno miejsce, bo cztery kopie tego gradientu już raz

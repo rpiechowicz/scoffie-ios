@@ -191,6 +191,20 @@ extension CalendarPlateItem {
         return Color.scLabel(scheme).opacity(0.28)
     }
 
+    /// Światło sceny pod talerzem (poświata i aureola). Ciemny motyw — barwa
+    /// obręczy: na czerni każdy tint czyta się jak światło. Jasny (1.10.2026:
+    /// „dark mode super, light mode trochę gorzej”): obręcz w jasnym motywie
+    /// to PRZYCIEMNIONY kolor pory, a zmieszany z kremem dawał szarobeżową
+    /// plamę, przygaszone talerze — szarą winietę. Tu świeci jasna wersja
+    /// koloru pory (`cozyGlow`) i tylko pod talerzem, który woła (następny,
+    /// gotowanie); reszta stoi bez poświaty.
+    func glow(in scheme: ColorScheme) -> Color {
+        guard scheme == .light else { return accent(in: scheme) }
+        if isPausedCooking { return MealSlot.cookingGlow }
+        if status == .next, !isEaten { return slot.cozyGlow }
+        return .clear
+    }
+
     /// „OBIAD · 14:00” — nadpis nad talerzem.
     ///
     /// Dla pory, która ani nie nadeszła, ani nie minęła (dzień przyszły,
@@ -360,13 +374,34 @@ struct CalendarPlateFace: View {
     /// Gradient pory pod ikoną — ten sam, którym Plan tygodnia rysuje kafel
     /// bez zdjęcia (`MealSlot.cozyGradient`), więc danie bez fotografii
     /// wygląda tak samo na obu zakładkach.
+    ///
+    /// W jasnym motywie bez tego gradientu: przyciemniona barwa pory zmieszana
+    /// z czernią dawała na kremie ciężki musztardowo-brązowy krążek (a to też
+    /// zastępca, który mignie przy każdym niezaładowanym zdjęciu). Zamiast
+    /// tego ciepła biel z tintem pory i ikona w kolorze pory.
+    @ViewBuilder
     private func fallback(_ slot: MealSlot) -> some View {
-        ZStack {
-            slot.cozyGradient
+        if scheme == .dark {
+            ZStack {
+                slot.cozyGradient
 
-            Image(systemName: slot.icon)
-                .font(.system(size: iconSize, weight: .light))
-                .foregroundStyle(Color.white.opacity(0.65))
+                Image(systemName: slot.icon)
+                    .font(.system(size: iconSize, weight: .light))
+                    .foregroundStyle(Color.white.opacity(0.65))
+            }
+        } else {
+            ZStack {
+                Color.scCardSurface(scheme)
+                LinearGradient(
+                    colors: [slot.cozyAccent.opacity(0.12), slot.cozyAccent.opacity(0.24)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                Image(systemName: slot.icon)
+                    .font(.system(size: iconSize, weight: .light))
+                    .foregroundStyle(slot.cozyAccent)
+            }
         }
     }
 }
@@ -502,7 +537,7 @@ struct CalendarPlate: View {
             // ma czego przenikać. Nic tu nie przygasa, bo na talerzu nie ma
             // chwili, w której nic nie stoi.
             CalendarPlateLight(
-                tint: accent,
+                tint: item?.glow(in: scheme) ?? .clear,
                 diameter: size,
                 ringWidth: ringWidth,
                 loud: isUrgent,
@@ -605,11 +640,28 @@ struct CalendarPlate: View {
             // Zjedzone przygasa — zostaje czytelne, ale przestaje konkurować
             // z tym, co dopiero przed użytkownikiem. Ta sama reguła, co
             // w miniaturach w Planie tygodnia.
-            .saturation(item?.isEaten == true ? 0.5 : 1)
-            .opacity(item?.isEaten == true ? 0.78 : 1)
+            //
+            // W jasnym motywie bez krycia: przez przezroczyste zdjęcie
+            // prześwitywał cień i poświata spod talerza — mleczny, szary
+            // welon. Zamiast tego słabsze kolory i krem na zdjęciu.
+            .saturation(item?.isEaten == true ? (scheme == .dark ? 0.5 : 0.4) : 1)
+            .overlay {
+                if item?.isEaten == true, scheme == .light {
+                    Circle().fill(Color.scPageBase(scheme).opacity(0.3))
+                }
+            }
+            .opacity(item?.isEaten == true && scheme == .dark ? 0.78 : 1)
             // Cień pod talerzem, nie pod pierścieniem: rant ma leżeć na
-            // planszy, a samo danie unosić się nad nią.
-            .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.22), radius: 26 * scale, y: 14 * scale)
+            // planszy, a samo danie unosić się nad nią. W jasnym motywie
+            // ciepły brąz, krótszy i bliżej — czarny 0,22 na promieniu 26
+            // zostawiał na kremie szary półksiężyc, na którym leżały ranty.
+            .shadow(
+                color: scheme == .dark
+                    ? .black.opacity(0.5)
+                    : Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(0.14),
+                radius: (scheme == .dark ? 26 : 16) * scale,
+                y: (scheme == .dark ? 14 : 8) * scale
+            )
             // Dwa ranty, licząc od zdjęcia na zewnątrz: pierścień pory tuż
             // przy krawędzi, a za nim cienka obwódka, która jest już samym
             // kształtem talerza.
@@ -636,7 +688,9 @@ struct CalendarPlate: View {
             }
             .overlay {
                 Circle()
-                    .strokeBorder(Color.scLabel(scheme).opacity(scheme == .dark ? 0.10 : 0.08), lineWidth: 1)
+                    // Na kremie obwódka potrzebuje więcej krycia niż na
+                    // czerni (jak `scTileStroke`: 0,06 → 0,12).
+                    .strokeBorder(Color.scLabel(scheme).opacity(scheme == .dark ? 0.10 : 0.14), lineWidth: 1)
                     .padding(-rimInset)
             }
     }
@@ -675,7 +729,9 @@ private struct CalendarPlateStamp: View {
                 .padding(3)
                 // Pieczątka wycina się z talerza krążkiem tła — inaczej
                 // kreskowane kółko „dowolnej pory” gubiło się na zdjęciu.
-                .background(Circle().fill(Color.scPageBase(scheme)))
+                // W jasnym motywie krążek pływającej kontrolki (ciepła biel
+                // z cienką obwódką), nie dziura w kolorze strony.
+                .background(CalendarPlateWell())
                 .scaleEffect(popped ? 1.3 : 1)
                 .scTapTarget(44, drawn: size + 6)
         }
@@ -746,13 +802,30 @@ private struct CalendarPlatePlay: View {
                     }
                 }
                 .frame(width: well, height: well)
-                .background(Circle().fill(Color.scPageBase(scheme)))
+                .background(CalendarPlateWell())
                 .scTapTarget(44, drawn: well)
         }
         .buttonStyle(StampPressStyle())
         .animation(.smooth(duration: 0.3), value: isStrong)
         .accessibilityLabel(isResume ? "Wróć do gotowania" : "Gotuj")
         .accessibilityHint("Otwiera tryb gotowania krok po kroku")
+    }
+}
+
+/// Krążek pod pieczątką i „play” na rancie talerza. Ciemny motyw — kolor
+/// strony (wycina się z talerza); jasny — pływająca kontrolka aplikacji
+/// (`scCardSurface` z obwódką `scCardStroke`).
+private struct CalendarPlateWell: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if scheme == .dark {
+            Circle().fill(Color.scPageBase(scheme))
+        } else {
+            Circle()
+                .fill(Color.scCardSurface(scheme))
+                .overlay(Circle().strokeBorder(Color.scCardStroke(scheme), lineWidth: 1))
+        }
     }
 }
 
@@ -771,12 +844,14 @@ private struct CalendarPlateGlow: View {
     let loud: Bool
     /// Głębokość oddechu 0–1; zero, gdy talerz stoi.
     let breath: Double
+    /// Jasny motyw: jasna barwa pory na kremie potrzebuje gęstszego środka.
+    var isLight = false
 
     var body: some View {
         Circle()
             .fill(
                 RadialGradient(
-                    colors: [tint.opacity(loud ? 0.44 : 0.22), tint.opacity(0)],
+                    colors: [tint.opacity(isLight ? (loud ? 0.55 : 0.3) : (loud ? 0.44 : 0.22)), tint.opacity(0)],
                     center: .center,
                     startRadius: 0,
                     endRadius: diameter * (loud ? 0.4 : 0.34)
@@ -807,6 +882,9 @@ private struct CalendarPlateHalo: View {
     let diameter: CGFloat
     let lineWidth: CGFloat
     let breath: Double
+    /// Jasny motyw: rozmyty pierścień na kremie czyta się mocniej niż na
+    /// czerni — o 40 % ciszej.
+    var isLight = false
 
     var body: some View {
         Circle()
@@ -814,7 +892,7 @@ private struct CalendarPlateHalo: View {
             .frame(width: diameter, height: diameter)
             .blur(radius: 6 + 8 * breath)
             .scaleEffect(1.07 + 0.07 * breath)
-            .opacity(0.38 + 0.6 * breath)
+            .opacity((0.38 + 0.6 * breath) * (isLight ? 0.6 : 1))
             .allowsHitTesting(false)
     }
 }
@@ -838,12 +916,14 @@ private struct CalendarPlateLight: View {
     let beats: Bool
     let reduceMotion: Bool
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beats)) { context in
             let breath = beats ? CalendarBreath.depth(at: context.date) : 0
 
             ZStack {
-                CalendarPlateGlow(tint: tint, diameter: diameter * 2.2, loud: loud, breath: breath)
+                CalendarPlateGlow(tint: tint, diameter: diameter * 2.2, loud: loud, breath: breath, isLight: scheme == .light)
 
                 if loud {
                     // Bez ruchu (Ogranicz ruch, niewybrana zakładka) aureola
@@ -852,7 +932,8 @@ private struct CalendarPlateLight: View {
                         tint: tint,
                         diameter: diameter,
                         lineWidth: ringWidth,
-                        breath: beats ? breath : 0.5
+                        breath: beats ? breath : 0.5,
+                        isLight: scheme == .light
                     )
                 }
             }

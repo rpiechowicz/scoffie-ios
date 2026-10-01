@@ -25,8 +25,16 @@ struct CookDock: View {
     let onTimer: (CookTimerAction) -> Void
     let onOpen: (CookSheet) -> Void
 
+    /// Potrząśnięcie koszyka (runda 9): rośnie, gdy krok przynosi składniki
+    /// — „tu są nowe składniki”; krok bez składników koszyka nie rusza.
+    @State private var basketNudge = 0
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Liczba składników bieżącego kroku (plakietka na wyspie).
+    private var stepIngredientCount: Int {
+        session.currentStep.map { session.package.lines(for: $0, portions: session.portions).count } ?? 0
+    }
 
     var body: some View {
         let capsules = session.dockCapsules(now: now)
@@ -111,7 +119,7 @@ struct CookDock: View {
     // MARK: - Wyspa
 
     private var island: some View {
-        let count = session.currentStep.map { session.package.lines(for: $0, portions: session.portions).count } ?? 0
+        let count = stepIngredientCount
         // Jeden krążek „Dalej”: w ostatnim kroku strzałka PRZECHODZI w ptaszek
         // na szałwii (glif się podmienia, kolory przenikają).
         let isLast = session.isLastStep
@@ -136,6 +144,7 @@ struct CookDock: View {
                 HStack(spacing: 8) {
                     Image(systemName: "basket")
                         .font(.system(size: 18, weight: .medium))
+                        .symbolEffect(.wiggle, options: .nonRepeating, value: basketNudge)
                     Text("Składniki")
                         .font(.system(size: 16, weight: .bold))
                     if count > 0 {
@@ -174,6 +183,17 @@ struct CookDock: View {
         .frame(height: SCCook.Height.island)
         .cookIslandSurface(scheme)
         .sensoryFeedback(.selection, trigger: session.stepIndex)
+        .onChange(of: session.stepIndex) { nudgeBasketIfNeeded() }
+        .task {
+            // Pierwszy krok po „Zaczynamy” — gdy dok już wjechał.
+            try? await Task.sleep(for: .milliseconds(700))
+            nudgeBasketIfNeeded()
+        }
+    }
+
+    private func nudgeBasketIfNeeded() {
+        guard !reduceMotion, stepIngredientCount > 0 else { return }
+        basketNudge += 1
     }
 
     private func islandCircle(

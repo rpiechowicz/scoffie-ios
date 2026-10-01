@@ -42,6 +42,10 @@ struct CookModeView: View {
     /// Zdjęcie dania osiada RAZ, przy wejściu w tryb — przejście powitanie →
     /// kroki → koniec go nie powtarza (to samo zdjęcie w tym samym miejscu).
     @State private var isPhotoRevealed = false
+    /// Cały tryb przenika nad pulpitem przy wejściu i gaśnie przy wyjściu —
+    /// pełny ekran pokazuje się bez wsuwania od dołu (`setPresented`), które
+    /// zasłaniało talerz, z którego ruszało gotowanie.
+    @State private var isShown = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -68,8 +72,14 @@ struct CookModeView: View {
                 }
             }
         }
+        .opacity(isShown ? 1 : 0)
+        // Pod przenikającym trybem widać pulpit, a nie tło systemu.
+        .presentationBackground(.clear)
         .interactiveDismissDisabled()
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.32)) { isShown = true }
+        }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .task {
             guard !isPhotoRevealed else { return }
@@ -112,7 +122,7 @@ struct CookModeView: View {
             onOpen: { kind in present(kind) },
             onEaten: {
                 onEaten(session)
-                store.end()
+                leave { store.end() }
             },
             onFeedback: onFeedback
         )
@@ -207,11 +217,11 @@ struct CookModeView: View {
                 session: session,
                 onPause: {
                     sheet = nil
-                    store.pause()
+                    leave { store.pause() }
                 },
                 onEnd: {
                     sheet = nil
-                    store.end()
+                    leave { store.end() }
                 },
                 onContinue: { sheet = nil }
             )
@@ -232,9 +242,23 @@ struct CookModeView: View {
     private func close(_ session: CookSession) {
         switch session.stage {
         case .welcome, .finished:
-            store.end()
+            leave { store.end() }
         case .steps:
             present(.exit)
+        }
+    }
+
+    /// Wyjście z trybu: ekran najpierw gaśnie nad pulpitem, dopiero potem
+    /// przełącznik chowa pełny ekran (bez animacji systemu).
+    private func leave(_ action: @escaping () -> Void) {
+        guard isShown else {
+            action()
+            return
+        }
+        withAnimation(.easeIn(duration: reduceMotion ? 0.15 : 0.22)) { isShown = false }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 160 : 230))
+            action()
         }
     }
 
