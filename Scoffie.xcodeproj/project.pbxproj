@@ -62,6 +62,11 @@
 			path = Scoffie;
 			sourceTree = "<group>";
 		};
+		0174A0A0306EB90000C6DD64 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		0174A079306EB68100C6DD64 /* ScoffieCookActivity */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -100,6 +105,7 @@
 				0174A08F306EB7B100C6DD64 /* ScoffieCookActivityExtension.entitlements */,
 				010DDB782F3235DD007CBEBF /* Scoffie */,
 				0174A079306EB68100C6DD64 /* ScoffieCookActivity */,
+				0174A0A0306EB90000C6DD64 /* Shared */,
 				0174A074306EB68100C6DD64 /* Frameworks */,
 				010DDB772F3235DD007CBEBF /* Products */,
 			);
@@ -144,6 +150,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				010DDB782F3235DD007CBEBF /* Scoffie */,
+				0174A0A0306EB90000C6DD64 /* Shared */,
 			);
 			name = Scoffie;
 			packageProductDependencies = (
@@ -168,6 +175,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				0174A079306EB68100C6DD64 /* ScoffieCookActivity */,
+				0174A0A0306EB90000C6DD64 /* Shared */,
 			);
 			name = ScoffieCookActivityExtension;
 			packageProductDependencies = (
@@ -527,9 +535,9 @@
 				DEVELOPMENT_TEAM = 5R874L3LNP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ScoffieCookActivity/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = ScoffieCookActivity;
+				INFOPLIST_KEY_CFBundleDisplayName = Scoffie;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -559,9 +567,9 @@
 				DEVELOPMENT_TEAM = 5R874L3LNP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ScoffieCookActivity/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = ScoffieCookActivity;
+				INFOPLIST_KEY_CFBundleDisplayName = Scoffie;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

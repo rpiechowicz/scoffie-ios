@@ -41,6 +41,10 @@ enum RecipeLinkTarget: Hashable {
 enum DeepLink: Equatable {
     case invitation(token: String)
     case recipe(RecipeLinkTarget)
+    /// `scoffie://gotuj` — stuknięcie w Live Activity trybu Gotuj: powrót do
+    /// trwającej sesji. Tylko schemat, bez adresu strony (nie wychodzi poza
+    /// telefon i nie czeka na zalogowanie).
+    case cooking
 
     /// Host strony — ten sam, na który wskazuje karta OG i plik
     /// `apple-app-site-association`. Uprawnienia mają TYLKO ten host:
@@ -69,6 +73,8 @@ enum DeepLink: Equatable {
 
         if scheme == "scoffie" {
             switch host ?? "" {
+            case "gotuj":
+                self = .cooking
             case "invite":
                 guard let token = query("token") else { return nil }
                 self = .invitation(token: token)
@@ -118,6 +124,7 @@ enum DeepLink: Equatable {
     /// w `UserDefaults` leży adres, a nie własny format, więc stary i nowy
     /// build czytają go tym samym parserem.
     var url: URL? {
+        if case .cooking = self { return URL(string: "scoffie://gotuj") }
         var components = URLComponents()
         components.scheme = "https"
         components.host = Self.host
@@ -129,6 +136,8 @@ enum DeepLink: Equatable {
             components.path = "/przepis/\(slug)"
         case .recipe(.shared(let token)):
             components.path = "/przepis/u/\(token)"
+        case .cooking:
+            return nil
         }
         return components.url
     }

@@ -1,18 +1,12 @@
-//
-//  ScoffieCookActivityBundle.swift
-//  ScoffieCookActivity
-//
-//  Created by Rafi on 01/10/2026.
-//
-
-import WidgetKit
 import SwiftUI
+import WidgetKit
 
+/// Rozszerzenie ma JEDNĄ rzecz: Live Activity trybu Gotuj. Szablony Xcode
+/// (widżet ekranu głównego, Control, intencja konfiguracji) usunięte —
+/// pokazałyby się w galerii widżetów jako „This is an example widget”.
 @main
 struct ScoffieCookActivityBundle: WidgetBundle {
     var body: some Widget {
-        ScoffieCookActivity()
-        ScoffieCookActivityControl()
         ScoffieCookActivityLiveActivity()
     }
 }

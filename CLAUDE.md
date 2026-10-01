@@ -127,8 +127,22 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   systemu, dzwoni mimo wyciszenia i Focus, pełny alert na ekranie blokady; zgoda przy pierwszym starcie timera
   (`NSAlarmKitUsageDescription`). „Zatrzymaj” na alercie = „Wycisz” w aplikacji (`acknowledgeSystemAlarm`, tylko
   przy tej samej godzinie końca), ekran końca timera nie gra swojego 1005, gdy dzwoni system. Bez zgody — dawna
-  droga: powiadomienie w tle (`CookTimerNotifications`) i 1005 w aplikacji. Odliczanie w Dynamic Island / na
-  ekranie blokady w trakcie = Live Activity sesji (E5) — czeka na target Widget Extension od Rafała. Zrzuty:
+  droga: powiadomienie w tle (`CookTimerNotifications`) i 1005 w aplikacji. Live Activity (E5, 1.10.2026): target
+  `ScoffieCookActivityExtension` (folder `ScoffieCookActivity/`, iOS 26.0, App Group `group.app.scoffie.ios`), JEDNA
+  aktywność na sesję (`CookLiveActivity` w aplikacji, wariant B z §8.4): rusza z pierwszym krokiem, aktualizuje się przy
+  każdej zmianie sesji (ta sama `syncSystemAlarms`), kończy na zakończeniu / „Zakończ” / wylogowaniu; odliczanie rysują
+  widoki czasowe (`Text(timerInterval:)`, `ProgressView(timerInterval:)` — bez aktualizacji co sekundę). Typy wspólne
+  dla obu targetów leżą w `Shared/` (osobna synchronizowana grupa w OBU targetach; każdy typ `nonisolated`, bo
+  rozszerzenie nie ma domyślnej izolacji MainActor; bez `SCPalette`/`SCCook` — rozszerzenie ich nie ma): stan
+  `CookActivityAttributes` (krok, „Dalej: …”, do dwóch kapsuł doku z kolorem 0xRRGGBB z ciemnego wariantu palety),
+  `CookAlarmMetadata`, `CookActivityImage` (miniatura 144 px w App Group — rozszerzenie nie sięga do sieci) i przyciski
+  `CookActivityIntent` (`LiveActivityIntent`: „Dalej →”, „+1 min”, ▶ timera, który czeka) — wykonuje je APLIKACJA przez
+  `CookActivityBridge` → `CookActivityCommands` (rejestrowane w `AppDelegate`; po wybudzeniu w tle sklep sesji wstaje
+  z pliku, `CookSessionStore.forIntent`). Wygląd z makiet DC3/DC5, MN4/MN6, ER1–4, LK0–3 (`CookActivityLook` —
+  stałe z makiet, jeszcze nie tokeny): nagłówek rozwiniętej i ekranu blokady zawsze z pierścieniem kroków, timery
+  w kaflach 60 pt, kompakt/minimal — pierścień timera, gdy działa (D25). Stuknięcie = `scoffie://gotuj`
+  (`DeepLink.cooking`; przed końcem startu `cookingResumeRequested` → `resumeCookingIfRequested`). Szablony Xcode
+  (widżet ekranu głównego, Control, intencja konfiguracji) USUNIĘTE — nie wracać. Zrzuty:
   `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-kroki|gotuj-alarm|gotuj-alarm-dwa|gotuj-wyjscie|gotuj-koniec`.
   Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
   — `scaledToFill` w samej ramce wysokości zgłaszał szerokość kadru (~580 pt) i tekst uciekał za lewą krawędź („bez

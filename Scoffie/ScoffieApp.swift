@@ -36,6 +36,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Przyciski Live Activity gotowania budzą aplikację — także w tle,
+        // zanim cokolwiek innego wstanie.
+        CookActivityCommands.register()
         #if DEBUG
         // Ekran porównania z makietą: bez pytania o powiadomienia i bez
         // toastu o sieci, które zasłaniałyby zrzut.

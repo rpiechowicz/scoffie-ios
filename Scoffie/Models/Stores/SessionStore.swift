@@ -1830,6 +1830,10 @@ final class SessionStore {
     /// na dysku leży równolegle w `storedDeepLink`, dopóki się nie otworzy.
     private(set) var pendingRecipeLink: RecipeLinkTarget?
 
+    /// Stuknięcie w Live Activity gotowania przed końcem startu — tryb Gotuj
+    /// otwiera się nad gotowym pulpitem (`resumeCookingIfRequested`).
+    var cookingResumeRequested = false
+
     /// Zdejmuje przepis z kolejki — w chwili, w której pulpit go otwiera.
     func takePendingRecipeLink() -> RecipeLinkTarget? {
         guard let target = pendingRecipeLink else { return nil }
@@ -1853,6 +1857,8 @@ final class SessionStore {
             await presentInvitation(token: token)
         case .recipe(let target):
             pendingRecipeLink = target
+        case .cooking:
+            storedDeepLink = nil
         }
     }
 
@@ -1861,6 +1867,18 @@ final class SessionStore {
     /// jest ignorowana.
     func handleIncomingURL(_ url: URL) {
         guard let link = DeepLink(url: url) else { return }
+
+        // Live Activity gotowania: sesja jest na tym telefonie — bez
+        // odkładania do zalogowania. Przed końcem startu tylko zapamiętujemy
+        // (`resumeCookingIfRequested` po `.ready`).
+        if case .cooking = link {
+            if startupPhase == .ready, cookSessionStore?.session != nil {
+                Task { await resumeCooking() }
+            } else {
+                cookingResumeRequested = true
+            }
+            return
+        }
 
         guard currentUserId?.isEmpty == false else {
             // Odkładamy i wracamy do tego po zalogowaniu — zamiast kazać
@@ -1871,6 +1889,8 @@ final class SessionStore {
                 authError = "Zaloguj się, aby przyjąć zaproszenie do gospodarstwa."
             case .recipe:
                 authError = "Zaloguj się, aby zobaczyć przepis."
+            case .cooking:
+                break
             }
             return
         }
@@ -1886,6 +1906,8 @@ final class SessionStore {
             // następnego uruchomienia aplikacji.
             storedDeepLink = link
             pendingRecipeLink = target
+        case .cooking:
+            break
         }
     }
 
@@ -2289,6 +2311,7 @@ final class SessionStore {
                 // Timer zadzwonił, zanim aplikacja wstała (zimny start) —
                 // alarm dopiero nad gotowym pulpitem, nie nad loaderem.
                 await self?.presentCookingIfRinging()
+                await self?.resumeCookingIfRequested()
                 await self?.prefetchCookScenarios()
             }
         }

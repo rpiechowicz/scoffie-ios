@@ -2,12 +2,6 @@ import AlarmKit
 import Foundation
 import SwiftUI
 
-/// Metadane alarmu Gotuj. Dziś tylko id timera — Live Activity sesji (E5,
-/// target widżetu) dostanie ten sam typ i narysuje z niego swój widok.
-nonisolated struct CookAlarmMetadata: AlarmMetadata {
-    let timerId: String
-}
-
 /// Koniec timera Gotuj jako ALARM SYSTEMOWY (AlarmKit, runda 11: „w ogóle
 /// nie działa na zablokowanym ekranie”, „dźwięk minutnika systemowego”).
 ///

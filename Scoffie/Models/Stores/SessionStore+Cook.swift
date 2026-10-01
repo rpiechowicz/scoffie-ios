@@ -21,6 +21,17 @@ extension SessionStore {
         cookSessionStore.resume()
     }
 
+    /// Stuknięcie w Live Activity przyszło przed końcem startu — teraz, nad
+    /// gotowym pulpitem, wraca tryb Gotuj (chyba że już stoi, bo zadzwonił
+    /// timer).
+    @MainActor
+    func resumeCookingIfRequested() async {
+        guard cookingResumeRequested else { return }
+        cookingResumeRequested = false
+        guard let cookSessionStore, !cookSessionStore.isPresented else { return }
+        await resumeCooking()
+    }
+
     /// Timer zadzwonił, a tryb jest schowany („Wstrzymaj”, zimny start) —
     /// pokazujemy go z ekranem końca timera, jak alarm w Zegarze. Najpierw
     /// zjeżdżają arkusze pulpitu (pełnego ekranu nie da się pokazać nad
