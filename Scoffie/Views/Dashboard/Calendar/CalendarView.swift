@@ -82,6 +82,19 @@ struct CalendarView: View {
     /// zapis na tym ekranie i ma być czuć pod palcem, że coś się stało.
     @State private var eatenToggles = 0
 
+    /// „Play” na talerzu, gdy trwa gotowanie INNEGO dania — czeka na decyzję
+    /// w „Gotujesz już inne danie” (jedno danie naraz, §4.7).
+    @State private var cookReplaceRequest: CookRequest?
+
+    /// Wszystko, czego potrzeba do startu gotowania dania z planu.
+    private struct CookRequest {
+        let recipe: Recipe
+        let package: CookPackage
+        let portions: Int
+        let slot: MealSlot
+        let date: Date
+    }
+
     // MARK: Obrót tacy
 
     /// Dzień, który właśnie wyjeżdża z kadru — rysowany jako druga, martwa
@@ -375,9 +388,90 @@ struct CalendarView: View {
                 cookFrom: cookFrom,
                 servingsNote: servingsNote(meal),
                 minutesAway: minutesAway,
-                isMissed: isPast && !meal.isEaten(by: userId)
+                isMissed: isPast && !meal.isEaten(by: userId),
+                cooking: cooking(for: meal, slot: card.slot, on: date)
             )
         }
+    }
+
+    // MARK: - Gotuj
+
+    /// Tryb Gotuj dla wpisu planu. Wstrzymane gotowanie TEGO wpisu (ten
+    /// przepis, ten dzień, ta pora) — talerz po wstrzymaniu (PS1). „Play” —
+    /// ZAWSZE przy daniu, którego scenariusz leży w telefonie (§13.6: „zawsze
+    /// dla dania ze scenariuszem”), w każdy dzień i o każdej porze (Rafał,
+    /// 1.10.2026: „nie trzymaj się czasu gotowania”); pora gotowania decyduje
+    /// tylko o tym, czy przycisk jest pełny, czy „soft”. Bez paczki — bez
+    /// przycisku (§4.1: bez wyszarzonych obietnic).
+    private func cooking(for meal: PlanMeal, slot: MealSlot, on date: Date) -> CalendarPlateCooking? {
+        if let session = sessionStore.cookSessionStore?.session,
+           session.stage != .finished,
+           session.recipeId == meal.recipe.id,
+           session.planDateKey == MealCalendarStore.dateKey(for: date),
+           session.mealSlotRaw == nil || session.mealSlotRaw == slot.rawValue {
+            return .paused(step: session.stepIndex, steps: session.stepCount)
+        }
+        guard cookPackage(for: meal) != nil else { return nil }
+        return .ready
+    }
+
+    /// Przepis z katalogu: wpis planu niesie kopię, która bywa bez
+    /// `cookScenarioVersion` (ta sama zasada, co pobieranie z wyprzedzeniem).
+    private func cookRecipe(for meal: PlanMeal) -> Recipe {
+        recipeCatalogStore.recipes.first(where: { $0.id == meal.recipe.id }) ?? meal.recipe
+    }
+
+    private func cookPackage(for meal: PlanMeal) -> CookPackage? {
+        sessionStore.cookScenarioStore?.package(for: cookRecipe(for: meal))
+    }
+
+    /// „Play” na talerzu: trwające gotowanie tego przepisu wraca na ekran,
+    /// nowe startuje z porcjami z planu (D11), a gdy trwa gotowanie innego
+    /// dania — pytamy, co z nim zrobić (jedno danie naraz, §4.7). Ta sama
+    /// droga co „Gotuj” w szczegółach posiłku.
+    private func cook(withCardId id: String, on date: Date) {
+        guard let card = card(withId: id, on: date), let meal = card.meal else { return }
+        if sessionStore.cookSessionStore?.activeSession(for: meal.recipe.id) != nil {
+            Task { await sessionStore.resumeCooking() }
+            return
+        }
+        let recipe = cookRecipe(for: meal)
+        guard let package = sessionStore.cookScenarioStore?.package(for: recipe) else { return }
+        let request = CookRequest(
+            recipe: recipe,
+            package: package,
+            portions: meal.effectiveServings(knownHouseholdMemberCount: knownHouseholdMemberCount) ?? recipe.servings,
+            slot: card.slot,
+            date: date
+        )
+        if let other = sessionStore.cookSessionStore?.session, other.stage != .finished {
+            cookReplaceRequest = request
+            return
+        }
+        startCooking(request)
+    }
+
+    private func startCooking(_ request: CookRequest) {
+        Task {
+            await sessionStore.startCooking(
+                recipe: request.recipe,
+                package: request.package,
+                portions: request.portions,
+                slot: request.slot,
+                planDate: request.date
+            )
+        }
+    }
+
+    /// Scenariusz dania, które stoi na talerzu, a którego paczki jeszcze nie
+    /// ma (z wyprzedzeniem pobieramy tylko dziś i jutro, a plan potrafi
+    /// zmienić się po starcie). Paczka jest mała, a „play” wskakuje, gdy
+    /// przyjdzie.
+    private func prepareCooking(withCardId id: String?, on date: Date) async {
+        guard let id,
+              let card = card(withId: id, on: date),
+              let meal = card.meal else { return }
+        await sessionStore.cookScenarioStore?.prepare(cookRecipe(for: meal))
     }
 
     /// Które danie stoi na talerzu — albo `nil`, gdy talerz ma być pusty.
@@ -852,6 +946,26 @@ struct CalendarView: View {
                 )
                 .recipeDetailSheet()
             }
+            .confirmationDialog(
+                "Gotujesz już inne danie",
+                isPresented: Binding(
+                    get: { cookReplaceRequest != nil },
+                    set: { if !$0 { cookReplaceRequest = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: cookReplaceRequest
+            ) { request in
+                // Bez `end()` tutaj: start i tak podmienia sesję (jak w szczegółach).
+                Button("Zakończ tamto i gotuj to", role: .destructive) {
+                    startCooking(request)
+                }
+                Button("Wróć do tamtego") {
+                    Task { await sessionStore.resumeCooking() }
+                }
+                Button("Anuluj", role: .cancel) {}
+            } message: { _ in
+                Text("Gotujemy jedno danie naraz — tamto ma swoje timery.")
+            }
         }
     }
 
@@ -1148,6 +1262,11 @@ struct CalendarView: View {
         if let focused, !focused.isEmptySlot {
             openDetail = { openMeal(withCardId: focused.id, on: date) }
         }
+        // „Play” w prawym rogu talerza (D23) — ta sama zasada co wyżej.
+        var startCook: (() -> Void)?
+        if let focused, focused.cooking != nil {
+            startCook = { cook(withCardId: focused.id, on: date) }
+        }
 
         return VStack(spacing: fit.gap) {
             CalendarPlateKicker(item: focused)
@@ -1172,12 +1291,16 @@ struct CalendarView: View {
                     size: size,
                     canToggle: canToggle,
                     onToggle: { toggleEaten(withCardId: focused?.id, on: date) },
-                    onOpenDetail: openDetail
+                    onOpenDetail: openDetail,
+                    onCook: startCook
                 )
                 .contentShape(.contextMenuPreview, Circle().inset(by: -CalendarPlate.rimInset(for: size)))
                 .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            // Danie bez paczki scenariusza — dociągamy ją, a „play” wskakuje,
+            // gdy przyjdzie.
+            .task(id: focused?.id) { await prepareCooking(withCardId: focused?.id, on: date) }
             .frame(maxHeight: CalendarPlate.defaultSize + CalendarPlate.maxRimInset * 2)
             // Talerz jedzie najdalej i najwyżej — to on jest daniem na tacy.
             .modifier(turn.effect(travel: 140, lift: 24, shrink: 0.16))
@@ -1275,6 +1398,14 @@ struct CalendarView: View {
                 handleAssignedTap(meal, slot: card.slot, on: date)
             } label: {
                 Label("Szczegóły posiłku", systemImage: "text.below.photo")
+            }
+
+            if let cooking = item.cooking {
+                Button {
+                    cook(withCardId: item.id, on: date)
+                } label: {
+                    Label(cooking == .ready ? "Gotuj" : "Wróć do gotowania", systemImage: "play.fill")
+                }
             }
 
             Button {

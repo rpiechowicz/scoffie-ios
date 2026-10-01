@@ -211,6 +211,37 @@ if case let .running(remaining, _, _) = session.status(of: "t-potatoes", now: at
     check(false, "wznowienie: trwa")
 }
 
+// Stała kolejność: kroki, nie pilność — włączenie timera z dalszego kroku,
+// który skończy się wcześniej, nie zamienia kapsuł miejscami.
+var lineup = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
+lineup.begin(now: t0)
+lineup.jump(to: 2)
+lineup.startTimer("t-potatoes", now: t0)
+lineup.jump(to: 7)
+lineup.startTimer("t-cutlets", now: at(5))
+// Ziemniaki kończą się w 20', kotlety w 15' — pilność stawia kotlety pierwsze.
+equal(lineup.dockTimers(now: at(6)).map(\.timer.id), ["t-cutlets", "t-potatoes"], "pilność: najbliższy koniec pierwszy")
+equal(lineup.timerLineup(now: at(6)).map(\.timer.id), ["t-potatoes", "t-cutlets"], "kolejność: krok, nie koniec")
+equal(lineup.dockCapsules(now: at(6)).map(\.timer.id), ["t-potatoes", "t-cutlets"], "kapsuły: bez zamiany miejsc po starcie")
+lineup.pauseTimer("t-potatoes", now: at(7))
+equal(lineup.timerLineup(now: at(8)).map(\.timer.id), ["t-potatoes", "t-cutlets"], "kolejność: pauza nie przestawia")
+
+// Trzy naraz (poza planem scenariusza, D38) mieszczą się obok siebie;
+// czwarty idzie do „+1”, a zostają trzy najpilniejsze, ustawione po kroku.
+var three = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
+three.begin(now: t0)
+three.startTimer("t-butter", now: t0)
+three.jump(to: 2)
+three.startTimer("t-potatoes", now: at(1))
+three.jump(to: 7)
+three.startTimer("t-cutlets", now: at(2))
+equal(three.dockCapsules(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes", "t-cutlets"], "trzy timery: trzy kapsuły obok siebie, po kroku")
+three.jump(to: 8)
+three.startTimer("t-oven", now: at(2))
+// Końce: piekarnik 7', kotlety 12', masło 15', ziemniaki 21' — ziemniaki do „+1”.
+equal(three.dockCapsules(now: at(3)).map(\.timer.id), ["t-butter", "t-cutlets", "t-oven"], "cztery timery: trzy najpilniejsze kapsuły, po kroku")
+equal(three.timerLineup(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes", "t-cutlets", "t-oven"], "cztery timery: karta pokazuje wszystkie po kroku")
+
 // Pominięty timer NOW nie wraca do doku.
 var skipped = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
 skipped.begin(now: t0)

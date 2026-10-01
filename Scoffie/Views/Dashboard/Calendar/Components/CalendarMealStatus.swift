@@ -60,7 +60,12 @@ enum CalendarRelativeTime {
 // MARK: - Checkbox
 
 /// Kółko stanu: puste (później / inny dzień) · kreskowane (bez pory) ·
-/// w kolorze pory z kropką (następne) · pełne z ptaszkiem (zjedzone).
+/// obwódka i ptaszek w kolorze pory (następne) · pełne z ptaszkiem
+/// w neutralnym piśmie (zjedzone).
+///
+/// Następne miało kropkę i poświatę — od Gotuj (D23, 1.10.2026) ma PTASZEK
+/// w kolorze pory i bez poświaty: pieczątka mówi, co zrobi stuknięcie, zanim
+/// się w nią stuknie, a poświatę pod talerzem niesie już sam talerz.
 ///
 /// Siedzi w rogu wielkiego talerza jako pieczątka odhaczenia. Ten sam rysunek
 /// stał wcześniej w wierszu listy i na węźle łuku doby — i to jest cała jego
@@ -101,20 +106,13 @@ struct CalendarMealCheck: View {
                     )
 
                 if status == .next {
-                    Circle()
-                        .fill(color)
-                        .frame(width: size * 0.36, height: size * 0.36)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: size * 0.46, weight: .bold))
+                        .foregroundStyle(color)
                 }
             }
         }
         .frame(width: size, height: size)
-        // Poświata tylko pod „następnym": to jedyny posiłek, w który
-        // użytkownik ma teraz stuknąć, więc jako jedyny woła o uwagę.
-        .background(
-            Circle()
-                .fill(color.opacity(status == .next ? 0.16 : 0))
-                .padding(-3)
-        )
         .animation(.smooth(duration: 0.22), value: status)
     }
 

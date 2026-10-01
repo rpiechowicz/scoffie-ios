@@ -326,6 +326,29 @@ struct CookSession: Codable, Equatable {
             + pending
     }
 
+    /// Timery w doku, w karcie Timery i w pigułkach — w KOLEJNOŚCI
+    /// SCENARIUSZA (krok, który niesie timer), niezależnie od stanu.
+    /// Włączenie, pauza, koniec czy „+min” nie przestawiają ich miejscami
+    /// (Rafał, 1.10.2026: „nie powinny timery się zamieniać miejscami, jak
+    /// załączam”) — kolejność pilności z `dockTimers` przesuwała świeżo
+    /// włączony timer na początek, gdy kończył się przed tamtym. Krok ma
+    /// najwyżej jeden timer, więc kolejność jest jednoznaczna.
+    func timerLineup(now: Date) -> [CookDockTimer] {
+        dockTimers(now: now).sorted { $0.stepIndex < $1.stepIndex }
+    }
+
+    /// Kapsuły nad wyspą. Scenariusz planuje najwyżej dwa timery naraz (D33),
+    /// ale trzy mieszczą się obok siebie (runda 2: „jak się zmieszczą 3, to
+    /// koło siebie”); dopiero czwarty i dalsze idą do plakietki „+N”. Przy
+    /// nadmiarze wybór idzie za pilnością (`dockTimers`: po czasie, trwające
+    /// od najbliższego końca, wstrzymane, do włączenia), a kolejność na
+    /// ekranie — za krokiem (`timerLineup`).
+    func dockCapsules(now: Date, limit: Int = 3) -> [CookDockTimer] {
+        let urgent = dockTimers(now: now)
+        let chosen = Set(urgent.prefix(limit).map(\.id))
+        return urgent.filter { chosen.contains($0.id) }.sorted { $0.stepIndex < $1.stepIndex }
+    }
+
     /// Najbliższy biegnący timer — Live Activity i „Wróć do gotowania”.
     func nearestRunningTimer(now: Date) -> CookDockTimer? {
         dockTimers(now: now).first {

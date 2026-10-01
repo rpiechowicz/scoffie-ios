@@ -122,6 +122,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   marginesów”, 1.10.2026). Ruch (`CookLook.swift`): teksty `cookRoll` (`SCMotion.textRoll`), zegary `cookTicking`
   (0,3 s), łuki timerów dojeżdżają liniowo przez sekundę, wejście ekranów `cookReveal` (= `scReveal`), zmiana kroku =
   nagłówek roluje się w miejscu, opis wjeżdża z boku o 0,06 s później (`motion.cookStep`).
+  Wejście z Kalendarza (D23, EC41): na talerzu „play” w PRAWYM dolnym rogu ZAWSZE, gdy danie ma paczkę scenariusza
+  (`CalendarPlateCooking.ready`) — każdy dzień, każda pora (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
+  z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół, a „następne” ma w niej ptaszek
+  w kolorze pory zamiast kropki i poświaty (`CalendarMealCheck` — cała aplikacja). Po „Wstrzymaj” talerz tego wpisu
+  planu (przepis + dzień + pora) to PS1 (`.paused`): pierścień kroków zamiast obręczy pory, „OBIAD · GOTUJESZ”,
+  „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.
@@ -729,7 +735,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
   nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
 - Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień

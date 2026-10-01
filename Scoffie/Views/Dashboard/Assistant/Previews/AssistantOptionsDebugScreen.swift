@@ -276,22 +276,33 @@ struct AssistantOptionsDebugScreen: View {
                 .sheet(isPresented: .constant(true)) {
                     LegalDocumentSheet(title: "Warunki korzystania") { TermsOfServiceContent() }
                 }
-        } else if mode == "plate" {
-            // Talerz w oknie gotowania — oddech talerza, poświaty i aureoli.
+        } else if mode == "plate" || mode == "plate-gotujesz" {
+            // Talerz w oknie gotowania — oddech talerza, poświaty i aureoli,
+            // pieczątka z lewej i „play” z prawej (Gotuj, EC41). Wariant
+            // `plate-gotujesz` = talerz wstrzymanego gotowania (PS1).
+            let item = CalendarPlateItem(
+                id: "debug-plate", slot: .lunch, status: .next, time: "14:00",
+                title: "Omlet ze szpinakiem i fetą",
+                imageURL: URL(string: "https://img.scoffie.app/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.webp"),
+                kcal: 450, prepMinutes: 60, cookFrom: "13:00",
+                servingsNote: nil, minutesAway: 45, isMissed: false,
+                cooking: mode == "plate" ? CalendarPlateCooking.ready : .paused(step: 7, steps: 12)
+            )
             ZStack {
                 SCPageBackground(scheme: scheme).ignoresSafeArea()
-                CalendarPlate(
-                    item: CalendarPlateItem(
-                        id: "debug-plate", slot: .lunch, status: .next, time: "14:00",
-                        title: "Omlet ze szpinakiem i fetą",
-                        imageURL: URL(string: "https://img.scoffie.app/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.webp"),
-                        kcal: 450, prepMinutes: 60, cookFrom: "13:00",
-                        servingsNote: nil, minutesAway: 45, isMissed: false
-                    ),
-                    canToggle: true,
-                    onToggle: {},
-                    onOpenDetail: {}
-                )
+                VStack(spacing: 14) {
+                    CalendarPlateKicker(item: item)
+                    CalendarPlate(
+                        item: item,
+                        canToggle: true,
+                        onToggle: {},
+                        onOpenDetail: {},
+                        onCook: {}
+                    )
+                    .padding(.vertical, CalendarPlate.maxRimInset)
+                    CalendarPlateCaption(item: item, dayKey: "2026-10-01", onOpenDetail: {})
+                }
+                .padding(.horizontal, SCPageMetrics.horizontal)
             }
         } else if mode == "thought" {
             // Wiersz tury na żywo: ślad trzech kroków nad bieżącym statusem,
