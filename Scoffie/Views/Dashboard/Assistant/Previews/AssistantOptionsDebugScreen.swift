@@ -9,7 +9,8 @@ import SwiftUI
 /// Wartość to strona arkusza do otwarcia (`0…n` = dania, `n` = „Coś innego”)
 /// albo `card`, żeby zobaczyć samą kotwicę w rozmowie, albo `thought` —
 /// wiersz tury na żywo (ślad kroków nad bieżącym statusem), albo `plate` —
-/// talerz Kalendarza w oknie gotowania (oddech). Prawdziwe przepisy
+/// talerz Kalendarza w oknie gotowania (oddech), albo `gotuj…` — tryb Gotuj
+/// (`CookDebugScreen`). Prawdziwe przepisy
 /// i zdjęcia z katalogu, żeby kadr i liczby były takie jak u użytkownika.
 struct AssistantOptionsDebugScreen: View {
     let page: Int?
@@ -126,7 +127,10 @@ struct AssistantOptionsDebugScreen: View {
     }
 
     var body: some View {
-        if mode == "shopping" {
+        if let mode, mode.hasPrefix("gotuj") {
+            // Tryb Gotuj na wzorcu kotleta — `CookDebugScreen`.
+            CookDebugScreen(mode: mode)
+        } else if mode == "shopping" {
             // Liczniki Zakupów na przykładowych danych — do sprawdzenia
             // `SCCountingText` bez sesji.
             ScrollView {

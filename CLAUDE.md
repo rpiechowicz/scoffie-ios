@@ -111,7 +111,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `make-fixture.mjs`). Scenariusz wskazuje składniki po `ingredientId`, które ma TYLKO szczegół przepisu —
   `CookScenarioStore` bierze `recipes:cookScenario` + `recipes:findById` i trzyma paczkę offline (przycisk „Gotuj”
   tylko, gdy paczka jest i `Recipe.cookScenarioVersion` się zgadza). Sesja (`CookSessionStore`) jedna, per konto+dom,
-  timery jako DATY KOŃCA; kolor timera: terakota, a gdy zajęta przez inny żywy — szałwia.
+  timery jako DATY KOŃCA; kolor timera: terakota, a gdy zajęta przez inny żywy — szałwia. Widok (`Views/Cook/`)
+  to `fullScreenCover` nad pulpitem (`ScoffieApp.dashboard`); wejścia idą przez `SessionStore.startCooking` /
+  `resumeCooking`, które najpierw zamykają arkusze (ten sam ruch co przepis z linku). Karty doku (Timery, Składniki)
+  to karty w doku za zasłoną, nie arkusze systemu. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
+  otwiera tryb), w tle zwykłe powiadomienie (`CookTimerNotifications`) — AlarmKit dopiero w E5. Zrzuty:
+  `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-alarm|gotuj-wyjscie|gotuj-koniec`.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

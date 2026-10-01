@@ -574,6 +574,28 @@ struct ScoffieApp: App {
             .scErrorToast(mealStore.errorMessage)
             .scErrorToast(recipeCatalogStore.errorMessage)
             .scErrorToast(shoppingListStore.errorMessage)
+            .environment(\.cookScenarioStore, sessionStore.cookScenarioStore)
+            .environment(\.cookSessionStore, sessionStore.cookSessionStore)
+            // Tryb Gotuj: pełny ekran nad pulpitem (D6). Wejścia (szczegóły
+            // przepisu, talerz) idą przez `SessionStore.startCooking`, który
+            // najpierw zamyka arkusze.
+            .fullScreenCover(isPresented: cookModeBinding) {
+                if let cook = sessionStore.cookSessionStore {
+                    CookModeView(
+                        store: cook,
+                        onEaten: { session in sessionStore.markCookedAsEaten(session) }
+                    )
+                    .environment(\.sessionStore, sessionStore)
+                    .preferredColorScheme(appTheme.colorScheme)
+                }
+            }
+    }
+
+    private var cookModeBinding: Binding<Bool> {
+        Binding(
+            get: { sessionStore.cookSessionStore?.isPresented ?? false },
+            set: { sessionStore.cookSessionStore?.isPresented = $0 }
+        )
     }
 
     var body: some Scene {
@@ -651,7 +673,10 @@ struct ScoffieApp: App {
             .onChange(of: scenePhase) { _, newValue in
                 if newValue == .active {
                     sessionStore.refreshRealtimeStoresOnForeground()
+                    sessionStore.cookSessionStore?.appBecameActive()
                 } else if newValue == .background {
+                    // Timery Gotuj dzwonią w tle powiadomieniem (E4, bez AlarmKit).
+                    sessionStore.cookSessionStore?.appWentToBackground()
                     // Chwila, w której powiadomienia lokalne zaczynają być
                     // jedynym kanałem: aplikacja właśnie przestała być na
                     // wierzchu, a plan jest świeży po całej sesji. Rozkład

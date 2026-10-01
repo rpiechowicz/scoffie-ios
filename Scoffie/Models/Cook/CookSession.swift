@@ -31,6 +31,13 @@ struct CookSession: Codable, Equatable {
     /// Pora z planu (`MealSlot.rawValue`), gdy gotujemy danie z planu —
     /// „GOTUJEMY · OBIAD”. `nil` = spoza planu (D21).
     let mealSlotRaw: String?
+    /// Dzień pozycji planu (`PlanWeek.dateKey`) — na niego „Zjedzone” odhacza
+    /// danie. `nil` = spoza planu.
+    let planDateKey: String?
+    /// Trudność przepisu (`Difficulty.rawValue`) i kcal porcji — powitanie
+    /// i zakończenie; scenariusz ich nie niesie, a sesja ma działać offline.
+    let difficultyRaw: String?
+    let kcalPerServing: Int?
     /// Kopia scenariusza z chwili startu — sesja dokańcza na SWOJEJ wersji,
     /// nawet gdy w trakcie przyjdzie nowsza (§4.7).
     let package: CookPackage
@@ -59,6 +66,9 @@ struct CookSession: Codable, Equatable {
         recipeTitle: String,
         imageURL: URL?,
         mealSlotRaw: String?,
+        planDateKey: String? = nil,
+        difficultyRaw: String? = nil,
+        kcalPerServing: Int? = nil,
         package: CookPackage,
         portions: Int,
         startedAt: Date
@@ -69,6 +79,9 @@ struct CookSession: Codable, Equatable {
         self.recipeTitle = recipeTitle
         self.imageURL = imageURL
         self.mealSlotRaw = mealSlotRaw
+        self.planDateKey = planDateKey
+        self.difficultyRaw = difficultyRaw
+        self.kcalPerServing = kcalPerServing
         self.package = package
         self.portions = max(1, portions)
         self.defaultPortions = max(1, portions)

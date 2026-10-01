@@ -2278,6 +2278,11 @@ final class SessionStore {
             // Nawet jeśli któryś krok się nie udał (offline / timeout),
             // wchodzimy w .ready — dashboard ma własne skeletony / cache.
             self.startupPhase = .ready
+            // Scenariusze Gotuj dań dziś i jutro — po starcie, w tle; nic na
+            // nie nie czeka, a przycisk „Gotuj” pojawi się, gdy przyjdą.
+            Task { @MainActor [weak self] in
+                await self?.prefetchCookScenarios()
+            }
         }
         startupTask = task
         await task.value

@@ -46,6 +46,8 @@ enum NotificationIdentifierPrefix {
     // i slotu — inaczej nie dałoby się posprzątać rozkładu bez pytania
     // systemu, co w nim jeszcze stoi.
     static let cook = "meal-cook-"
+    /// Koniec timera trybu Gotuj, gdy aplikacja jest w tle (`CookTimerNotifications`).
+    static let cookTimer = "cook-timer-"
     static let mealTime = "meal-time-"
     /// Trzy sloty doby — po jednym powiadomieniu na każdy.
     static let dayMorning = "day-morning-"
