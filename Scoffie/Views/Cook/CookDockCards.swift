@@ -1,21 +1,21 @@
 import SwiftUI
 
-/// Powierzchnia kart doku: ta sama co wyspa (`canvas`, obwódka, cień), róg
-/// `radius.cookDockCard`.
+/// Powierzchnia karty Timery: ta sama co wyspa (`cook.dockSurface`, obwódka,
+/// cień), róg `radius.cookDockCard`.
 private struct CookDockCardSurface: ViewModifier {
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: SCCook.Radius.dockCard, style: .continuous)
         content
-            .background(shape.fill(Color.scCanvas(scheme)))
+            .background(shape.fill(SCCook.Palette.dockSurface(scheme)))
             .overlay(shape.strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
             .clipShape(shape)
             .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 18, y: 14)
     }
 }
 
-/// Nagłówek sekcji kart doku: „TRWA”, „W TYM KROKU”, „TERAZ”…
+/// Nagłówek sekcji listy składników: „TERAZ”, „ZA CHWILĘ · KROK 4”…
 private struct CookSectionHeader: View {
     let title: String
     let color: Color
@@ -45,6 +45,12 @@ private struct CookSectionHeader: View {
 // MARK: - Timery
 
 /// Karta Timery — w miejscu kapsuł, wyspa zostaje pod nią (ST5, Y3T1–3).
+///
+/// JEDNA lista w kolejności kroków (`CookSession.timerLineup`), bez sekcji
+/// „Trwa / W tym kroku / Wstrzymany” (runda 2 testów): wiersz zostaje na
+/// swoim miejscu przez cały czas swojego timera, a stan mówi kolor,
+/// podpis i glif w pierścieniu — jak w kapsule. Wcześniej start czy pauza
+/// przenosiły wiersz do innej sekcji i karta skakała pod palcem.
 struct CookTimersCard: View {
     let session: CookSession
     let now: Date
@@ -52,225 +58,166 @@ struct CookTimersCard: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private var items: [CookDockTimer] { session.dockTimers(now: now) }
-
-    private var active: [CookDockTimer] {
-        items.filter {
-            switch $0.status {
-            case .running, .overdue: true
-            default: false
-            }
-        }
-    }
-
-    private var pending: [CookDockTimer] {
-        items.filter { if case .pending = $0.status { true } else { false } }
-    }
-
-    private var paused: [CookDockTimer] {
-        items.filter { if case .paused = $0.status { true } else { false } }
-    }
-
     var body: some View {
+        let items = session.timerLineup(now: now)
+        let summaryText = summary(items)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("Timery")
                     .cookText(SCCook.Typography.sheetTitle)
                     .foregroundStyle(Color.scLabel(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(summary)
+                Text(summaryText)
                     .font(.system(size: 13))
                     .foregroundStyle(SCCook.Palette.caption(scheme))
                     .lineLimit(1)
-                    .cookRoll(summary)
+                    .cookRoll(summaryText)
             }
+            .padding(.bottom, 6)
 
-            if !active.isEmpty {
-                CookSectionHeader(
-                    title: active.count == 1 ? "TRWA" : "TRWAJĄ",
-                    color: active.count == 1 ? active[0].accent.color : Color.scLabel(scheme)
-                )
-                ForEach(active) { item in
-                    activeRow(item)
-                }
-            }
-
-            if !pending.isEmpty {
-                CookSectionHeader(title: "W TYM KROKU", color: SCPalette.terracotta)
-                ForEach(pending) { item in
-                    pendingTile(item)
-                        .padding(.bottom, 8)
-                }
-            }
-
-            if !paused.isEmpty {
-                CookSectionHeader(title: "WSTRZYMANY", color: Color.scMuted(scheme))
-                ForEach(paused) { item in
-                    pausedRow(item)
-                }
-                Text("Stoi, dopóki go nie wznowisz — nie zadzwoni.")
-                    .font(.system(size: 13))
-                    .lineSpacing(3)
-                    .foregroundStyle(SCCook.Palette.caption(scheme))
-                    .padding(.top, 6)
+            ForEach(items) { item in
+                CookTimerRow(item: item, onTimer: onTimer)
+                    .transition(.opacity)
             }
         }
         .padding(.top, 20)
         .padding(.horizontal, 18)
-        .padding(.bottom, 12)
+        .padding(.bottom, 10)
         .modifier(CookDockCardSurface())
     }
 
-    private var summary: String {
+    private func summary(_ items: [CookDockTimer]) -> String {
+        var running = 0
+        var pending = 0
+        var paused = 0
+        for item in items {
+            switch item.status {
+            case .running, .overdue: running += 1
+            case .pending: pending += 1
+            case .paused: paused += 1
+            case .finished: break
+            }
+        }
         var parts: [String] = []
-        if !active.isEmpty {
-            parts.append("\(active.count) \(PolishPlural.form(active.count, one: "trwa", few: "trwają", many: "trwa"))")
+        if running > 0 {
+            parts.append("\(running) \(PolishPlural.form(running, one: "trwa", few: "trwają", many: "trwa"))")
         }
-        if !pending.isEmpty {
-            parts.append("\(pending.count) do włączenia")
+        if pending > 0 {
+            parts.append("\(pending) do włączenia")
         }
-        if !paused.isEmpty {
-            parts.append("\(paused.count) \(PolishPlural.form(paused.count, one: "wstrzymany", few: "wstrzymane", many: "wstrzymanych"))")
+        if paused > 0 {
+            parts.append("\(paused) \(PolishPlural.form(paused, one: "wstrzymany", few: "wstrzymane", many: "wstrzymanych"))")
         }
         return parts.joined(separator: " · ")
     }
+}
 
-    private func caption(_ item: CookDockTimer) -> String {
-        "krok \(item.stepIndex + 1) · z \(CookClock.duration(item.timer))"
+/// Wiersz karty Timery — ten sam układ w każdym stanie: pierścień-przycisk
+/// (glif ruchu w środku), nazwa z podpisem i czas. Zmienia się kolor, glif
+/// i podpis, nie miejsce.
+private struct CookTimerRow: View {
+    let item: CookDockTimer
+    let onTimer: (CookTimerAction) -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var isOverdue: Bool { if case .overdue = item.status { true } else { false } }
+    private var isPending: Bool { if case .pending = item.status { true } else { false } }
+    private var isPaused: Bool { if case .paused = item.status { true } else { false } }
+    private var isRunning: Bool { if case .running = item.status { true } else { false } }
+
+    /// Kolor stanu: trwa — kolor timera, czeka i po czasie — terakota,
+    /// wstrzymany — przygaszony.
+    private var tone: Color {
+        if isPaused { return Color.scMuted(scheme) }
+        if isPending || isOverdue { return SCPalette.terracotta }
+        return item.accent.color
     }
 
-    private func activeRow(_ item: CookDockTimer) -> some View {
-        let color = item.accent.color
-        let isOverdue: Bool = if case .overdue = item.status { true } else { false }
-        return HStack(spacing: 12) {
-            Button {
-                onTimer(isOverdue ? .finish(item.id) : .pause(item.id))
-            } label: {
-                ZStack {
-                    CookTimerRing(fraction: item.status.remainingFraction, color: color, lineWidth: SCCook.Stroke.sheetTimerRing)
-                    Image(systemName: isOverdue ? "checkmark" : "pause.fill")
-                        .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(color)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .frame(width: SCCook.Size.sheetTimerRing, height: SCCook.Size.sheetTimerRing)
-                .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isOverdue ? "Gotowe: \(item.timer.label)" : "Pauza: \(item.timer.label)")
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.timer.label)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-                Text(caption(item))
-                    .font(.system(size: 12))
-                    .foregroundStyle(SCCook.Palette.caption(scheme))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(CookDockLabels.time(item.status))
-                .cookText(SCCook.Typography.sheetTime)
-                .monospacedDigit()
-                .foregroundStyle(color)
-                .cookTicking(CookDockLabels.time(item.status), countsDown: !isOverdue)
-        }
-        .frame(minHeight: SCCook.Height.timerRow)
-    }
-
-    private func pendingTile(_ item: CookDockTimer) -> some View {
-        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.timerStartTile, style: .continuous)
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(item.timer.label)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(SCPalette.terracotta)
-                Text(CookDockLabels.time(item.status))
-                    .cookText(SCCook.Typography.sheetTime)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scLabel(scheme))
-                Text("Start: \(item.timer.startLabel.lowercasedFirst)")
-                    .font(.system(size: 12))
-                    .foregroundStyle(SCCook.Palette.caption(scheme))
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button { onTimer(.start(item.id)) } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 13, weight: .heavy))
-                    Text("Start")
-                        .font(.system(size: 16, weight: .heavy))
-                }
-                .foregroundStyle(Color.scPageBase(scheme))
-                .padding(.leading, 14)
-                .padding(.trailing, 18)
-                .frame(height: SCCook.Size.sheetTimerRing)
-                .background(Capsule().fill(SCPalette.terracotta))
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Start: \(item.timer.label)")
-        }
-        .padding(.vertical, 12)
-        .padding(.leading, 16)
-        .padding(.trailing, 12)
-        .background(shape.fill(SCPalette.terracotta.opacity(SCCook.Opacity.timerFill)))
-        .overlay(shape.strokeBorder(SCPalette.terracotta.opacity(SCCook.Opacity.timerStroke), lineWidth: 1))
-        .cookInvitePulse(shape)
-    }
-
-    private func pausedRow(_ item: CookDockTimer) -> some View {
+    var body: some View {
+        let time = CookDockLabels.time(item.status)
+        let captionText = caption
         HStack(spacing: 12) {
-            Button { onTimer(.resume(item.id)) } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 14, weight: .heavy))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .offset(x: 1)
-                    .frame(width: SCCook.Size.sheetTimerRing, height: SCCook.Size.sheetTimerRing)
-                    .background(Circle().fill(Color.scTileStroke(scheme)))
-                    .overlay(Circle().strokeBorder(Color.scStrike(scheme), lineWidth: 2))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Wznów: \(item.timer.label)")
+            control
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.timer.label)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                Text(caption(item))
+                    .foregroundStyle(isPaused ? Color.scMuted(scheme) : Color.scLabel(scheme))
+                    .lineLimit(1)
+                Text(captionText)
                     .font(.system(size: 12))
-                    .foregroundStyle(SCCook.Palette.caption(scheme))
+                    .foregroundStyle(isOverdue ? SCPalette.terracotta : SCCook.Palette.caption(scheme))
+                    .lineLimit(1)
+                    .cookRoll(captionText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(CookDockLabels.time(item.status))
+            Text(time)
                 .cookText(SCCook.Typography.sheetTime)
                 .monospacedDigit()
-                .foregroundStyle(Color.scMuted(scheme))
+                .foregroundStyle(isPending ? Color.scLabel(scheme) : tone)
+                .cookTicking(time, countsDown: !isOverdue)
         }
         .frame(minHeight: SCCook.Height.timerRow)
+        .accessibilityElement(children: .contain)
+        // Zmiana stanu z zegara (koniec odliczania) — kolory przechodzą
+        // sprężyną doku, a nie w klatce.
+        .animation(SCCook.Motion.dock, value: item.status.phase)
+    }
+
+    private var caption: String {
+        switch item.status {
+        case .pending: "Start: \(item.timer.startLabel.lowercasedFirst)"
+        case .running: "krok \(item.stepIndex + 1) · z \(CookClock.duration(item.timer))"
+        case .paused: "wstrzymany — nie zadzwoni"
+        case .overdue: "po czasie · krok \(item.stepIndex + 1)"
+        case .finished: ""
+        }
+    }
+
+    /// Pierścień-przycisk 46 pt: łuk pozostałego czasu (trwa, wstrzymany)
+    /// albo pełny krążek terakoty (czeka — ▶, po czasie — ✓).
+    private var control: some View {
+        let side = SCCook.Size.sheetTimerRing
+        let filled = isPending || isOverdue
+        return Button {
+            if let action = item.primaryAction { onTimer(action) }
+        } label: {
+            ZStack {
+                Circle().fill(filled ? SCPalette.terracotta : .clear)
+                CookTimerRing(fraction: item.status.remainingFraction, color: tone, lineWidth: SCCook.Stroke.sheetTimerRing)
+                    .opacity(isRunning || isPaused ? 1 : 0)
+                Image(systemName: item.primaryIcon)
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundStyle(filled ? Color.scPageBase(scheme) : (isPaused ? Color.scLabel(scheme) : tone))
+                    .offset(x: item.primaryIcon == "play.fill" ? 1 : 0)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .frame(width: side, height: side)
+            .contentShape(Circle())
+            .cookInvitePulse(Circle(), isActive: isPending)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.primaryLabel)
     }
 }
 
 // MARK: - Składniki
 
-/// Karta Składniki — wyspa rozwinięta w kartę: lista nad kreską, wiersz wyspy
-/// na dole z podświetlonym „Składniki” (KM1, KM2). Bez odhaczania (D7).
-struct CookIngredientsCard<IslandRow: View>: View {
+/// Treść karty Składniki — leży w wyspie (`CookDock.island`), która rozwija
+/// się w kartę, więc nie ma własnej powierzchni ani wiersza wyspy: lista nad
+/// kreską, pod nią zostaje wiersz wyspy z podświetlonym „Składniki” (KM1,
+/// KM2). Bez odhaczania (D7).
+struct CookIngredientsPanel: View {
     enum Scope: Hashable {
         case step
         case recipe
     }
 
     let session: CookSession
-    @ViewBuilder let islandRow: () -> IslandRow
 
     @State private var scope: Scope = .step
-    @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
 
     private struct LineGroup: Identifiable {
@@ -329,21 +276,15 @@ struct CookIngredientsCard<IslandRow: View>: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Karta rozwija się z wyspy, a wiersze wchodzą kaskadą
-                        // (§8.2: „pigułki składników wchodzą kaskadą”).
-                        ForEach(Array(groups.enumerated()), id: \.element.id) { sectionIndex, section in
+                        ForEach(groups) { section in
                             CookSectionHeader(title: section.title, color: section.color, count: section.lines.count)
-                                .cookReveal(hasAppeared, order: revealOrder(groups, sectionIndex, row: -1))
                             ForEach(Array(section.lines.enumerated()), id: \.element.id) { offset, line in
-                                VStack(spacing: 0) {
-                                    row(line, isDone: section.isDone)
-                                    if offset < section.lines.count - 1 {
-                                        Rectangle()
-                                            .fill(Color.scChipBg(scheme))
-                                            .frame(height: 1)
-                                    }
+                                row(line, isDone: section.isDone)
+                                if offset < section.lines.count - 1 {
+                                    Rectangle()
+                                        .fill(Color.scChipBg(scheme))
+                                        .frame(height: 1)
                                 }
-                                .cookReveal(hasAppeared, order: revealOrder(groups, sectionIndex, row: offset))
                             }
                         }
                     }
@@ -360,22 +301,7 @@ struct CookIngredientsCard<IslandRow: View>: View {
                 .fill(Color.scChipBg(scheme))
                 .frame(height: 1)
                 .padding(.horizontal, 16)
-
-            islandRow()
         }
-        .modifier(CookDockCardSurface())
-        .task {
-            guard !hasAppeared else { return }
-            await CookEntrance.breathe()
-            hasAppeared = true
-        }
-    }
-
-    /// Kolejność w kaskadzie: nagłówki i wiersze po kolei przez wszystkie
-    /// sekcje, od dziewiątego razem.
-    private func revealOrder(_ groups: [LineGroup], _ sectionIndex: Int, row: Int) -> Int {
-        let before = groups.prefix(sectionIndex).reduce(0) { $0 + $1.lines.count + 1 }
-        return min(before + row + 1, 8)
     }
 
     private var scopePicker: some View {
@@ -391,7 +317,7 @@ struct CookIngredientsCard<IslandRow: View>: View {
     private func scopeSegment(_ value: Scope, title: String, count: Int) -> some View {
         let selected = scope == value
         return Button {
-            withAnimation(.smooth(duration: 0.2)) { scope = value }
+            withAnimation(.smooth(duration: 0.25)) { scope = value }
         } label: {
             HStack(spacing: 6) {
                 Text(title)

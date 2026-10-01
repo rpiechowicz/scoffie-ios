@@ -102,7 +102,8 @@ struct CookModeView: View {
                 },
                 onClose: { store.end() }
             )
-            .transition(.opacity)
+            .transition(stageTransition)
+            .zIndex(2)
         case .steps:
             if let step = session.currentStep {
                 CookStepView(
@@ -145,6 +146,8 @@ struct CookModeView: View {
                         }
                     }
                 }
+                .transition(stageTransition)
+                .zIndex(1)
             }
         case .finished:
             TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -161,8 +164,23 @@ struct CookModeView: View {
                     onFeedback: onFeedback
                 )
             }
-            .transition(.opacity)
+            .transition(stageTransition)
+            .zIndex(0)
         }
+    }
+
+    /// Przejście między ekranami trybu (powitanie → kroki → koniec; runda 2:
+    /// „ma nie przeskakiwać, tylko płynnie włączać”). Nowy ekran staje od razu
+    /// POD starym, w pełnym kryciu, a stary gaśnie na wierzchu (`zIndex`
+    /// idzie za kolejnością ekranów). Zdjęcie jest na obu w tym samym
+    /// miejscu, więc nie przygasa w połowie (dawniej przenikały się dwa
+    /// półprzezroczyste), krzyżyk stoi w miejscu, a treść nowego ekranu
+    /// wchodzi własną kaskadą, gdy stara już zgasła.
+    private var stageTransition: AnyTransition {
+        .asymmetric(
+            insertion: .identity,
+            removal: .opacity.animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22))
+        )
     }
 
     private func move(forward: Bool) {

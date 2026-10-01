@@ -42,9 +42,9 @@ struct CookStepView: View {
             }
             .scrollIndicators(.hidden)
             .scrollPosition($scrollPosition)
-            // Treść od krawędzi do krawędzi: zdjęcie pod paskiem stanu, koniec
-            // tekstu liczony od dołu ekranu, jak dok (`cookDockReserve`).
-            .ignoresSafeArea(edges: .vertical)
+            // Zdjęcie pod paskiem stanu; dół zostaje w bezpiecznym obszarze,
+            // tak jak dok (`cookDockReserve` liczy się od jego krawędzi).
+            .ignoresSafeArea(edges: .top)
             .simultaneousGesture(swipe)
             // Nowy krok zaczyna się od tytułu, nie od miejsca, w którym
             // skończyło się czytanie poprzedniego.
@@ -78,9 +78,8 @@ struct CookStepView: View {
                 )
             }
             .cookReveal(hasAppeared, order: 3)
-            // `spacing.cookDockBottom` od dołu EKRANU, jak w makiecie —
-            // nad wskaźnikiem home, nie nad całym dolnym marginesem.
-            .ignoresSafeArea(.container, edges: .bottom)
+            // Dok stoi tam, gdzie dolne menu aplikacji — na dolnej krawędzi
+            // bezpiecznego obszaru (runda 2: „ciut za wysoko”).
         }
         .animation(SCCook.Motion.dock, value: card)
         .task {
@@ -90,15 +89,18 @@ struct CookStepView: View {
         }
     }
 
+    /// Pierścień kroków i krzyżyk — ta sama wielkość i powierzchnia. Przy
+    /// wejściu pojawia się tylko pierścień: krzyżyk stoi w tym samym miejscu
+    /// na powitaniu, więc przejście powitanie → krok go nie gasi.
     private var topBar: some View {
         HStack(spacing: 10) {
             CookStepRing(count: session.stepCount, current: session.stepIndex)
+                .cookChrome(hasAppeared)
                 .frame(maxWidth: .infinity, alignment: .leading)
             SCSheetCloseButton(onImage: true, action: onClose)
         }
         .padding(.horizontal, SCCook.Spacing.page)
         .padding(.top, 11)
-        .cookChrome(hasAppeared)
     }
 
     private var scene: some View {

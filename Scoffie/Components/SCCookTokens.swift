@@ -56,11 +56,11 @@ enum SCCook {
                 : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255).opacity(0.05)
         }
 
-        /// Krążek pod pierścieniem kroków w nagłówku — pierścień stoi na zdjęciu dania (ST*).
-        static func ringDisc(_ scheme: ColorScheme) -> Color {
+        /// Powierzchnia wyspy, kapsuł timerów, kart doku i szuflad powitania. Ciemny motyw: płótno (semantic.canvas, jak w makiecie). Jasny: ciepła biel uniesionej powierzchni (semantic.cardSurface) — płótno #FAF6F0 na tle strony #FBF5EA to ten sam kolor i dok odcinała tylko cienka obwódka (runda 2 testów, 1.10.2026).
+        static func dockSurface(_ scheme: ColorScheme) -> Color {
             scheme == .dark
-                ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255).opacity(0.62)
-                : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255).opacity(0.62)
+                ? Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255)
+                : Color(red: 255 / 255, green: 252 / 255, blue: 246 / 255)
         }
 
         /// Warstwa na zdjęciu (krycie 0,35) ekranu końca timera — ST4.
@@ -167,14 +167,14 @@ enum SCCook {
         /// Wygaszenie zdjęcia do semantic.pageBase: od spacing.cookHeaderFadeStart w dół (kończy się 2 pt pod zdjęciem).
         static let headerFade: CGFloat = 172
 
-        /// Krążek z pierścieniem kroków i numerem bieżącego kroku (14/800) w nagłówku trybu (ST*). Pierścień: promień size.cookStepRingRadius, kreska stroke.cookStepRing, końce płaskie, start o 12:00.
-        static let stepRing: CGFloat = 44
+        /// Krążek z pierścieniem kroków i numerem bieżącego kroku (typography.cookStepNumber) w nagłówku trybu — tej samej wielkości co krzyżyk (SCSheetCloseButton 36, runda 2: „X oraz stepper mają być takiej samej wielkości”) i na tej samej powierzchni co krzyżyk na zdjęciu. Pierścień: promień size.cookStepRingRadius, kreska stroke.cookStepRing, końce okrągłe, start o 12:00.
+        static let stepRing: CGFloat = 36
 
-        /// Promień pierścienia kroków w krążku 44 (do środka kreski).
-        static let stepRingRadius: CGFloat = 17
+        /// Promień pierścienia kroków w krążku 36 (do środka kreski).
+        static let stepRingRadius: CGFloat = 13.5
 
-        /// Krążki „Wstecz” i „Dalej” (ostatni krok: ptaszek „Zakończ gotowanie”) w wyspie doku — cel dotyku w strefie kciuka (§8.5).
-        static let islandButton: CGFloat = 52
+        /// Krążki „Wstecz” i „Dalej” (ostatni krok: ptaszek „Zakończ gotowanie”) w wyspie doku — wysokość pigułki dolnego menu aplikacji (60 − 2 × 6).
+        static let islandButton: CGFloat = 48
 
         /// Plakietka liczby składników kroku obok „Składniki” w wyspie (min. szerokość i wysokość).
         static let islandBadge: CGFloat = 22
@@ -182,8 +182,11 @@ enum SCCook {
         /// Pierścień postępu w POJEDYNCZEJ kapsule timera (pełna szerokość doku); promień 12,8.
         static let timerRing: CGFloat = 30
 
-        /// Pierścień w kapsule z PARY (dwa timery obok siebie); promień 10,9.
-        static let timerRingPair: CGFloat = 26
+        /// Pierścień w kapsule z PARY (dwa timery obok siebie) — zarazem przycisk start / pauza / wznów / gotowe z glifem w środku (runda 2: „włączyć / wyłączyć timer z pulpitu, nie wchodząc w kartę”); kreska stroke.cookTimerRingSmall, dotyk 44.
+        static let timerRingPair: CGFloat = 34
+
+        /// Ten sam pierścień-przycisk w kapsule z TRÓJKI — trzy timery obok siebie, gdy się zmieszczą (runda 2), dotyk 44.
+        static let timerRingTrio: CGFloat = 30
 
         /// Pierścień-przycisk pauzy w wierszu arkusza Timery; promień 20,5 (ST5).
         static let sheetTimerRing: CGFloat = 46
@@ -214,8 +217,8 @@ enum SCCook {
     }
 
     enum Height {
-        /// Wyspa ‹ Składniki N › na dole ekranu kroku — zawsze w tym samym miejscu (D34). Kapsuła, padding spacing.cookIslandPadding.
-        static let island: CGFloat = 68
+        /// Wyspa ‹ Składniki N › na dole ekranu kroku — zawsze w tym samym miejscu (D34). Wysokość, boki i położenie jak dolne menu aplikacji (SCFloatingTabBar 60 pt, runda 2 testów). Kapsuła, padding spacing.cookIslandPadding.
+        static let island: CGFloat = 60
 
         /// Kapsuła timera nad wyspą; jedna = cała szerokość doku, dwie = obok siebie (D34).
         static let timerCapsule: CGFloat = 56
@@ -252,11 +255,14 @@ enum SCCook {
     }
 
     enum Stroke {
-        /// Kreska pierścienia kroków w nagłówku; przerwa między odcinkami spacing.cookStepRingGap, końce płaskie.
-        static let stepRing: CGFloat = 3.5
+        /// Kreska pierścienia kroków w nagłówku; widoczna przerwa między odcinkami spacing.cookStepRingGap, końce okrągłe.
+        static let stepRing: CGFloat = 3
 
-        /// Kreska pierścienia pojedynczej kapsuły (para: 3,2), końce okrągłe.
+        /// Kreska pierścienia pojedynczej kapsuły, końce okrągłe. Łuk = pozostały czas i ubywa ZGODNIE ze wskazówkami zegara (koniec stoi o 12:00, początek ucieka w prawo — runda 2 testów).
         static let timerRing: CGFloat = 3.4
+
+        /// Kreska pierścienia-przycisku w kapsułach z pary i trójki.
+        static let timerRingSmall: CGFloat = 3
 
         /// Kreska pierścienia-przycisku w arkuszu Timery.
         static let sheetTimerRing: CGFloat = 4
@@ -278,11 +284,11 @@ enum SCCook {
         /// Etykieta nad tytułem (etap kroku, „GOTUJEMY · OBIAD”) zaczyna się tyle od góry ekranu — na każdym ekranie trybu w tym samym miejscu, wcześniej tylko na zakończeniu (270).
         static let titleTop: CGFloat = 290
 
-        /// Dok pływa tyle od boków ekranu (D34).
-        static let dockSide: CGFloat = 16
+        /// Dok pływa tyle od boków ekranu (D34) — jak dolne menu aplikacji (SCFloatingTabBar.sideMargin).
+        static let dockSide: CGFloat = 20
 
-        /// Dok pływa tyle od dołu ekranu (nad paskiem domowym).
-        static let dockBottom: CGFloat = 24
+        /// Odległość doku od dolnej krawędzi bezpiecznego obszaru — 0, czyli tam, gdzie stoi dolne menu aplikacji (nad paskiem domowym).
+        static let dockBottom: CGFloat = 0
 
         /// Odstęp kapsuł (albo karty Timery) od wyspy.
         static let dockGap: CGFloat = 10
@@ -290,17 +296,17 @@ enum SCCook {
         /// Odstęp dwóch kapsuł obok siebie.
         static let capsuleGap: CGFloat = 8
 
-        /// Wcięcie krążków od krawędzi wyspy.
-        static let islandPadding: CGFloat = 8
+        /// Wcięcie krążków od krawędzi wyspy (jak pigułka w dolnym menu).
+        static let islandPadding: CGFloat = 6
 
         /// Odstęp krążków od środka „Składniki” w wyspie.
         static let islandGap: CGFloat = 6
 
-        /// Miejsce pod treścią kroku zarezerwowane na dok z dwiema kapsułami — tekst kroku przewija się pod dokiem, ale jego koniec staje nad nim.
-        static let dockReserve: CGFloat = 156
+        /// Miejsce pod treścią kroku zarezerwowane na dok z kapsułami (wyspa 60 + przerwa 10 + kapsuła 56), liczone od dolnej krawędzi bezpiecznego obszaru — tekst kroku przewija się pod dokiem, ale jego koniec staje nad nim.
+        static let dockReserve: CGFloat = 126
 
-        /// Widoczna przerwa między odcinkami pierścienia kroków (łuk, przy płaskich końcach).
-        static let stepRingGap: CGFloat = 3.2
+        /// Widoczna przerwa między odcinkami pierścienia kroków — od końca do końca zaokrąglenia (łuk między odcinkami = przerwa + kreska).
+        static let stepRingGap: CGFloat = 2
 
         /// Jak daleko rozchodzi się łagodny puls „do włączenia”.
         static let inviteSpread: CGFloat = 9
@@ -313,8 +319,8 @@ enum SCCook {
         /// Kafle trybu: karta porcji, szuflady, „NA NASTĘPNY RAZ”, kafle wyjścia, pole uwag (§13: promień kafli 24).
         static let tile: CGFloat = 24
 
-        /// Karty doku: Timery (w miejscu kapsuł) i Składniki (wyspa rozwinięta w kartę).
-        static let dockCard: CGFloat = 34
+        /// Karty doku: Timery (w miejscu kapsuł) i Składniki (wyspa rozwinięta w kartę) — połowa wysokości wyspy, więc wyspa i karta to ten sam kształt, rozwijany w górę.
+        static let dockCard: CGFloat = 30
 
         /// Kafel „W TYM KROKU” z „▶ Start” w arkuszu Timery.
         static let timerStartTile: CGFloat = 22
@@ -332,6 +338,9 @@ enum SCCook {
 
         /// Etykieta nad tytułem: etap kroku („SMAŻENIE”, „W MIĘDZYCZASIE”), „GOTUJEMY · OBIAD” — wersaliki w szałwii.
         static let stage = SCCookTextStyle(size: 12, weight: .heavy, tracking: 0.96, lineHeight: nil)
+
+        /// Numer bieżącego kroku w środku pierścienia kroków (krążek 36).
+        static let stepNumber = SCCookTextStyle(size: 13, weight: .heavy, tracking: 0, lineHeight: nil)
 
         /// Opis kroku w cook.body.
         static let stepBody = SCCookTextStyle(size: 17, weight: .regular, tracking: 0, lineHeight: 25.5)
@@ -359,6 +368,9 @@ enum SCCook {
 
         /// Czas w kapsule z pary.
         static let timerTimePair = SCCookTextStyle(size: 17, weight: .heavy, tracking: 0, lineHeight: nil)
+
+        /// Czas w kapsule z trójki.
+        static let timerTimeTrio = SCCookTextStyle(size: 15, weight: .heavy, tracking: 0, lineHeight: nil)
 
         /// Czas w wierszu arkusza Timery, w kolorze timera.
         static let sheetTime = SCCookTextStyle(size: 26, weight: .heavy, tracking: -0.78, lineHeight: nil)

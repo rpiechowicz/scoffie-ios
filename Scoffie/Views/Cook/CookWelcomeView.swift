@@ -214,8 +214,8 @@ struct CookWelcomeView: View {
             .padding(.leading, 14)
             .padding(.trailing, 18)
             .frame(height: SCCook.Height.drawer)
-            .background(shape.fill(Color.scCanvas(scheme)))
-            .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+            .background(shape.fill(SCCook.Palette.dockSurface(scheme)))
+            .overlay(shape.strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
             .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -251,7 +251,7 @@ struct CookWelcomeView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(tint)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.scCanvas(scheme)))
+                    .background(Circle().fill(SCCook.Palette.dockSurface(scheme)))
                     .background(Circle().fill(tint.opacity(0.18)).padding(-0.5))
                     .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 2).padding(-2))
             }

@@ -15,7 +15,7 @@ struct CookExitSheet: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            let running = session.dockTimers(now: context.date).filter { item in
+            let running = session.timerLineup(now: context.date).filter { item in
                 switch item.status {
                 case .running, .overdue: true
                 default: false

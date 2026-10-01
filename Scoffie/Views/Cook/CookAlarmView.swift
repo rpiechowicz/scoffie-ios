@@ -24,7 +24,7 @@ struct CookAlarmView: View {
     }
 
     private var others: [CookDockTimer] {
-        session.dockTimers(now: now).filter { other in
+        session.timerLineup(now: now).filter { other in
             guard other.id != item.id else { return false }
             if case .running = other.status { return true }
             return false
@@ -56,8 +56,10 @@ struct CookAlarmView: View {
                     .cookReveal(hasAppeared, order: 1)
                 if !others.isEmpty {
                     VStack(spacing: 8) {
+                        // Same pigułki — że lecą dalej, widać po tykającym
+                        // czasie (runda 2: „bez sensu ten tekst”).
                         ForEach(others) { other in
-                            CookTimerPill(item: other, suffix: "· leci dalej")
+                            CookTimerPill(item: other)
                         }
                     }
                     .padding(.top, 16)
@@ -132,7 +134,9 @@ struct CookAlarmView: View {
                 .frame(width: 216, height: 216)
                 // Łuk okrąża tarczę raz na minutę płynnie; na początku nowej
                 // minuty wraca na start bez cofania się po obwodzie.
-                .animation(reduceMotion || lap < 0.01 ? nil : .linear(duration: 1), value: lap)
+                // Zegar tyka co sekundę w dowolnej fazie, więc „nowa minuta” to
+                // pierwsza sekunda po pełnej, a nie próg na łuku.
+                .animation(reduceMotion || over.truncatingRemainder(dividingBy: 60) < 1 ? nil : .linear(duration: 1), value: lap)
             Circle()
                 .fill(Color.scPageBase(scheme))
                 .overlay(Circle().strokeBorder(SCPalette.terracotta, lineWidth: SCCook.Stroke.alarmDisc))
@@ -216,8 +220,8 @@ struct CookAlarmView: View {
             .buttonStyle(.plain)
         }
         .padding(14)
-        .background(shape.fill(Color.scCanvas(scheme)))
-        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+        .background(shape.fill(SCCook.Palette.dockSurface(scheme)))
+        .overlay(shape.strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
     }
 }
 

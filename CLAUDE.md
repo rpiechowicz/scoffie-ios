@@ -128,6 +128,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w kolorze pory zamiast kropki i poświaty (`CalendarMealCheck` — cała aplikacja). Po „Wstrzymaj” talerz tego wpisu
   planu (przepis + dzień + pora) to PS1 (`.paused`): pierścień kroków zamiast obręczy pory, „OBIAD · GOTUJESZ”,
   „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
+  Runda 2 testów (1.10.2026): dok stoi jak dolne menu aplikacji (wyspa 60 pt, 20 pt od boków, na krawędzi
+  bezpiecznego obszaru; powierzchnia `cook.dockSurface` — w jasnym motywie ciepła biel, bo płótno = tło strony).
+  Wyspa to JEDEN kontener: lista Składników wysuwa się spod wiersza wyspy, nic innego się nie rusza. Kapsuły
+  w kolejności kroków (`CookSession.dockCapsules`, do trzech obok siebie, nowa wjeżdża z boku), w parze i trójce
+  pierścień = przycisk start / pauza / wznów / gotowe; karta Timery = jedna lista bez sekcji (`timerLineup`) —
+  start ani pauza nie przestawiają timerów. Łuki timerów ubywają zgodnie ze wskazówkami zegara. Pierścień kroków
+  36 pt jak krzyżyk (`scSheetIconSurface`), odcinki zaokrąglone, zmiana kroku przelewa barwę (`CookStepArcLayer`).
+  Ekrany trybu: nowy staje pod starym, stary gaśnie na wierzchu (`zIndex`) — zdjęcie nie przygasa w połowie.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

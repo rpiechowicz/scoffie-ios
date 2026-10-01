@@ -431,7 +431,12 @@ struct CalendarView: View {
     /// droga co „Gotuj” w szczegółach posiłku.
     private func cook(withCardId id: String, on date: Date) {
         guard let card = card(withId: id, on: date), let meal = card.meal else { return }
-        if sessionStore.cookSessionStore?.activeSession(for: meal.recipe.id) != nil {
+        // Wraca gotowanie TEGO wpisu planu albo tego przepisu spoza planu —
+        // sesja innego dnia czy pory odhaczyłaby „Zjedzone” nie tam.
+        if let session = sessionStore.cookSessionStore?.activeSession(for: meal.recipe.id),
+           session.planDateKey == nil
+            || (session.planDateKey == MealCalendarStore.dateKey(for: date)
+                && (session.mealSlotRaw == nil || session.mealSlotRaw == card.slot.rawValue)) {
             Task { await sessionStore.resumeCooking() }
             return
         }

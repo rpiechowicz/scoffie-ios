@@ -29,6 +29,12 @@ extension View {
         modifier(CookTextMotion(value: value, countsDown: countsDown, ticking: false))
     }
 
+    /// Liczba w miejscu (numer kroku, liczba składników): cyfry rolują
+    /// w górę przy wzroście i w dół przy spadku (`numericText(value:)`).
+    func cookRoll(_ value: Int) -> some View {
+        modifier(CookTextMotion(value: value, countsDown: false, ticking: false, numericValue: Double(value)))
+    }
+
     /// Zegar, który tyka co sekundę: cyfry rolują krótkim `easeOut` 0,3 s
     /// (`SCRollingNumber` — każdy zegar w aplikacji rusza się tak samo).
     func cookTicking<V: Equatable>(_ value: V, countsDown: Bool = true) -> some View {
@@ -52,13 +58,21 @@ private struct CookTextMotion<V: Equatable>: ViewModifier {
     let value: V
     let countsDown: Bool
     let ticking: Bool
+    /// Gdy jest — kierunek rolowania idzie za zmianą tej liczby.
+    var numericValue: Double? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
-            .contentTransition(reduceMotion ? .opacity : .numericText(countsDown: countsDown))
+            .contentTransition(transition)
             .animation(animation, value: value)
+    }
+
+    private var transition: ContentTransition {
+        if reduceMotion { return .opacity }
+        if let numericValue { return .numericText(value: numericValue) }
+        return .numericText(countsDown: countsDown)
     }
 
     private var animation: Animation {
@@ -250,55 +264,118 @@ struct CookBackdropPhoto: View {
 
 /// Pierścień kroków: N odcinków zgodnie z zegarem od 12:00 — zrobione
 /// w szałwii, bieżący w terakocie, przed nami `cook.ringTodo`. Ten sam znak
-/// w nagłówku trybu, na talerzu po wstrzymaniu i w Live Activity.
+/// w nagłówku trybu i na talerzu po wstrzymaniu (Live Activity w E5).
+///
+/// Odcinki mają okrągłe końce i realną przerwę (runda 2 testów: „bardziej
+/// zaokrąglone, dopracuj designersko”). Zmiana kroku PRZELEWA barwę:
+/// szałwia przechodzi po starym odcinku, a terakota nalewa się w nowy (wstecz
+/// — odwrotnie). Jedna liczba (`position`) interpolowana przez SwiftUI,
+/// z której trzy warstwy liczą swoje łuki w każdej klatce (wzór `RingLap`
+/// z Planu), więc żaden odcinek nie przeskakuje kolorem w jednej klatce.
 struct CookStepArcs: View {
     let count: Int
+    /// Indeks od zera.
     let current: Int
     var lineWidth: CGFloat = SCCook.Stroke.stepRing
+    /// Widoczna przerwa między odcinkami — od końca do końca zaokrąglenia.
     var gap: CGFloat = SCCook.Spacing.stepRingGap
-    var roundCaps = false
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            let radius = (side - lineWidth) / 2
-            let circumference = 2 * .pi * radius
-            let total = max(1, count)
-            let pitch = circumference / CGFloat(total)
-            // Za krótki odcinek przy bardzo długim przepisie = ciągły łuk postępu.
-            let segmented = pitch > gap * 2
-            ZStack {
-                if segmented {
-                    ForEach(0..<total, id: \.self) { index in
-                        let start = (CGFloat(index) * pitch + gap / 2) / circumference
-                        let end = (CGFloat(index + 1) * pitch - gap / 2) / circumference
-                        Circle()
-                            .trim(from: start, to: end)
-                            .stroke(color(for: index), style: StrokeStyle(lineWidth: lineWidth, lineCap: roundCaps ? .round : .butt))
-                    }
-                } else {
-                    Circle().stroke(SCCook.Palette.ringTodo(scheme), lineWidth: lineWidth)
-                    Circle()
-                        .trim(from: 0, to: CGFloat(current + 1) / CGFloat(total))
-                        .stroke(SCPalette.sage, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                }
-            }
-            .rotationEffect(.degrees(-90))
-            .frame(width: side, height: side)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        let style = StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+        let position = Double(current)
+        ZStack {
+            CookStepArcLayer(part: .todo, count: count, position: position, lineWidth: lineWidth, gap: gap)
+                .stroke(SCCook.Palette.ringTodo(scheme), style: style)
+            CookStepArcLayer(part: .done, count: count, position: position, lineWidth: lineWidth, gap: gap)
+                .stroke(SCPalette.sage, style: style)
+            CookStepArcLayer(part: .current, count: count, position: position, lineWidth: lineWidth, gap: gap)
+                .stroke(SCPalette.terracotta, style: style)
         }
-    }
-
-    private func color(for index: Int) -> Color {
-        if index < current { return SCPalette.sage }
-        if index == current { return SCPalette.terracotta }
-        return SCCook.Palette.ringTodo(scheme)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.6), value: current)
     }
 }
 
-/// Krążek z pierścieniem kroków i numerem bieżącego kroku (nagłówek trybu).
+/// Łuki jednej barwy pierścienia kroków we wszystkich odcinkach.
+/// `position` (bieżący krok) jest `animatableData` — podział każdego odcinka
+/// na „zrobione / bieżący / przed nami” liczy się z niej w każdej klatce.
+private struct CookStepArcLayer: Shape {
+    enum Part {
+        case done
+        case current
+        case todo
+    }
+
+    let part: Part
+    let count: Int
+    var position: Double
+    let lineWidth: CGFloat
+    let gap: CGFloat
+
+    var animatableData: Double {
+        get { position }
+        set { position = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let total = max(1, count)
+        let radius = (min(rect.width, rect.height) - lineWidth) / 2
+        guard radius > 0 else { return Path() }
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let circumference = 2 * .pi * radius
+        let pitch = circumference / CGFloat(total)
+        // Okrągłe końce dokładają pół kreski z każdej strony — łuk między
+        // odcinkami = widoczna przerwa + kreska.
+        let arcGap = gap + lineWidth
+        var path = Path()
+
+        /// Łuk od `start` do `end` w punktach wzdłuż obwodu, od 12:00
+        /// zgodnie z zegarem. Każdy zaczyna się `move`, inaczej `addArc`
+        /// dociągnąłby kreskę od końca poprzedniego.
+        func arc(from start: CGFloat, to end: CGFloat) {
+            guard end - start > 0.01 else { return }
+            let a0 = Double(start / radius) - .pi / 2
+            let a1 = Double(end / radius) - .pi / 2
+            path.move(to: CGPoint(x: center.x + radius * CGFloat(cos(a0)), y: center.y + radius * CGFloat(sin(a0))))
+            path.addArc(center: center, radius: radius, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+        }
+
+        if pitch - arcGap >= 1 {
+            let length = pitch - arcGap
+            for index in 0..<total {
+                let origin = CGFloat(index) * pitch + arcGap / 2
+                let (from, to) = share(of: Double(index), size: 1)
+                arc(from: origin + length * from, to: origin + length * to)
+            }
+        } else {
+            // Bardzo długi przepis: odcinek byłby krótszy od przerwy —
+            // ciągły łuk postępu w tych samych trzech barwach.
+            let (from, to) = share(of: 0, size: Double(total))
+            arc(from: circumference * from, to: circumference * to)
+        }
+        return path
+    }
+
+    /// Część (0…1) przedziału [`origin`, `origin + size`) w krokach, która
+    /// należy do tej barwy: zrobione = przed `position`, bieżący = od
+    /// `position` do `position + 1`, przed nami = reszta.
+    private func share(of origin: Double, size: Double) -> (CGFloat, CGFloat) {
+        let done = CGFloat(min(1, max(0, (position - origin) / size)))
+        let currentEnd = CGFloat(min(1, max(0, (position + 1 - origin) / size)))
+        switch part {
+        case .done: return (0, done)
+        case .current: return (done, currentEnd)
+        case .todo: return (currentEnd, 1)
+        }
+    }
+}
+
+/// Krążek z pierścieniem kroków i numerem bieżącego kroku (nagłówek trybu) —
+/// tej samej wielkości i na tej samej powierzchni co krzyżyk na zdjęciu obok
+/// (`SCSheetCloseButton(onImage:)`; runda 2: „X oraz stepper mają być takiej
+/// samej wielkości”).
 struct CookStepRing: View {
     let count: Int
     /// Indeks od zera.
@@ -310,26 +387,28 @@ struct CookStepRing: View {
         let side = SCCook.Size.stepRing
         let arc = SCCook.Size.stepRingRadius * 2 + SCCook.Stroke.stepRing
         ZStack {
-            Circle().fill(SCCook.Palette.ringDisc(scheme))
             CookStepArcs(count: count, current: current)
                 .frame(width: arc, height: arc)
             Text("\(current + 1)")
-                .font(.system(size: 14, weight: .heavy))
+                .cookText(SCCook.Typography.stepNumber)
                 .monospacedDigit()
                 .foregroundStyle(Color.scLabel(scheme))
                 .cookRoll(current)
         }
         .frame(width: side, height: side)
+        .scSheetIconSurface(onImage: true)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Krok \(current + 1) z \(count)")
     }
 }
 
 /// Pierścień timera: tor w kolorze timera, łuk = POZOSTAŁY czas (topnieje —
-/// docs/GOTUJ.md, ustalenie 1), końce okrągłe, start o 12:00.
+/// docs/GOTUJ.md, ustalenie 1), końce okrągłe.
 ///
-/// Dok przelicza stan raz na sekundę, a łuk dojeżdża do nowej wartości
-/// liniowo przez tę sekundę — ubywa płynnie, a nie skokami (§8.2).
+/// Ubywa ZGODNIE ze wskazówkami zegara (runda 2 testów): koniec łuku stoi
+/// o 12:00, a jego początek ucieka w prawo — tak, jak wskazówka zjada
+/// tarczę. Dok przelicza stan raz na sekundę, a łuk dojeżdża do nowej
+/// wartości liniowo przez tę sekundę — płynnie, a nie skokami (§8.2).
 struct CookTimerRing: View {
     let fraction: Double
     let color: Color
@@ -338,10 +417,11 @@ struct CookTimerRing: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let left = max(0, min(1, fraction))
         ZStack {
             Circle().stroke(color.opacity(SCCook.Opacity.timerTrack), lineWidth: lineWidth)
             Circle()
-                .trim(from: 0, to: max(0, min(1, fraction)))
+                .trim(from: 1 - left, to: 1)
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(reduceMotion ? nil : .linear(duration: 1), value: fraction)
@@ -351,15 +431,15 @@ struct CookTimerRing: View {
 }
 
 /// Pigułka biegnącego timera: pierścień, nazwa, czas w kolorze timera —
-/// arkusz wyjścia i „leci dalej” na ekranie końca timera.
+/// arkusz wyjścia i inne timery na ekranie końca timera.
 struct CookTimerPill: View {
     let item: CookDockTimer
-    var suffix: String? = nil
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let color = item.accent.color
+        let time = CookDockLabels.time(item.status)
         HStack(spacing: 8) {
             CookTimerRing(fraction: item.status.remainingFraction, color: color, lineWidth: 3)
                 .frame(width: SCCook.Size.pillRing, height: SCCook.Size.pillRing)
@@ -367,16 +447,11 @@ struct CookTimerPill: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
-            Text(CookDockLabels.time(item.status))
+            Text(time)
                 .font(.system(size: 15, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(color)
-                .cookTicking(CookDockLabels.time(item.status), countsDown: !item.status.isOverdue)
-            if let suffix {
-                Text(suffix)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
+                .cookTicking(time, countsDown: !item.status.isOverdue)
         }
         .padding(.leading, 8)
         .padding(.trailing, 14)
@@ -389,6 +464,18 @@ struct CookTimerPill: View {
 extension CookTimerStatus {
     var isOverdue: Bool {
         if case .overdue = self { true } else { false }
+    }
+
+    /// Rodzaj stanu bez liczb — klucz animacji zmiany koloru i przycisku,
+    /// który nie tyka co sekundę razem z zegarem.
+    var phase: Int {
+        switch self {
+        case .pending: 0
+        case .running: 1
+        case .paused: 2
+        case .overdue: 3
+        case .finished: 4
+        }
     }
 }
 

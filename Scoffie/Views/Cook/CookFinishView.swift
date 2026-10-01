@@ -202,9 +202,18 @@ struct CookFinishView: View {
         let selected = rating == value
         return Button {
             withAnimation(.snappy(duration: 0.25)) { rating = value }
-            if value == .up { cheer += 1 }
             onFeedback(CookFeedback(rating: value, tags: [], comment: "", session: session))
-            isFeedbackSheetPresented = true
+            guard value == .up else {
+                isFeedbackSheetPresented = true
+                return
+            }
+            // Arkusz po „wybuchu” kropek, jak przy ocenie odpowiedzi
+            // Asystenta — otwarty od razu zasłaniał podskok i kropki.
+            cheer += 1
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(550))
+                if rating == .up { isFeedbackSheetPresented = true }
+            }
         } label: {
             Image(systemName: selected ? selectedName : systemName)
                 .font(.system(size: 18, weight: .medium))

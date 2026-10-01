@@ -26,8 +26,12 @@ struct CalendarCookTimerPills<Fallback: View>: View {
     let session: CookSession
     @ViewBuilder let fallback: () -> Fallback
 
+    /// Zegar stoi, gdy Kalendarz nie jest wybraną zakładką (zakładki żyją
+    /// pod spodem — `NavigationMenu`).
+    @Environment(\.scTabIsActive) private var isActiveTab
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.animation(minimumInterval: 1, paused: !isActiveTab)) { context in
             let timers = Array(running(at: context.date).prefix(2))
             if timers.isEmpty {
                 fallback()
@@ -45,7 +49,7 @@ struct CalendarCookTimerPills<Fallback: View>: View {
     /// Trwające i po czasie — te same, które arkusz „Wychodzisz z gotowania?”
     /// pokazał przy wstrzymaniu.
     private func running(at now: Date) -> [CookDockTimer] {
-        session.dockTimers(now: now).filter { item in
+        session.timerLineup(now: now).filter { item in
             switch item.status {
             case .running, .overdue: true
             default: false

@@ -621,10 +621,8 @@ struct CalendarPlate: View {
                         count: steps,
                         current: step,
                         lineWidth: stepRingWidth,
-                        // Końce okrągłe zjadają po pół kreski z każdej
-                        // strony — widoczna przerwa zostaje 3 pt.
-                        gap: stepRingWidth + 3 * scale,
-                        roundCaps: true
+                        // Widoczna przerwa między zaokrąglonymi końcami.
+                        gap: 3 * scale
                     )
                     .padding(-stepRingInset)
                     .transition(.opacity)
