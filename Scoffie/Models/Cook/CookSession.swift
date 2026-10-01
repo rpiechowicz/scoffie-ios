@@ -27,6 +27,9 @@ struct CookSession: Codable, Equatable {
     let id: UUID
     let recipeId: UUID
     let recipeTitle: String
+    /// Opis przepisu pod liczbami powitania (runda 6). `nil` = brak opisu
+    /// albo sesja zapisana przed tą wersją (klucza nie ma w pliku).
+    let recipeDescription: String?
     let imageURL: URL?
     /// Pora z planu (`MealSlot.rawValue`), gdy gotujemy danie z planu —
     /// „GOTUJEMY · OBIAD”. `nil` = spoza planu (D21).
@@ -64,6 +67,7 @@ struct CookSession: Codable, Equatable {
         id: UUID = UUID(),
         recipeId: UUID,
         recipeTitle: String,
+        recipeDescription: String? = nil,
         imageURL: URL?,
         mealSlotRaw: String?,
         planDateKey: String? = nil,
@@ -77,6 +81,8 @@ struct CookSession: Codable, Equatable {
         self.id = id
         self.recipeId = recipeId
         self.recipeTitle = recipeTitle
+        let description = recipeDescription?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.recipeDescription = description.isEmpty ? nil : description
         self.imageURL = imageURL
         self.mealSlotRaw = mealSlotRaw
         self.planDateKey = planDateKey

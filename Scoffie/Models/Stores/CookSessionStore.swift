@@ -62,6 +62,7 @@ final class CookSessionStore {
         let session = CookSession(
             recipeId: recipe.id,
             recipeTitle: recipe.name,
+            recipeDescription: recipe.description,
             imageURL: recipe.imageURL,
             mealSlotRaw: mealSlot?.rawValue,
             planDateKey: planDate.map { PlanWeek.dateKey($0) },

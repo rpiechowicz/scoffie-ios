@@ -12,6 +12,7 @@ import SwiftUI
 /// - `gotuj-jeden` — krok 10, jeden timer trwa (Y3K1);
 /// - `gotuj-pauza` — krok 8, kotlety wstrzymane (Y3S „Jeden wstrzymany”);
 /// - `gotuj-timery` / `gotuj-skladniki` — otwarty arkusz Timery / Składniki (Y3T1 / Y3I);
+/// - `gotuj-kroki` — krok 8 z otwartym arkuszem Kroki (runda 6);
 /// - `gotuj-alarm` — kotlety po czasie (ST4);
 /// - `gotuj-wyjscie` — arkusz „Wychodzisz z gotowania?” z dwoma timerami (XW2);
 /// - `gotuj-koniec` — zakończenie (EF8).
@@ -42,6 +43,7 @@ struct CookDebugScreen: View {
         case "gotuj-timery": .timers
         case "gotuj-skladniki": .ingredients
         case "gotuj-wyjscie": .exit
+        case "gotuj-kroki": .steps
         default: nil
         }
     }
@@ -51,7 +53,7 @@ struct CookDebugScreen: View {
         let now = Date()
         func minutesAgo(_ minutes: Double) -> Date { now.addingTimeInterval(-minutes * 60) }
         switch mode {
-        case "gotuj-krok", "gotuj-timery":
+        case "gotuj-krok", "gotuj-timery", "gotuj-kroki":
             session.begin(now: minutesAgo(40))
             session.jump(to: 2)
             session.startTimer("t-potatoes", now: minutesAgo(5.47))
@@ -113,6 +115,7 @@ struct CookDebugScreen: View {
         return CookSession(
             recipeId: recipeId,
             recipeTitle: "Kotlet de volaille z ziemniakami i mizerią",
+            recipeDescription: "Chrupiący kotlet z masłem ziołowym w środku, młode ziemniaki z koperkiem i chłodna mizeria — niedzielny obiad, który robi się w godzinę.",
             imageURL: URL(string: "https://img.scoffie.app/recipe-images/70d8db3e-e896-460e-ba96-d53d02c1357f.webp"),
             mealSlotRaw: MealSlot.lunch.rawValue,
             planDateKey: PlanWeek.dateKey(Date()),

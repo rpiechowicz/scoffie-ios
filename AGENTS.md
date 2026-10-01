@@ -121,7 +121,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Timery na wysokość treści (pomiar jak `PlanDayGoalSheet`); dzwoniący timer zamyka otwarty arkusz, bo widoku
   spod arkusza nie da się położyć nad nim. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
   otwiera tryb), w tle zwykłe powiadomienie (`CookTimerNotifications`) — AlarmKit dopiero w E5. Zrzuty:
-  `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-alarm|gotuj-wyjscie|gotuj-koniec`.
+  `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-kroki|gotuj-alarm|gotuj-wyjscie|gotuj-koniec`.
   Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
   — `scaledToFill` w samej ramce wysokości zgłaszał szerokość kadru (~580 pt) i tekst uciekał za lewą krawędź („bez
   marginesów”, 1.10.2026). Ruch (`CookLook.swift`): teksty `cookRoll` (`SCMotion.textRoll`), zegary `cookTicking`
@@ -170,6 +170,16 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   arkusz „Wychodzisz z gotowania?” zawija pigułki na środku (`AllergenChipFlow(alignment: .center)`) i ma wysokość
   z pomiaru treści, talerz PS1 w Kalendarzu stawia wszystkie w JEDNYM rzędzie w najbogatszej postaci, która się mieści
   (`ViewThatFits`: z nazwami → same pierścienie z czasem → trzy i „+N”).
+  Runda 6: etykieta nad tytułem na 322 pt (`spacing.cookTitleTop`, było 290) — tytuł pod zdjęciem, nie na nim.
+  Pierścień kroków to PRZYCISK → arkusz Kroki (`CookStepsSheet`, `CookSheet.steps`, pół ekranu jak Składniki,
+  otwiera się na bieżącym kroku): oś krążków (zrobiony = ptaszek w szałwii, bieżący = terakota, przeskoczony
+  skokiem liczy się jak dalszy), sam tytuł kroku, etap tylko przy zmianie, `SCTag` „Teraz” i timer kroku słowem;
+  wiersz = `CookSession.jump` + zamknięcie. Powitanie: opis przepisu (`CookSession.recipeDescription`, z
+  `Recipe.description`; stara sesja bez klucza = bez opisu) pod liczbami, karta porcji w STOPCE nad szufladą
+  Składniki, szuflady z jedną ikoną w krążku i w stroju kafla (`scTileBg` + `scTileStroke`). Jasny motyw jak
+  w aplikacji: arkusze trybu `cookSheetBackground` (= `SCPageBackground`, nie `scCanvas`), wyspa
+  `cookIslandSurface` — w jasnym szkło dolnego menu (`scBarGlass`, wyniesione z `SCFloatingTabBar`), w ciemnym
+  bez zmian. Zrzut: `SCOFFIE_DEBUG_OPTIONS=gotuj-kroki`.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

@@ -37,7 +37,7 @@ struct CookFinishContent: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(40)
-                    .presentationBackground(Color.scCanvas(scheme))
+                    .cookSheetBackground(scheme)
                 }
             }
             .task {

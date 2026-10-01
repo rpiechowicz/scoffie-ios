@@ -144,11 +144,7 @@ struct SCFloatingTabBar: View {
         // To samo szkło co pigułka „Cel dnia" i pole asystenta: warstwa tła
         // pod szkłem przygasza przelatującą treść do rozmytej plamy, odblaski
         // zostają na szkle.
-        .glassEffect(
-            .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
-            in: .capsule
-        )
-        .background(Color.scPageBase(scheme).opacity(0.72), in: .capsule)
+        .scBarGlass(scheme, in: Capsule(style: .continuous))
         .padding(.horizontal, isCompact ? Self.compactSideMargin : Self.sideMargin)
         .animation(compaction, value: isCompact)
         // Zmiana spoza paska (asystent → Plan, powiadomienie): pigułka
@@ -389,4 +385,16 @@ extension View {
         }
     }
     return Demo()
+}
+
+extension View {
+    /// Szkło dolnego menu: tint `scPageBase` 0,35 na szkle i warstwa
+    /// `scPageBase` 0,72 pod nim — przelatująca treść gaśnie do rozmytej
+    /// plamy, odblaski zostają na szkle. Wyniesione z paska, kiedy wyspa
+    /// trybu Gotuj (stoi tam, gdzie pasek) dostała to samo szkło w jasnym
+    /// motywie (runda 6 testów Gotuj, 1.10.2026).
+    func scBarGlass<S: Shape>(_ scheme: ColorScheme, in shape: S) -> some View {
+        glassEffect(.regular.tint(Color.scPageBase(scheme).opacity(0.35)), in: shape)
+            .background(Color.scPageBase(scheme).opacity(0.72), in: shape)
+    }
 }

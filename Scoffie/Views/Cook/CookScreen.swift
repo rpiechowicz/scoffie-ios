@@ -87,9 +87,19 @@ struct CookScreen: View {
     private var topBar: some View {
         HStack(spacing: 10) {
             if session.stage == .steps {
-                CookStepRing(count: session.stepCount, current: session.stepIndex)
-                    .cookChrome(hasAppeared)
-                    .transition(ringTransition)
+                // Stuknięcie = arkusz Kroki: wszystkie kroki jeden pod
+                // drugim, z drogą do każdego (runda 6).
+                Button { onOpen(.steps) } label: {
+                    CookStepRing(count: session.stepCount, current: session.stepIndex)
+                        // Dotyk 44 pt przy krążku 36 — układ bez zmian.
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                        .padding(-4)
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.9))
+                .accessibilityHint("Pokazuje wszystkie kroki")
+                .cookChrome(hasAppeared)
+                .transition(ringTransition)
             }
             Spacer(minLength: 0)
             SCSheetCloseButton(onImage: true, action: onClose)
@@ -115,7 +125,7 @@ struct CookScreen: View {
     private var content: some View {
         switch session.stage {
         case .welcome:
-            CookWelcomeContent(session: session, recipe: recipe, onPortions: onPortions)
+            CookWelcomeContent(session: session, recipe: recipe)
                 .transition(contentTransition)
                 .zIndex(2)
         case .steps:
@@ -155,7 +165,7 @@ struct CookScreen: View {
     private var footer: some View {
         switch session.stage {
         case .welcome:
-            CookWelcomeFooter(session: session, onOpen: onOpen, onStart: onStart)
+            CookWelcomeFooter(session: session, onPortions: onPortions, onOpen: onOpen, onStart: onStart)
                 .transition(footerTransition)
         case .steps:
             EmptyView()

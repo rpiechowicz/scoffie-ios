@@ -193,6 +193,9 @@ enum SCCook {
         /// Krążek ikony produktu w kolorze działu w wierszu arkusza Składniki (ikona 16) — KM1, D36.
         static let ingredientIcon: CGFloat = 32
 
+        /// Krążek numeru kroku na osi arkusza Kroki (runda 6: stuknięcie w pierścień kroków): zrobiony — ptaszek w szałwii, bieżący — numer na pełnej terakocie, dalszy — numer na polu chipa.
+        static let stepBadge: CGFloat = 30
+
         /// Tarcza ekranu końca timera: aureole, pierścień podziałki z wskazówką sekund (size.cookAlarmRing) i krążek (size.cookAlarmDisc) — ST4, runda 4.
         static let alarmDial: CGFloat = 244
 
@@ -267,6 +270,9 @@ enum SCCook {
         /// Wiersz składnika w karcie Składniki (z podpisem części — 56).
         static let ingredientRow: CGFloat = 50
 
+        /// Najniższy wiersz arkusza Kroki (sam tytuł); etap nad tytułem i etykieta timera pod nim go wydłużają.
+        static let stepRow: CGFloat = 56
+
         /// Przyciski „+1 / +2 / +5 min” na ekranie końca timera (D35).
         static let alarmExtend: CGFloat = 52
 
@@ -304,6 +310,9 @@ enum SCCook {
 
         /// Łuk w znaczku trwającego timera w plakietce.
         static let overflowMark: CGFloat = 2.5
+
+        /// Oś łącząca krążki kroków w arkuszu Kroki — między zrobionymi w szałwii, dalej w kolorze obwódki kafelka.
+        static let stepRail: CGFloat = 2
     }
 
     enum Spacing {
@@ -313,8 +322,8 @@ enum SCCook {
         /// Gdzie zaczyna się wygaszenie zdjęcia (od góry ekranu).
         static let headerFadeStart: CGFloat = 160
 
-        /// Etykieta nad tytułem (etap kroku, „GOTUJEMY · OBIAD”) zaczyna się tyle od góry ekranu — na każdym ekranie trybu w tym samym miejscu, wcześniej tylko na zakończeniu (270).
-        static let titleTop: CGFloat = 290
+        /// Etykieta nad tytułem (etap kroku, „GOTUJEMY · OBIAD”) zaczyna się tyle od góry ekranu — na każdym ekranie trybu w tym samym miejscu. Runda 6 testów: 290 → 322 („tytuł ciut niżej, żeby był pod zdjęciem”) — etykieta stoi na ostatnich punktach wygaszonego zdjęcia (size.cookHeaderPhoto 330), tytuł już pod nim.
+        static let titleTop: CGFloat = 322
 
         /// Dok pływa tyle od boków ekranu (D34) — jak dolne menu aplikacji (SCFloatingTabBar.sideMargin).
         static let dockSide: CGFloat = 20

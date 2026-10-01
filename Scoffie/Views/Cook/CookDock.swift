@@ -153,9 +153,7 @@ struct CookDock: View {
         }
         .padding(SCCook.Spacing.islandPadding)
         .frame(height: SCCook.Height.island)
-        .background(Capsule().fill(SCCook.Palette.dockSurface(scheme)))
-        .overlay(Capsule().strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
-        .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 18, y: 14)
+        .cookIslandSurface(scheme)
         .sensoryFeedback(.selection, trigger: session.stepIndex)
     }
 

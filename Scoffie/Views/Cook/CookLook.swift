@@ -213,6 +213,29 @@ extension View {
             isActive: isActive
         ))
     }
+
+    /// Tło arkuszy trybu = tło arkuszy aplikacji (`SCPageBackground`:
+    /// `scPageBase` z poświatą u góry). Runda 6 testów: „kolor sheetów na
+    /// light mode jest inny” — było `scCanvas`, w jasnym motywie bielsze
+    /// i bez poświaty.
+    func cookSheetBackground(_ scheme: ColorScheme) -> some View {
+        presentationBackground { SCPageBackground(scheme: scheme) }
+    }
+
+    /// Powierzchnia wyspy doku. Jasny motyw = szkło dolnego menu aplikacji
+    /// (`scBarGlass`) — runda 6: „kolor wyspy na light mode źle wygląda”
+    /// (ciepła biel z ciemną obwódką i cieniem odstawała od kremu, a wyspa
+    /// stoi tam, gdzie pasek zakładek). Ciemny motyw bez zmian.
+    @ViewBuilder
+    func cookIslandSurface(_ scheme: ColorScheme) -> some View {
+        if scheme == .dark {
+            background(Capsule().fill(SCCook.Palette.dockSurface(scheme)))
+                .overlay(Capsule().strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
+                .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 18, y: 14)
+        } else {
+            scBarGlass(scheme, in: Capsule(style: .continuous))
+        }
+    }
 }
 
 /// Zdjęcie dania w nagłówku każdego ekranu trybu — ta sama wysokość

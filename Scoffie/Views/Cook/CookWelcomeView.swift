@@ -1,17 +1,16 @@
 import SwiftUI
 
 /// Powitanie (WL1) — treść pod zdjęciem na wspólnym ekranie trybu
-/// (`CookScreen`): co gotujesz i dla ilu porcji. Szuflady i „Zaczynamy” są
-/// w stopce (`CookWelcomeFooter`). Porcje zmieniają się tylko w tej sesji —
-/// plan zostaje (D11). Sprzętu nie pokazujemy (§13.1).
+/// (`CookScreen`): co gotujesz, liczby (czas, trudność, kroki) i opis
+/// przepisu. Porcje, szuflady i „Zaczynamy” są w stopce
+/// (`CookWelcomeFooter`) — runda 6: „gotujesz porcje nad składnikami, a pod
+/// czasem / trudnością daj opis przepisu”. Sprzętu nie pokazujemy (§13.1).
 ///
 /// Ruch: sekcje wjeżdżają kaskadą (jak szczegóły posiłku), liczby w meta
-/// liczą się od zera, a zmiana porcji roluje liczby w karcie, stepperze
-/// i skrócie składników.
+/// liczą się od zera.
 struct CookWelcomeContent: View {
     let session: CookSession
     let recipe: CookRecipeFacts
-    let onPortions: (Int) -> Void
 
     @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
@@ -46,9 +45,15 @@ struct CookWelcomeContent: View {
                 .padding(.top, 12)
                 .cookReveal(hasAppeared, order: 1)
 
-            servingsCard
-                .padding(.top, 20)
-                .cookReveal(hasAppeared, order: 2)
+            if let description = recipe.description {
+                Text(description)
+                    .cookText(SCCook.Typography.note)
+                    .lineSpacing(4)
+                    .foregroundStyle(SCCook.Palette.body(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 16)
+                    .cookReveal(hasAppeared, order: 2)
+            }
 
             Color.clear.frame(height: 24)
         }
@@ -93,6 +98,120 @@ struct CookWelcomeContent: View {
             }
         }
     }
+}
+
+/// Szuflada powitania — co otwiera jej arkusz.
+enum CookWelcomeDrawer {
+    case ingredients
+    case tips
+}
+
+/// Stopka powitania: porcje, szuflady Składniki i Rady kucharza,
+/// „Zaczynamy” — na płycie stopki aplikacji (`SCSheetFooter`), we wspólnej
+/// stopce ekranu trybu (`CookScreen`). Porcje stoją NAD składnikami (runda
+/// 6), bo to od nich zależą ilości w szufladzie; zmieniają się tylko w tej
+/// sesji — plan zostaje (D11). Zmiana porcji roluje liczby w karcie,
+/// stepperze i skrócie składników.
+struct CookWelcomeFooter: View {
+    let session: CookSession
+    let onPortions: (Int) -> Void
+    let onOpen: (CookSheet) -> Void
+    let onStart: () -> Void
+
+    @State private var hasAppeared = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        SCSheetFooter(horizontalPadding: SCCook.Spacing.page, reservesShade: true) {
+            VStack(spacing: 12) {
+                servingsCard
+                    .cookReveal(hasAppeared, order: 3)
+                drawerButton(.ingredients)
+                    .cookReveal(hasAppeared, order: 4)
+                if !session.scenario.tips.isEmpty {
+                    drawerButton(.tips)
+                        .cookReveal(hasAppeared, order: 5)
+                }
+                CookPrimaryButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
+                    .cookReveal(hasAppeared, order: 6)
+            }
+        }
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
+    }
+
+    private func drawerButton(_ kind: CookWelcomeDrawer) -> some View {
+        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.tile, style: .continuous)
+        return Button {
+            onOpen(kind == .tips ? .tips : .recipeIngredients)
+        } label: {
+            HStack(spacing: 14) {
+                // Jedna ikona na szufladę — Składniki tak samo jak Rady
+                // kucharza (runda 6; stos czterech ikon działów w jasnym
+                // motywie „słabo wyglądał”).
+                drawerIcon(kind)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(drawerTitle(kind))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.scLabel(scheme))
+                    Text(drawerSummary(kind))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .lineLimit(1)
+                        // Ilości w skrócie idą za porcjami — rolują.
+                        .contentTransition(.numericText())
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.scMuted(scheme))
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 18)
+            .frame(height: SCCook.Height.drawer)
+            // Karta aplikacji — jak karta porcji nad nią (runda 6: ciepła
+            // biel z ciemną obwódką odstawała w jasnym motywie).
+            .background(shape.fill(Color.scTileBg(scheme)))
+            .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func drawerTitle(_ kind: CookWelcomeDrawer) -> String {
+        switch kind {
+        case .ingredients: "Składniki · \(session.package.ingredients.count)"
+        case .tips: "Rady kucharza · \(session.scenario.tips.count)"
+        }
+    }
+
+    private func drawerSummary(_ kind: CookWelcomeDrawer) -> String {
+        switch kind {
+        case .ingredients:
+            // Ta sama kolejność co w arkuszu — działami.
+            CookIngredientAisle.sorted(session.package.allLines(portions: session.portions))
+                .prefix(4)
+                .map { "\($0.name.lowercased(with: Locale(identifier: "pl_PL"))) \($0.amountText)" }
+                .joined(separator: " · ")
+        case .tips:
+            session.scenario.tips.first ?? ""
+        }
+    }
+
+    /// Krążek 36 z glifem w tincie akcentu — koszyk w terakocie (jak nagłówek
+    /// arkusza Składniki), żarówka w maśle.
+    private func drawerIcon(_ kind: CookWelcomeDrawer) -> some View {
+        let accent = kind == .ingredients ? SCPalette.terracotta : SCPalette.butter
+        return Image(systemName: kind == .ingredients ? "basket" : "lightbulb")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(accent)
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(accent.opacity(scheme == .dark ? 0.16 : 0.12)))
+            .accessibilityHidden(true)
+    }
 
     private var servingsCard: some View {
         let shape = RoundedRectangle(cornerRadius: SCCook.Radius.tile, style: .continuous)
@@ -124,137 +243,21 @@ struct CookWelcomeContent: View {
     }
 }
 
-/// Szuflada powitania — co otwiera jej arkusz.
-enum CookWelcomeDrawer {
-    case ingredients
-    case tips
-}
-
-/// Stopka powitania: szuflady Składniki i Rady kucharza, „Zaczynamy” — na
-/// płycie stopki aplikacji (`SCSheetFooter`), w wspólnej stopce ekranu
-/// trybu (`CookScreen`).
-struct CookWelcomeFooter: View {
-    let session: CookSession
-    let onOpen: (CookSheet) -> Void
-    let onStart: () -> Void
-
-    @State private var hasAppeared = false
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        SCSheetFooter(horizontalPadding: SCCook.Spacing.page, reservesShade: true) {
-            VStack(spacing: 12) {
-                drawerButton(.ingredients)
-                    .cookReveal(hasAppeared, order: 3)
-                if !session.scenario.tips.isEmpty {
-                    drawerButton(.tips)
-                        .cookReveal(hasAppeared, order: 4)
-                }
-                CookPrimaryButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
-                    .cookReveal(hasAppeared, order: 5)
-            }
-        }
-        .task {
-            guard !hasAppeared else { return }
-            await CookEntrance.breathe()
-            hasAppeared = true
-        }
-    }
-
-    private func drawerButton(_ kind: CookWelcomeDrawer) -> some View {
-        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.tile, style: .continuous)
-        return Button {
-            onOpen(kind == .tips ? .tips : .recipeIngredients)
-        } label: {
-            HStack(spacing: 14) {
-                switch kind {
-                case .ingredients:
-                    ingredientStack
-                case .tips:
-                    Image(systemName: "lightbulb")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(SCPalette.butter)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.scButterTint(scheme)))
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(drawerTitle(kind))
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.scLabel(scheme))
-                    Text(drawerSummary(kind))
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .lineLimit(1)
-                        // Ilości w skrócie idą za porcjami — rolują.
-                        .contentTransition(.numericText())
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, 18)
-            .frame(height: SCCook.Height.drawer)
-            .background(shape.fill(SCCook.Palette.dockSurface(scheme)))
-            .overlay(shape.strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
-            .contentShape(shape)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func drawerTitle(_ kind: CookWelcomeDrawer) -> String {
-        switch kind {
-        case .ingredients: "Składniki · \(session.package.ingredients.count)"
-        case .tips: "Rady kucharza · \(session.scenario.tips.count)"
-        }
-    }
-
-    private func drawerSummary(_ kind: CookWelcomeDrawer) -> String {
-        switch kind {
-        case .ingredients:
-            // Ta sama kolejność co w arkuszu — działami.
-            CookIngredientAisle.sorted(session.package.allLines(portions: session.portions))
-                .prefix(4)
-                .map { "\($0.name.lowercased(with: Locale(identifier: "pl_PL"))) \($0.amountText)" }
-                .joined(separator: " · ")
-        case .tips:
-            session.scenario.tips.first ?? ""
-        }
-    }
-
-    /// Stos czterech ikon działów — kolor działu na pierścieniu tła strony
-    /// (makieta: krążki 30 z obwódką `pageBase`, nachodzące o 8).
-    private var ingredientStack: some View {
-        let lines = Array(CookIngredientAisle.sorted(session.package.allLines(portions: session.portions)).prefix(4))
-        return HStack(spacing: -8) {
-            ForEach(lines) { line in
-                let tint = CookIngredientLook.color(line.department)
-                Image(systemName: CookIngredientLook.icon(line.department))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(SCCook.Palette.dockSurface(scheme)))
-                    .background(Circle().fill(tint.opacity(0.18)).padding(-0.5))
-                    .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 2).padding(-2))
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
 /// To, co powitanie mówi o przepisie, a czego scenariusz nie niesie.
 struct CookRecipeFacts {
     /// Nazwa do „ z ” — „Kotlet de volaille”.
     let headline: String
     /// Dopisek po „ z ” — „z ziemniakami i mizerią”.
     let subtitle: String?
+    /// Opis przepisu pod liczbami powitania.
+    let description: String?
     let difficultyText: String
     let kcalPerServing: Int?
 
-    init(headline: String, subtitle: String?, difficultyText: String, kcalPerServing: Int?) {
+    init(headline: String, subtitle: String?, description: String?, difficultyText: String, kcalPerServing: Int?) {
         self.headline = headline
         self.subtitle = subtitle
+        self.description = description
         self.difficultyText = difficultyText
         self.kcalPerServing = kcalPerServing
     }
