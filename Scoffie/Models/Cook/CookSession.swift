@@ -126,6 +126,7 @@ struct CookSession: Codable, Equatable {
         } else {
             stepIndex += 1
             markVisited()
+            restoreSkippedTimer()
         }
     }
 
@@ -133,6 +134,7 @@ struct CookSession: Codable, Equatable {
         guard stage == .steps else { return }
         if stepIndex > 0 {
             stepIndex -= 1
+            restoreSkippedTimer()
         }
     }
 
@@ -141,6 +143,16 @@ struct CookSession: Codable, Equatable {
         guard stage == .steps, steps.indices.contains(index) else { return }
         stepIndex = index
         markVisited()
+        restoreSkippedTimer()
+    }
+
+    /// Pominięty timer kroku, na którym użytkownik znów stanął, wraca jako
+    /// „do włączenia” (runda 5: „Pomiń” nie dało się cofnąć — przypadkowe
+    /// stuknięcie gubiło timer do końca gotowania). Samo „Pomiń” nikogo
+    /// nie przenosi, więc na swoim kroku timer znika od razu.
+    private mutating func restoreSkippedTimer() {
+        guard let timerId = currentStep?.timer?.id, timers[timerId]?.state == .skipped else { return }
+        timers[timerId] = nil
     }
 
     mutating func setPortions(_ value: Int) {
@@ -170,7 +182,7 @@ struct CookSession: Codable, Equatable {
     mutating func startTimer(_ timerId: String, now: Date) {
         guard let timer = scenario.timer(id: timerId),
               let step = scenario.step(forTimer: timerId) else { return }
-        if let run = timers[timerId], run.state != .finished { return }
+        if let run = timers[timerId], run.state != .finished, run.state != .skipped { return }
         timers[timerId] = CookTimerRun(
             timerId: timerId,
             stepId: step.id,
@@ -212,14 +224,14 @@ struct CookSession: Codable, Equatable {
     /// „Jeszcze chwilę?” +1 / +2 / +5 min (D35): przedłuża TEN SAM timer
     /// (i krok — D38). Po czasie liczymy od teraz, przed końcem — od końca.
     mutating func extendTimer(_ timerId: String, by seconds: Int, now: Date) {
-        guard var run = timers[timerId], run.state != .finished, seconds > 0 else { return }
+        guard var run = timers[timerId], seconds > 0 else { return }
         switch run.state {
         case .running:
             let base = max(run.endDate ?? now, now)
             run.endDate = base.addingTimeInterval(TimeInterval(seconds))
         case .paused:
             run.remaining = (run.remaining ?? 0) + TimeInterval(seconds)
-        case .finished:
+        case .finished, .skipped:
             return
         }
         run.silenced = false
@@ -236,15 +248,17 @@ struct CookSession: Codable, Equatable {
         timers[timerId] = run
     }
 
-    /// „Pomiń” timer, który czeka na włączenie — znika z doku, jakby był
-    /// zrobiony. Pominięty przy „Dalej” zostaje w doku (runda 4), więc to
+    /// „Pomiń” timer, który czeka na włączenie — znika z doku i z arkusza
+    /// Timery. Pominięty przy „Dalej” zostaje w doku (runda 4), więc to
     /// jedyna droga, żeby niepotrzebny timer przestał zapraszać do startu.
+    /// Nie jest „zrobiony”: wraca, gdy użytkownik znów stanie na jego kroku
+    /// (`restoreSkippedTimer`).
     mutating func skipTimer(_ timerId: String, now: Date) {
         guard timers[timerId] == nil, let step = scenario.step(forTimer: timerId) else { return }
         timers[timerId] = CookTimerRun(
             timerId: timerId,
             stepId: step.id,
-            state: .finished,
+            state: .skipped,
             endDate: nil,
             remaining: nil,
             silenced: true,
@@ -285,7 +299,7 @@ struct CookSession: Codable, Equatable {
         }
         let total = TimeInterval(timer.minSeconds + run.extendedSeconds)
         switch run.state {
-        case .finished:
+        case .finished, .skipped:
             return .finished
         case .paused:
             return .paused(remaining: run.remaining ?? 0, total: total)
@@ -438,6 +452,9 @@ struct CookTimerRun: Codable, Equatable {
         case paused
         /// „Gotowe” — znika z doku.
         case finished
+        /// „Pomiń” — znika z doku jak zrobiony, ale wraca jako „do włączenia”,
+        /// gdy użytkownik znów stanie na jego kroku.
+        case skipped
     }
 
     let timerId: String

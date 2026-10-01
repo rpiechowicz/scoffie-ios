@@ -150,7 +150,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   kroków obok krzyżyka tylko w krokach. Nie wracać do osobnych ekranów etapów — krzyżyk wjeżdżał od nowa.
   Runda 4: timer do włączenia stoi w doku od SWOJEGO kroku dalej — pominięty przy „Dalej” nie znika (dawniej czekał tak
   tylko „Gdy woda zawrze”), chowa się dopiero po cofnięciu przed jego krok; niepotrzebny odprawia „Pomiń”
-  (`CookSession.skipTimer`: wiersz arkusza Timery, przytrzymanie kapsuły). Dok ma STAŁĄ wysokość — puste miejsca na
+  (`CookSession.skipTimer`: wiersz arkusza Timery, przytrzymanie kapsuły) — stan `skipped`, nie „zrobiony”: wraca
+  jako „do włączenia”, gdy użytkownik znów stanie na jego kroku (`restoreSkippedTimer`, runda 5 — przypadkowe
+  „Pomiń” gubiło timer do końca gotowania). Dok ma STAŁĄ wysokość — puste miejsca na
   plakietkę, kapsuły i wyspę (`spacing.cookDockReserve` 162): wcześniej rząd kapsuł wchodził do `VStack` nad wyspą,
   dok rósł, a wyspa jechała inną krzywą niż kapsuły i podskakiwała — nie wracać. Kapsuła to JEDEN układ dla pojedynczej
   i pary (`CookTimerCapsule`: pierścień rośnie i dostaje glif, pigułka gaśnie, czas zmniejsza SKALA, nie krój) — `switch`
