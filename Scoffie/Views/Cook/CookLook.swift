@@ -54,6 +54,21 @@ extension View {
         modifier(CookTextMotion(value: value, countsDown: countsDown, ticking: true))
     }
 
+    /// Akapit (opis kroku z radami) przechodzi w nowy W MIEJSCU jako całość:
+    /// stary gaśnie z lekkim rozmyciem i ucieka o kilka punktów, nowy
+    /// wchodzi z drugiej strony — ten sam ruch co cyfry `numericText`, ale
+    /// bez przelewania liter między liniami (runda 10: „ostatnie litery
+    /// w zdaniu i kropka przeskakują na nowy wiersz”). Na widoku z `.id`
+    /// w kontenerze; krzywą podaje `cookParagraphSwapAnimation`.
+    func cookParagraphSwap(countsDown: Bool) -> some View {
+        modifier(CookParagraphSwapTransition(countsDown: countsDown))
+    }
+
+    /// Krzywa zamiany akapitu — `SCMotion.textRoll`, jak tytuł obok.
+    func cookParagraphSwapAnimation<V: Equatable>(_ value: V) -> some View {
+        modifier(CookParagraphSwapAnimation(value: value))
+    }
+
     /// Wejście ekranu trybu: sekcja wjeżdża z dołu i rozjaśnia się kaskadą
     /// (`scReveal`, wzór szczegółów posiłku).
     func cookReveal(_ isVisible: Bool, order: Int) -> some View {
@@ -91,6 +106,51 @@ private struct CookTextMotion<V: Equatable>: ViewModifier {
     private var animation: Animation {
         if reduceMotion { return .easeInOut(duration: 0.2) }
         return ticking ? .easeOut(duration: 0.3) : SCMotion.textRoll
+    }
+}
+
+private struct CookParagraphSwapTransition: ViewModifier {
+    let countsDown: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.transition(CookParagraphSwap(
+            rise: reduceMotion ? 0 : (countsDown ? -6 : 6),
+            blur: reduceMotion ? 0 : 3
+        ))
+    }
+}
+
+private struct CookParagraphSwapAnimation<V: Equatable>: ViewModifier {
+    let value: V
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.animation(reduceMotion ? .easeInOut(duration: 0.2) : SCMotion.textRoll, value: value)
+    }
+}
+
+/// Nowy akapit wchodzi od dołu (`rise` > 0) i z rozmycia, stary gaśnie
+/// w górę — wstecz odwrotnie, jak cyfry przy odliczaniu.
+private struct CookParagraphSwap: Transition {
+    let rise: CGFloat
+    let blur: CGFloat
+
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        content
+            .opacity(phase.isIdentity ? 1 : 0)
+            .blur(radius: phase.isIdentity ? 0 : blur)
+            .offset(y: offset(phase))
+    }
+
+    private func offset(_ phase: TransitionPhase) -> CGFloat {
+        switch phase {
+        case .willAppear: rise
+        case .didDisappear: -rise
+        default: 0
+        }
     }
 }
 

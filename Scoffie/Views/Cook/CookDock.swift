@@ -25,9 +25,17 @@ struct CookDock: View {
     let onTimer: (CookTimerAction) -> Void
     let onOpen: (CookSheet) -> Void
 
-    /// Potrząśnięcie koszyka (runda 9): rośnie, gdy krok przynosi składniki
-    /// — „tu są nowe składniki”; krok bez składników koszyka nie rusza.
-    @State private var basketNudge = 0
+    /// Koszyk woła (runda 10: „bardziej widać, aż user nie otworzy”): krok
+    /// przynosi składniki, a arkusza Składniki na tym kroku jeszcze nikt
+    /// nie otworzył. Koszyk i plakietka są wtedy w terakocie, a koszyk
+    /// potrząsa się SERIAMI — trzy wychylenia, przerwa, i tak w kółko
+    /// (`basketShake` rośnie co serię), do stuknięcia w Składniki. Krok bez
+    /// składników koszyka nie rusza.
+    @State private var basketPending = false
+    @State private var basketShake = 0
+    /// Kroki, na których arkusz Składniki już był otwarty — powrót do nich
+    /// nie woła drugi raz.
+    @State private var basketSeenSteps: Set<Int> = []
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -139,12 +147,12 @@ struct CookDock: View {
             .opacity(session.isFirstStep ? 0.4 : 1)
 
             Button {
+                basketSeenSteps.insert(session.stepIndex)
+                basketPending = false
                 onOpen(.ingredients)
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "basket")
-                        .font(.system(size: 18, weight: .medium))
-                        .symbolEffect(.wiggle, options: .nonRepeating, value: basketNudge)
+                    CookBasketGlyph(shake: basketShake, isCalling: basketPending)
                     Text("Składniki")
                         .font(.system(size: 16, weight: .bold))
                     if count > 0 {
@@ -154,7 +162,9 @@ struct CookDock: View {
                             .cookRoll(count)
                             .padding(.horizontal, 6)
                             .frame(minWidth: SCCook.Size.islandBadge, minHeight: SCCook.Size.islandBadge)
-                            .background(Capsule().fill(SCCook.Palette.badge(scheme)))
+                            .foregroundStyle(basketPending ? SCPalette.terracotta : Color.scLabel(scheme))
+                            .background(Capsule().fill(basketPending ? SCPalette.terracotta.opacity(0.16) : SCCook.Palette.badge(scheme)))
+                            .animation(.easeInOut(duration: 0.3), value: basketPending)
                             .transition(.scale(scale: 0.6).combined(with: .opacity))
                     }
                 }
@@ -183,17 +193,22 @@ struct CookDock: View {
         .frame(height: SCCook.Height.island)
         .cookIslandSurface(scheme)
         .sensoryFeedback(.selection, trigger: session.stepIndex)
-        .onChange(of: session.stepIndex) { nudgeBasketIfNeeded() }
-        .task {
-            // Pierwszy krok po „Zaczynamy” — gdy dok już wjechał.
-            try? await Task.sleep(for: .milliseconds(700))
-            nudgeBasketIfNeeded()
+        .onChange(of: session.stepIndex, initial: true) { updateBasketCall() }
+        // Serie potrząśnięć: nowy klucz (inny krok albo koniec wołania)
+        // przerywa poprzednią pętlę. Pierwsza seria czeka, aż dok wjedzie
+        // i krok się przeroluje; potem co ~3 s, aż do otwarcia arkusza.
+        .task(id: basketPending ? session.stepIndex : -1) {
+            guard basketPending, !reduceMotion else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            while !Task.isCancelled {
+                basketShake += 1
+                try? await Task.sleep(for: .seconds(CookBasketGlyph.burstPeriod))
+            }
         }
     }
 
-    private func nudgeBasketIfNeeded() {
-        guard !reduceMotion, stepIngredientCount > 0 else { return }
-        basketNudge += 1
+    private func updateBasketCall() {
+        basketPending = stepIngredientCount > 0 && !basketSeenSteps.contains(session.stepIndex)
     }
 
     private func islandCircle(
@@ -756,4 +771,53 @@ struct CookTimerMark: View {
     private var glyphColor: Color {
         isPaused ? Color.scMuted(scheme) : Color.scPageBase(scheme)
     }
+}
+
+/// Koszyk na wyspie (runda 10). Woła terakotą i seriami potrząśnięć: koszyk
+/// podskakuje (skala 1,25) i wychyla się trzy razy coraz słabiej, kołysząc
+/// się na uchwycie (oś u góry). Ruch idzie z `keyframeAnimator` na liczniku
+/// serii — każda seria startuje od zera, nic się nie wstawia. Przy Reduce
+/// Motion licznik stoi (pętla nie rusza), zostaje sam kolor.
+private struct CookBasketGlyph: View {
+    let shake: Int
+    let isCalling: Bool
+
+    /// Seria (≈ 0,7 s) + przerwa — co tyle rusza następna.
+    static let burstPeriod: Double = 3.0
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Image(systemName: isCalling ? "basket.fill" : "basket")
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(isCalling ? SCPalette.terracotta : Color.scLabel(scheme))
+            .contentTransition(.symbolEffect(.replace))
+            .animation(.easeInOut(duration: 0.3), value: isCalling)
+            .keyframeAnimator(initialValue: BasketShakeFrame(), trigger: shake) { basket, frame in
+                basket
+                    .scaleEffect(frame.scale)
+                    .rotationEffect(.degrees(frame.angle), anchor: .top)
+            } keyframes: { _ in
+                KeyframeTrack(\.angle) {
+                    MoveKeyframe(0)
+                    CubicKeyframe(-18, duration: 0.09)
+                    CubicKeyframe(16, duration: 0.12)
+                    CubicKeyframe(-12, duration: 0.11)
+                    CubicKeyframe(9, duration: 0.11)
+                    CubicKeyframe(-4, duration: 0.1)
+                    CubicKeyframe(0, duration: 0.12)
+                }
+                KeyframeTrack(\.scale) {
+                    MoveKeyframe(1)
+                    SpringKeyframe(1.25, duration: 0.16, spring: .snappy)
+                    LinearKeyframe(1.25, duration: 0.3)
+                    SpringKeyframe(1, duration: 0.3, spring: .bouncy)
+                }
+            }
+    }
+}
+
+private struct BasketShakeFrame {
+    var angle: Double = 0
+    var scale: CGFloat = 1
 }

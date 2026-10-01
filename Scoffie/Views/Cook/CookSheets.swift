@@ -342,27 +342,27 @@ struct CookIngredientsSheet: View {
     /// i kolorem alejki — jak w „Całym przepisie” (runda 9: „per krok też
     /// sortuj po kategoriach”; etykiety „Teraz” / „Za chwilę” i sekcja
     /// następnego kroku odpadły jako „totalnie niepotrzebne”). Krok bez
-    /// składników nie zostawia pustego arkusza (runda 5): karta pustego stanu
-    /// z drogą do całego przepisu.
+    /// składników nie zostawia pustego arkusza (runda 5) — od rundy 10
+    /// cichy napis na środku (`CookStepNoIngredients`), bez karty, ptaszka
+    /// i przycisku („minimalistycznie”); „Cały przepis” jest w przełączniku.
     @ViewBuilder
     private var stepList: some View {
         let now = lines(at: index)
         if now.isEmpty {
-            RecipeListEmptyState(
-                icon: "checkmark",
-                accent: SCPalette.sage,
-                title: "Ten krok bez składników",
-                message: "Nic tu nie odmierzasz — pełna lista jest w „Całym przepisie”.",
-                actions: [
-                    .init(title: "Pokaż cały przepis", icon: "list.bullet") {
-                        withAnimation(.smooth(duration: 0.25)) { scope = .recipe }
-                    },
-                ]
-            )
-            .padding(.top, 12)
+            CookStepNoIngredients(nextStep: nextStepWithIngredients)
+                // Środek widocznej części arkusza (pół ekranu albo cały),
+                // odrobinę nad połową — tam pada wzrok.
+                .containerRelativeFrame(.vertical) { length, _ in length * 0.8 }
         } else {
             aisleRows(now)
         }
+    }
+
+    /// Numer (od 1) najbliższego dalszego kroku, który przynosi składniki.
+    private var nextStepWithIngredients: Int? {
+        session.steps.indices
+            .first { $0 > index && !lines(at: $0).isEmpty }
+            .map { $0 + 1 }
     }
 
     /// Działy sklepu z nagłówkiem (ikona i kolor alejki) i wierszami — ten
@@ -477,5 +477,38 @@ extension String {
     var lowercasedFirst: String {
         guard let first else { return self }
         return String(first).lowercased(with: Locale(identifier: "pl_PL")) + dropFirst()
+    }
+}
+
+/// Krok bez składników w arkuszu Składniki (runda 10: „minimalistycznie, bez
+/// buttonów czy checków”): przygaszony koszyk, jedno zdanie i cichy dopisek,
+/// kiedy wejdą następne. Nic do stuknięcia.
+private struct CookStepNoIngredients: View {
+    let nextStep: Int?
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "basket")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(Color.scFaint(scheme))
+            Text("Ten krok bez składników")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.scLabel(scheme))
+                .padding(.top, 14)
+            Text(hint)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.scMuted(scheme))
+                .padding(.top, 4)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var hint: String {
+        guard let nextStep else { return "Nowych składników już nie będzie" }
+        return "Następne wchodzą w kroku \(nextStep)"
     }
 }

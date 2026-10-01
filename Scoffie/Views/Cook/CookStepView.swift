@@ -11,8 +11,10 @@ import SwiftUI
 /// zawsze, etap dochodzi obok, więc tytuł nie skacze, gdy etap się pojawia
 /// albo znika. Składniki są w arkuszu z wyspy — kapsułki pod tytułem z rundy
 /// 9 odpadły („mam je w sheet, wcześniej było lepiej”). Przy zmianie kroku
-/// nic nie wjeżdża z boku: widoki stoją, a tytuł, etap, opis i rady ROLUJĄ
-/// się w miejscu (`cookRoll` = `SCMotion.textRoll`, wstecz — w drugą stronę).
+/// nic nie wjeżdża z boku: widoki stoją, a tytuł i etap ROLUJĄ się w miejscu
+/// (`cookRoll` = `SCMotion.textRoll`, wstecz — w drugą stronę). Opis i rady
+/// od rundy 10 przechodzą w nowe jako CAŁY akapit (`cookParagraphSwap`) —
+/// rolowanie liter na kilku liniach przelewało końcówki zdań do innej linii.
 struct CookStepScene: View {
     let session: CookSession
     let step: CookStep
@@ -31,17 +33,26 @@ struct CookStepScene: View {
             header
                 .cookReveal(hasAppeared, order: 0)
 
-            Text(session.package.body(for: step, portions: session.portions))
-                .cookText(SCCook.Typography.stepBody)
-                .foregroundStyle(SCCook.Palette.body(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .cookRoll(step.id, countsDown: backwards)
-                .padding(.top, 16)
-                .cookReveal(hasAppeared, order: 1)
+            // Opis i rady przechodzą w nowe W MIEJSCU jako całość (runda 10):
+            // `numericText` na kilku liniach łamał nowy tekst inaczej niż
+            // stary i ostatnie litery z kropką przeskakiwały między liniami.
+            ZStack(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(session.package.body(for: step, portions: session.portions))
+                        .cookText(SCCook.Typography.stepBody)
+                        .foregroundStyle(SCCook.Palette.body(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 16)
+                        .cookReveal(hasAppeared, order: 1)
 
-            notes
-                .cookReveal(hasAppeared, order: 2)
+                    notes
+                        .cookReveal(hasAppeared, order: 2)
+                }
+                .id(step.id)
+                .cookParagraphSwap(countsDown: backwards)
+            }
+            .cookParagraphSwapAnimation(step.id)
 
             Color.clear.frame(height: SCCook.Spacing.dockReserve + 24)
         }
@@ -94,13 +105,9 @@ struct CookStepScene: View {
         VStack(alignment: .leading, spacing: 8) {
             if let note = step.note {
                 CookNoteCard(kind: note.kind, text: note.text)
-                    .cookRoll(note.text, countsDown: backwards)
-                    .transition(.opacity)
             }
             if let scaleNote = session.package.scaleNote(for: step, portions: session.portions) {
                 CookNoteCard(kind: .tip, text: scaleNote, label: "WIĘCEJ PORCJI", systemImage: "person.2")
-                    .cookRoll(scaleNote, countsDown: backwards)
-                    .transition(.opacity)
             }
         }
         .padding(.top, step.note == nil && session.package.scaleNote(for: step, portions: session.portions) == nil ? 0 : 16)

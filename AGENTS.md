@@ -165,10 +165,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Jeszcze chwilę?”. Składniki w DZIAŁACH sklepu (`CookIngredientAisle`, kolejność `ProductConstants.isDepartment` —
   jak Zakupy i szczegóły przepisu): szuflada powitania i „Cały przepis” działami (wiersz mówi krok, „teraz”
   w terakocie), „Ten krok” zostaje TERAZ / ZA CHWILĘ, w środku działami.
-  Runda 5: krok bez składników ma pusty stan (`RecipeListEmptyState` „Ten krok bez składników” z drogą do całego
-  przepisu, a gdy coś przyjdzie za chwilę — cichy wiersz pod TERAZ). Trwające timery NIGDZIE nie są ucinane do dwóch:
+  Runda 5: krok bez składników ma pusty stan (od rundy 10 `CookStepNoIngredients`: przygaszony koszyk, „Ten krok bez
+  składników”, cichy dopisek „Następne wchodzą w kroku 6” — bez karty, ptaszka i przycisku, „minimalistycznie”).
+  Trwające timery NIGDZIE nie są ucinane do dwóch:
   arkusz „Wychodzisz z gotowania?” zawija pigułki na środku (`AllergenChipFlow(alignment: .center)`) i ma wysokość
-  z pomiaru treści, talerz PS1 w Kalendarzu stawia wszystkie w JEDNYM rzędzie w najbogatszej postaci, która się mieści
+  treści POLICZONĄ przed pokazaniem (`CookExitSheet.estimatedHeight`: kroje UIKit, kafle, zawijanie pigułek; pomiar
+  poprawia ułamki) i bez kaskady wejścia — runda 10: szacunek 400 pt kurczył się w trakcie wjazdu („niech się
+  otwiera jak wszystkie inne”), talerz PS1 w Kalendarzu stawia wszystkie w JEDNYM rzędzie w najbogatszej postaci, która się mieści
   (`ViewThatFits`: z nazwami → same pierścienie z czasem → trzy i „+N”).
   Runda 6: etykieta nad tytułem na 322 pt (`spacing.cookTitleTop`, było 290) — tytuł pod zdjęciem, nie na nim.
   Pierścień kroków to PRZYCISK → arkusz Kroki (`CookStepsSheet`, `CookSheet.steps`). Runda 7 („nie dawaj tak, że jak
@@ -197,8 +200,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Gotowe” przy jednym zostawia ekran drugiemu, „Wycisz” ucisza WSZYSTKIE dzwoniące. Zrzut: `gotuj-alarm-dwa`.
   Runda 9 („całość nieruszalna”; „opis i reszta z tą samą animacją tekstu co w aplikacji”): krok = nadtytuł w JEDNYM
   stałym wierszu „KROK 4 Z 12 · ETAP” (numer zawsze, etap dochodzi obok — tytuł nie skacze, gdy etap się pojawia) ·
-  tytuł · opis · karty rad. Przy zmianie kroku widoki STOJĄ, tytuł / etap / numer / opis / rady rolują się w miejscu
-  (`cookRoll`, wstecz w drugą stronę) — `.id(step.id)` z wjazdem opisu z boku usunięte, nie wracać. Składników NA
+  tytuł · opis · karty rad. Przy zmianie kroku widoki STOJĄ, tytuł / etap / numer rolują się w miejscu
+  (`cookRoll`, wstecz w drugą stronę) — `.id(step.id)` z wjazdem opisu z boku usunięte, nie wracać. Opis z radami
+  (runda 10) przechodzi w nowy jako CAŁY blok w miejscu (`cookParagraphSwap`: krycie + rozmycie 3 + 6 pt w kierunku
+  kroku, krzywa `SCMotion.textRoll`) — `numericText` na kilku liniach łamał nowy tekst inaczej i ostatnie litery
+  z kropką przeskakiwały między liniami; nie wracać do `cookRoll` na akapicie. Składników NA
   kroku nie ma (kapsułki pod tytułem odrzucone: „mam je w sheet, wcześniej było lepiej”). Arkusz Składniki „Ten krok”
   = same składniki bieżącego kroku w DZIAŁACH z ikoną i kolorem alejki jak „Cały przepis” (`aisleRows`, jedna droga dla
   obu widoków); „Teraz” / „Za chwilę” i sekcja następnego kroku usunięte („totalnie niepotrzebne”). Arkusz Kroki
@@ -210,8 +216,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Wejście w tryb i wyjście: pełny ekran BEZ wsuwania od dołu („ucina talerz i wsuwa się ekran”) — `isPresented` zmienia
   wyłącznie `CookSessionStore.setPresented` (transakcja `disablesAnimations`), `CookModeView` ma `presentationBackground
   (.clear)` i sam przenika nad pulpitem (0,32 s), a przy wyjściu najpierw gaśnie (`leave`, 0,22 s), dopiero potem woła
-  `pause` / `end`. Koszyk na wyspie potrząsa się (`symbolEffect(.wiggle)`), gdy krok przynosi składniki — przy kroku bez
-  składników stoi.
+  `pause` / `end`. Koszyk na wyspie WOŁA, gdy krok przynosi składniki, a arkusza Składniki na tym kroku nikt jeszcze
+  nie otworzył (runda 10, `CookBasketGlyph`): koszyk i plakietka w terakocie (`basket.fill`), seria potrząśnięć
+  (`keyframeAnimator`: skok 1,25 i trzy wychylenia na uchwycie) co 3 s, aż do stuknięcia w Składniki; krok już
+  obejrzany (`basketSeenSteps`) i krok bez składników nie wołają, Reduce Motion — sam kolor. `symbolEffect(.wiggle)`
+  z rundy 9 był za słaby.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.
