@@ -35,7 +35,7 @@ final class CookAlarmScheduler {
     /// Alarmy, które ostatnio zaplanowaliśmy: id → timer i godzina końca.
     private var known: [UUID: (timerId: String, end: Date)] = [:]
     private var latest: CookSession?
-    private var isSyncing = false
+    private var syncTask: Task<Void, Never>?
     private var needsResync = false
     private var observer: Task<Void, Never>?
 
@@ -58,19 +58,23 @@ final class CookAlarmScheduler {
     func sync(_ session: CookSession?) {
         latest = session
         startObservingIfNeeded()
-        guard !isSyncing else {
+        guard syncTask == nil else {
             needsResync = true
             return
         }
-        isSyncing = true
-        Task { @MainActor [weak self] in
+        syncTask = Task { @MainActor [weak self] in
             guard let self else { return }
             repeat {
                 self.needsResync = false
                 await self.apply(self.latest)
             } while self.needsResync
-            self.isSyncing = false
+            self.syncTask = nil
         }
+    }
+
+    /// Czeka, aż alarmy systemu odpowiadają ostatniej sesji.
+    func settled() async {
+        await syncTask?.value
     }
 
     // MARK: - Uzgadnianie

@@ -23,19 +23,25 @@ struct ScoffieCookActivityLiveActivity: Widget {
         } dynamicIsland: { context in
             let attributes = context.attributes
             let state = context.state
+            // Rozwinięta wyspa ma sufit wysokości (ok. 160 pt) — runda 12: przy
+            // nagłówku 48 pt, tytule POD nim i kaflu 60 pt dół był ucięty. Teraz
+            // jak ekran blokady: zdjęcie, „KROK…” + tytuł i „Dalej” w JEDNYM
+            // rzędzie (tytuł w środkowym regionie, pod aparatem), pod spodem sam stan.
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    CookStepsRingPhoto(recipeId: attributes.recipeId, state: state, diameter: 48, photo: 35)
+                    CookStepsRingPhoto(recipeId: attributes.recipeId, state: state, diameter: 44, photo: 32)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    CookNextButton(state: state, diameter: 48)
+                    CookNextButton(state: state, diameter: 44)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    CookStepHeading(state: state, titleSize: 16, titleLines: 1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        CookStepHeading(state: state, titleSize: state.timers.isEmpty ? 20 : 17, titleLines: state.timers.isEmpty ? 2 : 1)
-                        CookStateSection(state: state)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    CookStateSection(state: state)
+                        .padding(.top, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } compactLeading: {
                 CookCompactRing(recipeId: attributes.recipeId, state: state)

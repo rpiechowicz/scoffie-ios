@@ -16,7 +16,7 @@ final class CookLiveActivity {
     static let shared = CookLiveActivity()
 
     private var latest: CookSession?
-    private var isSyncing = false
+    private var syncTask: Task<Void, Never>?
     private var needsResync = false
     private var lastState: CookActivityAttributes.ContentState?
 
@@ -24,19 +24,24 @@ final class CookLiveActivity {
 
     func sync(_ session: CookSession?) {
         latest = session
-        guard !isSyncing else {
+        guard syncTask == nil else {
             needsResync = true
             return
         }
-        isSyncing = true
-        Task { @MainActor [weak self] in
+        syncTask = Task { @MainActor [weak self] in
             guard let self else { return }
             repeat {
                 self.needsResync = false
                 await self.apply(self.latest)
             } while self.needsResync
-            self.isSyncing = false
+            self.syncTask = nil
         }
+    }
+
+    /// Czeka, aż aktywność dostanie ostatni stan — przycisk Live Activity
+    /// oddaje wynik dopiero potem (`CookActivityCommands`).
+    func settled() async {
+        await syncTask?.value
     }
 
     private func apply(_ session: CookSession?) async {
@@ -168,11 +173,12 @@ final class CookLiveActivity {
 enum CookActivityCommands {
     static func register() {
         CookActivityBridge.handler = { action, timerId in
-            handle(action, timerId: timerId)
+            await handle(action, timerId: timerId)
         }
     }
 
-    static func handle(_ action: CookActivityAction, timerId: String) {
+    /// Zmiana sesji + czekanie, aż Live Activity i alarmy ją dostaną.
+    static func handle(_ action: CookActivityAction, timerId: String) async {
         guard let store = CookSessionStore.forIntent() else { return }
         let now = Date()
         store.update { session in
@@ -185,5 +191,7 @@ enum CookActivityCommands {
                 session.startTimer(timerId, now: now)
             }
         }
+        await CookLiveActivity.shared.settled()
+        await CookAlarmScheduler.shared.settled()
     }
 }

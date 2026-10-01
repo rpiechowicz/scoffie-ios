@@ -42,17 +42,6 @@ struct CookDock: View {
         session.currentStep.map { session.package.lines(for: $0, portions: session.portions).count } ?? 0
     }
 
-    /// Plakietka wskakuje sprężyną z małej kropki i znika, kurcząc się
-    /// w róg koszyka — jak plakietka na ikonie aplikacji.
-    private var badgeTransition: AnyTransition {
-        if reduceMotion { return .opacity }
-        return .scale(scale: 0.2, anchor: .center).combined(with: .opacity)
-    }
-
-    private var badgeAnimation: Animation {
-        reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.34, dampingFraction: 0.62)
-    }
-
     var body: some View {
         let capsules = session.dockCapsules(now: now)
         let overflow = session.dockOverflow(now: now)
@@ -165,15 +154,9 @@ struct CookDock: View {
                         // Plakietka NAD koszykiem (runda 11), poza jego
                         // kołysaniem — liczba stoi, koszyk się buja.
                         .overlay(alignment: .topTrailing) {
-                            ZStack {
-                                if count > 0 {
-                                    CookIslandBadge(count: count)
-                                        .transition(badgeTransition)
-                                }
-                            }
-                            .alignmentGuide(.trailing) { $0[HorizontalAlignment.center] - SCCook.Spacing.islandBadgeInset }
-                            .alignmentGuide(.top) { $0[VerticalAlignment.center] + SCCook.Spacing.islandBadgeInset }
-                            .animation(badgeAnimation, value: count > 0)
+                            CookIslandBadge(count: count)
+                                .alignmentGuide(.trailing) { $0[HorizontalAlignment.center] - SCCook.Spacing.islandBadgeInset }
+                                .alignmentGuide(.top) { $0[VerticalAlignment.center] + SCCook.Spacing.islandBadgeInset }
                         }
                     Text("Składniki")
                         .font(.system(size: 16, weight: .bold))
@@ -773,29 +756,57 @@ struct CookTimerMark: View {
 }
 
 /// Liczba składników kroku nad koszykiem (runda 11: „badge nad ikonę
-/// składników”). Zmiana liczby: cyfry rolują (`cookRoll`), a plakietka
-/// lekko podskakuje — każde nowe składniki widać, nawet gdy liczba
-/// zostaje dwucyfrowa. Pojawienie i zniknięcie robi przejście rodzica.
+/// składników”). Widok STOI zawsze (runda 12: „pojawianie / znikanie się
+/// buguje”) — wstawiany i zdejmowany w pustym kontenerze zmieniał wraz ze
+/// skalą także położenie, a przy pojawieniu odpalał jeszcze podskok zmiany.
+/// Teraz pojawienie i zniknięcie = skala 0,2 ↔ 1 i krycie w miejscu
+/// (sprężyna), znikając trzyma ostatnią liczbę, a podskok 1,22 i rolowanie
+/// cyfr są tylko przy zmianie liczby między krokami ze składnikami.
 private struct CookIslandBadge: View {
     let count: Int
 
+    /// Ostatnia liczba > 0 — zostaje na plakietce w trakcie znikania.
+    @State private var shown: Int
+    @State private var bump = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    init(count: Int) {
+        self.count = count
+        _shown = State(initialValue: max(count, 1))
+    }
+
     var body: some View {
-        Text("\(count)")
+        let visible = count > 0
+        Text("\(shown)")
             .font(.system(size: 10.5, weight: .heavy))
             .monospacedDigit()
             .foregroundStyle(.white)
-            .cookRoll(count)
+            .cookRoll(shown)
             .padding(.horizontal, 4)
             .frame(minWidth: SCCook.Size.islandBadge, minHeight: SCCook.Size.islandBadge)
             .background(Capsule().fill(SCPalette.terracotta))
-            .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? 0 : count) { badge, scale in
+            .keyframeAnimator(initialValue: 1.0, trigger: bump) { badge, scale in
                 badge.scaleEffect(scale)
             } keyframes: { _ in
                 KeyframeTrack {
                     SpringKeyframe(1.22, duration: 0.14, spring: .snappy)
                     SpringKeyframe(1, duration: 0.4, spring: .bouncy)
+                }
+            }
+            .scaleEffect(visible || reduceMotion ? 1 : 0.2)
+            .opacity(visible ? 1 : 0)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.34, dampingFraction: 0.62), value: visible)
+            .onChange(of: count) { old, new in
+                guard new > 0 else { return }
+                if old > 0 {
+                    if old != new, !reduceMotion { bump += 1 }
+                    shown = new
+                } else {
+                    // Pojawienie: liczba podmienia się bez rolowania — rośnie
+                    // już z właściwą.
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { shown = new }
                 }
             }
             .accessibilityHidden(true)

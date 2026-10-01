@@ -101,9 +101,32 @@ final class CookSessionStore {
         return value > 0 ? Int(value.rounded()) : nil
     }
 
+    /// Tryb Gotuj naprawdę stoi na ekranie (`CookModeView` onAppear /
+    /// onDisappear) — sam `isPresented` bywa `true` także wtedy, gdy pokazanie
+    /// nad arkuszem przepadło.
+    private(set) var isOnScreen = false
+    /// Następne pokazanie bez przenikania (powrót z Live Activity — runda 12:
+    /// „najpierw widzę kalendarz, a potem pokazuje się gotowanie”).
+    @ObservationIgnored private var presentsInstantly = false
+
+    func markOnScreen(_ value: Bool) {
+        isOnScreen = value
+    }
+
+    /// `CookModeView` pyta przy wejściu, czy pokazać się od razu.
+    func takeInstantPresentation() -> Bool {
+        defer { presentsInstantly = false }
+        return presentsInstantly
+    }
+
     /// Powrót do wstrzymanej sesji (talerz, szczegóły, Live Activity).
-    func resume() {
+    /// `instantly` — bez przenikania nad pulpitem.
+    func resume(instantly: Bool = false) {
         guard session != nil else { return }
+        // Tryb już stoi na ekranie — nic do roboty (dawniej znikał i wjeżdżał
+        // od nowa, a spod niego mignął Kalendarz).
+        if isPresented, isOnScreen { return }
+        presentsInstantly = instantly
         if isPresented {
             // Przełącznik został na `true`, a ekranu nie ma (pokazanie nad
             // arkuszem przepadło) — przejście false → true, żeby SwiftUI

@@ -1873,7 +1873,7 @@ final class SessionStore {
         // (`resumeCookingIfRequested` po `.ready`).
         if case .cooking = link {
             if startupPhase == .ready, cookSessionStore?.session != nil {
-                Task { await resumeCooking() }
+                Task { await resumeCooking(instantly: true) }
             } else {
                 cookingResumeRequested = true
             }

@@ -138,10 +138,17 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `CookAlarmMetadata`, `CookActivityImage` (miniatura 144 px w App Group — rozszerzenie nie sięga do sieci) i przyciski
   `CookActivityIntent` (`LiveActivityIntent`: „Dalej →”, „+1 min”, ▶ timera, który czeka) — wykonuje je APLIKACJA przez
   `CookActivityBridge` → `CookActivityCommands` (rejestrowane w `AppDelegate`; po wybudzeniu w tle sklep sesji wstaje
-  z pliku, `CookSessionStore.forIntent`). Wygląd z makiet DC3/DC5, MN4/MN6, ER1–4, LK0–3 (`CookActivityLook` —
-  stałe z makiet, jeszcze nie tokeny): nagłówek rozwiniętej i ekranu blokady zawsze z pierścieniem kroków, timery
-  w kaflach 60 pt, kompakt/minimal — pierścień timera, gdy działa (D25). Stuknięcie = `scoffie://gotuj`
-  (`DeepLink.cooking`; przed końcem startu `cookingResumeRequested` → `resumeCookingIfRequested`). Szablony Xcode
+  z pliku, `CookSessionStore.forIntent`). Intencja CZEKA na koniec polecenia (`CookActivityBridge` jest async,
+  `CookLiveActivity.settled()` + `CookAlarmScheduler.settled()`) — runda 12: aplikacja obudzona przyciskiem na ekranie
+  blokady usypiała zaraz po `perform` i krok dochodził do Live Activity z opóźnieniem. Wygląd z makiet DC3/DC5,
+  MN4/MN6, ER1–4, LK0–3 (`CookActivityLook` — stałe z makiet, jeszcze nie tokeny): ekran blokady i (od rundy 12)
+  rozwinięta wyspa mają JEDEN rząd — zdjęcie w pierścieniu kroków 44, „KROK…” + tytuł w jednej linii (w wyspie region
+  `.center`), „Dalej” 44 — a pod nim sam stan (kafle 60 pt); tytuł POD nagłówkiem 48 pt przekraczał sufit wysokości
+  wyspy (~160 pt) i dół był ucięty — nie wracać. Kompakt/minimal — pierścień timera, gdy działa (D25). Stuknięcie =
+  `scoffie://gotuj` (`DeepLink.cooking`; przed końcem startu `cookingResumeRequested` → `resumeCookingIfRequested`)
+  → `resumeCooking(instantly: true)`: tryb, który już stoi na ekranie (`CookSessionStore.isOnScreen`), ZOSTAJE —
+  `dismissPresentedScreensAnimated` zamykał go razem z arkuszami i wjeżdżał od nowa, a spod niego mignął Kalendarz;
+  wstrzymany pokazuje się bez przenikania (`takeInstantPresentation`). Szablony Xcode
   (widżet ekranu głównego, Control, intencja konfiguracji) USUNIĘTE — nie wracać. Zrzuty:
   `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-kroki|gotuj-alarm|gotuj-alarm-dwa|gotuj-wyjscie|gotuj-koniec`.
   Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
@@ -245,8 +252,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Reduce Motion — sam kolor. `symbolEffect(.wiggle)` z rundy 9 był za słaby, a seria ze skokiem 1,25, ±18°, pełną
   ikoną i terakotową plakietką — „zbyt intensywna i rzucająca się”; nie wracać do żadnego z nich. Liczba składników
   kroku (runda 11) to plakietka NAD koszykiem (`CookIslandBadge`: terakota, `size.cookIslandBadge` 17, środek
-  `spacing.cookIslandBadgeInset` poza prawym górnym rogiem, poza kołysaniem koszyka), wchodzi sprężyną ze skali 0,2
-  i tak samo znika, a zmiana liczby = cyfry rolują + podskok 1,22; słowo „Składniki” o `spacing.cookIslandLabelGap`.
+  `spacing.cookIslandBadgeInset` poza prawym górnym rogiem, poza kołysaniem koszyka). Widok STOI zawsze (runda 12:
+  wstawiany w pusty `ZStack` zmieniał przy wejściu i wyjściu także położenie): pojawienie i zniknięcie = skala 0,2 ↔ 1
+  + krycie w miejscu (sprężyna), znikając trzyma ostatnią liczbę, podskok 1,22 i rolowanie cyfr tylko przy zmianie
+  liczby między krokami ze składnikami; słowo „Składniki” o `spacing.cookIslandLabelGap`.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

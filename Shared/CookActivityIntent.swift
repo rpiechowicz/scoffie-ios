@@ -43,12 +43,16 @@ nonisolated struct CookActivityIntent: LiveActivityIntent {
 
 /// Most z intencji do sesji gotowania w aplikacji (`CookActivityCommands`).
 /// W rozszerzeniu zostaje pusty — tam intencja się nie wykonuje.
+///
+/// Polecenie jest ASYNCHRONICZNE i intencja czeka na jego koniec: aplikacja
+/// obudzona przez przycisk na ekranie blokady usypia zaraz po `perform`, więc
+/// zmiana kroku musi dojść do Live Activity, zanim intencja odda wynik
+/// (runda 12: „przełączanie kroków na ekranie blokady działa wolno”).
 nonisolated enum CookActivityBridge {
-    @MainActor static var handler: (@MainActor (CookActivityAction, String) -> Void)?
+    @MainActor static var handler: (@MainActor (CookActivityAction, String) async -> Void)?
 
+    @MainActor
     static func run(_ action: CookActivityAction, timerId: String) async {
-        await MainActor.run {
-            handler?(action, timerId)
-        }
+        await handler?(action, timerId)
     }
 }
