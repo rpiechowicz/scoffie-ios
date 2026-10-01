@@ -129,6 +129,10 @@ final class SessionStore {
 
     var mealCalendarStore: MealCalendarStore?
     var recipeCatalogStore: RecipeCatalogStore?
+    /// Scenariusze trybu Gotuj w pamięci telefonu (§7.7 workstreamu Gotuj).
+    var cookScenarioStore: CookScenarioStore?
+    /// Trwająca sesja gotowania — jedna na telefon, zapisana na dysku.
+    var cookSessionStore: CookSessionStore?
     var shoppingListStore: ShoppingListStore?
     /// Integracja Cookidoo (Thermomix) — jedyny store gadający z backendem
     /// po REST z tokenem, patrz `IntegrationsAPIClient`.
@@ -815,6 +819,17 @@ final class SessionStore {
             repository: ApiRecipeRepository(client: recipeTransport),
             ownerKey: "\(userId)_\(householdId)"
         )
+        self.cookScenarioStore?.invalidate()
+        self.cookScenarioStore = CookScenarioStore(
+            repository: ApiRecipeRepository(client: recipeTransport)
+        )
+        // Sesja gotowania przeżywa ponowne zbudowanie store'ów tego samego
+        // konta i domu (restore po zimnym starcie, powrót połączenia); inny
+        // właściciel dostaje czysty store, a cudzego pliku nie wczyta.
+        let cookOwnerKey = "\(userId)_\(householdId)"
+        if self.cookSessionStore?.ownerKey != cookOwnerKey {
+            self.cookSessionStore = CookSessionStore(ownerKey: cookOwnerKey)
+        }
         let shoppingListStore = ShoppingListStore(
             repository: ApiShoppingListRepository(client: shoppingTransport),
             currentUserId: userId,
@@ -981,6 +996,14 @@ final class SessionStore {
         recipeCatalogStore?.invalidate()
         RecipeCatalogStore.clearCache()
         recipeCatalogStore = nil
+        // Paczki Gotuj niosą też przepisy domu, a sesja gotowania należy do
+        // konta — obie znikają z domem.
+        cookScenarioStore?.invalidate()
+        cookScenarioStore = nil
+        CookScenarioStore.clearCache()
+        cookSessionStore?.end()
+        cookSessionStore = nil
+        CookSessionStore.clearCache()
         shoppingListStore = nil
         cookidooIntegrationStore = nil
         healthStepsStore?.stopObserving()

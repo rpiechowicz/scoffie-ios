@@ -85,6 +85,8 @@ protocol RecipeRepository {
     /// Kopia cudzego przepisu w tym domu (idempotentne — druga prośba oddaje
     /// tę samą kopię).
     func saveSharedRecipe(token: String) async throws -> Recipe
+    /// Opublikowany scenariusz trybu Gotuj albo `nil` (przepis bez trybu Gotuj).
+    func fetchCookScenario(_ recipeId: UUID) async throws -> CookScenarioEnvelope?
 }
 
 protocol RecipeTransportClient {
@@ -103,6 +105,8 @@ protocol RecipeTransportClient {
     /// Dokładnie jedno z dwóch: `slug` (albo UUID przepisu katalogu) lub `token`.
     func openSharedRecipe(slug: String?, token: String?) async throws -> BackendOpenSharedRecipeDTO
     func saveSharedRecipe(token: String) async throws -> BackendSaveSharedRecipeDTO
+    /// Opublikowany scenariusz trybu Gotuj (`recipes:cookScenario`).
+    func fetchCookScenario(recipeId: String) async throws -> CookScenarioResponse
 }
 
 protocol RecipeSocketClient {

@@ -103,6 +103,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   kontrola w tym repo (nie ma targetu testów) i jedyna rzecz, która potrafi zepsuć się CAŁKIEM
   po cichu: zmiana nazwy pola w backendzie nie da błędu, tylko karta zniknie z ekranu. Wzorzec
   odświeża `scripts/dump-card-fixtures.ts` w backendzie.
+- **Tryb Gotuj** (E4 od 1.10.2026, `docs/workstreams/gotuj/README.md`, wygląd: scoffie-design `docs/GOTUJ.md`):
+  liczby wyglądu biorą się z `scoffie-design/tokens/cook.json` — `Components/SCCookTokens.swift` (`SCCook.*`) jest
+  WYGENEROWANY (`npm run build` w design repo, kopia bajt w bajt, `npm run check:ios`); nie edytować ręcznie, nowa
+  wartość = najpierw token. Logika w `Models/Cook/` (scenariusz, ilości §5.4, `{count:…}`, sesja i dok) tylko na
+  Foundation — `sh Scripts/cook-logic-check.sh` na scenariuszu kotleta (`Scripts/CookLogic/kotlet.json`, odświeżany
+  `make-fixture.mjs`). Scenariusz wskazuje składniki po `ingredientId`, które ma TYLKO szczegół przepisu —
+  `CookScenarioStore` bierze `recipes:cookScenario` + `recipes:findById` i trzyma paczkę offline (przycisk „Gotuj”
+  tylko, gdy paczka jest i `Recipe.cookScenarioVersion` się zgadza). Sesja (`CookSessionStore`) jedna, per konto+dom,
+  timery jako DATY KOŃCA; kolor timera: terakota, a gdy zajęta przez inny żywy — szałwia.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

@@ -227,6 +227,16 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
         )
     }
 
+    /// Scenariusz trybu Gotuj — bramka członkostwa po stronie serwera, więc
+    /// zdarzenie domu (`householdId` obowiązkowe).
+    func fetchCookScenario(recipeId: String) async throws -> CookScenarioResponse {
+        try await emitHouseholdEvent(
+            "recipes:cookScenario",
+            fields: ["recipeId": recipeId],
+            as: CookScenarioResponse.self
+        )
+    }
+
     /// Zdarzenie gospodarstwa: `userId` + `householdId` + pola zdarzenia,
     /// odpowiedź z koperty albo błąd z jej kodem.
     private func emitHouseholdEvent<T: Decodable>(

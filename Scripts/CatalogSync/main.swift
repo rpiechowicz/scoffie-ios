@@ -752,5 +752,42 @@ do {
           "15: stary plik cache bez nowych kluczy czyta się bez nich")
 }
 
+// MARK: - 16. Gotuj (1.10.2026)
+//
+// `cookScenarioVersion` decyduje o przycisku „Gotuj” — przechodzi z JSON-a do
+// przepisu i przeżywa plik cache; `ingredientId` składnika (tylko szczegół)
+// wskazuje składniki kroków scenariusza.
+
+do {
+    var json = recipeDict(recipeUUID(980), "Kotlet de volaille")
+    json["cookScenarioVersion"] = 3
+    var ingredient: [String: Any] = [
+        "id": "11111111-1111-4111-8111-111111111111",
+        "recipeId": recipeUUID(980),
+        "ingredientId": "ABCDEFAB-1111-4111-8111-111111111111",
+        "name": "masło",
+        "amount": 30,
+        "unit": "g",
+    ]
+    json["ingredients"] = [ingredient]
+    let dto = try JSONDecoder().decode(BackendRecipeDTO.self, from: try JSONSerialization.data(withJSONObject: json))
+    let recipe = dto.toAppRecipe()
+    check(recipe?.cookScenarioVersion == 3, "16: wersja scenariusza z JSON-a serwera trafia do przepisu")
+    check(recipe?.ingredients.first?.ingredientId == "abcdefab-1111-4111-8111-111111111111",
+          "16: ingredientId ze szczegółu, małymi literami")
+    let cached = try JSONDecoder().decode(Recipe.self, from: try JSONEncoder().encode(recipe!))
+    check(cached.cookScenarioVersion == 3 && cached.ingredients.first?.ingredientId == recipe?.ingredients.first?.ingredientId,
+          "16: wersja i ingredientId przeżywają zapis do pliku cache")
+
+    ingredient.removeValue(forKey: "ingredientId")
+    var list = recipeDict(recipeUUID(981), "Z listy")
+    list["cookScenarioVersion"] = NSNull()
+    list["ingredients"] = [ingredient]
+    let listDTO = try JSONDecoder().decode(BackendRecipeDTO.self, from: try JSONSerialization.data(withJSONObject: list))
+    check(listDTO.toAppRecipe()?.cookScenarioVersion == nil, "16: null = przepis bez trybu Gotuj")
+    check(listDTO.toAppRecipe()?.ingredients.first?.ingredientId == nil, "16: lista bez ingredientId → nil")
+    check(CatalogCacheEnvelope<String>.currentVersion >= 4, "16: plik katalogu podbity — stary nie zna wersji scenariusza")
+}
+
 print(failures == 0 ? "\nWSZYSTKO OK" : "\nBŁĘDÓW: \(failures)")
 exit(failures == 0 ? 0 : 1)

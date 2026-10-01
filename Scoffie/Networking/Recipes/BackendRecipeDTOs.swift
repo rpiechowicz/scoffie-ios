@@ -5,6 +5,9 @@ import Foundation
 struct BackendRecipeIngredientDTO: Codable {
     let id: String
     let recipeId: String
+    /// `Ingredient.id` katalogu składników — tylko w szczególe przepisu
+    /// (`recipes:findById`). Po nim scenariusz Gotuj wskazuje składniki.
+    let ingredientId: String?
     let name: String
     let amount: Double
     let unit: String
@@ -64,6 +67,9 @@ struct BackendRecipeDTO: Codable {
     let slug: String?
     /// Aktywny link przepisu domu — tylko w `recipes:householdState`.
     let shareUrl: String?
+    /// Wersja opublikowanego scenariusza trybu Gotuj; `nil` = przepis bez
+    /// trybu Gotuj (albo starszy backend).
+    let cookScenarioVersion: Int?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -97,6 +103,7 @@ struct BackendRecipeDTO: Codable {
         case features
         case slug
         case shareUrl
+        case cookScenarioVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -135,6 +142,7 @@ struct BackendRecipeDTO: Codable {
         features = try? container.decodeIfPresent([String].self, forKey: .features)
         slug = try? container.decodeIfPresent(String.self, forKey: .slug)
         shareUrl = try? container.decodeIfPresent(String.self, forKey: .shareUrl)
+        cookScenarioVersion = try? container.decodeIfPresent(Int.self, forKey: .cookScenarioVersion)
     }
 }
 
@@ -279,7 +287,8 @@ extension BackendRecipeDTO {
                 rawUnit: unit == .other ? item.unit : nil,
                 normalizedAmount: item.normalizedAmount,
                 normalizedUnit: item.normalizedUnit,
-                kitchenMeasure: item.kitchenMeasure
+                kitchenMeasure: item.kitchenMeasure,
+                ingredientId: item.ingredientId?.lowercased()
             )
         }
 
@@ -321,7 +330,8 @@ extension BackendRecipeDTO {
             dietTags: dietTags,
             taxonomy: appTaxonomy,
             slug: slug.flatMap { $0.isEmpty ? nil : $0 },
-            shareUrl: shareUrl.flatMap { URL(string: $0) }
+            shareUrl: shareUrl.flatMap { URL(string: $0) },
+            cookScenarioVersion: cookScenarioVersion
         )
     }
 }

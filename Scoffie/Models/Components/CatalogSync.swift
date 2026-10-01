@@ -230,9 +230,11 @@ struct CatalogCacheEnvelope<Item: Codable>: Codable {
     ///    plik z 1 ich nie ma, a delta nie dośle niezmienionych przepisów.
     /// 3: składniki przypraw z `kitchenMeasure` (łyżeczki zamiast gramów —
     ///    30.09.2026); plik z 2 go nie ma.
+    /// 4: przepisy z `cookScenarioVersion` (tryb Gotuj — 1.10.2026); plik z 3
+    ///    go nie ma, a delta nie dośle przepisów, których scenariusz już był.
     /// Zmiana kształtu `Item` albo znaczenia pól = podbij; stary plik zostanie
     /// odrzucony i katalog przyjdzie snapshotem.
-    static var currentVersion: Int { 3 }
+    static var currentVersion: Int { 4 }
 
     let version: Int
     let revision: String?
