@@ -103,11 +103,14 @@ struct CookDock: View {
         // Jeden krążek „Dalej”: w ostatnim kroku strzałka PRZECHODZI w ptaszek
         // na szałwii (glif się podmienia, kolory przenikają).
         let isLast = session.isLastStep
+        // Jasny motyw (szkło, runda 7): „Wstecz” prawie przezroczyste,
+        // „Dalej” w miękkiej terakocie — jak wybrana zakładka w dolnym menu.
+        let light = scheme == .light
         return HStack(spacing: SCCook.Spacing.islandGap) {
             islandCircle(
                 systemName: "chevron.left",
-                fill: Color.scTileStroke(scheme),
-                stroke: Color.scTileBg(scheme),
+                fill: light ? Color.scLabel(scheme).opacity(0.06) : Color.scTileStroke(scheme),
+                stroke: light ? .clear : Color.scTileBg(scheme),
                 tint: Color.scLabel(scheme),
                 label: "Poprzedni krok",
                 action: onBack
@@ -144,9 +147,13 @@ struct CookDock: View {
 
             islandCircle(
                 systemName: isLast ? "checkmark" : "arrow.right",
-                fill: isLast ? SCPalette.sage.opacity(SCCook.Opacity.finishFill) : SCCook.Palette.ringTodo(scheme),
-                stroke: isLast ? SCPalette.sage.opacity(SCCook.Opacity.finishStroke) : SCCook.Palette.badge(scheme),
-                tint: isLast ? SCPalette.sage : Color.scLabel(scheme),
+                fill: isLast
+                    ? SCPalette.sage.opacity(SCCook.Opacity.finishFill)
+                    : (light ? SCPalette.terracotta.opacity(0.13) : SCCook.Palette.ringTodo(scheme)),
+                stroke: isLast
+                    ? SCPalette.sage.opacity(SCCook.Opacity.finishStroke)
+                    : (light ? .clear : SCCook.Palette.badge(scheme)),
+                tint: isLast ? SCPalette.sage : (light ? SCPalette.terracotta : Color.scLabel(scheme)),
                 label: isLast ? "Zakończ gotowanie" : "Następny krok",
                 action: onNext
             )
@@ -277,10 +284,11 @@ struct CookTimerCapsule: View {
         .background(background)
         .overlay(border)
         .clipShape(Capsule())
+        .cookDockGlass(scheme)
         .contentShape(Capsule())
         .contentShape(.contextMenuPreview, Capsule())
         .contextMenu { menu }
-        .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 15, y: 12)
+        .shadow(color: scheme == .dark ? SCCook.Palette.dockShadow(scheme) : .clear, radius: 15, y: 12)
         .cookInvitePulse(Capsule(), color: color, isActive: isPending)
         .cookOverduePulse(Capsule(), color: color, isActive: isOverdue)
         // Koniec odliczania przychodzi z zegara (bez animacji w transakcji) —
@@ -423,9 +431,11 @@ struct CookTimerCapsule: View {
 
     // MARK: Tło
 
+    /// Barwa stanu na powierzchni doku — w jasnym motywie na szkle
+    /// (`cookDockGlass`), więc bez kryjącego spodu.
     @ViewBuilder
     private var background: some View {
-        let surface = SCCook.Palette.dockSurface(scheme)
+        let surface = scheme == .dark ? SCCook.Palette.dockSurface(scheme) : .clear
         if isOverdue {
             color
         } else if isPaused {
@@ -581,9 +591,10 @@ struct CookOverflowTab: View {
             .padding(.leading, 4)
             .padding(.trailing, 11)
             .frame(height: SCCook.Height.overflowTab)
-            .background(Capsule().fill(SCCook.Palette.dockSurface(scheme)))
-            .overlay(Capsule().strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
-            .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 10, y: 6)
+            .background(Capsule().fill(scheme == .dark ? SCCook.Palette.dockSurface(scheme) : .clear))
+            .overlay(Capsule().strokeBorder(scheme == .dark ? SCCook.Palette.dockStroke(scheme) : .clear, lineWidth: 1))
+            .cookDockGlass(scheme)
+            .shadow(color: scheme == .dark ? SCCook.Palette.dockShadow(scheme) : .clear, radius: 10, y: 6)
             .contentShape(Capsule())
             .scTapHeight(44, drawn: SCCook.Height.overflowTab)
         }

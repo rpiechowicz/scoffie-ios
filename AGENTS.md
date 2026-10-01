@@ -171,15 +171,21 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   z pomiaru treści, talerz PS1 w Kalendarzu stawia wszystkie w JEDNYM rzędzie w najbogatszej postaci, która się mieści
   (`ViewThatFits`: z nazwami → same pierścienie z czasem → trzy i „+N”).
   Runda 6: etykieta nad tytułem na 322 pt (`spacing.cookTitleTop`, było 290) — tytuł pod zdjęciem, nie na nim.
-  Pierścień kroków to PRZYCISK → arkusz Kroki (`CookStepsSheet`, `CookSheet.steps`, pół ekranu jak Składniki,
-  otwiera się na bieżącym kroku): oś krążków (zrobiony = ptaszek w szałwii, bieżący = terakota, przeskoczony
-  skokiem liczy się jak dalszy), sam tytuł kroku, etap tylko przy zmianie, `SCTag` „Teraz” i timer kroku słowem;
-  wiersz = `CookSession.jump` + zamknięcie. Powitanie: opis przepisu (`CookSession.recipeDescription`, z
-  `Recipe.description`; stara sesja bez klucza = bez opisu) pod liczbami, karta porcji w STOPCE nad szufladą
-  Składniki, szuflady z jedną ikoną w krążku i w stroju kafla (`scTileBg` + `scTileStroke`). Jasny motyw jak
-  w aplikacji: arkusze trybu `cookSheetBackground` (= `SCPageBackground`, nie `scCanvas`), wyspa
-  `cookIslandSurface` — w jasnym szkło dolnego menu (`scBarGlass`, wyniesione z `SCFloatingTabBar`), w ciemnym
-  bez zmian. Zrzut: `SCOFFIE_DEBUG_OPTIONS=gotuj-kroki`.
+  Pierścień kroków to PRZYCISK → arkusz Kroki (`CookStepsSheet`, `CookSheet.steps`). Runda 7 („nie dawaj tak, że jak
+  klikam, to mi się otwiera; wykorzystaj całą przestrzeń”): od razu `.large`, SAM PODGLĄD — wiersz nie przenosi do kroku
+  (`CookSession.jump` został dla debug i sprawdzianu); pasek `SCStepProgress` pod nagłówkiem, oś krążków (zrobiony =
+  ptaszek w szałwii, bieżący = terakota na karcie w tincie, przeskoczony liczy się jak dalszy), tytuł 17 + dwie linie
+  opisu (bieżący cztery), etap tylko przy zmianie, `SCTag` „Teraz” i timer kroku słowem. Powitanie mieści się BEZ
+  przewijania (runda 7, liczone na 844 pt): tytuł `typography.cookWelcomeTitle` 32, opis przepisu
+  (`CookSession.recipeDescription` z `Recipe.description`; stara sesja bez klucza = bez opisu) najwyżej 3 linie pod
+  liczbami, w stopce karta porcji 52 pt NAD szufladami, szuflady Składniki i Rady kucharza OBOK SIEBIE (kafle 52 pt,
+  jedna ikona, podpis „14 · na 2 porcje” / „3 rady”, strój kafla `scTileBg` + `scTileStroke`). Składniki (arkusz
+  i szuflada): ikona i kolor alejki TYLKO w nagłówku działu (`CookSectionHeader(icon:)`), wiersze bez ikon — zrobione
+  przygaszone z ptaszkiem w podpisie. Jasny motyw jak w aplikacji: arkusze trybu `cookSheetBackground`
+  (= `SCPageBackground`, nie `scCanvas`); dok (wyspa, kapsuły, plakietka) = systemowe Liquid Glass (`cookDockGlass`:
+  samo `glassEffect(.regular)`, barwa stanu nad szkłem, bez obwódki i cienia doku; „Dalej” w miękkiej terakocie).
+  Runda 6 dała wyspie szkło paska zakładek z warstwą `scPageBase` 0,72 — matowa plama „strasznie różniąca się od
+  reszty”; nie wracać. Ciemny motyw doku bez zmian. Zrzut: `SCOFFIE_DEBUG_OPTIONS=gotuj-kroki`.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

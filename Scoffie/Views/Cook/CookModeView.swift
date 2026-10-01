@@ -15,7 +15,7 @@ enum CookSheet: String, Identifiable {
     /// „Wychodzisz z gotowania?” — krzyżyk w krokach.
     case exit
     /// Wszystkie kroki jeden pod drugim — stuknięcie w pierścień kroków
-    /// (runda 6); pół ekranu, przewijanie rozwija na cały.
+    /// (runda 6); od rundy 7 od razu na cały ekran, sam podgląd.
     case steps
 
     var id: String { rawValue }
@@ -211,13 +211,8 @@ struct CookModeView: View {
             )
             // Wysokość podaje arkusz sam — z treści (liczba trwających timerów).
         case .steps:
-            CookStepsSheet(
-                session: session,
-                onJump: { index in jump(to: index) },
-                onClose: { sheet = nil }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationContentInteraction(.resizes)
+            CookStepsSheet(session: session, onClose: { sheet = nil })
+                .presentationDetents([.large])
         }
     }
 
@@ -248,18 +243,6 @@ struct CookModeView: View {
                     session.back()
                 }
             }
-        }
-    }
-
-    /// Skok z arkusza Kroki: arkusz się zamyka, a krok wjeżdża z tej strony,
-    /// po której leży (dalej — z prawej, wstecz — z lewej), jak przy
-    /// „Dalej” / „Wstecz”. Stuknięcie w bieżący krok tylko zamyka arkusz.
-    private func jump(to index: Int) {
-        sheet = nil
-        guard let current = store.session?.stepIndex, index != current else { return }
-        direction = index > current ? .trailing : .leading
-        withAnimation(SCCook.Motion.step) {
-            store.update { $0.jump(to: index) }
         }
     }
 

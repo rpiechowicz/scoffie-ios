@@ -222,10 +222,8 @@ extension View {
         presentationBackground { SCPageBackground(scheme: scheme) }
     }
 
-    /// Powierzchnia wyspy doku. Jasny motyw = szkło dolnego menu aplikacji
-    /// (`scBarGlass`) — runda 6: „kolor wyspy na light mode źle wygląda”
-    /// (ciepła biel z ciemną obwódką i cieniem odstawała od kremu, a wyspa
-    /// stoi tam, gdzie pasek zakładek). Ciemny motyw bez zmian.
+    /// Powierzchnia wyspy doku. Ciemny motyw: kryjąca powierzchnia doku
+    /// z obwódką i cieniem (bez zmian). Jasny: Liquid Glass (`cookDockGlass`).
     @ViewBuilder
     func cookIslandSurface(_ scheme: ColorScheme) -> some View {
         if scheme == .dark {
@@ -233,7 +231,23 @@ extension View {
                 .overlay(Capsule().strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
                 .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 18, y: 14)
         } else {
-            scBarGlass(scheme, in: Capsule(style: .continuous))
+            cookDockGlass(scheme)
+        }
+    }
+
+    /// Jasny motyw doku = systemowe Liquid Glass na wyspie, kapsułach
+    /// i plakietce (runda 7: „kolor wyspy na light mode … strasznie się różni
+    /// od reszty, da się to w stylu liquid zrobić?”). Samo szkło, BEZ
+    /// kryjącego spodu: runda 6 dała wyspie szkło paska zakładek, ale jego
+    /// warstwa `scPageBase` 0,72 zamieniała je w matową kremową plamę. Barwę
+    /// (timer, stan) kładzie element nad szkłem; obwódki doku i cienia nie ma —
+    /// szkło ma własny brzeg i głębię. W ciemnym motywie nic nie robi.
+    @ViewBuilder
+    func cookDockGlass(_ scheme: ColorScheme) -> some View {
+        if scheme == .dark {
+            self
+        } else {
+            glassEffect(.regular, in: Capsule(style: .continuous))
         }
     }
 }

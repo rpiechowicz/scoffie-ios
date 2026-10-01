@@ -144,7 +144,8 @@ struct CookSession: Codable, Equatable {
         }
     }
 
-    /// Skok z listy kroków (stuknięcie w pierścień kroków).
+    /// Skok do kroku — ekran debug i sprawdzian logiki. Arkusz Kroki od
+    /// rundy 7 jest samym podglądem (stuknięcie w wiersz nie przenosi).
     mutating func jump(to index: Int) {
         guard stage == .steps, steps.indices.contains(index) else { return }
         stepIndex = index

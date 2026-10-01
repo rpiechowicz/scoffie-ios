@@ -2,15 +2,25 @@ import SwiftUI
 
 /// Nagłówek sekcji listy składników: „TERAZ”, „ZA CHWILĘ · KROK 4”,
 /// dział sklepu („WARZYWA”) — arkusz Składniki i szuflada powitania.
+/// Dział ma ikonę i kolor alejki z Zakupów; to JEDYNE miejsce ikony —
+/// wiersze składników są bez niej (runda 7: „ikonę daj tylko przy
+/// kategorii, a nie przy składniku”).
 struct CookSectionHeader: View {
     let title: String
     let color: Color
     var count: Int?
+    var icon: String?
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack {
+        HStack(spacing: 7) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(color)
+                    .accessibilityHidden(true)
+            }
             Text(title)
                 .cookText(SCCook.Typography.sectionLabel)
                 .foregroundStyle(color)
@@ -318,7 +328,12 @@ struct CookIngredientsSheet: View {
                         stepList
                     case .recipe:
                         ForEach(recipeAisles) { aisle in
-                            CookSectionHeader(title: aisle.title, color: SCCook.Palette.caption(scheme), count: aisle.lines.count)
+                            CookSectionHeader(
+                                title: aisle.title,
+                                color: CookIngredientLook.color(aisle.department),
+                                count: aisle.lines.count,
+                                icon: CookIngredientLook.icon(aisle.department)
+                            )
                             lineRows(aisle.lines)
                         }
                     }
@@ -368,12 +383,10 @@ struct CookIngredientsSheet: View {
 
     /// Wiersz pod TERAZ, gdy krok nic nie dodaje — w rytmie wierszy składników.
     private var emptyNowRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Image(systemName: "checkmark")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(SCPalette.sage)
-                .frame(width: SCCook.Size.ingredientIcon, height: SCCook.Size.ingredientIcon)
-                .background(Circle().fill(SCPalette.sage.opacity(0.12)))
             Text("W tym kroku nic nie dodajesz")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(SCCook.Palette.caption(scheme))
@@ -427,11 +440,11 @@ struct CookIngredientsSheet: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// Wiersz: krążek działu (ptaszek, gdy krok już za nami), nazwa, podpis,
-    /// ilość. W „Ten krok” podpis to część składnika („połowa”), w „Całym
-    /// przepisie” — krok, w którym wchodzi („teraz” w terakocie).
+    /// Wiersz: nazwa, podpis, ilość — bez ikony (dział mówi nagłówek
+    /// sekcji). W „Ten krok” podpis to część składnika („połowa”), w „Całym
+    /// przepisie” — krok, w którym wchodzi („teraz” w terakocie); składnik
+    /// z kroku już za nami jest przygaszony, z ptaszkiem w podpisie.
     private func row(_ line: CookIngredientLine) -> some View {
-        let tint = CookIngredientLook.color(line.department)
         let dim = SCCook.Palette.caption(scheme)
         let stepIndex = session.steps.firstIndex { $0.id == line.stepId } ?? index
         let isDone = scope == .recipe && stepIndex < index
@@ -442,32 +455,23 @@ struct CookIngredientsSheet: View {
             return line.partLabel.map { "\(when) · \($0)" } ?? when
         }()
         return HStack(spacing: 12) {
-            Group {
-                if isDone {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(dim)
-                        .frame(width: SCCook.Size.ingredientIcon, height: SCCook.Size.ingredientIcon)
-                        .background(Circle().fill(Color.scTileStroke(scheme)))
-                } else {
-                    Image(systemName: CookIngredientLook.icon(line.department))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: SCCook.Size.ingredientIcon, height: SCCook.Size.ingredientIcon)
-                        .background(Circle().fill(tint.opacity(0.12)))
-                }
-            }
-
             VStack(alignment: .leading, spacing: 2) {
                 Text(line.name)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(isDone ? dim : Color.scLabel(scheme))
                     .lineLimit(1)
                 if let caption {
-                    Text(caption)
-                        .font(.system(size: 12, weight: isNow ? .semibold : .regular))
-                        .foregroundStyle(isNow ? SCPalette.terracotta : dim)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        if isDone {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .heavy))
+                                .accessibilityHidden(true)
+                        }
+                        Text(caption)
+                    }
+                    .font(.system(size: 12, weight: isNow ? .semibold : .regular))
+                    .foregroundStyle(isNow ? SCPalette.terracotta : dim)
+                    .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -481,6 +485,7 @@ struct CookIngredientsSheet: View {
         }
         .frame(minHeight: caption == nil ? SCCook.Height.ingredientRow : SCCook.Height.ingredientRow + 6)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(isDone ? "już w daniu" : "")
     }
 }
 

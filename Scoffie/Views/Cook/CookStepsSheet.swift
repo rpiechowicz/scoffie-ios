@@ -1,51 +1,51 @@
 import SwiftUI
 
-/// Arkusz Kroki — stuknięcie w pierścień kroków obok krzyżyka (runda 6
-/// testów: „niech się otworzy sheet ze stepperami jedno pod drugim, aby było
-/// wiadome co i jak, ładnie, czytelnie i pokrótce”).
+/// Arkusz Kroki — stuknięcie w pierścień kroków obok krzyżyka. Przegląd
+/// całego gotowania: wszystkie kroki jeden pod drugim, co i jak.
 ///
-/// Oś kroków: krążek z numerem (zrobiony — ptaszek w szałwii, bieżący —
-/// numer na pełnej terakocie, dalszy — numer na polu chipa), obok sam TYTUŁ
-/// kroku (polecenie ze scenariusza), etap nad nim tylko tam, gdzie się
-/// zmienia, i etykiety: „Teraz” przy bieżącym, timer przy kroku, który go
-/// niesie. Opisu kroku tu nie ma — od tego jest ekran kroku. Stuknięcie
-/// w wiersz przenosi na ten krok (`CookSession.jump`) i zamyka arkusz.
+/// Runda 7 testów („nie dawaj tak, że jak klikam, to mi się otwiera;
+/// czytelnie, wykorzystaj całą przestrzeń”): arkusz od razu na cały ekran
+/// (bez połowy, która rozwijała się pod palcem), wiersze NIE przenoszą do
+/// kroku — to podgląd, krok zmienia się dalej z doku. Pod nagłówkiem pasek
+/// postępu (`SCStepProgress`, ten sam co w kreatorze). Wiersz: krążek
+/// z numerem (zrobiony — ptaszek w szałwii, bieżący — numer na terakocie,
+/// dalszy — numer na polu chipa), tytuł kroku, pod nim dwie linie opisu
+/// (bieżący — do czterech, na karcie w tincie terakoty), etap tylko tam,
+/// gdzie się zmienia, i etykiety: „Teraz” oraz timer kroku słowem.
 ///
-/// Pół ekranu, przewijanie rozwija na cały (jak Składniki); przy otwarciu
-/// lista stoi na bieżącym kroku, z poprzednim nad nim.
+/// Otwiera się na bieżącym kroku, z poprzednim nad nim.
 struct CookStepsSheet: View {
     let session: CookSession
-    let onJump: (Int) -> Void
     let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetHeader(
-                eyebrow: "Krok \(session.stepIndex + 1) z \(session.stepCount)",
-                title: "Kroki",
-                icon: "list.number",
-                accent: SCPalette.terracotta,
-                compact: true,
-                onClose: onClose
-            )
+            VStack(alignment: .leading, spacing: 14) {
+                EditorialSheetHeader(
+                    eyebrow: "Krok \(session.stepIndex + 1) z \(session.stepCount)",
+                    title: "Kroki",
+                    icon: "list.number",
+                    accent: SCPalette.terracotta,
+                    compact: true,
+                    onClose: onClose
+                )
+                SCStepProgress(step: session.stepIndex + 1, total: session.stepCount)
+            }
             .padding(.horizontal, SCCook.Spacing.page)
             .padding(.top, 20)
-            .padding(.bottom, 8)
+            .padding(.bottom, 6)
 
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(session.steps.enumerated()), id: \.element.id) { index, step in
-                            Button { onJump(index) } label: {
-                                CookStepListRow(session: session, index: index, step: step)
-                            }
-                            .buttonStyle(.plain)
-                            .id(index)
+                            CookStepListRow(session: session, index: index, step: step)
+                                .id(index)
                         }
                     }
                     .padding(.horizontal, SCCook.Spacing.page)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
                 }
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
@@ -59,8 +59,7 @@ struct CookStepsSheet: View {
 
 /// Wiersz osi kroków. Oś ciągnie się przez etap nad tytułem, więc kroki
 /// czytają się jako jedna linia; przy krążku urywa się o `railGap` (krążki
-/// są półprzezroczyste, a tło arkusza ma poświatę — kryjący krążek by ją
-/// zdradzał).
+/// są półprzezroczyste, a tło arkusza ma poświatę).
 private struct CookStepListRow: View {
     enum Phase {
         case done
@@ -76,17 +75,17 @@ private struct CookStepListRow: View {
 
     private var badge: CGFloat { SCCook.Size.stepBadge }
     private var rail: CGFloat { SCCook.Stroke.stepRail }
-    /// Krążek od góry wiersza; tytuł (16 pt, linia ~20) dosunięty tak, żeby
+    /// Krążek od góry wiersza; tytuł (17 pt, linia ~21) dosunięty tak, żeby
     /// jego pierwsza linia stała na środku krążka.
-    private var badgeTop: CGFloat { 8 }
+    private var badgeTop: CGFloat { 12 }
     private var railGap: CGFloat { 4 }
-    private var titleTop: CGFloat { badgeTop + (badge - 20) / 2 }
+    private var titleTop: CGFloat { badgeTop + (badge - 21) / 2 }
 
     private var isLast: Bool { index == session.steps.count - 1 }
 
     private func phase(at position: Int) -> Phase {
         if position == session.stepIndex { return .current }
-        // Krok przeskoczony skokiem z tej listy nie jest „zrobiony”.
+        // Krok przeskoczony nie jest „zrobiony”.
         if position < session.stepIndex, session.visitedStepIds.contains(session.steps[position].id) {
             return .done
         }
@@ -95,8 +94,7 @@ private struct CookStepListRow: View {
 
     private var phase: Phase { phase(at: index) }
 
-    /// Etap nad tytułem — tylko tam, gdzie się zmienia (jak nagłówek
-    /// sekcji, ale bez przerywania osi).
+    /// Etap nad tytułem — tylko tam, gdzie się zmienia.
     private var stage: String? {
         guard let label = step.stageLabel else { return nil }
         guard index > 0 else { return label }
@@ -120,7 +118,7 @@ private struct CookStepListRow: View {
                     .cookText(SCCook.Typography.stage)
                     .foregroundStyle(SCPalette.sage)
                     .padding(.leading, badge + 14)
-                    .padding(.top, index == 0 ? 0 : 10)
+                    .padding(.top, index == 0 ? 0 : 12)
                     .padding(.bottom, 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(alignment: .leading) { railSegment(above) }
@@ -131,12 +129,20 @@ private struct CookStepListRow: View {
                     .frame(width: badge, height: badge)
                     .padding(.top, badgeTop)
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(step.title)
-                        .font(.system(size: 16, weight: phase == .current ? .bold : .semibold))
+                        .font(.system(size: 17, weight: phase == .current ? .bold : .semibold))
                         .foregroundStyle(phase == .done ? SCCook.Palette.caption(scheme) : Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(session.package.body(for: step, portions: session.portions))
+                        .font(.system(size: 14))
+                        .lineSpacing(2)
+                        .foregroundStyle(phase == .current ? SCCook.Palette.body(scheme) : SCCook.Palette.caption(scheme))
+                        .lineLimit(phase == .current ? 4 : 2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(phase == .done ? 0.8 : 1)
 
                     if phase == .current || step.timer != nil {
                         AllergenChipFlow(spacing: 6) {
@@ -149,10 +155,12 @@ private struct CookStepListRow: View {
                                 }
                             }
                         }
+                        .padding(.top, 2)
                     }
                 }
                 .padding(.top, titleTop)
-                .padding(.bottom, 14)
+                .padding(.bottom, 16)
+                .padding(.trailing, phase == .current ? 4 : 0)
             }
             .frame(minHeight: SCCook.Height.stepRow, alignment: .top)
             .background(alignment: .topLeading) {
@@ -165,13 +173,22 @@ private struct CookStepListRow: View {
                         .frame(maxHeight: .infinity)
                 }
             }
+            // Bieżący krok na karcie w tincie terakoty — wystaje poza
+            // margines treści o 10 pt, oś leży nad nią.
+            .background {
+                if phase == .current {
+                    let shape = RoundedRectangle(cornerRadius: SCCook.Radius.tile, style: .continuous)
+                    shape
+                        .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.12 : 0.07))
+                        .overlay(shape.strokeBorder(SCPalette.terracotta.opacity(0.22), lineWidth: 1))
+                        .padding(.horizontal, -10)
+                        .padding(.vertical, 2)
+                }
+            }
         }
-        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Krok \(index + 1): \(step.title)")
         .accessibilityValue(accessibilityState)
-        .accessibilityAddTraits(phase == .current ? [.isSelected] : [])
-        .accessibilityHint(phase == .current ? "" : "Przechodzi do tego kroku")
     }
 
     private func railSegment(_ color: Color) -> some View {
@@ -198,7 +215,6 @@ private struct CookStepListRow: View {
                 .foregroundStyle(Color.scPageBase(scheme))
                 .frame(width: badge, height: badge)
                 .background(Circle().fill(SCPalette.terracotta))
-                .background(Circle().fill(SCPalette.terracotta.opacity(0.18)).padding(-railGap))
         case .upcoming:
             Text("\(index + 1)")
                 .cookText(SCCook.Typography.stepNumber)

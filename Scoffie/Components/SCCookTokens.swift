@@ -190,9 +190,6 @@ enum SCCook {
         /// Znaczek stanu ukrytego timera w plakietce nad kapsułami: łuk (trwa), ▶ (do włączenia), pauza, dzwonek (po czasie).
         static let overflowMark: CGFloat = 20
 
-        /// Krążek ikony produktu w kolorze działu w wierszu arkusza Składniki (ikona 16) — KM1, D36.
-        static let ingredientIcon: CGFloat = 32
-
         /// Krążek numeru kroku na osi arkusza Kroki (runda 6: stuknięcie w pierścień kroków): zrobiony — ptaszek w szałwii, bieżący — numer na pełnej terakocie, dalszy — numer na polu chipa.
         static let stepBadge: CGFloat = 30
 
@@ -258,11 +255,11 @@ enum SCCook {
         /// Przyciski pełnej szerokości trybu: „Zaczynamy”, „Zjedzone”, „Gotuj dalej”, „Wyślij” (miękka kapsuła).
         static let button: CGFloat = 56
 
-        /// Szuflady powitania „Składniki · N” i „Rady kucharza · N” (WL1).
-        static let drawer: CGFloat = 72
+        /// Szuflady powitania „Składniki” i „Rady kucharza” — runda 7: dwa kafle OBOK SIEBIE w jednym rzędzie (było 72 pt, jedna pod drugą), żeby powitanie mieściło się bez przewijania.
+        static let drawer: CGFloat = 52
 
-        /// Karta „Gotujesz 2 porcje / tyle, ile w planie” ze stepperem (WL1).
-        static let servingsCard: CGFloat = 64
+        /// Karta „Gotujesz 2 porcje / tyle, ile w planie” ze stepperem (WL1) — w stopce nad szufladami; runda 7: 64 → 52 (powitanie bez przewijania).
+        static let servingsCard: CGFloat = 52
 
         /// Segment przełącznika „Ten krok / Cały przepis” w karcie Składniki.
         static let segment: CGFloat = 36
@@ -386,8 +383,8 @@ enum SCCook {
         /// Adnotacja kroku z ikoną (ostrzeżenie w palette.butter, po czym poznać, rada).
         static let note = SCCookTextStyle(size: 15, weight: .regular, tracking: 0, lineHeight: nil)
 
-        /// Nazwa dania na powitaniu (WL1).
-        static let welcomeTitle = SCCookTextStyle(size: 38, weight: .heavy, tracking: -1.33, lineHeight: 39.1)
+        /// Nazwa dania na powitaniu (WL1) — runda 7: 38 → 32 (jak cookStepTitleCompact), żeby powitanie mieściło się na ekranie bez przewijania.
+        static let welcomeTitle = SCCookTextStyle(size: 32, weight: .heavy, tracking: -1.12, lineHeight: 33)
 
         /// „Smacznego!” na zakończeniu (EF8).
         static let finishTitle = SCCookTextStyle(size: 44, weight: .heavy, tracking: -1.76, lineHeight: 44)
