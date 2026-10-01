@@ -133,9 +133,9 @@
 				010DDB722F3235DD007CBEBF /* Sources */,
 				010DDB732F3235DD007CBEBF /* Frameworks */,
 				010DDB742F3235DD007CBEBF /* Resources */,
+				0174A08E306EB68200C6DD64 /* Embed Foundation Extensions */,
 				7D1A9B2C3D4E5F60718293A4 /* Configure API Base URL */,
 				5E1A0C102F9B4E0100A1B2C3 /* Upload dSYM to Sentry */,
-				0174A08E306EB68200C6DD64 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
