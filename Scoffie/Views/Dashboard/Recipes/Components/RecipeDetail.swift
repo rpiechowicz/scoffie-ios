@@ -185,6 +185,9 @@ struct RecipeDetailView: View {
     @State private var showThermomixSuccess = false
     @State private var thermomixError: String?
 
+    /// Start Gotuj przy trwającej sesji innego dania — pytanie o tamto.
+    @State private var isReplaceCookingAsked = false
+
     /// Składniki odhaczone jako „mam w domu”.
     ///
     /// Stan WIZYTY, nie pamięć aplikacji: aplikacja nie ma spiżarni i nie wie,
@@ -430,6 +433,30 @@ struct RecipeDetailView: View {
             guard !hasAppeared else { return }
             try? await Task.sleep(for: .milliseconds(80))
             hasAppeared = true
+        }
+        // Scenariusz Gotuj w pamięci telefonu — przycisk „Gotuj” pojawia się,
+        // gdy paczka jest (§4.1), i działa potem bez sieci.
+        .task(id: recipe.id) {
+            // Cudzy przepis (`.shared`) i tak nie ma „Gotuj” — bez zapytań.
+            if case .shared = context { return }
+            await sessionStore.cookScenarioStore?.prepare(recipe)
+        }
+        .confirmationDialog(
+            "Gotujesz już inne danie",
+            isPresented: $isReplaceCookingAsked,
+            titleVisibility: .visible
+        ) {
+            // Bez `end()` tutaj: start i tak podmienia sesję, a gdyby przejście
+            // się nie udało, tamta nie przepada w pół drogi.
+            Button("Zakończ tamto i gotuj to", role: .destructive) {
+                beginCooking()
+            }
+            Button("Wróć do tamtego") {
+                Task { await sessionStore.resumeCooking() }
+            }
+            Button("Anuluj", role: .cancel) {}
+        } message: {
+            Text("Gotujemy jedno danie naraz — tamto ma swoje timery.")
         }
         .sheet(isPresented: $isAddToPlanPresented) {
             // Liczba porcji ze steppera jedzie do arkusza jako punkt startowy:
@@ -1041,6 +1068,13 @@ struct RecipeDetailView: View {
                     saveSharedButton
                     planActionButton(title: splitPlanTitle)
                 }
+            } else if showsCook {
+                // Makieta RD1/RD2: pełne „Dodaj do planu” / „Zapisz porcje”
+                // mieszczą się na połowie (≈ 121 z 138 pt).
+                HStack(spacing: 10) {
+                    planActionButton(title: primaryActionTitle)
+                    cookButton
+                }
             } else if showsThermomixSplit {
                 HStack(spacing: 10) {
                     planActionButton(title: splitPlanTitle)
@@ -1075,6 +1109,82 @@ struct RecipeDetailView: View {
         .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
         .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
         .accessibilityLabel(primaryActionTitle)
+    }
+
+    // MARK: - Gotuj
+
+    /// Paczka scenariusza w pamięci telefonu — bez niej „Gotuj” nie stoi
+    /// (bez wyszarzonych obietnic, §4.1). Cudzy przepis (`.shared`) — nie.
+    private var cookPackage: CookPackage? {
+        if case .shared = context { return nil }
+        return sessionStore.cookScenarioStore?.package(for: recipe)
+    }
+
+    /// Trwająca sesja TEGO przepisu — wtedy „Gotuj dalej”.
+    private var cookSession: CookSession? {
+        sessionStore.cookSessionStore?.activeSession(for: recipe.id)
+    }
+
+    private var showsCook: Bool {
+        cookPackage != nil || cookSession != nil
+    }
+
+    /// „▶ Gotuj” — jedyny pełny terakotowy przycisk w aplikacji: główna akcja
+    /// tego ekranu (makieta RD1/RD2, docs/GOTUJ.md „Wejścia”).
+    private var cookButton: some View {
+        Button(action: startCooking) {
+            HStack(spacing: 7) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 13, weight: .heavy))
+                Text(cookSession == nil ? "Gotuj" : "Gotuj dalej")
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(-0.1)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.scPageBase(scheme))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(SCPalette.terracotta))
+            .overlay(Capsule().strokeBorder(SCPalette.terracotta, lineWidth: 1.2))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(cookSession == nil ? "Gotuj" : "Wróć do gotowania")
+    }
+
+    private func startCooking() {
+        if cookSession != nil {
+            Task { await sessionStore.resumeCooking() }
+            return
+        }
+        // Jedna sesja naraz (§4.7) — start innego dania pyta o tamto.
+        if let other = sessionStore.cookSessionStore?.session, other.recipeId != recipe.id, other.stage != .finished {
+            isReplaceCookingAsked = true
+            return
+        }
+        beginCooking()
+    }
+
+    private func beginCooking() {
+        guard let package = cookPackage else { return }
+        var slot: MealSlot?
+        var planDate: Date?
+        var portions = didTouchStepper ? wholeServings : recipe.servings
+        if case .planned(let day, let plannedSlot) = context {
+            slot = plannedSlot
+            planDate = day
+            // Z planu: tyle, ile w planie (D11) — stepper szczegółów to te same porcje.
+            portions = wholeServings
+        }
+        Task {
+            await sessionStore.startCooking(
+                recipe: recipe,
+                package: package,
+                portions: portions,
+                slot: slot,
+                planDate: planDate
+            )
+        }
     }
 
     // MARK: - Thermomix
@@ -2269,7 +2379,8 @@ private enum RecipeDetailFormat {
             amount: ingredient.amount,
             unit: ingredient.unit,
             rawUnit: ingredient.rawUnit,
-            department: ingredient.department
+            department: ingredient.department,
+            measure: ingredient.kitchenMeasure
         )
     }
 }

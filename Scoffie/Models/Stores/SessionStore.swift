@@ -129,6 +129,10 @@ final class SessionStore {
 
     var mealCalendarStore: MealCalendarStore?
     var recipeCatalogStore: RecipeCatalogStore?
+    /// Scenariusze trybu Gotuj w pamięci telefonu (§7.7 workstreamu Gotuj).
+    var cookScenarioStore: CookScenarioStore?
+    /// Trwająca sesja gotowania — jedna na telefon, zapisana na dysku.
+    var cookSessionStore: CookSessionStore?
     var shoppingListStore: ShoppingListStore?
     /// Integracja Cookidoo (Thermomix) — jedyny store gadający z backendem
     /// po REST z tokenem, patrz `IntegrationsAPIClient`.
@@ -815,6 +819,22 @@ final class SessionStore {
             repository: ApiRecipeRepository(client: recipeTransport),
             ownerKey: "\(userId)_\(householdId)"
         )
+        self.cookScenarioStore?.invalidate()
+        self.cookScenarioStore = CookScenarioStore(
+            repository: ApiRecipeRepository(client: recipeTransport),
+            ownerKey: "\(userId)_\(householdId)"
+        )
+        // Sesja gotowania przeżywa ponowne zbudowanie store'ów tego samego
+        // konta i domu (restore po zimnym starcie, powrót połączenia); inny
+        // właściciel dostaje czysty store, a cudzego pliku nie wczyta.
+        let cookOwnerKey = "\(userId)_\(householdId)"
+        if self.cookSessionStore?.ownerKey != cookOwnerKey {
+            let cook = CookSessionStore(ownerKey: cookOwnerKey)
+            cook.onRing = { [weak self] in
+                Task { @MainActor in await self?.presentCookingIfRinging() }
+            }
+            self.cookSessionStore = cook
+        }
         let shoppingListStore = ShoppingListStore(
             repository: ApiShoppingListRepository(client: shoppingTransport),
             currentUserId: userId,
@@ -981,6 +1001,14 @@ final class SessionStore {
         recipeCatalogStore?.invalidate()
         RecipeCatalogStore.clearCache()
         recipeCatalogStore = nil
+        // Paczki Gotuj niosą też przepisy domu, a sesja gotowania należy do
+        // konta — obie znikają z domem.
+        cookScenarioStore?.invalidate()
+        cookScenarioStore = nil
+        CookScenarioStore.clearCache()
+        cookSessionStore?.end()
+        cookSessionStore = nil
+        CookSessionStore.clearCache()
         shoppingListStore = nil
         cookidooIntegrationStore = nil
         healthStepsStore?.stopObserving()
@@ -2255,6 +2283,14 @@ final class SessionStore {
             // Nawet jeśli któryś krok się nie udał (offline / timeout),
             // wchodzimy w .ready — dashboard ma własne skeletony / cache.
             self.startupPhase = .ready
+            // Scenariusze Gotuj dań dziś i jutro — po starcie, w tle; nic na
+            // nie nie czeka, a przycisk „Gotuj” pojawi się, gdy przyjdą.
+            Task { @MainActor [weak self] in
+                // Timer zadzwonił, zanim aplikacja wstała (zimny start) —
+                // alarm dopiero nad gotowym pulpitem, nie nad loaderem.
+                await self?.presentCookingIfRinging()
+                await self?.prefetchCookScenarios()
+            }
         }
         startupTask = task
         await task.value

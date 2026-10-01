@@ -9,7 +9,8 @@ import SwiftUI
 /// Wartość to strona arkusza do otwarcia (`0…n` = dania, `n` = „Coś innego”)
 /// albo `card`, żeby zobaczyć samą kotwicę w rozmowie, albo `thought` —
 /// wiersz tury na żywo (ślad kroków nad bieżącym statusem), albo `plate` —
-/// talerz Kalendarza w oknie gotowania (oddech). Prawdziwe przepisy
+/// talerz Kalendarza w oknie gotowania (oddech), albo `gotuj…` — tryb Gotuj
+/// (`CookDebugScreen`). Prawdziwe przepisy
 /// i zdjęcia z katalogu, żeby kadr i liczby były takie jak u użytkownika.
 struct AssistantOptionsDebugScreen: View {
     let page: Int?
@@ -126,7 +127,10 @@ struct AssistantOptionsDebugScreen: View {
     }
 
     var body: some View {
-        if mode == "shopping" {
+        if let mode, mode.hasPrefix("gotuj") {
+            // Tryb Gotuj na wzorcu kotleta — `CookDebugScreen`.
+            CookDebugScreen(mode: mode)
+        } else if mode == "shopping" {
             // Liczniki Zakupów na przykładowych danych — do sprawdzenia
             // `SCCountingText` bez sesji.
             ScrollView {
@@ -272,22 +276,33 @@ struct AssistantOptionsDebugScreen: View {
                 .sheet(isPresented: .constant(true)) {
                     LegalDocumentSheet(title: "Warunki korzystania") { TermsOfServiceContent() }
                 }
-        } else if mode == "plate" {
-            // Talerz w oknie gotowania — oddech talerza, poświaty i aureoli.
+        } else if mode == "plate" || mode == "plate-gotujesz" {
+            // Talerz w oknie gotowania — oddech talerza, poświaty i aureoli,
+            // pieczątka z lewej i „play” z prawej (Gotuj, EC41). Wariant
+            // `plate-gotujesz` = talerz wstrzymanego gotowania (PS1).
+            let item = CalendarPlateItem(
+                id: "debug-plate", slot: .lunch, status: .next, time: "14:00",
+                title: "Omlet ze szpinakiem i fetą",
+                imageURL: URL(string: "https://img.scoffie.app/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.webp"),
+                kcal: 450, prepMinutes: 60, cookFrom: "13:00",
+                servingsNote: nil, minutesAway: 45, isMissed: false,
+                cooking: mode == "plate" ? CalendarPlateCooking.ready : .paused(step: 7, steps: 12)
+            )
             ZStack {
                 SCPageBackground(scheme: scheme).ignoresSafeArea()
-                CalendarPlate(
-                    item: CalendarPlateItem(
-                        id: "debug-plate", slot: .lunch, status: .next, time: "14:00",
-                        title: "Omlet ze szpinakiem i fetą",
-                        imageURL: URL(string: "https://img.scoffie.app/recipe-images/1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80.webp"),
-                        kcal: 450, prepMinutes: 60, cookFrom: "13:00",
-                        servingsNote: nil, minutesAway: 45, isMissed: false
-                    ),
-                    canToggle: true,
-                    onToggle: {},
-                    onOpenDetail: {}
-                )
+                VStack(spacing: 14) {
+                    CalendarPlateKicker(item: item)
+                    CalendarPlate(
+                        item: item,
+                        canToggle: true,
+                        onToggle: {},
+                        onOpenDetail: {},
+                        onCook: {}
+                    )
+                    .padding(.vertical, CalendarPlate.maxRimInset)
+                    CalendarPlateCaption(item: item, dayKey: "2026-10-01", onOpenDetail: {})
+                }
+                .padding(.horizontal, SCPageMetrics.horizontal)
             }
         } else if mode == "thought" {
             // Wiersz tury na żywo: ślad trzech kroków nad bieżącym statusem,

@@ -239,7 +239,7 @@ struct AssistantAnswerFooter: View {
 /// z krążka i gaśnie (0,5 s), razem z podskokiem glifu i haptyką sukcesu.
 /// Trwałe widoki z `keyframeAnimator` na liczniku (wzór `BurstHeart`
 /// w ulubionych), nie wstawiane z `Task.sleep`. Przy Reduce Motion nie gra.
-private struct ThumbCheer: View {
+struct ThumbCheer: View {
     let trigger: Int
     let tint: Color
 

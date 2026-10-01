@@ -60,7 +60,12 @@ enum CalendarRelativeTime {
 // MARK: - Checkbox
 
 /// Kółko stanu: puste (później / inny dzień) · kreskowane (bez pory) ·
-/// w kolorze pory z kropką (następne) · pełne z ptaszkiem (zjedzone).
+/// obwódka i ptaszek w kolorze pory (następne) · pełne z ptaszkiem
+/// w neutralnym piśmie (zjedzone).
+///
+/// Następne miało kropkę i poświatę — od Gotuj (D23, 1.10.2026) ma PTASZEK
+/// w kolorze pory i bez poświaty: pieczątka mówi, co zrobi stuknięcie, zanim
+/// się w nią stuknie, a poświatę pod talerzem niesie już sam talerz.
 ///
 /// Siedzi w rogu wielkiego talerza jako pieczątka odhaczenia. Ten sam rysunek
 /// stał wcześniej w wierszu listy i na węźle łuku doby — i to jest cała jego
@@ -101,20 +106,13 @@ struct CalendarMealCheck: View {
                     )
 
                 if status == .next {
-                    Circle()
-                        .fill(color)
-                        .frame(width: size * 0.36, height: size * 0.36)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: size * 0.46, weight: .bold))
+                        .foregroundStyle(color)
                 }
             }
         }
         .frame(width: size, height: size)
-        // Poświata tylko pod „następnym": to jedyny posiłek, w który
-        // użytkownik ma teraz stuknąć, więc jako jedyny woła o uwagę.
-        .background(
-            Circle()
-                .fill(color.opacity(status == .next ? 0.16 : 0))
-                .padding(-3)
-        )
         .animation(.smooth(duration: 0.22), value: status)
     }
 
@@ -150,6 +148,25 @@ extension MealSlot {
 
     /// Tło talerza, gdy przepis nie ma zdjęcia.
     var cozyTint: Color { cozyAccent }
+
+    /// Światło pod talerzem w JASNYM motywie — jasna, świecąca wersja koloru
+    /// pory (wartości ciemnego motywu palety), w obu motywach ta sama.
+    /// `cozyAccent` w jasnym motywie jest przyciemniony pod tekst na kremie
+    /// i jako poświata dawał szarą plamę (1.10.2026, jasny Kalendarz).
+    var cozyGlow: Color {
+        switch self {
+        case .breakfast:       return Color(red: 232 / 255, green: 207 / 255, blue: 133 / 255)
+        case .secondBreakfast: return Color(red: 224 / 255, green: 154 / 255, blue: 164 / 255)
+        case .lunch:           return Color(red: 135 / 255, green: 194 / 255, blue: 165 / 255)
+        case .afternoonSnack:  return Color(red: 111 / 255, green: 185 / 255, blue: 204 / 255)
+        case .dinner:          return Color(red: 101 / 255, green: 115 / 255, blue: 202 / 255)
+        case .snack:           return Color(red: 183 / 255, green: 155 / 255, blue: 224 / 255)
+        }
+    }
+
+    /// Światło pod talerzem wstrzymanego gotowania w jasnym motywie — jasna
+    /// terakota (jak `cozyGlow`).
+    static let cookingGlow = Color(red: 219 / 255, green: 132 / 255, blue: 82 / 255)
 
     /// Gradient pory pod ikoną dania bez zdjęcia — ten sam ułamek i ten sam
     /// mikser (gamma sRGB, `mix(black:)`), którym Plan tygodnia rysuje kafel

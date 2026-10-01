@@ -97,6 +97,15 @@ struct Ingredient: Identifiable, Codable, Hashable {
     var normalizedAmount: Double?
     var normalizedUnit: String?
 
+    /// Przyprawy w g/ml: jak pokazać ilość w kuchni (`KitchenAmount.format`).
+    /// `nil` = jak dotąd (nie przyprawa, starszy serwer, stara kopia katalogu).
+    var kitchenMeasure: KitchenMeasure?
+
+    /// `Ingredient.id` katalogu składników (małymi literami) — tylko ze
+    /// szczegółu przepisu. Po nim scenariusz Gotuj wskazuje składniki kroku
+    /// (`CookPackage`); lista przepisów i stary cache go nie mają (`nil`).
+    var ingredientId: String?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -105,7 +114,9 @@ struct Ingredient: Identifiable, Codable, Hashable {
         department: String? = nil,
         rawUnit: String? = nil,
         normalizedAmount: Double? = nil,
-        normalizedUnit: String? = nil
+        normalizedUnit: String? = nil,
+        kitchenMeasure: KitchenMeasure? = nil,
+        ingredientId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -115,7 +126,24 @@ struct Ingredient: Identifiable, Codable, Hashable {
         self.rawUnit = rawUnit
         self.normalizedAmount = normalizedAmount
         self.normalizedUnit = normalizedUnit
+        self.kitchenMeasure = kitchenMeasure
+        self.ingredientId = ingredientId
     }
+}
+
+/// Miara kuchenna przypraw z backendu (`kitchenMeasure`): `per` gramów (ml
+/// przy ml) na łyżeczkę płaską (`spoon`) albo na sztukę (`piece` — z formami
+/// odmiany: „liść / liście / liści”). Dane zostają w gramach; to tylko
+/// przepis na wyświetlenie.
+struct KitchenMeasure: Codable, Hashable {
+    static let spoon = "spoon"
+    static let piece = "piece"
+
+    let kind: String
+    let per: Double
+    let one: String?
+    let few: String?
+    let many: String?
 }
 
 /// Pojedynczy krok przygotowania posiłku
@@ -252,6 +280,12 @@ struct Recipe: Identifiable, Codable {
     /// „Wyłącz link” — także na telefonie domownika, który linku nie wysyłał.
     var shareUrl: URL?
 
+    /// Wersja opublikowanego scenariusza trybu Gotuj (katalog i szczegół).
+    /// `nil` = przycisku „Gotuj” nie ma (D29: przepis trywialny, brak
+    /// scenariusza, przepis zmieniony po napisaniu — trigger serwera zeruje
+    /// wersję). Telefon trzyma scenariusz tylko w TEJ wersji (`CookScenarioStore`).
+    var cookScenarioVersion: Int?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -273,7 +307,8 @@ struct Recipe: Identifiable, Codable {
         dietTags: [String]? = nil,
         taxonomy: RecipeTaxonomy? = nil,
         slug: String? = nil,
-        shareUrl: URL? = nil
+        shareUrl: URL? = nil,
+        cookScenarioVersion: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -296,6 +331,7 @@ struct Recipe: Identifiable, Codable {
         self.taxonomy = taxonomy
         self.slug = slug
         self.shareUrl = shareUrl
+        self.cookScenarioVersion = cookScenarioVersion
     }
 }
 
@@ -315,6 +351,7 @@ extension Recipe {
         case allergens, dietTags
         case taxonomy
         case slug, shareUrl
+        case cookScenarioVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -352,6 +389,9 @@ extension Recipe {
         // wersji pliku: oba pola są tylko podpowiedzią dla przycisku.
         slug = try? container.decodeIfPresent(String.self, forKey: .slug)
         shareUrl = try? container.decodeIfPresent(URL.self, forKey: .shareUrl)
+        // Brak klucza (cache sprzed Gotuj) = brak przycisku do następnej
+        // synchronizacji — dlatego plik katalogu dostał wersję 4.
+        cookScenarioVersion = try? container.decodeIfPresent(Int.self, forKey: .cookScenarioVersion)
     }
 }
 

@@ -20,6 +20,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Codex czyta `AGENTS.md`, Claude Code — `CLAUDE.md`: ta sama treść
+  # (1.10.2026). Sekunda na Linuksie.
+  agents-md:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Instrukcje agentów zgodne (CLAUDE.md = AGENTS.md)
+        run: cmp -s CLAUDE.md AGENTS.md || { echo "AGENTS.md różni się od CLAUDE.md — zrób cp CLAUDE.md AGENTS.md"; exit 1; }
+
   # Skaner sekretów (klucze API, tokeny, hasła) w zmianach — zamiennik płatnej
   # ochrony GitHuba dla prywatnych repozytoriów. Czerwony = merge stoi.
   secrets-scan:

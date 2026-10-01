@@ -85,18 +85,39 @@ struct SCSheetIconLabel: View {
             }
         }
         .frame(width: 36, height: 36)
-        .background {
-            if onImage {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(Circle().fill(Color.scCanvas(scheme).opacity(0.78)))
-            }
-            Circle().fill(Color.scChipBg(scheme))
-        }
-        .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-        .shadow(color: .black.opacity(onImage ? (scheme == .dark ? 0.35 : 0.16) : 0), radius: 6, x: 0, y: 2)
+        .scSheetIconSurface(onImage: onImage)
         .contentShape(Circle())
         .animation(.smooth(duration: 0.2), value: isBusy)
+    }
+}
+
+/// Powierzchnia krążka arkusza: tło (na zdjęciu kryjące, pod szkłem),
+/// obwódka i cień. Jedna dla krzyżyka, jego sąsiadów i pierścienia kroków
+/// trybu Gotuj (`CookStepRing`), który stoi naprzeciw krzyżyka na zdjęciu
+/// i ma wyglądać jak jego para.
+struct SCSheetIconSurface: ViewModifier {
+    let onImage: Bool
+
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                if onImage {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Circle().fill(Color.scCanvas(scheme).opacity(0.78)))
+                }
+                Circle().fill(Color.scChipBg(scheme))
+            }
+            .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+            .shadow(color: .black.opacity(onImage ? (scheme == .dark ? 0.35 : 0.16) : 0), radius: 6, x: 0, y: 2)
+    }
+}
+
+extension View {
+    func scSheetIconSurface(onImage: Bool) -> some View {
+        modifier(SCSheetIconSurface(onImage: onImage))
     }
 }
 

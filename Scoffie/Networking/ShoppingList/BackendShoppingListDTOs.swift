@@ -12,6 +12,8 @@ struct BackendShoppingItemDTO: Codable {
     /// Tytuły przepisów, z których coś do pozycji DOPISANO („brakuje mi”
     /// ze szczegółu przepisu). Opcjonalne — starszy backend pola nie zna.
     let addedFrom: [String]?
+    /// Przyprawy: „1 łyżeczka” zamiast „6 g”. Starszy backend — `nil`.
+    let kitchenMeasure: KitchenMeasure?
 }
 
 struct BackendShoppingListArchiveItemDTO: Codable {
@@ -21,6 +23,7 @@ struct BackendShoppingListArchiveItemDTO: Codable {
     let department: String
     let totalAmount: Double
     let isChecked: Bool
+    let kitchenMeasure: KitchenMeasure?
 }
 
 struct BackendShoppingListArchiveDTO: Codable {
@@ -92,7 +95,8 @@ extension BackendShoppingItemDTO {
             unit: unit,
             department: department,
             isChecked: isChecked,
-            addedFrom: addedFrom?.isEmpty == false ? addedFrom : nil
+            addedFrom: addedFrom?.isEmpty == false ? addedFrom : nil,
+            kitchenMeasure: kitchenMeasure
         )
     }
 }
@@ -105,7 +109,8 @@ extension BackendShoppingListArchiveItemDTO {
             totalAmount: totalAmount,
             unit: unit,
             department: department,
-            isChecked: isChecked
+            isChecked: isChecked,
+            kitchenMeasure: kitchenMeasure
         )
     }
 }

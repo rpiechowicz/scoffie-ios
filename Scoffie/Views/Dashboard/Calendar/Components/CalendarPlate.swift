@@ -108,6 +108,10 @@ struct CalendarPlateItem: Identifiable, Equatable {
     let minutesAway: Int?
     /// Dzień miniony, a posiłek nieodhaczony.
     let isMissed: Bool
+    /// Tryb Gotuj dla tego dania: „play” na talerzu albo wstrzymane
+    /// gotowanie (D23, PS1). `nil` = bez „play” — danie bez scenariusza
+    /// w telefonie albo pusta pora.
+    var cooking: CalendarPlateCooking? = nil
 
     var isEmptySlot: Bool { title == nil }
     var isEaten: Bool { status.isEaten }
@@ -161,9 +165,16 @@ extension CalendarPlateItem {
         return away < -CalendarRelativeTime.graceMinutes
     }
 
+    /// Gotowanie tego dania jest wstrzymane (PS1) — obręcz talerza staje się
+    /// pierścieniem kroków, a podpis mówi, na którym kroku stanęło.
+    var isPausedCooking: Bool {
+        if case .paused = cooking { true } else { false }
+    }
+
     /// Czy talerz ma bić. Tylko wtedy, gdy jest co zrobić — bijący talerz
-    /// bez powodu to migająca dioda, a nie informacja.
-    var isUrgent: Bool { isCooking || isDue }
+    /// bez powodu to migająca dioda, a nie informacja. Wstrzymane gotowanie
+    /// też jest „co zrobić”: garnki czekają.
+    var isUrgent: Bool { isCooking || isDue || isPausedCooking }
 
     /// Barwa, którą niesie ten talerz.
     ///
@@ -173,9 +184,25 @@ extension CalendarPlateItem {
     /// w przygaszonym piśmie, żeby jedna pora nie wołała głośniej od drugiej
     /// bez powodu.
     func accent(in scheme: ColorScheme) -> Color {
+        // Gotowanie to terakota — poświata i nadpis jak w trybie Gotuj.
+        if isPausedCooking { return SCPalette.terracotta }
         if isEaten { return Color.scChecked(scheme).opacity(0.55) }
         if status == .next { return slot.cozyAccent }
         return Color.scLabel(scheme).opacity(0.28)
+    }
+
+    /// Światło sceny pod talerzem (poświata i aureola). Ciemny motyw — barwa
+    /// obręczy: na czerni każdy tint czyta się jak światło. Jasny (1.10.2026:
+    /// „dark mode super, light mode trochę gorzej”): obręcz w jasnym motywie
+    /// to PRZYCIEMNIONY kolor pory, a zmieszany z kremem dawał szarobeżową
+    /// plamę, przygaszone talerze — szarą winietę. Tu świeci jasna wersja
+    /// koloru pory (`cozyGlow`) i tylko pod talerzem, który woła (następny,
+    /// gotowanie); reszta stoi bez poświaty.
+    func glow(in scheme: ColorScheme) -> Color {
+        guard scheme == .light else { return accent(in: scheme) }
+        if isPausedCooking { return MealSlot.cookingGlow }
+        if status == .next, !isEaten { return slot.cozyGlow }
+        return .clear
     }
 
     /// „OBIAD · 14:00” — nadpis nad talerzem.
@@ -185,6 +212,8 @@ extension CalendarPlateItem {
     /// talerzem w sekwencji i nie ma po co pisać jej dwa razy na jednym
     /// ekranie.
     var kicker: String {
+        // „OBIAD · GOTUJESZ” zamiast godziny (PS1).
+        if isPausedCooking { return "\(slot.title.uppercased()) · GOTUJESZ" }
         guard let time else { return slot.title.uppercased() }
 
         switch status {
@@ -196,6 +225,7 @@ extension CalendarPlateItem {
     }
 
     func kickerColor(in scheme: ColorScheme) -> Color {
+        if isPausedCooking { return SCPalette.terracotta }
         if isEaten { return Color.scChecked(scheme).opacity(0.7) }
         if status == .next && !isLate { return slot.cozyAccent }
         return Color.scMuted(scheme)
@@ -209,6 +239,9 @@ extension CalendarPlateItem {
         if let time { parts.append(time) }
         parts.append(title ?? "nic nie zaplanowano")
         if isEaten { parts.append("zjedzone") }
+        if case let .paused(step, steps) = cooking {
+            parts.append("gotujesz, krok \(step + 1) z \(steps)")
+        }
         return parts.joined(separator: ", ")
     }
 }
@@ -341,13 +374,34 @@ struct CalendarPlateFace: View {
     /// Gradient pory pod ikoną — ten sam, którym Plan tygodnia rysuje kafel
     /// bez zdjęcia (`MealSlot.cozyGradient`), więc danie bez fotografii
     /// wygląda tak samo na obu zakładkach.
+    ///
+    /// W jasnym motywie bez tego gradientu: przyciemniona barwa pory zmieszana
+    /// z czernią dawała na kremie ciężki musztardowo-brązowy krążek (a to też
+    /// zastępca, który mignie przy każdym niezaładowanym zdjęciu). Zamiast
+    /// tego ciepła biel z tintem pory i ikona w kolorze pory.
+    @ViewBuilder
     private func fallback(_ slot: MealSlot) -> some View {
-        ZStack {
-            slot.cozyGradient
+        if scheme == .dark {
+            ZStack {
+                slot.cozyGradient
 
-            Image(systemName: slot.icon)
-                .font(.system(size: iconSize, weight: .light))
-                .foregroundStyle(Color.white.opacity(0.65))
+                Image(systemName: slot.icon)
+                    .font(.system(size: iconSize, weight: .light))
+                    .foregroundStyle(Color.white.opacity(0.65))
+            }
+        } else {
+            ZStack {
+                Color.scCardSurface(scheme)
+                LinearGradient(
+                    colors: [slot.cozyAccent.opacity(0.12), slot.cozyAccent.opacity(0.24)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                Image(systemName: slot.icon)
+                    .font(.system(size: iconSize, weight: .light))
+                    .foregroundStyle(slot.cozyAccent)
+            }
         }
     }
 }
@@ -389,12 +443,16 @@ enum CalendarBreath {
 
 /// Wielkie okrągłe zdjęcie dania z podwójnym rantem i pieczątką odhaczenia.
 ///
-/// Dwa przyciski obok siebie, nie jeden w drugim: zdjęcie otwiera szczegóły
-/// posiłku (jak każde zdjęcie dania w aplikacji), pieczątka w rogu odhacza
-/// — jedyna czynność, którą ten ekran w ogóle zapisuje (Kalendarz nie
-/// planuje). Dzień z przyszłości nie ma czego odhaczać, więc pieczątka jest
-/// wtedy przygaszona; pusta pora nie ma czego otwierać, więc zdjęcie jest
-/// wtedy tylko obrazkiem.
+/// Przyciski obok siebie, nie jeden w drugim: zdjęcie otwiera szczegóły
+/// posiłku (jak każde zdjęcie dania w aplikacji), pieczątka w LEWYM rogu
+/// odhacza — jedyna czynność, którą ten ekran w ogóle zapisuje (Kalendarz
+/// nie planuje), a „play” w PRAWYM, pod kciukiem, wchodzi w tryb Gotuj
+/// (D23 — pieczątka stała wcześniej po prawej). Dzień z przyszłości nie ma
+/// czego odhaczać, więc pieczątka jest wtedy przygaszona; pusta pora nie ma
+/// czego otwierać, więc zdjęcie jest wtedy tylko obrazkiem.
+///
+/// Wstrzymane gotowanie (PS1): obręcz pory zamienia się w pierścień kroków
+/// trybu Gotuj (`CookStepArcs`), a światło i nadpis przechodzą w terakotę.
 struct CalendarPlate: View {
     let item: CalendarPlateItem?
     var size: CGFloat = CalendarPlate.defaultSize
@@ -404,6 +462,9 @@ struct CalendarPlate: View {
     let onToggle: () -> Void
     /// Zdjęcie — otwiera szczegóły. `nil` dla pustej pory i pustego dnia.
     let onOpenDetail: (() -> Void)?
+    /// „Play” w prawym rogu — gotowanie (start albo powrót). Rysowany tylko,
+    /// gdy danie ma `cooking`.
+    var onCook: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -445,7 +506,17 @@ struct CalendarPlate: View {
     /// Pierścień w kolorze pory — to on niesie stan.
     private var ringInset: CGFloat { (7 * scale).rounded() }
     private var ringWidth: CGFloat { max(2, (3 * scale).rounded()) }
-    private var badgeSize: CGFloat { max(26, (32 * scale).rounded()) }
+    private var badgeSize: CGFloat { max(26, (SCCook.Size.plateStamp * scale).rounded()) }
+
+    /// Pierścień kroków po wstrzymaniu (PS1): linia środka 6,5 pt za
+    /// zdjęciem (promień 90,5 przy talerzu 168), kreska 5 — od środka
+    /// zaczyna się tam, gdzie obręcz pory, na zewnątrz jest o 2 pt grubszy.
+    private var stepRingWidth: CGFloat { SCCook.Stroke.plateStepRing * scale }
+    private var stepRingInset: CGFloat { 6.5 * scale + stepRingWidth / 2 }
+
+    /// „Play” 38 w krążku tła 46 (EC41) — mniejszy razem z talerzem.
+    private var playSize: CGFloat { max(28, (SCCook.Size.platePlay * scale).rounded()) }
+    private var playWell: CGFloat { playSize + SCCook.Size.platePlayWell - SCCook.Size.platePlay }
 
     private var accent: Color {
         item?.accent(in: scheme) ?? Color.scLabel(scheme).opacity(0.14)
@@ -466,7 +537,7 @@ struct CalendarPlate: View {
             // ma czego przenikać. Nic tu nie przygasa, bo na talerzu nie ma
             // chwili, w której nic nie stoi.
             CalendarPlateLight(
-                tint: accent,
+                tint: item?.glow(in: scheme) ?? .clear,
                 diameter: size,
                 ringWidth: ringWidth,
                 loud: isUrgent,
@@ -484,9 +555,12 @@ struct CalendarPlate: View {
         // w miejscu, sprężyną.
         .animation(DayNavigationMotion.plateFade, value: item?.id)
         .animation(DayNavigationMotion.spring, value: item?.status)
+        // „Play” wskakuje, gdy scenariusz dojdzie do telefonu, a obręcz
+        // przechodzi w pierścień kroków po wstrzymaniu — sprężyną, w miejscu.
+        .animation(DayNavigationMotion.spring, value: item?.cooking)
     }
 
-    /// Zdjęcie i pieczątka — dwa osobne przyciski w jednym pudełku.
+    /// Zdjęcie, pieczątka i „play” — osobne przyciski w jednym pudełku.
     ///
     /// Nie przycisk w przycisku: zagnieżdżone przyciski w SwiftUI dzielą
     /// jeden obszar dotyku i o tym, który zadziała, decyduje kolejność
@@ -497,18 +571,20 @@ struct CalendarPlate: View {
         // wyrażeniu warunkowym nie mają skąd wziąć typu bez podpowiedzi.
         let hiddenTraits: AccessibilityTraits = onOpenDetail == nil ? .isButton : []
 
-        return ZStack(alignment: .bottomTrailing) {
-            Button {
-                pagerGate.ifNotSwiping { onOpenDetail?() }
-            } label: {
-                plate
-            }
-            .buttonStyle(PlatePressStyle())
-            .disabled(onOpenDetail == nil)
-            .accessibilityLabel(accessibilityLabel)
-            .accessibilityHint(onOpenDetail == nil ? "" : "Otwiera szczegóły posiłku")
-            .accessibilityRemoveTraits(hiddenTraits)
-
+        return Button {
+            pagerGate.ifNotSwiping { onOpenDetail?() }
+        } label: {
+            plate
+        }
+        .buttonStyle(PlatePressStyle())
+        .disabled(onOpenDetail == nil)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(onOpenDetail == nil ? "" : "Otwiera szczegóły posiłku")
+        .accessibilityRemoveTraits(hiddenTraits)
+        .frame(width: size, height: size)
+        // Pieczątka — lewy dół (środek 15 pt do wewnątrz od narożnika
+        // zdjęcia, lustro dawnego prawego rogu).
+        .overlay(alignment: .bottomLeading) {
             if let item, !item.isEmptySlot {
                 CalendarPlateStamp(
                     status: item.status,
@@ -517,10 +593,24 @@ struct CalendarPlate: View {
                     isEnabled: canToggle,
                     action: { pagerGate.ifNotSwiping(onToggle) }
                 )
-                .offset(x: 4 * scale, y: 4 * scale)
+                .offset(x: -4 * scale, y: 4 * scale)
             }
         }
-        .frame(width: size, height: size)
+        // „Play” — prawy dół, symetrycznie do pieczątki (oba środki na tej
+        // samej wysokości, 15 pt od narożników zdjęcia).
+        .overlay(alignment: .bottomTrailing) {
+            if let item, let onCook, item.cooking != nil {
+                CalendarPlatePlay(
+                    isStrong: item.isUrgent,
+                    isResume: item.isPausedCooking,
+                    size: playSize,
+                    well: playWell,
+                    action: { pagerGate.ifNotSwiping(onCook) }
+                )
+                .offset(x: 8 * scale, y: 8 * scale)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+        }
     }
 
     /// Talerz w rytmie oddechu.
@@ -550,23 +640,57 @@ struct CalendarPlate: View {
             // Zjedzone przygasa — zostaje czytelne, ale przestaje konkurować
             // z tym, co dopiero przed użytkownikiem. Ta sama reguła, co
             // w miniaturach w Planie tygodnia.
-            .saturation(item?.isEaten == true ? 0.5 : 1)
-            .opacity(item?.isEaten == true ? 0.78 : 1)
+            //
+            // W jasnym motywie bez krycia: przez przezroczyste zdjęcie
+            // prześwitywał cień i poświata spod talerza — mleczny, szary
+            // welon. Zamiast tego słabsze kolory i krem na zdjęciu.
+            .saturation(item?.isEaten == true ? (scheme == .dark ? 0.5 : 0.4) : 1)
+            .overlay {
+                if item?.isEaten == true, scheme == .light {
+                    Circle().fill(Color.scPageBase(scheme).opacity(0.3))
+                }
+            }
+            .opacity(item?.isEaten == true && scheme == .dark ? 0.78 : 1)
             // Cień pod talerzem, nie pod pierścieniem: rant ma leżeć na
-            // planszy, a samo danie unosić się nad nią.
-            .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.22), radius: 26 * scale, y: 14 * scale)
+            // planszy, a samo danie unosić się nad nią. W jasnym motywie
+            // ciepły brąz, krótszy i bliżej — czarny 0,22 na promieniu 26
+            // zostawiał na kremie szary półksiężyc, na którym leżały ranty.
+            .shadow(
+                color: scheme == .dark
+                    ? .black.opacity(0.5)
+                    : Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(0.14),
+                radius: (scheme == .dark ? 26 : 16) * scale,
+                y: (scheme == .dark ? 14 : 8) * scale
+            )
             // Dwa ranty, licząc od zdjęcia na zewnątrz: pierścień pory tuż
             // przy krawędzi, a za nim cienka obwódka, która jest już samym
             // kształtem talerza.
             .overlay {
-                Circle()
-                    .strokeBorder(accent, lineWidth: ringWidth)
-                    .padding(-ringInset)
-                    .animation(DayNavigationMotion.spring, value: accent)
+                // Wstrzymane gotowanie: pierścień kroków trybu Gotuj w miejscu
+                // obręczy pory (ten sam znak co w nagłówku trybu).
+                if case let .paused(step, steps) = item?.cooking {
+                    CookStepArcs(
+                        count: steps,
+                        current: step,
+                        lineWidth: stepRingWidth,
+                        // Widoczna przerwa między zaokrąglonymi końcami.
+                        gap: 3 * scale
+                    )
+                    .padding(-stepRingInset)
+                    .transition(.opacity)
+                } else {
+                    Circle()
+                        .strokeBorder(accent, lineWidth: ringWidth)
+                        .padding(-ringInset)
+                        .animation(DayNavigationMotion.spring, value: accent)
+                        .transition(.opacity)
+                }
             }
             .overlay {
                 Circle()
-                    .strokeBorder(Color.scLabel(scheme).opacity(scheme == .dark ? 0.10 : 0.08), lineWidth: 1)
+                    // Na kremie obwódka potrzebuje więcej krycia niż na
+                    // czerni (jak `scTileStroke`: 0,06 → 0,12).
+                    .strokeBorder(Color.scLabel(scheme).opacity(scheme == .dark ? 0.10 : 0.14), lineWidth: 1)
                     .padding(-rimInset)
             }
     }
@@ -605,7 +729,9 @@ private struct CalendarPlateStamp: View {
                 .padding(3)
                 // Pieczątka wycina się z talerza krążkiem tła — inaczej
                 // kreskowane kółko „dowolnej pory” gubiło się na zdjęciu.
-                .background(Circle().fill(Color.scPageBase(scheme)))
+                // W jasnym motywie krążek pływającej kontrolki (ciepła biel
+                // z cienką obwódką), nie dziura w kolorze strony.
+                .background(CalendarPlateWell())
                 .scaleEffect(popped ? 1.3 : 1)
                 .scTapTarget(44, drawn: size + 6)
         }
@@ -634,6 +760,75 @@ private struct StampPressStyle: ButtonStyle {
     }
 }
 
+// MARK: - Gotuj
+
+/// „Gotuj” w prawym rogu talerza (D23, EC41): krążek w kolorze tła wycina go
+/// z obręczy, a w nim pełna terakota z aureolą 5 pt — w oknie „Pora
+/// gotować”, w porze posiłku i przy wstrzymanym gotowaniu. Poza tym ten sam
+/// przycisk w wariancie „soft”: stoi przy każdym dzisiejszym daniu ze
+/// scenariuszem i nie może wołać głośniej niż talerz, który akurat nie ma nic
+/// do powiedzenia (§13.6: „mocniejszy w oknie Pora gotować”).
+private struct CalendarPlatePlay: View {
+    let isStrong: Bool
+    /// Wstrzymane gotowanie — VoiceOver mówi „Wróć do gotowania”.
+    let isResume: Bool
+    let size: CGFloat
+    let well: CGFloat
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var halo: CGFloat { (5 * size / SCCook.Size.platePlay).rounded() }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "play.fill")
+                .font(.system(size: (size * 0.4).rounded(), weight: .heavy))
+                .foregroundStyle(isStrong ? Color.scPageBase(scheme) : SCPalette.terracotta)
+                // Trójkąt ma ciężar po lewej — o punkt w prawo stoi na środku.
+                .offset(x: 1)
+                .frame(width: size, height: size)
+                .background {
+                    if isStrong {
+                        Circle()
+                            .fill(SCPalette.terracotta)
+                            .background(
+                                Circle()
+                                    .fill(SCPalette.terracotta.opacity(SCCook.Opacity.playHalo))
+                                    .padding(-halo)
+                            )
+                    } else {
+                        Color.clear.scSoftSurface(Circle())
+                    }
+                }
+                .frame(width: well, height: well)
+                .background(CalendarPlateWell())
+                .scTapTarget(44, drawn: well)
+        }
+        .buttonStyle(StampPressStyle())
+        .animation(.smooth(duration: 0.3), value: isStrong)
+        .accessibilityLabel(isResume ? "Wróć do gotowania" : "Gotuj")
+        .accessibilityHint("Otwiera tryb gotowania krok po kroku")
+    }
+}
+
+/// Krążek pod pieczątką i „play” na rancie talerza. Ciemny motyw — kolor
+/// strony (wycina się z talerza); jasny — pływająca kontrolka aplikacji
+/// (`scCardSurface` z obwódką `scCardStroke`).
+private struct CalendarPlateWell: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if scheme == .dark {
+            Circle().fill(Color.scPageBase(scheme))
+        } else {
+            Circle()
+                .fill(Color.scCardSurface(scheme))
+                .overlay(Circle().strokeBorder(Color.scCardStroke(scheme), lineWidth: 1))
+        }
+    }
+}
+
 // MARK: - Poświata
 
 /// Miękka plama w kolorze pory za talerzem.
@@ -649,12 +844,14 @@ private struct CalendarPlateGlow: View {
     let loud: Bool
     /// Głębokość oddechu 0–1; zero, gdy talerz stoi.
     let breath: Double
+    /// Jasny motyw: jasna barwa pory na kremie potrzebuje gęstszego środka.
+    var isLight = false
 
     var body: some View {
         Circle()
             .fill(
                 RadialGradient(
-                    colors: [tint.opacity(loud ? 0.44 : 0.22), tint.opacity(0)],
+                    colors: [tint.opacity(isLight ? (loud ? 0.55 : 0.3) : (loud ? 0.44 : 0.22)), tint.opacity(0)],
                     center: .center,
                     startRadius: 0,
                     endRadius: diameter * (loud ? 0.4 : 0.34)
@@ -685,6 +882,9 @@ private struct CalendarPlateHalo: View {
     let diameter: CGFloat
     let lineWidth: CGFloat
     let breath: Double
+    /// Jasny motyw: rozmyty pierścień na kremie czyta się mocniej niż na
+    /// czerni — o 40 % ciszej.
+    var isLight = false
 
     var body: some View {
         Circle()
@@ -692,7 +892,7 @@ private struct CalendarPlateHalo: View {
             .frame(width: diameter, height: diameter)
             .blur(radius: 6 + 8 * breath)
             .scaleEffect(1.07 + 0.07 * breath)
-            .opacity(0.38 + 0.6 * breath)
+            .opacity((0.38 + 0.6 * breath) * (isLight ? 0.6 : 1))
             .allowsHitTesting(false)
     }
 }
@@ -716,12 +916,14 @@ private struct CalendarPlateLight: View {
     let beats: Bool
     let reduceMotion: Bool
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !beats)) { context in
             let breath = beats ? CalendarBreath.depth(at: context.date) : 0
 
             ZStack {
-                CalendarPlateGlow(tint: tint, diameter: diameter * 2.2, loud: loud, breath: breath)
+                CalendarPlateGlow(tint: tint, diameter: diameter * 2.2, loud: loud, breath: breath, isLight: scheme == .light)
 
                 if loud {
                     // Bez ruchu (Ogranicz ruch, niewybrana zakładka) aureola
@@ -730,7 +932,8 @@ private struct CalendarPlateLight: View {
                         tint: tint,
                         diameter: diameter,
                         lineWidth: ringWidth,
-                        breath: beats ? breath : 0.5
+                        breath: beats ? breath : 0.5,
+                        isLight: scheme == .light
                     )
                 }
             }
@@ -842,6 +1045,7 @@ struct CalendarPlateCaption: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dayPagerGate) private var pagerGate
+    @Environment(\.sessionStore) private var sessionStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -874,13 +1078,14 @@ struct CalendarPlateCaption: View {
             // sekwencja pod spodem podskakiwałaby o trzydzieści sześć
             // punktów.
             if showsChips {
-                HStack(spacing: 6) {
-                    ForEach(chips) { chip in
-                        CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
-                            // Krycie, nie skala: pigułka rosnąca w rzędzie
-                            // rozpychała sąsiadki w trakcie przejścia i cały
-                            // rząd falował.
-                            .transition(.opacity)
+                Group {
+                    // Wstrzymane gotowanie (PS1): w rzędzie trwające timery
+                    // trybu Gotuj zamiast czasu i kcal — tykają co sekundę.
+                    // Bez trwających timerów zostaje zwykły rząd.
+                    if item?.isPausedCooking == true, let session = sessionStore.cookSessionStore?.session {
+                        CalendarCookTimerPills(session: session) { chipRow }
+                    } else {
+                        chipRow
                     }
                 }
                 .frame(height: 30)
@@ -905,6 +1110,18 @@ struct CalendarPlateCaption: View {
         .animation(DayNavigationMotion.spring, value: item?.status)
         .animation(DayNavigationMotion.plateFade, value: headline)
         .accessibilityElement(children: .contain)
+    }
+
+    private var chipRow: some View {
+        HStack(spacing: 6) {
+            ForEach(chips) { chip in
+                CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
+                    // Krycie, nie skala: pigułka rosnąca w rzędzie
+                    // rozpychała sąsiadki w trakcie przejścia i cały
+                    // rząd falował.
+                    .transition(.opacity)
+            }
+        }
     }
 
     /// Nazwa dania w pudełku o wysokości `titleLines` linijek — zawsze,
@@ -977,6 +1194,10 @@ struct CalendarPlateCaption: View {
         if item.isEmptySlot {
             return voice(["Nic nie zaplanowano", "Jeszcze pusto", "Wolna pora", "Bez planu"], "empty-slot")
         }
+        // Wstrzymane gotowanie (PS1): miejsce w przepisie zamiast czasu.
+        if case let .paused(step, steps) = item.cooking {
+            return "Krok \(step + 1) z \(steps)"
+        }
 
         switch item.status {
         case .eaten:
@@ -1023,6 +1244,7 @@ struct CalendarPlateCaption: View {
     private var headlineColor: Color {
         guard let item else { return Color.scMuted(scheme) }
         if item.isEmptySlot { return Color.scMuted(scheme) }
+        if item.isPausedCooking { return SCPalette.terracotta }
         if item.isEaten { return Color.scLabel(scheme) }
         guard item.status == .next else { return Color.scLabel(scheme) }
         if item.isLate { return Color.scMuted(scheme) }
