@@ -273,6 +273,9 @@ enum SCCook {
         /// Najniższy wiersz arkusza Kroki (sam tytuł); etap nad tytułem i etykieta timera pod nim go wydłużają.
         static let stepRow: CGFloat = 56
 
+        /// Kapsułka składnika pod tytułem kroku (runda 9): nazwa 14/600 i ilość 14/700 w terakocie na polu chipa — co odmierzyć, bez otwierania arkusza Składniki.
+        static let stepChip: CGFloat = 32
+
         /// Przyciski „+1 / +2 / +5 min” na ekranie końca timera (D35).
         static let alarmExtend: CGFloat = 52
 

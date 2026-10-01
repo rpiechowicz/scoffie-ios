@@ -292,11 +292,6 @@ struct CookIngredientsSheet: View {
         return session.package.lines(for: session.steps[stepIndex], portions: session.portions)
     }
 
-    /// „Cały przepis”: każdy wiersz każdego kroku, w działach.
-    private var recipeAisles: [CookIngredientAisle] {
-        CookIngredientAisle.make(session.steps.indices.flatMap { lines(at: $0) })
-    }
-
     /// „Cały przepis N” = wiersze listy (składnik dzielony między kroki to
     /// kilka wierszy — sól ×3), tak jak liczą sekcje.
     private var recipeCount: Int {
@@ -327,15 +322,7 @@ struct CookIngredientsSheet: View {
                     case .step:
                         stepList
                     case .recipe:
-                        ForEach(recipeAisles) { aisle in
-                            CookSectionHeader(
-                                title: aisle.title,
-                                color: CookIngredientLook.color(aisle.department),
-                                count: aisle.lines.count,
-                                icon: CookIngredientLook.icon(aisle.department)
-                            )
-                            lineRows(aisle.lines)
-                        }
+                        aisleRows(session.steps.indices.flatMap { lines(at: $0) })
                     }
                 }
                 .padding(.horizontal, SCCook.Spacing.page)
@@ -346,14 +333,17 @@ struct CookIngredientsSheet: View {
         }
     }
 
-    /// „Ten krok”: TERAZ i ZA CHWILĘ. Krok bez składników nie zostawia
-    /// pustego arkusza (runda 5: „daj empty state, żeby nie było pustki”):
-    /// gdy nic nie przyjdzie też za chwilę — karta pustego stanu z drogą do
-    /// całego przepisu, a gdy coś przyjdzie — cichy wiersz pod TERAZ.
+    /// „Ten krok”: TERAZ i ZA CHWILĘ, a w każdym działy sklepu z ikoną
+    /// i kolorem alejki — jak w „Całym przepisie” (runda 9: „na składniki per
+    /// krok też sortuj po kategoriach, jak ogólnie”). Czas to etykieta
+    /// (`SCTag`), dział — nagłówek sekcji, więc dwa poziomy się nie mylą.
+    /// Krok bez składników nie zostawia pustego arkusza (runda 5): gdy nic
+    /// nie przyjdzie też za chwilę — karta pustego stanu z drogą do całego
+    /// przepisu, a gdy coś przyjdzie — cichy wiersz pod TERAZ.
     @ViewBuilder
     private var stepList: some View {
-        let now = CookIngredientAisle.sorted(lines(at: index))
-        let next = CookIngredientAisle.sorted(lines(at: index + 1))
+        let now = lines(at: index)
+        let next = lines(at: index + 1)
         if now.isEmpty, next.isEmpty {
             RecipeListEmptyState(
                 icon: "checkmark",
@@ -368,16 +358,37 @@ struct CookIngredientsSheet: View {
             )
             .padding(.top, 12)
         } else {
-            CookSectionHeader(title: "TERAZ", color: SCPalette.terracotta, count: now.isEmpty ? nil : now.count)
+            timeTag("Teraz · krok \(index + 1)", icon: "arrow.right", accent: SCPalette.terracotta)
+                .padding(.top, 10)
             if now.isEmpty {
                 emptyNowRow
             } else {
-                lineRows(now)
+                aisleRows(now)
             }
             if !next.isEmpty {
-                CookSectionHeader(title: "ZA CHWILĘ · KROK \(index + 2)", color: SCCook.Palette.caption(scheme), count: next.count)
-                lineRows(next)
+                timeTag("Za chwilę · krok \(index + 2)", icon: "clock", accent: Color.scMuted(scheme))
+                    .padding(.top, 22)
+                aisleRows(next)
             }
+        }
+    }
+
+    private func timeTag(_ title: String, icon: String, accent: Color) -> some View {
+        SCTag(title: title, icon: icon, accent: accent)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Działy sklepu z nagłówkiem (ikona i kolor alejki) i wierszami — ten
+    /// sam strój w „Ten krok” i „Całym przepisie”.
+    private func aisleRows(_ lines: [CookIngredientLine]) -> some View {
+        ForEach(CookIngredientAisle.make(lines)) { aisle in
+            CookSectionHeader(
+                title: aisle.title,
+                color: CookIngredientLook.color(aisle.department),
+                count: aisle.lines.count,
+                icon: CookIngredientLook.icon(aisle.department)
+            )
+            lineRows(aisle.lines)
         }
     }
 

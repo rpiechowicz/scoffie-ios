@@ -19,7 +19,7 @@ struct CookScreen: View {
     let recipe: CookRecipeFacts
     /// Zdjęcie osiada raz, przy wejściu w tryb (`CookModeView`).
     let isPhotoRevealed: Bool
-    /// Skąd przyszedł krok — nowy opis wjeżdża z tej strony.
+    /// Kierunek przejścia kroku — wstecz teksty rolują się w drugą stronę.
     let direction: Edge
     let onPortions: (Int) -> Void
     let onStart: () -> Void

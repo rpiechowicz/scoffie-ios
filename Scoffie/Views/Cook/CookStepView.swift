@@ -1,24 +1,34 @@
 import SwiftUI
 
 /// Krok (Y3K1–3) — treść pod zdjęciem na wspólnym ekranie trybu
-/// (`CookScreen`): etap · tytuł · opis · adnotacja. Pierścień kroków
-/// i krzyżyk stoją w pasku ekranu, dok pływa nad treścią. Tekst przewija się
-/// pod dokiem, a jego koniec staje nad nim (`spacing.cookDockReserve`).
+/// (`CookScreen`): nadtytuł „KROK 4 Z 12 · ETAP” · tytuł · składniki kroku
+/// · opis · karty rad. Pierścień kroków i krzyżyk stoją w pasku ekranu, dok
+/// pływa nad treścią. Tekst przewija się pod dokiem, a jego koniec staje nad
+/// nim (`spacing.cookDockReserve`).
 ///
-/// Ruch (§8.2, `motion.cookStep`): przy wejściu sekcje wjeżdżają kaskadą,
-/// przy zmianie kroku nagłówek (etap i tytuł) ROLUJE się w miejscu jak danie
-/// w arkuszu wyboru posiłku, a opis wjeżdża z boku, z którego przyszedł krok,
-/// o chwilę później — nagłówek szybciej niż „jak”. Nowy opis i stary leżą
-/// w tym samym `ZStack`, więc nic pod nimi nie skacze.
+/// Runda 9 („czytelniej”; „tytuł się rusza, subtitle tylko jak się pojawia,
+/// całość nieruszalna”; „opis i cała reszta z tą samą animacją tekstu co
+/// w reszcie aplikacji”): nadtytuł to JEDEN stały wiersz — numer kroku jest
+/// zawsze, etap dochodzi obok, więc tytuł nie skacze, gdy etap się pojawia
+/// albo znika. Pod tytułem kapsułki składników tego kroku z ilościami (co
+/// odmierzyć bez otwierania arkusza). Przy zmianie kroku nic nie wjeżdża
+/// z boku: widoki stoją, a tytuł, etap, opis i rady ROLUJĄ się w miejscu
+/// (`cookRoll` = `SCMotion.textRoll`, wstecz — w drugą stronę), kapsułki
+/// przenikają.
 struct CookStepScene: View {
     let session: CookSession
     let step: CookStep
-    /// Skąd przyszedł krok — nowy opis wjeżdża z tej strony.
+    /// Kierunek przejścia — wstecz tekst roluje się w drugą stronę.
     let direction: Edge
 
     @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var backwards: Bool { direction == .leading }
+
+    private var lines: [CookIngredientLine] {
+        CookIngredientAisle.sorted(session.package.lines(for: step, portions: session.portions))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -27,13 +37,20 @@ struct CookStepScene: View {
             header
                 .cookReveal(hasAppeared, order: 0)
 
-            ZStack(alignment: .topLeading) {
-                details
-                    .id(step.id)
-                    .transition(detailsTransition)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .cookReveal(hasAppeared, order: 1)
+            ingredients
+                .cookReveal(hasAppeared, order: 1)
+
+            Text(session.package.body(for: step, portions: session.portions))
+                .cookText(SCCook.Typography.stepBody)
+                .foregroundStyle(SCCook.Palette.body(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cookRoll(step.id, countsDown: backwards)
+                .padding(.top, 16)
+                .cookReveal(hasAppeared, order: 2)
+
+            notes
+                .cookReveal(hasAppeared, order: 3)
 
             Color.clear.frame(height: SCCook.Spacing.dockReserve + 24)
         }
@@ -46,19 +63,28 @@ struct CookStepScene: View {
         }
     }
 
-    /// Etap i tytuł — ten sam widok przez wszystkie kroki, tekst roluje się
-    /// w miejscu (wstecz = w drugą stronę).
+    /// Nadtytuł i tytuł — te same widoki przez wszystkie kroki.
     private var header: some View {
-        let backwards = direction == .leading
-        return VStack(alignment: .leading, spacing: 0) {
-            if let stage = step.stageLabel {
-                Text(stage)
-                    .cookText(SCCook.Typography.stage)
-                    .foregroundStyle(SCPalette.sage)
-                    .cookRoll(stage, countsDown: backwards)
-                    .padding(.bottom, 8)
-                    .transition(.opacity)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("KROK \(session.stepIndex + 1) Z \(session.stepCount)")
+                    .foregroundStyle(SCCook.Palette.caption(scheme))
+                    .cookRoll(session.stepIndex)
+                if let stage = step.stageLabel {
+                    HStack(spacing: 6) {
+                        Text("·")
+                            .foregroundStyle(SCCook.Palette.caption(scheme))
+                        Text(stage)
+                            .foregroundStyle(SCPalette.sage)
+                            .cookRoll(stage, countsDown: backwards)
+                    }
+                    .transition(.opacity.combined(with: .offset(x: -6)))
+                }
             }
+            .cookText(SCCook.Typography.stage)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .accessibilityElement(children: .combine)
 
             Text(step.title)
                 .cookText(titleStyle)
@@ -72,48 +98,74 @@ struct CookStepScene: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Opis, adnotacja i dopisek o porcjach — nowy krok = nowy widok, który
-    /// wjeżdża z boku.
-    private var details: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(session.package.body(for: step, portions: session.portions))
-                .cookText(SCCook.Typography.stepBody)
-                .foregroundStyle(SCCook.Palette.body(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 16)
-
-            if let note = step.note {
-                CookNoteCard(kind: note.kind, text: note.text)
-                    .padding(.top, 14)
+    /// Składniki kroku w kolejności działów sklepu — kapsułki „masło 30 g”.
+    @ViewBuilder
+    private var ingredients: some View {
+        if !lines.isEmpty {
+            AllergenChipFlow(spacing: 6) {
+                ForEach(lines) { line in
+                    CookStepIngredientChip(line: line)
+                        .transition(.opacity)
+                }
             }
-
-            if let scaleNote = session.package.scaleNote(for: step, portions: session.portions) {
-                CookNoteCard(kind: .tip, text: scaleNote, label: "WIĘCEJ PORCJI", systemImage: "person.2")
-                    .padding(.top, step.note == nil ? 14 : 8)
-            }
+            .padding(.top, 14)
+            .transition(.opacity)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Nowy opis wjeżdża z boku z lekkim opóźnieniem za nagłówkiem, stary
-    /// gaśnie od razu w miejscu. Przy „Ogranicz ruch” — samo przenikanie.
-    private var detailsTransition: AnyTransition {
-        if reduceMotion {
-            return .opacity.animation(.easeInOut(duration: 0.2))
+    /// Adnotacja i dopisek o porcjach — ta sama karta rady co na zakończeniu.
+    private var notes: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let note = step.note {
+                CookNoteCard(kind: note.kind, text: note.text)
+                    .cookRoll(note.text, countsDown: backwards)
+                    .transition(.opacity)
+            }
+            if let scaleNote = session.package.scaleNote(for: step, portions: session.portions) {
+                CookNoteCard(kind: .tip, text: scaleNote, label: "WIĘCEJ PORCJI", systemImage: "person.2")
+                    .cookRoll(scaleNote, countsDown: backwards)
+                    .transition(.opacity)
+            }
         }
-        let shift: CGFloat = direction == .trailing ? 44 : -44
-        return .asymmetric(
-            insertion: .offset(x: shift)
-                .combined(with: .opacity)
-                .animation(SCCook.Motion.step.delay(0.06)),
-            removal: .opacity.animation(.easeOut(duration: 0.12))
-        )
+        .padding(.top, step.note == nil && session.package.scaleNote(for: step, portions: session.portions) == nil ? 0 : 16)
     }
 
     /// Tytuł ≤ 30 znaków mieści się w dwóch liniach 40 pt (zasady .5, D37);
     /// dłuższy (scenariusze sprzed zasad .5) schodzi do 32 pt.
     private var titleStyle: SCCookTextStyle {
         step.title.count > 30 ? SCCook.Typography.stepTitleCompact : SCCook.Typography.stepTitle
+    }
+}
+
+/// Kapsułka składnika kroku: nazwa i ilość w terakocie (część — „połowa” —
+/// cicho za ilością). Bez ikony działu (runda 7: ikona tylko przy dziale).
+private struct CookStepIngredientChip: View {
+    let line: CookIngredientLine
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(line.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.scLabel(scheme))
+            Text(line.amountText)
+                .font(.system(size: 14, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(SCPalette.terracotta)
+                .contentTransition(.numericText())
+            if let part = line.partLabel {
+                Text(part)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(SCCook.Palette.caption(scheme))
+            }
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 11)
+        .frame(height: SCCook.Height.stepChip)
+        .background(Capsule().fill(Color.scChipBg(scheme)))
+        .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+        .accessibilityElement(children: .combine)
     }
 }
 

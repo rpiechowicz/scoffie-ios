@@ -126,7 +126,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   — `scaledToFill` w samej ramce wysokości zgłaszał szerokość kadru (~580 pt) i tekst uciekał za lewą krawędź („bez
   marginesów”, 1.10.2026). Ruch (`CookLook.swift`): teksty `cookRoll` (`SCMotion.textRoll`), zegary `cookTicking`
   (0,3 s), łuki timerów dojeżdżają liniowo przez sekundę, wejście ekranów `cookReveal` (= `scReveal`), zmiana kroku =
-  nagłówek roluje się w miejscu, opis wjeżdża z boku o 0,06 s później (`motion.cookStep`).
+  wszystkie teksty kroku rolują się w miejscu (runda 9 — dawny wjazd opisu z boku odpadł, niżej).
   Wejście z Kalendarza (D23, EC41): na talerzu „play” w PRAWYM dolnym rogu ZAWSZE, gdy danie ma paczkę scenariusza
   (`CalendarPlateCooking.ready`) — każdy dzień, każda pora (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
   z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół, a „następne” ma w niej ptaszek
@@ -195,6 +195,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   tarczy — tło i panel stoją, aureole i podziałka przenikają (`.id` timera NA NICH, nie na całym ekranie — dawne
   `.id(ringing.id)` gasiło i zapalało cały alarm), kolor płynie, nazwa / tytuł / „było … min” rolują, treść przenika.
   „Gotowe” przy jednym zostawia ekran drugiemu, „Wycisz” ucisza WSZYSTKIE dzwoniące. Zrzut: `gotuj-alarm-dwa`.
+  Runda 9 („czytelniej”; „całość nieruszalna”; „opis i reszta z tą samą animacją tekstu co w aplikacji”): krok =
+  nadtytuł w JEDNYM stałym wierszu „KROK 4 Z 12 · ETAP” (numer zawsze, etap dochodzi obok — tytuł nie skacze, gdy etap
+  się pojawia) · tytuł · kapsułki składników kroku (`CookStepIngredientChip`: nazwa + ilość w terakocie, kolejność
+  działów, `height.cookStepChip`) · opis · karty rad. Przy zmianie kroku widoki STOJĄ, tytuł / etap / numer / opis /
+  rady rolują się w miejscu (`cookRoll`, wstecz w drugą stronę), kapsułki przenikają — `.id(step.id)` z wjazdem opisu
+  z boku usunięte, nie wracać. Arkusz Składniki „Ten krok”: etykiety `SCTag` „Teraz · krok 4” / „Za chwilę · krok 5”,
+  pod nimi DZIAŁY z ikoną i kolorem alejki jak w „Całym przepisie” (`aisleRows`, jedna droga dla obu widoków).
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.
