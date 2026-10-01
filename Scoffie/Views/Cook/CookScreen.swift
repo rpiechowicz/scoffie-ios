@@ -52,7 +52,10 @@ struct CookScreen: View {
                 .containerRelativeFrame(.horizontal)
             }
             .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
+            // Krok odbija zawsze — zdjęcie rozciąga się przy przeciągnięciu
+            // w dół także na krótkim kroku; powitanie i koniec, gdy się
+            // mieszczą, stoją.
+            .scrollBounceBehavior(session.stage == .steps ? .always : .basedOnSize)
             .scrollPosition($scrollPosition)
             // Zdjęcie pod paskiem stanu; dół zostaje w bezpiecznym obszarze,
             // tak jak dok (`cookDockReserve` liczy się od jego krawędzi).
@@ -114,21 +117,29 @@ struct CookScreen: View {
         case .welcome:
             CookWelcomeContent(session: session, recipe: recipe, onPortions: onPortions)
                 .transition(contentTransition)
+                .zIndex(2)
         case .steps:
-            if let step = session.currentStep {
-                CookStepScene(session: session, step: step, direction: direction)
-                    .transition(contentTransition)
+            // Kontener z przejściem — nie `if let` z przejściem w środku,
+            // żeby wyjście z kroków na pewno gasło, a nie cięło.
+            ZStack(alignment: .topLeading) {
+                if let step = session.currentStep {
+                    CookStepScene(session: session, step: step, direction: direction)
+                }
             }
+            .transition(contentTransition)
+            .zIndex(1)
         case .finished:
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 CookFinishContent(session: session, recipe: recipe, now: context.date, onFeedback: onFeedback)
             }
             .transition(contentTransition)
+            .zIndex(0)
         }
     }
 
     /// Nowa treść staje od razu (jej sekcje startują niewidoczne i wchodzą
-    /// kaskadą), stara gaśnie w miejscu na wierzchu.
+    /// kaskadą), stara gaśnie w miejscu na wierzchu (`zIndex` idzie za
+    /// kolejnością etapów).
     private var contentTransition: AnyTransition {
         .asymmetric(
             insertion: .identity,

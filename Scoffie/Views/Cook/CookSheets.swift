@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Nagłówek sekcji listy składników: „TERAZ”, „ZA CHWILĘ · KROK 4”…
-private struct CookSectionHeader: View {
+/// Nagłówek sekcji listy składników: „TERAZ”, „ZA CHWILĘ · KROK 4”,
+/// dział sklepu („WARZYWA”) — arkusz Składniki i szuflada powitania.
+struct CookSectionHeader: View {
     let title: String
     let color: Color
     var count: Int?
@@ -182,11 +183,31 @@ private struct CookTimerRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(time)
-                .cookText(SCCook.Typography.sheetTime)
-                .monospacedDigit()
-                .foregroundStyle(isPending ? Color.scLabel(scheme) : tone)
-                .cookTicking(time, countsDown: !isOverdue)
+            if isPending {
+                // Pominięty przy „Dalej” timer zostaje w doku (runda 4) —
+                // stąd się go odprawia, gdy nie jest potrzebny.
+                Button { onTimer(.skip(item.id)) } label: {
+                    Text("Pomiń")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(Capsule().fill(Color.scChipBg(scheme)))
+                        .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                        .contentShape(Capsule())
+                        .scTapHeight(44, drawn: 34)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Pomiń: \(item.timer.label)")
+                .transition(.opacity)
+            } else {
+                Text(time)
+                    .cookText(SCCook.Typography.sheetTime)
+                    .monospacedDigit()
+                    .foregroundStyle(tone)
+                    .cookTicking(time, countsDown: !isOverdue)
+                    .transition(.opacity)
+            }
         }
         .frame(minHeight: SCCook.Height.timerRow)
         .accessibilityElement(children: .contain)
@@ -197,7 +218,7 @@ private struct CookTimerRow: View {
 
     private var caption: String {
         switch item.status {
-        case .pending: "Start: \(item.timer.startLabel.lowercasedFirst)"
+        case .pending: "Start: \(item.timer.startLabel.lowercasedFirst) · \(CookClock.duration(item.timer))"
         case .running: "krok \(item.stepIndex + 1) · z \(CookClock.duration(item.timer))"
         case .paused: "wstrzymany — nie zadzwoni"
         case .overdue: "po czasie · krok \(item.stepIndex + 1)"
@@ -235,9 +256,13 @@ private struct CookTimerRow: View {
 // MARK: - Składniki
 
 /// Arkusz Składniki — z wyspy (KM1, KM2). Otwiera się na pół ekranu,
-/// a przewijanie listy rozwija go na cały (runda 3: „Składniki do połowy
-/// ekranu by default, podczas scrollowania może się rozszerzyć”). Bez
-/// odhaczania (D7).
+/// a przewijanie listy rozwija go na cały (runda 3). Bez odhaczania (D7).
+///
+/// „Ten krok” idzie za czasem (TERAZ, ZA CHWILĘ), „Cały przepis” — za
+/// działami sklepu (runda 4: „poukładaj składniki względem kategorii”):
+/// pod działem każdy wiersz mówi, w którym kroku wchodzi, a te z kroków już
+/// zrobionych są przygaszone z ptaszkiem. W obu widokach składniki jednego
+/// działu stoją obok siebie.
 struct CookIngredientsSheet: View {
     enum Scope: Hashable {
         case step
@@ -255,7 +280,6 @@ struct CookIngredientsSheet: View {
         let title: String
         let color: Color
         let lines: [CookIngredientLine]
-        let isDone: Bool
     }
 
     private var index: Int { session.stepIndex }
@@ -265,19 +289,18 @@ struct CookIngredientsSheet: View {
         return session.package.lines(for: session.steps[stepIndex], portions: session.portions)
     }
 
-    private var sections: [LineGroup] {
-        let caption = SCCook.Palette.caption(scheme)
-        var result = [
-            LineGroup(id: "now", title: "TERAZ", color: SCPalette.terracotta, lines: lines(at: index), isDone: false),
-            LineGroup(id: "next", title: "ZA CHWILĘ · KROK \(index + 2)", color: caption, lines: lines(at: index + 1), isDone: false),
+    /// „Ten krok”: TERAZ i ZA CHWILĘ, w każdej sekcji działami.
+    private var stepSections: [LineGroup] {
+        [
+            LineGroup(id: "now", title: "TERAZ", color: SCPalette.terracotta, lines: CookIngredientAisle.sorted(lines(at: index))),
+            LineGroup(id: "next", title: "ZA CHWILĘ · KROK \(index + 2)", color: SCCook.Palette.caption(scheme), lines: CookIngredientAisle.sorted(lines(at: index + 1))),
         ]
-        if scope == .recipe {
-            let later = session.steps.indices.filter { $0 > index + 1 }.flatMap { lines(at: $0) }
-            let done = session.steps.indices.filter { $0 < index }.flatMap { lines(at: $0) }
-            result.append(LineGroup(id: "later", title: "PÓŹNIEJ", color: caption, lines: later, isDone: false))
-            result.append(LineGroup(id: "done", title: "JUŻ W DANIU", color: caption, lines: done, isDone: true))
-        }
-        return result.filter { !$0.lines.isEmpty }
+        .filter { !$0.lines.isEmpty }
+    }
+
+    /// „Cały przepis”: każdy wiersz każdego kroku, w działach.
+    private var recipeAisles: [CookIngredientAisle] {
+        CookIngredientAisle.make(session.steps.indices.flatMap { lines(at: $0) })
     }
 
     /// „Cały przepis N” = wiersze listy (składnik dzielony między kroki to
@@ -287,7 +310,6 @@ struct CookIngredientsSheet: View {
     }
 
     var body: some View {
-        let groups = sections
         VStack(alignment: .leading, spacing: 0) {
             // Nagłówek i przełącznik stoją nad listą — nie przewijają się.
             VStack(alignment: .leading, spacing: 16) {
@@ -307,15 +329,16 @@ struct CookIngredientsSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(groups) { section in
-                        CookSectionHeader(title: section.title, color: section.color, count: section.lines.count)
-                        ForEach(Array(section.lines.enumerated()), id: \.element.id) { offset, line in
-                            row(line, isDone: section.isDone)
-                            if offset < section.lines.count - 1 {
-                                Rectangle()
-                                    .fill(Color.scChipBg(scheme))
-                                    .frame(height: 1)
-                            }
+                    switch scope {
+                    case .step:
+                        ForEach(stepSections) { section in
+                            CookSectionHeader(title: section.title, color: section.color, count: section.lines.count)
+                            lineRows(section.lines)
+                        }
+                    case .recipe:
+                        ForEach(recipeAisles) { aisle in
+                            CookSectionHeader(title: aisle.title, color: SCCook.Palette.caption(scheme), count: aisle.lines.count)
+                            lineRows(aisle.lines)
                         }
                     }
                 }
@@ -324,6 +347,17 @@ struct CookIngredientsSheet: View {
             }
             .scrollIndicators(.hidden)
             .scScrollEdgeFade()
+        }
+    }
+
+    private func lineRows(_ lines: [CookIngredientLine]) -> some View {
+        ForEach(Array(lines.enumerated()), id: \.element.id) { offset, line in
+            row(line)
+            if offset < lines.count - 1 {
+                Rectangle()
+                    .fill(Color.scChipBg(scheme))
+                    .frame(height: 1)
+            }
         }
     }
 
@@ -360,11 +394,20 @@ struct CookIngredientsSheet: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private func row(_ line: CookIngredientLine, isDone: Bool) -> some View {
+    /// Wiersz: krążek działu (ptaszek, gdy krok już za nami), nazwa, podpis,
+    /// ilość. W „Ten krok” podpis to część składnika („połowa”), w „Całym
+    /// przepisie” — krok, w którym wchodzi („teraz” w terakocie).
+    private func row(_ line: CookIngredientLine) -> some View {
         let tint = CookIngredientLook.color(line.department)
         let dim = SCCook.Palette.caption(scheme)
-        let stepNumber = (session.steps.firstIndex { $0.id == line.stepId } ?? 0) + 1
-        let caption = isDone ? "krok \(stepNumber)" : line.partLabel
+        let stepIndex = session.steps.firstIndex { $0.id == line.stepId } ?? index
+        let isDone = scope == .recipe && stepIndex < index
+        let isNow = scope == .recipe && stepIndex == index
+        let caption: String? = {
+            guard scope == .recipe else { return line.partLabel }
+            let when = isNow ? "teraz" : "krok \(stepIndex + 1)"
+            return line.partLabel.map { "\(when) · \($0)" } ?? when
+        }()
         return HStack(spacing: 12) {
             Group {
                 if isDone {
@@ -389,8 +432,8 @@ struct CookIngredientsSheet: View {
                     .lineLimit(1)
                 if let caption {
                     Text(caption)
-                        .font(.system(size: 12))
-                        .foregroundStyle(dim)
+                        .font(.system(size: 12, weight: isNow ? .semibold : .regular))
+                        .foregroundStyle(isNow ? SCPalette.terracotta : dim)
                         .lineLimit(1)
                 }
             }

@@ -236,6 +236,24 @@ struct CookSession: Codable, Equatable {
         timers[timerId] = run
     }
 
+    /// „Pomiń” timer, który czeka na włączenie — znika z doku, jakby był
+    /// zrobiony. Pominięty przy „Dalej” zostaje w doku (runda 4), więc to
+    /// jedyna droga, żeby niepotrzebny timer przestał zapraszać do startu.
+    mutating func skipTimer(_ timerId: String, now: Date) {
+        guard timers[timerId] == nil, let step = scenario.step(forTimer: timerId) else { return }
+        timers[timerId] = CookTimerRun(
+            timerId: timerId,
+            stepId: step.id,
+            state: .finished,
+            endDate: nil,
+            remaining: nil,
+            silenced: true,
+            extendedSeconds: 0,
+            startedAt: now,
+            accent: accent(for: timerId)
+        )
+    }
+
     /// „Gotowe” — timer znika z doku. Działa też przed końcem („gotowe
     /// wcześniej” — kontrakt osi czasu, `CookStep.during`).
     mutating func finishTimer(_ timerId: String) {
@@ -282,12 +300,11 @@ struct CookSession: Codable, Equatable {
 
     /// Timery w doku nad wyspą (D34): najpierw te, które wymagają uwagi
     /// (po czasie), potem biegnące od najbliższego końca, wstrzymane, a na
-    /// końcu „do włączenia”:
-    /// - timer BIEŻĄCEGO kroku, jeszcze nie włączony;
-    /// - timer z wyzwalaczem `EVENT` z kroku, na którym już się stało, a który
-    ///   wciąż czeka („Gdy woda zawrze”) — nie gubi się, gdy pójdziesz dalej (§4.5).
-    /// Timer `NOW` pominięty na wcześniejszym kroku nie wraca — scenariusz
-    /// i tak mówi, kiedy go włączyć, a dok nie ma miejsca na zaległości.
+    /// końcu „do włączenia” — timer z kroku, na którym użytkownik już stanął
+    /// (bieżący albo wcześniejszy), jeszcze nie włączony. Pominięty przy
+    /// „Dalej” nie znika (runda 4 testów: „żebym przez przypadek go nie
+    /// pominął” — wcześniej czekał tak tylko „Gdy woda zawrze”); chowa się
+    /// dopiero po cofnięciu PRZED jego krok.
     func dockTimers(now: Date) -> [CookDockTimer] {
         var attention: [CookDockTimer] = []
         var running: [(Date, CookDockTimer)] = []
@@ -313,10 +330,8 @@ struct CookSession: Codable, Equatable {
             case .pending:
                 guard stage == .steps else { continue }
                 let isCurrent = stepIndex == self.stepIndex
-                let waitsForEvent = timer.trigger == .event
-                    && visitedStepIds.contains(steps[stepIndex].id)
-                    && stepIndex < self.stepIndex
-                if isCurrent || waitsForEvent {
+                let wasReached = stepIndex < self.stepIndex && visitedStepIds.contains(steps[stepIndex].id)
+                if isCurrent || wasReached {
                     pending.append(item)
                 }
             case .finished:
@@ -343,10 +358,12 @@ struct CookSession: Codable, Equatable {
     /// Kapsuły nad wyspą — najwyżej dwie (D33; runda 3 testów: „max 2 —
     /// te najstarsze, które już działają”). Pierwszeństwo mają włączone
     /// timery (trwa, wstrzymany) od najdawniej włączonego; miejsce, które
-    /// zostanie, bierze timer do włączenia. Wyjątek: timer PO CZASIE stoi
-    /// w doku zawsze — wyciszony pulsuje, dopóki nie padnie „Gotowe”, więc
-    /// nie może czekać za „+N”. Reszta jest w arkuszu Timery i w plakietce
-    /// „+N”. Na ekranie kapsuły stoją w kolejności kroków.
+    /// zostanie, bierze timer do włączenia — najpierw ten z bieżącego kroku,
+    /// potem pominięte od najbliższego. Wyjątek: timer PO CZASIE stoi w doku
+    /// zawsze — wyciszony pulsuje, dopóki nie padnie „Gotowe”, więc nie może
+    /// czekać za plakietką. Reszta jest w plakietce nad kapsułami
+    /// (`dockOverflow`) i w arkuszu Timery. Na ekranie kapsuły stoją
+    /// w kolejności kroków.
     func dockCapsules(now: Date, limit: Int = 2) -> [CookDockTimer] {
         let all = dockTimers(now: now)
         let overdue = all.filter { if case .overdue = $0.status { true } else { false } }
@@ -360,9 +377,17 @@ struct CookSession: Codable, Equatable {
             .sorted { (timers[$0.id]?.startedAt ?? .distantFuture) < (timers[$1.id]?.startedAt ?? .distantFuture) }
         let waiting = all
             .filter { if case .pending = $0.status { true } else { false } }
-            .sorted { $0.stepIndex < $1.stepIndex }
+            .sorted { $0.stepIndex > $1.stepIndex }
         let chosen = Set((overdue + started + waiting).prefix(limit).map(\.id))
         return all.filter { chosen.contains($0.id) }.sorted { $0.stepIndex < $1.stepIndex }
+    }
+
+    /// Timery, które nie zmieściły się w kapsułach — plakietka nad nimi mówi,
+    /// co się z nimi dzieje (runda 4: „że timer idzie, że trzeba włączyć,
+    /// że jest wstrzymany”). Kolejność pilności z `dockTimers`.
+    func dockOverflow(now: Date, limit: Int = 2) -> [CookDockTimer] {
+        let shown = Set(dockCapsules(now: now, limit: limit).map(\.id))
+        return dockTimers(now: now).filter { !shown.contains($0.id) }
     }
 
     /// Najbliższy biegnący timer — Live Activity i „Wróć do gotowania”.

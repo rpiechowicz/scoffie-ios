@@ -244,6 +244,7 @@ struct CookModeView: View {
                 case .pause(let id): session.pauseTimer(id, now: now)
                 case .resume(let id): session.resumeTimer(id, now: now)
                 case .finish(let id): session.finishTimer(id)
+                case .skip(let id): session.skipTimer(id, now: now)
                 }
             }
         }

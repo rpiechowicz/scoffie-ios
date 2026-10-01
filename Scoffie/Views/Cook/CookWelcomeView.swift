@@ -213,7 +213,8 @@ struct CookWelcomeFooter: View {
     private func drawerSummary(_ kind: CookWelcomeDrawer) -> String {
         switch kind {
         case .ingredients:
-            session.package.allLines(portions: session.portions)
+            // Ta sama kolejność co w arkuszu — działami.
+            CookIngredientAisle.sorted(session.package.allLines(portions: session.portions))
                 .prefix(4)
                 .map { "\($0.name.lowercased(with: Locale(identifier: "pl_PL"))) \($0.amountText)" }
                 .joined(separator: " · ")
@@ -225,7 +226,7 @@ struct CookWelcomeFooter: View {
     /// Stos czterech ikon działów — kolor działu na pierścieniu tła strony
     /// (makieta: krążki 30 z obwódką `pageBase`, nachodzące o 8).
     private var ingredientStack: some View {
-        let lines = Array(session.package.allLines(portions: session.portions).prefix(4))
+        let lines = Array(CookIngredientAisle.sorted(session.package.allLines(portions: session.portions)).prefix(4))
         return HStack(spacing: -8) {
             ForEach(lines) { line in
                 let tint = CookIngredientLook.color(line.department)
@@ -342,8 +343,9 @@ struct CookPrimaryButton: View {
     }
 }
 
-/// Arkusz szuflady powitania: cały przepis w ilościach sesji albo rady
-/// kucharza (makieta pokazuje szuflady tylko zwinięte — docs/GOTUJ.md, ustalenie 6).
+/// Arkusz szuflady powitania: cały przepis w ilościach sesji, w działach
+/// sklepu, albo rady kucharza (makieta pokazuje szuflady tylko zwinięte —
+/// docs/GOTUJ.md, ustalenie 6).
 struct CookWelcomeDrawerSheet: View {
     let session: CookSession
     let drawer: CookWelcomeDrawer
@@ -368,16 +370,20 @@ struct CookWelcomeDrawerSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     switch drawer {
                     case .ingredients:
-                        ForEach(Array(lines.enumerated()), id: \.element.id) { offset, line in
-                            VStack(spacing: 0) {
-                                ingredientRow(line)
-                                if offset < lines.count - 1 {
-                                    Rectangle().fill(Color.scChipBg(scheme)).frame(height: 1)
+                        // Działy sklepu jak w Zakupach i szczegółach przepisu
+                        // (runda 4: „poukładaj składniki względem kategorii”);
+                        // działy wchodzą kaskadą, po kolei.
+                        ForEach(Array(aisles.enumerated()), id: \.element.id) { group, aisle in
+                            VStack(alignment: .leading, spacing: 0) {
+                                CookSectionHeader(title: aisle.title, color: SCCook.Palette.caption(scheme), count: aisle.lines.count)
+                                ForEach(Array(aisle.lines.enumerated()), id: \.element.id) { offset, line in
+                                    ingredientRow(line)
+                                    if offset < aisle.lines.count - 1 {
+                                        Rectangle().fill(Color.scChipBg(scheme)).frame(height: 1)
+                                    }
                                 }
                             }
-                            // Wiersze wchodzą kaskadą — pierwsze osiem po
-                            // kolei, reszta razem z ósmym.
-                            .cookReveal(hasAppeared, order: min(offset, 8))
+                            .cookReveal(hasAppeared, order: min(group, 8))
                         }
                     case .tips:
                         ForEach(Array(session.scenario.tips.enumerated()), id: \.offset) { offset, tip in
@@ -408,8 +414,8 @@ struct CookWelcomeDrawerSheet: View {
         }
     }
 
-    private var lines: [CookIngredientLine] {
-        session.package.allLines(portions: session.portions)
+    private var aisles: [CookIngredientAisle] {
+        CookIngredientAisle.make(session.package.allLines(portions: session.portions))
     }
 
     private func ingredientRow(_ line: CookIngredientLine) -> some View {

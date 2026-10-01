@@ -122,47 +122,48 @@ struct CookAlarmView: View {
         }
     }
 
+    /// Tarcza jak stoper (runda 4: „teksty wychodzą poza zegar — doszlifuj
+    /// go”): po obwodzie podziałka sekund, po niej krąży kropka wskazówki ze
+    /// smugą — raz na minutę po czasie, bez powrotu na start (`CookAlarmBezel`).
+    /// W krążku zostają tylko trzy krótkie wiersze, każdy w szerokości, która
+    /// mieści się w kole: nazwa timera z dzwonkiem, licznik i „po czasie”.
+    /// Dłuższe maleją, zamiast wychodzić poza tarczę; na czas nastawienia
+    /// („było 10–12 min”) jest miejsce w panelu „Jeszcze chwilę?”.
     private var dial: some View {
-        let lap = over.truncatingRemainder(dividingBy: 60) / 60
         let minutes = Int(over) / 60
         let counter = CookClock.overdueText(over)
-        let caption = minutes > 0 ? "\(minutes) min po czasie · było \(CookClock.duration(item.timer))" : "po czasie · było \(CookClock.duration(item.timer))"
         return ZStack {
             CookAlarmHalos(accent: item.accent)
-            Circle()
-                .stroke(color.opacity(SCCook.Opacity.alarmTrack), lineWidth: 4)
-                .frame(width: 216, height: 216)
-            Circle()
-                .trim(from: 0, to: lap)
-                .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .frame(width: 216, height: 216)
-                // Łuk okrąża tarczę raz na minutę płynnie; na początku nowej
-                // minuty wraca na start bez cofania się po obwodzie.
-                // Zegar tyka co sekundę w dowolnej fazie, więc „nowa minuta” to
-                // pierwsza sekunda po pełnej, a nie próg na łuku.
-                .animation(reduceMotion || over.truncatingRemainder(dividingBy: 60) < 1 ? nil : .linear(duration: 1), value: lap)
+            CookAlarmBezel(color: color, over: over)
+                .frame(width: SCCook.Size.alarmRing, height: SCCook.Size.alarmRing)
             Circle()
                 .fill(Color.scPageBase(scheme))
                 .overlay(Circle().strokeBorder(color, lineWidth: SCCook.Stroke.alarmDisc))
-                .frame(width: 198, height: 198)
+                .frame(width: SCCook.Size.alarmDisc, height: SCCook.Size.alarmDisc)
             VStack(spacing: 2) {
                 HStack(spacing: 6) {
                     CookBell(isRinging: !reduceMotion)
                     Text(item.timer.label.uppercased(with: Locale(identifier: "pl_PL")))
                         .cookText(SCCook.Typography.stage)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 .foregroundStyle(color)
+                .frame(maxWidth: SCCook.Size.alarmTextWidth)
                 Text(counter)
                     .cookText(SCCook.Typography.alarmCounter)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: SCCook.Size.alarmCounterWidth)
                     .cookTicking(counter, countsDown: false)
                     .padding(.top, 2)
-                Text(caption)
+                Text("po czasie")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
-                    .cookRoll(caption)
+                    .lineLimit(1)
+                    .frame(maxWidth: SCCook.Size.alarmTextWidth)
             }
         }
         .frame(width: SCCook.Size.alarmDial, height: SCCook.Size.alarmDial)
@@ -189,10 +190,20 @@ struct CookAlarmView: View {
     private var panel: some View {
         let shape = RoundedRectangle(cornerRadius: SCCook.Radius.alarmPanel, style: .continuous)
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Jeszcze chwilę?")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color.scMuted(scheme))
-                .padding(.horizontal, 4)
+            // Na ile był nastawiony — tu, przy „+min”, bo od tego zależy,
+            // ile dołożyć (w tarczy się nie mieścił).
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Jeszcze chwilę?")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.scMuted(scheme))
+                Spacer(minLength: 8)
+                Text("było \(CookClock.duration(item.timer))")
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(SCCook.Palette.caption(scheme))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 4)
             HStack(spacing: 8) {
                 ForEach([1, 2, 5], id: \.self) { minutes in
                     Button { onExtend(minutes * 60) } label: {
@@ -262,6 +273,77 @@ private struct CookAlarmHalos: View {
             .frame(width: SCCook.Size.alarmHalo, height: SCCook.Size.alarmHalo)
             .scaleEffect(0.86 + (1.22 - 0.86) * eased)
             .opacity(0.55 * (1 - eased))
+    }
+}
+
+/// Pierścień tarczy końca timera: podziałka sekund (60 kresek, co piąta
+/// dłuższa) i kropka wskazówki ze smugą, która okrąża go raz na minutę po
+/// czasie. Kąt rośnie bez końca (6° na sekundę) i dojeżdża liniowo przez
+/// sekundę, więc na pełnej minucie wskazówka biegnie dalej — dawny łuk
+/// „sekund bieżącej minuty” wracał co minutę do zera.
+private struct CookAlarmBezel: View {
+    let color: Color
+    let over: TimeInterval
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let angle = over / 60 * 360
+        let hand = SCCook.Size.alarmHand
+        let ring = SCCook.Size.alarmRing
+        // Smuga jako ułamek obwodu pierścienia.
+        let trail = Double(SCCook.Size.alarmTrail / (.pi * ring))
+        ZStack {
+            CookAlarmTicks(every: 1, skippingEvery: 5, length: SCCook.Size.alarmTick)
+                .stroke(color.opacity(SCCook.Opacity.alarmTick), style: StrokeStyle(lineWidth: SCCook.Stroke.alarmTick, lineCap: .round))
+            CookAlarmTicks(every: 5, skippingEvery: 0, length: SCCook.Size.alarmTickMajor)
+                .stroke(color.opacity(SCCook.Opacity.alarmTickMajor), style: StrokeStyle(lineWidth: SCCook.Stroke.alarmTick, lineCap: .round))
+            ZStack {
+                Circle()
+                    .trim(from: 1 - trail, to: 1)
+                    .stroke(
+                        AngularGradient(
+                            colors: [color.opacity(0), color],
+                            center: .center,
+                            startAngle: .degrees(360 * (1 - trail)),
+                            endAngle: .degrees(360)
+                        ),
+                        style: StrokeStyle(lineWidth: SCCook.Stroke.alarmTrail, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                Circle()
+                    .fill(color)
+                    .frame(width: hand, height: hand)
+                    .shadow(color: color.opacity(0.5), radius: 4)
+                    .offset(y: -ring / 2)
+            }
+            .rotationEffect(.degrees(angle))
+            .animation(reduceMotion ? nil : .linear(duration: 1), value: angle)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Kreski podziałki sekund od obwodu do środka: `every` — co ile sekund,
+/// `skippingEvery` — bez kresek, które rysuje druga, dłuższa podziałka.
+private struct CookAlarmTicks: Shape {
+    let every: Int
+    let skippingEvery: Int
+    let length: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let outer = min(rect.width, rect.height) / 2
+        var path = Path()
+        for second in stride(from: 0, to: 60, by: every) {
+            if skippingEvery > 0, second % skippingEvery == 0 { continue }
+            let angle = Double(second) / 60 * 2 * .pi - .pi / 2
+            let dx = CGFloat(cos(angle))
+            let dy = CGFloat(sin(angle))
+            path.move(to: CGPoint(x: center.x + dx * outer, y: center.y + dy * outer))
+            path.addLine(to: CGPoint(x: center.x + dx * (outer - length), y: center.y + dy * (outer - length)))
+        }
+        return path
     }
 }
 

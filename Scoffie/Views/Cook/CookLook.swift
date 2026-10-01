@@ -127,6 +127,37 @@ enum CookIngredientLook {
     }
 }
 
+/// Składniki jednego działu sklepu (runda 4: „poukładaj składniki względem
+/// kategorii”). Działy idą w kolejności obchodzenia sklepu — tej samej co
+/// Zakupy i szczegóły przepisu (`ProductConstants.isDepartment`), a w dziale
+/// zostaje kolejność z przepisu.
+struct CookIngredientAisle: Identifiable {
+    let department: String
+    let lines: [CookIngredientLine]
+
+    var id: String { department }
+
+    /// „WARZYWA” — nagłówek sekcji.
+    var title: String { department.uppercased(with: Locale(identifier: "pl_PL")) }
+
+    static func make(_ lines: [CookIngredientLine]) -> [CookIngredientAisle] {
+        let other = ProductConstants.Department.other
+        // `Dictionary(grouping:)` trzyma kolejność wejścia wewnątrz działu.
+        let grouped = Dictionary(grouping: lines) { line -> String in
+            let department = line.department?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return department.isEmpty ? other : department
+        }
+        return grouped
+            .sorted { ProductConstants.isDepartment($0.key, orderedBefore: $1.key) }
+            .map { CookIngredientAisle(department: $0.key, lines: $0.value) }
+    }
+
+    /// Ta sama kolejność bez nagłówków — składniki jednego działu obok siebie.
+    static func sorted(_ lines: [CookIngredientLine]) -> [CookIngredientLine] {
+        make(lines).flatMap(\.lines)
+    }
+}
+
 /// Puls rozchodzący się NA ZEWNĄTRZ kształtu — sama kontrolka się nie
 /// skaluje (makieta: `box-shadow` rośnie od 0 do `spread`, krycie spada do 0,
 /// ease-out, w pętli). Przy Reduce Motion pulsu nie ma.
@@ -301,18 +332,22 @@ struct CookStepArcs: View {
         let style = StrokeStyle(lineWidth: lineWidth, lineCap: .round)
         let segments = CookStepSegments(count: count, lineWidth: lineWidth, gap: gap)
         let position = Double(current)
+        let pour: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.55)
+        // Ruch siedzi na samych klinach w masce — to one się przelewają,
+        // a odcinki pod nimi stoją.
         ZStack {
             segments.stroke(SCCook.Palette.ringTodo(scheme), style: style)
             segments.stroke(SCPalette.sage, style: style)
                 .mask {
                     CookStepWedges(part: .done, count: count, position: position, lineWidth: lineWidth, gap: gap)
+                        .animation(pour, value: current)
                 }
             segments.stroke(SCPalette.terracotta, style: style)
                 .mask {
                     CookStepWedges(part: .current, count: count, position: position, lineWidth: lineWidth, gap: gap)
+                        .animation(pour, value: current)
                 }
         }
-        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.55), value: current)
     }
 }
 

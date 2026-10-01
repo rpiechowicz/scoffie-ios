@@ -121,8 +121,11 @@ enum SCCook {
         /// Pierwsza aureola tarczy końca timera w terakocie; druga stoi na semantic.accentTint (ST4).
         static let alarmHalo: Double = 0.22
 
-        /// Tor zewnętrznego łuku „minut po czasie” w terakocie (ST4).
-        static let alarmTrack: Double = 0.14
+        /// Kreski podziałki sekund na tarczy końca timera, w kolorze timera (co piąta — cookAlarmTickMajor).
+        static let alarmTick: Double = 0.22
+
+        /// Co piąta kreska podziałki tarczy (pełne 5 s), w kolorze timera.
+        static let alarmTickMajor: Double = 0.5
 
         /// Krycie zdjęcia dania w nagłówku każdego ekranu trybu (powitanie, krok, zakończenie).
         static let headerPhoto: Double = 0.85
@@ -184,14 +187,41 @@ enum SCCook {
         /// Mały pierścień w pigułce biegnącego timera (arkusz wyjścia, „leci dalej”); promień 9.
         static let pillRing: CGFloat = 22
 
+        /// Znaczek stanu ukrytego timera w plakietce nad kapsułami: łuk (trwa), ▶ (do włączenia), pauza, dzwonek (po czasie).
+        static let overflowMark: CGFloat = 20
+
         /// Krążek ikony produktu w kolorze działu w wierszu arkusza Składniki (ikona 16) — KM1, D36.
         static let ingredientIcon: CGFloat = 32
 
-        /// Tarcza ekranu końca timera: łuk „minut po czasie” na promieniu 108, krążek 94 z obwódką stroke.cookAlarmDisc (ST4).
+        /// Tarcza ekranu końca timera: aureole, pierścień podziałki z wskazówką sekund (size.cookAlarmRing) i krążek (size.cookAlarmDisc) — ST4, runda 4.
         static let alarmDial: CGFloat = 244
 
         /// Aureole za tarczą końca timera (dwie, na zmianę).
         static let alarmHalo: CGFloat = 200
+
+        /// Pierścień podziałki sekund i wskazówki na tarczy końca timera (promień 108): 60 kresek, kropka okrąża go raz na minutę.
+        static let alarmRing: CGFloat = 216
+
+        /// Krążek tarczy końca timera z obwódką stroke.cookAlarmDisc w kolorze timera (promień 99).
+        static let alarmDisc: CGFloat = 198
+
+        /// Kropka wskazówki sekund na pierścieniu tarczy, w kolorze timera.
+        static let alarmHand: CGFloat = 10
+
+        /// Smuga za wskazówką sekund — długość łuku, kolor timera gaśnie do zera.
+        static let alarmTrail: CGFloat = 96
+
+        /// Kreska podziałki sekund (do środka od pierścienia).
+        static let alarmTick: CGFloat = 4
+
+        /// Co piąta kreska podziałki — dłuższa.
+        static let alarmTickMajor: CGFloat = 8
+
+        /// Szerokość nazwy timera nad licznikiem i podpisu pod nim — wpisane w krążek, dłuższe maleją (runda 4: teksty wychodziły poza tarczę).
+        static let alarmTextWidth: CGFloat = 128
+
+        /// Szerokość licznika „+0:18” w krążku; dłuższy („+12:05”) maleje zamiast wychodzić poza tarczę.
+        static let alarmCounterWidth: CGFloat = 150
 
         /// Krążek z glifem pauzy / stopu w kaflach „Wstrzymaj” i „Zakończ” (XW0–XW2).
         static let exitTileIcon: CGFloat = 52
@@ -212,6 +242,9 @@ enum SCCook {
 
         /// Kapsuła timera nad wyspą; jedna = cała szerokość doku, dwie = obok siebie (D34).
         static let timerCapsule: CGFloat = 56
+
+        /// Plakietka nad kapsułami — timery, które się w nich nie zmieściły, ze stanem słowem (runda 4: zamiast gołego „+1”).
+        static let overflowTab: CGFloat = 28
 
         /// Przycisk w pojedynczej kapsule: pauza (krążek), „▶ Start”, „▶ Wznów”, „✓ Gotowe”.
         static let timerAction: CGFloat = 40
@@ -262,6 +295,15 @@ enum SCCook {
 
         /// Terakotowa obwódka krążka na tarczy końca timera (łuk minut ma 4).
         static let alarmDisc: CGFloat = 10
+
+        /// Kreska podziałki sekund na tarczy końca timera.
+        static let alarmTick: CGFloat = 1.5
+
+        /// Smuga za wskazówką sekund na tarczy końca timera.
+        static let alarmTrail: CGFloat = 4
+
+        /// Łuk w znaczku trwającego timera w plakietce.
+        static let overflowMark: CGFloat = 2.5
     }
 
     enum Spacing {
@@ -283,6 +325,9 @@ enum SCCook {
         /// Odstęp kapsuł (albo karty Timery) od wyspy.
         static let dockGap: CGFloat = 10
 
+        /// Odstęp plakietki od kapsuł.
+        static let overflowGap: CGFloat = 8
+
         /// Odstęp dwóch kapsuł obok siebie.
         static let capsuleGap: CGFloat = 8
 
@@ -292,8 +337,8 @@ enum SCCook {
         /// Odstęp krążków od środka „Składniki” w wyspie.
         static let islandGap: CGFloat = 6
 
-        /// Miejsce pod treścią kroku zarezerwowane na dok z kapsułami (wyspa 60 + przerwa 10 + kapsuła 56), liczone od dolnej krawędzi bezpiecznego obszaru — tekst kroku przewija się pod dokiem, ale jego koniec staje nad nim.
-        static let dockReserve: CGFloat = 126
+        /// Miejsce pod treścią kroku zarezerwowane na dok (wyspa 60 + przerwa 10 + kapsuła 56 + przerwa 8 + plakietka 28), liczone od dolnej krawędzi bezpiecznego obszaru — dok ma STAŁĄ wysokość (wyspa nie skacze, gdy pojawia się kapsuła), a tekst kroku przewija się pod nim i kończy nad nim.
+        static let dockReserve: CGFloat = 162
 
         /// Widoczna przerwa między odcinkami pierścienia kroków — od końca do końca zaokrąglenia (łuk między odcinkami = przerwa + kreska).
         static let stepRingGap: CGFloat = 2

@@ -216,6 +216,9 @@ if case let .running(remaining, _, _) = session.status(of: "t-potatoes", now: at
 // który skończy się wcześniej, nie zamienia kapsuł miejscami.
 var lineup = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
 lineup.begin(now: t0)
+// Masło niepotrzebne — „Pomiń”, inaczej czekałoby w doku (runda 4).
+lineup.skipTimer("t-butter", now: t0)
+equal(lineup.dockTimers(now: t0).map(\.timer.id), [], "Pomiń: timer do włączenia znika z doku")
 lineup.jump(to: 2)
 lineup.startTimer("t-potatoes", now: t0)
 lineup.jump(to: 7)
@@ -247,11 +250,37 @@ equal(three.timerLineup(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes", 
 three.silenceTimer("t-oven")
 equal(three.dockCapsules(now: at(8)).map(\.timer.id), ["t-butter", "t-oven"], "po czasie: zawsze w doku, obok najstarszego")
 
-// Pominięty timer NOW nie wraca do doku.
+// Pominięty timer zostaje w doku przy „Dalej” (runda 4), a chowa się
+// dopiero po cofnięciu PRZED jego krok.
 var skipped = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
 skipped.begin(now: t0)
 skipped.next(now: t0)
-equal(skipped.dockTimers(now: t0).map(\.timer.id), [], "dok: pominięty timer „teraz” nie wraca")
+equal(skipped.dockTimers(now: t0).map(\.timer.id), ["t-butter"], "dok: pominięty timer „teraz” zostaje po „Dalej”")
+skipped.next(now: t0)
+skipped.next(now: t0)
+equal(skipped.currentStep?.id, "s4", "pominięte: krok 4")
+equal(skipped.dockTimers(now: t0).map(\.timer.id), ["t-butter", "t-potatoes"], "dok: oba pominięte czekają")
+skipped.back()
+skipped.back()
+equal(skipped.currentStep?.id, "s2", "pominięte: cofnięcie na krok 2")
+equal(skipped.dockTimers(now: t0).map(\.timer.id), ["t-butter"], "dok: cofnięcie przed krok ziemniaków je chowa")
+skipped.jump(to: 7)
+equal(skipped.dockTimers(now: t0).map(\.timer.id), ["t-butter", "t-potatoes", "t-cutlets"], "dok: krok 8 — wszystkie odwiedzone czekają")
+equal(skipped.dockCapsules(now: t0).map(\.timer.id), ["t-potatoes", "t-cutlets"], "kapsuły: bieżący i najbliższy pominięty")
+skipped.next(now: t0)
+skipped.next(now: t0)
+equal(skipped.currentStep?.id, "s10", "pominięte: krok 10")
+equal(skipped.dockCapsules(now: t0).map(\.timer.id), ["t-cutlets", "t-oven"], "kapsuły: najbliższe pominięte, nie najstarsze")
+equal(skipped.dockOverflow(now: t0).map(\.timer.id), ["t-butter", "t-potatoes"], "plakietka: reszta")
+skipped.startTimer("t-butter", now: t0)
+equal(skipped.dockCapsules(now: t0).map(\.timer.id), ["t-butter", "t-oven"], "kapsuły: włączony ma pierwszeństwo przed do włączenia")
+equal(skipped.dockOverflow(now: t0).map(\.timer.id), ["t-potatoes", "t-cutlets"], "plakietka: pominięte ziemniaki i kotlety")
+
+// Skok przez kroki: timer z kroku, na którym użytkownik nie stanął, nie czeka.
+var jumped = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
+jumped.begin(now: t0)
+jumped.jump(to: 7)
+equal(jumped.dockTimers(now: t0).map(\.timer.id), ["t-butter", "t-cutlets"], "dok: nieodwiedzony krok 3 — ziemniaki nie czekają")
 
 // Smażenie, „+2 min” dwa razy, „Gotowe — dalej”.
 session.jump(to: 7)
