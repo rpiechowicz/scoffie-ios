@@ -50,8 +50,12 @@ enum CookAmounts {
         factor: Double
     ) -> String {
         let unit = IngredientUnit(rawValue: rawUnit) ?? .other
-        let isSpice = department == KitchenAmount.spicesDepartment
-        let value = isSpice ? amount * factor : scaled(amount, unit: unit, factor: factor)
+        // Drabina łyżeczek dostaje ilość bez zaokrąglenia — tylko dla jednostek,
+        // które na nią wchodzą; przyprawa w sztukach (liść laurowy) idzie zwykłą
+        // drogą, bez „1,5 szt”.
+        let usesSpoonLadder = department == KitchenAmount.spicesDepartment
+            && [.gram, .milliliter, .teaspoon, .tablespoon].contains(unit)
+        let value = usesSpoonLadder ? amount * factor : scaled(amount, unit: unit, factor: factor)
         return KitchenAmount.format(
             amount: value,
             unit: unit,
@@ -131,10 +135,12 @@ extension CookPackage {
     /// pigułka „? · 30 g”.
     func lines(for step: CookStep, portions: Int) -> [CookIngredientLine] {
         let factor = CookAmounts.factor(portions: portions, basePortions: scenario.basePortions)
-        return step.ingredients.compactMap { item in
+        return step.ingredients.enumerated().compactMap { offset, item in
             guard let info = ingredient(item.ingredientId) else { return nil }
             return CookIngredientLine(
-                id: "\(step.id)·\(info.ingredientId)",
+                // Pozycja w kroku w id — ten sam składnik dwa razy w kroku
+                // nie da dwóch takich samych id w `ForEach`.
+                id: "\(step.id)·\(offset)·\(info.ingredientId)",
                 stepId: step.id,
                 ingredientId: info.ingredientId,
                 name: info.name,

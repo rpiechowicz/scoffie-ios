@@ -43,6 +43,10 @@ struct CookDock: View {
         .padding(.bottom, SCCook.Spacing.dockBottom)
         .animation(SCCook.Motion.dock, value: card)
         .animation(SCCook.Motion.dock, value: timers.map(\.id))
+        // Ostatni timer zrobiony — pusta karta Timery nie zostaje.
+        .onChange(of: timers.isEmpty) { _, isEmpty in
+            if isEmpty, card == .timers { card = nil }
+        }
     }
 
     // MARK: - Kapsuły

@@ -19,13 +19,17 @@ import SwiftUI
 @Observable
 final class CookScenarioStore {
     private let repository: RecipeRepository
+    /// Konto i dom — paczki przepisów domu nie przechodzą do innego domu.
+    private let ownerKey: String
     private(set) var packages: [UUID: CookPackage] = [:]
     private var inFlight: [UUID: Task<CookPackage?, Never>] = [:]
     private var isInvalidated = false
 
-    init(repository: RecipeRepository) {
+    init(repository: RecipeRepository, ownerKey: String) {
         self.repository = repository
-        self.packages = Self.loadAll()
+        self.ownerKey = ownerKey
+        Self.removeOtherOwners(keeping: ownerKey)
+        self.packages = Self.loadAll(from: Self.directory(for: ownerKey))
     }
 
     /// Koniec sesji (wylogowanie, inny dom) — spóźnione odpowiedzi nic już
@@ -112,7 +116,7 @@ final class CookScenarioStore {
                 savedAt: Date()
             )
             packages[recipe.id] = package
-            Self.save(package)
+            save(package)
             // Duże zdjęcie do nagłówka trybu — w kuchni bywa bez sieci.
             if let url = detail.imageURL ?? recipe.imageURL {
                 ImagePrefetcher.prefetch([url], variant: .large)
@@ -139,7 +143,7 @@ final class CookScenarioStore {
 
     private func drop(_ recipeId: UUID) {
         packages[recipeId] = nil
-        try? FileManager.default.removeItem(at: Self.fileURL(recipeId))
+        try? FileManager.default.removeItem(at: fileURL(recipeId))
     }
 
     // MARK: - Dysk
@@ -156,13 +160,28 @@ final class CookScenarioStore {
             .appendingPathComponent("cook-scenarios-v1", isDirectory: true)
     }
 
-    private static func fileURL(_ recipeId: UUID) -> URL {
-        directory.appendingPathComponent("\(recipeId.uuidString.lowercased()).json")
+    /// Katalog paczek jednego konta i domu (klucz bez znaków spoza nazwy pliku).
+    private static func directory(for ownerKey: String) -> URL {
+        let safe = ownerKey.map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? String($0) : "_" }.joined()
+        return directory.appendingPathComponent(safe, isDirectory: true)
     }
 
-    private static func save(_ package: CookPackage) {
+    /// Paczki innego konta albo domu (zmiana domu bez wylogowania) znikają.
+    private static func removeOtherOwners(keeping ownerKey: String) {
+        let keep = directory(for: ownerKey).lastPathComponent
+        let entries = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for entry in entries where entry.lastPathComponent != keep {
+            try? FileManager.default.removeItem(at: entry)
+        }
+    }
+
+    private func fileURL(_ recipeId: UUID) -> URL {
+        Self.directory(for: ownerKey).appendingPathComponent("\(recipeId.uuidString.lowercased()).json")
+    }
+
+    private func save(_ package: CookPackage) {
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: Self.directory(for: ownerKey), withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(package)
             try data.write(to: fileURL(package.recipeId), options: .atomic)
         } catch {
@@ -171,7 +190,7 @@ final class CookScenarioStore {
         }
     }
 
-    private static func loadAll() -> [UUID: CookPackage] {
+    private static func loadAll(from directory: URL) -> [UUID: CookPackage] {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil
@@ -185,18 +204,5 @@ final class CookScenarioStore {
             result[package.recipeId] = package
         }
         return result
-    }
-}
-
-private struct CookScenarioStoreKey: EnvironmentKey {
-    @MainActor static let defaultValue: CookScenarioStore? = nil
-}
-
-extension EnvironmentValues {
-    /// `nil` poza sesją (podglądy, ekrany przed logowaniem) — wtedy
-    /// przycisku „Gotuj” po prostu nie ma.
-    var cookScenarioStore: CookScenarioStore? {
-        get { self[CookScenarioStoreKey.self] }
-        set { self[CookScenarioStoreKey.self] = newValue }
     }
 }

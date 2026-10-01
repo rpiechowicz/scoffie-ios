@@ -437,6 +437,8 @@ struct RecipeDetailView: View {
         // Scenariusz Gotuj w pamięci telefonu — przycisk „Gotuj” pojawia się,
         // gdy paczka jest (§4.1), i działa potem bez sieci.
         .task(id: recipe.id) {
+            // Cudzy przepis (`.shared`) i tak nie ma „Gotuj” — bez zapytań.
+            if case .shared = context { return }
             await sessionStore.cookScenarioStore?.prepare(recipe)
         }
         .confirmationDialog(
@@ -444,8 +446,9 @@ struct RecipeDetailView: View {
             isPresented: $isReplaceCookingAsked,
             titleVisibility: .visible
         ) {
+            // Bez `end()` tutaj: start i tak podmienia sesję, a gdyby przejście
+            // się nie udało, tamta nie przepada w pół drogi.
             Button("Zakończ tamto i gotuj to", role: .destructive) {
-                sessionStore.cookSessionStore?.end()
                 beginCooking()
             }
             Button("Wróć do tamtego") {
@@ -1119,7 +1122,7 @@ struct RecipeDetailView: View {
 
     /// Trwająca sesja TEGO przepisu — wtedy „Gotuj dalej”.
     private var cookSession: CookSession? {
-        sessionStore.cookSessionStore?.session(for: recipe.id)
+        sessionStore.cookSessionStore?.activeSession(for: recipe.id)
     }
 
     private var showsCook: Bool {

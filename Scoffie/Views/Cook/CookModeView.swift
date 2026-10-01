@@ -112,6 +112,7 @@ struct CookModeView: View {
                                 },
                                 onSilence: { store.update { $0.silenceTimer(ringing.id) } },
                                 onDone: {
+                                    card = nil
                                     direction = .trailing
                                     withAnimation(SCCook.Motion.step) {
                                         store.update { $0.finishTimerAndAdvance(ringing.id, now: Date()) }
@@ -167,14 +168,6 @@ struct CookModeView: View {
                 }
             }
         }
-    }
-}
-
-extension CookRecipeFacts {
-    /// Dopisek po „ z ” — „z ziemniakami i mizerią”.
-    static func subtitle(_ title: String) -> String? {
-        guard let range = title.range(of: " z ") ?? title.range(of: " ze ") else { return nil }
-        return String(title[range.lowerBound...]).trimmingCharacters(in: .whitespaces)
     }
 }
 

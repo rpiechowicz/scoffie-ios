@@ -23,11 +23,16 @@ final class CookSessionStore {
     let ownerKey: String
     /// `false` = podgląd (ekran debug): bez pliku, żeby zrzut nie nadpisał
     /// prawdziwej sesji na tym telefonie.
-    @ObservationIgnored private let persists: Bool
+    private let persists: Bool
 
     /// Czeka do najbliższego końca timera — wtedy, jeśli tryb jest schowany
     /// („Wstrzymaj”), pokazuje go z ekranem końca timera, jak alarm w Zegarze.
     @ObservationIgnored private var ringWatch: Task<Void, Never>?
+
+    /// Timer właśnie zadzwonił, a tryb jest schowany. Pokazuje go
+    /// `SessionStore` (najpierw zamyka arkusze pulpitu — pełnego ekranu nie da
+    /// się pokazać nad otwartym arkuszem — i czeka na koniec startu).
+    @ObservationIgnored var onRing: (() -> Void)?
 
     init(ownerKey: String) {
         self.ownerKey = ownerKey
@@ -61,25 +66,40 @@ final class CookSessionStore {
             mealSlotRaw: mealSlot?.rawValue,
             planDateKey: planDate.map { PlanWeek.dateKey($0) },
             difficultyRaw: recipe.difficulty.rawValue,
-            kcalPerServing: CookRecipeFacts(recipe: recipe).kcalPerServing,
+            kcalPerServing: Self.kcalPerServing(recipe),
             package: package,
             portions: portions,
             startedAt: now
         )
+        // Poprzednia sesja (inne danie) odchodzi razem ze swoimi powiadomieniami.
+        CookTimerNotifications.cancelAll()
         self.session = session
         save()
         scheduleRingWatch()
         isPresented = true
     }
 
+    private static func kcalPerServing(_ recipe: Recipe) -> Int? {
+        let value = recipe.nutrition.kcal / Double(max(1, recipe.servings))
+        return value > 0 ? Int(value.rounded()) : nil
+    }
+
     /// Powrót do wstrzymanej sesji (talerz, szczegóły, Live Activity).
     func resume() {
         guard session != nil else { return }
-        isPresented = true
+        if isPresented {
+            // Przełącznik został na `true`, a ekranu nie ma (pokazanie nad
+            // arkuszem przepadło) — przejście false → true, żeby SwiftUI
+            // pokazało go od nowa.
+            isPresented = false
+            Task { @MainActor [weak self] in self?.isPresented = true }
+        } else {
+            isPresented = true
+        }
     }
 
     /// Sesja dla tego przepisu — „Wróć do gotowania” zamiast „Gotuj”.
-    func session(for recipeId: UUID) -> CookSession? {
+    func activeSession(for recipeId: UUID) -> CookSession? {
         guard let session, session.recipeId == recipeId, session.stage != .finished else { return nil }
         return session
     }
@@ -121,7 +141,9 @@ final class CookSessionStore {
 
     /// Na wierzchu dzwoni ekran końca timera, nie baner.
     func appBecameActive() {
-        CookTimerNotifications.cancelAll()
+        // Synchronicznie, po znanych id — asynchroniczne `cancelAll` przy
+        // szybkim „wierzch → tło” zdjęłoby świeżo zaplanowane powiadomienie.
+        CookTimerNotifications.remove(for: session)
         scheduleRingWatch()
     }
 
@@ -142,8 +164,12 @@ final class CookSessionStore {
                 try? await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow)))
             }
             guard !Task.isCancelled, let self, let session = self.session else { return }
-            if session.ringingTimer(now: Date()) != nil {
-                self.isPresented = true
+            if session.ringingTimer(now: Date()) != nil, !self.isPresented {
+                if let onRing = self.onRing {
+                    onRing()
+                } else {
+                    self.isPresented = true
+                }
             }
             if !ringsNow {
                 self.scheduleRingWatch()
@@ -203,7 +229,7 @@ enum CookTimerNotifications {
         let center = UNUserNotificationCenter.current()
         // Zdejmowanie po znanych id, synchronicznie — `cancelAll` czyta listę
         // asynchronicznie i potrafiłby zdjąć to, co zaraz dodamy.
-        center.removePendingNotificationRequests(withIdentifiers: session.scenario.timers.map { prefix + $0.id })
+        remove(for: session)
         for run in session.timers.values where run.state == .running && !run.silenced {
             guard let end = run.endDate, end > now, let timer = session.scenario.timer(id: run.timerId) else { continue }
             let content = UNMutableNotificationContent()
@@ -215,6 +241,16 @@ enum CookTimerNotifications {
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, end.timeIntervalSince(now)), repeats: false)
             center.add(UNNotificationRequest(identifier: prefix + run.timerId, content: content, trigger: trigger))
         }
+    }
+
+    /// Zdejmuje oczekujące i dostarczone powiadomienia timerów tej sesji —
+    /// synchronicznie, po znanych id.
+    static func remove(for session: CookSession?) {
+        guard let session else { return }
+        let ids = session.scenario.timers.map { prefix + $0.id }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
     static func cancelAll() {
@@ -232,15 +268,4 @@ enum CookTimerNotifications {
 private struct StoredSession: Codable {
     let ownerKey: String
     let session: CookSession
-}
-
-private struct CookSessionStoreKey: EnvironmentKey {
-    @MainActor static let defaultValue: CookSessionStore? = nil
-}
-
-extension EnvironmentValues {
-    var cookSessionStore: CookSessionStore? {
-        get { self[CookSessionStoreKey.self] }
-        set { self[CookSessionStoreKey.self] = newValue }
-    }
 }

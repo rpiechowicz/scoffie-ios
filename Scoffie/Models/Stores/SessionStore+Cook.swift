@@ -21,6 +21,22 @@ extension SessionStore {
         cookSessionStore.resume()
     }
 
+    /// Timer zadzwonił, a tryb jest schowany („Wstrzymaj”, zimny start) —
+    /// pokazujemy go z ekranem końca timera, jak alarm w Zegarze. Najpierw
+    /// zjeżdżają arkusze pulpitu (pełnego ekranu nie da się pokazać nad
+    /// otwartym arkuszem) i tylko nad gotowym pulpitem — nad loaderem startu
+    /// czeka, aż `startupPhase` dojdzie do `.ready` (wtedy woła to start).
+    @MainActor
+    func presentCookingIfRinging() async {
+        guard let cookSessionStore,
+              let session = cookSessionStore.session,
+              session.ringingTimer(now: Date()) != nil,
+              !cookSessionStore.isPresented,
+              startupPhase == .ready else { return }
+        await sessionCurtain.dismissPresentedScreensAnimated()
+        cookSessionStore.resume()
+    }
+
     /// „Zjedzone” na zakończeniu: danie z planu odhacza się na swój dzień
     /// i porę. Gotowanie spoza planu (D21: sam wpis do dzisiejszego planu)
     /// czeka na specyfikację po stronie backendu — na razie bez wpisu.

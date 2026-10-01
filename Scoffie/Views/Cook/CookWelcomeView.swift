@@ -234,24 +234,6 @@ struct CookRecipeFacts {
     let difficultyText: String
     let kcalPerServing: Int?
 
-    init(recipe: Recipe) {
-        let title = recipe.name
-        if let range = title.range(of: " z ") ?? title.range(of: " ze ") {
-            headline = String(title[..<range.lowerBound])
-            subtitle = String(title[range.lowerBound...]).trimmingCharacters(in: .whitespaces)
-        } else {
-            headline = title
-            subtitle = nil
-        }
-        switch recipe.difficulty {
-        case .easy: difficultyText = "łatwe"
-        case .medium: difficultyText = "średnio trudne"
-        case .hard: difficultyText = "trudne"
-        }
-        let perServing = recipe.nutrition.kcal / Double(max(1, recipe.servings))
-        kcalPerServing = perServing > 0 ? Int(perServing.rounded()) : nil
-    }
-
     init(headline: String, subtitle: String?, difficultyText: String, kcalPerServing: Int?) {
         self.headline = headline
         self.subtitle = subtitle

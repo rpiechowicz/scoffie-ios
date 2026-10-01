@@ -300,7 +300,11 @@ struct CookIngredientsCard<IslandRow: View>: View {
         return result.filter { !$0.lines.isEmpty }
     }
 
-    private var recipeCount: Int { session.package.ingredients.count }
+    /// „Cały przepis N” = wiersze listy (składnik dzielony między kroki to
+    /// kilka wierszy — sól ×3), tak jak liczą sekcje.
+    private var recipeCount: Int {
+        session.steps.indices.reduce(0) { $0 + lines(at: $1).count }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -353,7 +357,8 @@ struct CookIngredientsCard<IslandRow: View>: View {
 
     private var scopePicker: some View {
         HStack(spacing: 4) {
-            scopeSegment(.step, title: "Ten krok", count: lines(at: index).count + lines(at: index + 1).count)
+            // Jak plakietka na wyspie: składniki TEGO kroku (makieta: „Ten krok 4”).
+            scopeSegment(.step, title: "Ten krok", count: lines(at: index).count)
             scopeSegment(.recipe, title: "Cały przepis", count: recipeCount)
         }
         .padding(4)

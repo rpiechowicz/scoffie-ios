@@ -459,7 +459,9 @@ enum CookClock {
     static func duration(_ timer: CookTimer) -> String {
         let low = minutesText(timer.minSeconds)
         guard timer.hasRange else { return low }
-        return "\(timer.minSeconds / 60)–\(minutesText(timer.maxSeconds))"
+        // „10–12 min”; zakres przez godzinę słowami w całości: „50 min – 1 h 10 min”.
+        guard timer.maxSeconds < 3600 else { return "\(low) – \(minutesText(timer.maxSeconds))" }
+        return "\(Int((Double(timer.minSeconds) / 60).rounded(.up)))–\(minutesText(timer.maxSeconds))"
     }
 
     static func minutesText(_ seconds: Int) -> String {

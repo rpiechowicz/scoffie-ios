@@ -14,6 +14,7 @@ struct CookStepView: View {
     let onNext: () -> Void
     let onTimer: (CookTimerAction) -> Void
 
+    @State private var scrollPosition = ScrollPosition(edge: .top)
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -32,8 +33,14 @@ struct CookStepView: View {
                 }
             }
             .scrollIndicators(.hidden)
+            .scrollPosition($scrollPosition)
             .ignoresSafeArea(edges: .top)
             .simultaneousGesture(swipe)
+            // Nowy krok zaczyna się od tytułu, nie od miejsca, w którym
+            // skończyło się czytanie poprzedniego.
+            .onChange(of: step.id) {
+                scrollPosition.scrollTo(edge: .top)
+            }
 
             topBar
         }

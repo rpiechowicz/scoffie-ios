@@ -574,8 +574,6 @@ struct ScoffieApp: App {
             .scErrorToast(mealStore.errorMessage)
             .scErrorToast(recipeCatalogStore.errorMessage)
             .scErrorToast(shoppingListStore.errorMessage)
-            .environment(\.cookScenarioStore, sessionStore.cookScenarioStore)
-            .environment(\.cookSessionStore, sessionStore.cookSessionStore)
             // Tryb Gotuj: pełny ekran nad pulpitem (D6). Wejścia (szczegóły
             // przepisu, talerz) idą przez `SessionStore.startCooking`, który
             // najpierw zamyka arkusze.

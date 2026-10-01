@@ -119,11 +119,20 @@ struct CookExitSheet: View {
 }
 
 extension CookRecipeFacts {
+    /// Gdzie tytuł dzieli się na nazwę i dopisek: pierwsze „ z ” / „ ze ”.
+    private static func splitRange(_ title: String) -> Range<String.Index>? {
+        title.range(of: " z ") ?? title.range(of: " ze ")
+    }
+
     /// Nazwa dania do „Krok 8 z 12 · Kotlet de volaille” — bez dopisku po „ z ”.
     static func shortTitle(_ title: String) -> String {
-        if let range = title.range(of: " z ") ?? title.range(of: " ze ") {
-            return String(title[..<range.lowerBound])
-        }
-        return title
+        guard let range = splitRange(title) else { return title }
+        return String(title[..<range.lowerBound])
+    }
+
+    /// Dopisek po „ z ” — „z ziemniakami i mizerią”.
+    static func subtitle(_ title: String) -> String? {
+        guard let range = splitRange(title) else { return nil }
+        return String(title[range.lowerBound...]).trimmingCharacters(in: .whitespaces)
     }
 }

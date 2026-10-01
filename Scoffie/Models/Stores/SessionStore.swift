@@ -821,14 +821,19 @@ final class SessionStore {
         )
         self.cookScenarioStore?.invalidate()
         self.cookScenarioStore = CookScenarioStore(
-            repository: ApiRecipeRepository(client: recipeTransport)
+            repository: ApiRecipeRepository(client: recipeTransport),
+            ownerKey: "\(userId)_\(householdId)"
         )
         // Sesja gotowania przeżywa ponowne zbudowanie store'ów tego samego
         // konta i domu (restore po zimnym starcie, powrót połączenia); inny
         // właściciel dostaje czysty store, a cudzego pliku nie wczyta.
         let cookOwnerKey = "\(userId)_\(householdId)"
         if self.cookSessionStore?.ownerKey != cookOwnerKey {
-            self.cookSessionStore = CookSessionStore(ownerKey: cookOwnerKey)
+            let cook = CookSessionStore(ownerKey: cookOwnerKey)
+            cook.onRing = { [weak self] in
+                Task { @MainActor in await self?.presentCookingIfRinging() }
+            }
+            self.cookSessionStore = cook
         }
         let shoppingListStore = ShoppingListStore(
             repository: ApiShoppingListRepository(client: shoppingTransport),
@@ -2281,6 +2286,9 @@ final class SessionStore {
             // Scenariusze Gotuj dań dziś i jutro — po starcie, w tle; nic na
             // nie nie czeka, a przycisk „Gotuj” pojawi się, gdy przyjdą.
             Task { @MainActor [weak self] in
+                // Timer zadzwonił, zanim aplikacja wstała (zimny start) —
+                // alarm dopiero nad gotowym pulpitem, nie nad loaderem.
+                await self?.presentCookingIfRinging()
                 await self?.prefetchCookScenarios()
             }
         }
