@@ -1,109 +1,26 @@
 import SwiftUI
 
-/// Ekran kroku (Y3K1–3): u góry pierścień kroków i krzyżyk, scena (etap ·
-/// tytuł · opis · adnotacja) pod zdjęciem dania, na dole dok. Tekst przewija
-/// się pod dokiem, a jego koniec staje nad nim (`spacing.cookDockReserve`).
+/// Krok (Y3K1–3) — treść pod zdjęciem na wspólnym ekranie trybu
+/// (`CookScreen`): etap · tytuł · opis · adnotacja. Pierścień kroków
+/// i krzyżyk stoją w pasku ekranu, dok pływa nad treścią. Tekst przewija się
+/// pod dokiem, a jego koniec staje nad nim (`spacing.cookDockReserve`).
 ///
 /// Ruch (§8.2, `motion.cookStep`): przy wejściu sekcje wjeżdżają kaskadą,
 /// przy zmianie kroku nagłówek (etap i tytuł) ROLUJE się w miejscu jak danie
 /// w arkuszu wyboru posiłku, a opis wjeżdża z boku, z którego przyszedł krok,
-/// o chwilę później — nagłówek szybciej niż „jak”. Układ zostaje jeden: nowy
-/// opis i stary leżą w tym samym `ZStack`, więc nic pod nimi nie skacze.
-struct CookStepView: View {
+/// o chwilę później — nagłówek szybciej niż „jak”. Nowy opis i stary leżą
+/// w tym samym `ZStack`, więc nic pod nimi nie skacze.
+struct CookStepScene: View {
     let session: CookSession
     let step: CookStep
-    /// Skąd przyszedł krok — nowy wjeżdża z tej strony.
+    /// Skąd przyszedł krok — nowy opis wjeżdża z tej strony.
     let direction: Edge
-    /// Zdjęcie osiada raz, przy wejściu w tryb (`CookModeView`).
-    let isPhotoRevealed: Bool
-    @Binding var card: CookDock.Card?
-    let onClose: () -> Void
-    let onBack: () -> Void
-    let onNext: () -> Void
-    let onTimer: (CookTimerAction) -> Void
 
-    @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.scPageBase(scheme).ignoresSafeArea()
-
-            ScrollView {
-                ZStack(alignment: .topLeading) {
-                    CookHeaderPhoto(url: session.imageURL, isRevealed: isPhotoRevealed)
-                    scene
-                }
-                // Szerokość treści = szerokość ekranu (wzór szczegółów
-                // posiłku): żaden element nie poszerzy obszaru przewijania.
-                .containerRelativeFrame(.horizontal)
-            }
-            .scrollIndicators(.hidden)
-            .scrollPosition($scrollPosition)
-            // Zdjęcie pod paskiem stanu; dół zostaje w bezpiecznym obszarze,
-            // tak jak dok (`cookDockReserve` liczy się od jego krawędzi).
-            .ignoresSafeArea(edges: .top)
-            .simultaneousGesture(swipe)
-            // Nowy krok zaczyna się od tytułu, nie od miejsca, w którym
-            // skończyło się czytanie poprzedniego.
-            .onChange(of: step.id) {
-                withAnimation(SCCook.Motion.step) {
-                    scrollPosition.scrollTo(edge: .top)
-                }
-            }
-
-            topBar
-        }
-        .overlay {
-            if card != nil {
-                SCCook.Palette.scrim(scheme)
-                    .ignoresSafeArea()
-                    .onTapGesture { card = nil }
-                    .transition(.opacity)
-                    .accessibilityLabel("Zamknij kartę")
-                    .accessibilityAddTraits(.isButton)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                CookDock(
-                    session: session,
-                    now: context.date,
-                    card: $card,
-                    onBack: onBack,
-                    onNext: onNext,
-                    onTimer: onTimer
-                )
-            }
-            .cookReveal(hasAppeared, order: 3)
-            // Dok stoi tam, gdzie dolne menu aplikacji — na dolnej krawędzi
-            // bezpiecznego obszaru (runda 2: „ciut za wysoko”).
-        }
-        .animation(SCCook.Motion.dock, value: card)
-        .task {
-            guard !hasAppeared else { return }
-            await CookEntrance.breathe()
-            hasAppeared = true
-        }
-    }
-
-    /// Pierścień kroków i krzyżyk — ta sama wielkość i powierzchnia. Przy
-    /// wejściu pojawia się tylko pierścień: krzyżyk stoi w tym samym miejscu
-    /// na powitaniu, więc przejście powitanie → krok go nie gasi.
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            CookStepRing(count: session.stepCount, current: session.stepIndex)
-                .cookChrome(hasAppeared)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            SCSheetCloseButton(onImage: true, action: onClose)
-        }
-        .padding(.horizontal, SCCook.Spacing.page)
-        .padding(.top, 11)
-    }
-
-    private var scene: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: SCCook.Spacing.titleTop)
 
@@ -122,6 +39,11 @@ struct CookStepView: View {
         }
         .padding(.horizontal, SCCook.Spacing.page)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
     }
 
     /// Etap i tytuł — ten sam widok przez wszystkie kroki, tekst roluje się
@@ -192,22 +114,6 @@ struct CookStepView: View {
     /// dłuższy (scenariusze sprzed zasad .5) schodzi do 32 pt.
     private var titleStyle: SCCookTextStyle {
         step.title.count > 30 ? SCCook.Typography.stepTitleCompact : SCCook.Typography.stepTitle
-    }
-
-    /// Przesunięcie w bok = krok dalej / wstecz (§4.2). Równolegle
-    /// z przewijaniem — liczy się tylko wyraźnie poziomy ruch.
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onEnded { value in
-                let dx = value.translation.width
-                let dy = value.translation.height
-                guard abs(dx) > 70, abs(dx) > abs(dy) * 1.6, card == nil else { return }
-                if dx < 0 {
-                    if !session.isLastStep { onNext() }
-                } else if !session.isFirstStep {
-                    onBack()
-                }
-            }
     }
 }
 

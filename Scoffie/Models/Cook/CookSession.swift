@@ -171,10 +171,6 @@ struct CookSession: Codable, Equatable {
         guard let timer = scenario.timer(id: timerId),
               let step = scenario.step(forTimer: timerId) else { return }
         if let run = timers[timerId], run.state != .finished { return }
-        // Kolor timera (docs/GOTUJ.md w scoffie-design): terakota, chyba że ma
-        // ją już inny żywy timer — wtedy szałwia. Dwa biegnące razem nigdy
-        // nie mają tego samego koloru, a kolor zostaje z timerem do końca.
-        let terracottaTaken = timers.values.contains { $0.state != .finished && $0.accent == .terracotta }
         timers[timerId] = CookTimerRun(
             timerId: timerId,
             stepId: step.id,
@@ -184,8 +180,15 @@ struct CookSession: Codable, Equatable {
             silenced: false,
             extendedSeconds: 0,
             startedAt: now,
-            accent: terracottaTaken ? .sage : .terracotta
+            accent: accent(for: timerId)
         )
+    }
+
+    /// Kolor timera — każdy timer przepisu ma SWÓJ, po jego miejscu
+    /// w scenariuszu (`CookTimerAccent.forTimer`). Ten sam od „do włączenia”
+    /// do „Gotowe” i w każdej sesji tego przepisu.
+    func accent(for timerId: String) -> CookTimerAccent {
+        CookTimerAccent.forTimer(at: scenario.timers.firstIndex { $0.id == timerId } ?? 0)
     }
 
     mutating func pauseTimer(_ timerId: String, now: Date) {
@@ -298,7 +301,7 @@ struct CookSession: Codable, Equatable {
                 timer: timer,
                 stepIndex: stepIndex,
                 status: status,
-                accent: timers[timer.id]?.accent ?? .terracotta
+                accent: timers[timer.id]?.accent ?? accent(for: timer.id)
             )
             switch status {
             case .overdue:
@@ -337,16 +340,29 @@ struct CookSession: Codable, Equatable {
         dockTimers(now: now).sorted { $0.stepIndex < $1.stepIndex }
     }
 
-    /// Kapsuły nad wyspą. Scenariusz planuje najwyżej dwa timery naraz (D33),
-    /// ale trzy mieszczą się obok siebie (runda 2: „jak się zmieszczą 3, to
-    /// koło siebie”); dopiero czwarty i dalsze idą do plakietki „+N”. Przy
-    /// nadmiarze wybór idzie za pilnością (`dockTimers`: po czasie, trwające
-    /// od najbliższego końca, wstrzymane, do włączenia), a kolejność na
-    /// ekranie — za krokiem (`timerLineup`).
-    func dockCapsules(now: Date, limit: Int = 3) -> [CookDockTimer] {
-        let urgent = dockTimers(now: now)
-        let chosen = Set(urgent.prefix(limit).map(\.id))
-        return urgent.filter { chosen.contains($0.id) }.sorted { $0.stepIndex < $1.stepIndex }
+    /// Kapsuły nad wyspą — najwyżej dwie (D33; runda 3 testów: „max 2 —
+    /// te najstarsze, które już działają”). Pierwszeństwo mają włączone
+    /// timery (trwa, wstrzymany) od najdawniej włączonego; miejsce, które
+    /// zostanie, bierze timer do włączenia. Wyjątek: timer PO CZASIE stoi
+    /// w doku zawsze — wyciszony pulsuje, dopóki nie padnie „Gotowe”, więc
+    /// nie może czekać za „+N”. Reszta jest w arkuszu Timery i w plakietce
+    /// „+N”. Na ekranie kapsuły stoją w kolejności kroków.
+    func dockCapsules(now: Date, limit: Int = 2) -> [CookDockTimer] {
+        let all = dockTimers(now: now)
+        let overdue = all.filter { if case .overdue = $0.status { true } else { false } }
+        let started = all
+            .filter {
+                switch $0.status {
+                case .running, .paused: true
+                case .pending, .overdue, .finished: false
+                }
+            }
+            .sorted { (timers[$0.id]?.startedAt ?? .distantFuture) < (timers[$1.id]?.startedAt ?? .distantFuture) }
+        let waiting = all
+            .filter { if case .pending = $0.status { true } else { false } }
+            .sorted { $0.stepIndex < $1.stepIndex }
+        let chosen = Set((overdue + started + waiting).prefix(limit).map(\.id))
+        return all.filter { chosen.contains($0.id) }.sorted { $0.stepIndex < $1.stepIndex }
     }
 
     /// Najbliższy biegnący timer — Live Activity i „Wróć do gotowania”.
@@ -412,11 +428,31 @@ struct CookTimerRun: Codable, Equatable {
     let accent: CookTimerAccent
 }
 
-/// Kolor timera — pierścień, etykieta, obwódka i przycisk pauzy (makieta:
-/// Kotlety terakota, Ziemniaki szałwia). Bez SwiftUI: kolor rozwiązuje widok.
-enum CookTimerAccent: String, Codable, Equatable {
+/// Kolor timera — pierścień, etykieta, obwódka, przycisk i alarm. Każdy
+/// timer przepisu ma swój (runda 3 testów, 1.10.2026: „każdy inny timer inny
+/// kolor — kolory posiłków”): po kolei terakota, szałwia, indygo, róż,
+/// morska, lawenda, masło — akcent aplikacji i kolory pór posiłków. Bez
+/// SwiftUI: kolor rozwiązuje widok.
+enum CookTimerAccent: String, Codable, Equatable, CaseIterable {
     case terracotta
     case sage
+    case indigo
+    case rose
+    case teal
+    case lavender
+    case butter
+
+    /// Kolor `index`-tego timera scenariusza; po siedmiu — od początku.
+    static func forTimer(at index: Int) -> CookTimerAccent {
+        let count = allCases.count
+        return allCases[((index % count) + count) % count]
+    }
+
+    /// Nieznany kolor z pliku nowszej wersji = terakota, a nie utracona sesja.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = CookTimerAccent(rawValue: raw) ?? .terracotta
+    }
 }
 
 struct CookTimerExtension: Codable, Equatable {
@@ -433,7 +469,7 @@ enum CookTimerStatus: Equatable {
     case running(remaining: TimeInterval, total: TimeInterval, endDate: Date)
     /// Wstrzymany — przygaszony, nie zadzwoni.
     case paused(remaining: TimeInterval, total: TimeInterval)
-    /// Po czasie — pełna terakota, dzwonek, mocny puls; licznik idzie w górę.
+    /// Po czasie — pełny kolor timera, dzwonek, mocny puls; licznik idzie w górę.
     case overdue(over: TimeInterval, total: TimeInterval, silenced: Bool)
     case finished
 
@@ -454,7 +490,7 @@ struct CookDockTimer: Equatable, Identifiable {
     /// Indeks kroku, który ten timer niesie („krok 3”).
     let stepIndex: Int
     let status: CookTimerStatus
-    /// „Do włączenia” zawsze terakota — kolor przychodzi ze startem.
+    /// Kolor timera — ten sam przed startem, w trakcie i po czasie.
     let accent: CookTimerAccent
 
     var id: String { timer.id }

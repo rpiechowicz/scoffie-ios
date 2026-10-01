@@ -1,20 +1,19 @@
 import SwiftUI
 
-/// Zakończenie (EF8, D20): „Smacznego!”, trzy liczby (czas · kroki · kcal
-/// porcji), rada „na następny raz”, ocena w wierszu i „✓ Zjedzone”. Po
-/// kciuku arkusz uwag (EF2); kciuk zapisuje się także bez uwag.
+/// Zakończenie (EF8, D20) — treść pod zdjęciem na wspólnym ekranie trybu
+/// (`CookScreen`): „Smacznego!”, trzy liczby (czas · kroki · kcal porcji),
+/// rada „na następny raz” i ocena w wierszu. „✓ Zjedzone” stoi w stopce
+/// (`CookFinishFooter`). Po kciuku arkusz uwag (EF2); kciuk zapisuje się
+/// także bez uwag.
 ///
 /// Ruch: sekcje wjeżdżają kaskadą, liczby liczą się od zera razem z wejściem
 /// swojego rzędu, kciuk podmienia glif i podskakuje, a kciuk w górę dostaje
 /// „wybuch” kropek w szałwii i haptykę sukcesu (jak ocena odpowiedzi
 /// Asystenta).
-struct CookFinishView: View {
+struct CookFinishContent: View {
     let session: CookSession
     let recipe: CookRecipeFacts
     let now: Date
-    let isPhotoRevealed: Bool
-    let onEaten: () -> Void
-    let onClose: () -> Void
     let onFeedback: (CookFeedback) -> Void
 
     @State private var rating: CookFeedback.Rating?
@@ -24,60 +23,28 @@ struct CookFinishView: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.scPageBase(scheme).ignoresSafeArea()
-
-            ScrollView {
-                ZStack(alignment: .top) {
-                    CookHeaderPhoto(url: session.imageURL, isRevealed: isPhotoRevealed)
-                    content
+        content
+            .sheet(isPresented: $isFeedbackSheetPresented) {
+                if let rating {
+                    CookFeedbackSheet(
+                        session: session,
+                        rating: rating,
+                        onSend: { tags, comment in
+                            onFeedback(CookFeedback(rating: rating, tags: tags, comment: comment, session: session))
+                            isFeedbackSheetPresented = false
+                        }
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(40)
+                    .presentationBackground(Color.scCanvas(scheme))
                 }
-                // Szerokość treści = szerokość ekranu (wzór szczegółów posiłku).
-                .containerRelativeFrame(.horizontal)
             }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-            .ignoresSafeArea(edges: .top)
-            .scSheetFooter(horizontalPadding: SCCook.Spacing.page) {
-                CookPrimaryButton(
-                    title: "Zjedzone",
-                    leadingIcon: "checkmark",
-                    accent: SCPalette.sage,
-                    style: SCCook.Typography.buttonQuiet,
-                    action: onEaten
-                )
-                .cookReveal(hasAppeared, order: 5)
+            .task {
+                guard !hasAppeared else { return }
+                await CookEntrance.breathe()
+                hasAppeared = true
             }
-
-            HStack {
-                Spacer()
-                SCSheetCloseButton(onImage: true, action: onClose)
-            }
-            .padding(.horizontal, SCCook.Spacing.page)
-            .padding(.top, 11)
-            .cookChrome(hasAppeared)
-        }
-        .sheet(isPresented: $isFeedbackSheetPresented) {
-            if let rating {
-                CookFeedbackSheet(
-                    session: session,
-                    rating: rating,
-                    onSend: { tags, comment in
-                        onFeedback(CookFeedback(rating: rating, tags: tags, comment: comment, session: session))
-                        isFeedbackSheetPresented = false
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(40)
-                .presentationBackground(Color.scCanvas(scheme))
-            }
-        }
-        .task {
-            guard !hasAppeared else { return }
-            await CookEntrance.breathe()
-            hasAppeared = true
-        }
     }
 
     private var content: some View {
@@ -234,6 +201,31 @@ struct CookFinishView: View {
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .sensoryFeedback(value == .up ? .success : .selection, trigger: selected) { _, isOn in isOn }
+    }
+}
+
+/// Stopka zakończenia: „✓ Zjedzone” w szałwii na płycie stopki aplikacji.
+struct CookFinishFooter: View {
+    let onEaten: () -> Void
+
+    @State private var hasAppeared = false
+
+    var body: some View {
+        SCSheetFooter(horizontalPadding: SCCook.Spacing.page, reservesShade: true) {
+            CookPrimaryButton(
+                title: "Zjedzone",
+                leadingIcon: "checkmark",
+                accent: SCPalette.sage,
+                style: SCCook.Typography.buttonQuiet,
+                action: onEaten
+            )
+            .cookReveal(hasAppeared, order: 5)
+        }
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
     }
 }
 

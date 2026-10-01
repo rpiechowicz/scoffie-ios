@@ -1,85 +1,22 @@
 import SwiftUI
 
-/// Powitanie (WL1): co gotujesz, dla ilu porcji, szuflady Składniki i Rady
-/// kucharza, „Zaczynamy”. Porcje zmieniają się tylko w tej sesji — plan
-/// zostaje (D11). Sprzętu nie pokazujemy (§13.1).
+/// Powitanie (WL1) — treść pod zdjęciem na wspólnym ekranie trybu
+/// (`CookScreen`): co gotujesz i dla ilu porcji. Szuflady i „Zaczynamy” są
+/// w stopce (`CookWelcomeFooter`). Porcje zmieniają się tylko w tej sesji —
+/// plan zostaje (D11). Sprzętu nie pokazujemy (§13.1).
 ///
-/// Ruch: zdjęcie osiada, sekcje wjeżdżają kaskadą (jak szczegóły posiłku),
-/// liczby w meta liczą się od zera, a zmiana porcji roluje liczby w karcie,
-/// stepperze i skrócie składników.
-struct CookWelcomeView: View {
+/// Ruch: sekcje wjeżdżają kaskadą (jak szczegóły posiłku), liczby w meta
+/// liczą się od zera, a zmiana porcji roluje liczby w karcie, stepperze
+/// i skrócie składników.
+struct CookWelcomeContent: View {
     let session: CookSession
     let recipe: CookRecipeFacts
-    let isPhotoRevealed: Bool
     let onPortions: (Int) -> Void
-    let onStart: () -> Void
-    let onClose: () -> Void
 
-    @State private var drawer: Drawer?
     @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
 
-    enum Drawer: String, Identifiable {
-        case ingredients
-        case tips
-        var id: String { rawValue }
-    }
-
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.scPageBase(scheme).ignoresSafeArea()
-
-            ScrollView {
-                ZStack(alignment: .topLeading) {
-                    CookHeaderPhoto(url: session.imageURL, isRevealed: isPhotoRevealed)
-                    content
-                }
-                // Szerokość treści = szerokość ekranu (wzór szczegółów posiłku).
-                .containerRelativeFrame(.horizontal)
-            }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-            .ignoresSafeArea(edges: .top)
-            .scSheetFooter(horizontalPadding: SCCook.Spacing.page) {
-                footer
-            }
-
-            HStack {
-                Spacer()
-                SCSheetCloseButton(onImage: true, action: onClose)
-            }
-            .padding(.horizontal, SCCook.Spacing.page)
-            .padding(.top, 11)
-            .cookChrome(hasAppeared)
-        }
-        .sheet(item: $drawer) { drawer in
-            CookWelcomeDrawerSheet(session: session, drawer: drawer)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(40)
-                .presentationBackground(Color.scCanvas(scheme))
-        }
-        .task {
-            guard !hasAppeared else { return }
-            await CookEntrance.breathe()
-            hasAppeared = true
-        }
-    }
-
-    private var footer: some View {
-        VStack(spacing: 12) {
-            drawerButton(.ingredients)
-                .cookReveal(hasAppeared, order: 3)
-            if !session.scenario.tips.isEmpty {
-                drawerButton(.tips)
-                    .cookReveal(hasAppeared, order: 4)
-            }
-            CookPrimaryButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
-                .cookReveal(hasAppeared, order: 5)
-        }
-    }
-
-    private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: SCCook.Spacing.titleTop)
 
@@ -117,6 +54,11 @@ struct CookWelcomeView: View {
         }
         .padding(.horizontal, SCCook.Spacing.page)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
     }
 
     private var eyebrow: String {
@@ -180,10 +122,50 @@ struct CookWelcomeView: View {
         if session.portionsChanged { return "tylko na teraz — plan bez zmian" }
         return session.planDateKey != nil ? "tyle, ile w planie" : "tyle, ile w przepisie"
     }
+}
 
-    private func drawerButton(_ kind: Drawer) -> some View {
+/// Szuflada powitania — co otwiera jej arkusz.
+enum CookWelcomeDrawer {
+    case ingredients
+    case tips
+}
+
+/// Stopka powitania: szuflady Składniki i Rady kucharza, „Zaczynamy” — na
+/// płycie stopki aplikacji (`SCSheetFooter`), w wspólnej stopce ekranu
+/// trybu (`CookScreen`).
+struct CookWelcomeFooter: View {
+    let session: CookSession
+    let onOpen: (CookSheet) -> Void
+    let onStart: () -> Void
+
+    @State private var hasAppeared = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        SCSheetFooter(horizontalPadding: SCCook.Spacing.page, reservesShade: true) {
+            VStack(spacing: 12) {
+                drawerButton(.ingredients)
+                    .cookReveal(hasAppeared, order: 3)
+                if !session.scenario.tips.isEmpty {
+                    drawerButton(.tips)
+                        .cookReveal(hasAppeared, order: 4)
+                }
+                CookPrimaryButton(title: "Zaczynamy", trailingIcon: "arrow.right", action: onStart)
+                    .cookReveal(hasAppeared, order: 5)
+            }
+        }
+        .task {
+            guard !hasAppeared else { return }
+            await CookEntrance.breathe()
+            hasAppeared = true
+        }
+    }
+
+    private func drawerButton(_ kind: CookWelcomeDrawer) -> some View {
         let shape = RoundedRectangle(cornerRadius: SCCook.Radius.tile, style: .continuous)
-        return Button { drawer = kind } label: {
+        return Button {
+            onOpen(kind == .tips ? .tips : .recipeIngredients)
+        } label: {
             HStack(spacing: 14) {
                 switch kind {
                 case .ingredients:
@@ -221,14 +203,14 @@ struct CookWelcomeView: View {
         .buttonStyle(.plain)
     }
 
-    private func drawerTitle(_ kind: Drawer) -> String {
+    private func drawerTitle(_ kind: CookWelcomeDrawer) -> String {
         switch kind {
         case .ingredients: "Składniki · \(session.package.ingredients.count)"
         case .tips: "Rady kucharza · \(session.scenario.tips.count)"
         }
     }
 
-    private func drawerSummary(_ kind: Drawer) -> String {
+    private func drawerSummary(_ kind: CookWelcomeDrawer) -> String {
         switch kind {
         case .ingredients:
             session.package.allLines(portions: session.portions)
@@ -364,7 +346,7 @@ struct CookPrimaryButton: View {
 /// kucharza (makieta pokazuje szuflady tylko zwinięte — docs/GOTUJ.md, ustalenie 6).
 struct CookWelcomeDrawerSheet: View {
     let session: CookSession
-    let drawer: CookWelcomeView.Drawer
+    let drawer: CookWelcomeDrawer
 
     @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme

@@ -1,20 +1,40 @@
 import SwiftUI
 
+/// Arkusz trybu Gotuj — najwyżej jeden naraz. Timery i Składniki to arkusze
+/// systemu (runda 3 testów, 1.10.2026: „jak otwieram / zamykam sheet od
+/// timerów oraz od składników, to trochę się buguje animacja”) — dawne karty
+/// rozwijane z doku przestawiały dok i treść pod palcem.
+enum CookSheet: String, Identifiable {
+    /// Wszystkie timery — z kapsuły i plakietki „+N”.
+    case timers
+    /// Składniki kroku — z wyspy; pół ekranu, przewijanie rozwija na cały.
+    case ingredients
+    /// Szuflady powitania: cały przepis i rady kucharza.
+    case recipeIngredients
+    case tips
+    /// „Wychodzisz z gotowania?” — krzyżyk w krokach.
+    case exit
+
+    var id: String { rawValue }
+}
+
 /// Tryb Gotuj — pełny ekran nad pulpitem (D6): powitanie → kroki →
-/// „Smacznego!”, a nad krokami ekran końca timera, gdy któryś dzwoni.
+/// „Smacznego!” na JEDNYM ekranie (`CookScreen`), a nad krokami ekran końca
+/// timera, gdy któryś dzwoni.
 ///
 /// Stan żyje w `CookSessionStore` (zapis przy każdej zmianie), widok tylko
 /// go rysuje i przekazuje decyzje. Ekran nie gaśnie przez cały tryb.
 /// Krzyżyk w trakcie kroków pyta „Wychodzisz z gotowania?” (D22); na
-/// powitaniu, zanim cokolwiek ruszyło, po prostu zamyka.
+/// powitaniu, zanim cokolwiek ruszyło, i na końcu po prostu zamyka.
 struct CookModeView: View {
     let store: CookSessionStore
     /// „Zjedzone” — odhaczenie w planie robi pulpit (dostęp do planu).
     let onEaten: (CookSession) -> Void
     let onFeedback: (CookFeedback) -> Void
 
-    @State private var card: CookDock.Card?
-    @State private var isExitPresented = false
+    @State private var sheet: CookSheet?
+    /// Składniki otwierają się zawsze na pół ekranu.
+    @State private var ingredientsDetent: PresentationDetent = .medium
     @State private var direction: Edge = .trailing
     /// Zdjęcie dania osiada RAZ, przy wejściu w tryb — przejście powitanie →
     /// kroki → koniec go nie powtarza (to samo zdjęcie w tym samym miejscu).
@@ -22,20 +42,17 @@ struct CookModeView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// `initialCard` / `showsExit` — tylko ekran debug (zrzut otwartej karty
-    /// albo arkusza wyjścia).
+    /// `initialSheet` — tylko ekran debug (zrzut otwartego arkusza).
     init(
         store: CookSessionStore,
         onEaten: @escaping (CookSession) -> Void,
         onFeedback: @escaping (CookFeedback) -> Void = { _ in },
-        initialCard: CookDock.Card? = nil,
-        showsExit: Bool = false
+        initialSheet: CookSheet? = nil
     ) {
         self.store = store
         self.onEaten = onEaten
         self.onFeedback = onFeedback
-        _card = State(initialValue: initialCard)
-        _isExitPresented = State(initialValue: showsExit)
+        _sheet = State(initialValue: initialSheet)
     }
 
     var body: some View {
@@ -43,6 +60,9 @@ struct CookModeView: View {
             Color.scPageBase(scheme).ignoresSafeArea()
             if let session = store.session {
                 screen(session)
+                if session.stage == .steps {
+                    alarm(session)
+                }
             }
         }
         .interactiveDismissDisabled()
@@ -53,138 +73,156 @@ struct CookModeView: View {
             await CookEntrance.breathe()
             isPhotoRevealed = true
         }
-        .sheet(isPresented: $isExitPresented) {
-            if let session = store.session {
-                CookExitSheet(
-                    session: session,
-                    onPause: {
-                        isExitPresented = false
-                        store.pause()
-                    },
-                    onEnd: {
-                        isExitPresented = false
-                        store.end()
-                    },
-                    onContinue: { isExitPresented = false }
-                )
-                .presentationDetents([.height(440)])
+        .sheet(item: $sheet) { kind in
+            sheetContent(kind)
+        }
+    }
+
+    private func screen(_ session: CookSession) -> some View {
+        CookScreen(
+            session: session,
+            recipe: CookRecipeFacts(
+                headline: CookRecipeFacts.shortTitle(session.recipeTitle),
+                subtitle: CookRecipeFacts.subtitle(session.recipeTitle),
+                difficultyText: session.difficultyText,
+                kcalPerServing: session.kcalPerServing
+            ),
+            isPhotoRevealed: isPhotoRevealed,
+            direction: direction,
+            // Porcje rolują liczby w karcie, stepperze i skrócie składników.
+            onPortions: { value in
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : SCMotion.textRoll) {
+                    store.update { $0.setPortions(value) }
+                }
+            },
+            onStart: {
+                direction = .trailing
+                withAnimation(SCCook.Motion.step) {
+                    store.update { $0.begin(now: Date()) }
+                }
+            },
+            onClose: { close(session) },
+            onBack: { move(forward: false) },
+            onNext: { move(forward: true) },
+            onTimer: { action in handle(action) },
+            onOpen: { kind in present(kind) },
+            onEaten: {
+                onEaten(session)
+                store.end()
+            },
+            onFeedback: onFeedback
+        )
+    }
+
+    /// Ekran końca timera nad krokami. Arkusza nie da się przykryć widokiem
+    /// spod niego, więc dzwoniący timer najpierw zamyka otwarty arkusz
+    /// (Timery, Składniki, „Wychodzisz…”) — alarm jest ważniejszy.
+    private func alarm(_ session: CookSession) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let ringing = session.ringingTimer(now: context.date)
+            ZStack {
+                if let ringing {
+                    CookAlarmView(
+                        session: session,
+                        item: ringing,
+                        now: context.date,
+                        onExtend: { seconds in
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                store.update { $0.extendTimer(ringing.id, by: seconds, now: Date()) }
+                            }
+                        },
+                        onSilence: {
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                store.update { $0.silenceTimer(ringing.id) }
+                            }
+                        },
+                        onDone: {
+                            sheet = nil
+                            direction = .trailing
+                            withAnimation(SCCook.Motion.step) {
+                                store.update { $0.finishTimerAndAdvance(ringing.id, now: Date()) }
+                            }
+                        }
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .onChange(of: ringing?.id, initial: true) { _, id in
+                if id != nil { sheet = nil }
+            }
+        }
+    }
+
+    // MARK: - Arkusze
+
+    @ViewBuilder
+    private func sheetContent(_ kind: CookSheet) -> some View {
+        if let session = store.session {
+            sheetBody(kind, session: session)
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(40)
                 .presentationBackground(Color.scCanvas(scheme))
-            }
         }
     }
 
     @ViewBuilder
-    private func screen(_ session: CookSession) -> some View {
-        let facts = CookRecipeFacts(
-            headline: CookRecipeFacts.shortTitle(session.recipeTitle),
-            subtitle: CookRecipeFacts.subtitle(session.recipeTitle),
-            difficultyText: session.difficultyText,
-            kcalPerServing: session.kcalPerServing
-        )
-        switch session.stage {
-        case .welcome:
-            CookWelcomeView(
+    private func sheetBody(_ kind: CookSheet, session: CookSession) -> some View {
+        switch kind {
+        case .timers:
+            // Wysokość podaje arkusz sam — z treści (liczba timerów).
+            CookTimersSheet(
                 session: session,
-                recipe: facts,
-                isPhotoRevealed: isPhotoRevealed,
-                // Porcje rolują liczby w karcie, stepperze i skrócie składników.
-                onPortions: { value in
-                    withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : SCMotion.textRoll) {
-                        store.update { $0.setPortions(value) }
-                    }
-                },
-                onStart: {
-                    withAnimation(SCCook.Motion.step) {
-                        store.update { $0.begin(now: Date()) }
-                    }
-                },
-                onClose: { store.end() }
+                onTimer: { action in handle(action) },
+                onClose: { sheet = nil }
             )
-            .transition(stageTransition)
-            .zIndex(2)
-        case .steps:
-            if let step = session.currentStep {
-                CookStepView(
-                    session: session,
-                    step: step,
-                    direction: direction,
-                    isPhotoRevealed: isPhotoRevealed,
-                    card: $card,
-                    onClose: { isExitPresented = true },
-                    onBack: { move(forward: false) },
-                    onNext: { move(forward: true) },
-                    onTimer: handle
-                )
-                .overlay {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        if let ringing = session.ringingTimer(now: context.date) {
-                            CookAlarmView(
-                                session: session,
-                                item: ringing,
-                                now: context.date,
-                                onExtend: { seconds in
-                                    withAnimation(.easeOut(duration: 0.25)) {
-                                        store.update { $0.extendTimer(ringing.id, by: seconds, now: Date()) }
-                                    }
-                                },
-                                onSilence: {
-                                    withAnimation(.easeOut(duration: 0.25)) {
-                                        store.update { $0.silenceTimer(ringing.id) }
-                                    }
-                                },
-                                onDone: {
-                                    card = nil
-                                    direction = .trailing
-                                    withAnimation(SCCook.Motion.step) {
-                                        store.update { $0.finishTimerAndAdvance(ringing.id, now: Date()) }
-                                    }
-                                }
-                            )
-                            .transition(.opacity)
-                        }
-                    }
-                }
-                .transition(stageTransition)
-                .zIndex(1)
-            }
-        case .finished:
-            TimelineView(.periodic(from: .now, by: 60)) { context in
-                CookFinishView(
-                    session: session,
-                    recipe: facts,
-                    now: context.date,
-                    isPhotoRevealed: isPhotoRevealed,
-                    onEaten: {
-                        onEaten(session)
-                        store.end()
-                    },
-                    onClose: { store.end() },
-                    onFeedback: onFeedback
-                )
-            }
-            .transition(stageTransition)
-            .zIndex(0)
+        case .ingredients:
+            CookIngredientsSheet(session: session, onClose: { sheet = nil })
+                .presentationDetents([.medium, .large], selection: $ingredientsDetent)
+                // Przewijanie listy najpierw rozwija arkusz na cały ekran.
+                .presentationContentInteraction(.resizes)
+        case .recipeIngredients:
+            CookWelcomeDrawerSheet(session: session, drawer: .ingredients)
+                .presentationDetents([.medium, .large])
+                .presentationContentInteraction(.resizes)
+        case .tips:
+            CookWelcomeDrawerSheet(session: session, drawer: .tips)
+                .presentationDetents([.medium, .large])
+                .presentationContentInteraction(.resizes)
+        case .exit:
+            CookExitSheet(
+                session: session,
+                onPause: {
+                    sheet = nil
+                    store.pause()
+                },
+                onEnd: {
+                    sheet = nil
+                    store.end()
+                },
+                onContinue: { sheet = nil }
+            )
+            .presentationDetents([.height(440)])
         }
     }
 
-    /// Przejście między ekranami trybu (powitanie → kroki → koniec; runda 2:
-    /// „ma nie przeskakiwać, tylko płynnie włączać”). Nowy ekran staje od razu
-    /// POD starym, w pełnym kryciu, a stary gaśnie na wierzchu (`zIndex`
-    /// idzie za kolejnością ekranów). Zdjęcie jest na obu w tym samym
-    /// miejscu, więc nie przygasa w połowie (dawniej przenikały się dwa
-    /// półprzezroczyste), krzyżyk stoi w miejscu, a treść nowego ekranu
-    /// wchodzi własną kaskadą, gdy stara już zgasła.
-    private var stageTransition: AnyTransition {
-        .asymmetric(
-            insertion: .identity,
-            removal: .opacity.animation(.easeOut(duration: reduceMotion ? 0.15 : 0.22))
-        )
+    private func present(_ kind: CookSheet) {
+        if kind == .ingredients { ingredientsDetent = .medium }
+        sheet = kind
+    }
+
+    // MARK: - Decyzje
+
+    private func close(_ session: CookSession) {
+        switch session.stage {
+        case .welcome, .finished:
+            store.end()
+        case .steps:
+            present(.exit)
+        }
     }
 
     private func move(forward: Bool) {
-        card = nil
+        sheet = nil
         direction = forward ? .trailing : .leading
         withAnimation(SCCook.Motion.step) {
             store.update { session in

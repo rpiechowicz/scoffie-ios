@@ -5,29 +5,22 @@ import SwiftUI
 /// dolnego menu aplikacji (60 pt, 20 pt od boków, na dolnej krawędzi
 /// bezpiecznego obszaru — runda 2 testów, 1.10.2026).
 ///
-/// Ruch (runda 2: „nie powinno wszystko się wysuwać”):
-/// - wyspa jest JEDNYM trwałym kontenerem; „Składniki” rozwijają ją w kartę —
-///   lista wysuwa się spod wiersza wyspy jak arkusz, a wiersz zostaje na
-///   miejscu (`island`);
-/// - kapsuły mają stałą tożsamość (po id timera) i kolejność kroków
-///   (`CookSession.dockCapsules`): kolejna wjeżdża z boku, poprzednie zwężają
-///   się płynnie, włączenie timera nie zamienia ich miejscami; trzy mieszczą
-///   się obok siebie;
-/// - kapsuły i karta Timery wychodzą spod wyspy (`riseFromIsland`), w jednym
-///   `ZStack` przyklejonym do dołu — wychodząca i wchodząca warstwa nakładają
-///   się, zamiast stawać jedna nad drugą.
+/// Najwyżej dwie kapsuły — dwa najdawniej włączone timery, a wolne miejsce
+/// bierze timer do włączenia (`CookSession.dockCapsules`, runda 3); stoją
+/// w kolejności kroków i każdy ma swój kolor (`CookTimerAccent`). Kapsuły
+/// mają stałą tożsamość (po id timera): druga wjeżdża z boku, pierwsza
+/// zwęża się w miejscu, a cały rząd wychodzi spod wyspy.
+///
+/// Timery i Składniki otwierają się jako arkusze systemu (`CookSheet`;
+/// runda 3: „trochę się buguje animacja”, „Składniki do połowy ekranu,
+/// przewijanie rozwija na cały”) — dok się wtedy nie przestawia.
 struct CookDock: View {
-    enum Card: Equatable {
-        case timers
-        case ingredients
-    }
-
     let session: CookSession
     let now: Date
-    @Binding var card: Card?
     let onBack: () -> Void
     let onNext: () -> Void
     let onTimer: (CookTimerAction) -> Void
+    let onOpen: (CookSheet) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,23 +28,20 @@ struct CookDock: View {
     var body: some View {
         let capsules = session.dockCapsules(now: now)
         let total = session.dockTimers(now: now).count
-        VStack(spacing: 0) {
-            timersSlot(capsules: capsules, total: total)
+        VStack(spacing: SCCook.Spacing.dockGap) {
+            if !capsules.isEmpty {
+                capsuleRow(capsules, total: total)
+                    .transition(riseFromIsland)
+            }
             island
         }
         .padding(.horizontal, SCCook.Spacing.dockSide)
         .padding(.bottom, SCCook.Spacing.dockBottom)
-        .animation(SCCook.Motion.dock, value: card)
         .animation(SCCook.Motion.dock, value: capsules.map(\.id))
-        // Ostatni timer zrobiony — pusta karta Timery nie zostaje.
-        .onChange(of: total == 0) { _, isEmpty in
-            if isEmpty, card == .timers { card = nil }
-        }
     }
 
-    /// Kapsuły i karta Timery wychodzą SPOD wyspy: unoszą się i rozjaśniają.
-    /// Wyspa leży nad nimi (jest dalej w `VStack`), więc dół wchodzącej
-    /// warstwy chowa się pod nią — nigdy nie wystaje pod wyspę.
+    /// Rząd kapsuł wychodzi SPOD wyspy: unosi się i rozjaśnia. Wyspa leży nad
+    /// nim (jest dalej w `VStack`), więc jego dół chowa się pod nią.
     private var riseFromIsland: AnyTransition {
         if reduceMotion { return .opacity }
         return .asymmetric(
@@ -62,56 +52,34 @@ struct CookDock: View {
 
     // MARK: - Timery
 
-    /// Miejsce nad wyspą: kapsuły albo karta Timery (ST5 — karta w miejscu
-    /// kapsuł, wyspa zostaje pod nią).
-    private func timersSlot(capsules: [CookDockTimer], total: Int) -> some View {
-        ZStack(alignment: .bottom) {
-            if card == .timers, total > 0 {
-                CookTimersCard(session: session, now: now, onTimer: onTimer)
-                    .padding(.bottom, SCCook.Spacing.dockGap)
-                    .transition(riseFromIsland)
-            } else if !capsules.isEmpty {
-                capsuleRow(capsules, total: total)
-                    .padding(.bottom, SCCook.Spacing.dockGap)
-                    .transition(riseFromIsland)
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// Kapsuły obok siebie — jedna na całą szerokość, dwie, trzy. Ta sama
-    /// kapsuła przez cały czas swojego timera: przy kolejnej zwęża się
-    /// w miejscu, a nowa wjeżdża z boku.
     private func capsuleRow(_ items: [CookDockTimer], total: Int) -> some View {
-        let layout: CookTimerCapsule.Layout = switch items.count {
-        case 1: .single
-        case 2: .pair
-        default: .trio
-        }
+        let layout: CookTimerCapsule.Layout = items.count > 1 ? .pair : .single
         return HStack(spacing: SCCook.Spacing.capsuleGap) {
             ForEach(items) { item in
-                CookTimerCapsule(item: item, layout: layout, onTimer: onTimer, onOpen: { card = .timers })
+                CookTimerCapsule(item: item, layout: layout, onTimer: onTimer, onOpen: { onOpen(.timers) })
                     .transition(capsuleTransition)
             }
         }
-        // Czwarty timer i dalsze (poza planem scenariusza, D38) — plakietka
-        // „+N” na ostatniej kapsule, wszystko widać w karcie Timery.
+        // Trzeci i dalsze (poza planem scenariusza, D38) — plakietka „+N”
+        // na drugiej kapsule, wszystkie są w arkuszu Timery.
         .overlay(alignment: .topTrailing) {
             if total > items.count {
-                Button { card = .timers } label: {
+                Button { onOpen(.timers) } label: {
                     Text("+\(total - items.count)")
                         .font(.system(size: 12, weight: .heavy))
                         .monospacedDigit()
                         .foregroundStyle(Color.scPageBase(scheme))
                         .padding(.horizontal, 7)
                         .frame(height: 22)
-                        .background(Capsule().fill(SCPalette.terracotta))
-                        .scTapTarget(44, drawn: 22)
+                        .background(Capsule().fill(Color.scLabel(scheme)))
+                        // Sama wysokość dotyku: szersza niż 22 pt plakietka
+                        // nie wchodzi wtedy pod róg kapsuły obok.
+                        .scTapHeight(44, drawn: 22)
                 }
                 .buttonStyle(.plain)
                 .offset(x: 4, y: -8)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
-                .accessibilityLabel("Jeszcze \(total - items.count) w karcie Timery")
+                .accessibilityLabel("Jeszcze \(total - items.count) w arkuszu Timery")
             }
         }
     }
@@ -126,31 +94,7 @@ struct CookDock: View {
 
     // MARK: - Wyspa
 
-    /// Wyspa i karta Składniki to ten sam kontener: zaokrąglenie
-    /// `radius.cookDockCard` to połowa wysokości wyspy, więc zamknięta jest
-    /// kapsułą, a rozwinięcie zmienia tylko wysokość — kształt nie przeskakuje.
-    /// Lista wjeżdża od dołu SPOD wiersza wyspy (wiersz ma kryjące tło i leży
-    /// nad nią), a kontener rośnie razem z nią — górna krawędź listy idzie
-    /// z górną krawędzią karty, jak arkusz.
     private var island: some View {
-        let isOpen = card == .ingredients
-        let surface = SCCook.Palette.dockSurface(scheme)
-        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.dockCard, style: .continuous)
-        return VStack(spacing: 0) {
-            if isOpen {
-                CookIngredientsPanel(session: session)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom))
-            }
-            islandRow(highlighted: isOpen)
-                .background(surface)
-        }
-        .background(shape.fill(surface))
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
-        .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 18, y: 14)
-    }
-
-    private func islandRow(highlighted: Bool) -> some View {
         let count = session.currentStep.map { session.package.lines(for: $0, portions: session.portions).count } ?? 0
         // Jeden krążek „Dalej”: w ostatnim kroku strzałka PRZECHODZI w ptaszek
         // na szałwii (glif się podmienia, kolory przenikają).
@@ -168,7 +112,7 @@ struct CookDock: View {
             .opacity(session.isFirstStep ? 0.4 : 1)
 
             Button {
-                card = card == .ingredients ? nil : .ingredients
+                onOpen(.ingredients)
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "basket")
@@ -189,7 +133,6 @@ struct CookDock: View {
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity)
                 .frame(height: SCCook.Size.islandButton)
-                .background(Capsule().fill(highlighted ? Color.scRule(scheme) : .clear))
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -206,6 +149,9 @@ struct CookDock: View {
         }
         .padding(SCCook.Spacing.islandPadding)
         .frame(height: SCCook.Height.island)
+        .background(Capsule().fill(SCCook.Palette.dockSurface(scheme)))
+        .overlay(Capsule().strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
+        .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 18, y: 14)
         .sensoryFeedback(.selection, trigger: session.stepIndex)
     }
 
@@ -232,7 +178,7 @@ struct CookDock: View {
     }
 }
 
-/// Co użytkownik zrobił z timerem — jedna droga z kapsuły, karty i alarmu.
+/// Co użytkownik zrobił z timerem — jedna droga z kapsuły, arkusza i alarmu.
 enum CookTimerAction {
     case start(String)
     case pause(String)
@@ -253,7 +199,7 @@ extension CookDockTimer {
         }
     }
 
-    /// Glif tego ruchu — ten sam w kapsule i w karcie Timery.
+    /// Glif tego ruchu — ten sam w kapsule i w arkuszu Timery.
     var primaryIcon: String {
         switch status {
         case .pending, .paused: "play.fill"
@@ -272,21 +218,20 @@ extension CookDockTimer {
     }
 }
 
-/// Kapsuła timera nad wyspą.
+/// Kapsuła timera nad wyspą — w kolorze SWOJEGO timera (runda 3: „każdy
+/// inny timer inny kolor”), we wszystkich stanach.
 ///
 /// - Pojedyncza (cała szerokość): pierścień, etykieta, czas i przycisk
 ///   w pigułce z makiety (pauza / ▶ Start / ▶ Wznów / ✓ Gotowe).
-/// - Z pary i z trójki: PIERŚCIEŃ JEST PRZYCISKIEM tego samego ruchu, z glifem
-///   w środku (runda 2: „włączyć / wyłączyć timer z pulpitu, nie wchodząc
-///   w kartę”) — ten sam znak, co w karcie Timery.
+/// - Z pary: PIERŚCIEŃ JEST PRZYCISKIEM tego samego ruchu, z glifem w środku
+///   (runda 2: „włączyć / wyłączyć timer z pulpitu, nie wchodząc w kartę”).
 ///
-/// Stuknięcie w resztę kapsuły otwiera kartę Timery; w „do włączenia” cała
+/// Stuknięcie w resztę kapsuły otwiera arkusz Timery; w „do włączenia” cała
 /// kapsuła włącza timer (makieta).
 struct CookTimerCapsule: View {
     enum Layout {
         case single
         case pair
-        case trio
     }
 
     let item: CookDockTimer
@@ -300,10 +245,10 @@ struct CookTimerCapsule: View {
     private var isPending: Bool { if case .pending = item.status { true } else { false } }
     private var isPaused: Bool { if case .paused = item.status { true } else { false } }
 
-    private var color: Color { isPending ? SCPalette.terracotta : item.accent.color }
+    private var color: Color { item.accent.color }
 
     var body: some View {
-        HStack(spacing: spacing) {
+        HStack(spacing: layout == .single ? 10 : 8) {
             switch layout {
             case .single:
                 bodyButton {
@@ -313,13 +258,13 @@ struct CookTimerCapsule: View {
                     }
                 }
                 singleAction
-            case .pair, .trio:
+            case .pair:
                 ringButton
                 bodyButton { texts }
             }
         }
-        .padding(.leading, leadingPadding)
-        .padding(.trailing, trailingPadding)
+        .padding(.leading, layout == .single ? 12 : 8)
+        .padding(.trailing, layout == .single ? 6 : 12)
         .frame(height: SCCook.Height.timerCapsule)
         .frame(maxWidth: .infinity)
         .background(background)
@@ -327,35 +272,11 @@ struct CookTimerCapsule: View {
         .clipShape(Capsule())
         .contentShape(Capsule())
         .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 15, y: 12)
-        .cookInvitePulse(Capsule(), isActive: isPending)
-        .cookOverduePulse(Capsule(), isActive: isOverdue)
+        .cookInvitePulse(Capsule(), color: color, isActive: isPending)
+        .cookOverduePulse(Capsule(), color: color, isActive: isOverdue)
         // Koniec odliczania przychodzi z zegara (bez animacji w transakcji) —
-        // kolor kapsuły przechodzi w terakotę sprężyną doku, a nie w klatce.
+        // kolor kapsuły przechodzi sprężyną doku, a nie w klatce.
         .animation(SCCook.Motion.dock, value: item.status.phase)
-    }
-
-    private var spacing: CGFloat {
-        switch layout {
-        case .single: 10
-        case .pair: 8
-        case .trio: 6
-        }
-    }
-
-    private var leadingPadding: CGFloat {
-        switch layout {
-        case .single: 12
-        case .pair: 8
-        case .trio: 6
-        }
-    }
-
-    private var trailingPadding: CGFloat {
-        switch layout {
-        case .single: 6
-        case .pair: 12
-        case .trio: 8
-        }
     }
 
     private func bodyAction() {
@@ -374,20 +295,16 @@ struct CookTimerCapsule: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(CookDockLabels.accessibility(item))
-        .accessibilityHint(isPending ? "Włącza timer" : "Otwiera kartę Timery")
+        .accessibilityHint(isPending ? "Włącza timer" : "Otwiera arkusz Timery")
     }
 
     private var texts: some View {
-        // Poza pojedynczą kapsułą bez dopisków („· pauza”, „· po czasie”) —
-        // stan mówi kolor i glif w pierścieniu, a węższa kapsuła nie mieści
-        // dwóch słów więcej.
-        let label = layout == .single ? CookDockLabels.capsuleLabel(item) : item.timer.label
+        // W parze bez dopisków („· pauza”, „· po czasie”) — stan mówi kolor
+        // i glif w pierścieniu, a połowa szerokości nie mieści dwóch słów
+        // więcej. „Do włączenia” zawsze z warunkiem startu (D37: „Gdy woda
+        // zawrze”), bo to on mówi, kiedy stuknąć.
+        let label = layout == .single || isPending ? CookDockLabels.capsuleLabel(item) : item.timer.label
         let time = CookDockLabels.time(item.status)
-        let timeStyle: SCCookTextStyle = switch layout {
-        case .single: SCCook.Typography.timerTime
-        case .pair: SCCook.Typography.timerTimePair
-        case .trio: SCCook.Typography.timerTimeTrio
-        }
         return VStack(alignment: .leading, spacing: 1) {
             Text(label)
                 .cookText(SCCook.Typography.timerLabel)
@@ -396,7 +313,7 @@ struct CookTimerCapsule: View {
                 .minimumScaleFactor(0.85)
                 .cookRoll(label)
             Text(time)
-                .cookText(timeStyle)
+                .cookText(layout == .single ? SCCook.Typography.timerTime : SCCook.Typography.timerTimePair)
                 .monospacedDigit()
                 .foregroundStyle(timeColor)
                 .lineLimit(1)
@@ -422,11 +339,11 @@ struct CookTimerCapsule: View {
     private var background: some View {
         let surface = SCCook.Palette.dockSurface(scheme)
         if isOverdue {
-            SCPalette.terracotta
+            color
         } else if isPaused {
             ZStack { surface; SCCook.Palette.pausedFill(scheme) }
         } else if isPending {
-            ZStack { surface; SCPalette.terracotta.opacity(SCCook.Opacity.pendingFill) }
+            ZStack { surface; color.opacity(SCCook.Opacity.pendingFill) }
         } else {
             ZStack { surface; color.opacity(SCCook.Opacity.timerFill) }
         }
@@ -439,7 +356,7 @@ struct CookTimerCapsule: View {
         } else if isPaused {
             Capsule().strokeBorder(Color.scRule(scheme), lineWidth: 1)
         } else if isPending {
-            Capsule().strokeBorder(SCPalette.terracotta, lineWidth: 1.5)
+            Capsule().strokeBorder(color, lineWidth: 1.5)
         } else {
             Capsule().strokeBorder(color.opacity(SCCook.Opacity.timerStroke), lineWidth: 1)
         }
@@ -464,7 +381,7 @@ struct CookTimerCapsule: View {
                 .overlay(Circle().strokeBorder(Color.scMuted(scheme), lineWidth: 2))
         } else if isPending {
             Circle()
-                .strokeBorder(SCPalette.terracotta.opacity(SCCook.Opacity.pendingRing), lineWidth: SCCook.Stroke.timerRing)
+                .strokeBorder(color.opacity(SCCook.Opacity.pendingRing), lineWidth: SCCook.Stroke.timerRing)
                 .frame(width: side, height: side)
         } else {
             CookTimerRing(fraction: item.status.remainingFraction, color: color, lineWidth: SCCook.Stroke.timerRing)
@@ -489,7 +406,7 @@ struct CookTimerCapsule: View {
             .accessibilityLabel(item.primaryLabel)
             .transition(.scale(scale: 0.8).combined(with: .opacity))
         case .pending:
-            pillButton(title: "Start", icon: "play.fill", fill: SCPalette.terracotta, ink: Color.scPageBase(scheme)) {
+            pillButton(title: "Start", icon: "play.fill", fill: color, ink: Color.scPageBase(scheme)) {
                 onTimer(.start(item.id))
             }
         case .paused:
@@ -538,13 +455,13 @@ struct CookTimerCapsule: View {
         .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 
-    // MARK: Para i trójka
+    // MARK: Para
 
     /// Pierścień-przycisk: łuk pozostałego czasu z glifem ruchu w środku.
     /// Jeden widok przez wszystkie stany — glif się podmienia, kolory
     /// przenikają, nic w kapsule się nie przestawia.
     private var ringButton: some View {
-        let side = layout == .trio ? SCCook.Size.timerRingTrio : SCCook.Size.timerRingPair
+        let side = SCCook.Size.timerRingPair
         let showsRing = item.status.phase == 1 || isPaused
         return Button {
             if let action = item.primaryAction { onTimer(action) }
@@ -558,7 +475,7 @@ struct CookTimerCapsule: View {
                 )
                 .opacity(showsRing ? 1 : 0)
                 Image(systemName: item.primaryIcon)
-                    .font(.system(size: layout == .trio ? 10 : 11, weight: .heavy))
+                    .font(.system(size: 11, weight: .heavy))
                     .foregroundStyle(glyphColor)
                     .offset(x: item.primaryIcon == "play.fill" ? 1 : 0)
                     .contentTransition(.symbolEffect(.replace))
@@ -571,7 +488,7 @@ struct CookTimerCapsule: View {
     }
 
     private var ringFill: Color {
-        if isPending { return SCPalette.terracotta }
+        if isPending { return color }
         if isOverdue { return Color.scPageBase(scheme).opacity(0.16) }
         return .clear
     }

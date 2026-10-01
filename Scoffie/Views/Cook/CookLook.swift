@@ -5,12 +5,25 @@ import SwiftUI
 // scoffie-design `docs/GOTUJ.md`.
 
 extension CookTimerAccent {
-    /// Kolor timera: pierścień, etykieta, obwódka i przycisk pauzy.
+    /// Kolor timera: pierścień, etykieta, obwódka, przycisk i alarm —
+    /// akcent aplikacji i kolory pór posiłków (każdy z jasnym wariantem
+    /// pod krem, `SCPalette.dynamicColor`).
     var color: Color {
         switch self {
         case .terracotta: SCPalette.terracotta
         case .sage: SCPalette.sage
+        case .indigo: SCPalette.indigo
+        case .rose: SCPalette.rose
+        case .teal: SCPalette.teal
+        case .lavender: SCPalette.lavender
+        case .butter: SCPalette.butter
         }
+    }
+
+    /// Tło pod kolor timera (aureola alarmu) — ten sam przepis co
+    /// `scAccentTint` dla akcentu aplikacji.
+    func tint(_ scheme: ColorScheme) -> Color {
+        color.opacity(scheme == .dark ? 0.16 : 0.12)
     }
 }
 
@@ -146,11 +159,11 @@ struct CookPulse<S: InsettableShape>: ViewModifier {
 }
 
 extension View {
-    /// Łagodny puls „do włączenia” (timer czeka na start).
-    func cookInvitePulse<S: InsettableShape>(_ shape: S, isActive: Bool = true) -> some View {
+    /// Łagodny puls „do włączenia” (timer czeka na start) — w kolorze timera.
+    func cookInvitePulse<S: InsettableShape>(_ shape: S, color: Color = SCPalette.terracotta, isActive: Bool = true) -> some View {
         modifier(CookPulse(
             shape: shape,
-            color: SCPalette.terracotta,
+            color: color,
             spread: SCCook.Spacing.inviteSpread,
             startOpacity: SCCook.Opacity.pendingPulse,
             period: SCCook.Duration.invitePulse,
@@ -158,11 +171,11 @@ extension View {
         ))
     }
 
-    /// Mocny puls „po czasie”.
-    func cookOverduePulse<S: InsettableShape>(_ shape: S, isActive: Bool = true) -> some View {
+    /// Mocny puls „po czasie” — w kolorze timera.
+    func cookOverduePulse<S: InsettableShape>(_ shape: S, color: Color = SCPalette.terracotta, isActive: Bool = true) -> some View {
         modifier(CookPulse(
             shape: shape,
-            color: SCPalette.terracotta,
+            color: color,
             spread: SCCook.Spacing.overdueSpread,
             startOpacity: SCCook.Opacity.overduePulse,
             period: SCCook.Duration.overduePulse,
@@ -266,12 +279,13 @@ struct CookBackdropPhoto: View {
 /// w szałwii, bieżący w terakocie, przed nami `cook.ringTodo`. Ten sam znak
 /// w nagłówku trybu i na talerzu po wstrzymaniu (Live Activity w E5).
 ///
-/// Odcinki mają okrągłe końce i realną przerwę (runda 2 testów: „bardziej
-/// zaokrąglone, dopracuj designersko”). Zmiana kroku PRZELEWA barwę:
-/// szałwia przechodzi po starym odcinku, a terakota nalewa się w nowy (wstecz
-/// — odwrotnie). Jedna liczba (`position`) interpolowana przez SwiftUI,
-/// z której trzy warstwy liczą swoje łuki w każdej klatce (wzór `RingLap`
-/// z Planu), więc żaden odcinek nie przeskakuje kolorem w jednej klatce.
+/// Odcinki mają okrągłe końce i realną przerwę (runda 2). Zmiana kroku
+/// PRZELEWA barwę: szałwia przechodzi po starym odcinku, terakota nalewa się
+/// w nowy. Barwy to pełne, zaokrąglone odcinki odsłaniane KLINEM od środka
+/// (`CookStepWedges`, `position` interpolowana przez SwiftUI) — granica
+/// barw to prosta krawędź klina. Runda 2 rysowała przelewanie łukami
+/// z okrągłymi końcami i przy każdym kroku na końcach odcinków wyskakiwały
+/// i znikały kropki („progress przeskakuje”, runda 3).
 struct CookStepArcs: View {
     let count: Int
     /// Indeks od zera.
@@ -285,27 +299,102 @@ struct CookStepArcs: View {
 
     var body: some View {
         let style = StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+        let segments = CookStepSegments(count: count, lineWidth: lineWidth, gap: gap)
         let position = Double(current)
         ZStack {
-            CookStepArcLayer(part: .todo, count: count, position: position, lineWidth: lineWidth, gap: gap)
-                .stroke(SCCook.Palette.ringTodo(scheme), style: style)
-            CookStepArcLayer(part: .done, count: count, position: position, lineWidth: lineWidth, gap: gap)
-                .stroke(SCPalette.sage, style: style)
-            CookStepArcLayer(part: .current, count: count, position: position, lineWidth: lineWidth, gap: gap)
-                .stroke(SCPalette.terracotta, style: style)
+            segments.stroke(SCCook.Palette.ringTodo(scheme), style: style)
+            segments.stroke(SCPalette.sage, style: style)
+                .mask {
+                    CookStepWedges(part: .done, count: count, position: position, lineWidth: lineWidth, gap: gap)
+                }
+            segments.stroke(SCPalette.terracotta, style: style)
+                .mask {
+                    CookStepWedges(part: .current, count: count, position: position, lineWidth: lineWidth, gap: gap)
+                }
         }
-        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.6), value: current)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.55), value: current)
     }
 }
 
-/// Łuki jednej barwy pierścienia kroków we wszystkich odcinkach.
-/// `position` (bieżący krok) jest `animatableData` — podział każdego odcinka
-/// na „zrobione / bieżący / przed nami” liczy się z niej w każdej klatce.
-private struct CookStepArcLayer: Shape {
+/// Geometria odcinków pierścienia kroków — jedna dla odcinków i klinów.
+/// Bez aktora: `path(in:)` kształtu woła ją poza głównym wątkiem.
+private nonisolated struct CookStepGeometry {
+    let center: CGPoint
+    let radius: CGFloat
+    let count: Int
+    /// Punkty obwodu na jeden krok.
+    let pitch: CGFloat
+    /// Łuk między odcinkami: widoczna przerwa + kreska (okrągłe końce
+    /// dokładają po pół kreski z każdej strony).
+    let arcGap: CGFloat
+    /// Odcinek dłuższy niż punkt — inaczej ciągły łuk postępu.
+    let isSegmented: Bool
+
+    init?(rect: CGRect, count: Int, lineWidth: CGFloat, gap: CGFloat) {
+        let radius = (min(rect.width, rect.height) - lineWidth) / 2
+        guard radius > 0 else { return nil }
+        let total = max(1, count)
+        let pitch = 2 * .pi * radius / CGFloat(total)
+        let arcGap = gap + lineWidth
+        self.center = CGPoint(x: rect.midX, y: rect.midY)
+        self.radius = radius
+        self.count = total
+        self.pitch = pitch
+        self.arcGap = arcGap
+        self.isSegmented = pitch - arcGap >= 1
+    }
+
+    /// Kąt punktu `length` wzdłuż obwodu — od 12:00, zgodnie z zegarem
+    /// (`addArc(clockwise: false)` przy rosnących kątach, jak `RingLap`).
+    func angle(_ length: CGFloat) -> Double {
+        Double(length / radius) - .pi / 2
+    }
+
+    func point(_ angle: Double, at distance: CGFloat) -> CGPoint {
+        CGPoint(x: center.x + distance * CGFloat(cos(angle)), y: center.y + distance * CGFloat(sin(angle)))
+    }
+
+    /// Początek i długość odcinka `index` w punktach obwodu (bez końców).
+    func segment(_ index: Int) -> (start: CGFloat, length: CGFloat) {
+        (CGFloat(index) * pitch + arcGap / 2, pitch - arcGap)
+    }
+}
+
+/// Wszystkie odcinki pierścienia (albo cały okrąg przy bardzo długim
+/// przepisie) — rysowane kreską z okrągłymi końcami.
+private struct CookStepSegments: Shape {
+    let count: Int
+    let lineWidth: CGFloat
+    let gap: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        guard let geometry = CookStepGeometry(rect: rect, count: count, lineWidth: lineWidth, gap: gap) else { return Path() }
+        var path = Path()
+        guard geometry.isSegmented else {
+            let r = geometry.radius
+            path.addEllipse(in: CGRect(x: geometry.center.x - r, y: geometry.center.y - r, width: r * 2, height: r * 2))
+            return path
+        }
+        for index in 0..<geometry.count {
+            let (start, length) = geometry.segment(index)
+            let a0 = geometry.angle(start)
+            let a1 = geometry.angle(start + length)
+            // Każdy odcinek od `move` — inaczej `addArc` dociąga kreskę od końca poprzedniego.
+            path.move(to: geometry.point(a0, at: geometry.radius))
+            path.addArc(center: geometry.center, radius: geometry.radius, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+        }
+        return path
+    }
+}
+
+/// Kliny od środka, które odsłaniają barwę na odcinkach: „zrobione” = przed
+/// `position`, „bieżący” = od `position` do `position + 1` (w krokach).
+/// Klin obejmuje też zaokrąglone końce, więc w spoczynku barwa kryje cały
+/// odcinek, a w ruchu jej brzeg to prosta krawędź klina.
+private struct CookStepWedges: Shape {
     enum Part {
         case done
         case current
-        case todo
     }
 
     let part: Part
@@ -320,55 +409,46 @@ private struct CookStepArcLayer: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let total = max(1, count)
-        let radius = (min(rect.width, rect.height) - lineWidth) / 2
-        guard radius > 0 else { return Path() }
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let circumference = 2 * .pi * radius
-        let pitch = circumference / CGFloat(total)
-        // Okrągłe końce dokładają pół kreski z każdej strony — łuk między
-        // odcinkami = widoczna przerwa + kreska.
-        let arcGap = gap + lineWidth
+        guard let geometry = CookStepGeometry(rect: rect, count: count, lineWidth: lineWidth, gap: gap) else { return Path() }
+        // Klin sięga daleko poza kreskę — maska ma objąć całą jej grubość.
+        let reach = geometry.radius * 2 + lineWidth * 2
+        // Pół kreski (okrągły koniec) i pół punktu zapasu z każdej strony.
+        let cap = lineWidth / 2 + 0.5
         var path = Path()
 
-        /// Łuk od `start` do `end` w punktach wzdłuż obwodu, od 12:00
-        /// zgodnie z zegarem. Każdy zaczyna się `move`, inaczej `addArc`
-        /// dociągnąłby kreskę od końca poprzedniego.
-        func arc(from start: CGFloat, to end: CGFloat) {
-            guard end - start > 0.01 else { return }
-            let a0 = Double(start / radius) - .pi / 2
-            let a1 = Double(end / radius) - .pi / 2
-            path.move(to: CGPoint(x: center.x + radius * CGFloat(cos(a0)), y: center.y + radius * CGFloat(sin(a0))))
-            path.addArc(center: center, radius: radius, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+        /// Część (0…1) przedziału [`origin`, `origin + size`) w krokach,
+        /// która należy do tej barwy.
+        func share(of origin: Double, size: Double) -> (CGFloat, CGFloat) {
+            let done = CGFloat(min(1, max(0, (position - origin) / size)))
+            let currentEnd = CGFloat(min(1, max(0, (position + 1 - origin) / size)))
+            switch part {
+            case .done: return (0, done)
+            case .current: return (done, currentEnd)
+            }
         }
 
-        if pitch - arcGap >= 1 {
-            let length = pitch - arcGap
-            for index in 0..<total {
-                let origin = CGFloat(index) * pitch + arcGap / 2
+        func wedge(from a0: Double, to a1: Double) {
+            guard a1 - a0 > 0.0001 else { return }
+            path.move(to: geometry.center)
+            path.addLine(to: geometry.point(a0, at: reach))
+            path.addArc(center: geometry.center, radius: reach, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+            path.closeSubpath()
+        }
+
+        if geometry.isSegmented {
+            for index in 0..<geometry.count {
                 let (from, to) = share(of: Double(index), size: 1)
-                arc(from: origin + length * from, to: origin + length * to)
+                guard to > from else { continue }
+                let (start, length) = geometry.segment(index)
+                let span = length + 2 * cap
+                wedge(from: geometry.angle(start - cap + span * from), to: geometry.angle(start - cap + span * to))
             }
         } else {
-            // Bardzo długi przepis: odcinek byłby krótszy od przerwy —
-            // ciągły łuk postępu w tych samych trzech barwach.
-            let (from, to) = share(of: 0, size: Double(total))
-            arc(from: circumference * from, to: circumference * to)
+            let (from, to) = share(of: 0, size: Double(geometry.count))
+            let full = 2 * .pi * geometry.radius
+            wedge(from: geometry.angle(full * from), to: geometry.angle(full * to))
         }
         return path
-    }
-
-    /// Część (0…1) przedziału [`origin`, `origin + size`) w krokach, która
-    /// należy do tej barwy: zrobione = przed `position`, bieżący = od
-    /// `position` do `position + 1`, przed nami = reszta.
-    private func share(of origin: Double, size: Double) -> (CGFloat, CGFloat) {
-        let done = CGFloat(min(1, max(0, (position - origin) / size)))
-        let currentEnd = CGFloat(min(1, max(0, (position + 1 - origin) / size)))
-        switch part {
-        case .done: return (0, done)
-        case .current: return (done, currentEnd)
-        case .todo: return (currentEnd, 1)
-        }
     }
 }
 

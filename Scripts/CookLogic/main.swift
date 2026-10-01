@@ -179,10 +179,11 @@ session.next(now: at(1))
 equal(session.currentStep?.id, "s2", "sesja: krok 2 w międzyczasie")
 equal(dock(at(1)), ["t-butter:trwa:terracotta"], "dok: krok bez timera — trwa tylko masło")
 session.next(now: at(3))
-equal(dock(at(3)), ["t-butter:trwa:terracotta", "t-potatoes:czeka:terracotta"], "dok: aktywny + do włączenia")
+equal(dock(at(3)), ["t-butter:trwa:terracotta", "t-potatoes:czeka:sage"], "dok: aktywny + do włączenia, każdy w swoim kolorze")
+equal(session.dockCapsules(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes"], "kapsuły: włączony + do włączenia")
 session.next(now: at(4))
 equal(session.currentStep?.id, "s4", "sesja: krok 4, ziemniaki jeszcze nie ruszyły")
-equal(dock(at(4)), ["t-butter:trwa:terracotta", "t-potatoes:czeka:terracotta"], "dok: „Gdy woda zawrze” nie gubi się po przejściu dalej")
+equal(dock(at(4)), ["t-butter:trwa:terracotta", "t-potatoes:czeka:sage"], "dok: „Gdy woda zawrze” nie gubi się po przejściu dalej")
 session.startTimer("t-potatoes", now: at(5))
 equal(dock(at(5)), ["t-butter:trwa:terracotta", "t-potatoes:trwa:sage"], "dok: dwa trwają, drugi w szałwii")
 if case let .running(remaining, total, _) = session.status(of: "t-potatoes", now: at(10)) {
@@ -226,8 +227,8 @@ equal(lineup.dockCapsules(now: at(6)).map(\.timer.id), ["t-potatoes", "t-cutlets
 lineup.pauseTimer("t-potatoes", now: at(7))
 equal(lineup.timerLineup(now: at(8)).map(\.timer.id), ["t-potatoes", "t-cutlets"], "kolejność: pauza nie przestawia")
 
-// Trzy naraz (poza planem scenariusza, D38) mieszczą się obok siebie;
-// czwarty idzie do „+1”, a zostają trzy najpilniejsze, ustawione po kroku.
+// Więcej niż dwa naraz (poza planem scenariusza, D38): kapsuły dostają
+// dwa najdawniej włączone, ustawione po kroku; arkusz pokazuje wszystkie.
 var three = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
 three.begin(now: t0)
 three.startTimer("t-butter", now: t0)
@@ -235,12 +236,16 @@ three.jump(to: 2)
 three.startTimer("t-potatoes", now: at(1))
 three.jump(to: 7)
 three.startTimer("t-cutlets", now: at(2))
-equal(three.dockCapsules(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes", "t-cutlets"], "trzy timery: trzy kapsuły obok siebie, po kroku")
+equal(three.dockCapsules(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes"], "trzy timery: dwie najstarsze kapsuły, po kroku")
 three.jump(to: 8)
 three.startTimer("t-oven", now: at(2))
-// Końce: piekarnik 7', kotlety 12', masło 15', ziemniaki 21' — ziemniaki do „+1”.
-equal(three.dockCapsules(now: at(3)).map(\.timer.id), ["t-butter", "t-cutlets", "t-oven"], "cztery timery: trzy najpilniejsze kapsuły, po kroku")
-equal(three.timerLineup(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes", "t-cutlets", "t-oven"], "cztery timery: karta pokazuje wszystkie po kroku")
+equal(three.dockCapsules(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes"], "cztery timery: dalej dwie najstarsze kapsuły")
+equal(three.dockTimers(now: at(3)).first { $0.id == "t-oven" }?.accent, CookTimerAccent.rose, "kolor: czwarty timer — róż")
+equal(three.timerLineup(now: at(3)).map(\.timer.id), ["t-butter", "t-potatoes", "t-cutlets", "t-oven"], "cztery timery: arkusz pokazuje wszystkie po kroku")
+// Piekarnik (5 min od 2') po czasie w 8' — najmłodszy, a stoi w doku obok
+// najstarszego: wyciszony pulsuje, więc nie może czekać za „+N”.
+three.silenceTimer("t-oven")
+equal(three.dockCapsules(now: at(8)).map(\.timer.id), ["t-butter", "t-oven"], "po czasie: zawsze w doku, obok najstarszego")
 
 // Pominięty timer NOW nie wraca do doku.
 var skipped = CookSession(recipeId: package.recipeId, recipeTitle: "K", imageURL: nil, mealSlotRaw: nil, package: package, portions: 2, startedAt: t0)
@@ -253,7 +258,7 @@ session.jump(to: 7)
 equal(session.currentStep?.id, "s8", "skok: krok 8")
 session.startTimer("t-cutlets", now: at(31))
 // Ziemniaki po wznowieniu kończą się w 35', kotlety w 41' — najbliższy koniec pierwszy.
-equal(dock(at(31)), ["t-potatoes:trwa:sage", "t-cutlets:trwa:terracotta"], "kolor: terakota znów wolna — kotlety terakota")
+equal(dock(at(31)), ["t-potatoes:trwa:sage", "t-cutlets:trwa:indigo"], "kolor: każdy timer swój — kotlety indygo")
 session.extendTimer("t-cutlets", by: 120, now: at(42))
 if case let .running(remaining, total, _) = session.status(of: "t-cutlets", now: at(42)) {
     equal(remaining, 120, "+2 min po czasie: liczy się od teraz")

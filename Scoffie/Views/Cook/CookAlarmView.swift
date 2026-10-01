@@ -6,6 +6,9 @@ import SwiftUI
 /// inne trwające timery, „Jeszcze chwilę?” +1 / +2 / +5 min i „Gotowe —
 /// dalej”. „Wycisz” zostawia timer po czasie (kapsuła pulsuje mocno), dopóki
 /// nie padnie „Gotowe”.
+///
+/// Tarcza, aureole, dzwonek i „Gotowe — dalej” są w kolorze TEGO timera
+/// (runda 3: „każdy inny timer inny kolor”) — ten sam kolor co jego kapsuła.
 struct CookAlarmView: View {
     let session: CookSession
     let item: CookDockTimer
@@ -17,6 +20,8 @@ struct CookAlarmView: View {
     @State private var hasAppeared = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var color: Color { item.accent.color }
 
     private var over: TimeInterval {
         if case let .overdue(over, _, _) = item.status { return over }
@@ -123,13 +128,13 @@ struct CookAlarmView: View {
         let counter = CookClock.overdueText(over)
         let caption = minutes > 0 ? "\(minutes) min po czasie · było \(CookClock.duration(item.timer))" : "po czasie · było \(CookClock.duration(item.timer))"
         return ZStack {
-            CookAlarmHalos()
+            CookAlarmHalos(accent: item.accent)
             Circle()
-                .stroke(SCPalette.terracotta.opacity(SCCook.Opacity.alarmTrack), lineWidth: 4)
+                .stroke(color.opacity(SCCook.Opacity.alarmTrack), lineWidth: 4)
                 .frame(width: 216, height: 216)
             Circle()
                 .trim(from: 0, to: lap)
-                .stroke(SCPalette.terracotta, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .frame(width: 216, height: 216)
                 // Łuk okrąża tarczę raz na minutę płynnie; na początku nowej
@@ -139,7 +144,7 @@ struct CookAlarmView: View {
                 .animation(reduceMotion || over.truncatingRemainder(dividingBy: 60) < 1 ? nil : .linear(duration: 1), value: lap)
             Circle()
                 .fill(Color.scPageBase(scheme))
-                .overlay(Circle().strokeBorder(SCPalette.terracotta, lineWidth: SCCook.Stroke.alarmDisc))
+                .overlay(Circle().strokeBorder(color, lineWidth: SCCook.Stroke.alarmDisc))
                 .frame(width: 198, height: 198)
             VStack(spacing: 2) {
                 HStack(spacing: 6) {
@@ -147,7 +152,7 @@ struct CookAlarmView: View {
                     Text(item.timer.label.uppercased(with: Locale(identifier: "pl_PL")))
                         .cookText(SCCook.Typography.stage)
                 }
-                .foregroundStyle(SCPalette.terracotta)
+                .foregroundStyle(color)
                 Text(counter)
                     .cookText(SCCook.Typography.alarmCounter)
                     .monospacedDigit()
@@ -211,10 +216,10 @@ struct CookAlarmView: View {
                     Text("Gotowe — dalej")
                         .cookText(SCCook.Typography.buttonQuiet)
                 }
-                .foregroundStyle(SCPalette.terracotta)
+                .foregroundStyle(color)
                 .frame(maxWidth: .infinity)
                 .frame(height: SCCook.Height.alarmDone)
-                .scSoftCapsule()
+                .scSoftCapsule(color)
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -225,23 +230,26 @@ struct CookAlarmView: View {
     }
 }
 
-/// Dwie aureole za tarczą, na zmianę (skala 0,86 → 1,22, krycie 0,55 → 0).
+/// Dwie aureole za tarczą, na zmianę (skala 0,86 → 1,22, krycie 0,55 → 0),
+/// w kolorze timera.
 private struct CookAlarmHalos: View {
+    let accent: CookTimerAccent
+
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if reduceMotion {
             Circle()
-                .fill(Color.scAccentTint(scheme))
+                .fill(accent.tint(scheme))
                 .frame(width: SCCook.Size.alarmHalo, height: SCCook.Size.alarmHalo)
         } else {
             TimelineView(.animation) { context in
                 let period = SCCook.Duration.alarmHalo
                 let t = context.date.timeIntervalSinceReferenceDate
                 ZStack {
-                    halo(phase: (t / period).truncatingRemainder(dividingBy: 1), color: SCPalette.terracotta.opacity(SCCook.Opacity.alarmHalo))
-                    halo(phase: (t / period + 0.5).truncatingRemainder(dividingBy: 1), color: Color.scAccentTint(scheme))
+                    halo(phase: (t / period).truncatingRemainder(dividingBy: 1), color: accent.color.opacity(SCCook.Opacity.alarmHalo))
+                    halo(phase: (t / period + 0.5).truncatingRemainder(dividingBy: 1), color: accent.tint(scheme))
                 }
             }
         }

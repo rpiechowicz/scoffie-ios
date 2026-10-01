@@ -1,20 +1,5 @@
 import SwiftUI
 
-/// Powierzchnia karty Timery: ta sama co wyspa (`cook.dockSurface`, obwódka,
-/// cień), róg `radius.cookDockCard`.
-private struct CookDockCardSurface: ViewModifier {
-    @Environment(\.colorScheme) private var scheme
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.dockCard, style: .continuous)
-        content
-            .background(shape.fill(SCCook.Palette.dockSurface(scheme)))
-            .overlay(shape.strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
-            .clipShape(shape)
-            .shadow(color: SCCook.Palette.dockShadow(scheme), radius: 18, y: 14)
-    }
-}
-
 /// Nagłówek sekcji listy składników: „TERAZ”, „ZA CHWILĘ · KROK 4”…
 private struct CookSectionHeader: View {
     let title: String
@@ -44,49 +29,93 @@ private struct CookSectionHeader: View {
 
 // MARK: - Timery
 
-/// Karta Timery — w miejscu kapsuł, wyspa zostaje pod nią (ST5, Y3T1–3).
+/// Arkusz Timery (ST5, Y3T1–3) — z kapsuły i plakietki „+N”. Arkusz systemu
+/// (runda 3 testów: karta rozwijana z doku „trochę się bugowała”), a jego
+/// wysokość idzie za treścią: tyle wierszy, ile timerów, bez pustego dołu.
 ///
 /// JEDNA lista w kolejności kroków (`CookSession.timerLineup`), bez sekcji
-/// „Trwa / W tym kroku / Wstrzymany” (runda 2 testów): wiersz zostaje na
-/// swoim miejscu przez cały czas swojego timera, a stan mówi kolor,
-/// podpis i glif w pierścieniu — jak w kapsule. Wcześniej start czy pauza
-/// przenosiły wiersz do innej sekcji i karta skakała pod palcem.
-struct CookTimersCard: View {
+/// „Trwa / W tym kroku / Wstrzymany” (runda 2): wiersz zostaje na swoim
+/// miejscu przez cały czas swojego timera, a stan mówią glif i podpis —
+/// w kolorze TEGO timera, jak w kapsule.
+struct CookTimersSheet: View {
     let session: CookSession
-    let now: Date
     let onTimer: (CookTimerAction) -> Void
+    let onClose: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
+    @State private var contentHeight: CGFloat
+    @State private var bottomInset: CGFloat = 0
+
+    init(session: CookSession, onTimer: @escaping (CookTimerAction) -> Void, onClose: @escaping () -> Void) {
+        self.session = session
+        self.onTimer = onTimer
+        self.onClose = onClose
+        _contentHeight = State(initialValue: Self.estimatedHeight(rows: session.timerLineup(now: Date()).count))
+    }
+
+    /// Szacunek przed pierwszym pomiarem: nagłówek z odstępami i wiersze
+    /// `height.cookTimerRow`. Pomiar poda liczbę prawdziwą.
+    private static func estimatedHeight(rows: Int) -> CGFloat {
+        84 + CGFloat(max(rows, 1)) * SCCook.Height.timerRow + 16
+    }
 
     var body: some View {
-        let items = session.timerLineup(now: now)
-        let summaryText = summary(items)
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Timery")
-                    .cookText(SCCook.Typography.sheetTitle)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(summaryText)
-                    .font(.system(size: 13))
-                    .foregroundStyle(SCCook.Palette.caption(scheme))
-                    .lineLimit(1)
-                    .cookRoll(summaryText)
+        ScrollView {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                list(session.timerLineup(now: context.date))
             }
-            .padding(.bottom, 6)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { height in
+                guard height > 0, abs(height - contentHeight) > 0.5 else { return }
+                contentHeight = height
+            }
+        }
+        // Lista, która mieści się w całości, nie ma się od czego odbijać.
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.hidden)
+        // Margines gestu odczytany NA CZYTNIKU z `ignoresSafeArea()` — treść
+        // arkusza ma go już odjętego (wzór `PlanDayGoalSheet`).
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onChange(of: proxy.safeAreaInsets.bottom, initial: true) { _, value in
+                        bottomInset = value
+                    }
+            }
+            .ignoresSafeArea()
+        }
+        .presentationDetents([.height(contentHeight + bottomInset)])
+    }
+
+    private func list(_ items: [CookDockTimer]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSheetHeader(
+                eyebrow: Self.summary(items),
+                title: "Timery",
+                icon: "timer",
+                accent: SCPalette.terracotta,
+                compact: true,
+                onClose: onClose
+            )
+            .padding(.top, 20)
+            .padding(.bottom, 8)
 
             ForEach(items) { item in
                 CookTimerRow(item: item, onTimer: onTimer)
                     .transition(.opacity)
             }
         }
-        .padding(.top, 20)
-        .padding(.horizontal, 18)
-        .padding(.bottom, 10)
-        .modifier(CookDockCardSurface())
+        .padding(.horizontal, SCCook.Spacing.page)
+        .padding(.bottom, 16)
+        .animation(SCCook.Motion.dock, value: items.map(\.id))
+        // Ostatni timer zrobiony („Gotowe”) — pusty arkusz się zamyka.
+        .onChange(of: items.isEmpty) { _, isEmpty in
+            if isEmpty { onClose() }
+        }
     }
 
-    private func summary(_ items: [CookDockTimer]) -> String {
+    /// „1 trwa · 1 do włączenia” — eyebrow nagłówka.
+    private static func summary(_ items: [CookDockTimer]) -> String {
         var running = 0
         var pending = 0
         var paused = 0
@@ -108,13 +137,14 @@ struct CookTimersCard: View {
         if paused > 0 {
             parts.append("\(paused) \(PolishPlural.form(paused, one: "wstrzymany", few: "wstrzymane", many: "wstrzymanych"))")
         }
-        return parts.joined(separator: " · ")
+        return parts.isEmpty ? "Gotowanie" : parts.joined(separator: " · ")
     }
 }
 
-/// Wiersz karty Timery — ten sam układ w każdym stanie: pierścień-przycisk
-/// (glif ruchu w środku), nazwa z podpisem i czas. Zmienia się kolor, glif
-/// i podpis, nie miejsce.
+/// Wiersz arkusza Timery — ten sam układ w każdym stanie: pierścień-przycisk
+/// (glif ruchu w środku), nazwa z podpisem i czas. Zmienia się glif, podpis
+/// i wypełnienie, nie miejsce; kolor jest kolorem timera (wstrzymany —
+/// przygaszony).
 private struct CookTimerRow: View {
     let item: CookDockTimer
     let onTimer: (CookTimerAction) -> Void
@@ -126,12 +156,11 @@ private struct CookTimerRow: View {
     private var isPaused: Bool { if case .paused = item.status { true } else { false } }
     private var isRunning: Bool { if case .running = item.status { true } else { false } }
 
-    /// Kolor stanu: trwa — kolor timera, czeka i po czasie — terakota,
-    /// wstrzymany — przygaszony.
+    private var color: Color { item.accent.color }
+
+    /// Kolor stanu: kolor timera, a wstrzymany — przygaszony.
     private var tone: Color {
-        if isPaused { return Color.scMuted(scheme) }
-        if isPending || isOverdue { return SCPalette.terracotta }
-        return item.accent.color
+        isPaused ? Color.scMuted(scheme) : color
     }
 
     var body: some View {
@@ -147,7 +176,7 @@ private struct CookTimerRow: View {
                     .lineLimit(1)
                 Text(captionText)
                     .font(.system(size: 12))
-                    .foregroundStyle(isOverdue ? SCPalette.terracotta : SCCook.Palette.caption(scheme))
+                    .foregroundStyle(isOverdue ? color : SCCook.Palette.caption(scheme))
                     .lineLimit(1)
                     .cookRoll(captionText)
             }
@@ -177,7 +206,7 @@ private struct CookTimerRow: View {
     }
 
     /// Pierścień-przycisk 46 pt: łuk pozostałego czasu (trwa, wstrzymany)
-    /// albo pełny krążek terakoty (czeka — ▶, po czasie — ✓).
+    /// albo pełny krążek w kolorze timera (czeka — ▶, po czasie — ✓).
     private var control: some View {
         let side = SCCook.Size.sheetTimerRing
         let filled = isPending || isOverdue
@@ -185,7 +214,7 @@ private struct CookTimerRow: View {
             if let action = item.primaryAction { onTimer(action) }
         } label: {
             ZStack {
-                Circle().fill(filled ? SCPalette.terracotta : .clear)
+                Circle().fill(filled ? color : .clear)
                 CookTimerRing(fraction: item.status.remainingFraction, color: tone, lineWidth: SCCook.Stroke.sheetTimerRing)
                     .opacity(isRunning || isPaused ? 1 : 0)
                 Image(systemName: item.primaryIcon)
@@ -196,7 +225,7 @@ private struct CookTimerRow: View {
             }
             .frame(width: side, height: side)
             .contentShape(Circle())
-            .cookInvitePulse(Circle(), isActive: isPending)
+            .cookInvitePulse(Circle(), color: color, isActive: isPending)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.primaryLabel)
@@ -205,17 +234,18 @@ private struct CookTimerRow: View {
 
 // MARK: - Składniki
 
-/// Treść karty Składniki — leży w wyspie (`CookDock.island`), która rozwija
-/// się w kartę, więc nie ma własnej powierzchni ani wiersza wyspy: lista nad
-/// kreską, pod nią zostaje wiersz wyspy z podświetlonym „Składniki” (KM1,
-/// KM2). Bez odhaczania (D7).
-struct CookIngredientsPanel: View {
+/// Arkusz Składniki — z wyspy (KM1, KM2). Otwiera się na pół ekranu,
+/// a przewijanie listy rozwija go na cały (runda 3: „Składniki do połowy
+/// ekranu by default, podczas scrollowania może się rozszerzyć”). Bez
+/// odhaczania (D7).
+struct CookIngredientsSheet: View {
     enum Scope: Hashable {
         case step
         case recipe
     }
 
     let session: CookSession
+    let onClose: () -> Void
 
     @State private var scope: Scope = .step
     @Environment(\.colorScheme) private var scheme
@@ -257,50 +287,43 @@ struct CookIngredientsPanel: View {
     }
 
     var body: some View {
-        // Raz na przebieg: dok przerysowuje się co sekundę (zegary).
         let groups = sections
-        return VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("Składniki")
-                        .cookText(SCCook.Typography.sheetTitle)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text("KROK \(index + 1) Z \(session.stepCount)")
-                        .cookText(SCCook.Typography.sectionLabel)
-                        .foregroundStyle(SCPalette.terracotta)
-                }
-
+        VStack(alignment: .leading, spacing: 0) {
+            // Nagłówek i przełącznik stoją nad listą — nie przewijają się.
+            VStack(alignment: .leading, spacing: 16) {
+                EditorialSheetHeader(
+                    eyebrow: "Krok \(index + 1) z \(session.stepCount)",
+                    title: "Składniki",
+                    icon: "basket",
+                    accent: SCPalette.terracotta,
+                    compact: true,
+                    onClose: onClose
+                )
                 scopePicker
-                    .padding(.top, 14)
+            }
+            .padding(.horizontal, SCCook.Spacing.page)
+            .padding(.top, 20)
+            .padding(.bottom, 4)
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(groups) { section in
-                            CookSectionHeader(title: section.title, color: section.color, count: section.lines.count)
-                            ForEach(Array(section.lines.enumerated()), id: \.element.id) { offset, line in
-                                row(line, isDone: section.isDone)
-                                if offset < section.lines.count - 1 {
-                                    Rectangle()
-                                        .fill(Color.scChipBg(scheme))
-                                        .frame(height: 1)
-                                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(groups) { section in
+                        CookSectionHeader(title: section.title, color: section.color, count: section.lines.count)
+                        ForEach(Array(section.lines.enumerated()), id: \.element.id) { offset, line in
+                            row(line, isDone: section.isDone)
+                            if offset < section.lines.count - 1 {
+                                Rectangle()
+                                    .fill(Color.scChipBg(scheme))
+                                    .frame(height: 1)
                             }
                         }
                     }
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .scrollIndicators(.hidden)
-                .frame(maxHeight: 440)
+                .padding(.horizontal, SCCook.Spacing.page)
+                .padding(.bottom, 24)
             }
-            .padding(.top, 20)
-            .padding(.horizontal, 18)
-            .padding(.bottom, 8)
-
-            Rectangle()
-                .fill(Color.scChipBg(scheme))
-                .frame(height: 1)
-                .padding(.horizontal, 16)
+            .scrollIndicators(.hidden)
+            .scScrollEdgeFade()
         }
     }
 

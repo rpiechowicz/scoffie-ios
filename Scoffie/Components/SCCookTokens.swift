@@ -70,13 +70,6 @@ enum SCCook {
                 : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255).opacity(0.88)
         }
 
-        /// Zasłona za otwartą kartą doku (Timery, Składniki) — ST5, KM1. Jasny motyw: lżej, jak przyciemnienie arkusza systemu.
-        static func scrim(_ scheme: ColorScheme) -> Color {
-            scheme == .dark
-                ? Color(red: 0 / 255, green: 0 / 255, blue: 0 / 255).opacity(0.7)
-                : Color(red: 0 / 255, green: 0 / 255, blue: 0 / 255).opacity(0.4)
-        }
-
         /// Cień kapsuł (0 12 30) i wyspy z kartami (0 14 36) — dok pływa nad treścią kroku. Jasny motyw: cień miękki.
         static func dockShadow(_ scheme: ColorScheme) -> Color {
             scheme == .dark
@@ -184,9 +177,6 @@ enum SCCook {
 
         /// Pierścień w kapsule z PARY (dwa timery obok siebie) — zarazem przycisk start / pauza / wznów / gotowe z glifem w środku (runda 2: „włączyć / wyłączyć timer z pulpitu, nie wchodząc w kartę”); kreska stroke.cookTimerRingSmall, dotyk 44.
         static let timerRingPair: CGFloat = 34
-
-        /// Ten sam pierścień-przycisk w kapsule z TRÓJKI — trzy timery obok siebie, gdy się zmieszczą (runda 2), dotyk 44.
-        static let timerRingTrio: CGFloat = 30
 
         /// Pierścień-przycisk pauzy w wierszu arkusza Timery; promień 20,5 (ST5).
         static let sheetTimerRing: CGFloat = 46
@@ -319,12 +309,6 @@ enum SCCook {
         /// Kafle trybu: karta porcji, szuflady, „NA NASTĘPNY RAZ”, kafle wyjścia, pole uwag (§13: promień kafli 24).
         static let tile: CGFloat = 24
 
-        /// Karty doku: Timery (w miejscu kapsuł) i Składniki (wyspa rozwinięta w kartę) — połowa wysokości wyspy, więc wyspa i karta to ten sam kształt, rozwijany w górę.
-        static let dockCard: CGFloat = 30
-
-        /// Kafel „W TYM KROKU” z „▶ Start” w arkuszu Timery.
-        static let timerStartTile: CGFloat = 22
-
         /// Panel „Jeszcze chwilę?” na dole ekranu końca timera.
         static let alarmPanel: CGFloat = 28
     }
@@ -354,9 +338,6 @@ enum SCCook {
         /// „Smacznego!” na zakończeniu (EF8).
         static let finishTitle = SCCookTextStyle(size: 44, weight: .heavy, tracking: -1.76, lineHeight: 44)
 
-        /// Tytuł karty doku („Timery”, „Składniki”) i arkusza uwag.
-        static let sheetTitle = SCCookTextStyle(size: 22, weight: .heavy, tracking: -0.44, lineHeight: nil)
-
         /// Nagłówki sekcji kart doku (TRWA, W TYM KROKU, TERAZ, ZA CHWILĘ · KROK 11) i „KROK 10 Z 12”.
         static let sectionLabel = SCCookTextStyle(size: 12, weight: .heavy, tracking: 1.2, lineHeight: nil)
 
@@ -368,9 +349,6 @@ enum SCCook {
 
         /// Czas w kapsule z pary.
         static let timerTimePair = SCCookTextStyle(size: 17, weight: .heavy, tracking: 0, lineHeight: nil)
-
-        /// Czas w kapsule z trójki.
-        static let timerTimeTrio = SCCookTextStyle(size: 15, weight: .heavy, tracking: 0, lineHeight: nil)
 
         /// Czas w wierszu arkusza Timery, w kolorze timera.
         static let sheetTime = SCCookTextStyle(size: 26, weight: .heavy, tracking: -0.78, lineHeight: nil)

@@ -111,10 +111,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `make-fixture.mjs`). Scenariusz wskazuje składniki po `ingredientId`, które ma TYLKO szczegół przepisu —
   `CookScenarioStore` bierze `recipes:cookScenario` + `recipes:findById` i trzyma paczkę offline (przycisk „Gotuj”
   tylko, gdy paczka jest i `Recipe.cookScenarioVersion` się zgadza). Sesja (`CookSessionStore`) jedna, per konto+dom,
-  timery jako DATY KOŃCA; kolor timera: terakota, a gdy zajęta przez inny żywy — szałwia. Widok (`Views/Cook/`)
+  timery jako DATY KOŃCA; każdy timer przepisu ma SWÓJ kolor (`CookTimerAccent.forTimer` po miejscu w scenariuszu:
+  terakota, szałwia, indygo, róż, morska, lawenda, masło) — ten sam przed startem, w trakcie, po czasie i na alarmie
+  (runda 3; dawne „terakota, a gdy zajęta — szałwia” odpadło). Widok (`Views/Cook/`)
   to `fullScreenCover` nad pulpitem (`ScoffieApp.dashboard`); wejścia idą przez `SessionStore.startCooking` /
-  `resumeCooking`, które najpierw zamykają arkusze (ten sam ruch co przepis z linku). Karty doku (Timery, Składniki)
-  to karty w doku za zasłoną, nie arkusze systemu. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
+  `resumeCooking`, które najpierw zamykają arkusze (ten sam ruch co przepis z linku). Timery i Składniki to ARKUSZE
+  systemu (runda 3: karty rozwijane z doku „trochę się bugowały”) — jeden `.sheet(item:)` w `CookModeView`
+  (`CookSheet`); Składniki na pół ekranu, przewijanie rozwija na cały (`.presentationContentInteraction(.resizes)`),
+  Timery na wysokość treści (pomiar jak `PlanDayGoalSheet`); dzwoniący timer zamyka otwarty arkusz, bo widoku
+  spod arkusza nie da się położyć nad nim. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
   otwiera tryb), w tle zwykłe powiadomienie (`CookTimerNotifications`) — AlarmKit dopiero w E5. Zrzuty:
   `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-alarm|gotuj-wyjscie|gotuj-koniec`.
   Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
@@ -130,12 +135,17 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
   Runda 2 testów (1.10.2026): dok stoi jak dolne menu aplikacji (wyspa 60 pt, 20 pt od boków, na krawędzi
   bezpiecznego obszaru; powierzchnia `cook.dockSurface` — w jasnym motywie ciepła biel, bo płótno = tło strony).
-  Wyspa to JEDEN kontener: lista Składników wysuwa się spod wiersza wyspy, nic innego się nie rusza. Kapsuły
-  w kolejności kroków (`CookSession.dockCapsules`, do trzech obok siebie, nowa wjeżdża z boku), w parze i trójce
-  pierścień = przycisk start / pauza / wznów / gotowe; karta Timery = jedna lista bez sekcji (`timerLineup`) —
-  start ani pauza nie przestawiają timerów. Łuki timerów ubywają zgodnie ze wskazówkami zegara. Pierścień kroków
-  36 pt jak krzyżyk (`scSheetIconSurface`), odcinki zaokrąglone, zmiana kroku przelewa barwę (`CookStepArcLayer`).
-  Ekrany trybu: nowy staje pod starym, stary gaśnie na wierzchu (`zIndex`) — zdjęcie nie przygasa w połowie.
+  Kapsuły: najwyżej DWIE (`CookSession.dockCapsules` — dwa najdawniej włączone timery, wolne miejsce bierze timer
+  do włączenia, a timer PO CZASIE stoi w doku zawsze; runda 3 cofnęła trójkę), w kolejności kroków, druga wjeżdża z boku; w parze pierścień = przycisk
+  start / pauza / wznów / gotowe, „do włączenia” zawsze z warunkiem startu (D37). Arkusz Timery = jedna lista bez
+  sekcji (`timerLineup`) — start ani pauza nie przestawiają timerów. Łuki timerów ubywają zgodnie ze wskazówkami
+  zegara. Pierścień kroków 36 pt jak krzyżyk (`scSheetIconSurface`): pełne zaokrąglone odcinki odsłaniane KLINEM
+  od środka (`CookStepArcs` + `CookStepWedges`) — runda 2 liczyła łuki z okrągłymi końcami i przy każdym kroku na
+  końcach odcinków wyskakiwały kropki („progress przeskakuje”).
+  Runda 3: JEDEN ekran trybu (`CookScreen`) na powitanie, kroki i koniec — zdjęcie, krzyżyk i przewijanie są te
+  same, zmienia się treść pod zdjęciem (`CookWelcomeContent` / `CookStepScene` / `CookFinishContent`: stara gaśnie,
+  nowa wchodzi kaskadą), stopka (`CookWelcomeFooter` / `CookFinishFooter` w `safeAreaInset`) i dok; pierścień
+  kroków obok krzyżyka tylko w krokach. Nie wracać do osobnych ekranów etapów — krzyżyk wjeżdżał od nowa.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

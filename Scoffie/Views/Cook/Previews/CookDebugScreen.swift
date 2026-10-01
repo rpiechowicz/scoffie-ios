@@ -11,7 +11,7 @@ import SwiftUI
 /// - `gotuj-dwa` — krok 8, dwa timery trwają (Y3K3);
 /// - `gotuj-jeden` — krok 10, jeden timer trwa (Y3K1);
 /// - `gotuj-pauza` — krok 8, kotlety wstrzymane (Y3S „Jeden wstrzymany”);
-/// - `gotuj-timery` / `gotuj-skladniki` — otwarta karta doku (Y3T1 / Y3I);
+/// - `gotuj-timery` / `gotuj-skladniki` — otwarty arkusz Timery / Składniki (Y3T1 / Y3I);
 /// - `gotuj-alarm` — kotlety po czasie (ST4);
 /// - `gotuj-wyjscie` — arkusz „Wychodzisz z gotowania?” z dwoma timerami (XW2);
 /// - `gotuj-koniec` — zakończenie (EF8).
@@ -30,18 +30,18 @@ struct CookDebugScreen: View {
             CookModeView(
                 store: store,
                 onEaten: { _ in },
-                initialCard: Self.card(for: mode),
-                showsExit: mode == "gotuj-wyjscie"
+                initialSheet: Self.sheet(for: mode)
             )
         } else {
             Text("Nie udało się wczytać wzorca kotleta.")
         }
     }
 
-    private static func card(for mode: String) -> CookDock.Card? {
+    private static func sheet(for mode: String) -> CookSheet? {
         switch mode {
         case "gotuj-timery": .timers
         case "gotuj-skladniki": .ingredients
+        case "gotuj-wyjscie": .exit
         default: nil
         }
     }
