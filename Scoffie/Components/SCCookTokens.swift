@@ -175,8 +175,8 @@ enum SCCook {
         /// Krążki „Wstecz” i „Dalej” (ostatni krok: ptaszek „Zakończ gotowanie”) w wyspie doku — wysokość pigułki dolnego menu aplikacji (60 − 2 × 6).
         static let islandButton: CGFloat = 48
 
-        /// Plakietka liczby składników kroku obok „Składniki” w wyspie (min. szerokość i wysokość).
-        static let islandBadge: CGFloat = 22
+        /// Plakietka liczby składników kroku NAD koszykiem w wyspie (min. szerokość i wysokość; runda 11 — wcześniej 22 pt obok słowa „Składniki”). Terakota, cyfry 10,5/800 białe.
+        static let islandBadge: CGFloat = 17
 
         /// Pierścień postępu w POJEDYNCZEJ kapsule timera (pełna szerokość doku); promień 12,8.
         static let timerRing: CGFloat = 30
@@ -351,6 +351,12 @@ enum SCCook {
 
         /// Odstęp krążków od środka „Składniki” w wyspie.
         static let islandGap: CGFloat = 6
+
+        /// O ile środek plakietki liczby składników wystaje poza prawy górny róg koszyka (w prawo i w górę).
+        static let islandBadgeInset: CGFloat = 3
+
+        /// Odstęp koszyka (z plakietką nad nim) od słowa „Składniki” w wyspie.
+        static let islandLabelGap: CGFloat = 14
 
         /// Miejsce pod treścią kroku zarezerwowane na dok (wyspa 60 + przerwa 10 + kapsuła 56 + przerwa 8 + plakietka 28), liczone od dolnej krawędzi bezpiecznego obszaru — dok ma STAŁĄ wysokość (wyspa nie skacze, gdy pojawia się kapsuła), a tekst kroku przewija się pod nim i kończy nad nim.
         static let dockReserve: CGFloat = 162

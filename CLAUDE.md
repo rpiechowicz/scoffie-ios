@@ -120,7 +120,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`CookSheet`); Składniki na pół ekranu, przewijanie rozwija na cały (`.presentationContentInteraction(.resizes)`),
   Timery na wysokość treści (pomiar jak `PlanDayGoalSheet`); dzwoniący timer zamyka otwarty arkusz, bo widoku
   spod arkusza nie da się położyć nad nim. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
-  otwiera tryb), w tle zwykłe powiadomienie (`CookTimerNotifications`) — AlarmKit dopiero w E5. Zrzuty:
+  otwiera tryb), a od rundy 11 ALARM SYSTEMOWY AlarmKit (`CookAlarmScheduler`, wariant B z §8.4): każdy biegnący,
+  niewyciszony timer ma alarm na GODZINĘ KOŃCA (`Alarm.Schedule.fixed`, BEZ odliczania — AlarmKit z odliczaniem
+  wymaga rozszerzenia widżetów, bez niego „system może zdjąć alarm i nie zadzwonić”), id z sesji + timera + końca,
+  uzgadniany przy KAŻDEJ zmianie sesji (`syncSystemAlarms` w `update`/`start`/`end`/`clearCache`). Dźwięk alarmu
+  systemu, dzwoni mimo wyciszenia i Focus, pełny alert na ekranie blokady; zgoda przy pierwszym starcie timera
+  (`NSAlarmKitUsageDescription`). „Zatrzymaj” na alercie = „Wycisz” w aplikacji (`acknowledgeSystemAlarm`, tylko
+  przy tej samej godzinie końca), ekran końca timera nie gra swojego 1005, gdy dzwoni system. Bez zgody — dawna
+  droga: powiadomienie w tle (`CookTimerNotifications`) i 1005 w aplikacji. Odliczanie w Dynamic Island / na
+  ekranie blokady w trakcie = Live Activity sesji (E5) — czeka na target Widget Extension od Rafała. Zrzuty:
   `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-kroki|gotuj-alarm|gotuj-alarm-dwa|gotuj-wyjscie|gotuj-koniec`.
   Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
   — `scaledToFill` w samej ramce wysokości zgłaszał szerokość kadru (~580 pt) i tekst uciekał za lewą krawędź („bez
@@ -221,7 +229,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`CookBellSwing` — wspólne z `CookBell`: 0° → 14° → −12° → 8° → 0° w 0,64 s, oś u góry) co `duration.cookBasketCall`
   (2,4 s), aż do stuknięcia w Składniki; krok już obejrzany (`basketSeenSteps`) i krok bez składników nie wołają,
   Reduce Motion — sam kolor. `symbolEffect(.wiggle)` z rundy 9 był za słaby, a seria ze skokiem 1,25, ±18°, pełną
-  ikoną i terakotową plakietką — „zbyt intensywna i rzucająca się”; nie wracać do żadnego z nich.
+  ikoną i terakotową plakietką — „zbyt intensywna i rzucająca się”; nie wracać do żadnego z nich. Liczba składników
+  kroku (runda 11) to plakietka NAD koszykiem (`CookIslandBadge`: terakota, `size.cookIslandBadge` 17, środek
+  `spacing.cookIslandBadgeInset` poza prawym górnym rogiem, poza kołysaniem koszyka), wchodzi sprężyną ze skali 0,2
+  i tak samo znika, a zmiana liczby = cyfry rolują + podskok 1,22; słowo „Składniki” o `spacing.cookIslandLabelGap`.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

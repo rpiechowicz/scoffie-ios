@@ -34,6 +34,8 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Timery trybu Gotuj dzwonią jak budzik — także przy wyciszonym telefonie i na ekranie blokady.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Aplikacja odczytuje liczbę kroków ze Zdrowia, aby pokazywać dzienny postęp w Kalendarzu i budować statystyki aktywności.</string>
 	<!-- Wymagane przez walidację App Store (kod 90683) dla samego entitlementu

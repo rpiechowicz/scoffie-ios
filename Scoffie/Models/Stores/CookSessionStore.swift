@@ -40,6 +40,10 @@ final class CookSessionStore {
         self.persists = true
         session = Self.load(ownerKey: ownerKey)
         scheduleRingWatch()
+        CookAlarmScheduler.shared.onAcknowledged = { [weak self] timerId, end in
+            self?.acknowledgeSystemAlarm(timerId: timerId, end: end)
+        }
+        syncSystemAlarms()
     }
 
     /// Podgląd z gotową sesją — bez dysku i bez pilnowania alarmu.
@@ -78,6 +82,7 @@ final class CookSessionStore {
         self.session = session
         save()
         scheduleRingWatch()
+        syncSystemAlarms()
         setPresented(true)
     }
 
@@ -126,6 +131,7 @@ final class CookSessionStore {
         session = current
         save()
         scheduleRingWatch()
+        syncSystemAlarms()
     }
 
     /// „Wstrzymaj”: widok znika, sesja i timery zostają.
@@ -141,16 +147,22 @@ final class CookSessionStore {
         ringWatch = nil
         guard persists else { return }
         CookTimerNotifications.cancelAll()
+        CookAlarmScheduler.shared.sync(nil)
         try? FileManager.default.removeItem(at: Self.fileURL)
     }
 
     // MARK: - Koniec timera poza ekranem trybu
 
-    /// Aplikacja w tle: koniec każdego biegnącego timera dzwoni zwykłym
-    /// powiadomieniem. E4 — bez AlarmKit; ten przejmie to w E5 (dzwoni mimo
-    /// wyciszenia, Dynamic Island, ekran blokady).
+    /// Aplikacja w tle: koniec timera dzwoni ALARMEM SYSTEMOWYM
+    /// (`CookAlarmScheduler`, runda 11 — mimo wyciszenia, na ekranie blokady).
+    /// Zwykłe powiadomienie zostaje tylko jako zapas, gdy zgody na alarmy nie
+    /// ma — inaczej koniec timera dzwoniłby dwa razy.
     func appWentToBackground() {
-        CookTimerNotifications.schedule(for: session)
+        if CookAlarmScheduler.shared.isAuthorized {
+            CookTimerNotifications.remove(for: session)
+        } else {
+            CookTimerNotifications.schedule(for: session)
+        }
     }
 
     /// Na wierzchu dzwoni ekran końca timera, nie baner.
@@ -159,6 +171,23 @@ final class CookSessionStore {
         // szybkim „wierzch → tło” zdjęłoby świeżo zaplanowane powiadomienie.
         CookTimerNotifications.remove(for: session)
         scheduleRingWatch()
+        syncSystemAlarms()
+    }
+
+    // MARK: - Alarmy systemowe (AlarmKit)
+
+    private func syncSystemAlarms() {
+        guard persists else { return }
+        CookAlarmScheduler.shared.sync(session)
+    }
+
+    /// „Zatrzymaj” na alercie systemu = „Wycisz” w aplikacji. Tylko timer,
+    /// który dalej biegnie z tą samą godziną końca — alarm zdjęty z naszej
+    /// ręki („Gotowe”, „+2 min”, wyciszenie) niczego tu nie zmienia.
+    private func acknowledgeSystemAlarm(timerId: String, end: Date) {
+        guard let run = session?.timers[timerId],
+              run.state == .running, !run.silenced, run.endDate == end else { return }
+        update { $0.silenceTimer(timerId) }
     }
 
     private func scheduleRingWatch() {
@@ -196,6 +225,8 @@ final class CookSessionStore {
     /// Sesja należy do konta — po wylogowaniu nie ma prawa wrócić u kogoś innego.
     static func clearCache() {
         try? FileManager.default.removeItem(at: fileURL)
+        // Alarm systemowy przeżyłby wylogowanie i zadzwonił cudzym timerem.
+        CookAlarmScheduler.shared.sync(nil)
     }
 
     private static var fileURL: URL {

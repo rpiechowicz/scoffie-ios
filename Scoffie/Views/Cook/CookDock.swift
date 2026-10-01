@@ -42,6 +42,17 @@ struct CookDock: View {
         session.currentStep.map { session.package.lines(for: $0, portions: session.portions).count } ?? 0
     }
 
+    /// Plakietka wskakuje sprężyną z małej kropki i znika, kurcząc się
+    /// w róg koszyka — jak plakietka na ikonie aplikacji.
+    private var badgeTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .scale(scale: 0.2, anchor: .center).combined(with: .opacity)
+    }
+
+    private var badgeAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.34, dampingFraction: 0.62)
+    }
+
     var body: some View {
         let capsules = session.dockCapsules(now: now)
         let overflow = session.dockOverflow(now: now)
@@ -149,20 +160,23 @@ struct CookDock: View {
                 basketPending = false
                 onOpen(.ingredients)
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: SCCook.Spacing.islandLabelGap) {
                     CookBasketGlyph(callID: basketPending ? session.stepIndex : nil)
+                        // Plakietka NAD koszykiem (runda 11), poza jego
+                        // kołysaniem — liczba stoi, koszyk się buja.
+                        .overlay(alignment: .topTrailing) {
+                            ZStack {
+                                if count > 0 {
+                                    CookIslandBadge(count: count)
+                                        .transition(badgeTransition)
+                                }
+                            }
+                            .alignmentGuide(.trailing) { $0[HorizontalAlignment.center] - SCCook.Spacing.islandBadgeInset }
+                            .alignmentGuide(.top) { $0[VerticalAlignment.center] + SCCook.Spacing.islandBadgeInset }
+                            .animation(badgeAnimation, value: count > 0)
+                        }
                     Text("Składniki")
                         .font(.system(size: 16, weight: .bold))
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 12, weight: .heavy))
-                            .monospacedDigit()
-                            .cookRoll(count)
-                            .padding(.horizontal, 6)
-                            .frame(minWidth: SCCook.Size.islandBadge, minHeight: SCCook.Size.islandBadge)
-                            .background(Capsule().fill(SCCook.Palette.badge(scheme)))
-                            .transition(.scale(scale: 0.6).combined(with: .opacity))
-                    }
                 }
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity)
@@ -755,6 +769,36 @@ struct CookTimerMark: View {
 
     private var glyphColor: Color {
         isPaused ? Color.scMuted(scheme) : Color.scPageBase(scheme)
+    }
+}
+
+/// Liczba składników kroku nad koszykiem (runda 11: „badge nad ikonę
+/// składników”). Zmiana liczby: cyfry rolują (`cookRoll`), a plakietka
+/// lekko podskakuje — każde nowe składniki widać, nawet gdy liczba
+/// zostaje dwucyfrowa. Pojawienie i zniknięcie robi przejście rodzica.
+private struct CookIslandBadge: View {
+    let count: Int
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text("\(count)")
+            .font(.system(size: 10.5, weight: .heavy))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .cookRoll(count)
+            .padding(.horizontal, 4)
+            .frame(minWidth: SCCook.Size.islandBadge, minHeight: SCCook.Size.islandBadge)
+            .background(Capsule().fill(SCPalette.terracotta))
+            .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? 0 : count) { badge, scale in
+                badge.scaleEffect(scale)
+            } keyframes: { _ in
+                KeyframeTrack {
+                    SpringKeyframe(1.22, duration: 0.14, spring: .snappy)
+                    SpringKeyframe(1, duration: 0.4, spring: .bouncy)
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 

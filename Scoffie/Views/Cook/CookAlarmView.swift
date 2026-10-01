@@ -211,11 +211,21 @@ struct CookAlarmView: View {
     }
 
     /// Dźwięk alarmu co 2 s, dopóki nie padnie „Wycisz” albo „Gotowe” —
-    /// widok znika z ekranu, a zadanie razem z nim.
+    /// widok znika z ekranu, a zadanie razem z nim. Gdy dzwoni alarm
+    /// systemowy (`CookAlarmScheduler`, runda 11 — dźwięk alarmu telefonu),
+    /// ekran swojego nie dokłada; własny dźwięk zostaje zapasem na brak
+    /// zgody na alarmy.
     private func ring() async {
+        // Alarm systemowy rusza w tej samej sekundzie co ekran — chwila na
+        // jego start, żeby pierwszy takt nie zagrał dwoma dźwiękami naraz.
+        if CookAlarmScheduler.shared.isAuthorized {
+            try? await Task.sleep(for: .milliseconds(800))
+        }
         while !Task.isCancelled {
             if case let .overdue(_, _, silenced) = item.status, silenced { return }
-            AudioServicesPlayAlertSound(SystemSoundID(1005))
+            if !CookAlarmScheduler.shared.isSystemAlerting {
+                AudioServicesPlayAlertSound(SystemSoundID(1005))
+            }
             try? await Task.sleep(for: .seconds(2))
         }
     }
