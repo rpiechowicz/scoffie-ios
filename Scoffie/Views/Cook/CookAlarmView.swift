@@ -486,8 +486,8 @@ private struct CookAlarmTicks: Shape {
     }
 }
 
-/// Dzwonek, który się kołysze: 0° → 14° → −12° → 8° → 0° w pierwszych 40 %
-/// okresu, potem spoczynek; oś u góry dzwonka.
+/// Dzwonek, który się kołysze (`CookBellSwing`): 0° → 14° → −12° → 8° → 0°
+/// w pierwszych 40 % okresu, potem spoczynek; oś u góry dzwonka.
 private struct CookBell: View {
     let isRinging: Bool
 
@@ -496,7 +496,7 @@ private struct CookBell: View {
             TimelineView(.animation) { context in
                 let period = SCCook.Duration.alarmBell
                 let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
-                bell.rotationEffect(.degrees(Self.angle(at: t)), anchor: UnitPoint(x: 0.5, y: 0.1))
+                bell.rotationEffect(.degrees(CookBellSwing.angle(at: t)), anchor: CookBellSwing.anchor)
             }
         } else {
             bell
@@ -506,17 +506,5 @@ private struct CookBell: View {
     private var bell: some View {
         Image(systemName: "bell.fill")
             .font(.system(size: 12, weight: .bold))
-    }
-
-    /// Klatki z makiety (`scoffie-bell`), liniowo między nimi.
-    static func angle(at t: Double) -> Double {
-        let frames: [(Double, Double)] = [(0, 0), (0.1, 14), (0.2, -12), (0.3, 8), (0.4, 0), (1, 0)]
-        for index in 1..<frames.count where t <= frames[index].0 {
-            let (t0, a0) = frames[index - 1]
-            let (t1, a1) = frames[index]
-            let k = (t - t0) / max(0.0001, t1 - t0)
-            return a0 + (a1 - a0) * k
-        }
-        return 0
     }
 }

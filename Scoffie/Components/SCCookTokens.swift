@@ -146,6 +146,9 @@ enum SCCook {
 
         /// Kołysanie dzwonka na tarczy: 0° → 14° → −12° → 8° → 0° w pierwszych 40 % okresu, potem spoczynek; oś u góry dzwonka.
         static let alarmBell: Double = 1.6
+
+        /// Koszyk na wyspie woła (krok przynosi składniki, arkusz nieotwarty): to samo kołysanie co dzwonek (duration.cookAlarmBell — te same kąty i 0,64 s ruchu), dłuższy spoczynek; bez skali i bez pełnej ikony.
+        static let basketCall: Double = 2.4
     }
 
     enum Motion {

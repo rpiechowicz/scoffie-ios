@@ -217,10 +217,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wyłącznie `CookSessionStore.setPresented` (transakcja `disablesAnimations`), `CookModeView` ma `presentationBackground
   (.clear)` i sam przenika nad pulpitem (0,32 s), a przy wyjściu najpierw gaśnie (`leave`, 0,22 s), dopiero potem woła
   `pause` / `end`. Koszyk na wyspie WOŁA, gdy krok przynosi składniki, a arkusza Składniki na tym kroku nikt jeszcze
-  nie otworzył (runda 10, `CookBasketGlyph`): koszyk i plakietka w terakocie (`basket.fill`), seria potrząśnięć
-  (`keyframeAnimator`: skok 1,25 i trzy wychylenia na uchwycie) co 3 s, aż do stuknięcia w Składniki; krok już
-  obejrzany (`basketSeenSteps`) i krok bez składników nie wołają, Reduce Motion — sam kolor. `symbolEffect(.wiggle)`
-  z rundy 9 był za słaby.
+  nie otworzył (runda 10, `CookBasketGlyph`): koszyk (kontur) w terakocie i KOŁYSANIE dzwonka z tarczy końca timera
+  (`CookBellSwing` — wspólne z `CookBell`: 0° → 14° → −12° → 8° → 0° w 0,64 s, oś u góry) co `duration.cookBasketCall`
+  (2,4 s), aż do stuknięcia w Składniki; krok już obejrzany (`basketSeenSteps`) i krok bez składników nie wołają,
+  Reduce Motion — sam kolor. `symbolEffect(.wiggle)` z rundy 9 był za słaby, a seria ze skokiem 1,25, ±18°, pełną
+  ikoną i terakotową plakietką — „zbyt intensywna i rzucająca się”; nie wracać do żadnego z nich.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.

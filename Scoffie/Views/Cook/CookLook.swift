@@ -154,6 +154,32 @@ private struct CookParagraphSwap: Transition {
     }
 }
 
+/// Kołysanie dzwonka z tarczy końca timera (`scoffie-bell`): 0° → 14° →
+/// −12° → 8° → 0° w pierwszych 40 % okresu `duration.cookAlarmBell`, potem
+/// spoczynek; oś u góry ikony. Jedno źródło dla dzwonka i wołającego koszyka
+/// na wyspie (runda 10: „podoba mi się, jak ikona się trzęsie w tym zegarze”).
+enum CookBellSwing {
+    static let anchor = UnitPoint(x: 0.5, y: 0.1)
+
+    /// Kąt w chwili `elapsed` sekund od początku kołysania; po ruchu (0,64 s)
+    /// zero, aż do końca okresu.
+    static func angle(elapsed: Double) -> Double {
+        angle(at: elapsed / SCCook.Duration.alarmBell)
+    }
+
+    /// Klatki z makiety, liniowo między nimi; `t` = ułamek okresu dzwonka.
+    static func angle(at t: Double) -> Double {
+        let frames: [(Double, Double)] = [(0, 0), (0.1, 14), (0.2, -12), (0.3, 8), (0.4, 0), (1, 0)]
+        for index in 1..<frames.count where t <= frames[index].0 {
+            let (t0, a0) = frames[index - 1]
+            let (t1, a1) = frames[index]
+            let k = (t - t0) / max(0.0001, t1 - t0)
+            return a0 + (a1 - a0) * k
+        }
+        return 0
+    }
+}
+
 private struct CookChrome: ViewModifier {
     let isVisible: Bool
 
