@@ -2344,7 +2344,7 @@ final class SessionStore {
     }
 
     /// Katalog i miniatury: start czeka na pierwsze `startupThumbnailCount`,
-    /// reszta dociąga się w tle (najwyżej kilka naraz). Pamięć mieści ~256
+    /// reszta trafia w tle na dysk (najwyżej kilka naraz, bez pamięci). Pamięć mieści ~256
     /// miniatur, a katalog ma ich ponad tysiąc — czekanie na wszystkie
     /// wydłużało loader i przy zimnym starcie (świeża instalacja, App Review)
     /// piętrzyło pobrane bajty aż do WatchdogTermination (27–30.09.2026).
@@ -2355,7 +2355,8 @@ final class SessionStore {
         await catalog.loadIfNeeded()
         let urls = catalog.recipes.compactMap(\.imageURL)
         await ImagePrefetcher.prefetchAwaiting(Array(urls.prefix(Self.startupThumbnailCount)))
-        ImagePrefetcher.prefetch(Array(urls.dropFirst(Self.startupThumbnailCount)))
+        // Reszta tylko na dysk — pamięć zostaje dla tych, które widać.
+        ImagePrefetcher.warmDisk(Array(urls.dropFirst(Self.startupThumbnailCount)))
     }
 
     private static let startupThumbnailCount = 160

@@ -56,8 +56,10 @@ private final class SharedImageMemoryCache: @unchecked Sendable {
         // Ostrzeżenie systemu = oddajemy całą pamięć podręczną od razu
         // (WatchdogTermination u App Review, 27–30.09.2026). Obrazy wrócą
         // z dysku przy następnym rysowaniu.
+        // Surowa nazwa zamiast `UIApplication.didReceiveMemoryWarningNotification`:
+        // ta klasa nie jest na głównym aktorze, a stała z `UIApplication` może być.
         NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification,
+            forName: Notification.Name("UIApplicationDidReceiveMemoryWarningNotification"),
             object: nil,
             queue: nil
         ) { [weak self] _ in
@@ -166,6 +168,11 @@ private final class SharedImageDiskCache: @unchecked Sendable {
         }
     }
 
+    /// Czy plik jest na dysku — bez czytania go do pamięci.
+    func contains(_ url: URL, variant: CachedImageVariant) -> Bool {
+        fileManager.fileExists(atPath: filePath(for: url, variant: variant).path)
+    }
+
     func data(for url: URL, variant: CachedImageVariant = .large) -> Data? {
         let path = filePath(for: url, variant: variant)
         guard let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return nil }
@@ -264,6 +271,26 @@ private actor SharedImagePipeline {
         return try await task.value
     }
 
+    /// Miniatura TYLKO na dysk (mały JPEG), bez pamięci podręcznej i bez
+    /// zapisu oryginału. Dla reszty katalogu po starcie: pamięć mieści ~256
+    /// miniatur, więc wkładanie tam tysiąca wypychałoby te, które właśnie
+    /// widać, a oryginały (~300 KB) zapchałyby limit dysku.
+    nonisolated func warmDisk(_ url: URL) async {
+        let disk = SharedImageDiskCache.shared
+        guard !disk.contains(url, variant: .thumbnail),
+              SharedImageMemoryCache.shared.image(for: url, variant: .thumbnail) == nil else { return }
+        let original: Data
+        if let data = disk.data(for: url) {
+            original = data
+        } else {
+            guard let response = try? await session.data(from: url) else { return }
+            original = response.0
+        }
+        guard let decoded = await Self.decode(data: original, variant: .thumbnail),
+              let jpeg = decoded.jpegData(compressionQuality: 0.85) else { return }
+        disk.insert(jpeg, for: url, variant: .thumbnail)
+    }
+
     private func makeFetchTask(url: URL, variant: CachedImageVariant) -> Task<UIImage, Error> {
         let session = self.session
         return Task.detached(priority: .userInitiated) {
@@ -333,11 +360,26 @@ enum ImagePrefetcher {
     /// zwalnia — a pobrane, czekające na dekodowanie bajty nie piętrzą się
     /// w pamięci. Wcześniej rozgrzewka katalogu zakładała ~1000 zadań naraz.
     private static let concurrency = 8
+    /// W tle mniej — zdjęcia, które właśnie widać, nie czekają w kolejce za rozgrzewką.
+    private static let backgroundConcurrency = 4
 
     static func prefetch(_ urls: [URL], variant: CachedImageVariant = .thumbnail) {
         guard !urls.isEmpty else { return }
         Task.detached(priority: .utility) {
-            await load(urls, variant: variant, priority: .utility)
+            await run(urls, limit: backgroundConcurrency, priority: .utility) { url in
+                _ = try? await SharedImagePipeline.shared.image(for: url, variant: variant)
+            }
+        }
+    }
+
+    /// Miniatury na dysk, bez pamięci (`SharedImagePipeline.warmDisk`) — dla
+    /// całego katalogu: następne wejście na listę dekoduje mały JPEG z dysku.
+    static func warmDisk(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            await run(urls, limit: backgroundConcurrency, priority: .utility) { url in
+                await SharedImagePipeline.shared.warmDisk(url)
+            }
         }
     }
 
@@ -345,28 +387,32 @@ enum ImagePrefetcher {
     /// i będzie w cache pamięciowym. Używane przez smart startup loader, żeby
     /// lista przepisów nie „wyskakiwała” okładkami zaraz po wejściu.
     static func prefetchAwaiting(_ urls: [URL], variant: CachedImageVariant = .thumbnail) async {
-        await load(urls, variant: variant, priority: .userInitiated)
+        await run(urls, limit: concurrency, priority: .userInitiated) { url in
+            _ = try? await SharedImagePipeline.shared.image(for: url, variant: variant)
+        }
     }
 
-    /// Przesuwne okno: najwyżej `concurrency` pobrań naraz, następne rusza,
-    /// gdy któreś się skończy. Trafienia w pamięć i pobrania w toku dedupuje
-    /// `SharedImagePipeline.image(for:variant:)`.
-    private static func load(_ urls: [URL], variant: CachedImageVariant, priority: TaskPriority) async {
+    /// Przesuwne okno: najwyżej `limit` zadań naraz, następne rusza, gdy
+    /// któreś się skończy. Anulowanie (limit czasu startu) przestaje dokładać
+    /// nowe — bez tego loader czekał na całą listę mimo `cancelAll()`.
+    /// Trafienia w pamięć i pobrania w toku dedupuje `SharedImagePipeline`.
+    private static func run(
+        _ urls: [URL],
+        limit: Int,
+        priority: TaskPriority,
+        work: @escaping @Sendable (URL) async -> Void
+    ) async {
         guard !urls.isEmpty else { return }
         await withTaskGroup(of: Void.self) { group in
             var pending = urls.makeIterator()
             var started = 0
-            while started < concurrency, let url = pending.next() {
-                group.addTask(priority: priority) {
-                    _ = try? await SharedImagePipeline.shared.image(for: url, variant: variant)
-                }
+            while started < limit, let url = pending.next() {
+                guard group.addTaskUnlessCancelled(priority: priority, operation: { await work(url) }) else { break }
                 started += 1
             }
             while await group.next() != nil {
-                guard let url = pending.next() else { continue }
-                group.addTask(priority: priority) {
-                    _ = try? await SharedImagePipeline.shared.image(for: url, variant: variant)
-                }
+                guard !Task.isCancelled, let url = pending.next() else { continue }
+                group.addTask(priority: priority) { await work(url) }
             }
         }
     }

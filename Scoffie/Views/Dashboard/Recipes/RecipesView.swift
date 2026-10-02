@@ -238,7 +238,9 @@ struct RecipesView: View {
                 resyncFeaturedSelectionIfNeeded()
             }
             .onChange(of: recipeCatalogStore.recipes.count) { _, _ in
-                ImagePrefetcher.prefetch(recipeCatalogStore.recipes.compactMap(\.imageURL))
+                // Cały katalog tylko na dysk — pamięć mieści ~256 miniatur
+                // i wypchnęłoby się to, co właśnie widać (`warmDisk`).
+                ImagePrefetcher.warmDisk(recipeCatalogStore.recipes.compactMap(\.imageURL))
                 resyncFeaturedSelectionIfNeeded()
             }
             .onChange(of: searchText) { _, newValue in
