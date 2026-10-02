@@ -54,9 +54,9 @@ struct AuthFooterView: View {
 /// (`src/common/legal-documents.ts`) — wersja z przyszłości jest odrzucana,
 /// a starsza niż minimalna nie otwiera bramki asystenta.
 enum LegalDocMeta {
-    static let version = "1.1"
-    static let effectiveDate = "23 września 2026"
-    static let documentVersionISO = "2026-09-23"
+    static let version = "1.2"
+    static let effectiveDate = "2 października 2026"
+    static let documentVersionISO = "2026-10-02"
     static let contactEmail = "support@scoffie.app"
 }
 
@@ -235,7 +235,7 @@ private struct LegalBullet: View {
 
 // MARK: - Polityka prywatności
 //
-// Treść 1:1 ze strony (scoffie-web `src/pages/privacy`, wersja 1.1, 23 września 2026).
+// Treść 1:1 ze strony (scoffie-web `src/pages/privacy`, wersja 1.2, 2 października 2026).
 // Zmiana tutaj = zmiana na stronie, potem Android (`scripts/gen-legal-content.py`).
 // Istotna zmiana (nowy odbiorca, nowy cel) = też podbicie wersji tu
 // (`LegalDocMeta`) i w `src/common/legal-documents.ts` na serwerze — inaczej nikt
@@ -286,6 +286,10 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("dane diagnostyczne: raporty awarii i zawieszeń aplikacji, czasy działania ekranów i żądań, model urządzenia, wersja systemu i aplikacji, identyfikator użytkownika — bez zrzutów ekranu, nagrań sesji, adresu IP i treści wpisywanych w aplikacji.")
                 LegalParagraph("Zgłoszenia odpowiedzi asystenta (jeśli użytkownik z nich skorzysta):").fontWeight(.medium)
                 LegalBullet("treść zgłoszonej odpowiedzi, powód i komentarz użytkownika.")
+                LegalParagraph("Wiadomości e-mail o koncie:").fontWeight(.medium)
+                LegalBullet("adres e-mail z konta i imię wyświetlane,")
+                LegalBullet("treść wiadomości: powitanie, dołączenie do gospodarstwa, wykorzystana pula asystenta, stan subskrypcji, usunięcie konta, zmiana dokumentów,")
+                LegalBullet("informacja, że wiadomość się odbiła albo została zgłoszona jako spam.")
             }
         }
 
@@ -297,6 +301,8 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("dane ze Zdrowia (kroki) — zgoda udzielona w systemie iOS przy włączaniu integracji (art. 9 ust. 2 lit. a RODO),")
                 LegalBullet("poświadczenia Cookidoo — zgoda wyrażona przy łączeniu konta (art. 6 ust. 1 lit. a RODO),")
                 LegalBullet("bezpieczeństwo, wykrywanie nadużyć, limity użycia i ochrona sesji — prawnie uzasadniony interes, art. 6 ust. 1 lit. f RODO,")
+                LegalBullet("wiadomości e-mail o koncie (sekcja 2) — wykonanie umowy, art. 6 ust. 1 lit. b RODO; bez marketingu i newsletterów,")
+                LegalBullet("lista adresów, na które wiadomość się odbiła albo które zgłosiły ją jako spam — prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO): nie wysyłamy tam ponownie,")
                 LegalBullet("obsługa zgłoszeń i realizacja praw — art. 6 ust. 1 lit. b i f RODO,")
                 LegalBullet("wykazanie udzielonych zgód i akceptacji dokumentów — obowiązek prawny, art. 6 ust. 1 lit. c w zw. z art. 7 ust. 1 RODO.")
                 LegalParagraph("Zgody można cofnąć w każdej chwili w Aplikacji (zgoda na asystenta: menu asystenta → „Prywatność i zgoda”; integracje: Ustawienia) lub pisząc do Administratora; cofnięcie nie wpływa na zgodność z prawem przetwarzania sprzed cofnięcia.")
@@ -352,9 +358,9 @@ struct PrivacyPolicyContent: View {
 
         LegalSection(number: 9, title: "Odbiorcy danych", icon: "building.2.fill") {
             VStack(alignment: .leading, spacing: 6) {
-                LegalBullet("Railway Corp. — hosting serwera i bazy danych (infrastruktura Aplikacji),")
+                LegalBullet("Railway Corp. — hosting serwera i bazy danych oraz wykonanie nocnej kopii zapasowej bazy (infrastruktura Aplikacji),")
                 LegalBullet("Cloudflare, Inc. — przechowywanie i serwowanie zdjęć przepisów z katalogu oraz przechowywanie zaszyfrowanych kopii zapasowych bazy danych (kopie zawierają dane osobowe; przechowywane 30 dni),")
-                LegalBullet("GitHub, Inc. (Microsoft) — wykonanie nocnej kopii zapasowej bazy: zrzut przechodzi przez środowisko GitHub Actions i jest usuwany zaraz po wysłaniu do Cloudflare,")
+                LegalBullet("Resend, Inc. — wysyłka wiadomości e-mail o koncie: adres e-mail, imię wyświetlane i treść wiadomości; serwery w Irlandii (Unia Europejska),")
                 LegalBullet("Functional Software, Inc. (Sentry) — diagnostyka aplikacji i serwera: awarie i błędy, czasy działania, ostrzeżenia z logów serwera; identyfikator żądania, kod i ścieżka błędu, wersja, identyfikator użytkownika; bez treści wiadomości, danych profilu, zrzutów ekranu i adresu IP; serwery w Unii Europejskiej,")
                 LegalBullet("Apple Inc. — Sign in with Apple, powiadomienia push, App Store,")
                 LegalBullet("Anthropic, PBC — model językowy asystenta AI, w zakresie z sekcji 6, wyłącznie dla osób, które wyraziły zgodę,")
@@ -378,6 +384,7 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("linki do udostępnionych przepisów — do wyłączenia linku lub usunięcia przepisu; informacja, kto utworzył link, znika z usunięciem konta; liczby udostępnień i otwarć (bez osób) — przez czas istnienia przepisu,")
                 LegalBullet("dziennik zgód — przez czas korzystania z Aplikacji, usuwany z kontem,")
                 LegalBullet("kopie zapasowe bazy — 30 dni, potem nadpisywane,")
+                LegalBullet("wiadomości e-mail — adres, temat i treść przez 30 dni od wysyłki, potem zostaje sam ślad nadania bez tych danych, usuwany po roku; adres z listy odrzuceń — do usunięcia na prośbę użytkownika,")
                 LegalBullet("logi techniczne — nie dłużej niż 90 dni,")
                 LegalBullet("ślad tożsamości zakupowej (pseudonim wyliczony z identyfikatora logowania, bez możliwości odtworzenia go z powrotem) wraz z licznikiem wykorzystanej bezpłatnej próby i zapisem opłaconej subskrypcji — BEZTERMINOWO, także po usunięciu konta. To jedyny ślad, który zostaje. Bez niego bezpłatna próba odnawiałaby się przy każdym nowym koncie, a opłacona subskrypcja nie wróciłaby po ponownym zalogowaniu tym samym Apple ID. Podstawa: prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO) — zapobieganie nadużyciu bezpłatnej próby i odtworzenie opłaconego świadczenia.")
                 LegalBullet("po usunięciu konta dane są usuwane niezwłocznie, nie później niż w ciągu 30 dni (w tym z kopii zapasowych po ich rotacji), z zastrzeżeniem obowiązków prawnych, ochrony roszczeń i opisanego wyżej śladu tożsamości zakupowej. Własne przepisy dodane do wspólnego gospodarstwa pozostają w nim (bez powiązania z usuniętym kontem), bo korzystają z nich pozostali domownicy.")
@@ -422,7 +429,7 @@ struct PrivacyPolicyContent: View {
 
 // MARK: - Warunki korzystania
 //
-// Treść 1:1 ze strony (scoffie-web `src/pages/terms`, wersja 1.1, 23 września 2026).
+// Treść 1:1 ze strony (scoffie-web `src/pages/terms`, wersja 1.2 — treść jak w 1.1, numer wspólny z polityką).
 // Ceny planów na stronie biorą się z `pricing.plans` — zmiana ceny = tu i tam.
 // Android generuje z tego pliku `LegalContent.kt` (`scripts/gen-legal-content.py`).
 
