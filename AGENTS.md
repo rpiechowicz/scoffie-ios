@@ -278,6 +278,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   bez tego build przechodzi z ostrzeżeniem, ale crashe są bez nazw funkcji.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
+- **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`
+  przy starcie i po powrocie na wierzch (≤ raz na minutę), BEZ logowania; `updateRequired` = ekran „Zaktualizuj Scoffie”
+  we własnym oknie nad wszystkim (`alert + 2`, nad toastami i zasłoną). Każdy błąd przepuszcza, wersji nie porównujemy
+  na telefonie. Próg ustawia się w panelu (Sterowanie, `APP_MIN_VERSION_IOS`). Kontrakt na zawsze — nie zmieniać adresu ani pól.
 - Błędy: `WsEnvelope` (`ok, data, error, message, code, status, details?, requestId`) i REST
   `{code, message, details?, requestId}`; `envelope.failure(fallback:)` → `RecipeDataError.server`;
   kopie po kodzie w `UserFacingErrorMapper.copyByCode` (parytet z `src/common/app-error-code.ts`).
