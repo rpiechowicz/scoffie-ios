@@ -33,6 +33,11 @@ check(link("https://scoffie.app/zaproszenie/") == nil, "zaproszenie: bez tokenu 
 check(link("scoffie://invite?token=abc") == .invitation(token: "abc"), "zaproszenie: schemat")
 check(link("scoffie://invite") == nil, "zaproszenie: schemat bez tokenu → nic")
 
+// MARK: - Live Activity gotowania
+
+check(link("scoffie://gotuj") == .cooking, "gotowanie: schemat")
+check(DeepLink.cooking.url?.absoluteString == "scoffie://gotuj", "gotowanie: adres")
+
 // MARK: - Przepisy
 
 check(link("https://scoffie.app/przepis/bigos-staropolski") == .recipe(.catalog(slug: "bigos-staropolski")), "przepis: slug")

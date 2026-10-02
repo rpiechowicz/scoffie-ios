@@ -120,7 +120,36 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`CookSheet`); Składniki na pół ekranu, przewijanie rozwija na cały (`.presentationContentInteraction(.resizes)`),
   Timery na wysokość treści (pomiar jak `PlanDayGoalSheet`); dzwoniący timer zamyka otwarty arkusz, bo widoku
   spod arkusza nie da się położyć nad nim. Koniec timera: pełny ekran także po „Wstrzymaj” (store sam
-  otwiera tryb), w tle zwykłe powiadomienie (`CookTimerNotifications`) — AlarmKit dopiero w E5. Zrzuty:
+  otwiera tryb), a od rundy 11 ALARM SYSTEMOWY AlarmKit (`CookAlarmScheduler`, wariant B z §8.4): każdy biegnący,
+  niewyciszony timer ma alarm na GODZINĘ KOŃCA (`Alarm.Schedule.fixed`, BEZ odliczania — AlarmKit z odliczaniem
+  wymaga rozszerzenia widżetów, bez niego „system może zdjąć alarm i nie zadzwonić”), id z sesji + timera + końca,
+  uzgadniany przy KAŻDEJ zmianie sesji (`syncSystemAlarms` w `update`/`start`/`end`/`clearCache`). Dźwięk alarmu
+  systemu, dzwoni mimo wyciszenia i Focus, pełny alert na ekranie blokady; zgoda przy pierwszym starcie timera
+  (`NSAlarmKitUsageDescription`). „Zatrzymaj” na alercie = „Wycisz” w aplikacji (`acknowledgeSystemAlarm`, tylko
+  przy tej samej godzinie końca), ekran końca timera nie gra swojego 1005, gdy dzwoni system. Bez zgody — dawna
+  droga: powiadomienie w tle (`CookTimerNotifications`) i 1005 w aplikacji. Live Activity (E5, 1.10.2026): target
+  `ScoffieCookActivityExtension` (folder `ScoffieCookActivity/`, iOS 26.0, App Group `group.app.scoffie.ios`), JEDNA
+  aktywność na sesję (`CookLiveActivity` w aplikacji, wariant B z §8.4): rusza z pierwszym krokiem, aktualizuje się przy
+  każdej zmianie sesji (ta sama `syncSystemAlarms`), kończy na zakończeniu / „Zakończ” / wylogowaniu; odliczanie rysują
+  widoki czasowe (`Text(timerInterval:)`, `ProgressView(timerInterval:)` — bez aktualizacji co sekundę). Typy wspólne
+  dla obu targetów leżą w `Shared/` (osobna synchronizowana grupa w OBU targetach; każdy typ `nonisolated`, bo
+  rozszerzenie nie ma domyślnej izolacji MainActor; bez `SCPalette`/`SCCook` — rozszerzenie ich nie ma): stan
+  `CookActivityAttributes` (krok, „Dalej: …”, do dwóch kapsuł doku z kolorem 0xRRGGBB z ciemnego wariantu palety),
+  `CookAlarmMetadata`, `CookActivityImage` (miniatura 144 px w App Group — rozszerzenie nie sięga do sieci) i przyciski
+  `CookActivityIntent` (`LiveActivityIntent`: „Dalej →”, „+1 min”, ▶ timera, który czeka) — wykonuje je APLIKACJA przez
+  `CookActivityBridge` → `CookActivityCommands` (rejestrowane w `AppDelegate`; po wybudzeniu w tle sklep sesji wstaje
+  z pliku, `CookSessionStore.forIntent`). Intencja CZEKA na koniec polecenia (`CookActivityBridge` jest async,
+  `CookLiveActivity.settled()` + `CookAlarmScheduler.settled()`) — runda 12: aplikacja obudzona przyciskiem na ekranie
+  blokady usypiała zaraz po `perform` i krok dochodził do Live Activity z opóźnieniem. Wygląd z makiet DC3/DC5,
+  MN4/MN6, ER1–4, LK0–3 (`CookActivityLook` — stałe z makiet, jeszcze nie tokeny): ekran blokady i (od rundy 12)
+  rozwinięta wyspa mają JEDEN rząd — zdjęcie w pierścieniu kroków 44, „KROK…” + tytuł w jednej linii (w wyspie region
+  `.center`), „Dalej” 44 — a pod nim sam stan (kafle 60 pt); tytuł POD nagłówkiem 48 pt przekraczał sufit wysokości
+  wyspy (~160 pt) i dół był ucięty — nie wracać. Kompakt/minimal — pierścień timera, gdy działa (D25). Stuknięcie =
+  `scoffie://gotuj` (`DeepLink.cooking`; przed końcem startu `cookingResumeRequested` → `resumeCookingIfRequested`)
+  → `resumeCooking(instantly: true)`: tryb, który już stoi na ekranie (`CookSessionStore.isOnScreen`), ZOSTAJE —
+  `dismissPresentedScreensAnimated` zamykał go razem z arkuszami i wjeżdżał od nowa, a spod niego mignął Kalendarz;
+  wstrzymany pokazuje się bez przenikania (`takeInstantPresentation`). Szablony Xcode
+  (widżet ekranu głównego, Control, intencja konfiguracji) USUNIĘTE — nie wracać. Zrzuty:
   `SCOFFIE_DEBUG_OPTIONS=gotuj|gotuj-krok|gotuj-dwa|gotuj-jeden|gotuj-pauza|gotuj-timery|gotuj-skladniki|gotuj-kroki|gotuj-alarm|gotuj-alarm-dwa|gotuj-wyjscie|gotuj-koniec`.
   Zdjęcie nagłówka (`CookHeaderPhoto`) leży w TLE pustej ramki, a treść przewijania ma `containerRelativeFrame(.horizontal)`
   — `scaledToFill` w samej ramce wysokości zgłaszał szerokość kadru (~580 pt) i tekst uciekał za lewą krawędź („bez
@@ -221,7 +250,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`CookBellSwing` — wspólne z `CookBell`: 0° → 14° → −12° → 8° → 0° w 0,64 s, oś u góry) co `duration.cookBasketCall`
   (2,4 s), aż do stuknięcia w Składniki; krok już obejrzany (`basketSeenSteps`) i krok bez składników nie wołają,
   Reduce Motion — sam kolor. `symbolEffect(.wiggle)` z rundy 9 był za słaby, a seria ze skokiem 1,25, ±18°, pełną
-  ikoną i terakotową plakietką — „zbyt intensywna i rzucająca się”; nie wracać do żadnego z nich.
+  ikoną i terakotową plakietką — „zbyt intensywna i rzucająca się”; nie wracać do żadnego z nich. Liczba składników
+  kroku (runda 11) to plakietka NAD koszykiem (`CookIslandBadge`: terakota, `size.cookIslandBadge` 17, środek
+  `spacing.cookIslandBadgeInset` poza prawym górnym rogiem, poza kołysaniem koszyka). Widok STOI zawsze (runda 12:
+  wstawiany w pusty `ZStack` zmieniał przy wejściu i wyjściu także położenie): pojawienie i zniknięcie = skala 0,2 ↔ 1
+  + krycie w miejscu (sprężyna), znikając trzyma ostatnią liczbę, podskok 1,22 i rolowanie cyfr tylko przy zmianie
+  liczby między krokami ze składnikami; słowo „Składniki” o `spacing.cookIslandLabelGap`.
 - Polski cudzysłów: `„…”`. W literale `String` zamknięcie prostym `"` KOŃCZY literał w połowie
   zdania — objaw to `Invalid character in source file` + `Expected ',' separator`. Kontrola:
   linia, w której liczba `„` ≠ liczba `”`, a nie jest komentarzem.
@@ -244,6 +278,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   bez tego build przechodzi z ostrzeżeniem, ale crashe są bez nazw funkcji.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
+- **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`
+  przy starcie i po powrocie na wierzch (≤ raz na minutę), BEZ logowania; `updateRequired` = ekran „Zaktualizuj Scoffie”
+  we własnym oknie nad wszystkim (`alert + 2`, nad toastami i zasłoną). Każdy błąd przepuszcza, wersji nie porównujemy
+  na telefonie. Próg ustawia się w panelu (Sterowanie, `APP_MIN_VERSION_IOS`). Kontrakt na zawsze — nie zmieniać adresu ani pól.
 - Błędy: `WsEnvelope` (`ok, data, error, message, code, status, details?, requestId`) i REST
   `{code, message, details?, requestId}`; `envelope.failure(fallback:)` → `RecipeDataError.server`;
   kopie po kodzie w `UserFacingErrorMapper.copyByCode` (parytet z `src/common/app-error-code.ts`).
@@ -297,7 +335,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
   (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po
   zdekodowaniu — w `.large` cały katalog NIE mieści się w pamięci i listy zaczynają migać.
-  Start (`SessionStore.prepareStartupData`) czeka na miniatury CAŁEGO katalogu i bieżącego tygodnia.
+  Pamięć mieści ~256 miniatur (`totalCostLimit` 256 MB), katalog ma ponad 1000 — start
+  (`SessionStore.prepareStartupData`) czeka na pierwsze 160 miniatur katalogu i bieżący tydzień, reszta
+  dociąga się w tle. Rozgrzewka (`ImagePrefetcher`) biegnie NAJWYŻEJ 8 naraz (przesuwne okno), dysk
+  przycina się co 64 zapisy, ostrzeżenie o pamięci czyści pamięć podręczną — bez tego zimny start
+  (świeża instalacja, App Review) kończył się WatchdogTermination (Sentry SCOFFIE-IOS-1, 27–30.09.2026).
+  Nie wracać do `withTaskGroup` z zadaniem na każdy adres.
 - Asystent AI (Faza 1) jedzie po REST, NIE po sockecie: `POST /agent/conversations/:id/messages`
   oddaje `202` z `turnId`, a odpowiedź zbiera się odpytywaniem `GET /agent/turns/:id` co sekundę
   (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–240 s (sufit `AI_TURN_TIMEOUT_MS`,
@@ -834,8 +877,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „tylko najważniejsze rzeczy”, bez powtarzania nazwy, liczników i objaśnień. „Czego nie jem” (wykluczone
   składniki + limit czasu na danie) USUNIĘTE: walidator planu i prompt dalej czytają te kolumny,
   więc każdy zapis diety wysyła `excludedIngredientIds: []` + `maxPrepTimeMinutes: null`,
-  a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
-  nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
+  a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka i regulamin 1.1
+  (2.10.2026) już ich nie wymieniają, ekran zgody Asystenta też nie. Teksty w `AuthFooterView`
+  są 1:1 ze stroną (scoffie-web `src/pages/{privacy,terms}`); po zmianie — Android
+  `python scripts/gen-legal-content.py`.
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
   auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.

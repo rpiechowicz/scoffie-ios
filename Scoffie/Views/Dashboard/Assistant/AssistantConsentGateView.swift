@@ -346,8 +346,8 @@ struct AssistantConsentGateView: View {
     /// obiecuje ani mniej, ani więcej.
     private static let sentItems = [
         "Treść wiadomości i rozmowy",
-        "Twoje imię, dietę, alergeny, wykluczenia",
-        "Cel, zapotrzebowanie i makro, maks. czas gotowania",
+        "Twoje imię, dietę, alergeny",
+        "Cel, zapotrzebowanie i makro",
         "Te same dane domowników, tylko za ich zgodą",
         "Nazwę domu, plan tygodnia, notatki pamięci",
         "Katalog przepisów",

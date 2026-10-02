@@ -14,11 +14,25 @@ extension SessionStore {
     }
 
     /// „Gotuj dalej” / „Wróć do gotowania” — wstrzymana sesja wraca na ekran.
+    /// `instantly` (Live Activity) — bez przenikania. Tryb, który już stoi na
+    /// ekranie, zostaje: zamykanie arkuszy zamknęłoby też jego pełny ekran.
     @MainActor
-    func resumeCooking() async {
+    func resumeCooking(instantly: Bool = false) async {
         guard let cookSessionStore, cookSessionStore.session != nil else { return }
+        if cookSessionStore.isPresented, cookSessionStore.isOnScreen { return }
         await sessionCurtain.dismissPresentedScreensAnimated()
-        cookSessionStore.resume()
+        cookSessionStore.resume(instantly: instantly)
+    }
+
+    /// Stuknięcie w Live Activity przyszło przed końcem startu — teraz, nad
+    /// gotowym pulpitem, wraca tryb Gotuj (chyba że już stoi, bo zadzwonił
+    /// timer).
+    @MainActor
+    func resumeCookingIfRequested() async {
+        guard cookingResumeRequested else { return }
+        cookingResumeRequested = false
+        guard let cookSessionStore, !cookSessionStore.isPresented else { return }
+        await resumeCooking(instantly: true)
     }
 
     /// Timer zadzwonił, a tryb jest schowany („Wstrzymaj”, zimny start) —

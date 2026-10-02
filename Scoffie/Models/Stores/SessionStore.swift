@@ -1830,6 +1830,10 @@ final class SessionStore {
     /// na dysku leży równolegle w `storedDeepLink`, dopóki się nie otworzy.
     private(set) var pendingRecipeLink: RecipeLinkTarget?
 
+    /// Stuknięcie w Live Activity gotowania przed końcem startu — tryb Gotuj
+    /// otwiera się nad gotowym pulpitem (`resumeCookingIfRequested`).
+    var cookingResumeRequested = false
+
     /// Zdejmuje przepis z kolejki — w chwili, w której pulpit go otwiera.
     func takePendingRecipeLink() -> RecipeLinkTarget? {
         guard let target = pendingRecipeLink else { return nil }
@@ -1853,6 +1857,8 @@ final class SessionStore {
             await presentInvitation(token: token)
         case .recipe(let target):
             pendingRecipeLink = target
+        case .cooking:
+            storedDeepLink = nil
         }
     }
 
@@ -1861,6 +1867,18 @@ final class SessionStore {
     /// jest ignorowana.
     func handleIncomingURL(_ url: URL) {
         guard let link = DeepLink(url: url) else { return }
+
+        // Live Activity gotowania: sesja jest na tym telefonie — bez
+        // odkładania do zalogowania. Przed końcem startu tylko zapamiętujemy
+        // (`resumeCookingIfRequested` po `.ready`).
+        if case .cooking = link {
+            if startupPhase == .ready, cookSessionStore?.session != nil {
+                Task { await resumeCooking(instantly: true) }
+            } else {
+                cookingResumeRequested = true
+            }
+            return
+        }
 
         guard currentUserId?.isEmpty == false else {
             // Odkładamy i wracamy do tego po zalogowaniu — zamiast kazać
@@ -1871,6 +1889,8 @@ final class SessionStore {
                 authError = "Zaloguj się, aby przyjąć zaproszenie do gospodarstwa."
             case .recipe:
                 authError = "Zaloguj się, aby zobaczyć przepis."
+            case .cooking:
+                break
             }
             return
         }
@@ -1886,6 +1906,8 @@ final class SessionStore {
             // następnego uruchomienia aplikacji.
             storedDeepLink = link
             pendingRecipeLink = target
+        case .cooking:
+            break
         }
     }
 
@@ -2289,6 +2311,7 @@ final class SessionStore {
                 // Timer zadzwonił, zanim aplikacja wstała (zimny start) —
                 // alarm dopiero nad gotowym pulpitem, nie nad loaderem.
                 await self?.presentCookingIfRinging()
+                await self?.resumeCookingIfRequested()
                 await self?.prefetchCookScenarios()
             }
         }
@@ -2320,17 +2343,23 @@ final class SessionStore {
         _ = await (recipesReady, householdReady, weekReady)
     }
 
-    /// Katalog i miniatury WSZYSTKICH przepisów, nie pierwszych dwunastu.
-    /// Miniatura to ~1 MB w pamięci i mały JPEG na dysku, więc ciepły start
-    /// dekoduje cały katalog w ułamku sekundy — a lista przepisów, plan
-    /// i kalendarz dostają zdjęcia w tej samej klatce, w której się rysują.
-    /// Zimny start (pierwsze pobranie z sieci) ucina `startupTimeoutSeconds`;
-    /// pobieranie biegnie wtedy dalej w tle.
+    /// Katalog i miniatury: start czeka na pierwsze `startupThumbnailCount`,
+    /// reszta trafia w tle na dysk (najwyżej kilka naraz, bez pamięci). Pamięć mieści ~256
+    /// miniatur, a katalog ma ich ponad tysiąc — czekanie na wszystkie
+    /// wydłużało loader i przy zimnym starcie (świeża instalacja, App Review)
+    /// piętrzyło pobrane bajty aż do WatchdogTermination (27–30.09.2026).
+    /// Po pierwszym pobraniu każda miniatura leży na dysku jako mały JPEG,
+    /// więc lista dociąga brakujące w ułamku sekundy.
     private func prepareRecipesAndThumbnails() async {
         guard let catalog = recipeCatalogStore else { return }
         await catalog.loadIfNeeded()
-        await ImagePrefetcher.prefetchAwaiting(catalog.recipes.compactMap(\.imageURL))
+        let urls = catalog.recipes.compactMap(\.imageURL)
+        await ImagePrefetcher.prefetchAwaiting(Array(urls.prefix(Self.startupThumbnailCount)))
+        // Reszta tylko na dysk — pamięć zostaje dla tych, które widać.
+        ImagePrefetcher.warmDisk(Array(urls.dropFirst(Self.startupThumbnailCount)))
     }
+
+    private static let startupThumbnailCount = 160
 
     /// Bieżący tydzień planu — Kalendarz i Plan stoją na nim od pierwszej
     /// klatki. Przepisy gospodarstwa (spoza katalogu) mają własne zdjęcia,

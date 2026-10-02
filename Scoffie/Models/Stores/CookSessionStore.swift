@@ -35,11 +35,25 @@ final class CookSessionStore {
     /// się pokazać nad otwartym arkuszem — i czeka na koniec startu).
     @ObservationIgnored var onRing: (() -> Void)?
 
+    /// Sklep sesji, który właśnie żyje — dla przycisków Live Activity.
+    static weak var current: CookSessionStore?
+    /// Sklep odtworzony z pliku, gdy przycisk Live Activity obudził aplikację
+    /// w tle, zanim sesja konta wstała (`forIntent`).
+    private static var restoredForIntent: CookSessionStore?
+
     init(ownerKey: String) {
         self.ownerKey = ownerKey
         self.persists = true
         session = Self.load(ownerKey: ownerKey)
+        // Prawdziwy sklep konta zastępuje ten odtworzony dla intencji —
+        // stan i tak jest w pliku.
+        Self.restoredForIntent = nil
+        Self.current = self
         scheduleRingWatch()
+        CookAlarmScheduler.shared.onAcknowledged = { [weak self] timerId, end in
+            self?.acknowledgeSystemAlarm(timerId: timerId, end: end)
+        }
+        syncSystemAlarms()
     }
 
     /// Podgląd z gotową sesją — bez dysku i bez pilnowania alarmu.
@@ -78,6 +92,7 @@ final class CookSessionStore {
         self.session = session
         save()
         scheduleRingWatch()
+        syncSystemAlarms()
         setPresented(true)
     }
 
@@ -86,9 +101,32 @@ final class CookSessionStore {
         return value > 0 ? Int(value.rounded()) : nil
     }
 
+    /// Tryb Gotuj naprawdę stoi na ekranie (`CookModeView` onAppear /
+    /// onDisappear) — sam `isPresented` bywa `true` także wtedy, gdy pokazanie
+    /// nad arkuszem przepadło.
+    private(set) var isOnScreen = false
+    /// Następne pokazanie bez przenikania (powrót z Live Activity — runda 12:
+    /// „najpierw widzę kalendarz, a potem pokazuje się gotowanie”).
+    @ObservationIgnored private var presentsInstantly = false
+
+    func markOnScreen(_ value: Bool) {
+        isOnScreen = value
+    }
+
+    /// `CookModeView` pyta przy wejściu, czy pokazać się od razu.
+    func takeInstantPresentation() -> Bool {
+        defer { presentsInstantly = false }
+        return presentsInstantly
+    }
+
     /// Powrót do wstrzymanej sesji (talerz, szczegóły, Live Activity).
-    func resume() {
+    /// `instantly` — bez przenikania nad pulpitem.
+    func resume(instantly: Bool = false) {
         guard session != nil else { return }
+        // Tryb już stoi na ekranie — nic do roboty (dawniej znikał i wjeżdżał
+        // od nowa, a spod niego mignął Kalendarz).
+        if isPresented, isOnScreen { return }
+        presentsInstantly = instantly
         if isPresented {
             // Przełącznik został na `true`, a ekranu nie ma (pokazanie nad
             // arkuszem przepadło) — przejście false → true, żeby SwiftUI
@@ -126,6 +164,7 @@ final class CookSessionStore {
         session = current
         save()
         scheduleRingWatch()
+        syncSystemAlarms()
     }
 
     /// „Wstrzymaj”: widok znika, sesja i timery zostają.
@@ -141,16 +180,23 @@ final class CookSessionStore {
         ringWatch = nil
         guard persists else { return }
         CookTimerNotifications.cancelAll()
+        CookAlarmScheduler.shared.sync(nil)
+        CookLiveActivity.shared.sync(nil)
         try? FileManager.default.removeItem(at: Self.fileURL)
     }
 
     // MARK: - Koniec timera poza ekranem trybu
 
-    /// Aplikacja w tle: koniec każdego biegnącego timera dzwoni zwykłym
-    /// powiadomieniem. E4 — bez AlarmKit; ten przejmie to w E5 (dzwoni mimo
-    /// wyciszenia, Dynamic Island, ekran blokady).
+    /// Aplikacja w tle: koniec timera dzwoni ALARMEM SYSTEMOWYM
+    /// (`CookAlarmScheduler`, runda 11 — mimo wyciszenia, na ekranie blokady).
+    /// Zwykłe powiadomienie zostaje tylko jako zapas, gdy zgody na alarmy nie
+    /// ma — inaczej koniec timera dzwoniłby dwa razy.
     func appWentToBackground() {
-        CookTimerNotifications.schedule(for: session)
+        if CookAlarmScheduler.shared.isAuthorized {
+            CookTimerNotifications.remove(for: session)
+        } else {
+            CookTimerNotifications.schedule(for: session)
+        }
     }
 
     /// Na wierzchu dzwoni ekran końca timera, nie baner.
@@ -159,6 +205,38 @@ final class CookSessionStore {
         // szybkim „wierzch → tło” zdjęłoby świeżo zaplanowane powiadomienie.
         CookTimerNotifications.remove(for: session)
         scheduleRingWatch()
+        syncSystemAlarms()
+    }
+
+    // MARK: - Alarmy systemowe (AlarmKit)
+
+    /// Alarmy systemowe i Live Activity idą za sesją przy każdej zmianie.
+    private func syncSystemAlarms() {
+        guard persists else { return }
+        CookAlarmScheduler.shared.sync(session)
+        CookLiveActivity.shared.sync(session)
+    }
+
+    /// Sklep dla przycisku Live Activity (`CookActivityCommands`): żywy albo
+    /// odtworzony z pliku — po wybudzeniu w tle sesja konta jeszcze nie stoi,
+    /// a stan gotowania jest w pliku. Właściciel bierze się z pliku.
+    static func forIntent() -> CookSessionStore? {
+        if let live = Self.current { return live }
+        guard let data = try? Data(contentsOf: fileURL),
+              let stored = try? JSONDecoder().decode(StoredSession.self, from: data) else { return nil }
+        let store = CookSessionStore(ownerKey: stored.ownerKey)
+        guard store.session != nil else { return nil }
+        restoredForIntent = store
+        return store
+    }
+
+    /// „Zatrzymaj” na alercie systemu = „Wycisz” w aplikacji. Tylko timer,
+    /// który dalej biegnie z tą samą godziną końca — alarm zdjęty z naszej
+    /// ręki („Gotowe”, „+2 min”, wyciszenie) niczego tu nie zmienia.
+    private func acknowledgeSystemAlarm(timerId: String, end: Date) {
+        guard let run = session?.timers[timerId],
+              run.state == .running, !run.silenced, run.endDate == end else { return }
+        update { $0.silenceTimer(timerId) }
     }
 
     private func scheduleRingWatch() {
@@ -196,6 +274,9 @@ final class CookSessionStore {
     /// Sesja należy do konta — po wylogowaniu nie ma prawa wrócić u kogoś innego.
     static func clearCache() {
         try? FileManager.default.removeItem(at: fileURL)
+        // Alarm systemowy i Live Activity przeżyłyby wylogowanie.
+        CookAlarmScheduler.shared.sync(nil)
+        CookLiveActivity.shared.sync(nil)
     }
 
     private static var fileURL: URL {

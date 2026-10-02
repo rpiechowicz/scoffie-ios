@@ -78,9 +78,18 @@ struct CookModeView: View {
         .interactiveDismissDisabled()
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.32)) { isShown = true }
+            store.markOnScreen(true)
+            // Powrót z Live Activity: od razu, bez przenikania nad Kalendarzem.
+            if store.takeInstantPresentation() {
+                isShown = true
+            } else {
+                withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.32)) { isShown = true }
+            }
         }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            store.markOnScreen(false)
+        }
         .task {
             guard !isPhotoRevealed else { return }
             await CookEntrance.breathe()

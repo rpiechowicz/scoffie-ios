@@ -7,18 +7,72 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0174A076306EB68100C6DD64 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0174A075306EB68100C6DD64 /* WidgetKit.framework */; };
+		0174A078306EB68100C6DD64 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0174A077306EB68100C6DD64 /* SwiftUI.framework */; };
+		0174A089306EB68200C6DD64 /* ScoffieCookActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0174A073306EB68100C6DD64 /* ScoffieCookActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0189A9A42F3BE40C00CEFB06 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 0189A9A32F3BE40C00CEFB06 /* SocketIO */; };
 		5E1A0C0F2F9B4E0100A1B2C3 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 5E1A0C0E2F9B4E0100A1B2C3 /* Sentry */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		0174A087306EB68200C6DD64 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 010DDB6E2F3235DD007CBEBF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0174A072306EB68100C6DD64;
+			remoteInfo = ScoffieCookActivityExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		0174A08E306EB68200C6DD64 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0174A089306EB68200C6DD64 /* ScoffieCookActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		010DDB762F3235DD007CBEBF /* Scoffie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scoffie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0174A073306EB68100C6DD64 /* ScoffieCookActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScoffieCookActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0174A075306EB68100C6DD64 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		0174A077306EB68100C6DD64 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		0174A08F306EB7B100C6DD64 /* ScoffieCookActivityExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScoffieCookActivityExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0174A08A306EB68200C6DD64 /* Exceptions for "ScoffieCookActivity" folder in "ScoffieCookActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0174A072306EB68100C6DD64 /* ScoffieCookActivityExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		010DDB782F3235DD007CBEBF /* Scoffie */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Scoffie;
+			sourceTree = "<group>";
+		};
+		0174A0A0306EB90000C6DD64 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		0174A079306EB68100C6DD64 /* ScoffieCookActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0174A08A306EB68200C6DD64 /* Exceptions for "ScoffieCookActivity" folder in "ScoffieCookActivityExtension" target */,
+			);
+			path = ScoffieCookActivity;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -33,13 +87,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0174A070306EB68100C6DD64 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0174A078306EB68100C6DD64 /* SwiftUI.framework in Frameworks */,
+				0174A076306EB68100C6DD64 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		010DDB6D2F3235DD007CBEBF = {
 			isa = PBXGroup;
 			children = (
+				0174A08F306EB7B100C6DD64 /* ScoffieCookActivityExtension.entitlements */,
 				010DDB782F3235DD007CBEBF /* Scoffie */,
+				0174A079306EB68100C6DD64 /* ScoffieCookActivity */,
+				0174A0A0306EB90000C6DD64 /* Shared */,
+				0174A074306EB68100C6DD64 /* Frameworks */,
 				010DDB772F3235DD007CBEBF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -48,8 +115,18 @@
 			isa = PBXGroup;
 			children = (
 				010DDB762F3235DD007CBEBF /* Scoffie.app */,
+				0174A073306EB68100C6DD64 /* ScoffieCookActivityExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		0174A074306EB68100C6DD64 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0174A075306EB68100C6DD64 /* WidgetKit.framework */,
+				0174A077306EB68100C6DD64 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -62,15 +139,18 @@
 				010DDB722F3235DD007CBEBF /* Sources */,
 				010DDB732F3235DD007CBEBF /* Frameworks */,
 				010DDB742F3235DD007CBEBF /* Resources */,
+				0174A08E306EB68200C6DD64 /* Embed Foundation Extensions */,
 				7D1A9B2C3D4E5F60718293A4 /* Configure API Base URL */,
 				5E1A0C102F9B4E0100A1B2C3 /* Upload dSYM to Sentry */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				0174A088306EB68200C6DD64 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				010DDB782F3235DD007CBEBF /* Scoffie */,
+				0174A0A0306EB90000C6DD64 /* Shared */,
 			);
 			name = Scoffie;
 			packageProductDependencies = (
@@ -80,6 +160,29 @@
 			productName = Scoffie;
 			productReference = 010DDB762F3235DD007CBEBF /* Scoffie.app */;
 			productType = "com.apple.product-type.application";
+		};
+		0174A072306EB68100C6DD64 /* ScoffieCookActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0174A08B306EB68200C6DD64 /* Build configuration list for PBXNativeTarget "ScoffieCookActivityExtension" */;
+			buildPhases = (
+				0174A06F306EB68100C6DD64 /* Sources */,
+				0174A070306EB68100C6DD64 /* Frameworks */,
+				0174A071306EB68100C6DD64 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0174A079306EB68100C6DD64 /* ScoffieCookActivity */,
+				0174A0A0306EB90000C6DD64 /* Shared */,
+			);
+			name = ScoffieCookActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = ScoffieCookActivityExtension;
+			productReference = 0174A073306EB68100C6DD64 /* ScoffieCookActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -92,6 +195,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					010DDB752F3235DD007CBEBF = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					0174A072306EB68100C6DD64 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -116,6 +222,7 @@
 			projectRoot = "";
 			targets = (
 				010DDB752F3235DD007CBEBF /* Scoffie */,
+				0174A072306EB68100C6DD64 /* ScoffieCookActivityExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -128,27 +235,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		7D1A9B2C3D4E5F60718293A4 /* Configure API Base URL */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
+		0174A071306EB68100C6DD64 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputPaths = (
-				"$(SRCROOT)/.git/HEAD",
-				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
-			);
-			name = "Configure API Base URL";
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/configure-api-base-url.stamp",
-			);
 			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -eu\n\nPROD_URL=\"https://api.scoffie.app\"\nLOCAL_URL=\"http://localhost:3000\"\nBRANCH=\"${GIT_BRANCH:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}\"\n\nif [ -z \"$BRANCH\" ] && [ -f \"$SRCROOT/.git/HEAD\" ]; then\n  HEAD_CONTENT=$(cat \"$SRCROOT/.git/HEAD\")\n  case \"$HEAD_CONTENT\" in\n    \"ref: refs/heads/\"*)\n      BRANCH=\"${HEAD_CONTENT#ref: refs/heads/}\"\n      ;;\n  esac\nfi\n\nAPI_BASE_URL=\"$PROD_URL\"\nif [ \"$CONFIGURATION\" = \"Debug\" ] && [ -n \"$BRANCH\" ] && [ \"$BRANCH\" != \"master\" ] && [ \"$BRANCH\" != \"main\" ]; then\n  API_BASE_URL=\"$LOCAL_URL\"\nfi\n\nPLIST_PATH=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :API_BASE_URL\" \"$PLIST_PATH\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :API_BASE_URL string $API_BASE_URL\" \"$PLIST_PATH\"\necho \"Configured API_BASE_URL=$API_BASE_URL for configuration=$CONFIGURATION branch=${BRANCH:-unknown}\"\ntouch \"$SCRIPT_OUTPUT_FILE_0\"\n";
 		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
 		5E1A0C102F9B4E0100A1B2C3 /* Upload dSYM to Sentry */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -169,6 +265,24 @@
 			shellPath = /bin/sh;
 			shellScript = "set -u\n\n# Symbole (dSYM) do Sentry: bez nich crash z TestFlightu to same adresy.\n# Tylko Release (archiwum); Debug nie ma dSYM. Brak sentry-cli albo tokenu\n# to OSTRZEZENIE, nie blad: archiwum ma powstac zawsze.\n# Jednorazowo na Macu: brew install getsentry/tools/sentry-cli && sentry-cli login\nif [ \"$CONFIGURATION\" != \"Release\" ]; then\n  exit 0\nfi\nexport PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif ! command -v sentry-cli >/dev/null 2>&1; then\n  echo \"warning: brak sentry-cli - crashe z tego buildu beda bez nazw funkcji (brew install getsentry/tools/sentry-cli)\"\n  exit 0\nfi\nexport SENTRY_ORG=scoffie\nexport SENTRY_PROJECT=scoffie-ios\nif ! sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\"; then\n  echo \"warning: wysylka dSYM do Sentry nie wyszla - sprawdz 'sentry-cli login' (token z dostepem do org scoffie)\"\nfi\n";
 		};
+		7D1A9B2C3D4E5F60718293A4 /* Configure API Base URL */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.git/HEAD",
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Configure API Base URL";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/configure-api-base-url.stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\n\nPROD_URL=\"https://api.scoffie.app\"\nLOCAL_URL=\"http://localhost:3000\"\nBRANCH=\"${GIT_BRANCH:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}\"\n\nif [ -z \"$BRANCH\" ] && [ -f \"$SRCROOT/.git/HEAD\" ]; then\n  HEAD_CONTENT=$(cat \"$SRCROOT/.git/HEAD\")\n  case \"$HEAD_CONTENT\" in\n    \"ref: refs/heads/\"*)\n      BRANCH=\"${HEAD_CONTENT#ref: refs/heads/}\"\n      ;;\n  esac\nfi\n\nAPI_BASE_URL=\"$PROD_URL\"\nif [ \"$CONFIGURATION\" = \"Debug\" ] && [ -n \"$BRANCH\" ] && [ \"$BRANCH\" != \"master\" ] && [ \"$BRANCH\" != \"main\" ]; then\n  API_BASE_URL=\"$LOCAL_URL\"\nfi\n\nPLIST_PATH=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :API_BASE_URL\" \"$PLIST_PATH\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :API_BASE_URL string $API_BASE_URL\" \"$PLIST_PATH\"\necho \"Configured API_BASE_URL=$API_BASE_URL for configuration=$CONFIGURATION branch=${BRANCH:-unknown}\"\ntouch \"$SCRIPT_OUTPUT_FILE_0\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -179,7 +293,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0174A06F306EB68100C6DD64 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0174A088306EB68200C6DD64 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0174A072306EB68100C6DD64 /* ScoffieCookActivityExtension */;
+			targetProxy = 0174A087306EB68200C6DD64 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		010DDB7F2F3235DE007CBEBF /* Debug */ = {
@@ -395,6 +524,70 @@
 			};
 			name = Release;
 		};
+		0174A08C306EB68200C6DD64 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = ScoffieCookActivityExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5R874L3LNP;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScoffieCookActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Scoffie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.scoffie.ios.ScoffieCookActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0174A08D306EB68200C6DD64 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = ScoffieCookActivityExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5R874L3LNP;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScoffieCookActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Scoffie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.scoffie.ios.ScoffieCookActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -412,6 +605,15 @@
 			buildConfigurations = (
 				010DDB822F3235DE007CBEBF /* Debug */,
 				010DDB832F3235DE007CBEBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0174A08B306EB68200C6DD64 /* Build configuration list for PBXNativeTarget "ScoffieCookActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0174A08C306EB68200C6DD64 /* Debug */,
+				0174A08D306EB68200C6DD64 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

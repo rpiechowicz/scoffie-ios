@@ -149,20 +149,17 @@ struct CookDock: View {
                 basketPending = false
                 onOpen(.ingredients)
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: SCCook.Spacing.islandLabelGap) {
                     CookBasketGlyph(callID: basketPending ? session.stepIndex : nil)
+                        // Plakietka NAD koszykiem (runda 11), poza jego
+                        // kołysaniem — liczba stoi, koszyk się buja.
+                        .overlay(alignment: .topTrailing) {
+                            CookIslandBadge(count: count)
+                                .alignmentGuide(.trailing) { $0[HorizontalAlignment.center] - SCCook.Spacing.islandBadgeInset }
+                                .alignmentGuide(.top) { $0[VerticalAlignment.center] + SCCook.Spacing.islandBadgeInset }
+                        }
                     Text("Składniki")
                         .font(.system(size: 16, weight: .bold))
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 12, weight: .heavy))
-                            .monospacedDigit()
-                            .cookRoll(count)
-                            .padding(.horizontal, 6)
-                            .frame(minWidth: SCCook.Size.islandBadge, minHeight: SCCook.Size.islandBadge)
-                            .background(Capsule().fill(SCCook.Palette.badge(scheme)))
-                            .transition(.scale(scale: 0.6).combined(with: .opacity))
-                    }
                 }
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity)
@@ -755,6 +752,64 @@ struct CookTimerMark: View {
 
     private var glyphColor: Color {
         isPaused ? Color.scMuted(scheme) : Color.scPageBase(scheme)
+    }
+}
+
+/// Liczba składników kroku nad koszykiem (runda 11: „badge nad ikonę
+/// składników”). Widok STOI zawsze (runda 12: „pojawianie / znikanie się
+/// buguje”) — wstawiany i zdejmowany w pustym kontenerze zmieniał wraz ze
+/// skalą także położenie, a przy pojawieniu odpalał jeszcze podskok zmiany.
+/// Teraz pojawienie i zniknięcie = skala 0,2 ↔ 1 i krycie w miejscu
+/// (sprężyna), znikając trzyma ostatnią liczbę, a podskok 1,22 i rolowanie
+/// cyfr są tylko przy zmianie liczby między krokami ze składnikami.
+private struct CookIslandBadge: View {
+    let count: Int
+
+    /// Ostatnia liczba > 0 — zostaje na plakietce w trakcie znikania.
+    @State private var shown: Int
+    @State private var bump = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(count: Int) {
+        self.count = count
+        _shown = State(initialValue: max(count, 1))
+    }
+
+    var body: some View {
+        let visible = count > 0
+        Text("\(shown)")
+            .font(.system(size: 10.5, weight: .heavy))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .cookRoll(shown)
+            .padding(.horizontal, 4)
+            .frame(minWidth: SCCook.Size.islandBadge, minHeight: SCCook.Size.islandBadge)
+            .background(Capsule().fill(SCPalette.terracotta))
+            .keyframeAnimator(initialValue: 1.0, trigger: bump) { badge, scale in
+                badge.scaleEffect(scale)
+            } keyframes: { _ in
+                KeyframeTrack {
+                    SpringKeyframe(1.22, duration: 0.14, spring: .snappy)
+                    SpringKeyframe(1, duration: 0.4, spring: .bouncy)
+                }
+            }
+            .scaleEffect(visible || reduceMotion ? 1 : 0.2)
+            .opacity(visible ? 1 : 0)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.34, dampingFraction: 0.62), value: visible)
+            .onChange(of: count) { old, new in
+                guard new > 0 else { return }
+                if old > 0 {
+                    if old != new, !reduceMotion { bump += 1 }
+                    shown = new
+                } else {
+                    // Pojawienie: liczba podmienia się bez rolowania — rośnie
+                    // już z właściwą.
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { shown = new }
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 
