@@ -331,7 +331,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
   (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po
   zdekodowaniu — w `.large` cały katalog NIE mieści się w pamięci i listy zaczynają migać.
-  Start (`SessionStore.prepareStartupData`) czeka na miniatury CAŁEGO katalogu i bieżącego tygodnia.
+  Pamięć mieści ~256 miniatur (`totalCostLimit` 256 MB), katalog ma ponad 1000 — start
+  (`SessionStore.prepareStartupData`) czeka na pierwsze 160 miniatur katalogu i bieżący tydzień, reszta
+  dociąga się w tle. Rozgrzewka (`ImagePrefetcher`) biegnie NAJWYŻEJ 8 naraz (przesuwne okno), dysk
+  przycina się co 64 zapisy, ostrzeżenie o pamięci czyści pamięć podręczną — bez tego zimny start
+  (świeża instalacja, App Review) kończył się WatchdogTermination (Sentry SCOFFIE-IOS-1, 27–30.09.2026).
+  Nie wracać do `withTaskGroup` z zadaniem na każdy adres.
 - Asystent AI (Faza 1) jedzie po REST, NIE po sockecie: `POST /agent/conversations/:id/messages`
   oddaje `202` z `turnId`, a odpowiedź zbiera się odpytywaniem `GET /agent/turns/:id` co sekundę
   (`AgentAPIClient` + `AgentStore`). Powód jest po obu stronach: tura trwa 25–240 s (sufit `AI_TURN_TIMEOUT_MS`,

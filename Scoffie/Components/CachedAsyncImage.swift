@@ -13,7 +13,8 @@ private enum CachedAsyncImageError: Error {
 /// podręczna mieściła ich około trzydziestu — przy katalogu ponad stu
 /// przepisów lista wypychała własne okładki i dekodowała je od nowa przy
 /// każdym przewinięciu („przeskakujące" zdjęcia). Miniatura ma 512 px
-/// i około 1 MB, więc CAŁY katalog siedzi w pamięci naraz.
+/// i około 1 MB — pamięć mieści ich ~256 (`totalCostLimit`), a nie cały
+/// katalog (1072 przepisy od 28.09.2026); reszta czeka na dysku jako mały JPEG.
 enum CachedImageVariant: Sendable {
     /// Wiersze list, kafelki, talerze kalendarza — wszystko do ~170 pt.
     case thumbnail
@@ -51,7 +52,22 @@ private final class SharedImageMemoryCache: @unchecked Sendable {
         return cache
     }()
 
-    private init() { }
+    private init() {
+        // Ostrzeżenie systemu = oddajemy całą pamięć podręczną od razu
+        // (WatchdogTermination u App Review, 27–30.09.2026). Obrazy wrócą
+        // z dysku przy następnym rysowaniu.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.removeAll()
+        }
+    }
+
+    func removeAll() {
+        cache.removeAllObjects()
+    }
 
     private func key(_ url: URL, _ variant: CachedImageVariant) -> NSString {
         (url.absoluteString + variant.cacheSuffix) as NSString
@@ -106,6 +122,12 @@ private final class SharedImageDiskCache: @unchecked Sendable {
     private let ioQueue = DispatchQueue(label: "app.scoffie.imagecache.disk", qos: .utility)
     private let maxDiskBytes: Int = 300 * 1_024 * 1_024
     private let maxAge: TimeInterval = 60 * 60 * 24 * 30
+    /// Zapisy od ostatniego przycinania — tylko na `ioQueue`. Przycinanie
+    /// czyta atrybuty KAŻDEGO pliku w katalogu, a przy pierwszej rozgrzewce
+    /// idzie ~2000 zapisów: po każdym z nich wychodziło O(n²) odczytów
+    /// i kolejka zapisów trzymała w pamięci zaległe bajty.
+    private var insertsSincePrune = 0
+    private static let pruneEvery = 64
 
     /// Wersja katalogu na dysku. Podbicie unieważnia CAŁY cache obrazów.
     ///
@@ -156,8 +178,13 @@ private final class SharedImageDiskCache: @unchecked Sendable {
     func insert(_ data: Data, for url: URL, variant: CachedImageVariant = .large) {
         let path = filePath(for: url, variant: variant)
         ioQueue.async { [weak self] in
+            guard let self else { return }
             try? data.write(to: path, options: .atomic)
-            self?.pruneIfNeeded()
+            insertsSincePrune += 1
+            if insertsSincePrune >= Self.pruneEvery {
+                insertsSincePrune = 0
+                pruneIfNeeded()
+            }
         }
     }
 
@@ -237,18 +264,6 @@ private actor SharedImagePipeline {
         return try await task.value
     }
 
-    func prefetch(_ urls: [URL], variant: CachedImageVariant) {
-        for url in urls {
-            guard SharedImageMemoryCache.shared.image(for: url, variant: variant) == nil,
-                  inFlight[Key(url: url, variant: variant)] == nil else { continue }
-            // Reuse ten sam tor co zwykły fetch — defer w image(for:) sprząta inFlight,
-            // więc nie ma ryzyka wyścigu z równoległym zapotrzebowaniem na ten sam URL.
-            Task { [weak self] in
-                _ = try? await self?.image(for: url, variant: variant)
-            }
-        }
-    }
-
     private func makeFetchTask(url: URL, variant: CachedImageVariant) -> Task<UIImage, Error> {
         let session = self.session
         return Task.detached(priority: .userInitiated) {
@@ -313,10 +328,16 @@ private actor SharedImagePipeline {
 /// Warmuje cache obrazów dla przyszłych widoków — wołaj gdy znasz URL-e wcześniej
 /// niż pojawią się na ekranie (np. po załadowaniu listy przepisów / stronicowaniu).
 enum ImagePrefetcher {
+    /// Ile zdjęć rozgrzewa się naraz. Tyle, ile połączeń do hosta i tak
+    /// przepuszcza sesja (`httpMaximumConnectionsPerHost`), więc sieć nie
+    /// zwalnia — a pobrane, czekające na dekodowanie bajty nie piętrzą się
+    /// w pamięci. Wcześniej rozgrzewka katalogu zakładała ~1000 zadań naraz.
+    private static let concurrency = 8
+
     static func prefetch(_ urls: [URL], variant: CachedImageVariant = .thumbnail) {
         guard !urls.isEmpty else { return }
         Task.detached(priority: .utility) {
-            await SharedImagePipeline.shared.prefetch(urls, variant: variant)
+            await load(urls, variant: variant, priority: .utility)
         }
     }
 
@@ -324,10 +345,26 @@ enum ImagePrefetcher {
     /// i będzie w cache pamięciowym. Używane przez smart startup loader, żeby
     /// lista przepisów nie „wyskakiwała” okładkami zaraz po wejściu.
     static func prefetchAwaiting(_ urls: [URL], variant: CachedImageVariant = .thumbnail) async {
+        await load(urls, variant: variant, priority: .userInitiated)
+    }
+
+    /// Przesuwne okno: najwyżej `concurrency` pobrań naraz, następne rusza,
+    /// gdy któreś się skończy. Trafienia w pamięć i pobrania w toku dedupuje
+    /// `SharedImagePipeline.image(for:variant:)`.
+    private static func load(_ urls: [URL], variant: CachedImageVariant, priority: TaskPriority) async {
         guard !urls.isEmpty else { return }
         await withTaskGroup(of: Void.self) { group in
-            for url in urls {
-                group.addTask(priority: .userInitiated) {
+            var pending = urls.makeIterator()
+            var started = 0
+            while started < concurrency, let url = pending.next() {
+                group.addTask(priority: priority) {
+                    _ = try? await SharedImagePipeline.shared.image(for: url, variant: variant)
+                }
+                started += 1
+            }
+            while await group.next() != nil {
+                guard let url = pending.next() else { continue }
+                group.addTask(priority: priority) {
                     _ = try? await SharedImagePipeline.shared.image(for: url, variant: variant)
                 }
             }
