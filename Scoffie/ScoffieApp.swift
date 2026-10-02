@@ -268,6 +268,8 @@ struct ScoffieApp: App {
     /// Kolejka wewnętrznych powiadomień. Jedna na aplikację — kapsuła udaje
     /// Dynamic Island, a wyspa jest jedna.
     @State private var toastCenter = SCToastCenter()
+    /// Wyłącznik starych buildów — ekran „Zaktualizuj Scoffie” nad wszystkim.
+    @State private var appUpdateGate = SCAppUpdateGate()
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
 
     private var appTheme: AppTheme { AppTheme(rawValue: themeRawValue) ?? .system }
@@ -664,15 +666,20 @@ struct ScoffieApp: App {
             // Motyw podany JAWNIE: warstwa toastów mieszka w osobnym oknie,
             // do którego `preferredColorScheme` nie dociera.
             .scToastLayer(toastCenter, colorScheme: appTheme.colorScheme)
+            // Nad toastami i zasłoną (`alert + 2`) — za stara wersja nie robi nic poza aktualizacją.
+            .scAppUpdateGate(appUpdateGate, colorScheme: appTheme.colorScheme)
             .preferredColorScheme(appTheme.colorScheme)
             .task(id: startupTaskID) {
                 await sessionStore.runStartupIfNeeded()
             }
+            // Osobno od startu sesji: działa też przed logowaniem.
+            .task { await appUpdateGate.check(force: true) }
             .onAppear {
                 appDelegate.sessionStore = sessionStore
             }
             .onChange(of: scenePhase) { _, newValue in
                 if newValue == .active {
+                    Task { await appUpdateGate.check() }
                     sessionStore.refreshRealtimeStoresOnForeground()
                     sessionStore.cookSessionStore?.appBecameActive()
                 } else if newValue == .background {
