@@ -235,10 +235,11 @@ private struct LegalBullet: View {
 
 // MARK: - Polityka prywatności
 //
-// Treść 1:1 z `docs/privacy/index.html` (wersja 1.1, 23 września 2026; strona: scoffie-web `src/pages/privacy`).
-// Zmiana tutaj = zmiana na stronie i podbicie wersji w
-// `src/common/legal-documents.ts` na serwerze — inaczej nikt nie zostanie
-// poproszony o ponowną akceptację.
+// Treść 1:1 ze strony (scoffie-web `src/pages/privacy`, wersja 1.1, 23 września 2026).
+// Zmiana tutaj = zmiana na stronie, potem Android (`scripts/gen-legal-content.py`).
+// Istotna zmiana (nowy odbiorca, nowy cel) = też podbicie wersji tu
+// (`LegalDocMeta`) i w `src/common/legal-documents.ts` na serwerze — inaczej nikt
+// nie zostanie poproszony o ponowną akceptację.
 
 struct PrivacyPolicyContent: View {
     var body: some View {
@@ -273,7 +274,6 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("treść wiadomości użytkownika i odpowiedzi asystenta,")
                 LegalBullet("propozycje planu i decyzje użytkownika (zatwierdzenie, cofnięcie),")
                 LegalBullet("notatki pamięci gospodarstwa — krótkie fakty zapisane przez asystenta na prośbę użytkownika (np. „nie jemy pieczarek”),")
-                LegalBullet("zgłoszenia niewłaściwych odpowiedzi — treść zgłoszonej odpowiedzi, powód i komentarz,")
                 LegalBullet("dane o użyciu: liczba wiadomości i zapisanych planów, zużyte tokeny i koszt każdej odpowiedzi (do rozliczeń i limitów).")
                 LegalParagraph("Zdrowie (Apple Health / HealthKit), jeśli użytkownik włączy tę integrację:").fontWeight(.medium)
                 LegalBullet("dzienna liczba kroków z ostatnich 14 dni oraz cel kroków.")
@@ -284,6 +284,8 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("logi żądań: identyfikator użytkownika, adres IP, wersja aplikacji, czas i status żądania — bez treści wiadomości do asystenta,")
                 LegalBullet("dziennik zgód: rodzaj zgody, wersja dokumentu, data, źródło,")
                 LegalBullet("dane diagnostyczne: raporty awarii i zawieszeń aplikacji, czasy działania ekranów i żądań, model urządzenia, wersja systemu i aplikacji, identyfikator użytkownika — bez zrzutów ekranu, nagrań sesji, adresu IP i treści wpisywanych w aplikacji.")
+                LegalParagraph("Zgłoszenia odpowiedzi asystenta (jeśli użytkownik z nich skorzysta):").fontWeight(.medium)
+                LegalBullet("treść zgłoszonej odpowiedzi, powód i komentarz użytkownika.")
             }
         }
 
@@ -313,6 +315,8 @@ struct PrivacyPolicyContent: View {
                 LegalParagraph("Dołączenie do gospodarstwa jest dobrowolne. Członkowie gospodarstwa współdzielą plan tygodnia, listy zakupów, własne przepisy i ustawienia gospodarstwa i mogą je modyfikować.")
                 LegalParagraph("Co widzą o Tobie pozostali domownicy: imię i awatar, dietę, alergeny, cel kaloryczny i makro oraz Twój udział w posiłkach. Te dane są potrzebne, żeby wspólny plan uwzględniał każdego. Sylwetka (wzrost, waga, płeć, rok urodzenia) nie jest udostępniana domownikom ani asystentowi.")
                 LegalParagraph("Skąd mamy dane o innych osobach: każdy domownik podaje swoje dane sam, w swoim koncie. Zapraszając kogoś do gospodarstwa, poinformuj tę osobę, jakie dane będą współdzielone. Gospodarstwo można w każdej chwili opuścić w Ustawieniach.")
+                LegalParagraph("Udostępnianie przepisów linkiem. Przepis możesz wysłać komuś linkiem. Link do przepisu z katalogu jest stały i publiczny — nie zapisujemy, kto go wysłał. Link do własnego przepisu gospodarstwa powstaje dopiero, gdy go udostępnisz, i działa dla każdego, kto go ma: bez logowania widać tytuł, opis, zdjęcie, składniki i wartości odżywcze, a po otwarciu w Aplikacji — cały przepis. Link nie pokazuje autora, domowników ani nazwy gospodarstwa. Kartę z tytułem i zdjęciem pobiera też komunikator, w którym wysyłasz link. Strony przepisów nie są indeksowane przez wyszukiwarki.")
+                LegalParagraph("Każdy domownik może wyłączyć link w Aplikacji; przestaje on też działać, gdy przepis zostanie usunięty. Odbiorca z kontem może zapisać przepis u siebie — kopia staje się przepisem jego gospodarstwa i zostaje także po wyłączeniu linku. Zapisujemy, który przepis ma aktywny link i kto go utworzył, oraz liczby udostępnień, otwarć i zapisów bez powiązania z osobami. Podstawa: wykonanie umowy (art. 6 ust. 1 lit. b RODO) — to funkcja, z której korzystasz na własne życzenie.")
             }
         }
 
@@ -342,21 +346,21 @@ struct PrivacyPolicyContent: View {
         LegalSection(number: 8, title: "Integracja z Cookidoo (opcjonalna)", icon: "app.connected.to.app.below.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalParagraph("Funkcja „Gotuj w Thermomixie” pozwala wysłać wybrany przepis do kalendarza „Mój tydzień” w Cookidoo. Wymaga podania adresu e-mail i hasła do konta Cookidoo, które są przechowywane na serwerze Administratora w postaci zaszyfrowanej (AES-256-GCM) i używane wyłącznie do logowania do Cookidoo w imieniu użytkownika. Hasło nigdy nie jest pokazywane ani przekazywane innym domownikom; pozostali domownicy mogą korzystać z połączonego konta i widzą jego adres e-mail.")
-                LegalParagraph("Integracja korzysta z nieoficjalnego interfejsu Cookidoo i może przestać działać bez uprzedzenia. Cookidoo i Thermomix są znakami towarowymi Vorwerk; Administrator nie jest powiązany z Vorwerk.")
-                LegalParagraph("Połączenie można rozłączyć w Ustawieniach — poświadczenia są wtedy natychmiast usuwane; są też usuwane, gdy osoba, która je podała, opuści gospodarstwo lub usunie konto. Administrator może czasowo wyłączyć integrację.")
+                LegalParagraph("Integracja korzysta z nieoficjalnego interfejsu Cookidoo i może przestać działać bez uprzedzenia. Cookidoo i Thermomix są znakami towarowymi Vorwerk; Administrator nie jest powiązany z Vorwerk. Połączenie można rozłączyć w Ustawieniach — poświadczenia są wtedy natychmiast usuwane; są też usuwane, gdy osoba, która je podała, opuści gospodarstwo lub usunie konto. Administrator może czasowo wyłączyć integrację.")
             }
         }
 
         LegalSection(number: 9, title: "Odbiorcy danych", icon: "building.2.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalBullet("Railway Corp. — hosting serwera i bazy danych (infrastruktura Aplikacji),")
-                LegalBullet("Cloudflare, Inc. — przechowywanie i serwowanie zdjęć przepisów z katalogu oraz przechowywanie zaszyfrowanych kopii zapasowych bazy danych (kopie zawierają dane osobowe; 30 dni),")
-                LegalBullet("GitHub, Inc. (Microsoft) — wykonanie nocnej kopii zapasowej bazy: zrzut przechodzi przez środowisko GitHub Actions i jest usuwane zaraz po wysłaniu do Cloudflare,")
+                LegalBullet("Cloudflare, Inc. — przechowywanie i serwowanie zdjęć przepisów z katalogu oraz przechowywanie zaszyfrowanych kopii zapasowych bazy danych (kopie zawierają dane osobowe; przechowywane 30 dni),")
+                LegalBullet("GitHub, Inc. (Microsoft) — wykonanie nocnej kopii zapasowej bazy: zrzut przechodzi przez środowisko GitHub Actions i jest usuwany zaraz po wysłaniu do Cloudflare,")
                 LegalBullet("Functional Software, Inc. (Sentry) — diagnostyka aplikacji i serwera: awarie i błędy, czasy działania, ostrzeżenia z logów serwera; identyfikator żądania, kod i ścieżka błędu, wersja, identyfikator użytkownika; bez treści wiadomości, danych profilu, zrzutów ekranu i adresu IP; serwery w Unii Europejskiej,")
                 LegalBullet("Apple Inc. — Sign in with Apple, powiadomienia push, App Store,")
                 LegalBullet("Anthropic, PBC — model językowy asystenta AI, w zakresie z sekcji 6, wyłącznie dla osób, które wyraziły zgodę,")
                 LegalBullet("Vorwerk (Cookidoo) — wyłącznie jeśli użytkownik połączy konto Cookidoo, w zakresie z sekcji 8,")
                 LegalBullet("członkowie gospodarstwa domowego użytkownika, w zakresie z sekcji 5,")
+                LegalBullet("osoby, którym użytkownik przekazał link do przepisu, i komunikatory, którymi go wysłał (karta z tytułem i zdjęciem) — w zakresie z sekcji 5,")
                 LegalBullet("podmioty uprawnione na podstawie przepisów prawa.")
             }
         }
@@ -371,11 +375,12 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("kroki ze Zdrowia — przez czas korzystania z integracji, usuwane przy jej wyłączeniu i z kontem,")
                 LegalBullet("poświadczenia Cookidoo — do rozłączenia lub usunięcia konta,")
                 LegalBullet("historia list zakupów — przez czas korzystania z Aplikacji,")
+                LegalBullet("linki do udostępnionych przepisów — do wyłączenia linku lub usunięcia przepisu; informacja, kto utworzył link, znika z usunięciem konta; liczby udostępnień i otwarć (bez osób) — przez czas istnienia przepisu,")
                 LegalBullet("dziennik zgód — przez czas korzystania z Aplikacji, usuwany z kontem,")
                 LegalBullet("kopie zapasowe bazy — 30 dni, potem nadpisywane,")
                 LegalBullet("logi techniczne — nie dłużej niż 90 dni,")
                 LegalBullet("ślad tożsamości zakupowej (pseudonim wyliczony z identyfikatora logowania, bez możliwości odtworzenia go z powrotem) wraz z licznikiem wykorzystanej bezpłatnej próby i zapisem opłaconej subskrypcji — BEZTERMINOWO, także po usunięciu konta. To jedyny ślad, który zostaje. Bez niego bezpłatna próba odnawiałaby się przy każdym nowym koncie, a opłacona subskrypcja nie wróciłaby po ponownym zalogowaniu tym samym Apple ID. Podstawa: prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO) — zapobieganie nadużyciu bezpłatnej próby i odtworzenie opłaconego świadczenia.")
-                LegalBullet("po usunięciu konta dane są usuwane niezwłocznie, nie później niż w ciągu 30 dni (w tym z kopii zapasowych po ich rotacji), z zastrzeżeniem obowiązków prawnych i ochrony roszczeń oraz opisanego wyżej śladu tożsamości zakupowej. Własne przepisy dodane do wspólnego gospodarstwa pozostają w nim (bez powiązania z usuniętym kontem), bo korzystają z nich pozostali domownicy.")
+                LegalBullet("po usunięciu konta dane są usuwane niezwłocznie, nie później niż w ciągu 30 dni (w tym z kopii zapasowych po ich rotacji), z zastrzeżeniem obowiązków prawnych, ochrony roszczeń i opisanego wyżej śladu tożsamości zakupowej. Własne przepisy dodane do wspólnego gospodarstwa pozostają w nim (bez powiązania z usuniętym kontem), bo korzystają z nich pozostali domownicy.")
             }
         }
 
@@ -395,7 +400,7 @@ struct PrivacyPolicyContent: View {
         }
 
         LegalSection(number: 12, title: "Usunięcie konta", icon: "trash.fill") {
-            LegalParagraph("Konto można usunąć bezpośrednio w Aplikacji: Ustawienia → profil użytkownika → „Usuń konto”. Operacja usuwa konto wraz z profilem, preferencjami, rozmowami z asystentem, krokami, poświadczeniami Cookidoo, tokenami i dziennikiem zgód; przy kontach Apple unieważniane są także tokeny Sign in with Apple. Żądanie usunięcia można też przesłać e-mailem z adresu przypisanego do konta.")
+            LegalParagraph("Konto można usunąć bezpośrednio w Aplikacji: Ustawienia → profil użytkownika → „Usuń konto”. Operacja usuwa konto wraz z profilem, preferencjami, rozmowami z asystentem, krokami, poświadczeniami Cookidoo, tokenami i dziennikiem zgód; unieważniane są także tokeny Sign in with Apple. Żądanie usunięcia można też przesłać e-mailem z adresu przypisanego do konta.")
         }
 
         LegalSection(number: 13, title: "Personalizacja i zautomatyzowane decyzje", icon: "cpu.fill") {
@@ -417,7 +422,9 @@ struct PrivacyPolicyContent: View {
 
 // MARK: - Warunki korzystania
 //
-// Treść 1:1 z `docs/terms/index.html` (wersja 1.0, 15 września 2026).
+// Treść 1:1 ze strony (scoffie-web `src/pages/terms`, wersja 1.1, 23 września 2026).
+// Ceny planów na stronie biorą się z `pricing.plans` — zmiana ceny = tu i tam.
+// Android generuje z tego pliku `LegalContent.kt` (`scripts/gen-legal-content.py`).
 
 struct TermsOfServiceContent: View {
     var body: some View {
@@ -451,7 +458,7 @@ struct TermsOfServiceContent: View {
                 LegalBullet("planowanie posiłków w kalendarzu tygodnia — dla siebie i wspólnego gospodarstwa domowego,")
                 LegalBullet("korzystanie z bazy przepisów wraz z wartościami odżywczymi (kalorie i makroskładniki),")
                 LegalBullet("automatyczne tworzenie list zakupów na podstawie zaplanowanych posiłków,")
-                LegalBullet("zarządzanie preferencjami żywieniowymi (dieta, alergeny, wykluczone składniki, liczba i pory posiłków),")
+                LegalBullet("zarządzanie preferencjami żywieniowymi (dieta, alergeny, liczba i pory posiłków),")
                 LegalBullet("przypomnienia o posiłkach oraz powiadomienia o zmianach w planie gospodarstwa,")
                 LegalBullet("asystenta AI planującego posiłki (sekcja 5),")
                 LegalBullet("opcjonalne integracje: Apple Health (kroki) i Cookidoo (sekcja 7).")
@@ -477,7 +484,11 @@ struct TermsOfServiceContent: View {
         }
 
         LegalSection(number: 6, title: "Gospodarstwa domowe", icon: "house.fill") {
-            LegalParagraph("Użytkownik może utworzyć wspólne gospodarstwo domowe i zapraszać do niego innych użytkowników. Członkowie gospodarstwa współdzielą plan tygodnia, listy zakupów, własne przepisy i ustawienia gospodarstwa i mogą je modyfikować. Zapraszając kogoś, użytkownik przyjmuje do wiadomości, że zaproszeni będą widzieć wspólne dane, w tym jego dietę i alergeny, i zobowiązuje się poinformować o tym zapraszaną osobę. Opuszczenie gospodarstwa przez ostatniego członka usuwa gospodarstwo wraz z planami i listami. Zakres współdzielonych danych opisuje Polityka prywatności.")
+            VStack(alignment: .leading, spacing: 6) {
+                LegalParagraph("Użytkownik może utworzyć wspólne gospodarstwo domowe i zapraszać do niego innych użytkowników. Członkowie gospodarstwa współdzielą plan tygodnia, listy zakupów, własne przepisy i ustawienia gospodarstwa i mogą je modyfikować. Zapraszając kogoś, użytkownik przyjmuje do wiadomości, że zaproszeni będą widzieć wspólne dane, w tym jego dietę i alergeny, i zobowiązuje się poinformować o tym zapraszaną osobę.")
+                LegalParagraph("Opuszczenie gospodarstwa przez ostatniego członka usuwa gospodarstwo wraz z planami i listami. Zakres współdzielonych danych opisuje Polityka prywatności.")
+                LegalParagraph("Udostępnianie przepisów. Przepis z katalogu albo własny przepis gospodarstwa można wysłać linkiem. Link do własnego przepisu działa dla każdego, kto go ma, dopóki domownik go nie wyłączy albo przepis nie zostanie usunięty. Udostępniając własny przepis, użytkownik odpowiada za jego treść i zdjęcie — nie może udostępniać treści bezprawnych ani naruszających prawa osób trzecich. Treść linku można zgłosić na adres pomocy (link „Zgłoś” na stronie przepisu); Usługodawca rozpatruje zgłoszenie niezwłocznie i może wyłączyć link, informując o tym, jeśli to możliwe, zgłaszającego.")
+            }
         }
 
         LegalSection(number: 7, title: "Integracje zewnętrzne", icon: "app.connected.to.app.below.fill") {
@@ -498,7 +509,7 @@ struct TermsOfServiceContent: View {
         }
 
         LegalSection(number: 9, title: "Własność intelektualna", icon: "c.circle.fill") {
-            LegalParagraph("Prawa do Aplikacji, w tym kodu, grafik, logotypów i katalogu przepisów, przysługują Usługodawcy lub licencjodawcom. Użytkownik otrzymuje niewyłączną, nieprzenoszalną, odwołalną licencję na korzystanie z Aplikacji na własnym urządzeniu. Treści utworzone przez użytkownika (plany, listy, własne przepisy, notatki) pozostają jego własnością; własne przepisy dodane do wspólnego gospodarstwa pozostają w nim po usunięciu konta autora.")
+            LegalParagraph("Prawa do Aplikacji, w tym kodu, grafik, logotypów i katalogu przepisów, przysługują Usługodawcy lub licencjodawcom. Użytkownik otrzymuje niewyłączną, nieprzenoszalną, odwołalną licencję na korzystanie z Aplikacji na własnym urządzeniu. Treści utworzone przez użytkownika (plany, listy, własne przepisy, notatki) pozostają jego własnością; własne przepisy dodane do wspólnego gospodarstwa pozostają w nim po usunięciu konta autora. Udostępniając przepis linkiem, użytkownik zgadza się, żeby odbiorcy mogli go oglądać i zapisać jego kopię w swoim gospodarstwie do własnego, niekomercyjnego użytku.")
         }
 
         LegalSection(number: 10, title: "Odpowiedzialność", icon: "exclamationmark.shield.fill") {
