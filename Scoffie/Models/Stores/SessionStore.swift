@@ -2343,17 +2343,23 @@ final class SessionStore {
         _ = await (recipesReady, householdReady, weekReady)
     }
 
-    /// Katalog i miniatury WSZYSTKICH przepisów, nie pierwszych dwunastu.
-    /// Miniatura to ~1 MB w pamięci i mały JPEG na dysku, więc ciepły start
-    /// dekoduje cały katalog w ułamku sekundy — a lista przepisów, plan
-    /// i kalendarz dostają zdjęcia w tej samej klatce, w której się rysują.
-    /// Zimny start (pierwsze pobranie z sieci) ucina `startupTimeoutSeconds`;
-    /// pobieranie biegnie wtedy dalej w tle.
+    /// Katalog i miniatury: start czeka na pierwsze `startupThumbnailCount`,
+    /// reszta trafia w tle na dysk (najwyżej kilka naraz, bez pamięci). Pamięć mieści ~256
+    /// miniatur, a katalog ma ich ponad tysiąc — czekanie na wszystkie
+    /// wydłużało loader i przy zimnym starcie (świeża instalacja, App Review)
+    /// piętrzyło pobrane bajty aż do WatchdogTermination (27–30.09.2026).
+    /// Po pierwszym pobraniu każda miniatura leży na dysku jako mały JPEG,
+    /// więc lista dociąga brakujące w ułamku sekundy.
     private func prepareRecipesAndThumbnails() async {
         guard let catalog = recipeCatalogStore else { return }
         await catalog.loadIfNeeded()
-        await ImagePrefetcher.prefetchAwaiting(catalog.recipes.compactMap(\.imageURL))
+        let urls = catalog.recipes.compactMap(\.imageURL)
+        await ImagePrefetcher.prefetchAwaiting(Array(urls.prefix(Self.startupThumbnailCount)))
+        // Reszta tylko na dysk — pamięć zostaje dla tych, które widać.
+        ImagePrefetcher.warmDisk(Array(urls.dropFirst(Self.startupThumbnailCount)))
     }
+
+    private static let startupThumbnailCount = 160
 
     /// Bieżący tydzień planu — Kalendarz i Plan stoją na nim od pierwszej
     /// klatki. Przepisy gospodarstwa (spoza katalogu) mają własne zdjęcia,
