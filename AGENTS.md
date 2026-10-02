@@ -868,8 +868,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „tylko najważniejsze rzeczy”, bez powtarzania nazwy, liczników i objaśnień. „Czego nie jem” (wykluczone
   składniki + limit czasu na danie) USUNIĘTE: walidator planu i prompt dalej czytają te kolumny,
   więc każdy zapis diety wysyła `excludedIngredientIds: []` + `maxPrepTimeMinutes: null`,
-  a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka prywatności
-  nadal wymienia te dane — do zdjęcia w następnej wersji polityki (spiętej w 3 repo).
+  a `loadUserPreferences` jednorazowo czyści stare wartości na serwerze. Polityka i regulamin 1.1
+  (2.10.2026) już ich nie wymieniają, ekran zgody Asystenta też nie. Teksty w `AuthFooterView`
+  są 1:1 ze stroną (scoffie-web `src/pages/{privacy,terms}`); po zmianie — Android
+  `python scripts/gen-legal-content.py`.
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
   auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
