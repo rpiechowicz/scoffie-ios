@@ -34,9 +34,11 @@ final class SCAppUpdateGate {
         if !force, let lastCheck, Date().timeIntervalSince(lastCheck) < Self.minimumInterval { return }
         inFlight = true
         defer { inFlight = false }
-        lastCheck = Date()
 
+        // Nieudane sprawdzenie nie liczy się do odstępu — następny powrót
+        // na wierzch spróbuje znowu.
         guard let status = await Self.fetch() else { return }
+        lastCheck = Date()
         if let raw = status.storeUrl, let url = URL(string: raw) {
             storeURL = url
         }
@@ -83,6 +85,9 @@ private struct SCAppUpdateRequiredView: View {
         ZStack {
             if gate.isRequired {
                 content
+                    // VoiceOver omija `point(inside:)` — bez tego dałoby się
+                    // gestem przejść do aplikacji pod spodem.
+                    .accessibilityAddTraits(.isModal)
                     .transition(.opacity)
             }
         }
