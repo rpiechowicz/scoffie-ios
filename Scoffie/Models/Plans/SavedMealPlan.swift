@@ -54,6 +54,11 @@ struct PlanMeal: Codable, Identifiable, Hashable {
     /// `weeklyPlans:setPortion` dla TEJ osoby.
     var portionRevisions: [String: Int]
 
+    /// Danie dopisane po „Zjedzone” w trybie Gotuj, ugotowane spoza planu
+    /// (`PlanItem.cookedOffPlan`). Składniki już zużyte — serwer nie liczy go
+    /// w liście zakupów, a „Na dziś” nie pokazuje go wśród dań.
+    var cookedOffPlan: Bool
+
     init(
         id: String = UUID().uuidString,
         recipe: Recipe,
@@ -62,7 +67,8 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         plannedServings: Int? = nil,
         portionUnits: [String: Int] = [:],
         revision: Int? = nil,
-        portionRevisions: [String: Int] = [:]
+        portionRevisions: [String: Int] = [:],
+        cookedOffPlan: Bool = false
     ) {
         self.id = id
         self.recipe = recipe
@@ -72,6 +78,7 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         self.portionUnits = portionUnits
         self.revision = revision
         self.portionRevisions = portionRevisions
+        self.cookedOffPlan = cookedOffPlan
     }
 
     // Plans persisted before eaten-marks existed have no `eatenByUserIds` key.
@@ -101,6 +108,8 @@ struct PlanMeal: Codable, Identifiable, Hashable {
         // porcji czeka na odświeżenie tygodnia.
         self.revision = try container.decodeIfPresent(Int.self, forKey: .revision)
         self.portionRevisions = try container.decodeIfPresent([String: Int].self, forKey: .portionRevisions) ?? [:]
+        // Plik planu sprzed Gotuj nie ma klucza — takie danie było zaplanowane.
+        self.cookedOffPlan = try container.decodeIfPresent(Bool.self, forKey: .cookedOffPlan) ?? false
     }
 
     var isShared: Bool { participantIds.isEmpty }

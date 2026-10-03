@@ -36,6 +36,10 @@ xcrun swiftc $PLUGIN_ARGS -o "$OUT" \
   "Scoffie/Models/Stores/DebugLog.swift" \
   "Scoffie/Models/Plans/SavedMealPlan.swift" \
   "Scoffie/Models/Plans/PlanPortions.swift" \
+  "Scoffie/Models/Cook/CookScenario.swift" \
+  "Scoffie/Models/Cook/CookAmounts.swift" \
+  "Scoffie/Models/Cook/CookSession.swift" \
+  "Scoffie/Models/Cook/CookFeedback.swift" \
   "Scoffie/Models/Components/PlanWeek.swift" \
   "Scoffie/Models/Components/RecipesModel.swift" \
   "Scoffie/Models/Components/RecipeTaxonomy.swift" \

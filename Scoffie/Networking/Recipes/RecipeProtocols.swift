@@ -87,6 +87,8 @@ protocol RecipeRepository {
     func saveSharedRecipe(token: String) async throws -> Recipe
     /// Opublikowany scenariusz trybu Gotuj albo `nil` (przepis bez trybu Gotuj).
     func fetchCookScenario(_ recipeId: UUID) async throws -> CookScenarioEnvelope?
+    /// Ocena gotowania (`recipes:cookFeedback`) — jedna na sesję.
+    func sendCookFeedback(_ feedback: CookFeedback) async throws
 }
 
 protocol RecipeTransportClient {
@@ -107,6 +109,8 @@ protocol RecipeTransportClient {
     func saveSharedRecipe(token: String) async throws -> BackendSaveSharedRecipeDTO
     /// Opublikowany scenariusz trybu Gotuj (`recipes:cookScenario`).
     func fetchCookScenario(recipeId: String) async throws -> CookScenarioResponse
+    /// Ocena gotowania (`recipes:cookFeedback`); `data` = `CookFeedback.wireData`.
+    func sendCookFeedback(data: [String: Any]) async throws -> CookFeedbackAck
 }
 
 protocol RecipeSocketClient {

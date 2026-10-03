@@ -146,7 +146,8 @@ class MealCalendarStore {
                         plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId],
                         portionUnits: slot.portionUnits,
                         revision: slot.revision,
-                        portionRevisions: slot.portionRevisions
+                        portionRevisions: slot.portionRevisions,
+                        cookedOffPlan: slot.cookedOffPlan
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -321,7 +322,8 @@ class MealCalendarStore {
                         // „równy podział”, a nie „nie wiem” (pole jest zawsze).
                         portionUnits: saved.portionUnits,
                         revision: saved.revision,
-                        portionRevisions: saved.portionRevisions
+                        portionRevisions: saved.portionRevisions,
+                        cookedOffPlan: saved.cookedOffPlan
                     )
                     setMeals(confirmed, for: date, slot: slot)
                 }
@@ -521,6 +523,33 @@ class MealCalendarStore {
             return true
         } catch {
             setMeals(previous, for: date, slot: slot)
+            errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            return false
+        }
+    }
+
+    /// „Zjedzone” po gotowaniu w trybie Gotuj (D21/D28): serwer odhacza
+    /// danie, które już stoi tego dnia w planie, albo dopisuje ugotowane
+    /// OBOK dania w porze — bez optymistycznej kopii, bo o audytorium
+    /// i porze pozycji decyduje on. Obserwowany tydzień przeładowuje się
+    /// po zapisie (rozgłoszenie `SET_MEAL_EATEN` też by go przeładowało,
+    /// ale nie wtedy, gdy Kalendarz stoi na innym tygodniu).
+    @discardableResult
+    func logCookedMeal(recipeId: UUID, for date: Date, slot: MealSlot, servings: Int) async -> Bool {
+        guard let weeklyPlanRepository else { return false }
+        let weekStart = PlanWeek.dateKey(PlanWeek.monday(of: date))
+        do {
+            try await weeklyPlanRepository.logCookedMeal(
+                weekStart: weekStart,
+                date: date,
+                mealSlot: slot,
+                recipeId: recipeId,
+                servings: servings
+            )
+            errorMessage = nil
+            scheduleRefreshForObservedState()
+            return true
+        } catch {
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }

@@ -32,6 +32,14 @@ final class CookScenarioStore {
         self.packages = Self.loadAll(from: Self.directory(for: ownerKey))
     }
 
+    /// Ocena gotowania na serwer. Błąd zostaje tutaj — ocena to sygnał dla
+    /// panelu, a ekran zakończenia nie ma nic do poprawienia.
+    @MainActor
+    func sendFeedback(_ feedback: CookFeedback) async {
+        guard !isInvalidated else { return }
+        _ = try? await repository.sendCookFeedback(feedback)
+    }
+
     /// Koniec sesji (wylogowanie, inny dom) — spóźnione odpowiedzi nic już
     /// nie zapisują.
     func invalidate() {

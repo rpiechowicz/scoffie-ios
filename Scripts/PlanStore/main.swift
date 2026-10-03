@@ -119,6 +119,10 @@ final class SpyWeeklyPlanRepository: WeeklyPlanRepository {
         otherCalls.append("setMealEaten")
     }
 
+    func logCookedMeal(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, servings: Int) async throws {
+        otherCalls.append("logCookedMeal")
+    }
+
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void) {}
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void) {}
 }
