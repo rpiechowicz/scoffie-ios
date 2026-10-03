@@ -149,6 +149,11 @@ enum RecipeTraitFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Cechy do pokazania w filtrach — bez schowanych funkcji (`FeatureFlags`).
+    static var visibleCases: [RecipeTraitFilter] {
+        allCases.filter { $0 != .thermomix || FeatureFlags.thermomix }
+    }
+
     var title: String {
         switch self {
         case .highProtein: return RecipeNutritionTag.highProtein.title

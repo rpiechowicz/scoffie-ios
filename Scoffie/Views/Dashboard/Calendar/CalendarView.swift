@@ -283,7 +283,13 @@ struct CalendarView: View {
     /// z własnego argumentu i przez czas zjazdu pokazuje jeszcze poprzedni
     /// dzień.
     private func stepsBarVisible(on date: Date) -> Bool {
-        stepsEnabled && canLogEatenMeals(on: date)
+        showsSteps && canLogEatenMeals(on: date)
+    }
+
+    /// Integracja „Zdrowie" włączona i nie schowana w `FeatureFlags` — flaga
+    /// z `@AppStorage` zostaje `true` u tych, którzy włączyli ją wcześniej.
+    private var showsSteps: Bool {
+        FeatureFlags.health && stepsEnabled
     }
 
     /// Set of "yyyy-MM-dd" keys for visible days that already have ≥1 meal — drives the sage planned-dot.
@@ -1249,7 +1255,7 @@ struct CalendarView: View {
         // gdy integracja jest włączona: piętro stoi zawsze, treść wchodzi
         // i schodzi. Inaczej machnięcie z dziś na jutro zabierałoby
         // osiemdziesiąt punktów spod talerza i cała scena by się przesuwała.
-        let fit = dayFit(area: area, reservesSteps: stepsEnabled)
+        let fit = dayFit(area: area, reservesSteps: showsSteps)
         let showsSteps = fit.reservesSteps && stepsBarVisible(on: date)
 
         let focused = focusedItem(from: items, pick: pick)
