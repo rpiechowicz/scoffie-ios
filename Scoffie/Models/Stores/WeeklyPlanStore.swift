@@ -26,6 +26,8 @@ struct WeekPlanSlot {
     var revision: Int? = nil
     /// Tokeny porcji per osoba (`portions[].revision`).
     var portionRevisions: [String: Int] = [:]
+    /// Danie dopisane po „Zjedzone” w trybie Gotuj (`PlanItem.cookedOffPlan`).
+    var cookedOffPlan: Bool = false
 }
 
 protocol WeeklyPlanRepository {
@@ -108,6 +110,9 @@ struct BackendWeeklyPlanItemDTO: Codable {
     /// Token pozycji (`ios-contract.md` §1) — nieobecny na backendzie sprzed
     /// wersji; wtedy edycja porcji zostaje zablokowana.
     let revision: Int?
+    /// Danie ugotowane spoza planu (Gotuj, „Zjedzone”) — składniki zużyte,
+    /// więc nie wchodzi do dań listy zakupów. Brak pola = starszy backend.
+    let cookedOffPlan: Bool?
 }
 
 /// Porcja jednej osoby w pozycji planu: `servings` w porcjach przepisu,
@@ -527,7 +532,8 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             portionRevisions: Dictionary(
                 (item.portions ?? []).compactMap { portion in portion.revision.map { (portion.userId, $0) } },
                 uniquingKeysWith: { first, _ in first }
-            )
+            ),
+            cookedOffPlan: item.cookedOffPlan ?? false
         )
     }
 
@@ -596,8 +602,10 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             weekStart: weekStart,
             dayOfWeek: dayOfWeek,
             mealType: mealSlot.backendMealType,
-            recipeId: recipeId.uuidString,
-            servings: servings
+            // Małymi literami, jak trzyma je baza — serwer porównuje
+            // przepisy dnia w kodzie (`logCookedMeal`).
+            recipeId: recipeId.uuidString.lowercased(),
+            servings: min(max(1, servings), CookSession.maxPortions)
         )
     }
 

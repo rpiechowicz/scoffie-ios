@@ -146,7 +146,8 @@ class MealCalendarStore {
                         plannedServings: slot.plannedServings ?? knownServingsByItemId[slot.itemId],
                         portionUnits: slot.portionUnits,
                         revision: slot.revision,
-                        portionRevisions: slot.portionRevisions
+                        portionRevisions: slot.portionRevisions,
+                        cookedOffPlan: slot.cookedOffPlan
                     )
                 )
                 dayPlan.setMeals(meals, for: slot.mealSlot)
@@ -321,7 +322,8 @@ class MealCalendarStore {
                         // „równy podział”, a nie „nie wiem” (pole jest zawsze).
                         portionUnits: saved.portionUnits,
                         revision: saved.revision,
-                        portionRevisions: saved.portionRevisions
+                        portionRevisions: saved.portionRevisions,
+                        cookedOffPlan: saved.cookedOffPlan
                     )
                     setMeals(confirmed, for: date, slot: slot)
                 }

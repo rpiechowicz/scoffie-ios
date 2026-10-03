@@ -28,7 +28,7 @@ struct CookFeedback: Equatable {
         self.sessionId = session.id
         self.recipeId = session.recipeId
         self.scenarioVersion = session.package.version
-        self.servings = session.portions
+        self.servings = min(max(1, session.portions), CookSession.maxPortions)
         self.extensions = session.extensions.reduce(into: [:]) { $0[$1.timerId, default: 0] += $1.seconds }
     }
 
@@ -44,7 +44,9 @@ struct CookFeedback: Equatable {
             "extensions": extensions,
             "servings": servings
         ]
-        if !comment.isEmpty { data["comment"] = comment }
+        // Serwer przyjmuje do 1000 znaków — dłuższe zdanie nie może zabrać
+        // ze sobą całej oceny.
+        if !comment.isEmpty { data["comment"] = String(comment.prefix(1000)) }
         return data
     }
 }
