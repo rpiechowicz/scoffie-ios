@@ -842,32 +842,38 @@ final class SessionStore {
         )
         self.shoppingListStore = shoppingListStore
 
-        let cookidooStore = CookidooIntegrationStore(
-            client: IntegrationsAPIClient(
-                baseURL: baseURL,
-                tokenProvider: { [weak self] in self?.currentAccessToken },
-                refreshSession: { [weak self] in
-                    await self?.refreshSessionTokens() == .refreshed
-                }
+        // Schowane funkcje (`FeatureFlags`) nie dostają store'u: bez niego nie
+        // ma ani zapytań do serwera, ani odczytu HealthKit w tle.
+        if FeatureFlags.thermomix {
+            let cookidooStore = CookidooIntegrationStore(
+                client: IntegrationsAPIClient(
+                    baseURL: baseURL,
+                    tokenProvider: { [weak self] in self?.currentAccessToken },
+                    refreshSession: { [weak self] in
+                        await self?.refreshSessionTokens() == .refreshed
+                    }
+                )
             )
-        )
-        self.cookidooIntegrationStore = cookidooStore
-        // Stan integracji od razu przy starcie — ekran przepisu musi wiedzieć,
-        // czy rysować „Gotuj w Thermomixie", zanim ktoś otworzy Ustawienia.
-        Task { @MainActor in
-            await cookidooStore.refresh()
+            self.cookidooIntegrationStore = cookidooStore
+            // Stan integracji od razu przy starcie — ekran przepisu musi wiedzieć,
+            // czy rysować „Gotuj w Thermomixie", zanim ktoś otworzy Ustawienia.
+            Task { @MainActor in
+                await cookidooStore.refresh()
+            }
         }
 
-        let healthStore = HealthStepsStore(
-            service: HealthKitService(),
-            client: IntegrationsAPIClient(
-                baseURL: baseURL,
-                tokenProvider: { [weak self] in self?.currentAccessToken },
-                refreshSession: { [weak self] in
-                    await self?.refreshSessionTokens() == .refreshed
-                }
+        let healthStore: HealthStepsStore? = FeatureFlags.health
+            ? HealthStepsStore(
+                service: HealthKitService(),
+                client: IntegrationsAPIClient(
+                    baseURL: baseURL,
+                    tokenProvider: { [weak self] in self?.currentAccessToken },
+                    refreshSession: { [weak self] in
+                        await self?.refreshSessionTokens() == .refreshed
+                    }
+                )
             )
-        )
+            : nil
         self.healthStepsStore = healthStore
 
         self.agentStore = AgentStore(
@@ -907,9 +913,11 @@ final class SessionStore {
         }
         // Świeże kroki od razu przy starcie sesji + obserwacja na żywo.
         // Oba to no-opy, dopóki użytkownik nie włączy integracji w Ustawieniach.
-        healthStore.startObserving()
-        Task { @MainActor in
-            await healthStore.refreshAndSync()
+        if let healthStore {
+            healthStore.startObserving()
+            Task { @MainActor in
+                await healthStore.refreshAndSync()
+            }
         }
 
         observeHouseholdRealtime()

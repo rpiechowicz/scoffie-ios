@@ -352,7 +352,12 @@ struct AssistantConsentGateView: View {
         "Nazwę domu, plan tygodnia, notatki pamięci",
         "Katalog przepisów",
     ]
-    private static let notSentItems = ["Wzrost, waga, płeć", "Rok urodzenia", "Kroki", "E-mail", "Hasło Cookidoo"]
+    /// Kroki i hasło Cookidoo tylko wtedy, gdy te funkcje są widoczne
+    /// (`FeatureFlags`) — nie mówimy o czymś, czego w aplikacji nie ma.
+    private static let notSentItems: [String] = ["Wzrost, waga, płeć", "Rok urodzenia"]
+        + (FeatureFlags.health ? ["Kroki"] : [])
+        + ["E-mail"]
+        + (FeatureFlags.thermomix ? ["Hasło Cookidoo"] : [])
 
     /// `ConsentRow`: tytuł i podpis z zawijaniem, po prawej pole wyboru
     /// aplikacji (`SCCheckbox`) w szałwii. Potwierdzenia są dwa i niezależne,
