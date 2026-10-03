@@ -51,20 +51,57 @@ extension SessionStore {
         cookSessionStore.resume()
     }
 
-    /// „Zjedzone” na zakończeniu: danie z planu odhacza się na swój dzień
-    /// i porę. Gotowanie spoza planu (D21: sam wpis do dzisiejszego planu)
-    /// czeka na specyfikację po stronie backendu — na razie bez wpisu.
+    /// „Zjedzone” na zakończeniu.
+    ///
+    /// Danie z planu odhacza się na swój dzień i porę — optymistycznie, gdy
+    /// Kalendarz ma ten dzień w pamięci; inaczej (inny tydzień) przez serwer.
+    /// Gotowanie spoza planu (D21/D28) dopisuje przepis do DZISIEJSZEGO planu
+    /// obok tego, co stoi w porze — porę wybiera telefon (`CookPlanEntry`:
+    /// włączone pory domu, pory przepisu, godzina), resztę serwer
+    /// (`weeklyPlans:logCookedMeal`).
     @MainActor
     func markCookedAsEaten(_ session: CookSession) {
-        guard let mealCalendarStore,
-              let key = session.planDateKey,
-              let date = PlanWeek.date(fromKey: key),
-              let raw = session.mealSlotRaw,
-              let slot = MealSlot(rawValue: raw) else { return }
-        let weekStart = PlanWeek.dateKey(PlanWeek.monday(of: date))
+        guard let mealCalendarStore else { return }
+        if let key = session.planDateKey,
+           let date = PlanWeek.date(fromKey: key),
+           let raw = session.mealSlotRaw,
+           let slot = MealSlot(rawValue: raw) {
+            let planned = mealCalendarStore.meals(for: date, slot: slot)
+                .contains { $0.recipe.id == session.recipeId }
+            Task { @MainActor in
+                if planned {
+                    let weekStart = PlanWeek.dateKey(PlanWeek.monday(of: date))
+                    await mealCalendarStore.setMealEaten(true, recipeId: session.recipeId, for: date, slot: slot, weekStart: weekStart)
+                } else {
+                    await mealCalendarStore.logCookedMeal(recipeId: session.recipeId, for: date, slot: slot, servings: session.portions)
+                }
+                rescheduleMealReminders()
+            }
+            return
+        }
+
+        let now = Date()
+        let recipe = recipeCatalogStore?.recipes.first { $0.id == session.recipeId }
+        let slot = CookPlanEntry.slot(
+            minuteOfDay: MealSlotSchedule.minutes(from: now),
+            enabled: mealSlots.enabled,
+            recipeSlots: recipe?.effectiveSlots ?? [],
+            schedule: mealSlotSchedule
+        )
         Task { @MainActor in
-            await mealCalendarStore.setMealEaten(true, recipeId: session.recipeId, for: date, slot: slot, weekStart: weekStart)
+            await mealCalendarStore.logCookedMeal(recipeId: session.recipeId, for: now, slot: slot, servings: session.portions)
             rescheduleMealReminders()
+        }
+    }
+
+    /// Ocena gotowania (§13.8) — kciuk od razu, uwagi z arkusza tym samym
+    /// `sessionId` poprawiają zapis. Bez sieci ocena przepada: to sygnał dla
+    /// panelu, nie dane użytkownika, i nie ma czego mu pokazywać.
+    @MainActor
+    func sendCookFeedback(_ feedback: CookFeedback) {
+        guard let cookScenarioStore else { return }
+        Task { @MainActor in
+            await cookScenarioStore.sendFeedback(feedback)
         }
     }
 

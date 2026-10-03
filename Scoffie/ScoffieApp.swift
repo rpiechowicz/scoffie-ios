@@ -586,7 +586,8 @@ struct ScoffieApp: App {
                 if let cook = sessionStore.cookSessionStore {
                     CookModeView(
                         store: cook,
-                        onEaten: { session in sessionStore.markCookedAsEaten(session) }
+                        onEaten: { session in sessionStore.markCookedAsEaten(session) },
+                        onFeedback: { feedback in sessionStore.sendCookFeedback(feedback) }
                     )
                     .environment(\.sessionStore, sessionStore)
                     .preferredColorScheme(appTheme.colorScheme)

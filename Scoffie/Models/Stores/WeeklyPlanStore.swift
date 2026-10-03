@@ -59,6 +59,10 @@ protocol WeeklyPlanRepository {
     func clearWeekPlan(weekStart: String) async throws
     /// Marks one planned meal as eaten by the signed-in user, or clears it.
     func setMealEaten(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, isEaten: Bool) async throws
+    /// „Zjedzone” po gotowaniu w trybie Gotuj (`weeklyPlans:logCookedMeal`,
+    /// D21/D28): przepis jest już tego dnia w planie — serwer odhacza go tam;
+    /// nie ma go — dopisuje OBOK dania w porze i odhacza w jednej transakcji.
+    func logCookedMeal(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, servings: Int) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
@@ -72,6 +76,7 @@ protocol WeeklyPlanTransportClient {
     func removeWeekSlot(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String?) async throws
     func clearWeekPlan(weekStart: String) async throws
     func setMealEaten(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, isEaten: Bool) async throws
+    func logCookedMeal(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, servings: Int) async throws
     func observeWeekPlanChanges(_ onChange: @escaping (_ event: BackendWeekChangedDTO) -> Void)
     func observeRealtimeReconnect(_ onReconnect: @escaping () -> Void)
 }
@@ -416,6 +421,29 @@ final class WebSocketWeeklyPlanTransportClient: WeeklyPlanTransportClient {
         throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:setMealEaten.")
     }
 
+    func logCookedMeal(weekStart: String, dayOfWeek: String, mealType: String, recipeId: String, servings: Int) async throws {
+        let householdId = try await resolveHouseholdId()
+        let envelope: WsEnvelope<BackendPlanItemAckDTO> = try await socket.emitWithAck(
+            event: "weeklyPlans:logCookedMeal",
+            payload: [
+                "userId": userId,
+                "householdId": householdId,
+                "weekStart": weekStart,
+                "data": [
+                    "dayOfWeek": dayOfWeek,
+                    "mealType": mealType,
+                    "recipeId": recipeId,
+                    "servings": servings
+                ]
+            ],
+            as: WsEnvelope<BackendPlanItemAckDTO>.self
+        )
+        if envelope.ok {
+            return
+        }
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:logCookedMeal.")
+    }
+
     func clearWeekPlan(weekStart: String) async throws {
         let householdId = try await resolveHouseholdId()
         let envelope: WsEnvelope<BackendClearWeekPlanAckDTO> = try await socket.emitWithAck(
@@ -557,6 +585,19 @@ final class ApiWeeklyPlanRepository: WeeklyPlanRepository {
             mealType: mealSlot.backendMealType,
             recipeId: recipeId.uuidString,
             isEaten: isEaten
+        )
+    }
+
+    func logCookedMeal(weekStart: String, date: Date, mealSlot: MealSlot, recipeId: UUID, servings: Int) async throws {
+        guard let dayOfWeek = WeekDateMapper.dayOfWeek(from: date, weekStart: weekStart) else {
+            throw RecipeDataError.serverError(message: "Nie można wyznaczyć dnia tygodnia dla slotu.")
+        }
+        try await client.logCookedMeal(
+            weekStart: weekStart,
+            dayOfWeek: dayOfWeek,
+            mealType: mealSlot.backendMealType,
+            recipeId: recipeId.uuidString,
+            servings: servings
         )
     }
 

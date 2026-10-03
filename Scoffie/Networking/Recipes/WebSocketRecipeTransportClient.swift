@@ -237,6 +237,15 @@ final class WebSocketRecipeTransportClient: RecipeTransportClient {
         )
     }
 
+    /// Ocena gotowania — zdarzenie domu, jak scenariusz (bramka członkostwa).
+    func sendCookFeedback(data: [String: Any]) async throws -> CookFeedbackAck {
+        try await emitHouseholdEvent(
+            "recipes:cookFeedback",
+            fields: ["data": data],
+            as: CookFeedbackAck.self
+        )
+    }
+
     /// Zdarzenie gospodarstwa: `userId` + `householdId` + pola zdarzenia,
     /// odpowiedź z koperty albo błąd z jej kodem.
     private func emitHouseholdEvent<T: Decodable>(

@@ -146,6 +146,10 @@ final class ApiRecipeRepository: RecipeRepository {
         try await client.fetchCookScenario(recipeId: Self.wireId(recipeId)).scenario
     }
 
+    func sendCookFeedback(_ feedback: CookFeedback) async throws {
+        _ = try await client.sendCookFeedback(data: feedback.wireData)
+    }
+
     /// UUID małymi literami — tak, jak trzyma je baza i jak wracają w odpowiedziach.
     private static func wireId(_ id: UUID) -> String {
         id.uuidString.lowercased()
