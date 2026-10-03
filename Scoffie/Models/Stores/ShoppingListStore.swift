@@ -4,7 +4,11 @@ import Observation
 /// Implementation detail of `ShoppingListStore.openRevisionsByWeek` — tracks
 /// pending amount edits against a known archive baseline. Kept at file scope
 /// (not nested) so the class declaration stays compact.
-private struct OpenShoppingRevision {
+///
+/// Zapisywany w pliku listy razem z tygodniami (jak `revisions` na Androidzie):
+/// bez niego po restarcie każda kupiona pozycja otwartej rewizji wyglądała
+/// jak „nowa” i store odznaczał ją NA SERWERZE.
+private struct OpenShoppingRevision: Codable {
     let baseArchiveId: String
     let pendingAmounts: [String: Double]
 }
@@ -20,6 +24,9 @@ private struct OpenShoppingRevision {
 final class ShoppingListStore {
     private struct ShoppingListCachePayload: Codable {
         let weeks: [String: ShoppingListState]
+        /// Znane stany otwartych rewizji. Opcjonalne: plik zapisany przez
+        /// starszą wersję aplikacji nie ma tego pola i dalej się wczytuje.
+        let revisions: [String: OpenShoppingRevision]?
     }
 
     private let repository: ShoppingListRepository
@@ -572,6 +579,7 @@ final class ShoppingListStore {
         }
 
         cachedStateByWeek = payload.weeks
+        openRevisionsByWeek = payload.revisions ?? [:]
     }
 
     /// Jedna kolejka seryjna na wszystkie zapisy — gwarantuje kolejność
@@ -586,7 +594,10 @@ final class ShoppingListStore {
         // i każdym loadzie, a przy dłuższej liście serializacja wszystkich
         // tygodni synchronicznie na MainActorze gubiła klatki dokładnie
         // w trakcie ładowania i scrollowania.
-        let payload = ShoppingListCachePayload(weeks: cachedStateByWeek)
+        let payload = ShoppingListCachePayload(
+            weeks: cachedStateByWeek,
+            revisions: openRevisionsByWeek
+        )
         let url = cacheURL
         Self.cacheWriteQueue.async {
             guard let data = try? JSONEncoder().encode(payload) else { return }
@@ -618,12 +629,27 @@ final class ShoppingListStore {
             state.baseArchiveId == archive.id ? state : nil
         }
 
+        // Pierwszy odczyt tej rewizji na tym telefonie (po instalacji, na
+        // telefonie domownika, po restarcie ze starszego pliku): nie ma z czym
+        // porównać, więc ptaszki zostają — to decyzje domowników. Nadwyżkę
+        // wobec archiwum odznacza sam serwer przy przebudowie listy
+        // (`rebuildShoppingListSnapshot`). Dotąd brak znanego stanu znaczył
+        // „wszystko nowe” i store odznaczał na serwerze wszystko, co kupiono
+        // w otwartej rewizji — po każdym restarcie aplikacji.
+        guard let previousState else {
+            openRevisionsByWeek[weekStart] = OpenShoppingRevision(
+                baseArchiveId: archive.id,
+                pendingAmounts: pendingAmounts
+            )
+            return
+        }
+
         let checkedPendingItems = items.filter { item in
             guard let pendingAmount = pendingAmounts[item.productKey], item.isChecked else {
                 return false
             }
 
-            guard let previousAmount = previousState?.pendingAmounts[item.productKey] else {
+            guard let previousAmount = previousState.pendingAmounts[item.productKey] else {
                 return true
             }
 
