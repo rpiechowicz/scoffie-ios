@@ -203,33 +203,6 @@ struct CookFinishFooter: View {
     }
 }
 
-/// Ocena gotowania: kciuk + pigułki + zdanie + zdarzenia sesji (§13.8).
-/// Do wysłania, gdy backend przyjmie oceny Gotuj — na razie zostaje
-/// w dzienniku sesji (TODO po stronie API, docs/workstreams/gotuj §13.8).
-struct CookFeedback: Equatable {
-    enum Rating: String, Equatable {
-        case up = "UP"
-        case down = "DOWN"
-    }
-
-    let rating: Rating
-    let tags: [String]
-    let comment: String
-    let recipeId: UUID
-    let scenarioVersion: Int
-    /// „+min” z sesji: id timera → suma sekund.
-    let extensions: [String: Int]
-
-    init(rating: Rating, tags: [String], comment: String, session: CookSession) {
-        self.rating = rating
-        self.tags = tags
-        self.comment = comment
-        self.recipeId = session.recipeId
-        self.scenarioVersion = session.package.version
-        self.extensions = session.extensions.reduce(into: [:]) { $0[$1.timerId, default: 0] += $1.seconds }
-    }
-}
-
 /// „Co byś zmienił?” po kciuku (EF2): pigułki powodów (pierwsza z sesji,
 /// np. „Kotlety +4 min”), pole, „Wyślij”.
 struct CookFeedbackSheet: View {

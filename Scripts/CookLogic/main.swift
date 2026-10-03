@@ -355,5 +355,20 @@ equal(session.stage, .finished, "ostatni krok → Smacznego")
 equal(session.dockTimers(now: at(60)).count, 0, "zakończenie: timery zgaszone")
 equal(session.cookingMinutes(now: at(70)), 60, "zakończenie: czas od „Zaczynamy”")
 
+// MARK: - Pora wpisu spoza planu (D21)
+
+let core: [MealSlot] = [.breakfast, .lunch, .dinner]
+func entry(_ hour: Int, _ minute: Int = 0, enabled: [MealSlot] = core, recipe: [MealSlot]) -> MealSlot {
+    CookPlanEntry.slot(minuteOfDay: hour * 60 + minute, enabled: enabled, recipeSlots: recipe, schedule: .default)
+}
+equal(entry(13, 30, recipe: [.lunch, .dinner]), .lunch, "pora: 13:30, obiad 14:00 bliżej niż kolacja")
+equal(entry(17, 30, recipe: [.lunch, .dinner]), .dinner, "pora: 17:30 — bliżej kolacji (20:00) niż obiadu (14:00)")
+equal(entry(17, recipe: [.lunch, .dinner]), .lunch, "pora: remis 14:00/20:00 → wcześniejsza")
+equal(entry(9, recipe: [.dinner]), .dinner, "pora: przepis tylko na kolację, nawet rano")
+equal(entry(9, recipe: [.afternoonSnack]), .breakfast, "pora: pora przepisu wyłączona → najbliższa włączona")
+equal(entry(16, enabled: core + [.afternoonSnack], recipe: [.lunch, .afternoonSnack]), .afternoonSnack, "pora: włączony podwieczorek 17:00")
+equal(entry(12, enabled: core + [.snack], recipe: [.snack]), .snack, "pora: przekąska bez godziny, gdy jedyna")
+equal(entry(12, recipe: []), .lunch, "pora: przepis bez pór → najbliższa włączona")
+
 print(failures == 0 ? "\nWszystko zgodne." : "\nBłędów: \(failures)")
 exit(failures == 0 ? 0 : 1)

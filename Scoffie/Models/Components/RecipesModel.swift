@@ -397,8 +397,12 @@ extension Recipe {
 
 extension Recipe {
     /// Przepis ma odpowiednik w Cookidoo — da się go wysłać na Thermomixa.
+    /// Przy schowanym Thermomixie (`FeatureFlags`) zawsze `false`: bez
+    /// plakietki, filtra i przycisku, a z trybem Gotuj, jeśli jest scenariusz.
     var isThermomix: Bool {
-        sourceProvider == "cookidoo" && !(sourceRecipeId ?? "").isEmpty
+        FeatureFlags.thermomix
+            && sourceProvider == "cookidoo"
+            && !(sourceRecipeId ?? "").isEmpty
     }
 }
 

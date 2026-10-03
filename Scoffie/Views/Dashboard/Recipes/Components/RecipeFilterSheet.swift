@@ -381,7 +381,7 @@ struct RecipeFilterSheet: View {
                     icon: "sparkles",
                     title: "Cechy",
                     placeholder: RecipeFilterPickerRow.placeholder(
-                        from: RecipeFilterPickerRow.sentence(RecipeTraitFilter.allCases.map { $0.title.lowercased() })
+                        from: RecipeFilterPickerRow.sentence(RecipeTraitFilter.visibleCases.map { $0.title.lowercased() })
                     ),
                     chips: traits.map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title) },
                     accent: SCPalette.indigo
@@ -426,7 +426,7 @@ struct RecipeFilterSheet: View {
                 icon: "sparkles",
                 accent: SCPalette.indigo,
                 hint: "Wszystkie zaznaczone naraz",
-                items: RecipeTraitFilter.allCases,
+                items: RecipeTraitFilter.visibleCases,
                 selectedCount: draft.traits.count,
                 resultCount: resultCount,
                 totalCount: index.total,

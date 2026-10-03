@@ -89,8 +89,10 @@ struct CookSession: Codable, Equatable {
         self.difficultyRaw = difficultyRaw
         self.kcalPerServing = kcalPerServing
         self.package = package
-        self.portions = max(1, portions)
-        self.defaultPortions = max(1, portions)
+        // Przepis domu bywa na 20 porcji, stepper sesji kończy się na 12 —
+        // serwer (wpis i ocena) większej liczby nie przyjmie.
+        self.portions = min(max(1, portions), Self.maxPortions)
+        self.defaultPortions = min(max(1, portions), Self.maxPortions)
         self.stage = .welcome
         self.stepIndex = 0
         self.timers = [:]

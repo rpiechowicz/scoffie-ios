@@ -503,7 +503,9 @@ struct SettingsView: View {
                             profileGroup
                             accountSection
                             appSection
-                            integrationsSection
+                            if showsIntegrationsSection {
+                                integrationsSection
+                            }
                             infoSection
 
                             SCDestructiveButton(
@@ -732,21 +734,29 @@ struct SettingsView: View {
                         iconColor: SCPalette.sage,
                         title: "Cookidoo (Thermomix)",
                         value: cookidooRowValue,
-                        isLast: false,
+                        isLast: !FeatureFlags.health,
                         action: { showCookidooSheet = true }
                     )
                 }
 
-                EditorialSettingsRow(
-                    icon: "figure.walk",
-                    iconColor: SCPalette.terracotta,
-                    title: "Zdrowie",
-                    value: healthRowValue,
-                    isLast: true,
-                    action: { showHealthSheet = true }
-                )
+                if FeatureFlags.health {
+                    EditorialSettingsRow(
+                        icon: "figure.walk",
+                        iconColor: SCPalette.terracotta,
+                        title: "Zdrowie",
+                        value: healthRowValue,
+                        isLast: true,
+                        action: { showHealthSheet = true }
+                    )
+                }
             }
         }
+    }
+
+    /// Sekcja „Integracje” znika, gdy nie ma w niej ani jednego wiersza
+    /// (obie funkcje schowane w `FeatureFlags`).
+    private var showsIntegrationsSection: Bool {
+        showsCookidooRow || FeatureFlags.health
     }
 
     /// Prawa kolumna wiersza „Zdrowie": nazwa wybranego źródła kroków, gdy
@@ -776,6 +786,7 @@ struct SettingsView: View {
     /// Wiersz Cookidoo znika, gdy serwer ma integrację wyłączoną — każde
     /// dotknięcie kończyło się alertem „na razie wyłączone".
     private var showsCookidooRow: Bool {
+        guard FeatureFlags.thermomix else { return false }
         if case .disabled = sessionStore.cookidooIntegrationStore?.status { return false }
         return true
     }

@@ -62,7 +62,9 @@ struct ShoppingDishIndex {
             let dayKey = MealCalendarStore.dateKey(for: date)
 
             for slot in MealSlot.allCases {
-                for meal in mealsProvider(date, slot) {
+                // Danie ugotowane spoza planu (Gotuj) już zużyło składniki —
+                // serwer nie liczy go w liście, więc nie stoi też za produktami.
+                for meal in mealsProvider(date, slot) where !meal.cookedOffPlan {
                     let dish = ShoppingDish(
                         // Sam `meal.id` nie wystarczy: posiłek dodany lokalnie
                         // dostaje syntetyczne id do czasu odświeżenia tygodnia,
