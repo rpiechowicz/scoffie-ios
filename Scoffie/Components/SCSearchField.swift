@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Pole szukania — JEDNO w całej aplikacji: kapsuła 44 pt na `scTileBg`,
+/// Pole szukania — JEDNO w całej aplikacji: szklana kapsuła 44 pt,
 /// lupa, krzyżyk czyszczący, a w trakcie pisania obwódka w terakocie.
 ///
 /// Wcześniej każdy ekran miał własne: pigułka na Przepisach, niższa pigułka
@@ -64,16 +64,13 @@ struct SCSearchField: View {
         .padding(.leading, 16)
         .padding(.trailing, 14)
         .frame(height: 44)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
+        // Liquid Glass (runda 2, 4.10.2026) — jak pole szukania i pole
+        // wiadomości w iOS 26. Szkło ma własny brzeg; obwódka w terakocie
+        // zostaje tylko w trakcie pisania.
+        .scChromeGlass(in: Capsule(style: .continuous), interactive: true)
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(
-                    isFocused ? SCPalette.terracotta.opacity(0.55) : Color.scTileStroke(scheme),
-                    lineWidth: isFocused ? 1.5 : 1
-                )
+                .strokeBorder(SCPalette.terracotta.opacity(isFocused ? 0.55 : 0), lineWidth: 1.5)
         )
         .contentShape(Capsule(style: .continuous))
         // Stuknięcie w brzeg kapsuły (lupa, margines) też stawia kursor —

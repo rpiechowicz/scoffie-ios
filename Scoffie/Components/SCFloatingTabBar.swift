@@ -20,6 +20,9 @@ final class SCTabBarChrome {
     /// Klawiatura zasłania pasek — treść nie rezerwuje pod nim miejsca,
     /// inaczej pole asystenta wisiałoby 70 pt nad klawiaturą.
     var isKeyboardVisible = false
+    /// Tytuł do kapsuły pod paskiem stanu (`SCCompactTitle`) dla zakładek,
+    /// których duży tytuł zjechał już pod górną krawędź.
+    var compactTitles: [DashboardTab: String] = [:]
     /// Czas ostatniego ruchu klawiatury (z powiadomienia) — rezerwa schodzi
     /// i wraca w tym samym tempie i tej samej krzywej co klawiatura.
     var keyboardDuration: Double = 0.25

@@ -130,6 +130,9 @@ struct AssistantView: View {
     /// Pytanie z odpowiedzią w aplikacji (lista zakupów, przepis) — karta
     /// nad polem zamiast tury (`AssistantAppShortcut`).
     @State private var appShortcut: AssistantAppShortcut?
+    /// Tożsamości szkieł nad rozmową (karta skrótu, pole, „Wyślij”) — karta
+    /// wyrasta z pola i w nie wsiąka, zamiast wjeżdżać od dołu.
+    @Namespace private var composerGlass
     /// Czy rozmowa stoi na końcu. Gdy użytkownik odjedzie w górę, żeby coś
     /// doczytać, automatyczne przewijanie MUSI przestać go szarpać.
     @State private var isPinnedToBottom = true
@@ -1243,44 +1246,52 @@ struct AssistantView: View {
     // MARK: - Pole wiadomości
 
     private var composer: some View {
-        VStack(spacing: 0) {
-            if editing != nil {
-                editingBar
-                    .transition(.opacity)
-            }
-
-            if let appShortcut {
-                AssistantAppShortcutCard(
-                    shortcut: appShortcut,
-                    onOpen: { openShortcut(appShortcut) },
-                    onAskAnyway: {
-                        self.appShortcut = nil
-                        send(force: true)
-                    },
-                    onDismiss: { self.appShortcut = nil }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Wykorzystana pula na próbę: pole, w które nie da się pisać, jest
-            // wyłącznie frustracją. W rozmowie stoi zamiast niego karta
-            // z jednym przyciskiem, który coś zmienia; na pustym ekranie
-            // to samo mówi briefing, więc composera nie ma wcale.
-            if store.isUnavailable {
-                // Przerwa techniczna: ekran mówi to sam i ma własne
-                // „Sprawdź ponownie” — wyszarzone pole byłoby tylko szumem.
-                EmptyView()
-            } else if store.isLockedByTrialQuota {
-                if !isConversationEmpty {
-                    quotaSpentCard(isTrial: true)
+        // Jedna grupa szkła na kartę skrótu, pole i „Wyślij”: karta „masz to
+        // w aplikacji” WYRASTA z pola i w nie wsiąka (Liquid Glass runda 2),
+        // a pole i krążek załamują światło razem. Odstęp grupy (8) nie
+        // przekracza odstępów w spoczynku, więc szkła nie zlewają się, póki
+        // stoją — łączą się tylko w ruchu.
+        GlassEffectContainer(spacing: 8) {
+            VStack(spacing: 0) {
+                if editing != nil {
+                    editingBar
+                        .transition(.opacity)
                 }
-            } else if isLockedByMonthlyQuota {
-                // Pula miesięczna: pole, w które nie da się pisać do
-                // odnowienia, zastępuje karta z datą powrotu — także na
-                // pustym ekranie, bo powitanie o puli nie mówi.
-                quotaSpentCard(isTrial: false)
-            } else {
-                composerField
+
+                if let appShortcut {
+                    AssistantAppShortcutCard(
+                        shortcut: appShortcut,
+                        onOpen: { openShortcut(appShortcut) },
+                        onAskAnyway: {
+                            self.appShortcut = nil
+                            send(force: true)
+                        },
+                        onDismiss: { self.appShortcut = nil }
+                    )
+                    .glassEffectID("shortcut", in: composerGlass)
+                    .transition(.opacity)
+                }
+
+                // Wykorzystana pula na próbę: pole, w które nie da się pisać, jest
+                // wyłącznie frustracją. W rozmowie stoi zamiast niego karta
+                // z jednym przyciskiem, który coś zmienia; na pustym ekranie
+                // to samo mówi briefing, więc composera nie ma wcale.
+                if store.isUnavailable {
+                    // Przerwa techniczna: ekran mówi to sam i ma własne
+                    // „Sprawdź ponownie” — wyszarzone pole byłoby tylko szumem.
+                    EmptyView()
+                } else if store.isLockedByTrialQuota {
+                    if !isConversationEmpty {
+                        quotaSpentCard(isTrial: true)
+                    }
+                } else if isLockedByMonthlyQuota {
+                    // Pula miesięczna: pole, w które nie da się pisać do
+                    // odnowienia, zastępuje karta z datą powrotu — także na
+                    // pustym ekranie, bo powitanie o puli nie mówi.
+                    quotaSpentCard(isTrial: false)
+                } else {
+                    composerField
+                }
             }
         }
         // Rozmowa chowa się pod polem i dolnym menu jak w Telegramie:
@@ -1297,6 +1308,9 @@ struct AssistantView: View {
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
         .animation(.easeInOut(duration: 0.2), value: isLockedByMonthlyQuota)
         .animation(.easeInOut(duration: 0.2), value: store.isUnavailable)
+        // Karta skrótu znika też bez `withAnimation` (krzyżyk, „Zapytaj mimo
+        // to”, pisanie w polu) — wsiąkanie w pole ma grać zawsze.
+        .animation(.smooth(duration: 0.32), value: appShortcut != nil)
     }
 
     /// `LComposer` z makiety: pole 50 pt w pigułce, obok krążek 50 — w terakocie
@@ -1306,79 +1320,79 @@ struct AssistantView: View {
     ///
     /// Pole i krążek to Liquid Glass, jak pole wiadomości w Telegramie na
     /// iOS 26 (4.10.2026): pływają nad rozmową tak samo jak dolne menu pod
-    /// nimi. Jeden `GlassEffectContainer`, żeby dwa szkła obok siebie
-    /// załamywały światło razem, a nie jak dwie osobne naklejki.
+    /// nimi. Grupa szkła (`GlassEffectContainer`) stoi w `composer` — wspólna
+    /// z kartą skrótu, która wyrasta z pola.
     private var composerField: some View {
         let active = store.isSending || editing != nil || canSend
-        return GlassEffectContainer(spacing: 10) {
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField(composerPrompt, text: $draft, axis: .vertical)
-                // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
-                // w sobotę, dwie osoby bez glutenu…"). PUSTE pole ma jeden
-                // wiersz: przykład z powitania („Np. obiady do 30 minut przez
-                // cały tydzień”) łamał się na dwa, a pierwsza litera zwijała pole
-                // do jednego — powitanie nad nim opadało skokiem o wiersz.
-                .lineLimit(draft.isEmpty ? 1...1 : 1...8)
-                .font(.system(size: 16.5))
-                .tracking(-0.3)
-                .foregroundStyle(AssistantLook.ink(scheme))
-                .focused($isComposerFocused)
-                .disabled(store.isUnavailable || store.isLocked)
-                .submitLabel(.send)
-                // Zmiana pytania zdejmuje kartę „masz to w aplikacji”.
-                .onChange(of: draft) { _, _ in
-                    if appShortcut != nil { appShortcut = nil }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 18)
-                .frame(minHeight: 50)
-                .scChromeGlass(in: Capsule(style: .continuous))
-                // Szkło ma własny brzeg — obrys zostaje tylko przy poprawce.
-                .overlay(
-                    Capsule(style: .continuous).stroke(
-                        AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.5),
-                        lineWidth: 1
-                    )
-                )
-                .background(
-                    Capsule(style: .continuous)
-                        .stroke(AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.12), lineWidth: 3)
-                        .padding(-2)
-                )
-                .animation(.easeOut(duration: 0.2), value: editing != nil)
-                .accessibilityLabel(editing == nil ? "Wiadomość do asystenta" : "Poprawiana wiadomość")
-
-                // W trakcie tury strzałka zamienia się w „stop"; po „stop"
-                // przycisk WYGASA razem ze statusem „Zatrzymuję…", bo drugi stop
-                // nic nie zrobi.
-                Button {
-                    if store.isSending { store.stopWaiting() } else { send() }
-                } label: {
-                    ZStack {
-                        // Aktywny: wariant „soft” (`scSoftSurface`) NA szkle, jak
-                        // każda akcja główna — pełna terakotowa tarcza z białą
-                        // strzałką była jedyną taką plamą koloru na ekranie.
-                        // Wygaszony: samo szkło, jak pole obok.
-                        Color.clear
-                            .scSoftSurface(Circle())
-                            .opacity(active ? 1 : 0)
-
-                        Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
-                            .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
-                            .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .frame(width: 50, height: 50)
-                    .scChromeGlass(in: Circle(), interactive: true)
-                    .opacity(store.isStopping ? 0.5 : 1)
-                }
-                .buttonStyle(PlanPressStyle(scale: 0.92))
-                .disabled((!store.isSending && !canSend) || store.isStopping)
-                .accessibilityLabel(sendAccessibilityLabel)
-                .animation(.easeOut(duration: 0.2), value: active)
-                .animation(.easeOut(duration: 0.2), value: store.isStopping)
-                .animation(.easeOut(duration: 0.2), value: store.isSending)
+        return HStack(alignment: .bottom, spacing: 10) {
+            TextField(composerPrompt, text: $draft, axis: .vertical)
+            // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
+            // w sobotę, dwie osoby bez glutenu…"). PUSTE pole ma jeden
+            // wiersz: przykład z powitania („Np. obiady do 30 minut przez
+            // cały tydzień”) łamał się na dwa, a pierwsza litera zwijała pole
+            // do jednego — powitanie nad nim opadało skokiem o wiersz.
+            .lineLimit(draft.isEmpty ? 1...1 : 1...8)
+            .font(.system(size: 16.5))
+            .tracking(-0.3)
+            .foregroundStyle(AssistantLook.ink(scheme))
+            .focused($isComposerFocused)
+            .disabled(store.isUnavailable || store.isLocked)
+            .submitLabel(.send)
+            // Zmiana pytania zdejmuje kartę „masz to w aplikacji”.
+            .onChange(of: draft) { _, _ in
+                if appShortcut != nil { appShortcut = nil }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .frame(minHeight: 50)
+            .scChromeGlass(in: Capsule(style: .continuous))
+            .glassEffectID("field", in: composerGlass)
+            // Szkło ma własny brzeg — obrys zostaje tylko przy poprawce.
+            .overlay(
+                Capsule(style: .continuous).stroke(
+                    AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.5),
+                    lineWidth: 1
+                )
+            )
+            .background(
+                Capsule(style: .continuous)
+                    .stroke(AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.12), lineWidth: 3)
+                    .padding(-2)
+            )
+            .animation(.easeOut(duration: 0.2), value: editing != nil)
+            .accessibilityLabel(editing == nil ? "Wiadomość do asystenta" : "Poprawiana wiadomość")
+
+            // W trakcie tury strzałka zamienia się w „stop"; po „stop"
+            // przycisk WYGASA razem ze statusem „Zatrzymuję…", bo drugi stop
+            // nic nie zrobi.
+            Button {
+                if store.isSending { store.stopWaiting() } else { send() }
+            } label: {
+                ZStack {
+                    // Aktywny: wariant „soft” (`scSoftSurface`) NA szkle, jak
+                    // każda akcja główna — pełna terakotowa tarcza z białą
+                    // strzałką była jedyną taką plamą koloru na ekranie.
+                    // Wygaszony: samo szkło, jak pole obok.
+                    Color.clear
+                        .scSoftSurface(Circle())
+                        .opacity(active ? 1 : 0)
+
+                    Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
+                        .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
+                        .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .frame(width: 50, height: 50)
+                .scChromeGlass(in: Circle(), interactive: true)
+                .glassEffectID("send", in: composerGlass)
+                .opacity(store.isStopping ? 0.5 : 1)
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.92))
+            .disabled((!store.isSending && !canSend) || store.isStopping)
+            .accessibilityLabel(sendAccessibilityLabel)
+            .animation(.easeOut(duration: 0.2), value: active)
+            .animation(.easeOut(duration: 0.2), value: store.isStopping)
+            .animation(.easeOut(duration: 0.2), value: store.isSending)
         }
         // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
         .padding(.horizontal, SCFloatingTabBar.sideMargin)

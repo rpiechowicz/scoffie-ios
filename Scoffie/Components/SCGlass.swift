@@ -17,8 +17,14 @@ extension View {
     ///
     /// Szkło nie leży na treści w przewijaniu (karty, wiersze, pola w liście) —
     /// tam zostaje strój kafla (`scTileBg` + `scTileStroke`).
-    func scChromeGlass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
-        glassEffect(interactive ? Glass.regular.interactive() : Glass.regular, in: shape)
+    ///
+    /// `tint` — barwa akcji, która coś włącza (aktywne filtry, „Wróć do
+    /// dziś”): szkło w kolorze akcentu zamiast dawnego wariantu „soft”.
+    func scChromeGlass<S: Shape>(in shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
+        var glass = Glass.regular
+        if let tint { glass = glass.tint(tint) }
+        if interactive { glass = glass.interactive() }
+        return glassEffect(glass, in: shape)
     }
 }
 
@@ -89,18 +95,85 @@ struct SCScrollEdgeBlur: View {
 }
 
 /// Rozmyty pas pod paskiem stanu — JEDEN na cały pulpit (`NavigationMenu`).
-/// Sięga dokładnie do dołu górnego bezpiecznego obszaru: niżej stoją już
-/// nagłówki zakładek (tytuł 78 pt od krawędzi) i przyciski „wstecz”
-/// wepchniętych ekranów, których pas nie może przymglić.
+/// W spoczynku sięga dokładnie do dołu górnego bezpiecznego obszaru: niżej
+/// stoją już nagłówki zakładek (tytuł 78 pt od krawędzi), których pas nie
+/// może przymglić. Gdy duży tytuł zjedzie i pojawi się kapsuła z tytułem
+/// (`SCCompactTitle`), pas schodzi o `extends` niżej — pod kapsułą treść
+/// też się chowa, jak pod nagłówkiem rozmowy w Telegramie.
 struct SCStatusBarBlur: View {
+    var extends: CGFloat = 0
+
     var body: some View {
         GeometryReader { proxy in
             SCScrollEdgeBlur(edge: .top, solidFraction: 0.6)
-                .frame(height: proxy.safeAreaInsets.top)
+                .frame(height: proxy.safeAreaInsets.top + extends)
                 .offset(y: -proxy.safeAreaInsets.top)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Kompaktowy tytuł zakładki
+
+/// Szklana kapsuła z tytułem zakładki pod paskiem stanu — pojawia się, gdy
+/// duży tytuł (`EditorialPageHeader`) zjedzie pod górną krawędź, jak nazwa
+/// czatu w Telegramie. Rysuje ją `NavigationMenu` (jedna na pulpit, nad
+/// wszystkimi zakładkami), a zakładka tylko melduje przewinięcie
+/// (`scReportsCompactTitle`). Bez dotyku: to podpis, nie przycisk.
+struct SCCompactTitle: View {
+    static let height: CGFloat = 36
+    static let top: CGFloat = 6
+    /// O ile pas pod paskiem stanu schodzi niżej, gdy kapsuła stoi.
+    static let blurExtension: CGFloat = top + height + 16
+
+    let title: String
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 15, weight: .semibold))
+            .tracking(-0.2)
+            .foregroundStyle(Color.scLabel(scheme))
+            .lineLimit(1)
+            .padding(.horizontal, 18)
+            .frame(height: Self.height)
+            .scChromeGlass(in: Capsule(style: .continuous))
+            .padding(.top, Self.top)
+            .allowsHitTesting(false)
+            // Tytuł jest już nagłówkiem dla VoiceOver w treści zakładki.
+            .accessibilityHidden(true)
+    }
+}
+
+/// Melduje, czy duży tytuł zakładki zjechał już pod górną krawędź.
+/// Bool, nie przesunięcie: stan zmienia się raz na przekroczenie progu.
+private struct SCCompactTitleReporter: ViewModifier {
+    let title: String
+    let tab: DashboardTab
+
+    @Environment(\.scTabBarChrome) private var chrome
+
+    /// Tytuł stoi 78 pt od krawędzi ekranu (`SCPageMetrics.top`) i ma
+    /// ~32 pt — po 56 pt przewinięcia jego dół wchodzi pod pasek stanu.
+    private static let threshold: CGFloat = 56
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > Self.threshold
+            } action: { _, isPast in
+                chrome.compactTitles[tab] = isPast ? title : nil
+            }
+    }
+}
+
+extension View {
+    /// Na głównym `ScrollView` zakładki z dużym tytułem w treści: po
+    /// przewinięciu pod paskiem stanu pojawia się kapsuła z tytułem.
+    func scReportsCompactTitle(_ title: String, for tab: DashboardTab) -> some View {
+        modifier(SCCompactTitleReporter(title: title, tab: tab))
     }
 }
 

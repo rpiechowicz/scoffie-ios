@@ -31,16 +31,20 @@ struct EditorialRecipesHeader: View {
             // w odległości kciuka mówiły co innego (23.09.2026).
             EditorialPageHeader("Przepisy")
 
-            HStack(spacing: 10) {
-                // To samo pole, co w liście kategorii, w wyborze przepisu do
-                // planu i w wykluczaniu składników (`SCSearchField`).
-                SCSearchField(
-                    prompt: "Szukaj przepisów",
-                    text: $searchText,
-                    onSubmit: { onSubmit?() }
-                )
+            // Pole i filtr to dwa szkła w jednej grupie — załamują światło
+            // razem (`GlassEffectContainer`), a nie jak dwie naklejki.
+            GlassEffectContainer(spacing: 10) {
+                HStack(spacing: 10) {
+                    // To samo pole, co w liście kategorii, w wyborze przepisu do
+                    // planu i w wykluczaniu składników (`SCSearchField`).
+                    SCSearchField(
+                        prompt: "Szukaj przepisów",
+                        text: $searchText,
+                        onSubmit: { onSubmit?() }
+                    )
 
-                filterButton
+                    filterButton
+                }
             }
         }
     }
@@ -49,7 +53,7 @@ struct EditorialRecipesHeader: View {
     // więc oba elementy kończą się dokładnie na tej samej wysokości.
     //
     // Włączone filtry to ten sam wariant „podświetlony”, co różdżka obok
-    // (`SCCircleIconLabel(highlighted:)`): tint i obwódka akcentu, glif
+    // (`SCCircleIconLabel(highlighted:)`): szkło w tincie akcentu, glif
     // w akcencie. Dawniej była tu pełna terakota z gradientem, białym glifem
     // i cieniem — jedyna taka plama koloru w nagłówkach aplikacji. Liczba
     // grup stoi w małej plakietce, jak liczniki w arkuszu filtrów.
@@ -77,15 +81,12 @@ struct EditorialRecipesHeader: View {
             .padding(.leading, hasActiveFilters ? 14 : 13)
             .padding(.trailing, hasActiveFilters ? 10 : 13)
             .frame(height: 44)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(hasActiveFilters ? SCPalette.terracotta.opacity(0.20) : Color.scTileBg(scheme))
-            )
-            .overlay(
-                Capsule(style: .continuous).stroke(
-                    hasActiveFilters ? SCPalette.terracotta.opacity(0.40) : Color.scTileStroke(scheme),
-                    lineWidth: 1
-                )
+            // Szkło jak pole obok; włączone filtry = szkło w tincie terakoty
+            // (ten sam „podświetlony” wariant co `SCCircleIconLabel`).
+            .scChromeGlass(
+                in: Capsule(style: .continuous),
+                tint: hasActiveFilters ? SCPalette.terracotta.opacity(0.22) : nil,
+                interactive: true
             )
             .contentShape(Capsule(style: .continuous))
         }

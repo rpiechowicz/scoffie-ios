@@ -95,26 +95,17 @@ struct SCSheetIconLabel: View {
 /// i pierścienia kroków trybu Gotuj (`CookStepRing`), który stoi naprzeciw
 /// krzyżyka na zdjęciu i ma wyglądać jak jego para.
 ///
-/// Na zdjęciu krążek PŁYWA nad treścią (zdjęcie, przewinięty przepis pod
-/// nim), więc jest Liquid Glass — jak przyciski nagłówka w Telegramie na
-/// iOS 26 (4.10.2026). Szkło ma własny brzeg i głębię: bez obwódki i cienia,
-/// a dawne kryjące tło pod materiałem (0,78) robiło z niego kremowy guzik.
-/// Na tle arkusza krążek stoi w treści — zostaje tło chipa z obwódką.
+/// Liquid Glass wszędzie — jak krzyżyk systemowych arkuszy iOS 26 i przyciski
+/// nagłówka w Telegramie (runda 1: na zdjęciu, runda 2 4.10.2026: także na
+/// tle arkusza). Szkło ma własny brzeg i głębię: bez obwódki i cienia, a dawne
+/// kryjące tło pod materiałem (0,78) robiło z krążka na zdjęciu kremowy guzik.
+/// `onImage` zmienia już tylko kolor glifu (`SCSheetIconLabel`).
 struct SCSheetIconSurface: ViewModifier {
     let onImage: Bool
 
-    @Environment(\.colorScheme) private var scheme
-
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if onImage {
-            content
-                .scChromeGlass(in: Circle(), interactive: true)
-        } else {
-            content
-                .background(Circle().fill(Color.scChipBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-        }
+        content
+            .scChromeGlass(in: Circle(), interactive: true)
     }
 }
 
