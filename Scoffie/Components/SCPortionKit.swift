@@ -33,46 +33,16 @@ struct SCPortionSummary: View {
 
     private var totalUnits: Int { segments.reduce(0) { $0 + $1.units } }
     private var isOverLimit: Bool { totalUnits > PlanPortions.maxTotalUnits }
+    private var spokenTotal: String {
+        PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings)
+    }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
 
         HStack(spacing: 16) {
             pot
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Do ugotowania")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                Text(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))
-                    .font(.system(size: 24, weight: .heavy))
-                    .tracking(-0.6)
-                    .monospacedDigit()
-                    .foregroundStyle(isOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
-                    .contentTransition(.numericText(value: Double(totalUnits)))
-                if isOverLimit {
-                    // Suma pozycji ≤ 12 — serwer odrzuca więcej; zapis czeka,
-                    // aż ktoś zejdzie z porcją.
-                    Text("Najwyżej \(PlanPortions.label(units: PlanPortions.maxTotalUnits)) porcji — zmniejsz którąś")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
-                } else if let note {
-                    Text(note)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
-                } else if let kcal {
-                    Text(verbatim: "\(kcal) kcal")
-                        .font(.system(size: 13, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .contentTransition(.numericText(value: Double(kcal)))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            details
         }
         .padding(16)
         .background(shape.fill(Color.scTileBg(scheme)))
@@ -81,10 +51,53 @@ struct SCPortionSummary: View {
         .animation(SCMotion.textRoll, value: totalUnits)
         .animation(SCMotion.textRoll, value: kcal)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "Do ugotowania \(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))"
-                + (isOverLimit ? ", za dużo, najwyżej 12 porcji" : (note.map { ", \($0)" } ?? kcal.map { ", \($0) kilokalorii" } ?? ""))
-        )
+        .accessibilityLabel(accessibilityText)
+    }
+
+    // Kolumna i zdanie dla VoiceOver poza `body` — w jednym wyrażeniu
+    // kompilator nie mieścił się w czasie („unable to type-check”).
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Do ugotowania")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Color.scMuted(scheme))
+            Text(spokenTotal)
+                .font(.system(size: 24, weight: .heavy))
+                .tracking(-0.6)
+                .monospacedDigit()
+                .foregroundStyle(isOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
+                .contentTransition(.numericText(value: Double(totalUnits)))
+            if isOverLimit {
+                // Suma pozycji ≤ 12 — serwer odrzuca więcej; zapis czeka,
+                // aż ktoś zejdzie z porcją.
+                Text("Najwyżej \(PlanPortions.label(units: PlanPortions.maxTotalUnits)) porcji — zmniejsz którąś")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            } else if let note {
+                Text(note)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            } else if let kcal {
+                Text(verbatim: "\(kcal) kcal")
+                    .font(.system(size: 13, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .contentTransition(.numericText(value: Double(kcal)))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var accessibilityText: String {
+        let lead = "Do ugotowania \(spokenTotal)"
+        if isOverLimit { return lead + ", za dużo, najwyżej 12 porcji" }
+        if let note { return lead + ", \(note)" }
+        if let kcal { return lead + ", \(kcal) kilokalorii" }
+        return lead
     }
 
     private var pot: some View {
@@ -156,6 +169,8 @@ struct SCPortionRow: View {
     @Environment(\.colorScheme) private var scheme
 
     private static let avatarSize: CGFloat = 40
+    /// Kreska zaczyna się przy tekście: wcięcie wiersza + awatar z obwódką + odstęp.
+    private static let dividerInset: CGFloat = 14 + avatarSize + 5 + 12
 
     var body: some View {
         HStack(spacing: 12) {
@@ -214,16 +229,13 @@ struct SCPortionRow: View {
                 Rectangle()
                     .fill(Color.scTileStroke(scheme))
                     .frame(height: 1)
-                    .padding(.leading, 14 + Self.avatarSize + 5 + 12)
+                    .padding(.leading, Self.dividerInset)
             }
         }
         .animation(.smooth(duration: 0.2), value: isChanged)
         .sensoryFeedback(.selection, trigger: units)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(name), \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))"
-                + (kcal.map { ", \($0) kilokalorii" } ?? "")
-        )
+        .accessibilityLabel(accessibilityText)
         .accessibilityAdjustableAction { direction in
             guard isEditable else { return }
             switch direction {
@@ -232,6 +244,12 @@ struct SCPortionRow: View {
             @unknown default: break
             }
         }
+    }
+
+    private var accessibilityText: String {
+        let spoken = "\(name), \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))"
+        guard let kcal else { return spoken }
+        return spoken + ", \(kcal) kilokalorii"
     }
 
     @ViewBuilder
