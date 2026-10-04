@@ -26,9 +26,9 @@ import SwiftUI
 ///   Lista wierszy z rundy 14 odpadła 24.09 — „nie do końca podoba mi się
 ///   design tego”.
 /// - **Dla kogo** — `PlanAudienceChips` (tylko w domu wieloosobowym).
-/// - **Porcje** — porcja każdej jedzącej osoby co 0,5 (`SCStepper`, krok
-///   10 jednostek 1/20). Dopóki lista domowników nie dojechała — jeden
-///   wiersz porcji łącznych jak dawniej.
+/// - **Porcje** — garnek i kafle osób (`SCPortionKit`, jak arkusz porcji
+///   w szczegółach), porcja każdej jedzącej osoby co 0,5. Dopóki lista
+///   domowników nie dojechała — jeden wiersz porcji łącznych jak dawniej.
 /// - **Stopka** (`scSheetFooter`, cień `SCEdgeShade`) — rolujące zdanie
 ///   „Środa, 24 września · Obiad” i przycisk, którego tytuł też roluje.
 ///
@@ -848,79 +848,66 @@ struct AddToPlanSheet: View {
         }
     }
 
-    /// Porcja każdej osoby co pół porcji. W domu jednoosobowym — jeden
-    /// wiersz „Porcje”.
+    /// Porcja każdej osoby co pół porcji — ten sam układ co arkusz porcji
+    /// w szczegółach posiłku (Rafał 4.10.2026: „zrób tak samo jak ten nasz
+    /// poprzedni sheet”): GARNEK z łukami osób i łączną liczbą porcji,
+    /// pod nim kafle osób (`Components/SCPortionKit.swift`). Dawniej karta
+    /// z wierszem „imię · liczba · stepper” na osobę.
     private var personalPortionsSection: some View {
         let ids = eaterIds
-        let names = Dictionary(members.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
-        return VStack(spacing: 0) {
-            ForEach(Array(ids.enumerated()), id: \.element) { index, memberId in
-                portionRow(
-                    title: ids.count == 1 ? "Porcje" : (names[memberId] ?? "Domownik"),
-                    memberId: memberId,
-                    allIds: ids
-                )
-                .overlay(alignment: .top) {
-                    if index > 0 {
-                        Rectangle()
-                            .fill(Color.scTileStroke(scheme))
-                            .frame(height: 1)
-                            .padding(.leading, 16)
-                    }
+        let byId = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let total = ids.reduce(0) { $0 + units(for: $1) }
+        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
+
+        return VStack(spacing: 16) {
+            SCPortionPot(
+                segments: ids.map { id in
+                    SCPortionPot.Segment(
+                        id: id,
+                        units: units(for: id),
+                        color: byId[id].map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
+                    )
+                },
+                caption: "\(kcal) kcal w garnku"
+            )
+
+            SCPortionTileGrid(count: ids.count) {
+                ForEach(ids, id: \.self) { memberId in
+                    let member = byId[memberId]
+                    let value = units(for: memberId)
+                    SCPortionTile(
+                        name: member?.displayName ?? "Domownik",
+                        avatarUrl: member?.avatarUrl,
+                        avatarColor: member?.avatarColor,
+                        seed: memberId,
+                        color: member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta,
+                        units: value,
+                        kcal: Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: value)).kcal.rounded()),
+                        isViewer: memberId == sessionStore.currentUserId,
+                        canDecrement: PlanPortions.stepped(units: value, direction: -1, totalUnits: total) != nil,
+                        canIncrement: PlanPortions.stepped(units: value, direction: 1, totalUnits: total) != nil,
+                        onStep: { direction in
+                            guard let next = PlanPortions.stepped(units: value, direction: direction, totalUnits: total) else { return }
+                            setUnits(next, for: memberId, allIds: ids)
+                        }
+                    )
                 }
             }
         }
-        .background(cardShape.fill(Color.scTileBg(scheme)))
-        .overlay(cardShape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 
-    private func portionRow(title: String, memberId: String, allIds: [String]) -> some View {
-        let value = units(for: memberId)
-        let total = allIds.reduce(0) { $0 + units(for: $1) }
-        // Suma pozycji ≤ 12 — plus nie przekroczy jej (serwer i tak by odmówił).
-        let upper = min(PlanPortions.unitsRange.upperBound, value + (PlanPortions.maxTotalUnits - total))
-        let binding = Binding<Int>(
-            get: { units(for: memberId) },
-            set: { next in
-                // Pierwsze ruszenie utrwala porcje wszystkich (dotąd liczone
-                // z punktu startowego), żeby nie przeskoczyły — migawka PRZED
-                // zapisem, bo `units(for:)` czyta punkt startowy tylko przy
-                // pustym słowniku.
-                if touchedUnits.isEmpty {
-                    touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
-                }
-                touchedUnits[memberId] = next
+    /// Porcja osoby ze steppera. Pierwsze ruszenie utrwala porcje wszystkich
+    /// (dotąd liczone z punktu startowego), żeby nie przeskoczyły — migawka
+    /// PRZED zapisem, bo `units(for:)` czyta punkt startowy tylko przy pustym
+    /// słowniku.
+    private func setUnits(_ next: Int, for memberId: String, allIds: [String]) {
+        withAnimation(.smooth(duration: 0.2)) {
+            if touchedUnits.isEmpty {
+                touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
             }
-        )
-        return HStack(spacing: 12) {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .tracking(-0.2)
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(PlanPortions.label(units: value))
-                .font(.system(size: 20, weight: .heavy))
-                .tracking(-0.3)
-                .monospacedDigit()
-                .foregroundStyle(Color.scLabel(scheme))
-                .contentTransition(.numericText(value: Double(value)))
-                .frame(minWidth: 34, alignment: .trailing)
-                .accessibilityHidden(true)
-
-            SCStepper(
-                value: binding,
-                range: PlanPortions.unitsRange.lowerBound...max(PlanPortions.unitsRange.lowerBound, upper),
-                step: PlanPortions.stepUnits,
-                accessibilityTitle: allIds.count == 1 ? "Liczba porcji" : "Porcja: \(title)",
-                accessibilityValue: PlanPortions.spokenServings(units: value, plural: PolishPlural.servings),
-                onChange: { _ in didOverrideServings = true }
-            )
+            touchedUnits[memberId] = next
+            didOverrideServings = true
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 10)
-        .frame(minHeight: 54)
     }
 
     /// Porcje łączne w jednym wierszu — zanim lista domowników dojedzie
