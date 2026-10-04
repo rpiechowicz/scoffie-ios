@@ -645,8 +645,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   strzałkę i ROZWIJA rodzaje w panelu na całą szerokość chmury (tam „Wszystkie”); sama nie
   wyklucza. Działy mają ikony i barwy alejek Zakupów (`ProductConstants.departmentIcon/Color`),
   wyniki szukania są pogrupowane po działach.
+- WYJĄTEK: szczegóły posiłku (`RecipeDetail.primaryActionBar`) mają SAME szklane przyciski w nakładce, BEZ żadnego
+  tła, cienia ani rozmytego pasa pod nimi — przepis przewija się pod nimi i widać go przez szkło (Rafał 4.10.2026,
+  kilkukrotnie: „usuń ten shadow pod buttonem, zrób to natywnie”). Nie wpinać tam `SCSheetFooter`/`AssistantStickyFooter`.
 - Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
-  (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): od 4.10.2026 (Liquid Glass runda 3,
+  (`Components/SCSheetFooter.swift`): od 4.10.2026 (Liquid Glass runda 3,
   „shadow na detail meal dolny też popraw”) pod przyciskami rozmyty pas `SCFooterScrim` =
   `SCScrollEdgeBlur` (tło arkusza 0,62 nad rozmyciem — na pasie stoi tekst) od 56 pt nad stopką do
   krawędzi ekranu: treść chowa się pod szklanymi przyciskami zamiast urywać się na kryjącej płycie.
