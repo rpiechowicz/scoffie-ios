@@ -160,7 +160,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`CalendarPlateCooking.ready`) — TYLKO dziś (D58, 4.10.2026: „nie ma sensu gotować na jutro / wczoraj / przyszły
   tydzień”; szczegóły posiłku z planu tak samo, z katalogu zawsze, wstrzymane wznawialne w każdy dzień), każda pora
   (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
-  z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół; ptaszek TYLKO przy zjedzonym,
+  z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół i stoi TYLKO tam, gdzie da się odhaczyć (dziś i wstecz; 4.10.2026: „bez sensu na przyszłym tygodniu”); ptaszek TYLKO przy zjedzonym,
   „następne” = sama obwódka w kolorze pory (4.10.2026: „nie dawaj checku w kolorze”, `CalendarMealCheck`). Po „Wstrzymaj” talerz tego wpisu
   planu (przepis + dzień + pora) to PS1 (`.paused`): pierścień kroków zamiast obręczy pory, „OBIAD · GOTUJESZ”,
   „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
@@ -685,8 +685,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „dodaj z powrotem ten natywny shadow, jednak to ma sens”). „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
   (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i strona końcowa przeglądu propozycji.
   `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
-  obok liczb = `RecipeFilterFooterButton` („Pokaż” w Filtrach i filtrach kategorii = `iconOnly`: sama strzałka
-  w szklanym krążku 50 pt, od 4.10.2026). `AssistantStickyFooter` i `AssistantSheetFooter` to już
+  obok liczb = `RecipeFilterFooterButton` („Pokaż” w Filtrach i filtrach kategorii = `iconOnly`: sam ptaszek
+  w szklanym krążku 50 pt, od 4.10.2026 — strzałka z pierwszej wersji zamieniona, bo arkusze iOS 26 zatwierdzają ptaszkiem). `AssistantStickyFooter` i `AssistantSheetFooter` to już
   tylko nakładki na nią; kreator, przewodnik i wprowadzenie Asystenta też (`SCStepFooter`, runda 14).
 - Przepływy krok po kroku (kreator „Poznajmy się”, przewodnik „Poznaj aplikację”, wprowadzenie Asystenta,
   runda 14) stoją na `Components/SCStepFlow.swift`: `SCStepHeader` (kafel `SCHeaderIconWell` 48, eyebrow
@@ -784,7 +784,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   prośba Rafała): Wszystkie · Śniadania · Obiady · Kolacje · Przekąski · Ulubione, szklane kapsuły, wybrana w tincie
   kategorii; TYLKO w stanie wyników (fraza / „Filtry”), także nad pustym stanem — w zwykłym widoku ich nie ma
   (Rafał 4.10.2026). Zawężają wyniki („kuskus” → Obiady), każda z liczbą trafień; bez frazy i filtrów zakres wraca
-  do „Wszystkie”. `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
+  do „Wszystkie”. Zmiana zakładki = nowa lista (`.id(scope)`) wjeżdża z kierunku wyboru i przenika nad starą
+  (`scopeBinding` ustawia kierunek w tej samej transakcji). `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
   nałożył nagłówek, karuzelę i sekcje na siebie).
   Przejścia (4.10.2026, „przeskakuje, szczególnie z karuzelą”): stany leżą w `ZStack` od góry (w `VStack` wchodzący
   stał pod wychodzącym i podskakiwał); zwykły widok liczy się z `browseRecipes` (dieta + filtry kategorii, BEZ frazy
