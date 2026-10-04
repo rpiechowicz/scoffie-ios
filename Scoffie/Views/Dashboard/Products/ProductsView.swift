@@ -15,7 +15,8 @@ import SwiftUI
 //   Powiązanie liczy się lokalnie z planu tygodnia (`ShoppingDishIndex`).
 // • Alejkę można zwinąć, a kupiona w całości zwija się sama. Odhaczenie nie
 //   przestawia produktu — wiersz zostaje tam, gdzie był.
-// • Wiersz „Na dziś” otwiera arkusz z dzisiejszymi daniami, a z arkusza da się
+// • „Na dziś” (szklany przycisk przyklejony do dołu, 4.10.2026) otwiera arkusz
+//   z dzisiejszymi daniami, a z arkusza da się
 //   zawęzić listę do dzisiejszych produktów.
 // • „Kupione” i „Zamknij listę” zeszły z karty hero do menu „…” i do jednej
 //   pigułki na końcu listy, która pojawia się dopiero wtedy, gdy jest co
@@ -294,6 +295,10 @@ struct ProductsView: View {
 
     // MARK: - Body
 
+    /// Pasek postępu zjechał pod górną krawędź — na górze stoi jego
+    /// przypięta kopia (`pinnedProgress`).
+    @State private var isProgressPinned = false
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
@@ -328,7 +333,27 @@ struct ProductsView: View {
                 }
                 .scrollIndicators(.hidden)
                 .ignoresSafeArea(.container, edges: .top)
+                // „Na dziś” przyklejone do dołu (Rafał 4.10.2026: „produkty
+                // na dziś osadź w buttonie, który będzie na dole przyklejony,
+                // aby móc od razu zobaczyć”) — szklany przycisk nad listą,
+                // lista przejeżdża pod nim.
+                .scSheetFooter {
+                    if listState == .content && showsTodayRow {
+                        todayButton
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.smooth(duration: 0.3), value: listState == .content && showsTodayRow)
+
+                // Przypięty pasek postępu — wchodzi, gdy prawdziwy zjedzie
+                // pod górną krawędź (Rafał: „jak scrolluję, przypnij do góry
+                // górną sekcję z progress barem”).
+                if listState == .content && isProgressPinned {
+                    pinnedProgress
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(.smooth(duration: 0.25), value: isProgressPinned)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -522,6 +547,14 @@ struct ProductsView: View {
             )
             .padding(.horizontal, pageHorizontalPadding)
             .padding(.top, 16)
+            // Położenie paska względem okna przewijania: gdy jego dół zjedzie
+            // pod górę, przypinamy kopię (`pinnedProgress`). Bool, nie
+            // przesunięcie — stan zmienia się raz na przekroczenie.
+            .onGeometryChange(for: Bool.self) { proxy in
+                proxy.frame(in: .scrollView).maxY < 8
+            } action: { pinned in
+                isProgressPinned = pinned
+            }
 
             if hasOpenRevision {
                 // Osobne zdanie, nie osobny wygląd listy: użytkownik ma
@@ -540,20 +573,8 @@ struct ProductsView: View {
                 .padding(.horizontal, pageHorizontalPadding)
                 .padding(.top, 16)
 
-            if showsTodayRow {
-                ShoppingTodayRow(
-                    missing: todayMissingItems.count,
-                    dishes: todayMissingDishCount,
-                    isFiltered: todayOnly,
-                    action: { handleTodayTap() }
-                )
-                .padding(.horizontal, pageHorizontalPadding)
-
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.horizontal, pageHorizontalPadding)
-            }
+            // „Na dziś” nie stoi już w liście — to przycisk przyklejony do
+            // dołu (`todayButton`).
 
             aisles
 
@@ -666,6 +687,35 @@ struct ProductsView: View {
 
     /// Sprężyna bez odbicia — akordeon ma się złożyć, a nie sprężynować.
     private static let foldAnimation = Animation.spring(response: 0.34, dampingFraction: 0.92)
+
+    /// „Na dziś” jako szklany przycisk przyklejony do dołu ekranu — ten sam
+    /// wiersz (`ShoppingTodayRow`: braki dziś, „Cała lista” przy filtrze),
+    /// tylko na szkle i zawsze pod ręką.
+    private var todayButton: some View {
+        ShoppingTodayRow(
+            missing: todayMissingItems.count,
+            dishes: todayMissingDishCount,
+            isFiltered: todayOnly,
+            action: { handleTodayTap() }
+        )
+        .padding(.horizontal, 18)
+        .scChromeGlass(in: Capsule(style: .continuous), interactive: true)
+    }
+
+    /// Kopia paska postępu przypięta u góry na szkle — licznik i pasek
+    /// alejek, nic więcej.
+    private var pinnedProgress: some View {
+        ShoppingProgressHeader(
+            bought: boughtCount,
+            total: activeItems.count,
+            segments: progressSegments
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .scChromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+    }
 
     /// Stuknięcie w wiersz „Na dziś”: z pełnej listy otwiera arkusz z daniami,
     /// z trybu filtra wraca do całej listy.

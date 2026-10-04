@@ -815,8 +815,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`SlotTileLayout`: 1–2 poziome w rzędzie, 3 pionowe obok siebie, 4 = 2 × 2 poziome, 5–6 = 3 kolumny pionowe;
   ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule` — i NIC więcej (runda 20: danie w kaflach „brzydkie”); podmianę mówi JEDNA karta „ZAMIENISZ · danie” ze zdjęciem nad zdaniem stopki;
   wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
-  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = `SCPortionSummary` + lista `SCPortionRow` (`Components/SCPortionKit.swift` — ten sam zestaw co
-  arkusz porcji w szczegółach, 4.10.2026); suma ponad 12 = minus działa, zapis czeka (`portionsOverLimit`); jeden wiersz
+  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = szklany przycisk z liczbą porcji OBOK „Dodaj do planu” (`portionsButton`) → arkusz
+  `portionsSheet` z `SCPortionSummary` + listą `SCPortionRow` (`Components/SCPortionKit.swift` — ten sam zestaw co
+  arkusz porcji w szczegółach, 4.10.2026; podsumowanie = „DO UGOTOWANIA” + duża liczba + kcal + pasek podziału
+  w kolorach osób; stepper w stroju `SCStepper`); suma ponad 12 = minus działa, zapis czeka (`portionsOverLimit`); jeden wiersz
   porcji łącznych tylko przed listą domowników / przy dołączaniu do dania w porze. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,
@@ -861,6 +863,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Odstęp pasek dni → nazwa dnia = 14 pt w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Plakietka
   `scCountBadge` bez kremowej obwódki (krążki są szkłem) i bez `GlassEffectContainer` wokół koszyka — grupa
   szkła nie może trzymać czegoś, co wystaje poza krążek.
+- Zakupy (4.10.2026): pasek postępu, który zjedzie pod górę, ma przypiętą kopię na szkle (`pinnedProgress`,
+  pomiar `frame(in: .scrollView)`); „Na dziś” to NIE wiersz listy, tylko szklany przycisk przyklejony do dołu
+  (`todayButton` w `.scSheetFooter`, ten sam `ShoppingTodayRow`).
 - Puste stany Zakupów (`ProductsView`, 24.09.2026 — „design jest stary, uspójnij”) stoją na `RecipeListEmptyState` (ma teraz opcjonalny `eyebrow`): tydzień bez planu = „LISTA ZAKUPÓW · Tydzień bez planu” + „Ułóż z Asystentem” (przełącza zakładkę i zamyka arkusz) i „Wróć do Planu”; plan jest, lista pusta = „Lista jest pusta” bez akcji; „Na dziś” bez produktów i otwarta rewizja bez nowych = ptaszek w szałwii („Na dziś masz wszystko” + „Pokaż całą listę”); pusta historia — ten sam klocek. Karta z koszykiem 78 pt i dwoma szarymi chipami usunięta.
 - Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
