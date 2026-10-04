@@ -208,8 +208,7 @@ private struct CookTimerRow: View {
                         .foregroundStyle(Color.scMuted(scheme))
                         .padding(.horizontal, 14)
                         .frame(height: 34)
-                        .background(Capsule().fill(Color.scChipBg(scheme)))
-                        .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                        .scChromeGlass(in: Capsule(), interactive: true)
                         .contentShape(Capsule())
                         .scTapHeight(44, drawn: 34)
                 }

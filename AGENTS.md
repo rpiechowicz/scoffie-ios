@@ -363,6 +363,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wybrany = szklana soczewka (osoby w „Cel dnia”, osoby w przeglądzie propozycji, „Ten krok / Cały przepis” w Gotuj,
   „Zamień / Dodaj obok”). Akcent na element stojący NA szkle (przycisk „Wyślij”, „Cofnij” w toaście) = `tint` tego
   jednego szkła albo zwykłe wypełnienie — bez drugiego szkła z `scSoftSurface` na pierwszym.
+  Gotuj (4.10.2026): szkło na „Wycisz” i „+N min” alarmu, „Gotuj dalej”, stepperze porcji powitania, „Pomiń” w Timerach,
+  pigułkach powodów oceny (`scChoiceSurface`). Ciemny dok (`cookDockGlass` w ciemnym = bez szkła, `cookIslandSurface`,
+  kapsuły, plakietka) ŚWIADOMIE bez zmian do decyzji Rafała. Makieta pola we wprowadzeniu Asystenta = strój prawdziwego pola.
 - Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
   (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po

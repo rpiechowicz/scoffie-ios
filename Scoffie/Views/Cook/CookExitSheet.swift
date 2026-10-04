@@ -211,8 +211,8 @@ struct CookExitSheet: View {
                     .cookText(SCCook.Typography.buttonQuiet)
                     .foregroundStyle(Color.scLabel(scheme))
                     .frame(maxWidth: .infinity, minHeight: SCCook.Height.button)
-                    .background(Capsule().fill(Color.scChipBg(scheme)))
-                    .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                    // Neutralne szkło — przycisk wtórny jak `AssistantGhostButton`.
+                    .scChromeGlass(in: Capsule(), interactive: true)
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)

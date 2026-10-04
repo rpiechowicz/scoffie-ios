@@ -249,8 +249,8 @@ struct CookFeedbackSheet: View {
                             .foregroundStyle(isOn ? SCPalette.terracotta : Color.scLabel(scheme).opacity(0.8))
                             .padding(.horizontal, 14)
                             .frame(height: 36)
-                            .background(Capsule().fill(isOn ? SCPalette.terracotta.opacity(0.14) : Color.scChipBg(scheme)))
-                            .overlay(Capsule().strokeBorder(isOn ? SCPalette.terracotta.opacity(0.45) : Color.scTileStroke(scheme), lineWidth: 1))
+                            // Wspólny chip wyboru — szkło, wybrany w tincie.
+                            .scChoiceSurface(Capsule(), isOn: isOn)
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isOn ? .isSelected : [])
