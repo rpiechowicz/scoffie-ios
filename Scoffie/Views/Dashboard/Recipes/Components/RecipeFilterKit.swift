@@ -848,10 +848,38 @@ struct RecipeFilterKcalChart: View {
 struct RecipeFilterFooterButton: View {
     let title: String
     var trailingIcon: String? = "chevron.right"
+    /// Sam glif w szklanym krążku 50 pt, słowo tylko dla VoiceOver — „Pokaż”
+    /// w filtrach (Rafał 4.10.2026: „button dalej na sheet filtrów daj samą
+    /// ikonę”).
+    var iconOnly: Bool = false
     var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
+        if iconOnly {
+            iconButton
+        } else {
+            labeledButton
+        }
+    }
+
+    private var iconButton: some View {
+        Button(action: action) {
+            Image(systemName: trailingIcon ?? "arrow.right")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(SCPalette.terracotta)
+                .frame(width: 50, height: 50)
+                .scSoftSurface(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .animation(.smooth(duration: 0.18), value: isEnabled)
+        .accessibilityLabel(title)
+    }
+
+    private var labeledButton: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title)

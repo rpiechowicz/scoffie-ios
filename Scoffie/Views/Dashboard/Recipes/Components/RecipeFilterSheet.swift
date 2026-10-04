@@ -635,7 +635,7 @@ struct RecipeFilterSheet: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(footerAccessibilityLabel(count: count, byCategory: byCategory))
 
-            RecipeFilterFooterButton(title: "Pokaż", isEnabled: count > 0, action: apply)
+            RecipeFilterFooterButton(title: "Pokaż", trailingIcon: "arrow.right", iconOnly: true, isEnabled: count > 0, action: apply)
         }
         .padding(.leading, 4)
     }

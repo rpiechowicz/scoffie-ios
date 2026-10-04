@@ -674,11 +674,14 @@ struct RecipeDetailView: View {
         .accessibilityHidden(true)
     }
 
-    /// Półarkusz „Kto ile je”: podział garnka w kolorach osób i wiersz na
-    /// osobę ze stepperem co pół porcji. Do połowy ekranu, przewijanie
-    /// rozwija na cały (dom z wieloma osobami).
+    /// Półarkusz „Kto ile je”: łączna liczba porcji do ugotowania (duża,
+    /// roluje), podział garnka w kolorach osób i wiersz na osobę ze stepperem
+    /// co pół porcji. Po zmianie w stopce wjeżdża „Zapisz porcje” (Rafał
+    /// 4.10.2026: „daj tam button do zapisu, jak się zmieni stan”), a obok
+    /// krzyżyka „Cofnij zmiany”. Do połowy ekranu, przewijanie rozwija na cały
+    /// (dom z wieloma osobami).
     private func portionsSheet(_ model: RecipeDetailPortions) -> some View {
-        let total = PlanPortions.totalUnits(portionUnits)
+        let hasChanges = !changedPortions.isEmpty
 
         return ZStack {
             SCPageBackground(scheme: scheme)
@@ -688,24 +691,80 @@ struct RecipeDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     EditorialSheetHeader(
                         eyebrow: "Kto ile je",
-                        title: "Ugotuj \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))",
+                        title: "Porcje",
                         icon: "person.2.fill",
                         accent: SCPalette.butter,
+                        subtitle: recipe.name,
                         onClose: { isPortionsSheetPresented = false }
-                    )
+                    ) {
+                        if hasChanges && model.isEditable {
+                            RecipeFilterClearButton(accessibilityLabel: "Cofnij zmiany porcji") {
+                                withAnimation(.smooth(duration: 0.3)) {
+                                    draftPortions = personalPortions?.units ?? [:]
+                                }
+                            }
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                        }
+                    }
 
                     portionsCard(model)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
-                .padding(.bottom, 24)
+                .padding(.bottom, 16)
+                .animation(.smooth(duration: 0.25), value: hasChanges)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
+            .scSheetFooter {
+                if hasChanges && model.isEditable {
+                    EditorialPrimaryActionButton(
+                        title: "Zapisz porcje",
+                        icon: "checkmark",
+                        isLoading: isSavingServings
+                    ) {
+                        // Ta sama droga co przycisk pod pigułką: zapis każdej
+                        // zmienionej osoby i zamknięcie szczegółów (razem
+                        // z tym arkuszem).
+                        performPrimaryAction()
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.smooth(duration: 0.3), value: hasChanges)
         }
         .presentationDetents([.medium, .large])
         .presentationContentInteraction(.resizes)
         .dashboardLiquidSheet()
+    }
+
+    /// Góra karty porcji: ile ugotować (duża liczba, roluje) i ile to razem
+    /// kalorii — to, po co się tu przychodzi, zanim ruszy się stepper.
+    private func portionsTotal(_ total: Int) -> some View {
+        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
+
+        return VStack(alignment: .leading, spacing: 2) {
+            Text("Do ugotowania")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(look.muted)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-0.6)
+                    .monospacedDigit()
+                    .foregroundStyle(look.fg)
+                    .contentTransition(.numericText(value: Double(total)))
+                Spacer(minLength: 8)
+                Text(verbatim: "\(kcal) kcal")
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(look.muted)
+                    .contentTransition(.numericText(value: Double(kcal)))
+            }
+        }
+        .animation(SCMotion.textRoll, value: total)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Do ugotowania \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings)), razem \(kcal) kilokalorii")
     }
 
     /// Karta porcji: pasek podziału garnka w kolorach osób (te same co
@@ -717,6 +776,11 @@ struct RecipeDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             DetailCard {
                 VStack(spacing: 0) {
+                    portionsTotal(PlanPortions.totalUnits(portionUnits))
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, model.people.count > 1 ? 10 : 6)
+
                     if model.people.count > 1 {
                         DetailPortionSplitBar(
                             segments: model.people.map { person in
@@ -728,7 +792,6 @@ struct RecipeDetailView: View {
                             }
                         )
                         .padding(.horizontal, 16)
-                        .padding(.top, 16)
                         .padding(.bottom, 4)
                         .accessibilityHidden(true)
                     }
