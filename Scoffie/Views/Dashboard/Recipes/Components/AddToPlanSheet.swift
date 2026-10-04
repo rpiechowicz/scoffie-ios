@@ -319,52 +319,17 @@ struct AddToPlanSheet: View {
 
     // MARK: - Nagłówek
 
-    /// Krój i układ `EditorialSheetHeader`, tylko w miejscu kafelka z ikoną
-    /// stoi zdjęcie dania — to jego dotyczy cały arkusz.
+    /// Wspólny nagłówek arkuszy (`EditorialSheetHeader`) ze zdjęciem dania
+    /// w miejscu kafelka — to jego dotyczy cały arkusz — i faktami (czas,
+    /// kcal) w podtytule. Dawniej własna kopia układu z własnym krzyżykiem.
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            HStack(spacing: 12) {
-                EditorialRecipeCover(recipe: recipe, size: 58, cornerRadius: 15)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("DODAJ DO PLANU")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .tracking(1.4)
-                        .foregroundStyle(SCPalette.terracotta)
-                        .lineLimit(1)
-
-                    Text(recipe.name)
-                        .font(.system(size: 20, weight: .heavy))
-                        .tracking(-0.4)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if !facts.isEmpty {
-                        HStack(spacing: 10) {
-                            ForEach(facts) { fact in
-                                HStack(spacing: 4) {
-                                    Image(systemName: fact.icon)
-                                        .font(.system(size: 10.5, weight: .semibold))
-                                    Text(fact.text)
-                                        .font(.system(size: 12.5, weight: .semibold))
-                                        .monospacedDigit()
-                                }
-                                .foregroundStyle(Color.scMuted(scheme))
-                            }
-                        }
-                        .padding(.top, 1)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            SCSheetCloseButton(action: { dismiss() })
-        }
+        EditorialSheetHeader(
+            eyebrow: "Dodaj do planu",
+            title: recipe.name,
+            subtitle: facts.isEmpty ? nil : facts.map(\.text).joined(separator: " · "),
+            leading: AnyView(EditorialRecipeCover(recipe: recipe, size: 52, cornerRadius: 14)),
+            onClose: { dismiss() }
+        )
     }
 
     // MARK: - Kiedy

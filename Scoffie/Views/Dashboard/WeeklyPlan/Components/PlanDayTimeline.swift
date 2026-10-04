@@ -689,27 +689,28 @@ struct PlanTimelineEmptyRow: View {
     /// więc machnięcie w bok nie może go „stuknąć” po drodze.
     @Environment(\.dayPagerGate) private var pagerGate
 
+    /// Środek kropki na szynie od góry znacznika: 2 pt odstępu + 3 pt
+    /// pierścienia maski + połowa 9-punktowej kropki (`PlanRailMark`).
+    private static let dotCenter: CGFloat = 2 + 3 + 4.5
+
+    /// Kropka z godziną stoi na wysokości ŚRODKA przerywanego obrysu (Rafał
+    /// 4.10.2026: „kreski nie są na równo z czasem”), a między pustymi porami
+    /// nie ma kresek — obrys sam oddziela pory. Dawniej kropka u góry wiersza,
+    /// a kreska pod obrysem, więc nic nie trzymało jednej linii.
     var body: some View {
-        HStack(alignment: .top, spacing: PlanTimelineMetrics.gutter) {
+        HStack(alignment: .center, spacing: PlanTimelineMetrics.gutter) {
             PlanRailMark(
                 time: sessionStore.mealSlotSchedule.time(for: slot),
                 color: slot.cozyAccent,
                 hollow: true,
                 muted: true
             )
+            .alignmentGuide(VerticalAlignment.center) { _ in Self.dotCenter }
 
-            VStack(alignment: .leading, spacing: 0) {
-                tappableContent
-                    .padding(.bottom, PlanTimelineMetrics.rowBottom)
-
-                if !isLast {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-            }
+            tappableContent
         }
         .padding(.top, PlanTimelineMetrics.rowTop)
+        .padding(.bottom, isLast ? PlanTimelineMetrics.rowBottom : 0)
     }
 
     /// Celem dotyku jest CAŁY wiersz, a nie sam napis po prawej.

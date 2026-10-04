@@ -913,6 +913,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Świadomie bez kafelka: `AddToPlanSheet` (tę rolę gra zdjęcie dania), `AssistantOptionsStorySheet`
   (pełne zdjęcie jak szczegóły posiłku), `AssistantHowItWorksView` (przepływ kroków). Nowy arkusz =
   od razu z `icon:`.
+- Nagłówek arkusza = JEDEN, `EditorialSheetHeader` (4.10.2026, Rafał: „1:1 wszędzie tak samo — globalny komponent
+  ze slotami”): `icon` albo `leading` (własny widok, np. zdjęcie dania w „Dodaj do planu”), `eyebrow` (pusty = bez
+  wiersza), `title`, `subtitle`, `accessory` (akcje obok krzyżyka), krzyżyk `SCSheetCloseButton`, `compact`.
+  `ShoppingSheetHeader` i `AssistantSheetHeader` to nakładki na niego; arkusz wyjścia z Gotuj też na nim (krzyżyk =
+  „Gotuj dalej”). Własny układ mają tylko arkusze ze zdjęciem na całą górę (szczegóły posiłku, przegląd propozycji).
+  Krążki nagłówka na tle arkusza = szkło z jasnym tintem (na zdjęciu czyste szkło).
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
