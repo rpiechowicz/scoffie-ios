@@ -358,7 +358,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Runda 2 (4.10.2026): szkło mają też krążki nagłówków (`SCCircleIconLabel` — podświetlony = `tint` akcentu; rząd
   akcji Planu w `GlassEffectContainer`), krzyżyk i sąsiedzi w KAŻDYM arkuszu (`SCSheetIconSurface`, `onImage` zmienia
   już tylko kolor glifu), „Wyczyść” (`RecipeFilterClearButton`) i „Wróć do dziś” (szkło w tincie terakoty),
-  `SCSearchField` + przycisk filtrów na Przepisach (jedna grupa) i karta skrótu nad polem Asystenta — w grupie
+  pasek szukania Przepisów (`RecipesSearchBar`, jedna grupa) i karta skrótu nad polem Asystenta — w grupie
   `composerGlass` z polem i „Wyślij” (`glassEffectID`), więc wyrasta z pola i w nie wsiąka. Po przewinięciu dużego
   tytułu (Przepisy, Ustawienia: `scReportsCompactTitle`) pod paskiem stanu staje szklana kapsuła z tytułem
   (`SCCompactTitle`, rysuje `NavigationMenu` z `SCTabBarChrome.compactTitles`), a pas rozmycia schodzi pod nią.
@@ -774,6 +774,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `RecipeFilterPickerSheet` (`.medium/.large`, nagłówek `compact`, „Wyczyść” tylko swojej grupy, stopka „N z M” +
   „Gotowe”) z TYMI SAMYMI kafelkami, piszącymi na żywo do kopii roboczej rodzica. Wszystkie podarkusze „Filtrów”
   idą jednym `sheet(item: $openPane)`. Filtry kategorii: kuchnia i okazje (`hidesEmptyOptions`) tak samo.
+- Przepisy jak Poczta na iOS 26 (4.10.2026, Rafał: „na dole wyszukiwarka, po lewej button od filtrów”): pływający
+  `RecipesSearchBar` NAD dolnym menu (`safeAreaInset` jak pigułka Planu, zwija się z menu, rozmyty pas od niego w dół —
+  `.recipes` w `NavigationMenu.ownBottomEdge`): szklany krążek filtrów 50 pt (tint + `scCountBadge` przy filtrach) ·
+  szklana kapsuła pola · przy fokusie krążek z krzyżykiem (czyści i chowa klawiaturę); przy klawiaturze jedzie nad nią.
+  Na górze sam `EditorialPageHeader("Przepisy")` (`EditorialRecipesHeader` usunięty). Fraza ALBO filtry z „Filtrów”
+  = STAN WYNIKÓW, jeden dla obu: `RecipeResultsHeader` (etykieta, duża liczba, „fraza” · filtry, szklane „Wyczyść”)
+  i JEDNA płaska lista `RecipeRowStack` — bez karuzeli i sekcji („nie może być mocnego podziału na sekcje”); przy
+  frazie najpierw nazwy zaczynające się nią, potem słowo, reszta nazw, sam opis. Dieta z profilu i filtry jednej
+  kategorii zostają w zwykłym widoku (filtry kategorii = plakietka na strzałce sekcji).
 - Karuzela na Przepisach: karta 330 pt (nie 420 z makiety) — zdjęcia są kwadratowe i przy 420
   `scaledToFill` skalował je do wysokości, przybliżając talerz. Kolejność kart jest ZAMROŻONA
   (`featuredOrder`) między ułożeniami (wyszukiwanie, filtry, dopasowanie, doba, katalog): ranking
@@ -938,8 +947,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
   gospodarstwo). Pole szukania = `SCSearchField` (kapsuła 44 pt, krzyżyk, obwódka przy fokusie; przy
-  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — jedyny wyjątek to pływające pole
-  rozmów Asystenta. Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
+  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — wyjątki to pływające pole
+  rozmów Asystenta i pasek szukania Przepisów (`RecipesSearchBar`). Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
   Podpowiedź szukania kategorii: `RecipesConstants.searchPrompt(for:)` („Szukaj w śniadaniach”, nie „w śniadania”).
 - Po audycie spójności (runda 8, 23.09.2026, 26 punktów): akcja niszcząca = `SCDestructiveButton`
   (soft kapsuła w ciepłej czerwieni: wyloguj, usuń konto, opuść gospodarstwo, odłącz Cookidoo/Zdrowie);
