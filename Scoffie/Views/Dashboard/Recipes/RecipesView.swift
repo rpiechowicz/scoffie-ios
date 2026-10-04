@@ -373,6 +373,8 @@ struct RecipesView: View {
         .scrollIndicators(.hidden)
         // Kierunek przewijania steruje zwijaniem dolnego menu.
         .scTracksTabBarCompaction()
+        // Duży tytuł zjechał — pod paskiem stanu staje szklana kapsuła.
+        .scReportsCompactTitle("Przepisy", for: .recipes)
         .ignoresSafeArea(.container, edges: .top)
     }
 

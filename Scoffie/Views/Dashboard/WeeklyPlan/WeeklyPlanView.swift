@@ -653,40 +653,44 @@ struct WeeklyPlanView: View {
 
     private var headerRow: some View {
         EditorialPageHeader(title: "Plan tygodnia") {
-            HStack(spacing: 6) {
-                // Asystent stoi w nagłówku EKRANU, a nie w nagłówku dnia —
-                // dotyczy całego tygodnia, tak jak sąsiednie akcje.
-                //
-                // Pigułka z podpisem, a nie sama ikona (runda 9, 23.09.2026 —
-                // „przerób na aktualne standardy”): podświetlone kółko
-                // z iskierkami było jedyną pomarańczową plamą bez słowa
-                // w nagłówkach aplikacji i przy pustym tygodniu nikt nie
-                // wiedział, że to właśnie ono układa plan. „Ułóż” mówi to
-                // wprost, w wariancie „soft”, jak każda akcja główna.
-                //
-                // Pusty tydzień = pigułka oddycha (27.09.2026). Zastąpiła
-                // kartę „Ten tydzień jest jeszcze pusty” nad osią dnia.
-                PlanAssistantPill(invites: invitesAssistant) { simpleSheet = .assistantIntro }
+            // Szklane krążki obok siebie w jednej grupie — załamują światło
+            // razem, jak przyciski nagłówka w iOS 26.
+            GlassEffectContainer(spacing: 6) {
+                HStack(spacing: 6) {
+                    // Asystent stoi w nagłówku EKRANU, a nie w nagłówku dnia —
+                    // dotyczy całego tygodnia, tak jak sąsiednie akcje.
+                    //
+                    // Pigułka z podpisem, a nie sama ikona (runda 9, 23.09.2026 —
+                    // „przerób na aktualne standardy”): podświetlone kółko
+                    // z iskierkami było jedyną pomarańczową plamą bez słowa
+                    // w nagłówkach aplikacji i przy pustym tygodniu nikt nie
+                    // wiedział, że to właśnie ono układa plan. „Ułóż” mówi to
+                    // wprost, w wariancie „soft”, jak każda akcja główna.
+                    //
+                    // Pusty tydzień = pigułka oddycha (27.09.2026). Zastąpiła
+                    // kartę „Ten tydzień jest jeszcze pusty” nad osią dnia.
+                    PlanAssistantPill(invites: invitesAssistant) { simpleSheet = .assistantIntro }
 
-                // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
-                // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
-                //
-                // Plakietka z liczbą jest ceną za to przeniesienie. Zakupy
-                // przestały być zakładką, więc nic na ekranie nie mówiło, że
-                // coś w nich zostało — żeby się dowiedzieć, trzeba było
-                // otworzyć arkusz. Teraz koszyk niesie tę jedną liczbę, która
-                // ma znaczenie: ile produktów czeka na kupienie.
-                EditorialIconButton(
-                    icon: MenuConstans.Products.icon,
-                    size: Self.headerActionSize,
-                    tapTarget: 44
-                ) {
-                    simpleSheet = .products
+                    // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
+                    // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
+                    //
+                    // Plakietka z liczbą jest ceną za to przeniesienie. Zakupy
+                    // przestały być zakładką, więc nic na ekranie nie mówiło, że
+                    // coś w nich zostało — żeby się dowiedzieć, trzeba było
+                    // otworzyć arkusz. Teraz koszyk niesie tę jedną liczbę, która
+                    // ma znaczenie: ile produktów czeka na kupienie.
+                    EditorialIconButton(
+                        icon: MenuConstans.Products.icon,
+                        size: Self.headerActionSize,
+                        tapTarget: 44
+                    ) {
+                        simpleSheet = .products
+                    }
+                    .scCountBadge(shoppingRemainingCount)
+                    .accessibilityLabel(shoppingAccessibilityLabel)
+
+                    overflowMenu
                 }
-                .scCountBadge(shoppingRemainingCount)
-                .accessibilityLabel(shoppingAccessibilityLabel)
-
-                overflowMenu
             }
         }
     }

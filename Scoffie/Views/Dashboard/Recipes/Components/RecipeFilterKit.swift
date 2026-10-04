@@ -879,7 +879,7 @@ struct RecipeFilterFooterButton: View {
 /// „Wyczyść” obok krzyżyka — pojawia się dopiero, gdy jest co czyścić.
 /// Ten sam w filtrach, w wykluczaniu składników i w alergenach.
 ///
-/// Sama ikona w terakotowym krążku „soft”, rozmiarem jak krzyżyk arkusza
+/// Sama ikona w terakotowym szklanym krążku, rozmiarem jak krzyżyk arkusza
 /// (Rafał, 24.09: „zmień button z ikona+wyczyść na samą ikonę”). Słowo
 /// zostaje tylko dla VoiceOver.
 struct RecipeFilterClearButton: View {
@@ -893,7 +893,9 @@ struct RecipeFilterClearButton: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 36, height: 36)
-                .scSoftSurface(Circle())
+                // Szkło w tincie terakoty — para dla szklanego krzyżyka obok
+                // (`SCSheetIconSurface`, Liquid Glass runda 2).
+                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22), interactive: true)
                 .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))

@@ -524,6 +524,8 @@ struct SettingsView: View {
                 .scrollIndicators(.hidden)
                 // Kierunek przewijania steruje zwijaniem dolnego menu.
                 .scTracksTabBarCompaction()
+                // Duży tytuł zjechał — pod paskiem stanu staje szklana kapsuła.
+                .scReportsCompactTitle("Ustawienia", for: .settings)
                 .ignoresSafeArea(.container, edges: .top)
             }
             // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ

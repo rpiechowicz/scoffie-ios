@@ -121,8 +121,10 @@ struct AssistantAppShortcutCard: View {
             }
         }
         .padding(14)
-        .background(shape.fill(AssistantLook.card(scheme)))
-        .overlay(shape.strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1))
+        // Pływa nad rozmową razem z polem — szkło jak pole, nie strój kafla
+        // (Liquid Glass runda 2). `AssistantView.composer` daje mu tożsamość
+        // w grupie szkła, więc karta wyrasta z pola i w nie wsiąka.
+        .scChromeGlass(in: shape)
         .padding(.horizontal, 16)
         .padding(.top, 8)
     }

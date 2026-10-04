@@ -345,6 +345,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `safeAreaBar`: zakładki przewijają pod górnym obszarem (`ignoresSafeArea`) i paski stoją w `overlay`.
   Menu: wybraną zakładkę mówi KOLOR ikony i podpisu (terakota, reszta `scLabel`); neutralna soczewka tylko pod
   palcem (Rafał: „na active ikona ma mieć kolor, a nie cały state”) — nie wracać do terakotowej pigułki w spoczynku.
+  Runda 2 (4.10.2026): szkło mają też krążki nagłówków (`SCCircleIconLabel` — podświetlony = `tint` akcentu; rząd
+  akcji Planu w `GlassEffectContainer`), krzyżyk i sąsiedzi w KAŻDYM arkuszu (`SCSheetIconSurface`, `onImage` zmienia
+  już tylko kolor glifu), „Wyczyść” (`RecipeFilterClearButton`) i „Wróć do dziś” (szkło w tincie terakoty),
+  `SCSearchField` + przycisk filtrów na Przepisach (jedna grupa) i karta skrótu nad polem Asystenta — w grupie
+  `composerGlass` z polem i „Wyślij” (`glassEffectID`), więc wyrasta z pola i w nie wsiąka. Po przewinięciu dużego
+  tytułu (Przepisy, Ustawienia: `scReportsCompactTitle`) pod paskiem stanu staje szklana kapsuła z tytułem
+  (`SCCompactTitle`, rysuje `NavigationMenu` z `SCTabBarChrome.compactTitles`), a pas rozmycia schodzi pod nią.
+  Toast (`SCToastHost`) świadomie BEZ szkła: wyrasta z Dynamic Island jako czerń i stygnie do koloru — szkło nie
+  zacznie się czernią wyspy, a toast niesie błędy, które mają być czytelne zawsze.
 - Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
   (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po

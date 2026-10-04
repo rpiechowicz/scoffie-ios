@@ -91,7 +91,19 @@ struct NavigationMenu: View {
         // przejeżdżać ostro pod zegarem i Dynamic Island (Telegram, iOS 26).
         // Jeden pas na wszystkie zakładki, w samym górnym bezpiecznym obszarze.
         .overlay(alignment: .top) {
-            SCStatusBarBlur()
+            let compactTitle = chrome.compactTitles[session.dashboardTab]
+            ZStack(alignment: .top) {
+                SCStatusBarBlur(extends: compactTitle == nil ? 0 : SCCompactTitle.blurExtension)
+
+                // Duży tytuł zjechał — jego miejsce pod paskiem stanu bierze
+                // szklana kapsuła (Telegram). Zmiana zakładki = cięcie, jak
+                // treść; animuje się tylko pojawienie i zniknięcie.
+                if let compactTitle {
+                    SCCompactTitle(title: compactTitle)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .top)))
+                }
+            }
+            .animation(.smooth(duration: 0.3), value: compactTitle == nil)
         }
         .overlay(alignment: .bottom) {
             SCFloatingTabBar(
