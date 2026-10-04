@@ -231,33 +231,6 @@ struct AssistantOptionsDebugScreen: View {
                 .padding(.top, 50)
             }
             .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
-        } else if mode == "plan-ulos" || mode == "plan-asystent" || mode == "plan-asystent-dom" {
-            // Pigułka „Ułóż” z Planu: zwykła i oddychająca (pusty tydzień).
-            // `plan-asystent` = nad nimi arkusz „Ułożę Ci ten tydzień”,
-            // `-dom` = gospodarstwo z trzema osobami.
-            ZStack(alignment: .top) {
-                SCPageBackground(scheme: scheme).ignoresSafeArea()
-                HStack(spacing: 24) {
-                    PlanAssistantPill {}
-                    PlanAssistantPill(invites: true) {}
-                }
-                .padding(.top, 120)
-            }
-            .sheet(isPresented: .constant(mode != "plan-ulos")) {
-                PlanAssistantIntroSheet(
-                    members: mode == "plan-asystent-dom"
-                        ? ["Rafał", "Ania", "Zosia"].enumerated().map { index, name in
-                            HouseholdMemberSnapshot(id: "debug-\(index)", displayName: name, email: nil, avatarUrl: nil, avatarColor: index, role: index == 0 ? "OWNER" : "MEMBER")
-                        }
-                        : [],
-                    days: PlanWeek.dates(from: PlanWeek.monday(of: Date())),
-                    slots: MealSlot.core,
-                    onOpenAssistant: {}
-                )
-                .presentationDetents([.large])
-                .dashboardLiquidSheet()
-                .interactiveDismissDisabled()
-            }
         } else if mode == "asystent-jak" {
             SCPageBackground(scheme: scheme).ignoresSafeArea()
                 .sheet(isPresented: .constant(true)) {
