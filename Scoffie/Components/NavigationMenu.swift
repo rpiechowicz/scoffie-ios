@@ -58,7 +58,7 @@ struct NavigationMenu: View {
     /// Zakładki z własnym pływającym elementem nad paskiem (pigułka „Cel
     /// dnia”, pole asystenta). Rozmyty pas rysują od NIEGO w dół, więc pas
     /// paska zakładek byłby drugim materiałem na pierwszym.
-    private static let ownBottomEdge: Set<DashboardTab> = [.plan, .assistant]
+    private static let ownBottomEdge: Set<DashboardTab> = [.recipes, .plan, .assistant]
 
     var body: some View {
         @Bindable var session = sessionStore

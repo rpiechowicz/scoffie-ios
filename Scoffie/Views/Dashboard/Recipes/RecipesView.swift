@@ -5,12 +5,15 @@ import SwiftUI
 // Source: design/Scoffie - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
 //
 // Layout (top → bottom):
-//   1. EditorialRecipesHeader  — tytuł "Przepisy" + pigułka wyszukiwarki
+//   1. EditorialPageHeader     — tytuł "Przepisy"
 //   2. EditorialRecipesHero    — eyebrow + "Smaki na dziś" z terakotowym pionem
 //   3. Karuzela kart-story     — pełna szerokość, paging, kropki
 //   4. Sekcje Tasting menu     — po jednej na `RecipesCategory.catalogSections`
 //      (Śniadania / Obiady / Kolacje / Przekąski i desery), każda z
 //      EditorialRecipesSectionHeader nad listą EditorialRecipeRow
+//   Na dole, nad menu: `RecipesSearchBar` (filtry + szukanie, jak Poczta).
+//   Szukanie albo filtry z „Filtrów” = STAN WYNIKÓW: `RecipeResultsHeader`
+//   i jedna płaska lista — bez karuzeli i sekcji (4.10.2026).
 //
 // Stylistyka i paddings idą za pozostałymi widokami v2 (Ustawienia, Produkty,
 // Kalendarz): `SCPageBackground`, `pageTopPadding=78`, `pageHorizontalPadding=20`,
@@ -19,6 +22,8 @@ struct RecipesView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scTabBarChrome) private var tabBarChrome
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Co dziesięć minut — wystarczy, żeby zestaw zmienił się najdalej dziesięć
     /// minut po piątej, a nie budzi widoku częściej niż trzeba.
@@ -146,6 +151,51 @@ struct RecipesView: View {
 
     private var hasVisibleRecipes: Bool {
         mealSections.contains { !$0.recipes.isEmpty }
+    }
+
+    /// Stan wyników: fraza albo filtry z arkusza „Filtry” (Rafał 4.10.2026:
+    /// „jak już się wyszuka, nie może być karuzeli i takiego mocnego podziału
+    /// na sekcje”; „jak filtrujemy globalnie, karuzela też może zniknąć”).
+    /// Dieta z profilu i filtry jednej kategorii zostają w zwykłym widoku —
+    /// to stałe ustawienia, nie szukanie (filtry kategorii mówi plakietka na
+    /// strzałce sekcji).
+    private var isResultsMode: Bool {
+        !debouncedSearchText.isEmpty || filters.activeCount > 0
+    }
+
+    /// Wyniki w jednej liście. Przy frazie najpierw nazwy, które się nią
+    /// ZACZYNAJĄ, potem te, w których słowo się nią zaczyna, potem reszta
+    /// nazw, na końcu trafienia w samym opisie; w obrębie grupy kolejność
+    /// zostaje (dopasowanie do celu).
+    private var resultRecipes: [Recipe] {
+        let visible = visibleRecipes
+        let query = debouncedSearchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return visible }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        func rank(_ recipe: Recipe) -> Int {
+            let name = recipe.name
+            if name.range(of: query, options: options.union(.anchored)) != nil { return 0 }
+            if name.split(separator: " ").contains(where: {
+                String($0).range(of: query, options: options.union(.anchored)) != nil
+            }) { return 1 }
+            if name.range(of: query, options: options) != nil { return 2 }
+            return 3
+        }
+        return visible.enumerated()
+            .map { (rank: rank($0.element), index: $0.offset, recipe: $0.element) }
+            .sorted { ($0.rank, $0.index) < ($1.rank, $1.index) }
+            .map(\.recipe)
+    }
+
+    /// Wyjście ze stanu wyników — fraza i filtry z „Filtrów” (filtry
+    /// kategorii zostają; czyści je ich własny arkusz).
+    private func clearResults() {
+        searchDebounceTask?.cancel()
+        withAnimation(.smooth(duration: 0.3)) {
+            searchText = ""
+            debouncedSearchText = ""
+            filters.resetGlobal()
+        }
     }
 
     /// Karty karuzeli: zamrożona kolejność (`featuredOrder`) z bieżącymi
@@ -332,23 +382,23 @@ struct RecipesView: View {
     // MARK: - Content tree
 
     private var content: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                EditorialRecipesHeader(
-                    searchText: $searchText,
-                    activeFilterCount: filters.activeCount,
-                    onSubmit: { debouncedSearchText = searchText },
-                    onOpenFilters: { isFilterSheetPresented = true }
-                )
-                .padding(.horizontal, pageHorizontalPadding)
-                .padding(.top, pageTopPadding)
-                .padding(.bottom, 18)
+                EditorialPageHeader("Przepisy")
+                    .id(Self.topAnchor)
+                    .padding(.horizontal, pageHorizontalPadding)
+                    .padding(.top, pageTopPadding)
+                    .padding(.bottom, 18)
 
                 // Szkielet → dane przenika, nie skacze (pierwsze wejście
-                // po uruchomieniu aplikacji).
+                // po uruchomieniu aplikacji); zwykły widok ↔ wyniki też.
                 Group {
                     if shouldShowSkeleton {
                         skeletonState
+                            .transition(.opacity)
+                    } else if isResultsMode {
+                        resultsState
                             .transition(.opacity)
                     } else if !hasVisibleRecipes {
                         emptyState
@@ -361,6 +411,7 @@ struct RecipesView: View {
                     }
                 }
                 .animation(.easeOut(duration: 0.3), value: shouldShowSkeleton)
+                .animation(.smooth(duration: 0.3), value: isResultsMode)
 
                 if recipeCatalogStore.isLoadingMore {
                     ProgressView()
@@ -372,11 +423,104 @@ struct RecipesView: View {
             .padding(.bottom, pageBottomPadding)
         }
         .scrollIndicators(.hidden)
+        // Przewinięcie listy chowa klawiaturę — jak w Poczcie.
+        .scrollDismissesKeyboard(.immediately)
         // Kierunek przewijania steruje zwijaniem dolnego menu.
         .scTracksTabBarCompaction()
         // Duży tytuł zjechał — pod paskiem stanu staje szklana kapsuła.
         .scReportsCompactTitle("Przepisy", for: .recipes)
         .ignoresSafeArea(.container, edges: .top)
+        // Nowa fraza albo wejście w wyniki / wyjście z nich — od góry
+        // (wyniki mogły zacząć się wysoko nad miejscem, w którym się było).
+        .onChange(of: debouncedSearchText) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
+        .onChange(of: isResultsMode) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
+        }
+        // Pasek szukania wchodzi bezpiecznym obszarem jak pigułka „Cel dnia”
+        // w Planie: lista przejeżdża pod szkłem, ale kończy się nad nim.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            RecipesSearchBar(
+                text: $searchText,
+                activeFilterCount: filters.activeCount,
+                onSubmit: { debouncedSearchText = searchText },
+                onOpenFilters: { isFilterSheetPresented = true }
+            )
+            .padding(.horizontal, pageHorizontalPadding)
+            // Zwija się RAZEM z dolnym menu (ten sam ruch co pigułka Planu).
+            .scaleEffect(tabBarChrome.isCompact ? 0.94 : 1, anchor: .bottom)
+            .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
+            .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity)
+            // Treść chowa się pod paskiem i menu — rozmyty pas od 28 pt nad
+            // paskiem do krawędzi ekranu (`NavigationMenu.ownBottomEdge`).
+            .background(alignment: .top) {
+                SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
+                    .padding(.top, -28)
+                    .ignoresSafeArea(.container, edges: .bottom)
+            }
+        }
+    }
+
+    private static let topAnchor = "recipes-top"
+
+    // MARK: - Wyniki
+
+    @ViewBuilder
+    private var resultsState: some View {
+        let results = resultRecipes
+        VStack(alignment: .leading, spacing: 0) {
+            RecipeResultsHeader(
+                count: results.count,
+                query: debouncedSearchText,
+                filterLabels: filters.summaryLabels,
+                onClear: clearResults
+            )
+            .padding(.horizontal, pageHorizontalPadding)
+            .padding(.bottom, 10)
+
+            if results.isEmpty {
+                resultsEmptyState
+                    .padding(.horizontal, pageHorizontalPadding)
+                    .padding(.top, 14)
+                    .transition(.opacity)
+            } else {
+                RecipeRowStack(recipes: results) { recipe in
+                    openDetail(for: recipe)
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.smooth(duration: 0.25), value: results.isEmpty)
+    }
+
+    /// Pusto w wynikach: powód w kafelku (lupa / filtry) i akcja, która go
+    /// zdejmuje — ten sam klocek, co puste listy kategorii i wyboru do planu.
+    private var resultsEmptyState: some View {
+        let hasQuery = !debouncedSearchText.isEmpty
+        let hasFilters = filters.activeCount > 0
+        var actions: [RecipeListEmptyState.Action] = []
+        if hasFilters {
+            actions.append(.init(title: "Wyczyść filtry") {
+                withAnimation(.smooth(duration: 0.3)) { filters.resetGlobal() }
+            })
+        }
+        if hasQuery {
+            actions.append(.init(title: "Wyczyść frazę", icon: "xmark") {
+                searchDebounceTask?.cancel()
+                withAnimation(.smooth(duration: 0.3)) {
+                    searchText = ""
+                    debouncedSearchText = ""
+                }
+            })
+        }
+        return RecipeListEmptyState(
+            icon: hasQuery ? "magnifyingglass" : "line.3.horizontal.decrease",
+            title: "Nic nie pasuje",
+            message: hasQuery && hasFilters
+                ? "Żaden przepis nie pasuje do frazy i filtrów."
+                : hasQuery ? "Spróbuj innej frazy." : "Poluzuj filtry, żeby zobaczyć więcej.",
+            actions: actions
+        )
     }
 
     @ViewBuilder
