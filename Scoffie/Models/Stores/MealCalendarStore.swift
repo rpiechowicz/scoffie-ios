@@ -24,6 +24,12 @@ class MealCalendarStore {
     private var observedWeekStart: String?
     private var observedWeekDates: [Date] = []
     private var lastWeekChangeVersionByWeek: [String: Int64] = [:]
+    /// Numer ostatniego odczytu tygodnia. Plan i Kalendarz mają osobne
+    /// tygodnie, a przełączanie zakładek (A → B → A) puszcza kolejne odczyty
+    /// tego samego tygodnia; odpowiedzi potrafią przyjść w odwrotnej
+    /// kolejności, a anulowanie nie przerywa czekania na ACK. Starsza
+    /// odpowiedź nie może nadpisać nowszej — wygrywa tylko ostatni odczyt.
+    private var weekLoadGeneration: [String: Int] = [:]
     private var pendingWeekReloadTask: Task<Void, Never>?
     /// Błędy łączności NIE trafiają tu wcale — `inlineMessage` oddaje na nie
     /// `nil` i melduje je w `ConnectivityMonitor`, który mówi o braku sieci
@@ -116,8 +122,11 @@ class MealCalendarStore {
         guard let weeklyPlanRepository else { return }
         observedWeekStart = weekStart
         observedWeekDates = dates
+        let generation = (weekLoadGeneration[weekStart] ?? 0) + 1
+        weekLoadGeneration[weekStart] = generation
         do {
             let slots = try await weeklyPlanRepository.fetchWeekPlan(weekStart: weekStart)
+            guard weekLoadGeneration[weekStart] == generation else { return }
             // Porcje znane sprzed odświeżenia, po `PlanItem.id`. Odczyt tygodnia
             // odtwarza plan od zera, więc bez tej mapy pozycja, przy której
             // serwer nie podał `plannedServings`, traciła zapisaną liczbę —
@@ -156,6 +165,7 @@ class MealCalendarStore {
             save()
             errorMessage = nil
         } catch {
+            guard weekLoadGeneration[weekStart] == generation else { return }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
@@ -583,6 +593,9 @@ class MealCalendarStore {
         observedWeekStart = nil
         observedWeekDates = []
         lastWeekChangeVersionByWeek = [:]
+        // Odczyty w locie sprzed resetu (stare gospodarstwo) przegrywają —
+        // numer idzie w górę, nie do zera.
+        weekLoadGeneration = weekLoadGeneration.mapValues { $0 + 1 }
         pendingWeekReloadTask?.cancel()
         pendingWeekReloadTask = nil
         save()
