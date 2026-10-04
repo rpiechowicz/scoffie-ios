@@ -24,6 +24,17 @@ import SwiftUI
 //   „Jak pracowałem” i „Co poprawić?” u Asystenta (27.09.2026 — „header
 //   jest zbyt duży”); ten sam układ, tylko w skali połowy ekranu.
 //
+// - `leading` — własny widok w miejscu kafelka (zdjęcie dania w „Dodaj do
+//   planu”);
+// - pusty `eyebrow` — bez wiersza nad tytułem (arkusze Zakupów mają eyebrow
+//   własnym wierszem pod nagłówkiem).
+//
+// JEDEN nagłówek WSZYSTKICH arkuszy (Rafał 4.10.2026: „to powinno być 1:1
+// wszędzie tak samo — globalny komponent ze slotami: icon, title, subtitle, X,
+// right button actions”). `ShoppingSheetHeader` i `AssistantSheetHeader` to
+// już tylko nakładki na niego, „Dodaj do planu” stoi na nim ze zdjęciem
+// w `leading`. Nowy arkusz = ten nagłówek, nie własny.
+//
 // Bez tych dodatków wywołanie zostaje takie jak było:
 // `EditorialSheetHeader(eyebrow:title:) { zamknij }`.
 struct EditorialSheetHeader<Accessory: View>: View {
@@ -36,6 +47,8 @@ struct EditorialSheetHeader<Accessory: View>: View {
     /// podtytuł z imieniem woli przenikanie, bo rolowanie przetacza litery.
     let subtitleTransition: ContentTransition
     let compact: Bool
+    /// Własny widok w miejscu kafelka z ikoną (zdjęcie dania).
+    let leading: AnyView?
     let onClose: () -> Void
     let accessory: () -> Accessory
 
@@ -47,6 +60,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
         subtitle: String? = nil,
         subtitleTransition: ContentTransition = .numericText(),
         compact: Bool = false,
+        leading: AnyView? = nil,
         onClose: @escaping () -> Void,
         @ViewBuilder accessory: @escaping () -> Accessory
     ) {
@@ -57,9 +71,12 @@ struct EditorialSheetHeader<Accessory: View>: View {
         self.subtitle = subtitle
         self.subtitleTransition = subtitleTransition
         self.compact = compact
+        self.leading = leading
         self.onClose = onClose
         self.accessory = accessory
     }
+
+    private var hasLeading: Bool { icon != nil || leading != nil }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -67,18 +84,22 @@ struct EditorialSheetHeader<Accessory: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             // Z kafelkiem wszystko stoi na jego środku; bez — przy górnej
             // krawędzi, bo tytuł bywa dwuwierszową nazwą dania.
-            HStack(alignment: icon == nil ? .top : .center, spacing: 12) {
+            HStack(alignment: hasLeading ? .center : .top, spacing: 12) {
                 HStack(spacing: compact ? 10 : 11) {
-                    if let icon {
+                    if let leading {
+                        leading
+                    } else if let icon {
                         SCHeaderIconWell(icon: icon, accent: accent, size: compact ? 36 : 44)
                     }
 
-                    VStack(alignment: .leading, spacing: icon == nil ? 4 : 2) {
-                        Text(eyebrow.uppercased())
-                            .font(.system(size: 10.5, weight: .bold))
-                            .tracking(1.4)
-                            .foregroundStyle(accent)
-                            .lineLimit(1)
+                    VStack(alignment: .leading, spacing: hasLeading ? 2 : 4) {
+                        if !eyebrow.isEmpty {
+                            Text(eyebrow.uppercased())
+                                .font(.system(size: 10.5, weight: .bold))
+                                .tracking(1.4)
+                                .foregroundStyle(accent)
+                                .lineLimit(1)
+                        }
 
                         Text(title)
                             .font(.system(size: compact ? 19 : 24, weight: compact ? .bold : .heavy))
@@ -122,6 +143,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
         subtitle: String? = nil,
         subtitleTransition: ContentTransition = .numericText(),
         compact: Bool = false,
+        leading: AnyView? = nil,
         onClose: @escaping () -> Void
     ) {
         self.init(
@@ -132,6 +154,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
             subtitle: subtitle,
             subtitleTransition: subtitleTransition,
             compact: compact,
+            leading: leading,
             onClose: onClose,
             accessory: { EmptyView() }
         )

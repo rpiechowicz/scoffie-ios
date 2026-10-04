@@ -111,9 +111,17 @@ struct SCSheetIconLabel: View {
 struct SCSheetIconSurface: ViewModifier {
     let onImage: Bool
 
+    @Environment(\.colorScheme) private var scheme
+
+    /// Na zdjęciu — czyste szkło (jest co załamywać). Na jednolitym tle
+    /// arkusza czyste szkło prawie znikało (Rafał 4.10.2026: „X nie ma w liquid
+    /// style”), więc dostaje jasny tint jak natywne przyciski arkuszy iOS 26.
     func body(content: Content) -> some View {
         content
-            .scChromeGlass(in: Circle())
+            .scChromeGlass(
+                in: Circle(),
+                tint: onImage ? nil : Color.white.opacity(scheme == .dark ? 0.1 : 0.55)
+            )
     }
 }
 
