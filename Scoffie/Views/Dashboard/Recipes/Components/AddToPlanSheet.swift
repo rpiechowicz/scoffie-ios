@@ -242,15 +242,9 @@ struct AddToPlanSheet: View {
 
                         // Jednoosobowe gospodarstwo nie ma o czym decydować —
                         // każdy posiłek i tak jest „Wspólne".
-                        if members.count > 1 {
-                            PlanAudienceChips(
-                                members: members,
-                                selection: $selectedParticipants,
-                                onChange: audienceChanged
-                            )
-                            .scReveal(hasAppeared, order: 2)
-                            .transition(.opacity)
-                        }
+                        // „Dla kogo” nie stoi już w przewijaniu — to szklany
+                        // przycisk obok „Dodaj do planu” (`PlanAudienceButton`,
+                        // Rafał 4.10.2026), jak w „Wybierz przepis”.
 
                         // Porcje nie stoją już w przewijaniu — to szklany
                         // przycisk obok „Dodaj do planu” z własnym arkuszem
@@ -955,6 +949,15 @@ struct AddToPlanSheet: View {
         .animation(.smooth(duration: 0.25), value: replacedMeal?.id)
 
         HStack(spacing: 10) {
+            if members.count > 1 {
+                PlanAudienceButton(
+                    members: members,
+                    selection: $selectedParticipants,
+                    me: sessionStore.currentUserId,
+                    onChange: audienceChanged
+                )
+            }
+
             portionsButton
 
             EditorialPrimaryActionButton(
@@ -986,7 +989,9 @@ struct AddToPlanSheet: View {
             isPortionsSheetPresented = true
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: "person.2.fill")
+                // Porcje = kawałki całości (Rafał 4.10.2026: „ikona jest zła”;
+                // osoby mówi już przycisk „Dla kogo” obok).
+                Image(systemName: "chart.pie.fill")
                     .font(.system(size: 13, weight: .bold))
                 Text(PlanPortions.label(units: total))
                     .font(.system(size: 15, weight: .heavy))

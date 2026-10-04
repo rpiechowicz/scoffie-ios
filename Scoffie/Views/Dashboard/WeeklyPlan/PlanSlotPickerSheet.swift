@@ -94,8 +94,6 @@ struct PlanSlotPickerSheet: View {
     @State private var isSaving = false
     /// Pusty zbiór znaczy „Wspólne" — je całe gospodarstwo.
     @State private var selectedParticipants: Set<String> = []
-    /// Półarkusz „Dla kogo” spod przycisku obok „Dodaj do planu”.
-    @State private var isAudienceSheetPresented = false
     /// Zaznaczony przepis. `nil` = nic jeszcze nie wybrano, więc nie ma czego
     /// zapisać i przycisk stopki jest wyłączony.
     @State private var selectedRecipeId: UUID?
@@ -491,7 +489,13 @@ struct PlanSlotPickerSheet: View {
 
         HStack(spacing: 10) {
             if roster.count > 1 {
-                audienceButton
+                PlanAudienceButton(
+                    members: roster,
+                    selection: $selectedParticipants,
+                    accent: accent,
+                    eyebrow: slot.title,
+                    me: sessionStore.currentUserId
+                )
             }
 
             // Ten sam przycisk, co w każdym innym arkuszu aplikacji.
@@ -507,89 +511,6 @@ struct PlanSlotPickerSheet: View {
                 action: { confirm() }
             )
         }
-    }
-
-    /// „Dla kogo” jako szklany przycisk OBOK „Dodaj do planu” (Rafał
-    /// 4.10.2026: „dla kogo daj tak samo w takim tab buttonie, gdzie będzie
-    /// ładny wybór”) — jak porcje w „Dodaj do planu”. Wybrane osoby jako
-    /// nachodzące awatary, „wszyscy” jako domek; stuknięcie = półarkusz
-    /// z chipami domowników. Dawniej rząd chipów nad przyciskiem.
-    private var audienceButton: some View {
-        let chosen = roster.filter { selectedParticipants.contains($0.id) }
-        return Button {
-            isAudienceSheetPresented = true
-        } label: {
-            HStack(spacing: 6) {
-                if chosen.isEmpty || chosen.count == roster.count {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(SCPalette.sage)
-                } else {
-                    HStack(spacing: -7) {
-                        ForEach(chosen.prefix(3), id: \.id) { member in
-                            ProfileAvatar(
-                                avatarUrl: member.avatarUrl,
-                                displayName: member.displayName,
-                                size: 22,
-                                colorIndex: member.avatarColor,
-                                seed: member.id
-                            )
-                            .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 1.5))
-                        }
-                    }
-                }
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 45)
-            .scChromeGlass(in: Capsule(style: .continuous))
-            .contentShape(Capsule(style: .continuous))
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
-        .accessibilityLabel(chosen.isEmpty ? "Dla kogo: cały dom" : "Dla kogo: " + chosen.map { HouseholdMemberStyle.shortName($0.displayName) }.joined(separator: ", "))
-        .accessibilityHint("Otwiera wybór domowników")
-        .sheet(isPresented: $isAudienceSheetPresented) {
-            audienceSheet
-        }
-    }
-
-    /// Półarkusz „Dla kogo”: nagłówek arkusza i chipy domowników (ten sam
-    /// `PlanAudienceChips`), „Gotowe” zamyka — wybór działa od razu.
-    private var audienceSheet: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 18) {
-                EditorialSheetHeader(
-                    eyebrow: slot.title,
-                    title: "Dla kogo",
-                    icon: "person.2.fill",
-                    accent: accent,
-                    compact: true,
-                    onClose: { isAudienceSheetPresented = false }
-                )
-
-                PlanAudienceChips(
-                    members: roster,
-                    selection: $selectedParticipants,
-                    sectionLabel: ""
-                )
-
-                Spacer(minLength: 0)
-
-                EditorialPrimaryActionButton(title: "Gotowe", icon: "checkmark") {
-                    isAudienceSheetPresented = false
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 12)
-        }
-        .presentationDetents([.height(300), .medium])
-        .dashboardLiquidSheet()
     }
 
     /// Zaznaczony przepis, którego nie ma już na liście (schowały go filtry,
