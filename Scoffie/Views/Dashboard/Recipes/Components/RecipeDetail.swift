@@ -789,7 +789,8 @@ struct RecipeDetailView: View {
                         showsDivider: index > 0,
                         onStep: { direction in
                             guard let next = PlanPortions.stepped(units: units, direction: direction, totalUnits: totalUnits) else { return }
-                            withAnimation(.smooth(duration: 0.2)) { draftPortions[person.memberId] = next }
+                            // Ta sama krzywa co każda cyfra w aplikacji.
+                            withAnimation(SCMotion.textRoll) { draftPortions[person.memberId] = next }
                         }
                     )
                 }

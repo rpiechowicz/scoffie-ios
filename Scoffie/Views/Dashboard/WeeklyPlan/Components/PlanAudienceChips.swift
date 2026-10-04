@@ -86,7 +86,10 @@ struct PlanAudienceChips: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            EditorialSheetSectionLabel(title: sectionLabel)
+            // Pusty podpis — gdy nad chipami stoi już tytuł („Dla kogo” w arkuszu).
+            if !sectionLabel.isEmpty {
+                EditorialSheetSectionLabel(title: sectionLabel)
+            }
 
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {

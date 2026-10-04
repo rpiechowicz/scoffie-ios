@@ -848,7 +848,7 @@ struct RecipeFilterKcalChart: View {
 struct RecipeFilterFooterButton: View {
     let title: String
     var trailingIcon: String? = "chevron.right"
-    /// Sam glif w szklanym krążku 50 pt, słowo tylko dla VoiceOver — „Pokaż”
+    /// Sam glif w szklanym krążku 44 pt, słowo tylko dla VoiceOver — „Pokaż”
     /// w filtrach (Rafał 4.10.2026: „button dalej na sheet filtrów daj samą
     /// ikonę”).
     var iconOnly: Bool = false
@@ -866,9 +866,11 @@ struct RecipeFilterFooterButton: View {
     private var iconButton: some View {
         Button(action: action) {
             Image(systemName: trailingIcon ?? "arrow.right")
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
-                .frame(width: 50, height: 50)
+                // 44 pt (było 50 — Rafał 4.10.2026: „nieproporcjonalnie
+                // większy od reszty”): wysokość przycisków stopek obok.
+                .frame(width: 44, height: 44)
                 .scSoftSurface(Circle())
                 .contentShape(Circle())
         }

@@ -47,18 +47,48 @@ extension View {
         color: Color = SCPalette.terracotta,
         offset: CGSize = CGSize(width: 5, height: -4)
     ) -> some View {
-        overlay(alignment: .topTrailing) {
-            if count > 0 {
-                SCCountBadge(count: count, color: color)
+        modifier(SCCountBadgeModifier(count: count, color: color, offset: offset))
+    }
+}
+
+/// Plakietka STOI w drzewie zawsze (Rafał 4.10.2026: „jak się pojawia i znika
+/// badge zakupów, psuje się animacja”) — jak plakietka na wyspie Gotuj.
+/// Pojawienie i zniknięcie = skala i krycie w miejscu, przy znikaniu trzyma
+/// ostatnią liczbę, a sama liczba roluje się `SCMotion.textRoll`, jak każda
+/// cyfra w aplikacji. Animacje są przypięte do PLAKIETKI — dawne
+/// `.animation(value: count)` na całym przycisku animowało przy każdej
+/// zmianie liczby także krążek pod spodem, a wstawiany widok przeskakiwał.
+private struct SCCountBadgeModifier: ViewModifier {
+    let count: Int
+    let color: Color
+    let offset: CGSize
+
+    /// Ostatnia dodatnia liczba — z nią plakietka gaśnie, zamiast pokazać 0.
+    @State private var shownCount: Int
+
+    init(count: Int, color: Color, offset: CGSize) {
+        self.count = count
+        self.color = color
+        self.offset = offset
+        _shownCount = State(initialValue: max(count, 1))
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .topTrailing) {
+                SCCountBadge(count: shownCount, color: color)
+                    .contentTransition(.numericText(value: Double(shownCount)))
+                    .animation(SCMotion.textRoll, value: shownCount)
+                    .scaleEffect(count > 0 ? 1 : 0.3)
+                    .opacity(count > 0 ? 1 : 0)
+                    .animation(.smooth(duration: 0.28), value: count > 0)
                     .offset(x: offset.width, y: offset.height)
-                    // Wejście bez podskoku: plakietka pojawia się zwykle przy
-                    // pierwszym wczytaniu listy, a odbicie 0,72 robiło z tego
-                    // skok, który przyciągał wzrok bez powodu.
-                    .transition(.scale(scale: 0.6).combined(with: .opacity))
-                    .contentTransition(.numericText())
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
-        }
-        .animation(.smooth(duration: 0.28), value: count)
+            .onChange(of: count) { _, new in
+                if new > 0 { shownCount = new }
+            }
     }
 }
 

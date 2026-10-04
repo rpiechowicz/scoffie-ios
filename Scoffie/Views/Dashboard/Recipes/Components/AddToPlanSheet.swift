@@ -905,7 +905,8 @@ struct AddToPlanSheet: View {
     /// PRZED zapisem, bo `units(for:)` czyta punkt startowy tylko przy pustym
     /// słowniku.
     private func setUnits(_ next: Int, for memberId: String, allIds: [String]) {
-        withAnimation(.smooth(duration: 0.2)) {
+        // Ta sama krzywa co każda cyfra w aplikacji (`SCMotion.textRoll`).
+        withAnimation(SCMotion.textRoll) {
             if touchedUnits.isEmpty {
                 touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
             }

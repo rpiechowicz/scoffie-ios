@@ -85,7 +85,7 @@ struct SCPortionSummary: View {
         .padding(16)
         .background(shape.fill(Color.scTileBg(scheme)))
         .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
-        .animation(.smooth(duration: 0.35), value: segments.map(\.units))
+        .animation(SCMotion.textRoll, value: segments.map(\.units))
         .animation(SCMotion.textRoll, value: totalUnits)
         .animation(SCMotion.textRoll, value: kcal)
         .animation(.smooth(duration: 0.2), value: warning)
@@ -192,7 +192,8 @@ struct SCPortionRow: View {
                         Circle()
                             .fill(color)
                             .frame(width: 6, height: 6)
-                            .transition(.scale.combined(with: .opacity))
+                            // Samo przenikanie — skala „powiększała” wiersz.
+                            .transition(.opacity)
                     }
                 }
                 if let kcal {
@@ -219,7 +220,7 @@ struct SCPortionRow: View {
                     .padding(.leading, 14 + Self.avatarSize + 5 + 12)
             }
         }
-        .animation(.smooth(duration: 0.2), value: isChanged)
+        .animation(SCMotion.textRoll, value: isChanged)
         .sensoryFeedback(.selection, trigger: units)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
