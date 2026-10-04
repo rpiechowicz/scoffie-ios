@@ -22,6 +22,9 @@ struct SCPortionSummary: View {
     let segments: [Segment]
     /// Kalorie całego garnka; `nil` = bez linii kalorii.
     var kcal: Int? = nil
+    /// Ostrzeżenie zamiast kalorii (w terakocie) — np. zapis nie zmieści się
+    /// w limicie osoba po osobie. Suma ponad 12 ma własne zdanie.
+    var note: String? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -55,6 +58,12 @@ struct SCPortionSummary: View {
                         .foregroundStyle(SCPalette.terracotta)
                         .fixedSize(horizontal: false, vertical: true)
                         .transition(.opacity)
+                } else if let note {
+                    Text(note)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(SCPalette.terracotta)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
                 } else if let kcal {
                     Text(verbatim: "\(kcal) kcal")
                         .font(.system(size: 13, weight: .medium))
@@ -74,7 +83,7 @@ struct SCPortionSummary: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "Do ugotowania \(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))"
-                + (isOverLimit ? ", za dużo, najwyżej 12 porcji" : (kcal.map { ", \($0) kilokalorii" } ?? ""))
+                + (isOverLimit ? ", za dużo, najwyżej 12 porcji" : (note.map { ", \($0)" } ?? kcal.map { ", \($0) kilokalorii" } ?? ""))
         )
     }
 

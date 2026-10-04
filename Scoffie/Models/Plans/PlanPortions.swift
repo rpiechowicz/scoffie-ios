@@ -98,6 +98,33 @@ enum PlanPortions {
         return next
     }
 
+    /// Kolejność zapisu porcji osób — od największego zmniejszenia do
+    /// największego zwiększenia, przy remisie po id. JEDNA dla sklepu
+    /// (`MealCalendarStore.setPortions`) i dla sprawdzenia wykonalności
+    /// (`isSequentialSaveFeasible`), żeby nie mogły się rozjechać.
+    static func saveOrder(saved: [String: Int], draft: [String: Int]) -> [(key: String, value: Int)] {
+        draft.sorted { lhs, rhs in
+            let lhsDelta = lhs.value - (saved[lhs.key] ?? missingEntryUnits)
+            let rhsDelta = rhs.value - (saved[rhs.key] ?? missingEntryUnits)
+            return lhsDelta != rhsDelta ? lhsDelta < rhsDelta : lhs.key < rhs.key
+        }
+    }
+
+    /// Czy seria `setPortion` (osoba po osobie, w `saveOrder`) zmieści się
+    /// w limicie sumy po KAŻDYM zapisie — serwer sprawdza sumę przy każdym.
+    /// Przy alokacji już ponad limitem (6 + 6 + 1 po dołączeniu osoby)
+    /// zejście dwiema połówkami do 12 nie przejdzie: pierwszy zapis da 12,5
+    /// i serwer go odrzuci. Wtedy jedna osoba musi zejść bardziej.
+    static func isSequentialSaveFeasible(saved: [String: Int], draft: [String: Int]) -> Bool {
+        var current = saved
+        let changed = draft.filter { (saved[$0.key] ?? missingEntryUnits) != $0.value }
+        for (memberId, value) in saveOrder(saved: saved, draft: changed) {
+            current[memberId] = value
+            if totalUnits(current) > maxTotalUnits { return false }
+        }
+        return true
+    }
+
     /// Czy porcję wolno wysłać (`setPortion` odrzuca resztę jako
     /// `PLAN_PORTIONS_INVALID`).
     static func isValid(units: Int) -> Bool {

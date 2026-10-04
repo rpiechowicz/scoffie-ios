@@ -52,6 +52,18 @@ check(PlanPortions.stepped(units: 60, direction: 1, totalUnits: 235) == nil, "kr
 check(PlanPortions.stepped(units: 60, direction: -1, totalUnits: 240) == 50, "przy sumie 12 minus działa")
 check(PlanPortions.stepped(units: 120, direction: -1, totalUnits: 260) == 110, "suma ponad 12 (6 + 6 + 1) — minus działa")
 check(PlanPortions.stepped(units: 20, direction: 1, totalUnits: 260) == nil, "suma ponad 12 — plus wygaszony")
+
+// MARK: Wykonalność zapisu osoba po osobie
+
+let over = ["a": 120, "b": 120, "c": 20]
+check(!PlanPortions.isSequentialSaveFeasible(saved: over, draft: ["a": 110, "b": 110, "c": 20]),
+      "6+6+1 → 5,5+5,5+1: pierwszy zapis da 12,5 — nie przejdzie")
+check(PlanPortions.isSequentialSaveFeasible(saved: over, draft: ["a": 100, "b": 120, "c": 20]),
+      "6+6+1 → 5+6+1: jeden zapis do 12 — przejdzie")
+check(PlanPortions.isSequentialSaveFeasible(saved: ["a": 40, "b": 20], draft: ["a": 20, "b": 60]),
+      "zmniejszenie przed zwiększeniem — mieści się po każdym kroku")
+check(PlanPortions.saveOrder(saved: ["a": 40, "b": 20], draft: ["a": 20, "b": 60]).map(\.key) == ["a", "b"],
+      "kolejność: najpierw zmniejszenie")
 check(PlanPortions.stepped(units: 25, direction: 1, totalUnits: 45) == 30, "1,25 (stare dane) + → 1,5 (na siatkę)")
 check(PlanPortions.stepped(units: 25, direction: -1, totalUnits: 45) == 20, "1,25 (stare dane) − → 1 (na siatkę)")
 check(PlanPortions.stepped(units: 16, direction: -1, totalUnits: 36) == 10, "0,80 − → 0,5")

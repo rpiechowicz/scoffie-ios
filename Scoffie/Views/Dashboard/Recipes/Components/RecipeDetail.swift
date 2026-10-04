@@ -721,6 +721,7 @@ struct RecipeDetailView: View {
                     EditorialPrimaryActionButton(
                         title: "Zapisz porcje",
                         icon: "checkmark",
+                        isEnabled: portionsSaveFeasible,
                         isLoading: isSavingServings
                     ) {
                         // Ta sama droga co przycisk pod pigułką: zapis każdej
@@ -762,7 +763,10 @@ struct RecipeDetailView: View {
                         color: portionColor(person)
                     )
                 },
-                kcal: kcal
+                kcal: kcal,
+                note: !changedPortions.isEmpty && !portionsSaveFeasible
+                    ? "Za dużo porcji naraz — zmniejsz jedną osobę mocniej"
+                    : nil
             )
 
             SCPortionList {
@@ -800,6 +804,12 @@ struct RecipeDetailView: View {
                     .padding(.horizontal, 4)
             }
         }
+    }
+
+    /// Czy zapis porcji przejdzie osoba po osobie (`PlanPortions.isSequentialSaveFeasible`)
+    /// — przy alokacji ponad 12 jedna osoba musi zejść bardziej.
+    private var portionsSaveFeasible: Bool {
+        PlanPortions.isSequentialSaveFeasible(saved: personalPortions?.units ?? [:], draft: draftPortions)
     }
 
     /// Osoby, których porcja różni się od zapisanej.
@@ -1431,7 +1441,7 @@ struct RecipeDetailView: View {
         case .shared: return !isPreparingPlan && sharedSave != .saving
         case .planned:
             if isPortionMode {
-                return personalPortions?.isEditable == true && !changedPortions.isEmpty
+                return personalPortions?.isEditable == true && !changedPortions.isEmpty && portionsSaveFeasible
             }
             return servingsUnits != initialServings * PlanPortions.unitsPerServing
         }
