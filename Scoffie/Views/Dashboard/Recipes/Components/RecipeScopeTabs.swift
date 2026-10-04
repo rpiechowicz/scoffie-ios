@@ -18,6 +18,9 @@ struct RecipeScopeTabs: View {
     var total: Int? = nil
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Soczewka zaznaczenia przejeżdża między zakładkami.
+    @Namespace private var lens
 
     static let scopes: [RecipesCategory] = RecipesCategory.catalogSections + [.favourite]
 
@@ -57,6 +60,7 @@ struct RecipeScopeTabs: View {
             .scrollIndicators(.hidden)
             // Cień szkła i plakietki nie urywają się na brzegu przewijania.
             .scrollClipDisabled()
+            .sensoryFeedback(.selection, trigger: selection)
             .onChange(of: selection) { _, value in
                 withAnimation(.smooth(duration: 0.3)) {
                     proxy.scrollTo(value.map { "\($0)" } ?? "all", anchor: .center)
@@ -65,8 +69,13 @@ struct RecipeScopeTabs: View {
         }
     }
 
+    /// Sprężyna soczewki — krótka, z lekkim dobiciem, jak przełączniki iOS 26.
+    private var lensMotion: Animation {
+        reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.78)
+    }
+
     private func select(_ scope: RecipesCategory?) {
-        withAnimation(.smooth(duration: 0.3)) { selection = scope }
+        withAnimation(lensMotion) { selection = scope }
     }
 
     private func tab(
@@ -100,12 +109,26 @@ struct RecipeScopeTabs: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 38)
-            .scChromeGlass(
-                in: Capsule(style: .continuous),
-                tint: isOn ? accent.opacity(scheme == .dark ? 0.3 : 0.22) : nil
-            )
+            // Zaznaczenie to JEDNA soczewka w kolorze kategorii, która
+            // przejeżdża sprężyną do stukniętej zakładki i po drodze zmienia
+            // barwę (Rafał 4.10.2026: „animacja zmiany stanu buttonu tab”).
+            // Dawniej tint przeskakiwał z kapsuły na kapsułę w jednej klatce.
+            .background {
+                if isOn {
+                    Capsule(style: .continuous)
+                        .fill(accent.opacity(scheme == .dark ? 0.3 : 0.2))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(accent.opacity(scheme == .dark ? 0.45 : 0.3), lineWidth: 1)
+                        )
+                        .matchedGeometryEffect(id: "scope-lens", in: lens)
+                }
+            }
+            .scChromeGlass(in: Capsule(style: .continuous))
             .contentShape(Capsule(style: .continuous))
             .opacity(count == 0 && !isOn ? 0.55 : 1)
+            // Stuknięta zakładka lekko „przyjmuje” soczewkę.
+            .scaleEffect(isOn ? 1 : 0.97)
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
         .id(id)

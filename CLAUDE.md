@@ -685,8 +685,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „dodaj z powrotem ten natywny shadow, jednak to ma sens”). „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
   (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i strona końcowa przeglądu propozycji.
   `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
-  obok liczb = `RecipeFilterFooterButton` („Pokaż” w Filtrach i filtrach kategorii = `iconOnly`: sam ptaszek
-  w szklanym krążku 50 pt, od 4.10.2026 — strzałka z pierwszej wersji zamieniona, bo arkusze iOS 26 zatwierdzają ptaszkiem). `AssistantStickyFooter` i `AssistantSheetFooter` to już
+  obok liczb = `RecipeFilterFooterButton` („Pokaż” w Filtrach i filtrach kategorii = `iconOnly`: sama LUPA
+  w szklanym krążku 50 pt, od 4.10.2026 — strzałka i ptaszek odrzucone, Rafał: „daj lupkę”). `AssistantStickyFooter` i `AssistantSheetFooter` to już
   tylko nakładki na nią; kreator, przewodnik i wprowadzenie Asystenta też (`SCStepFooter`, runda 14).
 - Przepływy krok po kroku (kreator „Poznajmy się”, przewodnik „Poznaj aplikację”, wprowadzenie Asystenta,
   runda 14) stoją na `Components/SCStepFlow.swift`: `SCStepHeader` (kafel `SCHeaderIconWell` 48, eyebrow
@@ -784,8 +784,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   prośba Rafała): Wszystkie · Śniadania · Obiady · Kolacje · Przekąski · Ulubione, szklane kapsuły, wybrana w tincie
   kategorii; TYLKO w stanie wyników (fraza / „Filtry”), także nad pustym stanem — w zwykłym widoku ich nie ma
   (Rafał 4.10.2026). Zawężają wyniki („kuskus” → Obiady), każda z liczbą trafień; bez frazy i filtrów zakres wraca
-  do „Wszystkie”. Zmiana zakładki = nowa lista (`.id(scope)`) wjeżdża z kierunku wyboru i przenika nad starą
-  (`scopeBinding` ustawia kierunek w tej samej transakcji). `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
+  do „Wszystkie”. Lista wyników przy zmianie zakładki animuje się jak przy szukaniu (wiersze) — wjazd
+  całej listy z boku (#305) odrzucony („ma zostać po staremu”). Animuje się ZAZNACZENIE: jedna soczewka w kolorze
+  kategorii (`matchedGeometryEffect`) przejeżdża sprężyną między zakładkami, haptyka wyboru. `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
   nałożył nagłówek, karuzelę i sekcje na siebie).
   Przejścia (4.10.2026, „przeskakuje, szczególnie z karuzelą”): stany leżą w `ZStack` od góry (w `VStack` wchodzący
   stał pod wychodzącym i podskakiwał); zwykły widok liczy się z `browseRecipes` (dieta + filtry kategorii, BEZ frazy
