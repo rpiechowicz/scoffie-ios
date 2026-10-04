@@ -455,11 +455,11 @@ struct AddToPlanSheet: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(Color.scChipBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                // Szklany krążek jak strzałki paska tygodnia (`EditorialWeekBar`).
+                .scChromeGlass(in: Circle())
                 .scTapTarget(drawn: 26)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.88))
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.35)
         .accessibilityLabel(label)
@@ -1031,7 +1031,7 @@ struct AddToPlanSheet: View {
             .foregroundStyle(portionsOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
-            .scChromeGlass(in: Capsule(style: .continuous), interactive: true)
+            .scChromeGlass(in: Capsule(style: .continuous))
             .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))

@@ -260,7 +260,7 @@ struct SCPortionRow: View {
                         .frame(width: 1, height: 18)
                     stepButton("plus", enabled: canIncrement) { onStep(1) }
                 }
-                .scChromeGlass(in: Capsule(), interactive: true)
+                .scChromeGlass(in: Capsule())
             }
         }
     }

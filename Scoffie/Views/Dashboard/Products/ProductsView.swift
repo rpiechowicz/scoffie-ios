@@ -699,7 +699,7 @@ struct ProductsView: View {
             action: { handleTodayTap() }
         )
         .padding(.horizontal, 18)
-        .scChromeGlass(in: Capsule(style: .continuous), interactive: true)
+        .scChromeGlass(in: Capsule(style: .continuous))
     }
 
     /// Kopia paska postępu przypięta u góry na szkle — licznik i pasek

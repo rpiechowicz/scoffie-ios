@@ -54,7 +54,7 @@ struct SCSoftButton: View {
             .frame(maxWidth: .infinity, minHeight: 56)
             .scSoftCapsule(accent)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.97))
         .disabled(!isEnabled || isLoading)
         // Wygaszamy tylko za brak danych. Spinner zostaje w pełnej mocy —
         // przygaszona kręciołka wygląda jak zawieszony ekran, a nie jak praca.
@@ -81,9 +81,9 @@ struct SCSoftIconButton: View {
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 56, height: 56)
                 // Neutralne szkło — para dla terakotowego szkła obok.
-                .scChromeGlass(in: Circle(), interactive: true)
+                .scChromeGlass(in: Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.97))
         .accessibilityLabel(accessibilityLabel)
     }
 }
@@ -110,8 +110,7 @@ struct SCSoftSurface<S: InsettableShape>: ViewModifier {
         content
             .scChromeGlass(
                 in: shape,
-                tint: accent.opacity(scheme == .dark ? 0.3 : 0.22),
-                interactive: true
+                tint: accent.opacity(scheme == .dark ? 0.3 : 0.22)
             )
     }
 }

@@ -361,8 +361,11 @@ struct PlanPersonSwitcher: View {
     @Environment(\.colorScheme) private var scheme
     @Namespace private var selectionNS
 
-    private static let avatarSize: CGFloat = 22
-    private static let segmentSize: CGFloat = 28
+    /// Kapsuła ma wysokość krzyżyka obok (`SCSheetIconLabel.size`, 38 pt):
+    /// segment = krzyżyk − 2 × wcięcie 2 pt (Rafał 4.10.2026: „switcher takiej
+    /// samej wielkości jak X”). Było 28 / awatar 22.
+    private static let segmentSize: CGFloat = SCSheetIconLabel.size - 4
+    private static let avatarSize: CGFloat = segmentSize - 6
 
     var body: some View {
         HStack(spacing: 2) {
@@ -402,8 +405,7 @@ struct PlanPersonSwitcher: View {
                         Color.clear
                             .scChromeGlass(
                                 in: Circle(),
-                                tint: tint.opacity(scheme == .dark ? 0.34 : 0.26),
-                                interactive: true
+                                tint: tint.opacity(scheme == .dark ? 0.34 : 0.26)
                             )
                             .matchedGeometryEffect(id: "selection", in: selectionNS)
                     }

@@ -924,7 +924,7 @@ struct RecipeFilterClearButton: View {
                 .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
                 // Szkło w tincie terakoty — para dla szklanego krzyżyka obok
                 // (`SCSheetIconSurface`, Liquid Glass runda 2).
-                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22), interactive: true)
+                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22))
                 .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))

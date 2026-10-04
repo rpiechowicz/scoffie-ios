@@ -136,17 +136,11 @@ struct PlanAudienceChips: View {
             .padding(.leading, 5)
             .padding(.trailing, 12)
             .padding(.vertical, 5)
-            .background(
-                Capsule().fill(isOn ? tint.opacity(scheme == .dark ? 0.22 : 0.16) : Color.scTileBg(scheme))
-            )
-            .overlay(
-                Capsule().stroke(
-                    isOn ? tint.opacity(scheme == .dark ? 0.55 : 0.45) : Color.scTileStroke(scheme),
-                    lineWidth: isOn ? 1.4 : 1
-                )
-            )
+            // Chip na szkle (Liquid Glass, 4.10.2026): wybrany w tincie koloru
+            // osoby, niewybrany — samo szkło.
+            .scChromeGlass(in: Capsule(), tint: isOn ? tint.opacity(scheme == .dark ? 0.3 : 0.24) : nil)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.95))
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 

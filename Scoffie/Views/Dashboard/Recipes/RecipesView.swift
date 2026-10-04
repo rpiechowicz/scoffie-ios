@@ -578,10 +578,10 @@ struct RecipesView: View {
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
-                        .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10)))
-                        .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.32), lineWidth: 1))
+                        // Wariant „soft” = szkło w tincie terakoty (4.10.2026).
+                        .scSoftCapsule()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlanPressStyle(scale: 0.95))
             }
         }
         .frame(maxWidth: .infinity)

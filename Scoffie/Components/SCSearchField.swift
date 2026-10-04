@@ -67,7 +67,7 @@ struct SCSearchField: View {
         // Liquid Glass (runda 2, 4.10.2026) — jak pole szukania i pole
         // wiadomości w iOS 26. Szkło ma własny brzeg; obwódka w terakocie
         // zostaje tylko w trakcie pisania.
-        .scChromeGlass(in: Capsule(style: .continuous), interactive: true)
+        .scChromeGlass(in: Capsule(style: .continuous))
         .overlay(
             Capsule(style: .continuous)
                 .strokeBorder(SCPalette.terracotta.opacity(isFocused ? 0.55 : 0), lineWidth: 1.5)

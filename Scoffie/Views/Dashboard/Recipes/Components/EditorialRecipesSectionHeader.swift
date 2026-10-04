@@ -47,14 +47,10 @@ struct EditorialRecipesSectionHeader: View {
                         .font(.system(size: 12, weight: .heavy))
                         .foregroundStyle(accent)
                         .frame(width: 32, height: 32)
-                        .background(
-                            Circle().fill(accent.opacity(scheme == .dark ? 0.18 : 0.12))
-                        )
-                        .overlay(
-                            Circle().stroke(accent.opacity(scheme == .dark ? 0.32 : 0.24), lineWidth: 1)
-                        )
+                        // Szkło w tincie kategorii (Liquid Glass, 4.10.2026).
+                        .scChromeGlass(in: Circle(), tint: accent.opacity(scheme == .dark ? 0.3 : 0.22))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlanPressStyle(scale: 0.9))
                 .accessibilityLabel("Zobacz wszystkie – \(title)")
             }
         }

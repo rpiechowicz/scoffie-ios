@@ -33,7 +33,7 @@ struct SCStepper: View {
             }
         }
         // Szklana pigułka (Liquid Glass runda 3) zamiast tła chipa z obwódką.
-        .scChromeGlass(in: Capsule(), interactive: true)
+        .scChromeGlass(in: Capsule())
         .accessibilityLabel(accessibilityTitle)
         .accessibilityValue(accessibilityValue)
     }

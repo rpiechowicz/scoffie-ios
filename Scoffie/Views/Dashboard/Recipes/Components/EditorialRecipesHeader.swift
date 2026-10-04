@@ -85,8 +85,7 @@ struct EditorialRecipesHeader: View {
             // (ten sam „podświetlony” wariant co `SCCircleIconLabel`).
             .scChromeGlass(
                 in: Capsule(style: .continuous),
-                tint: hasActiveFilters ? SCPalette.terracotta.opacity(0.22) : nil,
-                interactive: true
+                tint: hasActiveFilters ? SCPalette.terracotta.opacity(0.22) : nil
             )
             .contentShape(Capsule(style: .continuous))
         }

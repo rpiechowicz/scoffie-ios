@@ -208,7 +208,7 @@ private struct CookTimerRow: View {
                         .foregroundStyle(Color.scMuted(scheme))
                         .padding(.horizontal, 14)
                         .frame(height: 34)
-                        .scChromeGlass(in: Capsule(), interactive: true)
+                        .scChromeGlass(in: Capsule())
                         .contentShape(Capsule())
                         .scTapHeight(44, drawn: 34)
                 }
@@ -419,7 +419,7 @@ struct CookIngredientsSheet: View {
             // Glass runda 3), jak przełączniki iOS 26.
             .background {
                 if selected {
-                    Color.clear.scChromeGlass(in: Capsule(), interactive: true)
+                    Color.clear.scChromeGlass(in: Capsule())
                 }
             }
             .contentShape(Capsule())

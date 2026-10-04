@@ -887,8 +887,7 @@ private struct AssistantOptionsCarouselCard: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(enabled ? AssistantLook.terra(scheme) : AssistantLook.faint(scheme))
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(AssistantLook.wash(scheme)))
-                .overlay(Circle().stroke(AssistantLook.hair(scheme), lineWidth: 1))
+                .scChromeGlass(in: Circle())
                 .scTapTarget(44, drawn: 30)
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
@@ -1867,7 +1866,7 @@ private struct AssistantOptionsStorySheet: View {
                 .frame(width: 34, height: 34)
                 // Szklany krzyżyk jak `SCSheetCloseButton` (Liquid Glass) —
                 // także nad zdjęciem dania.
-                .scChromeGlass(in: Circle(), interactive: true)
+                .scChromeGlass(in: Circle())
                 .contentShape(Circle().inset(by: -5))
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
@@ -1926,8 +1925,7 @@ private struct AssistantOptionsStorySheet: View {
             // Szkło jak krzyżyk obok; filtr działa = szkło w tincie terakoty.
             .scChromeGlass(
                 in: Circle(),
-                tint: on ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil,
-                interactive: true
+                tint: on ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil
             )
             .contentShape(Circle().inset(by: -5))
             .animation(motion(.smooth(duration: 0.25)), value: on)

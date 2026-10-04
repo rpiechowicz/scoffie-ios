@@ -44,8 +44,7 @@ struct SCChoiceSurface<S: InsettableShape>: ViewModifier {
             content
                 .scChromeGlass(
                     in: shape,
-                    tint: isOn ? accent.opacity(scheme == .dark ? 0.3 : 0.22) : nil,
-                    interactive: true
+                    tint: isOn ? accent.opacity(scheme == .dark ? 0.3 : 0.22) : nil
                 )
         case .tile:
             content

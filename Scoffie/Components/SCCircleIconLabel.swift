@@ -37,8 +37,7 @@ struct SCCircleIconLabel: View {
             .frame(width: size, height: size)
             .scChromeGlass(
                 in: Circle(),
-                tint: highlighted ? accent.opacity(scheme == .dark ? 0.28 : 0.22) : nil,
-                interactive: true
+                tint: highlighted ? accent.opacity(scheme == .dark ? 0.28 : 0.22) : nil
             )
     }
 }

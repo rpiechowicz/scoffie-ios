@@ -212,7 +212,7 @@ struct CookExitSheet: View {
                     .foregroundStyle(Color.scLabel(scheme))
                     .frame(maxWidth: .infinity, minHeight: SCCook.Height.button)
                     // Neutralne szkło — przycisk wtórny jak `AssistantGhostButton`.
-                    .scChromeGlass(in: Capsule(), interactive: true)
+                    .scChromeGlass(in: Capsule())
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)

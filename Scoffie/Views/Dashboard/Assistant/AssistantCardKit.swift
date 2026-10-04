@@ -1181,7 +1181,7 @@ struct AssistantIconActionButton: View {
             .frame(width: size.height, height: size.height)
             // Neutralne szkło (Liquid Glass runda 3) — „szary” obok szkła
             // w tincie akcji głównej.
-            .scChromeGlass(in: Circle(), interactive: true)
+            .scChromeGlass(in: Circle())
             .contentShape(Circle())
             .scTapHeight(44, drawn: size.height)
         }
@@ -1218,7 +1218,7 @@ struct AssistantGhostButton: View {
             .frame(height: size.height)
             // Neutralne szkło (Liquid Glass runda 3) obok szkła w tincie
             // akcji głównej — para czyta się jako jeden komplet.
-            .scChromeGlass(in: Capsule(style: .continuous), interactive: true)
+            .scChromeGlass(in: Capsule(style: .continuous))
             .scTapHeight(44, drawn: size.height)
         }
         .buttonStyle(PlanPressStyle(scale: size.pressScale))
@@ -1388,8 +1388,7 @@ struct AssistantChip: View {
             // reszta neutralna.
             .scChromeGlass(
                 in: shape,
-                tint: highlighted ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil,
-                interactive: true
+                tint: highlighted ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil
             )
             .opacity(dimmed ? 0.45 : 1)
             .scTapHeight(44, drawn: Self.height)

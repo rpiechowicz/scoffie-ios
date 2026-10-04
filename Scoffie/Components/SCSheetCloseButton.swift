@@ -113,7 +113,7 @@ struct SCSheetIconSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scChromeGlass(in: Circle(), interactive: true)
+            .scChromeGlass(in: Circle())
     }
 }
 

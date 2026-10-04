@@ -457,13 +457,12 @@ struct AssistantSavedPlanCard: View {
                     .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule().fill(Color.scAccentTint(scheme))
-                    )
+                    // Wariant „soft” = szkło w tincie terakoty.
+                    .scSoftCapsule()
                     // Pigułka ma ~28 pt; cel dotyku 44 bez podnoszenia wiersza.
                     .scTapHeight(drawn: 28)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlanPressStyle(scale: 0.94))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
