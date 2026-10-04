@@ -36,6 +36,15 @@ struct RecipesSearchBar: View {
                 }
             }
         }
+        // Plakietka POZA grupą szkła — w środku grupa przycinała to, co
+        // wystaje poza krążek, a pole obok rysowało się na niej (Rafał
+        // 4.10.2026: „badge psuje z-index”). Stoi w ramce krążka filtrów.
+        .overlay(alignment: .topLeading) {
+            Color.clear
+                .frame(width: Self.height, height: Self.height)
+                .scCountBadge(activeFilterCount, offset: CGSize(width: 2, height: -2))
+                .allowsHitTesting(false)
+        }
         .animation(.spring(response: 0.34, dampingFraction: 0.82), value: isFocused)
     }
 
@@ -54,7 +63,6 @@ struct RecipesSearchBar: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.92))
-        .scCountBadge(activeFilterCount, offset: CGSize(width: 2, height: -2))
         .accessibilityLabel(hasFilters ? "Filtry, aktywne: \(activeFilterCount)" : "Filtry")
     }
 
@@ -74,31 +82,16 @@ struct RecipesSearchBar: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .onSubmit(onSubmit)
-
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity)
-                .accessibilityLabel("Wyczyść frazę")
-            }
+            // Bez krzyżyka w polu — czyści krążek obok (Rafał 4.10.2026: „nie
+            // musi być X, bo jest obok jako osobny button”).
         }
-        .padding(.leading, 16)
-        .padding(.trailing, text.isEmpty ? 16 : 10)
+        .padding(.horizontal, 16)
         .frame(height: Self.height)
         .frame(maxWidth: .infinity)
         .scChromeGlass(in: Capsule(style: .continuous))
         .contentShape(Capsule(style: .continuous))
         // Stuknięcie gdziekolwiek w kapsułę — nie tylko w sam tekst.
         .onTapGesture { isFocused = true }
-        .animation(.easeOut(duration: 0.16), value: text.isEmpty)
     }
 
     // MARK: Koniec szukania
