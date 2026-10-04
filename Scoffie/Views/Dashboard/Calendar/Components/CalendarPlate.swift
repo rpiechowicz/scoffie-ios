@@ -585,7 +585,10 @@ struct CalendarPlate: View {
         // Pieczątka — lewy dół (środek 15 pt do wewnątrz od narożnika
         // zdjęcia, lustro dawnego prawego rogu).
         .overlay(alignment: .bottomLeading) {
-            if let item, !item.isEmptySlot {
+            // Tylko tam, gdzie da się odhaczyć (dziś i wstecz) — na dniu,
+            // który dopiero nadejdzie, wyszarzona pieczątka nic nie mówiła
+            // (Rafał 4.10.2026: „bez sensu, jak np. przyszły tydzień”).
+            if let item, !item.isEmptySlot, canToggle || item.status == .eaten {
                 CalendarPlateStamp(
                     status: item.status,
                     color: item.slot.cozyAccent,
