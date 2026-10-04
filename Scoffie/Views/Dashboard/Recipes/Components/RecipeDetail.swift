@@ -360,10 +360,11 @@ struct RecipeDetailView: View {
                             .detailReveal(hasAppeared, order: 3 + revealShift)
                     }
 
-                    // Zapas pod dolny pasek: przycisk z marginesami (~72 pt)
-                    // i cień nad nim (`SCEdgeShade.bottomHeight`) — przewinięta
-                    // do końca treść kończy się NAD cieniem, nie w nim.
-                    Color.clear.frame(height: 72 + SCEdgeShade.bottomHeight)
+                    // Oddech nad dolnym paskiem. Sam pasek liczy system
+                    // (`safeAreaBar` niżej): przewinięta do końca treść kończy
+                    // się nad nim przy każdej jego wysokości — także z błędem
+                    // Thermomixa nad przyciskami.
+                    Color.clear.frame(height: 16)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -376,6 +377,11 @@ struct RecipeDetailView: View {
             .scrollPosition($scrollPosition)
             .scrollIndicators(.hidden)
             .ignoresSafeArea(.container, edges: .top)
+            // Dolny pasek akcji natywnie (iOS 26 `safeAreaBar`): same szklane
+            // przyciski, przepis przejeżdża pod nimi, a kończy się nad nimi.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                primaryActionBar
+            }
             // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
             // progu, a nie w każdej klatce przewijania.
             .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -421,9 +427,6 @@ struct RecipeDetailView: View {
             .padding(.trailing, 20)
             .padding(.top, 16)
             .detailChrome(hasAppeared)
-        }
-        .overlay(alignment: .bottom) {
-            primaryActionBar
         }
         .onAppear { applyDebugLaunchOptions() }
         // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
@@ -1056,11 +1059,14 @@ struct RecipeDetailView: View {
     // MARK: - Dolny pasek akcji
 
     /// Dolny pasek: jeden przycisk (albo dwa przy przepisie thermomixowym
-    /// z połączonym Cookidoo) na stopce, pod którą treść ginie w miękkim
-    /// gradiencie tła — ta sama stopka co w arkuszach asystenta
-    /// (`AssistantStickyFooter`), zamiast twardej linii nad przyciskiem.
+    /// z połączonym Cookidoo) — SAME szklane przyciski nad treścią, BEZ tła,
+    /// cienia i rozmytego pasa pod nimi. Przewijany przepis jedzie pod
+    /// przyciskami i widać go przez szkło, jak w natywnych aplikacjach iOS 26.
+    /// Rafał (4.10.2026, kolejny raz): „usuń ten shadow pod buttonem, zrób to
+    /// natywnie, aby pokazywało się, co jest pod spodem” — nie wracać do
+    /// płyty, cienia (`SCEdgeShade`) ani pasa (`SCFooterScrim`) w tym miejscu.
     private var primaryActionBar: some View {
-        AssistantStickyFooter(base: look.background) {
+        VStack(spacing: 10) {
             thermomixFeedback
 
             if case .shared = context {
@@ -1084,6 +1090,9 @@ struct RecipeDetailView: View {
                 planActionButton(title: primaryActionTitle)
             }
         }
+        // Te same marginesy co `SCSheetFooter`, tylko bez jej tła.
+        .padding(.horizontal, SCPageMetrics.horizontal)
+        .padding(.vertical, 12)
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
@@ -1213,6 +1222,11 @@ struct RecipeDetailView: View {
                 .foregroundStyle(SCPalette.terracotta)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Pod stopką nie ma już tła — zdanie stoi na własnym szkle,
+                // żeby było czytelne nad przewijaną treścią.
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .scChromeGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .transition(.opacity)
         }
     }

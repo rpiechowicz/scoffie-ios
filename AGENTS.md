@@ -646,15 +646,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wyklucza. Działy mają ikony i barwy alejek Zakupów (`ProductConstants.departmentIcon/Color`),
   wyniki szukania są pogrupowane po działach.
 - Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
-  (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): od 4.10.2026 (Liquid Glass runda 3,
-  „shadow na detail meal dolny też popraw”) pod przyciskami rozmyty pas `SCFooterScrim` =
-  `SCScrollEdgeBlur` (tło arkusza 0,62 nad rozmyciem — na pasie stoi tekst) od 56 pt nad stopką do
-  krawędzi ekranu: treść chowa się pod szklanymi przyciskami zamiast urywać się na kryjącej płycie.
-  Wysokość bez zmian (`SCEdgeShade.bottomHeight`). `SCEdgeShade` został pod górnym paskiem szczegółów
-  posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Na przewijanej treści przez `.scSheetFooter` (`safeAreaInset`, cień WLICZONY
-  w wysokość — przewinięta do końca treść kończy się nad nim), pod listą w `VStack` jako ostatnie
-  dziecko — wtedy cień leży na liście i lista MUSI mieć na dole `.padding(.bottom,
-  SCEdgeShade.bottomHeight)`. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
+  (`Components/SCSheetFooter.swift`). Od 4.10.2026 BEZ TŁA (Rafał, kilka razy: „usuń ten shadow pod buttonem,
+  zrób to natywnie, aby pokazywało się, co jest pod spodem”; „każdy sheet… tylko button liquid i pokazuje się
+  płynnie”): bez kryjącej płyty, bez `SCEdgeShade`, bez rozmytego pasa (`SCFooterScrim` usunięty) — same szklane
+  przyciski. `.scSheetFooter` = systemowe `safeAreaBar(edge: .bottom)`: treść przejeżdża pod przyciskami i kończy
+  się nad nimi, a efekt krawędzi kładzie SYSTEM (natywny, lekki). Tak samo szczegóły posiłku
+  (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i strona końcowa przeglądu propozycji.
+  `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
   tylko nakładki na nią; kreator, przewodnik i wprowadzenie Asystenta też (`SCStepFooter`, runda 14).
 - Przepływy krok po kroku (kreator „Poznajmy się”, przewodnik „Poznaj aplikację”, wprowadzenie Asystenta,

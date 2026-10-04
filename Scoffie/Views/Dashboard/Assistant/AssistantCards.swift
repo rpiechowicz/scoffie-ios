@@ -2391,9 +2391,8 @@ private struct AssistantOptionsStorySheet: View {
                 }
                 // 118 = uchwyt, nagłówek i segmenty nad treścią.
                 .padding(.top, 118)
-                // Miejsce na cień stopki — przewinięta do końca lista kończy
-                // się nad nim, nie pod nim.
-                .padding(.bottom, 16 + SCEdgeShade.bottomHeight)
+                // Oddech nad stopką; samą stopkę odlicza `safeAreaBar` niżej.
+                .padding(.bottom, 16)
                 .animation(motion(.smooth(duration: 0.4)), value: status)
                 .animation(motion(.smooth(duration: 0.3)), value: isBusy)
             }
@@ -2404,44 +2403,46 @@ private struct AssistantOptionsStorySheet: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.hidden)
             .scScrollEdgeFade()
-
-            endStep(3, rise: 20) {
-                // JEDEN przycisk na dole (runda 15, Rafał): zapis całości,
-                // po zapisie „Otwórz plan”, a gdy propozycji nie da się już
-                // zapisać — „Napisz, co zmienić”. Nowe dania to cichy
-                // odnośnik pod listą, nie drugi przycisk.
-                //
-                // Wspólna stopka arkuszy (`SCSheetFooter`): płyta w kolorze
-                // tła i cień krawędzi nad nią — przewijana lista gaśnie pod
-                // przyciskiem, zamiast urywać się na jego brzegu (runda 10).
-                SCSheetFooter(horizontalPadding: 16) {
-                Group {
-                    if let applyTitle, let onApply {
-                        ProposalAcceptButton(
-                            title: isBusy ? "Zapisuję…" : applyTitle,
-                            icon: "checkmark",
-                            isBusy: isBusy,
-                            action: onApply
-                        )
-                        .transition(.opacity)
-                    } else if status == .applied, let onOpenPlan {
-                        ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
+            // Stopka natywnie (iOS 26 `safeAreaBar`): lista przejeżdża pod
+            // szklanym przyciskiem i kończy się nad nim — bez płyty i cienia.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                endStep(3, rise: 20) {
+                    // JEDEN przycisk na dole (runda 15, Rafał): zapis całości,
+                    // po zapisie „Otwórz plan”, a gdy propozycji nie da się już
+                    // zapisać — „Napisz, co zmienić”. Nowe dania to cichy
+                    // odnośnik pod listą, nie drugi przycisk.
+                    //
+                    // Wspólna stopka arkuszy (`SCSheetFooter`) — same szklane
+                    // przyciski, bez tła (4.10.2026).
+                    SCSheetFooter(horizontalPadding: 16) {
+                    Group {
+                        if let applyTitle, let onApply {
+                            ProposalAcceptButton(
+                                title: isBusy ? "Zapisuję…" : applyTitle,
+                                icon: "checkmark",
+                                isBusy: isBusy,
+                                action: onApply
+                            )
                             .transition(.opacity)
-                    } else if !isBusy {
-                        AssistantGhostButton(
-                            action: AssistantCardAction(
-                                title: copy.composeTitle,
-                                icon: "square.and.pencil"
-                            ) {
-                                onCompose()
-                            }
-                        )
-                        .transition(.opacity)
+                        } else if status == .applied, let onOpenPlan {
+                            ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
+                                .transition(.opacity)
+                        } else if !isBusy {
+                            AssistantGhostButton(
+                                action: AssistantCardAction(
+                                    title: copy.composeTitle,
+                                    icon: "square.and.pencil"
+                                ) {
+                                    onCompose()
+                                }
+                            )
+                            .transition(.opacity)
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .animation(motion(.smooth(duration: 0.35)), value: status)
-                .animation(motion(.smooth(duration: 0.3)), value: isBusy)
+                    .frame(maxWidth: .infinity)
+                    .animation(motion(.smooth(duration: 0.35)), value: status)
+                    .animation(motion(.smooth(duration: 0.3)), value: isBusy)
+                    }
                 }
             }
         }

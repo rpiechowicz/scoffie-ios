@@ -374,8 +374,8 @@ struct PlanSlotPickerSheet: View {
                 }
             }
             .padding(.top, 8)
-            // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
-            .padding(.bottom, SCEdgeShade.bottomHeight)
+            // Oddech nad stopką — cienia stopki już nie ma.
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
         .scScrollEdgeFade()
