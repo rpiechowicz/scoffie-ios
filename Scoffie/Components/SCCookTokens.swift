@@ -184,6 +184,9 @@ enum SCCook {
         /// Pierścień w kapsule z PARY (dwa timery obok siebie) — zarazem przycisk start / pauza / wznów / gotowe z glifem w środku (runda 2: „włączyć / wyłączyć timer z pulpitu, nie wchodząc w kartę”); kreska stroke.cookTimerRingSmall, dotyk 44.
         static let timerRingPair: CGFloat = 34
 
+        /// Najmniejsza szerokość ZWARTEJ kapsuły timera (3+ timery obok siebie, 4.10.2026): pierścień z pary + czas typography.cookTimerTimeCompact. Gdy wszystkie się nie mieszczą w szerokości doku, rząd przewija się w bok, a każda ma tę szerokość.
+        static let timerCapsuleCompactMin: CGFloat = 100
+
         /// Pierścień-przycisk pauzy w wierszu arkusza Timery; promień 20,5 (ST5).
         static let sheetTimerRing: CGFloat = 46
 
@@ -258,8 +261,8 @@ enum SCCook {
         /// Minimalna wysokość wiersza trwającego timera w arkuszu Timery.
         static let timerRow: CGFloat = 62
 
-        /// Przyciski pełnej szerokości trybu: „Zaczynamy”, „Zjedzone”, „Gotuj dalej”, „Wyślij” (miękka kapsuła).
-        static let button: CGFloat = 56
+        /// Przyciski pełnej szerokości trybu: „Zaczynamy”, „Zjedzone”, „Gotuj dalej”, „Wyślij” (miękka kapsuła). 50 od 4.10.2026 (było 56 — „Zaczynamy trochę za duży w porównaniu do reszty”).
+        static let button: CGFloat = 50
 
         /// Szuflady powitania „Składniki” i „Rady kucharza” — runda 7: dwa kafle OBOK SIEBIE w jednym rzędzie (było 72 pt, jedna pod drugą), żeby powitanie mieściło się bez przewijania.
         static let drawer: CGFloat = 52
@@ -419,6 +422,9 @@ enum SCCook {
         /// Czas w kapsule z pary.
         static let timerTimePair = SCCookTextStyle(size: 17, weight: .heavy, tracking: 0, lineHeight: nil)
 
+        /// Czas w ZWARTEJ kapsule (3+ timery obok siebie, 4.10.2026) — „20:00” mieści się w size.cookTimerCapsuleCompactMin.
+        static let timerTimeCompact = SCCookTextStyle(size: 15, weight: .heavy, tracking: 0, lineHeight: nil)
+
         /// Czas w wierszu arkusza Timery, w kolorze timera.
         static let sheetTime = SCCookTextStyle(size: 26, weight: .heavy, tracking: -0.78, lineHeight: nil)
 
@@ -431,8 +437,8 @@ enum SCCook {
         /// „Wychodzisz z gotowania?”.
         static let exitTitle = SCCookTextStyle(size: 24, weight: .heavy, tracking: -0.48, lineHeight: nil)
 
-        /// Główne akcje w terakocie: „Zaczynamy”, „Wyślij”, „▶ Start”.
-        static let button = SCCookTextStyle(size: 17, weight: .heavy, tracking: 0, lineHeight: nil)
+        /// Główne akcje w terakocie: „Zaczynamy”, „Wyślij”, „▶ Start”. 16 od 4.10.2026 (było 17).
+        static let button = SCCookTextStyle(size: 16, weight: .heavy, tracking: 0, lineHeight: nil)
 
         /// Akcje w szałwii i neutralne: „Zjedzone”, „Gotuj dalej”, „Gotowe — dalej”.
         static let buttonQuiet = SCCookTextStyle(size: 17, weight: .bold, tracking: 0, lineHeight: nil)

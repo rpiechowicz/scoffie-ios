@@ -164,7 +164,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
   Runda 2 testów (1.10.2026): dok stoi jak dolne menu aplikacji (wyspa 60 pt, 20 pt od boków, na krawędzi
   bezpiecznego obszaru; powierzchnia `cook.dockSurface` — w jasnym motywie ciepła biel, bo płótno = tło strony).
-  Kapsuły: najwyżej DWIE (`CookSession.dockCapsules` — dwa najdawniej włączone timery, wolne miejsce bierze timer
+  OD 4.10.2026 na ekranie kroku WSZYSTKIE timery obok siebie (Rafał: „przy 3 timerach nie widzę, jak działa trzeci”):
+  `dockCapsules(now:, limit: .max)` — 1 = pełna kapsuła, 2 = para, 3+ = `CookTimerCapsule.Layout.compact` (pierścień
+  z ruchem + sam czas), powyżej 4 rząd przewija się w bok (92 pt na kapsułę); plakietka `CookOverflowTab` i znaczki
+  `CookTimerMark` USUNIĘTE, jej miejsce w doku zostaje puste (stała wysokość). Live Activity dalej dwie (limit 2).
+  Porcje sesji co 0,5 (`CookSession.portions: Double`, 0,5…12, `clampPortions`; serwer — ocena i wpis „ugotowane” —
+  dostaje całe w górę); teksty przez `CookPortionsText` („na 1,5 porcji”). Stopka powitania: odstępy 12 między kaflami.
+  Dawniej — kapsuły: najwyżej DWIE (`CookSession.dockCapsules` — dwa najdawniej włączone timery, wolne miejsce bierze timer
   do włączenia, też od najstarszego: nowy NIE wypycha kapsuły, która już stoi, tylko idzie do plakietki — runda 5,
   „nie powinien 1 przesuwać”; timer PO CZASIE stoi w doku zawsze; runda 3 cofnęła trójkę), w kolejności kroków, nowa
   wjeżdża z boku, po którym staje; w parze pierścień = przycisk
