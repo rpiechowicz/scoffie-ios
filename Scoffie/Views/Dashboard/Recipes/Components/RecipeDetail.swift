@@ -721,6 +721,7 @@ struct RecipeDetailView: View {
                     EditorialPrimaryActionButton(
                         title: "Zapisz porcje",
                         icon: "checkmark",
+                        isEnabled: portionsSaveFeasible,
                         isLoading: isSavingServings
                     ) {
                         // Ta sama droga co przycisk pod pigułką: zapis każdej
@@ -743,50 +744,54 @@ struct RecipeDetailView: View {
         person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
     }
 
-    /// Porcje od nowa (Rafał 4.10.2026: „zrób jakoś ładniej od nowa design
-    /// porcji dla userów”). Na górze GARNEK: pierścień podzielony na osoby
-    /// w ich kolorach, w środku łączna liczba porcji do ugotowania, pod nim
-    /// kcal garnka. Niżej kafel na osobę (`portionTile`). Dawniej: karta
-    /// z paskiem podziału i wierszami „awatar · imię · kcal · stepper”.
+    /// Porcje osób (4.10.2026, dwie rundy: „ładniej od nowa”, potem „bardziej
+    /// czytelne, ale też ładnie UX”): karta z garnkiem i liczbą do ugotowania
+    /// (`SCPortionSummary`) i lista osób z dużym stepperem (`SCPortionList`,
+    /// `SCPortionRow`). Ten sam zestaw w „Dodaj do planu”
+    /// (`Components/SCPortionKit.swift`).
     private func portionsCard(_ model: RecipeDetailPortions) -> some View {
         let total = PlanPortions.totalUnits(portionUnits)
         let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
-        let columns = model.people.count > 1
-            ? [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
-            : [GridItem(.flexible())]
+        let totalUnits = PlanPortions.totalUnits(draftPortions)
 
-        return VStack(spacing: 18) {
-            VStack(spacing: 10) {
-                DetailPortionPot(
-                    segments: model.people.map { person in
-                        DetailPortionPot.Segment(
-                            id: person.memberId,
-                            units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
-                            color: portionColor(person)
-                        )
-                    },
-                    totalLabel: PlanPortions.label(units: total),
-                    caption: total % PlanPortions.unitsPerServing == 0
-                        ? PolishPlural.form(total / PlanPortions.unitsPerServing, one: "porcja", few: "porcje", many: "porcji")
-                        : "porcji",
-                    totalUnits: total,
-                    look: look
-                )
+        return VStack(spacing: 14) {
+            SCPortionSummary(
+                segments: model.people.map { person in
+                    SCPortionSummary.Segment(
+                        id: person.memberId,
+                        units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
+                        color: portionColor(person)
+                    )
+                },
+                kcal: kcal,
+                note: !changedPortions.isEmpty && !portionsSaveFeasible
+                    ? "Za dużo porcji naraz — zmniejsz jedną osobę mocniej"
+                    : nil
+            )
 
-                Text(verbatim: "\(kcal) kcal w garnku")
-                    .font(.system(size: 13, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(look.muted)
-                    .contentTransition(.numericText(value: Double(kcal)))
-                    .animation(SCMotion.textRoll, value: kcal)
-            }
-            .frame(maxWidth: .infinity)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Do ugotowania \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings)), \(kcal) kilokalorii")
-
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(model.people, id: \.memberId) { person in
-                    portionTile(person, model: model)
+            SCPortionList {
+                ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
+                    let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
+                    let saved = personalPortions?.units[person.memberId] ?? PlanPortions.missingEntryUnits
+                    SCPortionRow(
+                        name: person.name,
+                        avatarUrl: person.member?.avatarUrl,
+                        avatarColor: person.member?.avatarColor,
+                        seed: person.memberId,
+                        color: portionColor(person),
+                        units: units,
+                        kcal: Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: units)).kcal.rounded()),
+                        isViewer: person.memberId == model.viewerId,
+                        isChanged: units != saved,
+                        isEditable: model.isEditable,
+                        canDecrement: PlanPortions.stepped(units: units, direction: -1, totalUnits: totalUnits) != nil,
+                        canIncrement: PlanPortions.stepped(units: units, direction: 1, totalUnits: totalUnits) != nil,
+                        showsDivider: index > 0,
+                        onStep: { direction in
+                            guard let next = PlanPortions.stepped(units: units, direction: direction, totalUnits: totalUnits) else { return }
+                            withAnimation(.smooth(duration: 0.2)) { draftPortions[person.memberId] = next }
+                        }
+                    )
                 }
             }
 
@@ -801,113 +806,10 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// Kafel osoby: awatar w obwódce JEJ koloru (tym samym, co jej łuk
-    /// garnka), imię z „TY”, duża porcja między szklanymi −/+, kcal porcji.
-    /// Zmieniona, a niezapisana porcja = obwódka kafla w kolorze osoby.
-    private func portionTile(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions) -> some View {
-        let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
-        let saved = personalPortions?.units[person.memberId] ?? PlanPortions.missingEntryUnits
-        let isChanged = units != saved
-        let isViewer = person.memberId == model.viewerId
-        let color = portionColor(person)
-        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: units)).kcal.rounded())
-        let totalUnits = PlanPortions.totalUnits(draftPortions)
-        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-
-        return VStack(spacing: 10) {
-            ProfileAvatar(
-                avatarUrl: person.member?.avatarUrl,
-                displayName: person.name,
-                size: 44,
-                colorIndex: person.member?.avatarColor,
-                seed: person.memberId
-            )
-            .padding(3)
-            .overlay(Circle().strokeBorder(color, lineWidth: 2))
-
-            HStack(spacing: 5) {
-                Text(person.name)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(look.fg)
-                    .lineLimit(1)
-                if isViewer {
-                    DetailPersonBadge(text: "TY")
-                }
-            }
-
-            HStack(spacing: 6) {
-                if model.isEditable {
-                    portionStepButton("minus", person: person, units: units, direction: -1, totalUnits: totalUnits)
-                }
-                Text(PlanPortions.label(units: units))
-                    .font(.system(size: 30, weight: .heavy))
-                    .tracking(-0.8)
-                    .monospacedDigit()
-                    .foregroundStyle(look.fg)
-                    .contentTransition(.numericText(value: Double(units)))
-                    .animation(SCMotion.textRoll, value: units)
-                    .frame(maxWidth: .infinity)
-                if model.isEditable {
-                    portionStepButton("plus", person: person, units: units, direction: 1, totalUnits: totalUnits)
-                }
-            }
-
-            Text(verbatim: "\(kcal) kcal")
-                .font(.system(size: 12.5, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(look.muted)
-                .contentTransition(.numericText(value: Double(kcal)))
-                .animation(SCMotion.textRoll, value: kcal)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity)
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(
-            shape.strokeBorder(
-                isChanged ? color.opacity(0.7) : Color.scTileStroke(scheme),
-                lineWidth: isChanged ? 1.5 : 1
-            )
-        )
-        .animation(.smooth(duration: 0.2), value: isChanged)
-        // Jedno stuknięcie haptyki na kafel, nie na każdy z dwóch przycisków.
-        .sensoryFeedback(.selection, trigger: units)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(person.name), \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings)), \(kcal) kilokalorii")
-        .accessibilityAdjustableAction { direction in
-            guard model.isEditable else { return }
-            let step = direction == .increment ? 1 : -1
-            if let next = PlanPortions.stepped(units: units, direction: step, totalUnits: totalUnits) {
-                withAnimation(.smooth(duration: 0.2)) { draftPortions[person.memberId] = next }
-            }
-        }
-    }
-
-    /// Szklane −/+ porcji osoby. Krok wychodzący poza widełki = przygaszony.
-    private func portionStepButton(
-        _ systemName: String,
-        person: RecipeDetailPortions.Person,
-        units: Int,
-        direction: Int,
-        totalUnits: Int
-    ) -> some View {
-        let next = PlanPortions.stepped(units: units, direction: direction, totalUnits: totalUnits)
-        return Button {
-            guard let next else { return }
-            withAnimation(.smooth(duration: 0.2)) { draftPortions[person.memberId] = next }
-        } label: {
-            Image(systemName: systemName)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(look.fg)
-                .frame(width: 34, height: 34)
-                .scChromeGlass(in: Circle(), interactive: true)
-                .contentShape(Circle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.88))
-        .disabled(next == nil)
-        .opacity(next == nil ? 0.35 : 1)
-        .accessibilityHidden(true)
+    /// Czy zapis porcji przejdzie osoba po osobie (`PlanPortions.isSequentialSaveFeasible`)
+    /// — przy alokacji ponad 12 jedna osoba musi zejść bardziej.
+    private var portionsSaveFeasible: Bool {
+        PlanPortions.isSequentialSaveFeasible(saved: personalPortions?.units ?? [:], draft: draftPortions)
     }
 
     /// Osoby, których porcja różni się od zapisanej.
@@ -1539,7 +1441,7 @@ struct RecipeDetailView: View {
         case .shared: return !isPreparingPlan && sharedSave != .saving
         case .planned:
             if isPortionMode {
-                return personalPortions?.isEditable == true && !changedPortions.isEmpty
+                return personalPortions?.isEditable == true && !changedPortions.isEmpty && portionsSaveFeasible
             }
             return servingsUnits != initialServings * PlanPortions.unitsPerServing
         }
@@ -2061,79 +1963,7 @@ private struct DetailHairline: View {
 
 // MARK: - Porcje osób
 
-/// Garnek: pierścień podzielony na osoby — łuk = porcja, kolor = kolor
-/// awatara — z łączną liczbą porcji w środku. Łuki przesuwają się razem ze
-/// stepperami (przycięcie koła animuje się w sprężynie zmiany).
-private struct DetailPortionPot: View {
-    struct Segment: Identifiable {
-        let id: String
-        let units: Int
-        let color: Color
-    }
 
-    let segments: [Segment]
-    let totalLabel: String
-    let caption: String
-    let totalUnits: Int
-    let look: DetailLook
-
-    private static let diameter: CGFloat = 132
-    private static let lineWidth: CGFloat = 12
-
-    var body: some View {
-        let total = max(1, segments.reduce(0) { $0 + $1.units })
-        // Przerwa między łukami w ułamku obwodu — przy jednej osobie pełne koło.
-        let gap: CGFloat = segments.count > 1 ? 0.018 : 0
-
-        ZStack {
-            Circle()
-                .stroke(look.fg.opacity(0.07), lineWidth: Self.lineWidth)
-
-            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                let start = CGFloat(segments.prefix(index).reduce(0) { $0 + $1.units }) / CGFloat(total)
-                let end = start + CGFloat(segment.units) / CGFloat(total)
-                Circle()
-                    .trim(from: min(start + gap / 2, end), to: max(end - gap / 2, start))
-                    .stroke(segment.color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-
-            VStack(spacing: 0) {
-                Text(totalLabel)
-                    .font(.system(size: 34, weight: .heavy))
-                    .tracking(-1)
-                    .monospacedDigit()
-                    .foregroundStyle(look.fg)
-                    .contentTransition(.numericText(value: Double(totalUnits)))
-                Text(caption)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(look.muted)
-                    .contentTransition(.opacity)
-            }
-        }
-        .frame(width: Self.diameter, height: Self.diameter)
-        .animation(.smooth(duration: 0.35), value: segments.map(\.units))
-        .animation(SCMotion.textRoll, value: totalUnits)
-    }
-}
-
-/// „TY” przy imieniu — ta sama plakietka co przy domownikach w Ustawieniach.
-private struct DetailPersonBadge: View {
-    let text: String
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 9.5, weight: .heavy))
-            .tracking(0.8)
-            .foregroundStyle(SCPalette.terracotta)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
-            .fixedSize()
-    }
-}
 
 // MARK: - Stepper porcji
 

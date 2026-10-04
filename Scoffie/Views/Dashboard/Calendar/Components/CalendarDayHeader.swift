@@ -54,31 +54,9 @@ struct CalendarDayHeader: View {
 
             Spacer(minLength: 10)
 
-            if total > 0 {
-                // Szałwia, choć pojedynczy ptaszek w wierszu jest neutralny
-                // (`Color.scChecked`). To nie jest niekonsekwencja: tamten
-                // znak stoi tuż obok koloru pory i musiał się od niego
-                // odciąć, a ta plakietka podsumowuje CAŁY dzień i nie
-                // sąsiaduje z żadną porą. Szałwia znaczy tu to samo, co
-                // kropka „z planem" na pasku dni nad nią.
-                SCPipsBadge(
-                    filled: eaten,
-                    total: total,
-                    color: SCPalette.sage,
-                    label: "\(eaten) z \(total)",
-                    // Mała, bo to komentarz do tytułu dnia, a nie drugi
-                    // tytuł: przy 28 pt plakietka ważyła w wierszu tyle,
-                    // co „Poniedziałek" obok niej.
-                    size: .small
-                )
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Zjedzone \(eaten) z \(total) posiłków")
-            }
+            // Plakietka „2 z 3” (kropki zjedzonych) zniknęła 4.10.2026 na prośbę
+            // Rafała — jak „3 z 5” w Planie; zjedzone widać na talerzykach.
         }
-        // Odhaczenie posiłku zapala kropkę tym samym ruchem, którym zmienia
-        // się wiersz niżej. Odcisk obejmuje też pulę, więc dołożenie posiłku
-        // dorysowuje kropkę zamiast podmienić plakietkę między klatkami.
-        .animation(.smooth(duration: 0.22), value: "\(eaten)/\(total)")
     }
 
     private var todayBadge: some View {

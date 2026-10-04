@@ -366,11 +366,7 @@ class MealCalendarStore {
         weekStart: String
     ) async -> Bool {
         let before = meals(for: date, slot: slot).first(where: { $0.id == itemId })?.portionUnits ?? [:]
-        let ordered = units.sorted { lhs, rhs in
-            let lhsDelta = lhs.value - (before[lhs.key] ?? PlanPortions.missingEntryUnits)
-            let rhsDelta = rhs.value - (before[rhs.key] ?? PlanPortions.missingEntryUnits)
-            return lhsDelta != rhsDelta ? lhsDelta < rhsDelta : lhs.key < rhs.key
-        }
+        let ordered = PlanPortions.saveOrder(saved: before, draft: units)
         for (memberId, value) in ordered {
             let previous = meals(for: date, slot: slot)
             guard let index = previous.firstIndex(where: { $0.id == itemId }) else {
