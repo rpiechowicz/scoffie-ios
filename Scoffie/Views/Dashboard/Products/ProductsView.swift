@@ -298,6 +298,11 @@ struct ProductsView: View {
     /// Pasek postępu zjechał pod górną krawędź — na górze stoi jego
     /// przypięta kopia (`pinnedProgress`).
     @State private var isProgressPinned = false
+    /// Arkusz się ustawił — dopiero od tej chwili „Na dziś” pojawia się
+    /// i chowa z animacją. Wcześniej przycisk wchodził w trakcie wjazdu
+    /// arkusza (lista wczytuje się w tym samym czasie), dziedziczył jego
+    /// animację i ramka rosła od zera — „wjeżdża od boku” (Rafał 4.10.2026).
+    @State private var footerAnimates = false
 
     var body: some View {
         NavigationStack {
@@ -345,10 +350,21 @@ struct ProductsView: View {
                     VStack(spacing: 0) {
                         if listState == .content && showsTodayRow {
                             todayButton
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .transition(.opacity)
                         }
                     }
-                    .animation(.smooth(duration: 0.3), value: listState == .content && showsTodayRow)
+                    // Do ustawienia się arkusza bez żadnej animacji — także
+                    // tej odziedziczonej po jego wjeździe.
+                    .transaction { transaction in
+                        if !footerAnimates { transaction.animation = nil }
+                    }
+                    .animation(footerAnimates ? .smooth(duration: 0.3) : nil, value: listState == .content && showsTodayRow)
+                }
+                .task {
+                    // Wjazd arkusza trwa ~0,35 s; potem stopka może już
+                    // animować zmiany (odhaczenie ostatniego produktu na dziś).
+                    try? await Task.sleep(for: .milliseconds(600))
+                    footerAnimates = true
                 }
 
                 // Przypięty pasek postępu — wchodzi, gdy prawdziwy zjedzie
