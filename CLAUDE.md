@@ -364,8 +364,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Zamień / Dodaj obok”). Akcent na element stojący NA szkle (przycisk „Wyślij”, „Cofnij” w toaście) = `tint` tego
   jednego szkła albo zwykłe wypełnienie — bez drugiego szkła z `scSoftSurface` na pierwszym.
   Gotuj (4.10.2026): szkło na „Wycisz” i „+N min” alarmu, „Gotuj dalej”, stepperze porcji powitania, „Pomiń” w Timerach,
-  pigułkach powodów oceny (`scChoiceSurface`). Przyciski nagłówka arkusza (krzyżyk, serce, „Cofnij/Wyczyść”, „…” w Zakupach) = 44 pt z glifem `scLabel`
-  (`SCSheetIconLabel.size`), jak natywne przyciski arkuszy iOS 26 — 36 pt z szarym glifem wyglądało na płaskie kółko.
+  pigułkach powodów oceny (`scChoiceSurface`). Przyciski nagłówka arkusza (krzyżyk, serce, „Cofnij/Wyczyść”, „…” w Zakupach) = 38 pt z glifem `scLabel`
+  (`SCSheetIconLabel.size`) — 36 pt z szarym glifem wyglądało na płaskie kółko, 44 było „ciut za duże”.
   Ciemny dok (`cookDockGlass` w ciemnym = bez szkła, `cookIslandSurface`,
   kapsuły, plakietka) ŚWIADOMIE bez zmian do decyzji Rafała. Makieta pola we wprowadzeniu Asystenta = strój prawdziwego pola.
 - Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
@@ -605,11 +605,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
   „Kto ile je” (posiłek z planu z porcjami osób) to od 4.10.2026 NIE sekcja w przewijaniu, tylko szklana pigułka
   przyczepiona nad przyciskami (`portionsPill`, jak „Cel dnia”): awatary, „Do ugotowania · 3,5 porcji”, ⌃ →
-  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania; GARNEK
-  `SCPortionPot` — pierścień z łukami osób w ich kolorach i łączną liczbą porcji w środku, pod nim „N kcal
-  w garnku”; KAFLE osób w siatce 2-kolumnowej (`SCPortionTile`: awatar w obwódce koloru osoby, imię + „TY”, duża
-  porcja między szklanymi −/+ co 0,5, kcal; zmieniona niezapisana porcja = obwódka kafla w kolorze osoby) — ten sam
-  szkic `draftPortions`; od 4.10.2026, wiersze z paskiem podziału odpadły). Po zmianie w stopce arkusza „Zapisz porcje” i obok krzyżyka „Cofnij zmiany”; ten sam zapis
+  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania; karta
+  `SCPortionSummary` — mały garnek z łukami osób w ich kolorach + „Do ugotowania · 3,5 porcji · kcal”; lista
+  `SCPortionList`/`SCPortionRow` — awatar w obwódce koloru osoby, imię + „TY” + kcal, z prawej szklany stepper
+  „− 1,5 +” z dużą liczbą; zmieniona niezapisana porcja = liczba w kolorze osoby i kropka przy imieniu). Ten sam
+  zestaw (`Components/SCPortionKit.swift`) w „Dodaj do planu”. Duży pierścień z kaflami po dwa (wcześniej tego dnia)
+  odpadł — „bardziej czytelne”. Po zmianie w stopce arkusza „Zapisz porcje” i obok krzyżyka „Cofnij zmiany”; ten sam zapis
   też pod pigułką.
   Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
@@ -814,8 +815,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`SlotTileLayout`: 1–2 poziome w rzędzie, 3 pionowe obok siebie, 4 = 2 × 2 poziome, 5–6 = 3 kolumny pionowe;
   ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule` — i NIC więcej (runda 20: danie w kaflach „brzydkie”); podmianę mówi JEDNA karta „ZAMIENISZ · danie” ze zdjęciem nad zdaniem stopki;
   wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
-  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = garnek + kafle osób (`Components/SCPortionKit.swift`: `SCPortionPot`,
-  `SCPortionTile`, `SCPortionTileGrid` — ten sam zestaw co arkusz porcji w szczegółach, 4.10.2026); jeden wiersz
+  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = `SCPortionSummary` + lista `SCPortionRow` (`Components/SCPortionKit.swift` — ten sam zestaw co
+  arkusz porcji w szczegółach, 4.10.2026); suma ponad 12 = minus działa, zapis czeka (`portionsOverLimit`); jeden wiersz
   porcji łącznych tylko przed listą domowników / przy dołączaniu do dania w porze. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,

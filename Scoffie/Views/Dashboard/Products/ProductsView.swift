@@ -489,7 +489,7 @@ struct ProductsView: View {
             // 36, nie 34: stoi obok krzyżyka zamykającego arkusz i ma mieć
             // jego rozmiar. 34 jest rozmiarem akcji w nagłówku EKRANU
             // (Plan tygodnia), gdzie krzyżyka nie ma.
-            SCCircleIconLabel(icon: "ellipsis", size: SCSheetIconLabel.size, iconSize: 16)
+            SCCircleIconLabel(icon: "ellipsis", size: SCSheetIconLabel.size, iconSize: 14)
                 .scTapTarget(drawn: 36)
         }
         .accessibilityLabel("Więcej opcji listy zakupów")

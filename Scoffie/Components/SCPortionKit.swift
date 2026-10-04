@@ -1,13 +1,18 @@
 import SwiftUI
 
+// Porcje osób — JEDEN zestaw w aplikacji: arkusz porcji w szczegółach posiłku
+// i „Dodaj do planu” (4.10.2026). Na górze karta z garnkiem i liczbą porcji do
+// ugotowania (`SCPortionSummary`), pod nią lista osób (`SCPortionList` +
+// `SCPortionRow`). Wcześniej tego samego dnia: duży pierścień i kafle po dwa
+// w rzędzie — Rafał: „popraw, aby były bardziej czytelne, ale też ładnie UX”.
+// Pełne wiersze czyta się od lewej do prawej jak każdą listę w aplikacji,
+// a liczba porcji stoi zawsze w tym samym miejscu, przy swoim stepperze.
+
 // MARK: - Garnek
 
-/// Garnek: pierścień podzielony na osoby — łuk = porcja, kolor = kolor
-/// awatara — z łączną liczbą porcji w środku. JEDEN w aplikacji: arkusz
-/// porcji w szczegółach posiłku i „Dodaj do planu” (4.10.2026). Łuki
-/// przesuwają się razem ze stepperami (przycięcie koła animuje się
-/// w sprężynie zmiany).
-struct SCPortionPot: View {
+/// Karta podsumowania: mały garnek (pierścień z łukami osób w ich kolorach,
+/// łączna liczba w środku) i obok „Do ugotowania · 3,5 porcji · 1840 kcal”.
+struct SCPortionSummary: View {
     struct Segment: Identifiable {
         let id: String
         let units: Int
@@ -15,84 +20,112 @@ struct SCPortionPot: View {
     }
 
     let segments: [Segment]
-    /// Podpis pod garnkiem — „1840 kcal w garnku”; `nil` = bez podpisu.
-    var caption: String? = nil
+    /// Kalorie całego garnka; `nil` = bez linii kalorii.
+    var kcal: Int? = nil
 
     @Environment(\.colorScheme) private var scheme
 
-    private static let diameter: CGFloat = 132
-    private static let lineWidth: CGFloat = 12
+    private static let diameter: CGFloat = 64
+    private static let lineWidth: CGFloat = 7
 
     private var totalUnits: Int { segments.reduce(0) { $0 + $1.units } }
-
-    /// „porcja / porcje / porcji” pod liczbą — ułamek łączy się z dopełniaczem.
-    private var unitWord: String {
-        let total = totalUnits
-        guard total % PlanPortions.unitsPerServing == 0 else { return "porcji" }
-        return PolishPlural.form(total / PlanPortions.unitsPerServing, one: "porcja", few: "porcje", many: "porcji")
-    }
+    private var isOverLimit: Bool { totalUnits > PlanPortions.maxTotalUnits }
 
     var body: some View {
-        let total = max(1, totalUnits)
-        // Przerwa między łukami w ułamku obwodu — przy jednej osobie pełne koło.
-        let gap: CGFloat = segments.count > 1 ? 0.018 : 0
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
 
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .stroke(Color.scLabel(scheme).opacity(0.07), lineWidth: Self.lineWidth)
+        HStack(spacing: 16) {
+            pot
 
-                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                    let start = CGFloat(segments.prefix(index).reduce(0) { $0 + $1.units }) / CGFloat(total)
-                    let end = start + CGFloat(segment.units) / CGFloat(total)
-                    Circle()
-                        .trim(from: min(start + gap / 2, end), to: max(end - gap / 2, start))
-                        .stroke(segment.color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                }
-
-                VStack(spacing: 0) {
-                    Text(PlanPortions.label(units: totalUnits))
-                        .font(.system(size: 34, weight: .heavy))
-                        .tracking(-1)
-                        .monospacedDigit()
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .contentTransition(.numericText(value: Double(totalUnits)))
-                    Text(unitWord)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .contentTransition(.opacity)
-                }
-            }
-            .frame(width: Self.diameter, height: Self.diameter)
-
-            if let caption {
-                Text(caption)
-                    .font(.system(size: 13, weight: .semibold))
-                    .monospacedDigit()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Do ugotowania")
+                    .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
-                    .contentTransition(.numericText())
+                Text(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))
+                    .font(.system(size: 24, weight: .heavy))
+                    .tracking(-0.6)
+                    .monospacedDigit()
+                    .foregroundStyle(isOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
+                    .contentTransition(.numericText(value: Double(totalUnits)))
+                if isOverLimit {
+                    // Suma pozycji ≤ 12 — serwer odrzuca więcej; zapis czeka,
+                    // aż ktoś zejdzie z porcją.
+                    Text("Najwyżej \(PlanPortions.label(units: PlanPortions.maxTotalUnits)) porcji — zmniejsz którąś")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(SCPalette.terracotta)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                } else if let kcal {
+                    Text(verbatim: "\(kcal) kcal")
+                        .font(.system(size: 13, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .contentTransition(.numericText(value: Double(kcal)))
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(shape.fill(Color.scTileBg(scheme)))
+        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
         .animation(.smooth(duration: 0.35), value: segments.map(\.units))
         .animation(SCMotion.textRoll, value: totalUnits)
-        .animation(SCMotion.textRoll, value: caption)
+        .animation(SCMotion.textRoll, value: kcal)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Razem \(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))"
-                + (caption.map { ", \($0)" } ?? "")
+            "Do ugotowania \(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))"
+                + (isOverLimit ? ", za dużo, najwyżej 12 porcji" : (kcal.map { ", \($0) kilokalorii" } ?? ""))
         )
+    }
+
+    private var pot: some View {
+        let total = max(1, totalUnits)
+        // Przerwa między łukami w ułamku obwodu — przy jednej osobie pełne koło.
+        let gap: CGFloat = segments.count > 1 ? 0.03 : 0
+
+        return ZStack {
+            Circle()
+                .stroke(Color.scLabel(scheme).opacity(0.07), lineWidth: Self.lineWidth)
+
+            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                let start = CGFloat(segments.prefix(index).reduce(0) { $0 + $1.units }) / CGFloat(total)
+                let end = start + CGFloat(segment.units) / CGFloat(total)
+                Circle()
+                    .trim(from: min(start + gap / 2, end), to: max(end - gap / 2, start))
+                    .stroke(segment.color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+
+            Image(systemName: "frying.pan.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.scMuted(scheme))
+        }
+        .frame(width: Self.diameter, height: Self.diameter)
     }
 }
 
-// MARK: - Kafel osoby
+// MARK: - Lista osób
 
-/// Kafel porcji jednej osoby: awatar w obwódce JEJ koloru (tym samym, co jej
-/// łuk garnka), imię z „TY”, duża porcja między szklanymi −/+ (co 0,5),
-/// opcjonalnie kcal porcji. Zmieniona, a niezapisana porcja = obwódka kafla
-/// w kolorze osoby. Bez edycji (porcje do odczytu) — sama liczba.
-struct SCPortionTile: View {
+/// Karta z wierszami osób (`SCPortionRow`) — strój kafla, wiersze dzielą
+/// włosowate kreski od tekstu.
+struct SCPortionList<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        VStack(spacing: 0, content: content)
+            .background(shape.fill(Color.scTileBg(scheme)))
+            .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+    }
+}
+
+/// Wiersz osoby: awatar w obwódce JEJ koloru (tym samym, co jej łuk garnka),
+/// imię z „TY” i kcal porcji, z prawej szklany stepper „− 1,5 +” z dużą
+/// liczbą. Zmieniona, a niezapisana porcja = liczba w kolorze osoby i kropka
+/// przy imieniu. Bez edycji (porcje do odczytu) — sama liczba.
+struct SCPortionRow: View {
     let name: String
     var avatarUrl: String? = nil
     var avatarColor: Int? = nil
@@ -106,81 +139,76 @@ struct SCPortionTile: View {
     var isEditable: Bool = true
     var canDecrement: Bool = true
     var canIncrement: Bool = true
+    /// Kreska nad wierszem — każdy poza pierwszym.
+    var showsDivider: Bool = false
     /// Krok porcji: −1 / +1.
     var onStep: (Int) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+    private static let avatarSize: CGFloat = 40
 
-        VStack(spacing: 10) {
+    var body: some View {
+        HStack(spacing: 12) {
             ProfileAvatar(
                 avatarUrl: avatarUrl,
                 displayName: name,
-                size: 44,
+                size: Self.avatarSize,
                 colorIndex: avatarColor,
                 seed: seed
             )
-            .padding(3)
+            .padding(2.5)
             .overlay(Circle().strokeBorder(color, lineWidth: 2))
 
-            HStack(spacing: 5) {
-                Text(name)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-                if isViewer {
-                    Text("TY")
-                        .font(.system(size: 9.5, weight: .heavy))
-                        .tracking(0.8)
-                        .foregroundStyle(SCPalette.terracotta)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
-                        .fixedSize()
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(1)
+                    if isViewer {
+                        Text("TY")
+                            .font(.system(size: 9.5, weight: .heavy))
+                            .tracking(0.8)
+                            .foregroundStyle(SCPalette.terracotta)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
+                            .fixedSize()
+                    }
+                    if isChanged {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 6, height: 6)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                if let kcal {
+                    Text(verbatim: "\(kcal) kcal")
+                        .font(.system(size: 13, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .contentTransition(.numericText(value: Double(kcal)))
+                        .animation(SCMotion.textRoll, value: kcal)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 6) {
-                if isEditable {
-                    stepButton("minus", enabled: canDecrement) { onStep(-1) }
-                }
-                Text(PlanPortions.label(units: units))
-                    .font(.system(size: 30, weight: .heavy))
-                    .tracking(-0.8)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .contentTransition(.numericText(value: Double(units)))
-                    .animation(SCMotion.textRoll, value: units)
-                    .frame(maxWidth: .infinity)
-                if isEditable {
-                    stepButton("plus", enabled: canIncrement) { onStep(1) }
-                }
-            }
-
-            if let kcal {
-                Text(verbatim: "\(kcal) kcal")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .contentTransition(.numericText(value: Double(kcal)))
-                    .animation(SCMotion.textRoll, value: kcal)
+            stepper
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) {
+            if showsDivider {
+                Rectangle()
+                    .fill(Color.scTileStroke(scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 14 + Self.avatarSize + 5 + 12)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity)
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(
-            shape.strokeBorder(
-                isChanged ? color.opacity(0.7) : Color.scTileStroke(scheme),
-                lineWidth: isChanged ? 1.5 : 1
-            )
-        )
         .animation(.smooth(duration: 0.2), value: isChanged)
-        // Jedno stuknięcie haptyki na kafel, nie na każdy z dwóch przycisków.
         .sensoryFeedback(.selection, trigger: units)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
@@ -197,32 +225,42 @@ struct SCPortionTile: View {
         }
     }
 
-    /// Szklane −/+. Krok wychodzący poza widełki = przygaszony.
+    @ViewBuilder
+    private var stepper: some View {
+        let value = Text(PlanPortions.label(units: units))
+            .font(.system(size: 20, weight: .heavy))
+            .tracking(-0.4)
+            .monospacedDigit()
+            .foregroundStyle(isChanged ? color : Color.scLabel(scheme))
+            .contentTransition(.numericText(value: Double(units)))
+            .animation(SCMotion.textRoll, value: units)
+            .frame(minWidth: 40)
+
+        if isEditable {
+            HStack(spacing: 0) {
+                stepButton("minus", enabled: canDecrement) { onStep(-1) }
+                value
+                stepButton("plus", enabled: canIncrement) { onStep(1) }
+            }
+            .padding(3)
+            .scChromeGlass(in: Capsule(), interactive: true)
+        } else {
+            value
+                .padding(.horizontal, 8)
+        }
+    }
+
     private func stepButton(_ systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Color.scLabel(scheme))
-                .frame(width: 34, height: 34)
-                .scChromeGlass(in: Circle(), interactive: true)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(systemName == "plus" ? SCPalette.terracotta : Color.scLabel(scheme))
+                .frame(width: 36, height: 36)
                 .contentShape(Circle())
         }
-        .buttonStyle(PlanPressStyle(scale: 0.88))
+        .buttonStyle(PlanPressStyle(scale: 0.85))
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
+        .opacity(enabled ? 1 : 0.3)
         .accessibilityHidden(true)
-    }
-}
-
-/// Siatka kafli: dwie kolumny, jedna osoba = pełna szerokość.
-struct SCPortionTileGrid<Content: View>: View {
-    let count: Int
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        let columns = count > 1
-            ? [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
-            : [GridItem(.flexible())]
-        LazyVGrid(columns: columns, spacing: 12, content: content)
     }
 }

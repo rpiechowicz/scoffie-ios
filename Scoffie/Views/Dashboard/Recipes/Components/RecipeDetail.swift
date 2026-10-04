@@ -743,33 +743,33 @@ struct RecipeDetailView: View {
         person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
     }
 
-    /// Porcje od nowa (Rafał 4.10.2026: „zrób jakoś ładniej od nowa design
-    /// porcji dla userów”): GARNEK (`SCPortionPot` — łuki osób w ich kolorach,
-    /// łączna liczba w środku, kcal garnka pod spodem) i KAFLE osób
-    /// (`SCPortionTile`). Ten sam zestaw w „Dodaj do planu” (`Components/
-    /// SCPortionKit.swift`). Dawniej: karta z paskiem podziału i wierszami.
+    /// Porcje osób (4.10.2026, dwie rundy: „ładniej od nowa”, potem „bardziej
+    /// czytelne, ale też ładnie UX”): karta z garnkiem i liczbą do ugotowania
+    /// (`SCPortionSummary`) i lista osób z dużym stepperem (`SCPortionList`,
+    /// `SCPortionRow`). Ten sam zestaw w „Dodaj do planu”
+    /// (`Components/SCPortionKit.swift`).
     private func portionsCard(_ model: RecipeDetailPortions) -> some View {
         let total = PlanPortions.totalUnits(portionUnits)
         let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
         let totalUnits = PlanPortions.totalUnits(draftPortions)
 
-        return VStack(spacing: 18) {
-            SCPortionPot(
+        return VStack(spacing: 14) {
+            SCPortionSummary(
                 segments: model.people.map { person in
-                    SCPortionPot.Segment(
+                    SCPortionSummary.Segment(
                         id: person.memberId,
                         units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
                         color: portionColor(person)
                     )
                 },
-                caption: "\(kcal) kcal w garnku"
+                kcal: kcal
             )
 
-            SCPortionTileGrid(count: model.people.count) {
-                ForEach(model.people, id: \.memberId) { person in
+            SCPortionList {
+                ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
                     let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
                     let saved = personalPortions?.units[person.memberId] ?? PlanPortions.missingEntryUnits
-                    SCPortionTile(
+                    SCPortionRow(
                         name: person.name,
                         avatarUrl: person.member?.avatarUrl,
                         avatarColor: person.member?.avatarColor,
@@ -782,6 +782,7 @@ struct RecipeDetailView: View {
                         isEditable: model.isEditable,
                         canDecrement: PlanPortions.stepped(units: units, direction: -1, totalUnits: totalUnits) != nil,
                         canIncrement: PlanPortions.stepped(units: units, direction: 1, totalUnits: totalUnits) != nil,
+                        showsDivider: index > 0,
                         onStep: { direction in
                             guard let next = PlanPortions.stepped(units: units, direction: direction, totalUnits: totalUnits) else { return }
                             withAnimation(.smooth(duration: 0.2)) { draftPortions[person.memberId] = next }

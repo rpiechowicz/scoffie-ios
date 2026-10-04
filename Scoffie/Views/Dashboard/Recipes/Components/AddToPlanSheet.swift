@@ -850,32 +850,31 @@ struct AddToPlanSheet: View {
 
     /// Porcja każdej osoby co pół porcji — ten sam układ co arkusz porcji
     /// w szczegółach posiłku (Rafał 4.10.2026: „zrób tak samo jak ten nasz
-    /// poprzedni sheet”): GARNEK z łukami osób i łączną liczbą porcji,
-    /// pod nim kafle osób (`Components/SCPortionKit.swift`). Dawniej karta
-    /// z wierszem „imię · liczba · stepper” na osobę.
+    /// poprzedni sheet”): karta z garnkiem i liczbą do ugotowania, pod nią
+    /// lista osób z dużym stepperem (`Components/SCPortionKit.swift`).
     private var personalPortionsSection: some View {
         let ids = eaterIds
         let byId = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let total = ids.reduce(0) { $0 + units(for: $1) }
         let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
 
-        return VStack(spacing: 16) {
-            SCPortionPot(
+        return VStack(spacing: 12) {
+            SCPortionSummary(
                 segments: ids.map { id in
-                    SCPortionPot.Segment(
+                    SCPortionSummary.Segment(
                         id: id,
                         units: units(for: id),
                         color: byId[id].map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
                     )
                 },
-                caption: "\(kcal) kcal w garnku"
+                kcal: kcal
             )
 
-            SCPortionTileGrid(count: ids.count) {
-                ForEach(ids, id: \.self) { memberId in
+            SCPortionList {
+                ForEach(Array(ids.enumerated()), id: \.element) { index, memberId in
                     let member = byId[memberId]
                     let value = units(for: memberId)
-                    SCPortionTile(
+                    SCPortionRow(
                         name: member?.displayName ?? "Domownik",
                         avatarUrl: member?.avatarUrl,
                         avatarColor: member?.avatarColor,
@@ -886,6 +885,7 @@ struct AddToPlanSheet: View {
                         isViewer: memberId == sessionStore.currentUserId,
                         canDecrement: PlanPortions.stepped(units: value, direction: -1, totalUnits: total) != nil,
                         canIncrement: PlanPortions.stepped(units: value, direction: 1, totalUnits: total) != nil,
+                        showsDivider: index > 0,
                         onStep: { direction in
                             guard let next = PlanPortions.stepped(units: value, direction: direction, totalUnits: total) else { return }
                             setUnits(next, for: memberId, allIds: ids)
@@ -1164,11 +1164,19 @@ struct AddToPlanSheet: View {
     /// Arkusz potrafi zostać otwarty przez północ — wtedy zaznaczone „dziś”
     /// staje się „wczoraj” pod ręką.
     private var canSave: Bool {
-        selectedSlot != nil && isEditable(selectedDate) && !isAlreadyPlanned
+        selectedSlot != nil && isEditable(selectedDate) && !isAlreadyPlanned && !portionsOverLimit
+    }
+
+    /// Suma porcji osób ponad limit pozycji (np. dwie osoby po 6 i dołączona
+    /// trzecia) — serwer odrzuciłby zapis, więc przycisk czeka, aż ktoś
+    /// zejdzie z porcją (minus działa zawsze, `PlanPortions.stepped`).
+    private var portionsOverLimit: Bool {
+        guard showsPersonalPortions else { return false }
+        return eaterIds.reduce(0) { $0 + units(for: $1) } > PlanPortions.maxTotalUnits
     }
 
     private func save() {
-        guard let slot = selectedSlot, !isSaving, isEditable(selectedDate), !isAlreadyPlanned else { return }
+        guard let slot = selectedSlot, !isSaving, isEditable(selectedDate), !isAlreadyPlanned, !portionsOverLimit else { return }
         isSaving = true
         let date = selectedDate
         // Zajęty slot podmieniamy, zamiast dokładać obok — drugie „Wspólne”

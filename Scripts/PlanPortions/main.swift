@@ -50,6 +50,8 @@ check(PlanPortions.stepped(units: 60, direction: 1, totalUnits: 240) == nil, "su
 check(PlanPortions.stepped(units: 60, direction: 1, totalUnits: 230) == 70, "do sumy 12 włącznie plus działa (11,5 → 12)")
 check(PlanPortions.stepped(units: 60, direction: 1, totalUnits: 235) == nil, "krok przekroczyłby sumę 12 — plus wygaszony")
 check(PlanPortions.stepped(units: 60, direction: -1, totalUnits: 240) == 50, "przy sumie 12 minus działa")
+check(PlanPortions.stepped(units: 120, direction: -1, totalUnits: 260) == 110, "suma ponad 12 (6 + 6 + 1) — minus działa")
+check(PlanPortions.stepped(units: 20, direction: 1, totalUnits: 260) == nil, "suma ponad 12 — plus wygaszony")
 check(PlanPortions.stepped(units: 25, direction: 1, totalUnits: 45) == 30, "1,25 (stare dane) + → 1,5 (na siatkę)")
 check(PlanPortions.stepped(units: 25, direction: -1, totalUnits: 45) == 20, "1,25 (stare dane) − → 1 (na siatkę)")
 check(PlanPortions.stepped(units: 16, direction: -1, totalUnits: 36) == 10, "0,80 − → 0,5")

@@ -80,8 +80,11 @@ enum PlanPortions {
     // MARK: - Stepper
 
     /// Porcja osoby po jednym kroku (`direction` = +1 / −1) albo `nil`, gdy
-    /// krok wyszedłby poza widełki osoby lub poza sumę pozycji. Wartość spoza
-    /// siatki 0,5 najpierw dociąga się do najbliższej połówki w stronę kroku.
+    /// krok wyszedłby poza widełki osoby lub (tylko w górę) poza sumę pozycji.
+    /// Zmniejszanie jest zawsze dozwolone w widełkach osoby — także przy
+    /// sumie już ponad limitem (dołączenie osoby do dwóch po 6 porcji), bo
+    /// inaczej nie dałoby się z niej zejść. Wartość spoza siatki 0,5 najpierw
+    /// dociąga się do najbliższej połówki w stronę kroku.
     static func stepped(units: Int, direction: Int, totalUnits: Int) -> Int? {
         let next: Int
         if units % stepUnits == 0 {
@@ -91,7 +94,7 @@ enum PlanPortions {
             next = direction > 0 ? floor + stepUnits : floor
         }
         guard unitsRange.contains(next) else { return nil }
-        guard totalUnits - units + next <= maxTotalUnits else { return nil }
+        guard direction < 0 || totalUnits - units + next <= maxTotalUnits else { return nil }
         return next
     }
 
