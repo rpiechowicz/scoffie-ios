@@ -360,11 +360,11 @@ struct RecipeDetailView: View {
                             .detailReveal(hasAppeared, order: 3 + revealShift)
                     }
 
-                    // Zapas pod dolny pasek: przycisk z marginesami (~72 pt)
-                    // i oddech nad nim — przewinięta do końca treść kończy
-                    // się nad przyciskiem, a w trakcie przewijania jedzie
-                    // POD nim i widać ją przez szkło.
-                    Color.clear.frame(height: 72 + 16)
+                    // Oddech nad dolnym paskiem. Sam pasek liczy system
+                    // (`safeAreaBar` niżej): przewinięta do końca treść kończy
+                    // się nad nim przy każdej jego wysokości — także z błędem
+                    // Thermomixa nad przyciskami.
+                    Color.clear.frame(height: 16)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -377,6 +377,11 @@ struct RecipeDetailView: View {
             .scrollPosition($scrollPosition)
             .scrollIndicators(.hidden)
             .ignoresSafeArea(.container, edges: .top)
+            // Dolny pasek akcji natywnie (iOS 26 `safeAreaBar`): same szklane
+            // przyciski, przepis przejeżdża pod nimi, a kończy się nad nimi.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                primaryActionBar
+            }
             // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
             // progu, a nie w każdej klatce przewijania.
             .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -422,9 +427,6 @@ struct RecipeDetailView: View {
             .padding(.trailing, 20)
             .padding(.top, 16)
             .detailChrome(hasAppeared)
-        }
-        .overlay(alignment: .bottom) {
-            primaryActionBar
         }
         .onAppear { applyDebugLaunchOptions() }
         // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
