@@ -72,6 +72,7 @@ struct RecipesView: View {
         let accent: Color
         let recipes: [Recipe]          // displayed inline (cap = sectionPreviewLimit)
         let totalCount: Int            // full count for this category (sheet badge)
+        let filterCount: Int           // filtry tej kategorii (plakietka strzałki)
 
         var id: RecipesCategory { category }
         var hasMore: Bool { totalCount > recipes.count }
@@ -488,7 +489,10 @@ struct RecipesView: View {
                 eyebrow: section.eyebrow,
                 title: section.title,
                 accent: section.accent,
-                action: section.recipes.isEmpty ? nil : {
+                filterCount: section.filterCount,
+                // Sekcję wyzerowaną przez JEJ filtry dalej da się otworzyć —
+                // tam się je zdejmuje.
+                action: section.recipes.isEmpty && section.filterCount == 0 ? nil : {
                     categorySheetSelection = section.category
                 }
             )
@@ -703,7 +707,8 @@ struct RecipesView: View {
                 : RecipeAccent.eyebrow(for: category),
             accent: RecipeAccent.accent(for: category),
             recipes: preview,
-            totalCount: categoryRecipes.count
+            totalCount: categoryRecipes.count,
+            filterCount: categoryFilterCount
         )
     }
 
