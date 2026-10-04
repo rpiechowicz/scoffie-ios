@@ -1,8 +1,8 @@
 import SwiftUI
 
 // Porcje osób — JEDEN zestaw w aplikacji: arkusz porcji w szczegółach posiłku
-// i „Dodaj do planu” (4.10.2026). Na górze karta z garnkiem i liczbą porcji do
-// ugotowania (`SCPortionSummary`), pod nią lista osób (`SCPortionList` +
+// i „Dodaj do planu” (4.10.2026). Na górze karta z liczbą porcji do ugotowania
+// i paskiem podziału (`SCPortionSummary`), pod nią lista osób (`SCPortionList` +
 // `SCPortionRow`). Wcześniej tego samego dnia: duży pierścień i kafle po dwa
 // w rzędzie — Rafał: „popraw, aby były bardziej czytelne, ale też ładnie UX”.
 // Pełne wiersze czyta się od lewej do prawej jak każdą listę w aplikacji,
@@ -10,8 +10,11 @@ import SwiftUI
 
 // MARK: - Garnek
 
-/// Karta podsumowania: mały garnek (pierścień z łukami osób w ich kolorach,
-/// łączna liczba w środku) i obok „Do ugotowania · 3,5 porcji · 1840 kcal”.
+/// Karta podsumowania: „DO UGOTOWANIA” · duża liczba porcji · kcal garnka
+/// z prawej, a pod spodem pasek podziału garnka — odcinek na osobę w jej
+/// kolorze, szerokość = jej porcja. Czyta się jak pasek postępu Zakupów:
+/// jedno spojrzenie mówi, ile ugotować i kto ile z tego zje. (Wcześniej tego
+/// dnia: pierścień z ikoną patelni — Rafał: „dopracuj design tego progress”.)
 struct SCPortionSummary: View {
     struct Segment: Identifiable {
         let id: String
@@ -20,59 +23,64 @@ struct SCPortionSummary: View {
     }
 
     let segments: [Segment]
-    /// Kalorie całego garnka; `nil` = bez linii kalorii.
+    /// Kalorie całego garnka; `nil` = bez kalorii.
     var kcal: Int? = nil
-    /// Ostrzeżenie zamiast kalorii (w terakocie) — np. zapis nie zmieści się
+    /// Ostrzeżenie pod paskiem (w terakocie) — np. zapis nie zmieści się
     /// w limicie osoba po osobie. Suma ponad 12 ma własne zdanie.
     var note: String? = nil
 
     @Environment(\.colorScheme) private var scheme
 
-    private static let diameter: CGFloat = 64
-    private static let lineWidth: CGFloat = 7
-
     private var totalUnits: Int { segments.reduce(0) { $0 + $1.units } }
     private var isOverLimit: Bool { totalUnits > PlanPortions.maxTotalUnits }
+
+    private var warning: String? {
+        if isOverLimit {
+            // Suma pozycji ≤ 12 — serwer odrzuca więcej; zapis czeka, aż
+            // ktoś zejdzie z porcją.
+            return "Najwyżej \(PlanPortions.label(units: PlanPortions.maxTotalUnits)) porcji — zmniejsz którąś"
+        }
+        return note
+    }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
 
-        HStack(spacing: 16) {
-            pot
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("DO UGOTOWANIA")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(Color.scFaint(scheme))
+                    Text(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.7)
+                        .monospacedDigit()
+                        .foregroundStyle(isOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
+                        .contentTransition(.numericText(value: Double(totalUnits)))
+                }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Do ugotowania")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                Text(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))
-                    .font(.system(size: 24, weight: .heavy))
-                    .tracking(-0.6)
-                    .monospacedDigit()
-                    .foregroundStyle(isOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
-                    .contentTransition(.numericText(value: Double(totalUnits)))
-                if isOverLimit {
-                    // Suma pozycji ≤ 12 — serwer odrzuca więcej; zapis czeka,
-                    // aż ktoś zejdzie z porcją.
-                    Text("Najwyżej \(PlanPortions.label(units: PlanPortions.maxTotalUnits)) porcji — zmniejsz którąś")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
-                } else if let note {
-                    Text(note)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
-                } else if let kcal {
+                Spacer(minLength: 8)
+
+                if let kcal {
                     Text(verbatim: "\(kcal) kcal")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 14, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .contentTransition(.numericText(value: Double(kcal)))
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            splitBar
+
+            if let warning {
+                Text(warning)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
         }
         .padding(16)
         .background(shape.fill(Color.scTileBg(scheme)))
@@ -80,36 +88,30 @@ struct SCPortionSummary: View {
         .animation(.smooth(duration: 0.35), value: segments.map(\.units))
         .animation(SCMotion.textRoll, value: totalUnits)
         .animation(SCMotion.textRoll, value: kcal)
+        .animation(.smooth(duration: 0.2), value: warning)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "Do ugotowania \(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))"
-                + (isOverLimit ? ", za dużo, najwyżej 12 porcji" : (note.map { ", \($0)" } ?? kcal.map { ", \($0) kilokalorii" } ?? ""))
+                + (kcal.map { ", \($0) kilokalorii" } ?? "")
+                + (warning.map { ", \($0)" } ?? "")
         )
     }
 
-    private var pot: some View {
-        let total = max(1, totalUnits)
-        // Przerwa między łukami w ułamku obwodu — przy jednej osobie pełne koło.
-        let gap: CGFloat = segments.count > 1 ? 0.03 : 0
-
-        return ZStack {
-            Circle()
-                .stroke(Color.scLabel(scheme).opacity(0.07), lineWidth: Self.lineWidth)
-
-            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                let start = CGFloat(segments.prefix(index).reduce(0) { $0 + $1.units }) / CGFloat(total)
-                let end = start + CGFloat(segment.units) / CGFloat(total)
-                Circle()
-                    .trim(from: min(start + gap / 2, end), to: max(end - gap / 2, start))
-                    .stroke(segment.color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+    /// Odcinek na osobę, szerokość = porcja, kolor = kolor awatara.
+    private var splitBar: some View {
+        GeometryReader { proxy in
+            let total = max(1, totalUnits)
+            let gap: CGFloat = 3
+            let usable = max(0, proxy.size.width - gap * CGFloat(max(0, segments.count - 1)))
+            HStack(spacing: gap) {
+                ForEach(segments) { segment in
+                    Capsule(style: .continuous)
+                        .fill(segment.color)
+                        .frame(width: max(6, usable * CGFloat(segment.units) / CGFloat(total)))
+                }
             }
-
-            Image(systemName: "frying.pan.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.scMuted(scheme))
         }
-        .frame(width: Self.diameter, height: Self.diameter)
+        .frame(height: 8)
     }
 }
 
@@ -130,9 +132,9 @@ struct SCPortionList<Content: View>: View {
     }
 }
 
-/// Wiersz osoby: awatar w obwódce JEJ koloru (tym samym, co jej łuk garnka),
-/// imię z „TY” i kcal porcji, z prawej szklany stepper „− 1,5 +” z dużą
-/// liczbą. Zmieniona, a niezapisana porcja = liczba w kolorze osoby i kropka
+/// Wiersz osoby: awatar w obwódce JEJ koloru (tym samym, co jej odcinek
+/// paska podziału), imię z „TY” i kcal porcji, z prawej liczba porcji
+/// i stepper jak `SCStepper`. Zmieniona, a niezapisana porcja = liczba w kolorze osoby i kropka
 /// przy imieniu. Bez edycji (porcje do odczytu) — sama liczba.
 struct SCPortionRow: View {
     let name: String
@@ -234,42 +236,46 @@ struct SCPortionRow: View {
         }
     }
 
+    /// Liczba porcji i stepper w stroju `SCStepper` (dwa przyciski 34 × 30
+    /// rozdzielone kreską, na szklanej pigułce) — ten sam, „naturalny”, co
+    /// w całej aplikacji. Dawniej większa pigułka z liczbą w środku (Rafał:
+    /// „stepper daj mniejszy, taki naturalny, jaki jest wszędzie”).
     @ViewBuilder
     private var stepper: some View {
-        let value = Text(PlanPortions.label(units: units))
-            .font(.system(size: 20, weight: .heavy))
-            .tracking(-0.4)
-            .monospacedDigit()
-            .foregroundStyle(isChanged ? color : Color.scLabel(scheme))
-            .contentTransition(.numericText(value: Double(units)))
-            .animation(SCMotion.textRoll, value: units)
-            .frame(minWidth: 40)
+        HStack(spacing: 10) {
+            Text(PlanPortions.label(units: units))
+                .font(.system(size: 18, weight: .heavy))
+                .tracking(-0.3)
+                .monospacedDigit()
+                .foregroundStyle(isChanged ? color : Color.scLabel(scheme))
+                .contentTransition(.numericText(value: Double(units)))
+                .animation(SCMotion.textRoll, value: units)
+                .frame(minWidth: 30, alignment: .trailing)
 
-        if isEditable {
-            HStack(spacing: 0) {
-                stepButton("minus", enabled: canDecrement) { onStep(-1) }
-                value
-                stepButton("plus", enabled: canIncrement) { onStep(1) }
+            if isEditable {
+                HStack(spacing: 0) {
+                    stepButton("minus", enabled: canDecrement) { onStep(-1) }
+                    Rectangle()
+                        .fill(Color.scTileStroke(scheme))
+                        .frame(width: 1, height: 18)
+                    stepButton("plus", enabled: canIncrement) { onStep(1) }
+                }
+                .scChromeGlass(in: Capsule(), interactive: true)
             }
-            .padding(3)
-            .scChromeGlass(in: Capsule(), interactive: true)
-        } else {
-            value
-                .padding(.horizontal, 8)
         }
     }
 
     private func stepButton(_ systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(systemName == "plus" ? SCPalette.terracotta : Color.scLabel(scheme))
-                .frame(width: 36, height: 36)
-                .contentShape(Circle())
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(SCPalette.terracotta)
+                .frame(width: 34, height: 30)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(PlanPressStyle(scale: 0.85))
+        .buttonStyle(.plain)
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.3)
+        .opacity(enabled ? 1 : 0.35)
         .accessibilityHidden(true)
     }
 }
