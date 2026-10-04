@@ -777,7 +777,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
 - Przepisy jak Poczta na iOS 26 (4.10.2026, Rafał: „na dole wyszukiwarka, po lewej button od filtrów”): pływający
   `RecipesSearchBar` NAD dolnym menu (`safeAreaInset` jak pigułka Planu, zwija się z menu, rozmyty pas od niego w dół —
   `.recipes` w `NavigationMenu.ownBottomEdge`): szklany krążek filtrów 50 pt (tint + `scCountBadge` przy filtrach) ·
-  szklana kapsuła pola · przy fokusie krążek z krzyżykiem (czyści i chowa klawiaturę); przy klawiaturze jedzie nad nią.
+  szklana kapsuła pola BEZ krzyżyka w środku · przy fokusie krążek z krzyżykiem (czyści i chowa klawiaturę); przy
+  klawiaturze jedzie nad nią. Zwija się z menu skalą 0,84 + jego spadek (0,94 było niewidoczne). Plakietka filtrów
+  stoi w nakładce NAD `GlassEffectContainer` (w grupie była przycinana i przykrywana przez pole).
+  Zakładki kategorii pod tytułem (`RecipeScopeTabs`, 4.10.2026 — świadomy wyjątek od „zawężanie tylko w Filtrach”,
+  prośba Rafała): Wszystkie · Śniadania · Obiady · Kolacje · Przekąski · Ulubione, szklane kapsuły, wybrana w tincie
+  kategorii; wybór = stan wyników tej kategorii, łączy się z frazą i filtrami („kuskus” → Obiady), przy frazie /
+  filtrach każda ma liczbę trafień.
   Na górze sam `EditorialPageHeader("Przepisy")` (`EditorialRecipesHeader` usunięty). Fraza ALBO filtry z „Filtrów”
   = STAN WYNIKÓW, jeden dla obu: `RecipeResultsHeader` (etykieta, duża liczba, „fraza” · filtry, szklane „Wyczyść”)
   i JEDNA płaska lista `RecipeRowStack` — bez karuzeli i sekcji („nie może być mocnego podziału na sekcje”); przy

@@ -45,6 +45,8 @@ struct RecipesView: View {
     /// `resyncFeaturedSelectionIfNeeded`. `nil` = jeszcze nie ułożona.
     @State private var featuredOrder: [UUID]?
     @State private var filters = RecipeFilterOptions()
+    /// Zakładka kategorii nad treścią (`RecipeScopeTabs`); `nil` = wszystkie.
+    @State private var scope: RecipesCategory?
     @State private var isFilterSheetPresented = false
 
     /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
@@ -160,14 +162,34 @@ struct RecipesView: View {
     /// to stałe ustawienia, nie szukanie (filtry kategorii mówi plakietka na
     /// strzałce sekcji).
     private var isResultsMode: Bool {
+        isSearchingOrFiltering || scope != nil
+    }
+
+    /// Fraza albo filtry — wtedy zakładki kategorii pokazują liczby trafień.
+    private var isSearchingOrFiltering: Bool {
         !debouncedSearchText.isEmpty || filters.activeCount > 0
+    }
+
+    /// Wyniki w zakresie wybranej zakładki.
+    private var resultRecipes: [Recipe] {
+        guard let scope else { return unscopedResults }
+        return unscopedResults.filter { RecipeScopeTabs.contains($0, in: scope) }
+    }
+
+    /// Ile trafień leży w każdej zakładce — przy frazie / filtrach.
+    private var scopeCounts: [RecipesCategory: Int]? {
+        guard isSearchingOrFiltering else { return nil }
+        let results = unscopedResults
+        return Dictionary(uniqueKeysWithValues: RecipeScopeTabs.scopes.map { scope in
+            (scope, results.reduce(0) { $0 + (RecipeScopeTabs.contains($1, in: scope) ? 1 : 0) })
+        })
     }
 
     /// Wyniki w jednej liście. Przy frazie najpierw nazwy, które się nią
     /// ZACZYNAJĄ, potem te, w których słowo się nią zaczyna, potem reszta
     /// nazw, na końcu trafienia w samym opisie; w obrębie grupy kolejność
     /// zostaje (dopasowanie do celu).
-    private var resultRecipes: [Recipe] {
+    private var unscopedResults: [Recipe] {
         let visible = visibleRecipes
         let query = debouncedSearchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return visible }
@@ -195,6 +217,7 @@ struct RecipesView: View {
             searchText = ""
             debouncedSearchText = ""
             filters.resetGlobal()
+            scope = nil
         }
     }
 
@@ -389,7 +412,17 @@ struct RecipesView: View {
                     .id(Self.topAnchor)
                     .padding(.horizontal, pageHorizontalPadding)
                     .padding(.top, pageTopPadding)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, 12)
+
+                if !shouldShowSkeleton {
+                    let counts = scopeCounts
+                    RecipeScopeTabs(
+                        selection: $scope,
+                        counts: counts,
+                        total: counts == nil ? nil : unscopedResults.count
+                    )
+                    .padding(.bottom, 16)
+                }
 
                 // Szkielet → dane przenika, nie skacze (pierwsze wejście
                 // po uruchomieniu aplikacji); zwykły widok ↔ wyniki też.
@@ -434,6 +467,7 @@ struct RecipesView: View {
         // (wyniki mogły zacząć się wysoko nad miejscem, w którym się było).
         .onChange(of: debouncedSearchText) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
         .onChange(of: isResultsMode) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
+        .onChange(of: scope) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
         }
         // Pasek szukania wchodzi bezpiecznym obszarem jak pigułka „Cel dnia”
         // w Planie: lista przejeżdża pod szkłem, ale kończy się nad nim.
@@ -445,8 +479,11 @@ struct RecipesView: View {
                 onOpenFilters: { isFilterSheetPresented = true }
             )
             .padding(.horizontal, pageHorizontalPadding)
-            // Zwija się RAZEM z dolnym menu (ten sam ruch co pigułka Planu).
-            .scaleEffect(tabBarChrome.isCompact ? 0.94 : 1, anchor: .bottom)
+            // Zwija się RAZEM z dolnym menu i tak jak ono (Rafał 4.10.2026:
+            // „navigation bar ładnie się zmniejsza, a filters bar już nie”):
+            // mniejszy i węższy o tyle, o ile menu, opada o jego spadek.
+            // Skala, nie inna wysokość — lista nad paskiem nie skacze.
+            .scaleEffect(tabBarChrome.isCompact ? 0.84 : 1, anchor: .bottom)
             .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
             .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
             .padding(.bottom, 8)
@@ -473,6 +510,7 @@ struct RecipesView: View {
                 count: results.count,
                 query: debouncedSearchText,
                 filterLabels: filters.summaryLabels,
+                scopeTitle: scope.map(RecipeScopeTabs.title(for:)),
                 onClear: clearResults
             )
             .padding(.horizontal, pageHorizontalPadding)
@@ -499,6 +537,11 @@ struct RecipesView: View {
         let hasQuery = !debouncedSearchText.isEmpty
         let hasFilters = filters.activeCount > 0
         var actions: [RecipeListEmptyState.Action] = []
+        if scope != nil, hasQuery || hasFilters {
+            actions.append(.init(title: "Szukaj we wszystkich", icon: "square.grid.2x2") {
+                withAnimation(.smooth(duration: 0.3)) { scope = nil }
+            })
+        }
         if hasFilters {
             actions.append(.init(title: "Wyczyść filtry") {
                 withAnimation(.smooth(duration: 0.3)) { filters.resetGlobal() }
@@ -513,12 +556,18 @@ struct RecipesView: View {
                 }
             })
         }
+        let onlyScope = !hasQuery && !hasFilters
         return RecipeListEmptyState(
-            icon: hasQuery ? "magnifyingglass" : "line.3.horizontal.decrease",
-            title: "Nic nie pasuje",
-            message: hasQuery && hasFilters
-                ? "Żaden przepis nie pasuje do frazy i filtrów."
-                : hasQuery ? "Spróbuj innej frazy." : "Poluzuj filtry, żeby zobaczyć więcej.",
+            icon: onlyScope
+                ? RecipesConstants.icon(for: scope ?? .all)
+                : hasQuery ? "magnifyingglass" : "line.3.horizontal.decrease",
+            accent: scope.map(RecipeScopeTabs.accent(for:)) ?? SCPalette.terracotta,
+            title: onlyScope && scope == .favourite ? "Brak ulubionych" : "Nic nie pasuje",
+            message: onlyScope
+                ? (scope == .favourite ? "Serce przy przepisie doda go tutaj." : "Ta kategoria jest jeszcze pusta.")
+                : hasQuery && hasFilters
+                    ? "Żaden przepis nie pasuje do frazy i filtrów."
+                    : hasQuery ? "Spróbuj innej frazy." : "Poluzuj filtry, żeby zobaczyć więcej.",
             actions: actions
         )
     }

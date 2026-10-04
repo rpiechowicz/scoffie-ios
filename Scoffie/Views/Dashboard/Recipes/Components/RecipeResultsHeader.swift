@@ -9,11 +9,14 @@ struct RecipeResultsHeader: View {
     let count: Int
     let query: String
     let filterLabels: [String]
+    /// Wybrana zakładka kategorii („Obiady”) — staje w miejscu etykiety.
+    var scopeTitle: String? = nil
     let onClear: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     private var eyebrow: String {
+        if let scopeTitle { return scopeTitle }
         switch (query.isEmpty, filterLabels.isEmpty) {
         case (false, false): return "Wyniki z filtrami"
         case (false, true):  return "Wyniki wyszukiwania"
