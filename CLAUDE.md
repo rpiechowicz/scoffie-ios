@@ -782,8 +782,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   stoi w nakładce NAD `GlassEffectContainer` (w grupie była przycinana i przykrywana przez pole).
   Zakładki kategorii pod tytułem (`RecipeScopeTabs`, 4.10.2026 — świadomy wyjątek od „zawężanie tylko w Filtrach”,
   prośba Rafała): Wszystkie · Śniadania · Obiady · Kolacje · Przekąski · Ulubione, szklane kapsuły, wybrana w tincie
-  kategorii; wybór = stan wyników tej kategorii, łączy się z frazą i filtrami („kuskus” → Obiady), przy frazie /
-  filtrach każda ma liczbę trafień. Nad pustym stanem zakładek NIE ma.
+  kategorii; TYLKO w stanie wyników (fraza / „Filtry”), także nad pustym stanem — w zwykłym widoku ich nie ma
+  (Rafał 4.10.2026). Zawężają wyniki („kuskus” → Obiady), każda z liczbą trafień; bez frazy i filtrów zakres wraca
+  do „Wszystkie”. `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
+  nałożył nagłówek, karuzelę i sekcje na siebie).
   Przejścia (4.10.2026, „przeskakuje, szczególnie z karuzelą”): stany leżą w `ZStack` od góry (w `VStack` wchodzący
   stał pod wychodzącym i podskakiwał); zwykły widok liczy się z `browseRecipes` (dieta + filtry kategorii, BEZ frazy
   i „Filtrów”) i STOI pod wynikami przezroczysty (karuzela nie buduje się od nowa), zwijany do zera po zgaśnięciu

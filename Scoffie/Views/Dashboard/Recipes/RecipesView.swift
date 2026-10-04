@@ -176,7 +176,7 @@ struct RecipesView: View {
     /// to stałe ustawienia, nie szukanie (filtry kategorii mówi plakietka na
     /// strzałce sekcji).
     private var isResultsMode: Bool {
-        isSearchingOrFiltering || scope != nil
+        isSearchingOrFiltering
     }
 
     /// Fraza albo filtry — wtedy zakładki kategorii pokazują liczby trafień.
@@ -444,7 +444,13 @@ struct RecipesView: View {
                 // i podskakiwał na górę, kiedy tamten znikał.
                 ZStack(alignment: .top) {
                     if showsBrowseLayer {
-                        body(forRecipes: browseRecipes)
+                        // JEDEN widok: `body(forRecipes:)` oddaje kilka
+                        // (nagłówek, karuzela, kropki, sekcje) — w `ZStack`
+                        // bez `VStack` każdy stawał osobną warstwą na górze
+                        // i wszystko nakładało się na siebie.
+                        VStack(alignment: .leading, spacing: 0) {
+                            body(forRecipes: browseRecipes)
+                        }
                             .opacity(isResultsMode ? 0 : 1)
                             .scaleEffect(isResultsMode ? 0.97 : 1, anchor: .top)
                             .allowsHitTesting(!isResultsMode)
@@ -511,6 +517,11 @@ struct RecipesView: View {
             }
         }
         .onChange(of: scope) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
+        // Zakres kategorii żyje tylko w wynikach — bez frazy i filtrów wraca
+        // do „Wszystkie”, żeby następne szukanie nie startowało zawężone.
+        .onChange(of: isSearchingOrFiltering) { _, active in
+            if !active { scope = nil }
+        }
         }
         // Pasek szukania wchodzi bezpiecznym obszarem jak pigułka „Cel dnia”
         // w Planie: lista przejeżdża pod szkłem, ale kończy się nad nim.
@@ -550,9 +561,11 @@ struct RecipesView: View {
         !shouldShowSkeleton && hasVisibleRecipes
     }
 
+    /// Zakładki kategorii TYLKO w stanie wyników — także nad pustym stanem
+    /// (Rafał 4.10.2026: „na głównym widoku nie ma być tab kategorii, tylko
+    /// na filtrach globalnych”; „na pustym brakuje mi tab kategorii”).
     private var showsScopeTabs: Bool {
-        guard !shouldShowSkeleton else { return false }
-        return isResultsMode ? !resultRecipes.isEmpty : hasVisibleRecipes
+        !shouldShowSkeleton && isResultsMode
     }
 
     // MARK: - Wyniki
