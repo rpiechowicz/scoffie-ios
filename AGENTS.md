@@ -357,7 +357,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Runda 3 (4.10.2026, „wszystkie możliwe buttony w stylu liquid, na każdym sheet, każdy X”): wariant „soft” TO JEST
   szkło — `SCSoftSurface`/`scSoftCapsule` = `scChromeGlass` w tincie akcentu (0,22 / ciemny 0,30), interaktywne, bez
   obwódki; idą przez to `SCSoftButton`, `EditorialPrimaryActionButton`, `AssistantPrimaryButton`, `SCDestructiveButton`,
-  `RecipeFilterFooterButton`, „Ułóż”, akcje szczegółów posiłku. Neutralne szkło: `AssistantGhostButton`,
+  `RecipeFilterFooterButton`, akcje szczegółów posiłku. Neutralne szkło: `AssistantGhostButton`,
   `AssistantIconActionButton`, `AssistantChip`, `SCSoftIconButton` („Wstecz”), `SCStepper`, chipy wyboru
   (`scChoiceSurface(.chip)`; kafle `.tile` zostają kartami). „Gotuj” = szkło w PEŁNEJ terakocie. Przełączniki: tor płaski,
   wybrany = szklana soczewka (osoby w „Cel dnia”, osoby w przeglądzie propozycji, „Ten krok / Cały przepis” w Gotuj,
@@ -712,8 +712,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   miejscach; siatka 3 × 5 (`AllergenPicker`) usunięta — nie robić drugiego wyboru alergenów.
 - Pory posiłków = `MealDayTimesCard` (oś dnia z kreatora: ikona pory, godzina na kapsułce, krótka nazwa),
   JEDNA w kroku 4 kreatora i w Ustawieniach → „Posiłki w planie” (osobny `MealTimesSheet` z listą
-  wierszy usunięty 24.09.2026). Stuknięcie w posiłek = koło godzin w arkuszu `.medium`
-  (`MealTimeEditorSheet`). Kreator trzyma godziny lokalnie i wysyła po utworzeniu gospodarstwa
+  wierszy usunięty 24.09.2026). Stuknięcie w posiłek = koło godzin w arkuszu na 1/3 ekranu
+  (`MealTimeEditorSheet`, `.fraction(1/3)`, kompaktowy nagłówek, koło 100–150 pt — 4.10.2026). Kreator trzyma godziny lokalnie i wysyła po utworzeniu gospodarstwa
   (tylko gdy różne od domyślnych), Ustawienia zapisują od razu.
 - Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
   (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
@@ -836,20 +836,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Powrót do bieżącego tygodnia w pasku dni = SAM krążek z ikoną cofania (`SCWeekTodayButton`, 26 pt jak strzałki,
   terakota soft; 27.09.2026) — pigułka „↩ Wróć do dziś” zabierała miejsce i podpis tygodnia malał. Jeden komponent
   w pasku Planu/Kalendarza (`EditorialWeekBar`) i w „Dodaj do planu”.
-- Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
-  podświetlone kółko z iskierkami. Karty pustego tygodnia nad osią dnia NIE MA (27.09.2026, „usuń ten
-  design”) — pusty tydzień z choć jednym dniem do zaplanowania = pigułka ODDYCHA (`invites:`, poświata
-  pod kapsułą, krycie ≤ 0,21, skala 1,028 — dobrane między „za mocno” a „ciut mocniej”, okres 2,6 s jak `attentive` w `SCLivingMark`, `TimelineView`, staje na
-  niewybranej zakładce, przy Reduce Motion stoi w połowie). Odstęp pasek dni → nazwa dnia = 14 pt
-  w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Pigułka otwiera `PlanAssistantIntroSheet`
-  („Ułożę Ci ten tydzień”): jedno zdanie, trzy `SCTag` w jednym wierszu (sprawdzone w planerze — lista
-  w komentarzu pliku; bez „kilku sekund”, „do 30 minut”, „sezonowych”), podgląd tygodnia w stroju
-  `ProposalRecap` z dań `AssistantIntroDish.week` (dieta i alergeny z Ustawień, bez powtórek) i JEDEN
-  przycisk „Ułóż z Asystentem” — „Wolę ułożyć sam” dublowało krzyżyk. Podgląd „wow” (runda 2): tydzień
-  SKŁADA SIĘ na oczach (szkielet → krążki wskakują sprężyną, nazwa pisze się `SCTypedText`, ptaszek
-  w szałwii, licznik posiłków roluje, `SCLivingMark` „myśli” i podskakuje), potem pętla ZAMIANY co ~3,4 s
-  (dzień w tincie terakoty, kręcące się strzałki, danie z `AssistantIntroDish.spares` przenika, nazwa roluje)
-  — to obietnica „każde danie możesz potem zamienić”. Reduce Motion = gotowy tydzień, bez pętli.
+- Nagłówek Planu = koszyk (z plakietką liczby do kupienia) i „…”. Pigułkę „✦ Ułóż” i jej arkusz „Ułożę Ci ten
+  tydzień” (`PlanAssistantPill`, `PlanAssistantIntroSheet`) USUNIĘTO 4.10.2026 na prośbę Rafała — do Asystenta
+  prowadzi zakładka i „Zaplanuj tydzień z asystentem” w „…”; nie wracać. Nagłówek dnia na osi = nazwa dnia
+  i „DZIŚ” — plakietka „3 z 5” (kropki pór, `SCPipsBadge`) też usunięta. Karty pustego tygodnia nad osią NIE MA.
+  Odstęp pasek dni → nazwa dnia = 14 pt w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Plakietka
+  `scCountBadge` bez kremowej obwódki (krążki są szkłem) i bez `GlassEffectContainer` wokół koszyka — grupa
+  szkła nie może trzymać czegoś, co wystaje poza krążek.
 - Puste stany Zakupów (`ProductsView`, 24.09.2026 — „design jest stary, uspójnij”) stoją na `RecipeListEmptyState` (ma teraz opcjonalny `eyebrow`): tydzień bez planu = „LISTA ZAKUPÓW · Tydzień bez planu” + „Ułóż z Asystentem” (przełącza zakładkę i zamyka arkusz) i „Wróć do Planu”; plan jest, lista pusta = „Lista jest pusta” bez akcji; „Na dziś” bez produktów i otwarta rewizja bez nowych = ptaszek w szałwii („Na dziś masz wszystko” + „Pokaż całą listę”); pusta historia — ten sam klocek. Karta z koszykiem 78 pt i dwoma szarymi chipami usunięta.
 - Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
@@ -912,7 +905,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   są 1:1 ze stroną (scoffie-web `src/pages/{privacy,terms}`); po zmianie — Android
   `python scripts/gen-legal-content.py`.
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
 - Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień

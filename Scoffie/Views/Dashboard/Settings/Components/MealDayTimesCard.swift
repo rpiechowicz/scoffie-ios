@@ -63,7 +63,9 @@ struct MealDayTimesCard: View {
                 },
                 onClose: { editing = nil }
             )
-            .presentationDetents([.medium])
+            // Jedna trzecia ekranu (Rafał 4.10.2026: „lepiej będzie wyglądać”) —
+            // kompaktowy nagłówek i niższe koło godzin mieszczą się w niej.
+            .presentationDetents([.fraction(1.0 / 3.0)])
             .dashboardLiquidSheet(cornerRadius: 26)
         }
     }
@@ -209,11 +211,12 @@ private struct MealTimeEditorSheet: View {
                     title: slot.title,
                     icon: slot.icon,
                     accent: slot.cozyAccent,
+                    compact: true,
                     onClose: onClose
                 )
                 .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 4)
+                .padding(.top, 16)
+                .padding(.bottom, 2)
 
                 DatePicker(
                     "",
@@ -226,6 +229,12 @@ private struct MealTimeEditorSheet: View {
                 // a cała reszta aplikacji rysuje godziny jako „%02d:%02d".
                 .environment(\.locale, Locale(identifier: "pl_PL"))
                 .frame(maxWidth: .infinity)
+                // Niższe niż naturalne 216 pt, żeby zmieścić się w trzeciej
+                // części ekranu — koło pokazuje wtedy mniej wierszy, ale dalej
+                // kręci się tak samo. Na małych telefonach schodzi do 100.
+                .frame(minHeight: 100, maxHeight: 150)
+                .clipped()
+                .layoutPriority(1)
                 .padding(.horizontal, 20)
 
                 // Zdjąć porę można wyłącznie tam, gdzie model na to pozwala.
@@ -235,8 +244,7 @@ private struct MealTimeEditorSheet: View {
                     Button("Bez stałej pory", action: onClearTime)
                         .font(.system(size: 13.5, weight: .semibold))
                         .foregroundStyle(SCPalette.terracotta)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .padding(.bottom, 6)
+                        .frame(maxWidth: .infinity, minHeight: 40)
                 }
 
                 Spacer(minLength: 0)

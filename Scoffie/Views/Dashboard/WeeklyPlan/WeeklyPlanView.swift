@@ -47,7 +47,7 @@ struct WeeklyPlanView: View {
     @State private var detailTarget: DetailTarget?
     @State private var showClearDayAlert = false
     @State private var showClearWeekAlert = false
-    /// Arkusze bez własnego celu: lista zakupów i plansza asystenta.
+    /// Arkusze bez własnego celu: lista zakupów i „Cel dnia”.
     ///
     /// Jeden `@State` na oba, a nie dwa niezależne `Bool`-e z osobnymi
     /// `.sheet(isPresented:)`. SwiftUI potrafi zgubić wcześniejsze
@@ -58,7 +58,6 @@ struct WeeklyPlanView: View {
 
     private enum SimpleSheet: String, Identifiable {
         case products
-        case assistantIntro
         case dayGoal
         var id: String { rawValue }
     }
@@ -179,19 +178,6 @@ struct WeeklyPlanView: View {
         let remaining = shoppingRemainingCount
         guard remaining > 0 else { return "Lista zakupów" }
         return "Lista zakupów, \(PolishPlural.products(remaining)) do kupienia"
-    }
-
-    /// Cały widoczny tydzień bez jednego posiłku. Nie decyduje już o TYM, czy
-    /// plansza asystenta się pokaże (pokazuje się zawsze, gdy stukniesz
-    /// w przycisk) — tylko o tym, co na niej pisze: „ułożę” brzmi jak groźba
-    /// nadpisania komuś, kto ma już pół tygodnia rozpisane ręcznie.
-    private var isWeekEmpty: Bool { plannedDates.isEmpty }
-
-    /// Pigułka „Ułóż” oddycha, gdy widoczny tydzień jest pusty i da się
-    /// w nim jeszcze coś zaplanować — miniony pusty tydzień jest po prostu
-    /// pusty, nie ma do czego zachęcać.
-    private var invitesAssistant: Bool {
-        isWeekEmpty && datesViewModel.dates.contains { datesViewModel.isEditable($0) }
     }
 
     /// Dzienny cel — ta sama reguła, co w Ustawieniach.
@@ -564,20 +550,6 @@ struct WeeklyPlanView: View {
                     // policzony z treści (patrz `PlanDayGoalSheet`).
                     .dashboardLiquidSheet()
 
-                case .assistantIntro:
-                    PlanAssistantIntroSheet(
-                        members: members,
-                        days: datesViewModel.dates,
-                        // Sloty z ustawień, nie `visibleSlots(on:)`: tamte
-                        // doliczają pory widoczne tylko dlatego, że akurat
-                        // w wybranym dniu coś w nich stoi, i podgląd tygodnia
-                        // zmieniałby się po przełączeniu dnia.
-                        slots: sessionStore.mealSlots.enabled,
-                        weekIsEmpty: isWeekEmpty,
-                        onOpenAssistant: { openAssistantTabAfterSheet() }
-                    )
-                    .presentationDetents([.large])
-                    .dashboardLiquidSheet()
                 }
             }
             // Skrót z karty asystenta: przełączenie zakładki to za mało,
@@ -647,50 +619,36 @@ struct WeeklyPlanView: View {
     // MARK: - Pieces
 
     /// Średnica pigułek akcji w nagłówku Planu — 34 pt, jak `P2Circle`
-    /// w makiecie. Akcje są trzy (asystent, zakupy i „…”); tytuł schodzi
-    /// wtedy o stopień pisma sam, przez `ViewThatFits` w `EditorialPageHeader`.
+    /// w makiecie. Akcje są dwie (zakupy i „…”); tytuł schodzi o stopień
+    /// pisma sam, gdy trzeba, przez `ViewThatFits` w `EditorialPageHeader`.
     private static let headerActionSize: CGFloat = 34
 
     private var headerRow: some View {
         EditorialPageHeader(title: "Plan tygodnia") {
-            // Szklane krążki obok siebie w jednej grupie — załamują światło
-            // razem, jak przyciski nagłówka w iOS 26.
-            GlassEffectContainer(spacing: 6) {
-                HStack(spacing: 6) {
-                    // Asystent stoi w nagłówku EKRANU, a nie w nagłówku dnia —
-                    // dotyczy całego tygodnia, tak jak sąsiednie akcje.
-                    //
-                    // Pigułka z podpisem, a nie sama ikona (runda 9, 23.09.2026 —
-                    // „przerób na aktualne standardy”): podświetlone kółko
-                    // z iskierkami było jedyną pomarańczową plamą bez słowa
-                    // w nagłówkach aplikacji i przy pustym tygodniu nikt nie
-                    // wiedział, że to właśnie ono układa plan. „Ułóż” mówi to
-                    // wprost, w wariancie „soft”, jak każda akcja główna.
-                    //
-                    // Pusty tydzień = pigułka oddycha (27.09.2026). Zastąpiła
-                    // kartę „Ten tydzień jest jeszcze pusty” nad osią dnia.
-                    PlanAssistantPill(invites: invitesAssistant) { simpleSheet = .assistantIntro }
-
-                    // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
-                    // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
-                    //
-                    // Plakietka z liczbą jest ceną za to przeniesienie. Zakupy
-                    // przestały być zakładką, więc nic na ekranie nie mówiło, że
-                    // coś w nich zostało — żeby się dowiedzieć, trzeba było
-                    // otworzyć arkusz. Teraz koszyk niesie tę jedną liczbę, która
-                    // ma znaczenie: ile produktów czeka na kupienie.
-                    EditorialIconButton(
-                        icon: MenuConstans.Products.icon,
-                        size: Self.headerActionSize,
-                        tapTarget: 44
-                    ) {
-                        simpleSheet = .products
-                    }
-                    .scCountBadge(shoppingRemainingCount)
-                    .accessibilityLabel(shoppingAccessibilityLabel)
-
-                    overflowMenu
+            // Bez `GlassEffectContainer`: grupa szkła składa krążki w jedną
+            // warstwę, a plakietka koszyka wystaje poza krążek — nie może
+            // wisieć w czymś, co ją przytnie albo wtopi w szkło. Asystent („Ułóż” i jego plansza) zszedł stąd 4.10.2026
+            // na prośbę Rafała — do Asystenta prowadzi zakładka i menu „…”.
+            HStack(spacing: 6) {
+                // Lista zakupów wchodzi stąd, a nie z dolnego menu: powstaje
+                // z TEGO planu i ogląda się ją zaraz po jego ułożeniu.
+                //
+                // Plakietka z liczbą jest ceną za to przeniesienie. Zakupy
+                // przestały być zakładką, więc nic na ekranie nie mówiło, że
+                // coś w nich zostało — żeby się dowiedzieć, trzeba było
+                // otworzyć arkusz. Teraz koszyk niesie tę jedną liczbę, która
+                // ma znaczenie: ile produktów czeka na kupienie.
+                EditorialIconButton(
+                    icon: MenuConstans.Products.icon,
+                    size: Self.headerActionSize,
+                    tapTarget: 44
+                ) {
+                    simpleSheet = .products
                 }
+                .scCountBadge(shoppingRemainingCount)
+                .accessibilityLabel(shoppingAccessibilityLabel)
+
+                overflowMenu
             }
         }
     }
@@ -698,13 +656,10 @@ struct WeeklyPlanView: View {
     /// Wszystko, co dotyczy CAŁEGO tygodnia, plus wybór soczewki.
     ///
     /// Skoki po tygodniach wyprowadziły się stąd na pasek dni. Zamiast nich
-    /// wszedł asystent (skrót prosto do zakładki, dla osoby, która szuka go
-    /// w menu) i przełącznik profilu, który zszedł z nagłówka razem z pigułką.
+    /// wszedł asystent (skrót prosto do zakładki) i przełącznik profilu.
     private var overflowMenu: some View {
         Menu {
-            // Prosto do asystenta, bez planszy „co on właściwie robi”.
-            // Kto szuka go w menu, ten już wie — planszę pokazuje pigułka
-            // z iskierkami w nagłówku, na którą trafia się przypadkiem.
+            // Prosto do zakładki asystenta, bez planszy pośrodku.
             Button {
                 sessionStore.dashboardTab = .assistant
             } label: {
@@ -828,19 +783,6 @@ struct WeeklyPlanView: View {
     }
 
     // MARK: - Actions
-
-    /// Zakładka przełącza się DOPIERO po zjeździe arkusza.
-    ///
-    /// Arkusz wisi na ekranie Planu, a `TabView` trzyma ekrany zakładek przy
-    /// życiu — przełączenie w tej samej klatce, w której arkusz zjeżdża, urywa
-    /// jego animację w połowie i asystent wchodzi zza wpół zamkniętej planszy.
-    /// 280 ms to tyle, ile trwa systemowe zamknięcie arkusza.
-    private func openAssistantTabAfterSheet() {
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(280))
-            sessionStore.dashboardTab = .assistant
-        }
-    }
 
     private func openDetail(date: Date, slot: MealSlot, meal: PlanMeal) {
         Task { @MainActor in
