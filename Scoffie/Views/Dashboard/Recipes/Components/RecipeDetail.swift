@@ -379,6 +379,8 @@ struct RecipeDetailView: View {
             .ignoresSafeArea(.container, edges: .top)
             // Dolny pasek akcji natywnie (iOS 26 `safeAreaBar`): same szklane
             // przyciski, przepis przejeżdża pod nimi, a kończy się nad nimi.
+            // Bez systemowego efektu krawędzi — pod przyciskami NIC.
+            .scrollEdgeEffectHidden(true, for: .bottom)
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 primaryActionBar
             }
@@ -1076,23 +1078,43 @@ struct RecipeDetailView: View {
                 }
             } else if showsCook {
                 // Makieta RD1/RD2: pełne „Dodaj do planu” / „Zapisz porcje”
-                // mieszczą się na połowie (≈ 121 z 138 pt).
+                // mieszczą się na połowie (≈ 121 z 138 pt). Bez zapisu
+                // „Gotuj” bierze całą szerokość.
                 HStack(spacing: 10) {
-                    planActionButton(title: primaryActionTitle)
+                    if showsPlanAction {
+                        planActionButton(title: primaryActionTitle)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
                     cookButton
                 }
             } else if showsThermomixSplit {
                 HStack(spacing: 10) {
-                    planActionButton(title: splitPlanTitle)
+                    if showsPlanAction {
+                        planActionButton(title: splitPlanTitle)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
                     thermomixButton
                 }
-            } else {
+            } else if showsPlanAction {
                 planActionButton(title: primaryActionTitle)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         // Te same marginesy co `SCSheetFooter`, tylko bez jej tła.
         .padding(.horizontal, SCPageMetrics.horizontal)
         .padding(.vertical, 12)
+        // Przycisk wjeżdża, gdy jest co zapisać, i zjeżdża, gdy znów nie ma.
+        .animation(.smooth(duration: 0.3), value: showsPlanAction)
+    }
+
+    /// „Zapisz porcje” stoi tylko wtedy, gdy jest co zapisać (Rafał 4.10.2026:
+    /// „jak button jest zablokowany, to go ukryj, a jak się pokazuje — pokaż”).
+    /// Dawniej stał od wejścia wygaszony. W trakcie zapisu zostaje, żeby nie
+    /// zniknął pod palcem. „Dodaj do planu” (katalog, cudzy przepis) jest
+    /// zawsze — jego blokada to chwilowa praca, a nie brak czegoś do zrobienia.
+    private var showsPlanAction: Bool {
+        if case .planned = context { return isPrimaryActionEnabled || isSavingServings }
+        return true
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
@@ -1113,8 +1135,8 @@ struct RecipeDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(!isPrimaryActionEnabled || isSavingServings)
-        // Wygaszony, a nie ukryty: „Zapisz porcje" ma być widoczne od wejścia,
-        // żeby było wiadomo, co się stanie po ruszeniu steppera.
+        // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
+        // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
         .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
         .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
         .accessibilityLabel(primaryActionTitle)

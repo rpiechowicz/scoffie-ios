@@ -650,7 +650,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zrób to natywnie, aby pokazywało się, co jest pod spodem”; „każdy sheet… tylko button liquid i pokazuje się
   płynnie”): bez kryjącej płyty, bez `SCEdgeShade`, bez rozmytego pasa (`SCFooterScrim` usunięty) — same szklane
   przyciski. `.scSheetFooter` = systemowe `safeAreaBar(edge: .bottom)`: treść przejeżdża pod przyciskami i kończy
-  się nad nimi, a efekt krawędzi kładzie SYSTEM (natywny, lekki). Tak samo szczegóły posiłku
+  się nad nimi; systemowy efekt krawędzi WYŁĄCZONY (`scrollEdgeEffectHidden(true, for: .bottom)` — Rafał widział
+  w nim dalej cień). „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
   (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i strona końcowa przeglądu propozycji.
   `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
