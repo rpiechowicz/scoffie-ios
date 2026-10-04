@@ -156,8 +156,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   marginesów”, 1.10.2026). Ruch (`CookLook.swift`): teksty `cookRoll` (`SCMotion.textRoll`), zegary `cookTicking`
   (0,3 s), łuki timerów dojeżdżają liniowo przez sekundę, wejście ekranów `cookReveal` (= `scReveal`), zmiana kroku =
   wszystkie teksty kroku rolują się w miejscu (runda 9 — dawny wjazd opisu z boku odpadł, niżej).
-  Wejście z Kalendarza (D23, EC41): na talerzu „play” w PRAWYM dolnym rogu ZAWSZE, gdy danie ma paczkę scenariusza
-  (`CalendarPlateCooking.ready`) — każdy dzień, każda pora (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
+  Wejście z Kalendarza (D23, EC41): na talerzu „play” w PRAWYM dolnym rogu, gdy danie ma paczkę scenariusza
+  (`CalendarPlateCooking.ready`) — TYLKO dziś (D58, 4.10.2026: „nie ma sensu gotować na jutro / wczoraj / przyszły
+  tydzień”; szczegóły posiłku z planu tak samo, z katalogu zawsze, wstrzymane wznawialne w każdy dzień), każda pora
+  (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
   z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół; ptaszek TYLKO przy zjedzonym,
   „następne” = sama obwódka w kolorze pory (4.10.2026: „nie dawaj checku w kolorze”, `CalendarMealCheck`). Po „Wstrzymaj” talerz tego wpisu
   planu (przepis + dzień + pora) to PS1 (`.paused`): pierścień kroków zamiast obręczy pory, „OBIAD · GOTUJESZ”,

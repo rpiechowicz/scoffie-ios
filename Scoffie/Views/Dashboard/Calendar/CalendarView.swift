@@ -403,12 +403,13 @@ struct CalendarView: View {
     // MARK: - Gotuj
 
     /// Tryb Gotuj dla wpisu planu. Wstrzymane gotowanie TEGO wpisu (ten
-    /// przepis, ten dzień, ta pora) — talerz po wstrzymaniu (PS1). „Play” —
-    /// ZAWSZE przy daniu, którego scenariusz leży w telefonie (§13.6: „zawsze
-    /// dla dania ze scenariuszem”), w każdy dzień i o każdej porze (Rafał,
-    /// 1.10.2026: „nie trzymaj się czasu gotowania”); pora gotowania decyduje
-    /// tylko o tym, czy przycisk jest pełny, czy „soft”. Bez paczki — bez
-    /// przycisku (§4.1: bez wyszarzonych obietnic).
+    /// przepis, ten dzień, ta pora) — talerz po wstrzymaniu (PS1), w każdy
+    /// dzień, bo gotowanie trzeba móc dokończyć. „Play” — tylko przy daniu
+    /// NA DZIŚ, którego scenariusz leży w telefonie (D58, Rafał 4.10.2026:
+    /// „nie ma sensu gotować posiłków, co nie są na dziś — na jutro, na
+    /// wczoraj, na przyszły tydzień”); o każdej porze dnia (D23 „nie trzymaj
+    /// się czasu gotowania” zostaje), pora decyduje tylko, czy przycisk jest
+    /// pełny, czy „soft”. Bez paczki — bez przycisku (§4.1).
     private func cooking(for meal: PlanMeal, slot: MealSlot, on date: Date) -> CalendarPlateCooking? {
         if let session = sessionStore.cookSessionStore?.session,
            session.stage != .finished,
@@ -417,7 +418,7 @@ struct CalendarView: View {
            session.mealSlotRaw == nil || session.mealSlotRaw == slot.rawValue {
             return .paused(step: session.stepIndex, steps: session.stepCount)
         }
-        guard cookPackage(for: meal) != nil else { return nil }
+        guard Calendar.current.isDateInToday(date), cookPackage(for: meal) != nil else { return nil }
         return .ready
     }
 
