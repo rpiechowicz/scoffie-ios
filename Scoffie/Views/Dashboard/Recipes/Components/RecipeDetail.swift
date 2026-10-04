@@ -1228,8 +1228,12 @@ struct RecipeDetailView: View {
 
     /// Paczka scenariusza w pamięci telefonu — bez niej „Gotuj” nie stoi
     /// (bez wyszarzonych obietnic, §4.1). Cudzy przepis (`.shared`) — nie.
+    /// Posiłek z planu na INNY dzień niż dziś — też nie (D58: „nie ma sensu
+    /// gotować posiłków na jutro / wczoraj / przyszły tydzień”); trwająca
+    /// sesja dalej daje „Gotuj dalej” (`cookSession`). Z katalogu — zawsze.
     private var cookPackage: CookPackage? {
         if case .shared = context { return nil }
+        if case .planned(let day, _) = context, !Calendar.current.isDateInToday(day) { return nil }
         return sessionStore.cookScenarioStore?.package(for: recipe)
     }
 
