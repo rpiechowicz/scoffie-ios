@@ -727,7 +727,9 @@ struct RecipeExcludeSheet: View {
                             .foregroundStyle(SCPalette.terracotta)
                             .padding(.horizontal, 12)
                             .frame(height: 32)
-                            .scSoftCapsule()
+                            // Stoi NA szklanym toaście — zwykły tint, nie
+                            // drugie szkło na pierwszym.
+                            .background(Capsule(style: .continuous).fill(SCPalette.terracotta.opacity(0.14)))
                             .contentShape(Capsule(style: .continuous))
                     }
                     .buttonStyle(PlanPressStyle(scale: 0.94))

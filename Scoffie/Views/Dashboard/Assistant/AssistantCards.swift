@@ -1865,10 +1865,9 @@ private struct AssistantOptionsStorySheet: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme))
                 .frame(width: 34, height: 34)
-                .background(
-                    Circle().fill(light ? Color.white.opacity(0.92) : AssistantLook.field(scheme))
-                )
-                .overlay(Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: light ? 0 : 1))
+                // Szklany krzyżyk jak `SCSheetCloseButton` (Liquid Glass) —
+                // także nad zdjęciem dania.
+                .scChromeGlass(in: Circle(), interactive: true)
                 .contentShape(Circle().inset(by: -5))
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
@@ -1924,17 +1923,12 @@ private struct AssistantOptionsStorySheet: View {
             .font(.system(size: 13, weight: .bold))
             .foregroundStyle(on ? AssistantLook.terra(scheme) : (light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme)))
             .frame(width: 34, height: 34)
-            .background {
-                if on {
-                    // Wypełnienie pod spodem, „soft” na wierzchu — samo
-                    // `scSoftSurface` na pełnym kole schowałoby tint pod fill.
-                    Circle().fill(light ? Color.white.opacity(0.95) : AssistantLook.card(scheme))
-                        .overlay(Color.clear.scSoftSurface(Circle(), accent: AssistantLook.terra(scheme)))
-                } else {
-                    Circle().fill(light ? Color.white.opacity(0.92) : AssistantLook.field(scheme))
-                        .overlay(Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: light ? 0 : 1))
-                }
-            }
+            // Szkło jak krzyżyk obok; filtr działa = szkło w tincie terakoty.
+            .scChromeGlass(
+                in: Circle(),
+                tint: on ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil,
+                interactive: true
+            )
             .contentShape(Circle().inset(by: -5))
             .animation(motion(.smooth(duration: 0.25)), value: on)
     }
@@ -2710,9 +2704,10 @@ private struct ProposalPersonSwitcher: View {
                 .frame(width: Self.disc, height: Self.disc)
                 .background {
                     if isOn {
-                        Circle()
-                            .fill(AssistantLook.card(scheme))
-                            .overlay(Color.clear.scSoftSurface(Circle(), accent: AssistantLook.terra(scheme)))
+                        // Wybrany = szklana soczewka w tincie terakoty na
+                        // płaskim torze, jak przełączniki iOS 26.
+                        Color.clear
+                            .scSoftSurface(Circle(), accent: AssistantLook.terra(scheme))
                             .matchedGeometryEffect(id: "selected", in: pill)
                     }
                 }

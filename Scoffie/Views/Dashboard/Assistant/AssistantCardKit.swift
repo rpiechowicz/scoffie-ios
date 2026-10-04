@@ -1179,8 +1179,9 @@ struct AssistantIconActionButton: View {
                 }
             }
             .frame(width: size.height, height: size.height)
-            .background(Circle().fill(AssistantLook.field(scheme)))
-            .overlay(Circle().strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1.2))
+            // Neutralne szkło (Liquid Glass runda 3) — „szary” obok szkła
+            // w tincie akcji głównej.
+            .scChromeGlass(in: Circle(), interactive: true)
             .contentShape(Circle())
             .scTapHeight(44, drawn: size.height)
         }
@@ -1215,8 +1216,9 @@ struct AssistantGhostButton: View {
             .padding(.horizontal, size.horizontalPadding)
             .frame(maxWidth: .infinity)
             .frame(height: size.height)
-            .background(Capsule(style: .continuous).fill(AssistantLook.field(scheme)))
-            .overlay(Capsule(style: .continuous).strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1.2))
+            // Neutralne szkło (Liquid Glass runda 3) obok szkła w tincie
+            // akcji głównej — para czyta się jako jeden komplet.
+            .scChromeGlass(in: Capsule(style: .continuous), interactive: true)
             .scTapHeight(44, drawn: size.height)
         }
         .buttonStyle(PlanPressStyle(scale: size.pressScale))
@@ -1382,15 +1384,13 @@ struct AssistantChip: View {
             .foregroundStyle(highlighted ? AssistantLook.terra(scheme) : AssistantLook.ink(scheme))
             .padding(.horizontal, 15)
             .frame(height: Self.height)
-            .background {
-                if highlighted {
-                    shape.fill(Color.clear).scSoftCapsule(AssistantLook.terra(scheme))
-                } else {
-                    shape
-                        .fill(AssistantLook.field(scheme))
-                        .overlay(shape.strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1.2))
-                }
-            }
+            // Szkło (Liquid Glass runda 3): podświetlony w tincie terakoty,
+            // reszta neutralna.
+            .scChromeGlass(
+                in: shape,
+                tint: highlighted ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil,
+                interactive: true
+            )
             .opacity(dimmed ? 0.45 : 1)
             .scTapHeight(44, drawn: Self.height)
         }

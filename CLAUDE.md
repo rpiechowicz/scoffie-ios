@@ -354,6 +354,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`SCCompactTitle`, rysuje `NavigationMenu` z `SCTabBarChrome.compactTitles`), a pas rozmycia schodzi pod nią.
   Toast (`SCToastHost`) świadomie BEZ szkła: wyrasta z Dynamic Island jako czerń i stygnie do koloru — szkło nie
   zacznie się czernią wyspy, a toast niesie błędy, które mają być czytelne zawsze.
+  Runda 3 (4.10.2026, „wszystkie możliwe buttony w stylu liquid, na każdym sheet, każdy X”): wariant „soft” TO JEST
+  szkło — `SCSoftSurface`/`scSoftCapsule` = `scChromeGlass` w tincie akcentu (0,22 / ciemny 0,30), interaktywne, bez
+  obwódki; idą przez to `SCSoftButton`, `EditorialPrimaryActionButton`, `AssistantPrimaryButton`, `SCDestructiveButton`,
+  `RecipeFilterFooterButton`, „Ułóż”, akcje szczegółów posiłku. Neutralne szkło: `AssistantGhostButton`,
+  `AssistantIconActionButton`, `AssistantChip`, `SCSoftIconButton` („Wstecz”), `SCStepper`, chipy wyboru
+  (`scChoiceSurface(.chip)`; kafle `.tile` zostają kartami). „Gotuj” = szkło w PEŁNEJ terakocie. Przełączniki: tor płaski,
+  wybrany = szklana soczewka (osoby w „Cel dnia”, osoby w przeglądzie propozycji, „Ten krok / Cały przepis” w Gotuj,
+  „Zamień / Dodaj obok”). Akcent na element stojący NA szkle (przycisk „Wyślij”, „Cofnij” w toaście) = `tint` tego
+  jednego szkła albo zwykłe wypełnienie — bez drugiego szkła z `scSoftSurface` na pierwszym.
 - Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
   (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po
@@ -637,12 +646,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wyklucza. Działy mają ikony i barwy alejek Zakupów (`ProductConstants.departmentIcon/Color`),
   wyniki szukania są pogrupowane po działach.
 - Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
-  (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): kryjąca płyta w kolorze tła
-  (`scPageBase`, czyli dół `SCPageBackground`) + cień krawędzi NAD nią, bez kreski i bez szkła.
-  Cień to `SCEdgeShade` (`Components/SCEdgeShade.swift`) — JEDEN na górę i dół: górny pasek
-  szczegółów posiłku (84 pt, przyciski stoją na nim) i jego lustro nad stopką (56 pt, zaczyna się
-  na krawędzi płyty, nie wchodzi na przycisk). Rafał: „bardzo mi się podoba shadow górny, zrób taki
-  sam od dołu”. Na przewijanej treści przez `.scSheetFooter` (`safeAreaInset`, cień WLICZONY
+  (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): od 4.10.2026 (Liquid Glass runda 3,
+  „shadow na detail meal dolny też popraw”) pod przyciskami rozmyty pas `SCFooterScrim` =
+  `SCScrollEdgeBlur` (tło arkusza 0,62 nad rozmyciem — na pasie stoi tekst) od 56 pt nad stopką do
+  krawędzi ekranu: treść chowa się pod szklanymi przyciskami zamiast urywać się na kryjącej płycie.
+  Wysokość bez zmian (`SCEdgeShade.bottomHeight`). `SCEdgeShade` został pod górnym paskiem szczegółów
+  posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Na przewijanej treści przez `.scSheetFooter` (`safeAreaInset`, cień WLICZONY
   w wysokość — przewinięta do końca treść kończy się nad nim), pod listą w `VStack` jako ostatnie
   dziecko — wtedy cień leży na liście i lista MUSI mieć na dole `.padding(.bottom,
   SCEdgeShade.bottomHeight)`. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,

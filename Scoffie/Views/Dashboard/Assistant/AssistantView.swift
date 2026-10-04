@@ -1369,21 +1369,22 @@ struct AssistantView: View {
                 if store.isSending { store.stopWaiting() } else { send() }
             } label: {
                 ZStack {
-                    // Aktywny: wariant „soft” (`scSoftSurface`) NA szkle, jak
-                    // każda akcja główna — pełna terakotowa tarcza z białą
-                    // strzałką była jedyną taką plamą koloru na ekranie.
-                    // Wygaszony: samo szkło, jak pole obok.
-                    Color.clear
-                        .scSoftSurface(Circle())
-                        .opacity(active ? 1 : 0)
-
+                    // Aktywny: szkło w tincie terakoty, jak każda akcja główna
+                    // („soft” = szkło od rundy 3) — pełna terakotowa tarcza
+                    // z białą strzałką była jedyną taką plamą koloru na ekranie.
+                    // Wygaszony: samo szkło, jak pole obok. Jedno szkło, nie
+                    // drugie na pierwszym.
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
                         .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
                         .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 50, height: 50)
-                .scChromeGlass(in: Circle(), interactive: true)
+                .scChromeGlass(
+                    in: Circle(),
+                    tint: active ? SCPalette.terracotta.opacity(scheme == .dark ? 0.3 : 0.22) : nil,
+                    interactive: true
+                )
                 .glassEffectID("send", in: composerGlass)
                 .opacity(store.isStopping ? 0.5 : 1)
             }

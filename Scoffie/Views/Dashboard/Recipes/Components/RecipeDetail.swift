@@ -1144,8 +1144,10 @@ struct RecipeDetailView: View {
             .foregroundStyle(Color.scPageBase(scheme))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Capsule().fill(SCPalette.terracotta))
-            .overlay(Capsule().strokeBorder(SCPalette.terracotta, lineWidth: 1.2))
+            // Pełna terakota jako szkło („prominent”, Liquid Glass runda 3):
+            // dalej jedyny kryjący przycisk w aplikacji, ale z odblaskiem
+            // i reakcją na dotyk jak przycisk obok.
+            .scChromeGlass(in: Capsule(), tint: SCPalette.terracotta, interactive: true)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
