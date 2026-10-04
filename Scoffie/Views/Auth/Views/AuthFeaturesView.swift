@@ -94,7 +94,12 @@ struct AuthFeaturesView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, compact ? 9 : 12)
-        .scSoftSurface(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // Kafel w treści, nie pływa — tint terakoty bez szkła (szkło tylko
+        // na tym, co pływa nad treścią).
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(SCPalette.terracotta.opacity(colorScheme == .dark ? 0.16 : 0.10))
+        )
         .accessibilityElement(children: .combine)
     }
 

@@ -241,9 +241,9 @@ struct SCStepFeatureCard: View {
 // MARK: - Stopka kroku
 
 /// Stopka przepływu krok po kroku — JEDNA dla przewodnika, kreatora
-/// i wprowadzenia asystenta. Stoi na `SCSheetFooter`: kryjąca płyta w kolorze
-/// tła i nad nią cień krawędzi (`SCEdgeShade`), w którym treść gaśnie — ta
-/// sama stopka, co w każdym arkuszu aplikacji.
+/// i wprowadzenia asystenta. Stoi na `SCSheetFooter` — bez tła, same szklane
+/// przyciski; komunikat i pasek kroków mają własne szkło, bo w kreatorze
+/// i przewodniku stopka jest nakładką nad przewijaną treścią.
 ///
 /// Układ jest STAŁY między krokami, więc przycisk nie podskakuje:
 /// - wiersz nawigacji o wysokości krążka: „Wstecz” po lewej (krążek
@@ -254,9 +254,8 @@ struct SCStepFeatureCard: View {
 /// - pod nim akcja główna na całą szerokość (`EditorialPrimaryActionButton`,
 ///   tytuł roluje się literami przy zmianie „Dalej” → „Utwórz gospodarstwo”).
 ///
-/// Wstawia się ją jako OSTATNIE dziecko `VStack` pod treścią (albo nakładkę
-/// na dole) — cień wystaje wtedy nad stopkę i leży na treści, więc przewijana
-/// treść musi mieć na dole zapas `SCEdgeShade.bottomHeight`.
+/// Wstawia się ją jako OSTATNIE dziecko `VStack` pod treścią albo nakładkę
+/// na dole — wtedy przewijana treść ma na dole zapas na wysokość stopki.
 struct SCStepFooter: View {
     enum Slot: Equatable {
         case progress(step: Int, total: Int)

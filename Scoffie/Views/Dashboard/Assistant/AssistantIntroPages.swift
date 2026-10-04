@@ -292,8 +292,8 @@ private struct AssistantIntroHelloPage: View {
 /// Pole wiadomości z przykładami, które piszą się po kolei — ilustracja, nie
 /// kontrolka: nie przyjmuje fokusu, a do VoiceOver trafia jako jedna lista
 /// przykładów. Wygląd prawdziwego pola (`AssistantView.composerField`):
-/// kapsuła 50 pt w `AssistantLook.input`, a obok osobny krążek wysyłania
-/// w wariancie „soft”.
+/// szklana kapsuła 50 pt, obok szklany krążek wysyłania w tincie terakoty,
+/// oba w jednej grupie szkła.
 private struct AssistantIntroComposerDemo: View {
     /// Pole wchodzi (i zaczyna pisać) dopiero na znak od strony.
     let isShown: Bool
@@ -327,6 +327,7 @@ private struct AssistantIntroComposerDemo: View {
                 .foregroundStyle(Color.scFaint(scheme))
                 .padding(.leading, 6)
 
+            GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
                 ZStack(alignment: .leading) {
                     // Każdy przykład to NOWY tekst (`.id`) — rodzi się jako
@@ -346,18 +347,18 @@ private struct AssistantIntroComposerDemo: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 18)
                 .frame(minHeight: 50)
-                .background(Capsule(style: .continuous).fill(AssistantLook.input(scheme)))
-                .overlay(Capsule(style: .continuous).stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
+                .scChromeGlass(in: Capsule(style: .continuous))
 
-                ZStack {
-                    Color.clear
-                        .scSoftSurface(Circle())
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(SCPalette.terracotta)
-                }
-                .frame(width: 50, height: 50)
-                .scaleEffect(sendPressed ? 0.86 : 1)
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .frame(width: 50, height: 50)
+                    .scChromeGlass(
+                        in: Circle(),
+                        tint: SCPalette.terracotta.opacity(scheme == .dark ? 0.3 : 0.22)
+                    )
+                    .scaleEffect(sendPressed ? 0.86 : 1)
+            }
             }
 
             // Który przykład — jak kropki kart, bieżący rozciągnięty.
