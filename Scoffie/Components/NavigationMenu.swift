@@ -55,6 +55,11 @@ struct NavigationMenu: View {
 
     private static let order: [DashboardTab] = [.recipes, .plan, .calendar, .assistant, .settings]
 
+    /// Zakładki z własnym pływającym elementem nad paskiem (pigułka „Cel
+    /// dnia”, pole asystenta). Rozmyty pas rysują od NIEGO w dół, więc pas
+    /// paska zakładek byłby drugim materiałem na pierwszym.
+    private static let ownBottomEdge: Set<DashboardTab> = [.plan, .assistant]
+
     var body: some View {
         @Bindable var session = sessionStore
 
@@ -82,8 +87,19 @@ struct NavigationMenu: View {
         // samego tła, które ma sama, a nie z gołego okna.
         .background(SCPageBackground(scheme: colorScheme).ignoresSafeArea())
         .tint(SCPalette.terracotta)
+        // Pod paskiem stanu treść CHOWA SIĘ — rozmywa i gaśnie — zamiast
+        // przejeżdżać ostro pod zegarem i Dynamic Island (Telegram, iOS 26).
+        // Jeden pas na wszystkie zakładki, w samym górnym bezpiecznym obszarze.
+        .overlay(alignment: .top) {
+            SCStatusBarBlur()
+        }
         .overlay(alignment: .bottom) {
-            SCFloatingTabBar(items: items, selection: tabSelection, isCompact: chrome.isCompact)
+            SCFloatingTabBar(
+                items: items,
+                selection: tabSelection,
+                isCompact: chrome.isCompact,
+                showsEdgeBlur: !Self.ownBottomEdge.contains(session.dashboardTab)
+            )
                 // Klawiatura ma pasek ZASŁONIĆ, jak systemowy — bez tego
                 // `overlay` uciekałby nad klawiaturę i stawał między nią
                 // a polem asystenta.

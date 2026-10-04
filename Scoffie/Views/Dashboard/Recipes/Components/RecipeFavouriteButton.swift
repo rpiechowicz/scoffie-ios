@@ -88,12 +88,7 @@ struct RecipeFavouriteButton: View {
                     // nowy wjeżdża od dołu.
                     .contentTransition(.symbolEffect(.replace.upUp))
                     .frame(width: 32, height: 32)
-                    .background {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(Color.black.opacity(0.40)))
-                    }
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+                    .scPhotoGlass(in: Circle(), interactive: true)
                     // Cel dotyku 44 pt przy 32-punktowym kółku.
                     .padding(6)
                     .contentShape(Circle())

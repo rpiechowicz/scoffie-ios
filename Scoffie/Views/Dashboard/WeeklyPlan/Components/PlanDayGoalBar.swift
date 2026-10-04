@@ -69,8 +69,6 @@ struct PlanDayGoalBar: View {
     var planned: PlanDayNutrition?
     let action: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
-
     /// Promień rogu szkła i obszaru dotyku — jedna liczba, żeby te dwa
     /// kształty nie mogły się rozjechać.
     private static let cornerRadius: CGFloat = 20
@@ -122,20 +120,11 @@ struct PlanDayGoalBar: View {
             // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
             // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
             // pigułka odpowiada dokładnie jak wiersz osi nad nią.
-            // Samo `.regular` przepuszczało tekst osi przewijany pod pigułką
-            // na tyle wyraźnie, że przy górnej krawędzi wyglądał jak artefakt
-            // renderowania. Sam `tint` tego nie gasił — barwi szkło, ale nie
-            // zasłania. Stąd warstwa tła strony POD szkłem: to ona przygasza
-            // przelatującą treść do rozmytej plamy, a odblaski i reakcja na
-            // dotyk zostają na szkle nad nią.
-            .glassEffect(
-                .regular.tint(Color.scPageBase(scheme).opacity(0.35)).interactive(),
-                in: .rect(cornerRadius: Self.cornerRadius)
-            )
-            .background(
-                Color.scPageBase(scheme).opacity(0.72),
-                in: .rect(cornerRadius: Self.cornerRadius)
-            )
+            // Czyste szkło, jak dolne menu (`scChromeGlass`). Tekst osi
+            // przewijany pod pigułką przebijał przez nie ostro — dawniej gasiła
+            // go kryjąca warstwa tła w szkle (matowa plama), teraz rozmyty pas
+            // pod pigułką (`SCScrollEdgeBlur` w `WeeklyPlanView`).
+            .scChromeGlass(in: .rect(cornerRadius: Self.cornerRadius), interactive: true)
             // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
             // na cyfrach, na literach i na kilku punktach pasków. Padding,
             // przerwy między kolumnami i całe tło szkła były martwe — pigułka

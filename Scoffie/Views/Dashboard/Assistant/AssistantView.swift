@@ -1113,10 +1113,12 @@ struct AssistantView: View {
             Image(systemName: "arrow.down")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.scCardSurface(scheme)))
-                .overlay(Circle().stroke(Color.scCardStroke(scheme), lineWidth: 1))
-                .shadow(color: .black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 8, y: 3)
+                .frame(width: 40, height: 40)
+                // Szklany krążek jak „na dół” w Telegramie — pływa nad
+                // rozmową w tej samej warstwie co pole i menu. Szkło ma
+                // własną głębię, więc bez obwódki i cienia.
+                .scChromeGlass(in: Circle(), interactive: true)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .padding(.bottom, 12)
@@ -1281,23 +1283,15 @@ struct AssistantView: View {
                 composerField
             }
         }
-        // Zasłona pod polem i dolnym menu: rozmowa przewijała się pod nimi
-        // w pełnej ostrości i jej litery mieszały się z polem i ikonami.
-        // Treść gaśnie w tło strony na 28 pt nad polem, a niżej — aż do
-        // krawędzi ekranu, także pod menu — tła już nie widać.
+        // Rozmowa chowa się pod polem i dolnym menu jak w Telegramie:
+        // rozmywa się i gaśnie w tło strony od 28 pt nad polem aż do
+        // krawędzi ekranu, także pod menu (`NavigationMenu.ownBottomEdge`).
+        // Wcześniej kryjący gradient — treść urywała się ścianą tła, a pole
+        // i menu nie miały nad czym być szkłem.
         .background(alignment: .top) {
-            LinearGradient(
-                stops: [
-                    .init(color: Color.scPageBase(scheme).opacity(0), location: 0),
-                    .init(color: Color.scPageBase(scheme).opacity(0.94), location: 0.22),
-                    .init(color: Color.scPageBase(scheme), location: 0.45),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .padding(.top, -28)
-            .ignoresSafeArea(.container, edges: .bottom)
-            .allowsHitTesting(false)
+            SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
+                .padding(.top, -28)
+                .ignoresSafeArea(.container, edges: .bottom)
         }
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
@@ -1305,83 +1299,86 @@ struct AssistantView: View {
         .animation(.easeInOut(duration: 0.2), value: store.isUnavailable)
     }
 
-    /// `LComposer` z makiety: pole 50 pt w pigułce z włoskowatym obrysem,
-    /// obok krążek 50 — w terakocie wariantu „soft”, gdy jest co wysłać albo
-    /// tura biegnie (wtedy strzałka staje się stopem); przy poprawce pytania
-    /// pole dostaje obrys terakoty i poświatę.
+    /// `LComposer` z makiety: pole 50 pt w pigułce, obok krążek 50 — w terakocie
+    /// wariantu „soft”, gdy jest co wysłać albo tura biegnie (wtedy strzałka
+    /// staje się stopem); przy poprawce pytania pole dostaje obrys terakoty
+    /// i poświatę.
+    ///
+    /// Pole i krążek to Liquid Glass, jak pole wiadomości w Telegramie na
+    /// iOS 26 (4.10.2026): pływają nad rozmową tak samo jak dolne menu pod
+    /// nimi. Jeden `GlassEffectContainer`, żeby dwa szkła obok siebie
+    /// załamywały światło razem, a nie jak dwie osobne naklejki.
     private var composerField: some View {
         let active = store.isSending || editing != nil || canSend
-        return HStack(alignment: .bottom, spacing: 10) {
-            TextField(composerPrompt, text: $draft, axis: .vertical)
-            // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
-            // w sobotę, dwie osoby bez glutenu…"). PUSTE pole ma jeden
-            // wiersz: przykład z powitania („Np. obiady do 30 minut przez
-            // cały tydzień”) łamał się na dwa, a pierwsza litera zwijała pole
-            // do jednego — powitanie nad nim opadało skokiem o wiersz.
-            .lineLimit(draft.isEmpty ? 1...1 : 1...8)
-            .font(.system(size: 16.5))
-            .tracking(-0.3)
-            .foregroundStyle(AssistantLook.ink(scheme))
-            .focused($isComposerFocused)
-            .disabled(store.isUnavailable || store.isLocked)
-            .submitLabel(.send)
-            // Zmiana pytania zdejmuje kartę „masz to w aplikacji”.
-            .onChange(of: draft) { _, _ in
-                if appShortcut != nil { appShortcut = nil }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18)
-            .frame(minHeight: 50)
-            .background(Capsule(style: .continuous).fill(AssistantLook.input(scheme)))
-            .overlay(
-                Capsule(style: .continuous).stroke(
-                    editing == nil ? AssistantLook.cardStroke(scheme) : AssistantLook.terraFill(scheme).opacity(0.5),
-                    lineWidth: 1
-                )
-            )
-            .background(
-                Capsule(style: .continuous)
-                    .stroke(AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.12), lineWidth: 3)
-                    .padding(-2)
-            )
-            .animation(.easeOut(duration: 0.2), value: editing != nil)
-            .accessibilityLabel(editing == nil ? "Wiadomość do asystenta" : "Poprawiana wiadomość")
-
-            // W trakcie tury strzałka zamienia się w „stop"; po „stop"
-            // przycisk WYGASA razem ze statusem „Zatrzymuję…", bo drugi stop
-            // nic nie zrobi.
-            Button {
-                if store.isSending { store.stopWaiting() } else { send() }
-            } label: {
-                ZStack {
-                    // Wygaszony: krążek jak pole obok.
-                    Group {
-                        Circle().fill(AssistantLook.input(scheme))
-                        Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1)
-                    }
-                    .opacity(active ? 0 : 1)
-
-                    // Aktywny: wariant „soft” (`scSoftSurface`), jak każda
-                    // akcja główna — pełna terakotowa tarcza z białą strzałką
-                    // była jedyną taką plamą koloru na ekranie.
-                    Color.clear
-                        .scSoftSurface(Circle())
-                        .opacity(active ? 1 : 0)
-
-                    Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
-                        .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
-                        .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
-                        .contentTransition(.symbolEffect(.replace))
+        return GlassEffectContainer(spacing: 10) {
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField(composerPrompt, text: $draft, axis: .vertical)
+                // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
+                // w sobotę, dwie osoby bez glutenu…"). PUSTE pole ma jeden
+                // wiersz: przykład z powitania („Np. obiady do 30 minut przez
+                // cały tydzień”) łamał się na dwa, a pierwsza litera zwijała pole
+                // do jednego — powitanie nad nim opadało skokiem o wiersz.
+                .lineLimit(draft.isEmpty ? 1...1 : 1...8)
+                .font(.system(size: 16.5))
+                .tracking(-0.3)
+                .foregroundStyle(AssistantLook.ink(scheme))
+                .focused($isComposerFocused)
+                .disabled(store.isUnavailable || store.isLocked)
+                .submitLabel(.send)
+                // Zmiana pytania zdejmuje kartę „masz to w aplikacji”.
+                .onChange(of: draft) { _, _ in
+                    if appShortcut != nil { appShortcut = nil }
                 }
-                .frame(width: 50, height: 50)
-                .opacity(store.isStopping ? 0.5 : 1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 18)
+                .frame(minHeight: 50)
+                .scChromeGlass(in: Capsule(style: .continuous))
+                // Szkło ma własny brzeg — obrys zostaje tylko przy poprawce.
+                .overlay(
+                    Capsule(style: .continuous).stroke(
+                        AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.5),
+                        lineWidth: 1
+                    )
+                )
+                .background(
+                    Capsule(style: .continuous)
+                        .stroke(AssistantLook.terraFill(scheme).opacity(editing == nil ? 0 : 0.12), lineWidth: 3)
+                        .padding(-2)
+                )
+                .animation(.easeOut(duration: 0.2), value: editing != nil)
+                .accessibilityLabel(editing == nil ? "Wiadomość do asystenta" : "Poprawiana wiadomość")
+
+                // W trakcie tury strzałka zamienia się w „stop"; po „stop"
+                // przycisk WYGASA razem ze statusem „Zatrzymuję…", bo drugi stop
+                // nic nie zrobi.
+                Button {
+                    if store.isSending { store.stopWaiting() } else { send() }
+                } label: {
+                    ZStack {
+                        // Aktywny: wariant „soft” (`scSoftSurface`) NA szkle, jak
+                        // każda akcja główna — pełna terakotowa tarcza z białą
+                        // strzałką była jedyną taką plamą koloru na ekranie.
+                        // Wygaszony: samo szkło, jak pole obok.
+                        Color.clear
+                            .scSoftSurface(Circle())
+                            .opacity(active ? 1 : 0)
+
+                        Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
+                            .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
+                            .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .frame(width: 50, height: 50)
+                    .scChromeGlass(in: Circle(), interactive: true)
+                    .opacity(store.isStopping ? 0.5 : 1)
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.92))
+                .disabled((!store.isSending && !canSend) || store.isStopping)
+                .accessibilityLabel(sendAccessibilityLabel)
+                .animation(.easeOut(duration: 0.2), value: active)
+                .animation(.easeOut(duration: 0.2), value: store.isStopping)
+                .animation(.easeOut(duration: 0.2), value: store.isSending)
             }
-            .buttonStyle(PlanPressStyle(scale: 0.92))
-            .disabled((!store.isSending && !canSend) || store.isStopping)
-            .accessibilityLabel(sendAccessibilityLabel)
-            .animation(.easeOut(duration: 0.2), value: active)
-            .animation(.easeOut(duration: 0.2), value: store.isStopping)
-            .animation(.easeOut(duration: 0.2), value: store.isSending)
         }
         // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
         .padding(.horizontal, SCFloatingTabBar.sideMargin)

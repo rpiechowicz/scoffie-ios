@@ -35,8 +35,8 @@ struct SCSheetIconButton: View {
     let accessibilityLabel: String
     /// Przycisk stoi na zdjęciu (szczegóły posiłku). Zwykłe tło krążka to
     /// kilka procent krycia — na tle arkusza wystarcza, ale na jasnym kadrze
-    /// krążek znikał. Tu dostaje kryjące tło arkusza pod szkłem i miękki
-    /// cień; rozmiar, glif i obwódka zostają te same.
+    /// krążek znikał. Tu jest Liquid Glass (`SCSheetIconSurface`); rozmiar
+    /// i glif zostają te same.
     var onImage: Bool = false
     /// Praca w toku — kręciołek w krążku (patrz `SCSheetIconLabel.isBusy`).
     var isBusy: Bool = false
@@ -91,27 +91,30 @@ struct SCSheetIconLabel: View {
     }
 }
 
-/// Powierzchnia krążka arkusza: tło (na zdjęciu kryjące, pod szkłem),
-/// obwódka i cień. Jedna dla krzyżyka, jego sąsiadów i pierścienia kroków
-/// trybu Gotuj (`CookStepRing`), który stoi naprzeciw krzyżyka na zdjęciu
-/// i ma wyglądać jak jego para.
+/// Powierzchnia krążka arkusza. Jedna dla krzyżyka, jego sąsiadów
+/// i pierścienia kroków trybu Gotuj (`CookStepRing`), który stoi naprzeciw
+/// krzyżyka na zdjęciu i ma wyglądać jak jego para.
+///
+/// Na zdjęciu krążek PŁYWA nad treścią (zdjęcie, przewinięty przepis pod
+/// nim), więc jest Liquid Glass — jak przyciski nagłówka w Telegramie na
+/// iOS 26 (4.10.2026). Szkło ma własny brzeg i głębię: bez obwódki i cienia,
+/// a dawne kryjące tło pod materiałem (0,78) robiło z niego kremowy guzik.
+/// Na tle arkusza krążek stoi w treści — zostaje tło chipa z obwódką.
 struct SCSheetIconSurface: ViewModifier {
     let onImage: Bool
 
     @Environment(\.colorScheme) private var scheme
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .background {
-                if onImage {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Circle().fill(Color.scCanvas(scheme).opacity(0.78)))
-                }
-                Circle().fill(Color.scChipBg(scheme))
-            }
-            .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            .shadow(color: .black.opacity(onImage ? (scheme == .dark ? 0.35 : 0.16) : 0), radius: 6, x: 0, y: 2)
+        if onImage {
+            content
+                .scChromeGlass(in: Circle(), interactive: true)
+        } else {
+            content
+                .background(Circle().fill(Color.scChipBg(scheme)))
+                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+        }
     }
 }
 
