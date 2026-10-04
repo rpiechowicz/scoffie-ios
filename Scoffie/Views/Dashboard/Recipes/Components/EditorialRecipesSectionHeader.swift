@@ -15,6 +15,10 @@ struct EditorialRecipesSectionHeader: View {
     let eyebrow: String
     let title: String
     let accent: Color
+    /// Filtry kategorii w działaniu — plakietka z liczbą na strzałce, jak na
+    /// przycisku filtrów (Rafał 4.10.2026: „obok buttonu dalej powinien być
+    /// badge, że są włączone filtry”).
+    var filterCount: Int = 0
     var action: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
@@ -53,7 +57,10 @@ struct EditorialRecipesSectionHeader: View {
                         .scChromeGlass(in: Circle(), tint: accent.opacity(scheme == .dark ? 0.3 : 0.22))
                 }
                 .buttonStyle(PlanPressStyle(scale: 0.9))
-                .accessibilityLabel("Zobacz wszystkie – \(title)")
+                .scCountBadge(filterCount, color: accent)
+                .accessibilityLabel(filterCount > 0
+                    ? "Zobacz wszystkie – \(title), filtry: \(filterCount)"
+                    : "Zobacz wszystkie – \(title)")
             }
         }
     }
