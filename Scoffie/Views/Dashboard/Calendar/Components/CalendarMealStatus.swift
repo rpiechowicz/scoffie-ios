@@ -97,6 +97,12 @@ struct CalendarMealCheck: View {
                     .font(.system(size: size * 0.46, weight: .bold))
                     .foregroundStyle(Color.scChecked(scheme).opacity(0.85))
             } else {
+                // Kryjące tło i cichy, szary ptaszek (Rafał 4.10.2026: „check
+                // jest prześwitujący, widać, co pod spodem — daj ikonę, która
+                // nie jest zaznaczona”). Szary, nie w kolorze pory — kolor
+                // ptaszka zostaje dla zjedzonego.
+                Circle().fill(Color.scPageBase(scheme))
+
                 Circle()
                     .strokeBorder(
                         borderColor,
@@ -105,6 +111,10 @@ struct CalendarMealCheck: View {
                             dash: status == .anytime ? [3, 2.5] : []
                         )
                     )
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: size * 0.42, weight: .bold))
+                    .foregroundStyle(Color.scFaint(scheme).opacity(0.7))
             }
         }
         .frame(width: size, height: size)

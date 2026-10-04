@@ -75,12 +75,14 @@ struct CookDock: View {
         .animation(SCCook.Motion.dock, value: overflow.map(\.id))
     }
 
-    /// Plakietki timerów spoza kapsuł, w kolejności pilności (`dockOverflow`).
-    /// Przy kilku rząd przewija się w bok — każda plakietka zostaje czytelna.
+    /// Plakietki timerów spoza kapsuł — w STAŁEJ kolejności kroków, nie
+    /// pilności (Rafał 4.10.2026: „timery 3 i 4 nie mogą się zamieniać
+    /// miejscami”; `dockOverflow` układa po czasie do końca, więc przestawiał
+    /// je start, pauza i każde odliczanie). Przy kilku rząd przewija się w bok.
     private func badgeRow(_ items: [CookDockTimer]) -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 6) {
-                ForEach(items) { item in
+                ForEach(items.sorted { $0.stepIndex < $1.stepIndex }) { item in
                     CookTimerBadge(item: item, onTimer: onTimer, onOpen: { onOpen(.timers) })
                         .transition(badgeTransition)
                 }

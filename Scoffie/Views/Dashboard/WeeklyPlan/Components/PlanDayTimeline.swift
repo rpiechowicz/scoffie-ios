@@ -247,10 +247,11 @@ enum PlanTimelineMetrics {
     static let rail: CGFloat = 46
     /// Odstęp między szyną a treścią wiersza.
     static let gutter: CGFloat = 12
-    /// Odstęp nad wierszem.
-    static let rowTop: CGFloat = 12
+    /// Odstęp nad wierszem. 16 od 4.10.2026 (było 12 — Rafał: „dania zbyt
+    /// skupione względem siebie”).
+    static let rowTop: CGFloat = 16
     /// Odstęp pod treścią wiersza, nad hairline'em.
-    static let rowBottom: CGFloat = 12
+    static let rowBottom: CGFloat = 16
     /// Zdjęcie dania domu i zdjęcie dania domownika.
     static let photo: CGFloat = 72
     static let photoAlt: CGFloat = 56

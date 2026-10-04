@@ -113,14 +113,19 @@ struct SCSheetIconSurface: ViewModifier {
 
     @Environment(\.colorScheme) private var scheme
 
-    /// Na zdjęciu — czyste szkło (jest co załamywać). Na jednolitym tle
-    /// arkusza czyste szkło prawie znikało (Rafał 4.10.2026: „X nie ma w liquid
-    /// style”), więc dostaje jasny tint jak natywne przyciski arkuszy iOS 26.
+    /// Czyste szkło z miękkim cieniem pod spodem — jak natywne szklane
+    /// przyciski iOS 26, którym głębię daje właśnie cień. Jasny tint z poprzedniej
+    /// rundy robił z krążka płaski, kremowy guzik „po staremu” (Rafał 4.10.2026,
+    /// dwa razy: „X dalej po staremu”, „wszystkie półarkusze mają mieć liquid
+    /// buttony”). Na zdjęciu cień mocniejszy, bo tło jest niespokojne.
     func body(content: Content) -> some View {
         content
-            .scChromeGlass(
-                in: Circle(),
-                tint: onImage ? nil : Color.white.opacity(scheme == .dark ? 0.1 : 0.55)
+            .scChromeGlass(in: Circle())
+            .shadow(
+                color: .black.opacity(scheme == .dark ? 0.4 : (onImage ? 0.18 : 0.1)),
+                radius: onImage ? 8 : 6,
+                x: 0,
+                y: onImage ? 3 : 2
             )
     }
 }

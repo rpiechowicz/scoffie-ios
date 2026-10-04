@@ -924,7 +924,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wiersza), `title`, `subtitle`, `accessory` (akcje obok krzyżyka), krzyżyk `SCSheetCloseButton`, `compact`.
   `ShoppingSheetHeader` i `AssistantSheetHeader` to nakładki na niego; arkusz wyjścia z Gotuj też na nim (krzyżyk =
   „Gotuj dalej”). Własny układ mają tylko arkusze ze zdjęciem na całą górę (szczegóły posiłku, przegląd propozycji).
-  Krążki nagłówka na tle arkusza = szkło z jasnym tintem (na zdjęciu czyste szkło).
+  Krążki nagłówka = czyste szkło + miękki cień (jak natywne szklane przyciski iOS 26); jasny tint z 4.10 robił
+  z nich płaskie guziki „po staremu” — nie wracać. Zakupy: pasek nawigacji SCHOWANY (`.toolbar(.hidden)`), pusty
+  pasek łapał stuknięcia w krzyżyk i „…” mimo `NavBarHitTestPassthrough`.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,

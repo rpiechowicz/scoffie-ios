@@ -366,13 +366,12 @@ struct ProductsView: View {
                 .ignoresSafeArea(.container, edges: .top)
                 .animation(.smooth(duration: 0.25), value: isProgressPinned)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Color.clear.frame(width: 1, height: 1)
-                }
-            }
-            .background(NavBarHitTestPassthrough())
+            // Pasek nawigacji SCHOWANY (Rafał 4.10.2026: „na Zakupach nie da się
+            // kliknąć X oraz ustawień”). Pusty, ale żywy pasek leżał dokładnie
+            // na wierszu nagłówka i łapał stuknięcia; hak wyłączający mu dotyk
+            // (`NavBarHitTestPassthrough`) bywał zawodny. Zakupy niczego nie
+            // wpychają na stos, więc pasek jest tu zbędny.
+            .toolbar(.hidden, for: .navigationBar)
             // Odhaczenie produktu jest jedyną czynnością na tym ekranie i robi
             // się je z ręką w koszyku, często nie patrząc — stuknięcie w palec
             // potwierdza je szybciej niż animacja kółka.
@@ -1000,47 +999,6 @@ struct ProductsView: View {
     /// ten przypadek, w którym ktoś do niej wraca.
     private func dishSummary(for item: ShoppingItem) -> String? {
         dishIndex.dishSummary(for: item)
-    }
-}
-
-// MARK: - Nav bar hit-test pass-through (shared with CalendarView)
-//
-// SwiftUI's `NavigationStack` keeps the toolbar layer "live" so the auto-blur
-// material can fade in on scroll, but that layer also captures touches across
-// its full ~44pt height — even when the toolbar is visually empty. That blocks
-// the editorial header's icon buttons once the layout extends under it via
-// `.ignoresSafeArea(.container, edges: .top)`.
-//
-// We don't have any real toolbar items here (just the invisible 1×1 placeholder
-// that keeps the bar from collapsing). Disabling user interaction on the
-// underlying `UINavigationBar` lets touches fall through to the SwiftUI
-// content below while leaving the auto-blur rendering intact.
-private struct NavBarHitTestPassthrough: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        BarUnlocker()
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    private final class BarUnlocker: UIView {
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            DispatchQueue.main.async { [weak self] in
-                self?.findNavigationBar()?.isUserInteractionEnabled = false
-            }
-        }
-
-        private func findNavigationBar() -> UINavigationBar? {
-            var responder: UIResponder? = self
-            while let r = responder {
-                if let vc = r as? UIViewController,
-                   let bar = vc.navigationController?.navigationBar {
-                    return bar
-                }
-                responder = r.next
-            }
-            return nil
-        }
     }
 }
 
