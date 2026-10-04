@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Okrągła akcja nagłówka — sam RYSUNEK, bez przycisku.
+/// Okrągła akcja nagłówka — sam RYSUNEK, bez przycisku. Szklany krążek.
 ///
 /// `Menu` potrzebuje etykiety, a nie przycisku, więc każde menu „…" w aplikacji
 /// rysowało ten krążek u siebie: Plan tygodnia, Zakupy, arkusz historii,
@@ -26,22 +26,19 @@ struct SCCircleIconLabel: View {
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Liquid Glass (4.10.2026, runda 2 — przyciski nagłówka jak „wstecz”
+    /// i awatar w Telegramie na iOS 26). Szkło ma własny brzeg, więc bez
+    /// obwódki; podświetlony = szkło w tincie akcentu i glif w akcencie.
+    /// Sąsiednie krążki w jednym rzędzie stawiać w `GlassEffectContainer`.
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(highlighted ? accent.opacity(0.20) : Color.scTileBg(scheme))
-
-            Circle()
-                .stroke(
-                    highlighted ? accent.opacity(0.40) : Color.scTileStroke(scheme),
-                    lineWidth: 1
-                )
-
-            Image(systemName: icon)
-                .font(.system(size: iconSize, weight: .semibold))
-                .foregroundStyle(highlighted ? accent : Color.scLabel(scheme))
-        }
-        .frame(width: size, height: size)
+        Image(systemName: icon)
+            .font(.system(size: iconSize, weight: .semibold))
+            .foregroundStyle(highlighted ? accent : Color.scLabel(scheme))
+            .frame(width: size, height: size)
+            .scChromeGlass(
+                in: Circle(),
+                tint: highlighted ? accent.opacity(scheme == .dark ? 0.28 : 0.22) : nil
+            )
     }
 }
 

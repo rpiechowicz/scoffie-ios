@@ -241,9 +241,9 @@ struct SCStepFeatureCard: View {
 // MARK: - Stopka kroku
 
 /// Stopka przepływu krok po kroku — JEDNA dla przewodnika, kreatora
-/// i wprowadzenia asystenta. Stoi na `SCSheetFooter`: kryjąca płyta w kolorze
-/// tła i nad nią cień krawędzi (`SCEdgeShade`), w którym treść gaśnie — ta
-/// sama stopka, co w każdym arkuszu aplikacji.
+/// i wprowadzenia asystenta. Stoi na `SCSheetFooter` — bez tła, same szklane
+/// przyciski; komunikat i pasek kroków mają własne szkło, bo w kreatorze
+/// i przewodniku stopka jest nakładką nad przewijaną treścią.
 ///
 /// Układ jest STAŁY między krokami, więc przycisk nie podskakuje:
 /// - wiersz nawigacji o wysokości krążka: „Wstecz” po lewej (krążek
@@ -254,9 +254,8 @@ struct SCStepFeatureCard: View {
 /// - pod nim akcja główna na całą szerokość (`EditorialPrimaryActionButton`,
 ///   tytuł roluje się literami przy zmianie „Dalej” → „Utwórz gospodarstwo”).
 ///
-/// Wstawia się ją jako OSTATNIE dziecko `VStack` pod treścią (albo nakładkę
-/// na dole) — cień wystaje wtedy nad stopkę i leży na treści, więc przewijana
-/// treść musi mieć na dole zapas `SCEdgeShade.bottomHeight`.
+/// Wstawia się ją jako OSTATNIE dziecko `VStack` pod treścią albo nakładkę
+/// na dole — wtedy przewijana treść ma na dole zapas na wysokość stopki.
 struct SCStepFooter: View {
     enum Slot: Equatable {
         case progress(step: Int, total: Int)
@@ -316,9 +315,14 @@ struct SCStepFooter: View {
     var body: some View {
         SCSheetFooter {
             if let notice {
+                // Stopka nie ma już tła, a w kreatorze i przewodniku stoi
+                // nakładką nad przewijaną treścią — komunikat ma własne
+                // szkło, żeby był czytelny nad każdą kartą pod spodem.
                 SCInlineErrorText(notice)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .scChromeGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .transition(.opacity)
             }
 
@@ -363,8 +367,7 @@ struct SCStepFooter: View {
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Color.scMuted(scheme))
                             .frame(width: primaryHeight, height: primaryHeight)
-                            .background(Circle().fill(Color.scChipBg(scheme)))
-                            .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                            .scChromeGlass(in: Circle())
                             .contentShape(Circle())
                     }
                     .buttonStyle(PlanPressStyle(scale: 0.92))
@@ -394,25 +397,38 @@ struct SCStepFooter: View {
                 .accessibilityHidden(!canGoBack)
             }
 
-            ZStack {
-                slotContent
-                    .id(slot.key)
-                    .transition(.opacity)
-            }
-            .frame(maxWidth: .infinity)
-            .animation(.easeInOut(duration: 0.3), value: slot.key)
+            // Pasek kroków, odnośnik i licznik na własnej szklanej kapsule:
+            // stopka nie ma już tła, a w kreatorze i przewodniku przewijana
+            // treść jedzie pod nią — bez szkła „2/5” i „Pomiń…” ginęłyby
+            // na kartach. Krążek „Wstecz” stoi obok, sam jest szkłem.
+            HStack(spacing: 12) {
+                ZStack {
+                    slotContent
+                        .id(slot.key)
+                        .transition(.opacity)
+                }
+                .frame(maxWidth: .infinity)
+                .animation(.easeInOut(duration: 0.3), value: slot.key)
 
-            // Przy „Wstecz” obok przycisku nie ma krążka, który równoważyłby
-            // licznik z lewej — pusty licznik zjadałby 36 pt z prawej
-            // i odnośnik „Pomiń…” stałby krzywo.
-            if backPlacement == .progressRow || slot.key == Slot.progress(step: 0, total: 0).key {
-                // Szerokość z treści, nie stałe 36 pt: przy dwucyfrowych
-                // krokach („11/11” w przepływie przewodnik + kreator) licznik
-                // łamał się na dwie linie. Minimum trzyma pasek w miejscu przy
-                // „1/5” → „2/5”.
-                counter
-                    .fixedSize()
-                    .frame(minWidth: Self.rowHeight, alignment: .trailing)
+                // Przy „Wstecz” obok przycisku nie ma krążka, który równoważyłby
+                // licznik z lewej — pusty licznik zjadałby 36 pt z prawej
+                // i odnośnik „Pomiń…” stałby krzywo.
+                if backPlacement == .progressRow || slot.key == Slot.progress(step: 0, total: 0).key {
+                    // Szerokość z treści, nie stałe 36 pt: przy dwucyfrowych
+                    // krokach („11/11” w przepływie przewodnik + kreator) licznik
+                    // łamał się na dwie linie. Minimum trzyma pasek w miejscu przy
+                    // „1/5” → „2/5”.
+                    counter
+                        .fixedSize()
+                        .frame(minWidth: Self.rowHeight, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, slot == .empty ? 0 : 14)
+            .frame(height: Self.rowHeight)
+            .background {
+                if slot != .empty {
+                    Color.clear.scChromeGlass(in: Capsule())
+                }
             }
         }
         .frame(height: Self.rowHeight)

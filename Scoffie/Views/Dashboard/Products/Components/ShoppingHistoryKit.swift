@@ -67,19 +67,12 @@ struct ShoppingEyebrowRow: View {
     }
 }
 
-/// Nagłówek arkusza zakupów: tytuł · akcje · krzyżyk.
-///
-/// Osobny komponent, a nie `EditorialSheetHeader`: tamten prowadzi eyebrow NAD
-/// tytułem i trzyma go w 24 punktach, a te ekrany są ciągiem dalszym Zakupów
-/// i mają czytać się jak one — duży tytuł, a pod nim własny wiersz z eyebrow
-/// i metą (`ShoppingEyebrowRow`).
-///
-/// Zamyka KRZYŻYK, nie strzałka wstecz, i to nawet wtedy, gdy arkusze stoją
-/// jeden na drugim. Arkusz się zamyka — dokładnie to samo robi przeciągnięcie
-/// w dół — a strzałka obiecywałaby nawigację, której tu nie ma.
-///
-/// Przed tytułem kafelek (`SCHeaderIconWell`) — ten sam, co w każdym innym
-/// arkuszu aplikacji; eyebrow zostaje własnym wierszem pod spodem.
+/// Nagłówek arkusza zakupów — od 4.10.2026 NAKŁADKA na wspólny nagłówek
+/// arkuszy (`EditorialSheetHeader`, Rafał: „to powinno być 1:1 wszędzie tak
+/// samo”). Dawniej osobny krój: tytuł 32 pt bez eyebrow. Eyebrow i meta stoją
+/// dalej własnym wierszem pod spodem (`ShoppingEyebrowRow`), więc tu eyebrow
+/// jest pusty. Zamyka KRZYŻYK, nie strzałka wstecz — także gdy arkusze stoją
+/// jeden na drugim.
 struct ShoppingSheetHeader<Trailing: View>: View {
     let title: String
     var icon: String? = nil
@@ -87,45 +80,15 @@ struct ShoppingSheetHeader<Trailing: View>: View {
     var onClose: () -> Void
     @ViewBuilder var trailing: () -> Trailing
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            HStack(spacing: 11) {
-                if let icon {
-                    SCHeaderIconWell(icon: icon, accent: accent)
-                }
-
-                // Ta sama drabinka stopni pisma, co w `EditorialPageHeader`:
-                // tytuł schodzi o stopień, zamiast się urywać.
-                ViewThatFits(in: .horizontal) {
-                    titleText(size: 32)
-                    titleText(size: 28)
-                    titleText(size: 24, allowsScaling: true)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            HStack(spacing: 6) {
-                trailing()
-                SCSheetCloseButton(action: onClose)
-            }
-            .fixedSize(horizontal: true, vertical: false)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func titleText(size: CGFloat, allowsScaling: Bool = false) -> some View {
-        Text(title)
-            .font(.system(size: size, weight: .heavy))
-            .tracking(-0.5)
-            .foregroundStyle(Color.scLabel(scheme))
-            .lineLimit(1)
-            .minimumScaleFactor(allowsScaling ? 0.75 : 1)
-            // Jak w `EditorialPageHeader` — ekran Zakupów stoi teraz na tym
-            // nagłówku i VoiceOver dalej ma ogłosić tytuł jako nagłówek.
-            .accessibilityAddTraits(.isHeader)
+        EditorialSheetHeader(
+            eyebrow: "",
+            title: title,
+            icon: icon,
+            accent: accent,
+            onClose: onClose,
+            accessory: trailing
+        )
     }
 }
 

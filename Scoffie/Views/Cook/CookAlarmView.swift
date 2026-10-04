@@ -244,8 +244,9 @@ struct CookAlarmView: View {
                 .foregroundStyle(Color.scLabel(scheme))
                 .padding(.horizontal, 12)
                 .frame(height: 36)
-                .background(Capsule().fill(Color.scCanvas(scheme).opacity(0.78)))
-                .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                // Szkło jak pierścień kroków obok (`SCSheetIconSurface`) —
+                // oba pływają nad zdjęciem pod welonem.
+                .scChromeGlass(in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -353,6 +354,8 @@ struct CookAlarmView: View {
                     .cookRoll(item.timer.id)
             }
             .padding(.horizontal, 4)
+            // „+N min” — neutralne szkło w jednej grupie (Liquid Glass).
+            GlassEffectContainer(spacing: 8) {
             HStack(spacing: 8) {
                 ForEach([1, 2, 5], id: \.self) { minutes in
                     Button { onExtend(item.id, minutes * 60) } label: {
@@ -362,12 +365,12 @@ struct CookAlarmView: View {
                             .foregroundStyle(Color.scLabel(scheme))
                             .frame(maxWidth: .infinity)
                             .frame(height: SCCook.Height.alarmExtend)
-                            .background(Capsule().fill(Color.scChipBg(scheme)))
-                            .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                            .scChromeGlass(in: Capsule())
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
+            }
             }
             Button { onDone(item.id) } label: {
                 HStack(spacing: 8) {

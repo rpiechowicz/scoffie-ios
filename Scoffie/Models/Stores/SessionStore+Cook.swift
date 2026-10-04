@@ -73,7 +73,7 @@ extension SessionStore {
                     let weekStart = PlanWeek.dateKey(PlanWeek.monday(of: date))
                     await mealCalendarStore.setMealEaten(true, recipeId: session.recipeId, for: date, slot: slot, weekStart: weekStart)
                 } else {
-                    await mealCalendarStore.logCookedMeal(recipeId: session.recipeId, for: date, slot: slot, servings: session.portions)
+                    await mealCalendarStore.logCookedMeal(recipeId: session.recipeId, for: date, slot: slot, servings: Int(session.portions.rounded(.up)))
                 }
                 rescheduleMealReminders()
             }
@@ -89,7 +89,7 @@ extension SessionStore {
             schedule: mealSlotSchedule
         )
         Task { @MainActor in
-            await mealCalendarStore.logCookedMeal(recipeId: session.recipeId, for: now, slot: slot, servings: session.portions)
+            await mealCalendarStore.logCookedMeal(recipeId: session.recipeId, for: now, slot: slot, servings: Int(session.portions.rounded(.up)))
             rescheduleMealReminders()
         }
     }

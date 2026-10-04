@@ -26,9 +26,10 @@ import SwiftUI
 ///   Lista wierszy z rundy 14 odpadła 24.09 — „nie do końca podoba mi się
 ///   design tego”.
 /// - **Dla kogo** — `PlanAudienceChips` (tylko w domu wieloosobowym).
-/// - **Porcje** — porcja każdej jedzącej osoby co 0,5 (`SCStepper`, krok
-///   10 jednostek 1/20). Dopóki lista domowników nie dojechała — jeden
-///   wiersz porcji łącznych jak dawniej.
+/// - **Porcje** — szklany przycisk z liczbą porcji OBOK „Dodaj do planu”,
+///   pod nim arkusz z tym samym zestawem co szczegóły posiłku (`SCPortionKit`),
+///   porcja każdej jedzącej osoby co 0,5. Dopóki lista domowników nie
+///   dojechała — w arkuszu jeden wiersz porcji łącznych.
 /// - **Stopka** (`scSheetFooter`, cień `SCEdgeShade`) — rolujące zdanie
 ///   „Środa, 24 września · Obiad” i przycisk, którego tytuł też roluje.
 ///
@@ -106,6 +107,8 @@ struct AddToPlanSheet: View {
     /// Porcje osób ruszone stepperem tutaj (jednostki 1/20); reszta osób ma
     /// `seedUnits`. Klucz = id domownika.
     @State private var touchedUnits: [String: Int] = [:]
+    /// Arkusz porcji spod przycisku obok „Dodaj do planu”.
+    @State private var isPortionsSheetPresented = false
     /// Porcje łączne, od których startują porcje osób: ze szczegółów przepisu
     /// albo ze steppera łącznego tutaj; `nil` = nikt nie wybierał (po 1).
     @State private var seedTotalUnits: Int?
@@ -239,18 +242,13 @@ struct AddToPlanSheet: View {
 
                         // Jednoosobowe gospodarstwo nie ma o czym decydować —
                         // każdy posiłek i tak jest „Wspólne".
-                        if members.count > 1 {
-                            PlanAudienceChips(
-                                members: members,
-                                selection: $selectedParticipants,
-                                onChange: audienceChanged
-                            )
-                            .scReveal(hasAppeared, order: 2)
-                            .transition(.opacity)
-                        }
+                        // „Dla kogo” nie stoi już w przewijaniu — to szklany
+                        // przycisk obok „Dodaj do planu” (`PlanAudienceButton`,
+                        // Rafał 4.10.2026), jak w „Wybierz przepis”.
 
-                        servingsSection
-                            .scReveal(hasAppeared, order: 3)
+                        // Porcje nie stoją już w przewijaniu — to szklany
+                        // przycisk obok „Dodaj do planu” z własnym arkuszem
+                        // (`portionsButton`, Rafał 4.10.2026).
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
@@ -315,52 +313,17 @@ struct AddToPlanSheet: View {
 
     // MARK: - Nagłówek
 
-    /// Krój i układ `EditorialSheetHeader`, tylko w miejscu kafelka z ikoną
-    /// stoi zdjęcie dania — to jego dotyczy cały arkusz.
+    /// Wspólny nagłówek arkuszy (`EditorialSheetHeader`) ze zdjęciem dania
+    /// w miejscu kafelka — to jego dotyczy cały arkusz — i faktami (czas,
+    /// kcal) w podtytule. Dawniej własna kopia układu z własnym krzyżykiem.
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            HStack(spacing: 12) {
-                EditorialRecipeCover(recipe: recipe, size: 58, cornerRadius: 15)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("DODAJ DO PLANU")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .tracking(1.4)
-                        .foregroundStyle(SCPalette.terracotta)
-                        .lineLimit(1)
-
-                    Text(recipe.name)
-                        .font(.system(size: 20, weight: .heavy))
-                        .tracking(-0.4)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if !facts.isEmpty {
-                        HStack(spacing: 10) {
-                            ForEach(facts) { fact in
-                                HStack(spacing: 4) {
-                                    Image(systemName: fact.icon)
-                                        .font(.system(size: 10.5, weight: .semibold))
-                                    Text(fact.text)
-                                        .font(.system(size: 12.5, weight: .semibold))
-                                        .monospacedDigit()
-                                }
-                                .foregroundStyle(Color.scMuted(scheme))
-                            }
-                        }
-                        .padding(.top, 1)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            SCSheetCloseButton(action: { dismiss() })
-        }
+        EditorialSheetHeader(
+            eyebrow: "Dodaj do planu",
+            title: recipe.name,
+            subtitle: facts.isEmpty ? nil : facts.map(\.text).joined(separator: " · "),
+            leading: AnyView(EditorialRecipeCover(recipe: recipe, size: 52, cornerRadius: 14)),
+            onClose: { dismiss() }
+        )
     }
 
     // MARK: - Kiedy
@@ -451,11 +414,11 @@ struct AddToPlanSheet: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(Color.scChipBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                // Szklany krążek jak strzałki paska tygodnia (`EditorialWeekBar`).
+                .scChromeGlass(in: Circle())
                 .scTapTarget(drawn: 26)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.88))
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.35)
         .accessibilityLabel(label)
@@ -848,79 +811,67 @@ struct AddToPlanSheet: View {
         }
     }
 
-    /// Porcja każdej osoby co pół porcji. W domu jednoosobowym — jeden
-    /// wiersz „Porcje”.
+    /// Porcja każdej osoby co pół porcji — ten sam układ co arkusz porcji
+    /// w szczegółach posiłku (Rafał 4.10.2026: „zrób tak samo jak ten nasz
+    /// poprzedni sheet”): karta z garnkiem i liczbą do ugotowania, pod nią
+    /// lista osób z dużym stepperem (`Components/SCPortionKit.swift`).
     private var personalPortionsSection: some View {
         let ids = eaterIds
-        let names = Dictionary(members.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
-        return VStack(spacing: 0) {
-            ForEach(Array(ids.enumerated()), id: \.element) { index, memberId in
-                portionRow(
-                    title: ids.count == 1 ? "Porcje" : (names[memberId] ?? "Domownik"),
-                    memberId: memberId,
-                    allIds: ids
-                )
-                .overlay(alignment: .top) {
-                    if index > 0 {
-                        Rectangle()
-                            .fill(Color.scTileStroke(scheme))
-                            .frame(height: 1)
-                            .padding(.leading, 16)
-                    }
+        let byId = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let total = ids.reduce(0) { $0 + units(for: $1) }
+        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
+
+        return VStack(spacing: 12) {
+            SCPortionSummary(
+                segments: ids.map { id in
+                    SCPortionSummary.Segment(
+                        id: id,
+                        units: units(for: id),
+                        color: byId[id].map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
+                    )
+                },
+                kcal: kcal
+            )
+
+            SCPortionList {
+                ForEach(Array(ids.enumerated()), id: \.element) { index, memberId in
+                    let member = byId[memberId]
+                    let value = units(for: memberId)
+                    SCPortionRow(
+                        name: member?.displayName ?? "Domownik",
+                        avatarUrl: member?.avatarUrl,
+                        avatarColor: member?.avatarColor,
+                        seed: memberId,
+                        color: member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta,
+                        units: value,
+                        kcal: Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: value)).kcal.rounded()),
+                        isViewer: memberId == sessionStore.currentUserId,
+                        canDecrement: PlanPortions.stepped(units: value, direction: -1, totalUnits: total) != nil,
+                        canIncrement: PlanPortions.stepped(units: value, direction: 1, totalUnits: total) != nil,
+                        showsDivider: index > 0,
+                        onStep: { direction in
+                            guard let next = PlanPortions.stepped(units: value, direction: direction, totalUnits: total) else { return }
+                            setUnits(next, for: memberId, allIds: ids)
+                        }
+                    )
                 }
             }
         }
-        .background(cardShape.fill(Color.scTileBg(scheme)))
-        .overlay(cardShape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 
-    private func portionRow(title: String, memberId: String, allIds: [String]) -> some View {
-        let value = units(for: memberId)
-        let total = allIds.reduce(0) { $0 + units(for: $1) }
-        // Suma pozycji ≤ 12 — plus nie przekroczy jej (serwer i tak by odmówił).
-        let upper = min(PlanPortions.unitsRange.upperBound, value + (PlanPortions.maxTotalUnits - total))
-        let binding = Binding<Int>(
-            get: { units(for: memberId) },
-            set: { next in
-                // Pierwsze ruszenie utrwala porcje wszystkich (dotąd liczone
-                // z punktu startowego), żeby nie przeskoczyły — migawka PRZED
-                // zapisem, bo `units(for:)` czyta punkt startowy tylko przy
-                // pustym słowniku.
-                if touchedUnits.isEmpty {
-                    touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
-                }
-                touchedUnits[memberId] = next
+    /// Porcja osoby ze steppera. Pierwsze ruszenie utrwala porcje wszystkich
+    /// (dotąd liczone z punktu startowego), żeby nie przeskoczyły — migawka
+    /// PRZED zapisem, bo `units(for:)` czyta punkt startowy tylko przy pustym
+    /// słowniku.
+    private func setUnits(_ next: Int, for memberId: String, allIds: [String]) {
+        // Ta sama krzywa co każda cyfra w aplikacji (`SCMotion.textRoll`).
+        withAnimation(SCMotion.textRoll) {
+            if touchedUnits.isEmpty {
+                touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
             }
-        )
-        return HStack(spacing: 12) {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .tracking(-0.2)
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(PlanPortions.label(units: value))
-                .font(.system(size: 20, weight: .heavy))
-                .tracking(-0.3)
-                .monospacedDigit()
-                .foregroundStyle(Color.scLabel(scheme))
-                .contentTransition(.numericText(value: Double(value)))
-                .frame(minWidth: 34, alignment: .trailing)
-                .accessibilityHidden(true)
-
-            SCStepper(
-                value: binding,
-                range: PlanPortions.unitsRange.lowerBound...max(PlanPortions.unitsRange.lowerBound, upper),
-                step: PlanPortions.stepUnits,
-                accessibilityTitle: allIds.count == 1 ? "Liczba porcji" : "Porcja: \(title)",
-                accessibilityValue: PlanPortions.spokenServings(units: value, plural: PolishPlural.servings),
-                onChange: { _ in didOverrideServings = true }
-            )
+            touchedUnits[memberId] = next
+            didOverrideServings = true
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 10)
-        .frame(minHeight: 54)
     }
 
     /// Porcje łączne w jednym wierszu — zanim lista domowników dojedzie
@@ -997,14 +948,114 @@ struct AddToPlanSheet: View {
         }
         .animation(.smooth(duration: 0.25), value: replacedMeal?.id)
 
-        EditorialPrimaryActionButton(
-            title: ctaTitle,
-            icon: ctaIcon,
-            isEnabled: canSave,
-            isLoading: isSaving,
-            action: { save() }
-        )
-        .animation(.smooth(duration: 0.25), value: ctaTitle)
+        HStack(spacing: 10) {
+            if members.count > 1 {
+                PlanAudienceButton(
+                    members: members,
+                    selection: $selectedParticipants,
+                    me: sessionStore.currentUserId,
+                    onChange: audienceChanged
+                )
+            }
+
+            portionsButton
+
+            EditorialPrimaryActionButton(
+                title: ctaTitle,
+                icon: ctaIcon,
+                isEnabled: canSave,
+                isLoading: isSaving,
+                action: { save() }
+            )
+            .animation(.smooth(duration: 0.25), value: ctaTitle)
+        }
+    }
+
+    /// Łączna liczba porcji pozycji — na przycisku i w nagłówku arkusza.
+    private var portionsTotalUnits: Int {
+        showsPersonalPortions
+            ? eaterIds.reduce(0) { $0 + units(for: $1) }
+            : servings * PlanPortions.unitsPerServing
+    }
+
+    /// Porcje jako szklany przycisk OBOK „Dodaj do planu” (Rafał 4.10.2026:
+    /// „ten sam mechanizm porcji, tylko też jako sheet i button liquid nad
+    /// albo obok — może obok lepiej”): ikona osób i łączna liczba porcji,
+    /// stuknięcie = arkusz porcji (`portionsSheet`). Suma ponad 12 = liczba
+    /// w terakocie, a zapis czeka (`portionsOverLimit`).
+    private var portionsButton: some View {
+        let total = portionsTotalUnits
+        return Button {
+            isPortionsSheetPresented = true
+        } label: {
+            HStack(spacing: 7) {
+                // Porcje = kawałki całości (Rafał 4.10.2026: „ikona jest zła”;
+                // osoby mówi już przycisk „Dla kogo” obok).
+                Image(systemName: "chart.pie.fill")
+                    .font(.system(size: 13, weight: .bold))
+                Text(PlanPortions.label(units: total))
+                    .font(.system(size: 15, weight: .heavy))
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(total)))
+                    .animation(SCMotion.textRoll, value: total)
+            }
+            .foregroundStyle(portionsOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .scChromeGlass(in: Capsule(style: .continuous))
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .disabled(isSaving)
+        .accessibilityLabel("Porcje: \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))")
+        .accessibilityHint("Otwiera porcje domowników")
+        // Arkusz na samym przycisku — ten widok ma już swoje arkusze.
+        .sheet(isPresented: $isPortionsSheetPresented) {
+            portionsSheet
+        }
+    }
+
+    /// Arkusz porcji: ten sam zestaw, co w szczegółach posiłku
+    /// (`SCPortionSummary` + lista osób) — zmiany idą prosto do tego arkusza
+    /// („Gotowe” tylko zamyka). Przed listą domowników albo przy dołączaniu
+    /// do dania w porze — jeden wiersz porcji łącznych.
+    private var portionsSheet: some View {
+        ZStack {
+            SCPageBackground(scheme: scheme)
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    EditorialSheetHeader(
+                        eyebrow: "Porcje",
+                        title: "Kto ile je",
+                        icon: "person.2.fill",
+                        accent: SCPalette.butter,
+                        subtitle: recipe.name,
+                        onClose: { isPortionsSheetPresented = false }
+                    )
+
+                    servingsSection
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 16)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .scSheetFooter {
+                EditorialPrimaryActionButton(
+                    title: "Gotowe",
+                    icon: "checkmark",
+                    isEnabled: !portionsOverLimit
+                ) {
+                    isPortionsSheetPresented = false
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationContentInteraction(.resizes)
+        .dashboardLiquidSheet()
     }
 
     /// „Środa, 24 września · Obiad”. Dopisek „dla całego domu”, gdy ten sam
@@ -1177,11 +1228,19 @@ struct AddToPlanSheet: View {
     /// Arkusz potrafi zostać otwarty przez północ — wtedy zaznaczone „dziś”
     /// staje się „wczoraj” pod ręką.
     private var canSave: Bool {
-        selectedSlot != nil && isEditable(selectedDate) && !isAlreadyPlanned
+        selectedSlot != nil && isEditable(selectedDate) && !isAlreadyPlanned && !portionsOverLimit
+    }
+
+    /// Suma porcji osób ponad limit pozycji (np. dwie osoby po 6 i dołączona
+    /// trzecia) — serwer odrzuciłby zapis, więc przycisk czeka, aż ktoś
+    /// zejdzie z porcją (minus działa zawsze, `PlanPortions.stepped`).
+    private var portionsOverLimit: Bool {
+        guard showsPersonalPortions else { return false }
+        return eaterIds.reduce(0) { $0 + units(for: $1) } > PlanPortions.maxTotalUnits
     }
 
     private func save() {
-        guard let slot = selectedSlot, !isSaving, isEditable(selectedDate), !isAlreadyPlanned else { return }
+        guard let slot = selectedSlot, !isSaving, isEditable(selectedDate), !isAlreadyPlanned, !portionsOverLimit else { return }
         isSaving = true
         let date = selectedDate
         // Zajęty slot podmieniamy, zamiast dokładać obok — drugie „Wspólne”

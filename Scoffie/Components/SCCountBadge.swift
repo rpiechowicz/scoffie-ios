@@ -7,15 +7,12 @@ import SwiftUI
 /// coś w niej jeszcze zostało — trzeba było ją otworzyć, żeby się dowiedzieć.
 /// Plakietka odpowiada na to jedną liczbą: ile produktów czeka na kupienie.
 ///
-/// Obwódka jest w kolorze płótna, nie przezroczysta: plakietka wisi na
-/// krawędzi pigułki i bez odcięcia zlewała się z jej obwódką w jedną plamę.
+/// Bez obwódki (4.10.2026): krążki pod spodem są szkłem bez własnej obwódki,
+/// a kremowy pierścień w kolorze płótna rysował wokół plakietki jasną
+/// obwódkę, której nic wokół nie miało. Od szkła odcina ją kolor i cień.
 struct SCCountBadge: View {
     let count: Int
     var color: Color = SCPalette.terracotta
-    /// Kolor obwódki odcinającej plakietkę od tego, na czym wisi.
-    var ringColor: Color?
-
-    @Environment(\.colorScheme) private var scheme
 
     /// Trzycyfrowe liczniki rozpychają pigułkę szerzej niż sama akcja pod
     /// spodem — „99+” mówi to samo, co „137”, w tym samym miejscu.
@@ -33,11 +30,7 @@ struct SCCountBadge: View {
             .background(
                 Capsule(style: .continuous)
                     .fill(color)
-                    .shadow(color: color.opacity(0.45), radius: 4, x: 0, y: 2)
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(ringColor ?? Color.scCanvas(scheme), lineWidth: 2)
+                    .shadow(color: .black.opacity(0.18), radius: 3, x: 0, y: 1)
             )
             .accessibilityHidden(true)
     }
@@ -52,17 +45,50 @@ extension View {
     func scCountBadge(
         _ count: Int,
         color: Color = SCPalette.terracotta,
-        offset: CGSize = CGSize(width: 6, height: -5)
+        offset: CGSize = CGSize(width: 5, height: -4)
     ) -> some View {
-        overlay(alignment: .topTrailing) {
-            if count > 0 {
-                SCCountBadge(count: count, color: color)
+        modifier(SCCountBadgeModifier(count: count, color: color, offset: offset))
+    }
+}
+
+/// Plakietka STOI w drzewie zawsze (Rafał 4.10.2026: „jak się pojawia i znika
+/// badge zakupów, psuje się animacja”) — jak plakietka na wyspie Gotuj.
+/// Pojawienie i zniknięcie = skala i krycie w miejscu, przy znikaniu trzyma
+/// ostatnią liczbę, a sama liczba roluje się `SCMotion.textRoll`, jak każda
+/// cyfra w aplikacji. Animacje są przypięte do PLAKIETKI — dawne
+/// `.animation(value: count)` na całym przycisku animowało przy każdej
+/// zmianie liczby także krążek pod spodem, a wstawiany widok przeskakiwał.
+private struct SCCountBadgeModifier: ViewModifier {
+    let count: Int
+    let color: Color
+    let offset: CGSize
+
+    /// Ostatnia dodatnia liczba — z nią plakietka gaśnie, zamiast pokazać 0.
+    @State private var shownCount: Int
+
+    init(count: Int, color: Color, offset: CGSize) {
+        self.count = count
+        self.color = color
+        self.offset = offset
+        _shownCount = State(initialValue: max(count, 1))
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .topTrailing) {
+                SCCountBadge(count: shownCount, color: color)
+                    .contentTransition(.numericText(value: Double(shownCount)))
+                    .animation(SCMotion.textRoll, value: shownCount)
+                    .scaleEffect(count > 0 ? 1 : 0.3)
+                    .opacity(count > 0 ? 1 : 0)
+                    .animation(.smooth(duration: 0.28), value: count > 0)
                     .offset(x: offset.width, y: offset.height)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
-                    .contentTransition(.numericText())
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
-        }
-        .animation(.spring(response: 0.34, dampingFraction: 0.72), value: count)
+            .onChange(of: count) { _, new in
+                if new > 0 { shownCount = new }
+            }
     }
 }
 

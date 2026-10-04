@@ -160,6 +160,8 @@ struct RecipeDetailView: View {
     /// (gdy nie ma porcji osób) co 1 — `plannedServings` to liczba całkowita.
     @State private var servingsUnits: Int
     @State private var isAddToPlanPresented = false
+    /// Półarkusz „Kto ile je” spod przyczepionej pigułki porcji.
+    @State private var isPortionsSheetPresented = false
 
     /// Czy użytkownik dotknął steppera na tym ekranie.
     ///
@@ -319,8 +321,6 @@ struct RecipeDetailView: View {
 
     private var look: DetailLook { DetailLook(scheme: scheme) }
 
-    /// Sekcja porcji osób wchodzi w kaskadę jako druga — reszta o krok dalej.
-    private var revealShift: Int { isPortionMode ? 1 : 0 }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -336,34 +336,31 @@ struct RecipeDetailView: View {
                         .padding(.top, 6)
                         .detailReveal(hasAppeared, order: 0)
 
-                    // Porcje osób PRZED makrami: najpierw kto ile je, potem
-                    // co to znaczy dla Twojego dnia.
-                    if isPortionMode, let personalPortions {
-                        portionsSection(personalPortions)
-                            .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 1)
-                    }
+                    // „Kto ile je” nie jest już sekcją tutaj — to pigułka
+                    // przyczepiona nad przyciskami (`portionsPill`), jak
+                    // „Cel dnia” w Planie, z półarkuszem do zmian.
 
                     nutritionSection
                         .padding(.top, 24)
-                        .detailReveal(hasAppeared, order: 1 + revealShift)
+                        .detailReveal(hasAppeared, order: 1)
 
                     if !recipe.preparationSteps.isEmpty {
                         preparationSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 2 + revealShift)
+                            .detailReveal(hasAppeared, order: 2)
                     }
 
                     if !recipe.ingredients.isEmpty {
                         ingredientsSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 3 + revealShift)
+                            .detailReveal(hasAppeared, order: 3)
                     }
 
-                    // Zapas pod dolny pasek: przycisk z marginesami (~72 pt)
-                    // i cień nad nim (`SCEdgeShade.bottomHeight`) — przewinięta
-                    // do końca treść kończy się NAD cieniem, nie w nim.
-                    Color.clear.frame(height: 72 + SCEdgeShade.bottomHeight)
+                    // Oddech nad dolnym paskiem. Sam pasek liczy system
+                    // (`safeAreaBar` niżej): przewinięta do końca treść kończy
+                    // się nad nim przy każdej jego wysokości — także z błędem
+                    // Thermomixa nad przyciskami.
+                    Color.clear.frame(height: 16)
                 }
                 // Szerokość treści przypięta do szerokości arkusza.
                 //
@@ -376,6 +373,12 @@ struct RecipeDetailView: View {
             .scrollPosition($scrollPosition)
             .scrollIndicators(.hidden)
             .ignoresSafeArea(.container, edges: .top)
+            // Dolny pasek akcji natywnie (iOS 26 `safeAreaBar`): same szklane
+            // przyciski, przepis przejeżdża pod nimi, a kończy się nad nimi.
+            // Pod przyciskami tylko natywny efekt krawędzi systemu.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                primaryActionBar
+            }
             // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
             // progu, a nie w każdej klatce przewijania.
             .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -421,9 +424,6 @@ struct RecipeDetailView: View {
             .padding(.trailing, 20)
             .padding(.top, 16)
             .detailChrome(hasAppeared)
-        }
-        .overlay(alignment: .bottom) {
-            primaryActionBar
         }
         .onAppear { applyDebugLaunchOptions() }
         // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
@@ -588,146 +588,229 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// „Kto ile je” — porcja każdego jedzącego ze stepperem co pół porcji.
-    /// Na górze karty pasek podziału garnka w kolorach osób (te same co
-    /// awatary w Planie), pod nim wiersz na osobę: awatar, imię z „TY”, kcal
-    /// JEJ porcji i stepper. Zapis dopiero „Zapisz porcje”, każda osoba
-    /// osobno (`setPortion` z jej tokenem). Bez tokenów (stary cache) — sam
-    /// odczyt i jedno zdanie, co zrobić.
+    /// „Kto ile je” jako PRZYCZEPIONA pigułka nad przyciskami (Rafał
+    /// 4.10.2026: „może jako taki przyczepiony tab na dole jak kcal tab, że
+    /// otworzy się sheet do połowy, gdzie będzie można to modyfikować, i pokaże
+    /// się łączna liczba porcji, którą trzeba ugotować”). Szkło jak pigułka
+    /// „Cel dnia”: awatary jedzących, „Do ugotowania · 3,5 porcji”, strzałka
+    /// w górę. Stuknięcie = półarkusz z podziałem i stepperami
+    /// (`portionsSheet`). Zmiany idą do tego samego szkicu (`draftPortions`),
+    /// a zapis — jak dotąd — „Zapisz porcje”, który pojawia się pod pigułką.
     ///
-    /// Dawniej: goła karta „Rafał (Ty)  − 1,5 +” pod pierścieniami — bez
-    /// awatarów, bez sumy i bez tego, ile to znaczy w kaloriach (Rafał
-    /// 27.09.2026: „nie podoba mi się ten design”).
-    private func portionsSection(_ model: RecipeDetailPortions) -> some View {
+    /// Dawniej sekcja „Kto ile je” w przewijaniu, nad wartościami odżywczymi.
+    private func portionsPill(_ model: RecipeDetailPortions) -> some View {
         let total = PlanPortions.totalUnits(portionUnits)
+        let spoken = PlanPortions.spokenServings(units: total, plural: PolishPlural.servings)
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            DetailSectionHeader(
-                eyebrow: "Razem \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))",
-                title: "Kto ile je",
-                accent: SCPalette.butter
-            ) { EmptyView() }
+        return Button {
+            isPortionsSheetPresented = true
+        } label: {
+            HStack(spacing: 12) {
+                portionsAvatars(model)
 
-            VStack(alignment: .leading, spacing: 8) {
-                DetailCard {
-                    VStack(spacing: 0) {
-                        if model.people.count > 1 {
-                            DetailPortionSplitBar(
-                                segments: model.people.map { person in
-                                    DetailPortionSplitBar.Segment(
-                                        id: person.memberId,
-                                        units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
-                                        color: person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
-                                    )
-                                }
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.top, 16)
-                            .padding(.bottom, 4)
-                            .accessibilityHidden(true)
-                        }
-
-                        ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
-                            portionRow(person, model: model, isFirst: index == 0)
-                        }
-                    }
-                }
-                if !model.isEditable {
-                    Text(PlanPortions.readOnlyMessage)
-                        .font(.system(size: 12.5, weight: .medium))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Do ugotowania")
+                        .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(look.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 4)
+                    Text(spoken)
+                        .font(.system(size: 16, weight: .bold))
+                        .tracking(-0.2)
+                        .monospacedDigit()
+                        .foregroundStyle(look.fg)
+                        .contentTransition(.numericText(value: Double(total)))
+                        .animation(SCMotion.textRoll, value: total)
                 }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(look.muted)
             }
-            .padding(.horizontal, 20)
+            .padding(.leading, 12)
+            .padding(.trailing, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .scChromeGlass(in: shape)
+            .contentShape(shape)
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .accessibilityLabel("Kto ile je, do ugotowania \(spoken)")
+        .accessibilityHint("Otwiera porcje domowników")
+        // Arkusz na samej pigułce, nie na całym ekranie: łańcuch szczegółów
+        // ma już swoje arkusze, a SwiftUI gubi czasem kolejne `.sheet` na
+        // tym samym widoku.
+        .sheet(isPresented: $isPortionsSheetPresented) {
+            portionsSheet(model)
         }
     }
 
-    private func portionRow(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions, isFirst: Bool) -> some View {
-        let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
-        let isViewer = person.memberId == model.viewerId
-        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: units)).kcal.rounded())
-        let avatarSize: CGFloat = 36
-        // Z stepperem VoiceOver czyta wiersz osoby i stepper osobno; bez — jedno zdanie.
-        let spoken = "\(person.name), \(kcal) kilokalorii"
-            + (model.isEditable ? "" : ", \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))")
+    /// Do trzech awatarów jedzących na zakładkę, reszta jako „+N”.
+    private func portionsAvatars(_ model: RecipeDetailPortions) -> some View {
+        let size: CGFloat = 30
+        let shown = Array(model.people.prefix(3))
+        let rest = model.people.count - shown.count
 
-        return HStack(spacing: 12) {
-            HStack(spacing: 12) {
+        return HStack(spacing: -9) {
+            ForEach(shown, id: \.memberId) { person in
                 ProfileAvatar(
                     avatarUrl: person.member?.avatarUrl,
                     displayName: person.name,
-                    size: avatarSize,
+                    size: size,
                     colorIndex: person.member?.avatarColor,
                     seed: person.memberId
                 )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(person.name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .tracking(-0.2)
-                            .foregroundStyle(look.fg)
-                            .lineLimit(1)
-                        if isViewer {
-                            DetailPersonBadge(text: "TY")
-                        }
-                    }
-                    Text(verbatim: "\(kcal) kcal")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(look.muted)
-                        .contentTransition(.numericText(value: Double(kcal)))
-                        .animation(SCMotion.textRoll, value: kcal)
-                }
+                .overlay(Circle().strokeBorder(look.background, lineWidth: 2))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(spoken)
-
-            if model.isEditable {
-                DetailServingsStepper(
-                    value: portionBinding(for: person.memberId),
-                    range: PlanPortions.unitsRange,
-                    label: { PlanPortions.label(units: $0) },
-                    accessibilityName: "Porcja: \(person.name)",
-                    accessibilityValueText: { PlanPortions.spokenServings(units: $0, plural: PolishPlural.servings) },
-                    next: { current, direction in
-                        PlanPortions.stepped(
-                            units: current,
-                            direction: direction,
-                            totalUnits: PlanPortions.totalUnits(draftPortions)
-                        )
-                    }
-                )
-            } else {
-                Text(PlanPortions.label(units: units))
-                    .font(.system(size: 17, weight: .heavy))
-                    .monospacedDigit()
+            if rest > 0 {
+                Text(verbatim: "+\(rest)")
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(look.fg)
-                    .accessibilityHidden(true)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(look.background))
             }
         }
-        .accessibilityElement(children: model.isEditable ? .contain : .combine)
-        .padding(.leading, 16)
-        .padding(.trailing, 12)
-        .padding(.vertical, 12)
-        .overlay(alignment: .top) {
-            // Kreska od tekstu, nie od krawędzi — awatary stoją w jednej kolumnie.
-            if !isFirst {
-                DetailHairline()
-                    .padding(.leading, 16 + avatarSize + 12)
+        .accessibilityHidden(true)
+    }
+
+    /// Półarkusz „Kto ile je”: łączna liczba porcji do ugotowania (duża,
+    /// roluje), podział garnka w kolorach osób i wiersz na osobę ze stepperem
+    /// co pół porcji. Po zmianie w stopce wjeżdża „Zapisz porcje” (Rafał
+    /// 4.10.2026: „daj tam button do zapisu, jak się zmieni stan”), a obok
+    /// krzyżyka „Cofnij zmiany”. Do połowy ekranu, przewijanie rozwija na cały
+    /// (dom z wieloma osobami).
+    private func portionsSheet(_ model: RecipeDetailPortions) -> some View {
+        let hasChanges = !changedPortions.isEmpty
+
+        return ZStack {
+            SCPageBackground(scheme: scheme)
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    EditorialSheetHeader(
+                        eyebrow: "Kto ile je",
+                        title: "Porcje",
+                        icon: "person.2.fill",
+                        accent: SCPalette.butter,
+                        subtitle: recipe.name,
+                        onClose: { isPortionsSheetPresented = false }
+                    ) {
+                        if hasChanges && model.isEditable {
+                            RecipeFilterClearButton(accessibilityLabel: "Cofnij zmiany porcji") {
+                                withAnimation(.smooth(duration: 0.3)) {
+                                    draftPortions = personalPortions?.units ?? [:]
+                                }
+                            }
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                        }
+                    }
+
+                    portionsCard(model)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 16)
+                .animation(.smooth(duration: 0.25), value: hasChanges)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .scSheetFooter {
+                if hasChanges && model.isEditable {
+                    EditorialPrimaryActionButton(
+                        title: "Zapisz porcje",
+                        icon: "checkmark",
+                        isEnabled: portionsSaveFeasible,
+                        isLoading: isSavingServings
+                    ) {
+                        // Ta sama droga co przycisk pod pigułką: zapis każdej
+                        // zmienionej osoby i zamknięcie szczegółów (razem
+                        // z tym arkuszem).
+                        performPrimaryAction()
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.smooth(duration: 0.3), value: hasChanges)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationContentInteraction(.resizes)
+        .dashboardLiquidSheet()
+    }
+
+    /// Kolor osoby — ten sam co jej awatar w Planie.
+    private func portionColor(_ person: RecipeDetailPortions.Person) -> Color {
+        person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
+    }
+
+    /// Porcje osób (4.10.2026, dwie rundy: „ładniej od nowa”, potem „bardziej
+    /// czytelne, ale też ładnie UX”): karta z garnkiem i liczbą do ugotowania
+    /// (`SCPortionSummary`) i lista osób z dużym stepperem (`SCPortionList`,
+    /// `SCPortionRow`). Ten sam zestaw w „Dodaj do planu”
+    /// (`Components/SCPortionKit.swift`).
+    private func portionsCard(_ model: RecipeDetailPortions) -> some View {
+        let total = PlanPortions.totalUnits(portionUnits)
+        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
+        let totalUnits = PlanPortions.totalUnits(draftPortions)
+
+        return VStack(spacing: 14) {
+            SCPortionSummary(
+                segments: model.people.map { person in
+                    SCPortionSummary.Segment(
+                        id: person.memberId,
+                        units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
+                        color: portionColor(person)
+                    )
+                },
+                kcal: kcal,
+                note: !changedPortions.isEmpty && !portionsSaveFeasible
+                    ? "Za dużo porcji naraz — zmniejsz jedną osobę mocniej"
+                    : nil
+            )
+
+            SCPortionList {
+                ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
+                    let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
+                    let saved = personalPortions?.units[person.memberId] ?? PlanPortions.missingEntryUnits
+                    SCPortionRow(
+                        name: person.name,
+                        avatarUrl: person.member?.avatarUrl,
+                        avatarColor: person.member?.avatarColor,
+                        seed: person.memberId,
+                        color: portionColor(person),
+                        units: units,
+                        kcal: Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: units)).kcal.rounded()),
+                        isViewer: person.memberId == model.viewerId,
+                        isChanged: units != saved,
+                        isEditable: model.isEditable,
+                        canDecrement: PlanPortions.stepped(units: units, direction: -1, totalUnits: totalUnits) != nil,
+                        canIncrement: PlanPortions.stepped(units: units, direction: 1, totalUnits: totalUnits) != nil,
+                        showsDivider: index > 0,
+                        onStep: { direction in
+                            guard let next = PlanPortions.stepped(units: units, direction: direction, totalUnits: totalUnits) else { return }
+                            // Ta sama krzywa co każda cyfra w aplikacji.
+                            withAnimation(SCMotion.textRoll) { draftPortions[person.memberId] = next }
+                        }
+                    )
+                }
+            }
+
+            if !model.isEditable {
+                Text(PlanPortions.readOnlyMessage)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(look.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
             }
         }
     }
 
-    /// Stepper osoby pisze do szkicu; brak wpisu = 1 porcja (reguła serwera).
-    private func portionBinding(for memberId: String) -> Binding<Int> {
-        Binding(
-            get: { draftPortions[memberId] ?? PlanPortions.missingEntryUnits },
-            set: { draftPortions[memberId] = $0 }
-        )
+    /// Czy zapis porcji przejdzie osoba po osobie (`PlanPortions.isSequentialSaveFeasible`)
+    /// — przy alokacji ponad 12 jedna osoba musi zejść bardziej.
+    private var portionsSaveFeasible: Bool {
+        PlanPortions.isSequentialSaveFeasible(saved: personalPortions?.units ?? [:], draft: draftPortions)
     }
 
     /// Osoby, których porcja różni się od zapisanej.
@@ -1056,12 +1139,19 @@ struct RecipeDetailView: View {
     // MARK: - Dolny pasek akcji
 
     /// Dolny pasek: jeden przycisk (albo dwa przy przepisie thermomixowym
-    /// z połączonym Cookidoo) na stopce, pod którą treść ginie w miękkim
-    /// gradiencie tła — ta sama stopka co w arkuszach asystenta
-    /// (`AssistantStickyFooter`), zamiast twardej linii nad przyciskiem.
+    /// z połączonym Cookidoo) — SAME szklane przyciski nad treścią, BEZ tła,
+    /// cienia i rozmytego pasa pod nimi. Przewijany przepis jedzie pod
+    /// przyciskami i widać go przez szkło, jak w natywnych aplikacjach iOS 26.
+    /// Rafał (4.10.2026, kolejny raz): „usuń ten shadow pod buttonem, zrób to
+    /// natywnie, aby pokazywało się, co jest pod spodem” — nie wracać do
+    /// płyty, cienia (`SCEdgeShade`) ani pasa (`SCFooterScrim`) w tym miejscu.
     private var primaryActionBar: some View {
-        AssistantStickyFooter(base: look.background) {
+        VStack(spacing: 10) {
             thermomixFeedback
+
+            if isPortionMode, let personalPortions {
+                portionsPill(personalPortions)
+            }
 
             if case .shared = context {
                 HStack(spacing: 10) {
@@ -1070,20 +1160,43 @@ struct RecipeDetailView: View {
                 }
             } else if showsCook {
                 // Makieta RD1/RD2: pełne „Dodaj do planu” / „Zapisz porcje”
-                // mieszczą się na połowie (≈ 121 z 138 pt).
+                // mieszczą się na połowie (≈ 121 z 138 pt). Bez zapisu
+                // „Gotuj” bierze całą szerokość.
                 HStack(spacing: 10) {
-                    planActionButton(title: primaryActionTitle)
+                    if showsPlanAction {
+                        planActionButton(title: primaryActionTitle)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
                     cookButton
                 }
             } else if showsThermomixSplit {
                 HStack(spacing: 10) {
-                    planActionButton(title: splitPlanTitle)
+                    if showsPlanAction {
+                        planActionButton(title: splitPlanTitle)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
                     thermomixButton
                 }
-            } else {
+            } else if showsPlanAction {
                 planActionButton(title: primaryActionTitle)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        // Te same marginesy co `SCSheetFooter`, tylko bez jej tła.
+        .padding(.horizontal, SCPageMetrics.horizontal)
+        .padding(.vertical, 12)
+        // Przycisk wjeżdża, gdy jest co zapisać, i zjeżdża, gdy znów nie ma.
+        .animation(.smooth(duration: 0.3), value: showsPlanAction)
+    }
+
+    /// „Zapisz porcje” stoi tylko wtedy, gdy jest co zapisać (Rafał 4.10.2026:
+    /// „jak button jest zablokowany, to go ukryj, a jak się pokazuje — pokaż”).
+    /// Dawniej stał od wejścia wygaszony. W trakcie zapisu zostaje, żeby nie
+    /// zniknął pod palcem. „Dodaj do planu” (katalog, cudzy przepis) jest
+    /// zawsze — jego blokada to chwilowa praca, a nie brak czegoś do zrobienia.
+    private var showsPlanAction: Bool {
+        if case .planned = context { return isPrimaryActionEnabled || isSavingServings }
+        return true
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
@@ -1104,8 +1217,8 @@ struct RecipeDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(!isPrimaryActionEnabled || isSavingServings)
-        // Wygaszony, a nie ukryty: „Zapisz porcje" ma być widoczne od wejścia,
-        // żeby było wiadomo, co się stanie po ruszeniu steppera.
+        // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
+        // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
         .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
         .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
         .accessibilityLabel(primaryActionTitle)
@@ -1115,8 +1228,12 @@ struct RecipeDetailView: View {
 
     /// Paczka scenariusza w pamięci telefonu — bez niej „Gotuj” nie stoi
     /// (bez wyszarzonych obietnic, §4.1). Cudzy przepis (`.shared`) — nie.
+    /// Posiłek z planu na INNY dzień niż dziś — też nie (D58: „nie ma sensu
+    /// gotować posiłków na jutro / wczoraj / przyszły tydzień”); trwająca
+    /// sesja dalej daje „Gotuj dalej” (`cookSession`). Z katalogu — zawsze.
     private var cookPackage: CookPackage? {
         if case .shared = context { return nil }
+        if case .planned(let day, _) = context, !Calendar.current.isDateInToday(day) { return nil }
         return sessionStore.cookScenarioStore?.package(for: recipe)
     }
 
@@ -1144,8 +1261,10 @@ struct RecipeDetailView: View {
             .foregroundStyle(Color.scPageBase(scheme))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Capsule().fill(SCPalette.terracotta))
-            .overlay(Capsule().strokeBorder(SCPalette.terracotta, lineWidth: 1.2))
+            // Pełna terakota jako szkło („prominent”, Liquid Glass runda 3):
+            // dalej jedyny kryjący przycisk w aplikacji, ale z odblaskiem
+            // i reakcją na dotyk jak przycisk obok.
+            .scChromeGlass(in: Capsule(), tint: SCPalette.terracotta)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -1211,6 +1330,11 @@ struct RecipeDetailView: View {
                 .foregroundStyle(SCPalette.terracotta)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Pod stopką nie ma już tła — zdanie stoi na własnym szkle,
+                // żeby było czytelne nad przewijaną treścią.
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .scChromeGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .transition(.opacity)
         }
     }
@@ -1322,7 +1446,7 @@ struct RecipeDetailView: View {
         case .shared: return !isPreparingPlan && sharedSave != .saving
         case .planned:
             if isPortionMode {
-                return personalPortions?.isEditable == true && !changedPortions.isEmpty
+                return personalPortions?.isEditable == true && !changedPortions.isEmpty && portionsSaveFeasible
             }
             return servingsUnits != initialServings * PlanPortions.unitsPerServing
         }
@@ -1844,55 +1968,7 @@ private struct DetailHairline: View {
 
 // MARK: - Porcje osób
 
-/// Podział garnka: odcinek na osobę, szerokość = jej porcja, kolor = kolor
-/// jej awatara. Odcinki przesuwają się razem ze stepperem.
-private struct DetailPortionSplitBar: View {
-    struct Segment: Identifiable {
-        let id: String
-        let units: Int
-        let color: Color
-    }
 
-    let segments: [Segment]
-
-    private static let gap: CGFloat = 3
-    private static let height: CGFloat = 8
-
-    var body: some View {
-        GeometryReader { proxy in
-            let total = max(1, segments.reduce(0) { $0 + $1.units })
-            let usable = max(0, proxy.size.width - Self.gap * CGFloat(max(0, segments.count - 1)))
-
-            HStack(spacing: Self.gap) {
-                ForEach(segments) { segment in
-                    Capsule()
-                        .fill(segment.color)
-                        .frame(width: usable * CGFloat(segment.units) / CGFloat(total))
-                }
-            }
-        }
-        .frame(height: Self.height)
-        .animation(.snappy(duration: 0.3), value: segments.map(\.units))
-    }
-}
-
-/// „TY” przy imieniu — ta sama plakietka co przy domownikach w Ustawieniach.
-private struct DetailPersonBadge: View {
-    let text: String
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 9.5, weight: .heavy))
-            .tracking(0.8)
-            .foregroundStyle(SCPalette.terracotta)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
-            .fixedSize()
-    }
-}
 
 // MARK: - Stepper porcji
 
@@ -1941,8 +2017,8 @@ private struct DetailServingsStepper: View {
                 adjust(by: 1)
             }
         }
-        .background(Capsule().fill(look.chip))
-        .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
+        // Szklana pigułka jak `SCStepper` (Liquid Glass).
+        .scChromeGlass(in: Capsule())
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityName)

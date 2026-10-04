@@ -61,16 +61,16 @@ class DatesViewModel {
         return selectedDate
     }
     
-    /// Przechodzi do poprzedniego tygodnia
+    /// Przechodzi do poprzedniego tygodnia — od jego poniedziałku.
     func goToPreviousWeek() {
         currentWeekOffset -= 1
-        shiftSelectedDate(byWeeks: -1)
+        selectMondayOfVisibleWeek()
     }
-    
-    /// Przechodzi do następnego tygodnia
+
+    /// Przechodzi do następnego tygodnia — od jego poniedziałku.
     func goToNextWeek() {
         currentWeekOffset += 1
-        shiftSelectedDate(byWeeks: 1)
+        selectMondayOfVisibleWeek()
     }
     
     /// Sprawdza czy data jest dzisiaj lub w przyszłości (można edytować)
@@ -107,9 +107,12 @@ class DatesViewModel {
         selectedDate = Date()
     }
 
-    private func shiftSelectedDate(byWeeks weeks: Int) {
-        if let shifted = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: selectedDate) {
-            selectedDate = shifted
+    /// Nowy tydzień zaczyna się ZAWSZE od poniedziałku (Rafał 4.10.2026),
+    /// także po powrocie strzałkami na bieżący — dziś daje „Wróć do dziś”.
+    /// Dawniej dzień tygodnia przechodził z poprzedniego (środa → środa).
+    private func selectMondayOfVisibleWeek() {
+        if let monday = dates.first {
+            selectedDate = monday
         }
     }
 }

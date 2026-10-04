@@ -156,15 +156,25 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   marginesów”, 1.10.2026). Ruch (`CookLook.swift`): teksty `cookRoll` (`SCMotion.textRoll`), zegary `cookTicking`
   (0,3 s), łuki timerów dojeżdżają liniowo przez sekundę, wejście ekranów `cookReveal` (= `scReveal`), zmiana kroku =
   wszystkie teksty kroku rolują się w miejscu (runda 9 — dawny wjazd opisu z boku odpadł, niżej).
-  Wejście z Kalendarza (D23, EC41): na talerzu „play” w PRAWYM dolnym rogu ZAWSZE, gdy danie ma paczkę scenariusza
-  (`CalendarPlateCooking.ready`) — każdy dzień, każda pora (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
-  z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół, a „następne” ma w niej ptaszek
-  w kolorze pory zamiast kropki i poświaty (`CalendarMealCheck` — cała aplikacja). Po „Wstrzymaj” talerz tego wpisu
+  Wejście z Kalendarza (D23, EC41): na talerzu „play” w PRAWYM dolnym rogu, gdy danie ma paczkę scenariusza
+  (`CalendarPlateCooking.ready`) — TYLKO dziś (D58, 4.10.2026: „nie ma sensu gotować na jutro / wczoraj / przyszły
+  tydzień”; szczegóły posiłku z planu tak samo, z katalogu zawsze, wstrzymane wznawialne w każdy dzień), każda pora
+  (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
+  z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół i stoi TYLKO tam, gdzie da się odhaczyć (dziś i wstecz; 4.10.2026: „bez sensu na przyszłym tygodniu”); ptaszek TYLKO przy zjedzonym,
+  „następne” = sama obwódka w kolorze pory (4.10.2026: „nie dawaj checku w kolorze”, `CalendarMealCheck`). Po „Wstrzymaj” talerz tego wpisu
   planu (przepis + dzień + pora) to PS1 (`.paused`): pierścień kroków zamiast obręczy pory, „OBIAD · GOTUJESZ”,
   „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
   Runda 2 testów (1.10.2026): dok stoi jak dolne menu aplikacji (wyspa 60 pt, 20 pt od boków, na krawędzi
   bezpiecznego obszaru; powierzchnia `cook.dockSurface` — w jasnym motywie ciepła biel, bo płótno = tło strony).
-  Kapsuły: najwyżej DWIE (`CookSession.dockCapsules` — dwa najdawniej włączone timery, wolne miejsce bierze timer
+  Timery w doku (4.10.2026, druga runda): najwyżej DWIE pełne kapsuły (pojedyncza / para, `dockCapsules` limit 2),
+  a KAŻDY kolejny timer = `CookTimerBadge` w rzędzie nad nimi (miejsce dawnej „+N”, `Height.overflowTab`): pierścień
+  w kolorze timera + „12:04 · Ziemniaki”, po czasie na pełnym kolorze, „do włączenia” = ▶ + warunek startu (stuknięcie
+  włącza; reszta stanów otwiera Timery); rząd przewija się w bok. Zwarte kapsuły po równo (pierwsza runda tego dnia)
+  ODPADŁY — przebudowywały parę przy trzecim timerze, czwarty się nie mieścił, trzeciego nie dało się włączyć; nie
+  wracać (tokeny `cookTimerCapsuleCompactMin`/`cookTimerTimeCompact` w scoffie-design są nieużywane).
+  Porcje sesji co 0,5 (`CookSession.portions: Double`, 0,5…12, `clampPortions`; serwer — ocena i wpis „ugotowane” —
+  dostaje całe w górę); teksty przez `CookPortionsText` („na 1,5 porcji”). Stopka powitania: odstępy 12 między kaflami.
+  Dawniej — kapsuły: najwyżej DWIE (`CookSession.dockCapsules` — dwa najdawniej włączone timery, wolne miejsce bierze timer
   do włączenia, też od najstarszego: nowy NIE wypycha kapsuły, która już stoi, tylko idzie do plakietki — runda 5,
   „nie powinien 1 przesuwać”; timer PO CZASIE stoi w doku zawsze; runda 3 cofnęła trójkę), w kolejności kroków, nowa
   wjeżdża z boku, po którym staje; w parze pierścień = przycisk
@@ -331,6 +341,50 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   główny `ScrollView` zakładki melduje kierunek przez `scTracksTabBarCompaction()`; rezerwa
   miejsca pod treścią (`scReservesTabBarSpace()`, WEWNĄTRZ `NavigationStack`) jest stała i schodzi
   do zera przy klawiaturze.
+- Liquid Glass (4.10.2026, wzór: Telegram na iOS 26 — Rafał: „więcej iOS liquid”) = `Components/SCGlass.swift`.
+  Szkło TYLKO na tym, co PŁYWA nad treścią: `scChromeGlass` (czyste `.regular`, bez kryjącej warstwy `scPageBase`
+  0,72 — „matowa plama”, jak w Gotuj runda 6) dla dolnego menu, pola i krążka wysyłania Asystenta (jeden
+  `GlassEffectContainer`), „na dół rozmowy”, pigułki „Cel dnia”, toastu cofania i krążków NA ZDJĘCIU
+  (`SCSheetIconSurface(onImage: true)`: serce, udostępnij, krzyżyk szczegółów, pierścień kroków Gotuj);
+  `scPhotoGlass` (`.clear` + czerń 0,32) dla serca i pigułek na zdjęciu karty karuzeli. Karty, wiersze i pola
+  w przewijaniu zostają w stroju kafla. Czytelność daje `SCScrollEdgeBlur` POD szkłem: treść chowa się —
+  rozmywa i gaśnie w tło — zamiast przebijać ostro: pod paskiem stanu (`SCStatusBarBlur`, jeden w `NavigationMenu`,
+  tylko w górnym bezpiecznym obszarze — niżej są tytuły zakładek i „wstecz”), pod menu (tło `SCFloatingTabBar`)
+  albo od elementu nad menu w dół (pole Asystenta, pigułka Planu — wtedy pas menu gaśnie,
+  `NavigationMenu.ownBottomEdge`, żeby dwa materiały nie dały progu). Własny pas, nie `scrollEdgeEffectStyle` +
+  `safeAreaBar`: zakładki przewijają pod górnym obszarem (`ignoresSafeArea`) i paski stoją w `overlay`.
+  Menu: wybraną zakładkę mówi KOLOR ikony i podpisu (terakota, reszta `scLabel`); neutralna soczewka tylko pod
+  palcem (Rafał: „na active ikona ma mieć kolor, a nie cały state”) — nie wracać do terakotowej pigułki w spoczynku.
+  Runda 2 (4.10.2026): szkło mają też krążki nagłówków (`SCCircleIconLabel` — podświetlony = `tint` akcentu; rząd
+  akcji Planu w `GlassEffectContainer`), krzyżyk i sąsiedzi w KAŻDYM arkuszu (`SCSheetIconSurface`, `onImage` zmienia
+  już tylko kolor glifu), „Wyczyść” (`RecipeFilterClearButton`) i „Wróć do dziś” (szkło w tincie terakoty),
+  pasek szukania Przepisów (`RecipesSearchBar`, jedna grupa) i karta skrótu nad polem Asystenta — w grupie
+  `composerGlass` z polem i „Wyślij” (`glassEffectID`), więc wyrasta z pola i w nie wsiąka. Po przewinięciu dużego
+  tytułu (Przepisy, Ustawienia: `scReportsCompactTitle`) pod paskiem stanu staje szklana kapsuła z tytułem
+  (`SCCompactTitle`, rysuje `NavigationMenu` z `SCTabBarChrome.compactTitles`), a pas rozmycia schodzi pod nią.
+  Toast (`SCToastHost`) świadomie BEZ szkła: wyrasta z Dynamic Island jako czerń i stygnie do koloru — szkło nie
+  zacznie się czernią wyspy, a toast niesie błędy, które mają być czytelne zawsze.
+  Runda 3 (4.10.2026, „wszystkie możliwe buttony w stylu liquid, na każdym sheet, każdy X”): wariant „soft” TO JEST
+  szkło — `SCSoftSurface`/`scSoftCapsule` = `scChromeGlass` w tincie akcentu (0,22 / ciemny 0,30), interaktywne, bez
+  obwódki; idą przez to `SCSoftButton`, `EditorialPrimaryActionButton`, `AssistantPrimaryButton`, `SCDestructiveButton`,
+  `RecipeFilterFooterButton`, akcje szczegółów posiłku. Neutralne szkło: `AssistantGhostButton`,
+  `AssistantIconActionButton`, `AssistantChip`, `SCSoftIconButton` („Wstecz”), `SCStepper`, chipy wyboru
+  (`scChoiceSurface(.chip)`; kafle `.tile` zostają kartami). „Gotuj” = szkło w PEŁNEJ terakocie. Przełączniki: tor płaski,
+  wybrany = szklana soczewka (osoby w „Cel dnia”, osoby w przeglądzie propozycji, „Ten krok / Cały przepis” w Gotuj,
+  „Zamień / Dodaj obok”). Akcent na element stojący NA szkle (przycisk „Wyślij”, „Cofnij” w toaście) = `tint` tego
+  jednego szkła albo zwykłe wypełnienie — bez drugiego szkła z `scSoftSurface` na pierwszym.
+  INTERAKTYWNE szkło (`scChromeGlass(interactive: true)`) TYLKO tam, gdzie widok ma własny gest (dolne menu,
+  pigułka „Cel dnia”) — NIGDY w etykiecie ani kontenerze przycisku: z `.buttonStyle(.plain)` przechwytywało na iOS 26
+  stuknięcie („Dalej” w „Jak działa Asystent” nic nie robiło, 4.10.2026). Reakcja na dotyk = `PlanPressStyle`
+  (`EditorialPrimaryActionButton`, `SCSoftButton` przeszły z `.plain`). Też szkło (4.10): strzałki tygodnia
+  (`EditorialWeekBar`, „Dodaj do planu”), „Wyczyść filtry”, strzałka nagłówka sekcji Przepisów, „Otwórz” u Asystenta,
+  „Ustaw/Policz/Odrzuć/…” w Ustawieniach, chipy „Dla kogo”, kciuki oceny Gotuj. Serce ulubionych = podskok glifu +
+  `ThumbCheer` w terakocie (jak „like” w Gotuj).
+  Gotuj (4.10.2026): szkło na „Wycisz” i „+N min” alarmu, „Gotuj dalej”, stepperze porcji powitania, „Pomiń” w Timerach,
+  pigułkach powodów oceny (`scChoiceSurface`). Przyciski nagłówka arkusza (krzyżyk, serce, „Cofnij/Wyczyść”, „…” w Zakupach) = 38 pt z glifem `scLabel`
+  (`SCSheetIconLabel.size`) — 36 pt z szarym glifem wyglądało na płaskie kółko, 44 było „ciut za duże”.
+  Ciemny dok (`cookDockGlass` w ciemnym = bez szkła, `cookIslandSurface`,
+  kapsuły, plakietka) ŚWIADOMIE bez zmian do decyzji Rafała. Makieta pola we wprowadzeniu Asystenta = strój prawdziwego pola.
 - Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
   (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po
@@ -566,6 +620,15 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `weeklyPlans:addRecipeExtras` na tydzień z Planu (nie wcześniejszy niż bieżący) — tylko
   z katalogu, bo posiłek z planu ma składniki na liście od początku. Dopisane pozycje listy
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
+  „Kto ile je” (posiłek z planu z porcjami osób) to od 4.10.2026 NIE sekcja w przewijaniu, tylko szklana pigułka
+  przyczepiona nad przyciskami (`portionsPill`, jak „Cel dnia”): awatary, „Do ugotowania · 3,5 porcji”, ⌃ →
+  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania; od 4.10.2026 wieczorem
+  „w stylu iOS” — linia `SCPortionSummary` „Razem · 3,5 porcji · kcal” nad listą, BEZ karty i paska podziału; grupa
+  `SCPortionList`/`SCPortionRow` jak w Ustawieniach iOS — awatar 34, imię + „· Ty”, kcal pod spodem, z prawej liczba
+  i SYSTEMOWY `Stepper` (strony wyłączane przez `nil`); zmieniona niezapisana porcja = liczba w terakocie). Ten sam
+  zestaw (`Components/SCPortionKit.swift`) w „Dodaj do planu”. Duży pierścień z kaflami po dwa (wcześniej tego dnia)
+  odpadł — „bardziej czytelne”. Po zmianie w stopce arkusza „Zapisz porcje” i obok krzyżyka „Cofnij zmiany”; ten sam zapis
+  też pod pigułką.
   Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
 - Filtry przepisów v3 (23.09.2026) — makieta Claude Design „Scoffie - Przepisy v3 - Filtry”
@@ -581,7 +644,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „500 · Twój cel · 800” — nigdy napis nad słupkami, bo przecinała go kreska. Aktywny przycisk
   filtrów na Przepisach = wariant „podświetlony”
   (`SCCircleIconLabel(highlighted:)`), nie pełna terakota. Przełącznik „Dopasowane do Ciebie” jest
-  TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
+  TYLKO w Filtrach — od 4.10.2026 jako różdżka OBOK krzyżyka (`RecipeFilterHeader(fitIsOn:)`, włączona = tint
+  szałwii; karta na górze arkusza usunięta), a podtytuł nagłówka mówi „Dopasowane do Ciebie · ukrywa N przepisów” — różdżka w nagłówku Przepisów
   i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
   „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`; od 27.09.2026 STAŁA wysokość 70 pt
   na dwie linie nazwy, miniatura 54 pt W KARCIE z równym odstępem 8 pt od góry, dołu i lewej (wersja „na całą
@@ -614,16 +678,16 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wyklucza. Działy mają ikony i barwy alejek Zakupów (`ProductConstants.departmentIcon/Color`),
   wyniki szukania są pogrupowane po działach.
 - Stopka z przyciskiem na dole arkusza = JEDNA: `SCSheetFooter` / `.scSheetFooter { … }`
-  (`Components/SCSheetFooter.swift`, wzór z szczegółów posiłku): kryjąca płyta w kolorze tła
-  (`scPageBase`, czyli dół `SCPageBackground`) + cień krawędzi NAD nią, bez kreski i bez szkła.
-  Cień to `SCEdgeShade` (`Components/SCEdgeShade.swift`) — JEDEN na górę i dół: górny pasek
-  szczegółów posiłku (84 pt, przyciski stoją na nim) i jego lustro nad stopką (56 pt, zaczyna się
-  na krawędzi płyty, nie wchodzi na przycisk). Rafał: „bardzo mi się podoba shadow górny, zrób taki
-  sam od dołu”. Na przewijanej treści przez `.scSheetFooter` (`safeAreaInset`, cień WLICZONY
-  w wysokość — przewinięta do końca treść kończy się nad nim), pod listą w `VStack` jako ostatnie
-  dziecko — wtedy cień leży na liście i lista MUSI mieć na dole `.padding(.bottom,
-  SCEdgeShade.bottomHeight)`. Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
-  obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już
+  (`Components/SCSheetFooter.swift`). Od 4.10.2026 BEZ TŁA (Rafał, kilka razy: „usuń ten shadow pod buttonem,
+  zrób to natywnie, aby pokazywało się, co jest pod spodem”; „każdy sheet… tylko button liquid i pokazuje się
+  płynnie”): bez kryjącej płyty, bez `SCEdgeShade`, bez rozmytego pasa (`SCFooterScrim` usunięty) — same szklane
+  przyciski. `.scSheetFooter` = systemowe `safeAreaBar(edge: .bottom)`: treść przejeżdża pod przyciskami i kończy
+  się nad nimi; pod przyciskami TYLKO natywny efekt krawędzi systemu (wyłączony na chwilę w #282, przywrócony:
+  „dodaj z powrotem ten natywny shadow, jednak to ma sens”). „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
+  (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i strona końcowa przeglądu propozycji.
+  `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
+  obok liczb = `RecipeFilterFooterButton` („Pokaż” w Filtrach i filtrach kategorii = `iconOnly`: sama LUPA
+  w szklanym krążku 50 pt, od 4.10.2026 — strzałka i ptaszek odrzucone, Rafał: „daj lupkę”). `AssistantStickyFooter` i `AssistantSheetFooter` to już
   tylko nakładki na nią; kreator, przewodnik i wprowadzenie Asystenta też (`SCStepFooter`, runda 14).
 - Przepływy krok po kroku (kreator „Poznajmy się”, przewodnik „Poznaj aplikację”, wprowadzenie Asystenta,
   runda 14) stoją na `Components/SCStepFlow.swift`: `SCStepHeader` (kafel `SCHeaderIconWell` 48, eyebrow
@@ -682,8 +746,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   miejscach; siatka 3 × 5 (`AllergenPicker`) usunięta — nie robić drugiego wyboru alergenów.
 - Pory posiłków = `MealDayTimesCard` (oś dnia z kreatora: ikona pory, godzina na kapsułce, krótka nazwa),
   JEDNA w kroku 4 kreatora i w Ustawieniach → „Posiłki w planie” (osobny `MealTimesSheet` z listą
-  wierszy usunięty 24.09.2026). Stuknięcie w posiłek = koło godzin w arkuszu `.medium`
-  (`MealTimeEditorSheet`). Kreator trzyma godziny lokalnie i wysyła po utworzeniu gospodarstwa
+  wierszy usunięty 24.09.2026). Stuknięcie w posiłek = koło godzin w arkuszu na 1/3 ekranu
+  (`MealTimeEditorSheet`, `.fraction(1/3)`, kompaktowy nagłówek, koło 100–150 pt — 4.10.2026). Kreator trzyma godziny lokalnie i wysyła po utworzeniu gospodarstwa
   (tylko gdy różne od domyślnych), Ustawienia zapisują od razu.
 - Filtry kategorii (23.09.2026): przycisk obok krzyżyka w liście kategorii → `RecipeCategoryFilterSheet`
   (ten sam układ co „Filtry”, akcent kategorii). Aspekty i reguły w `RecipeCategoryFacets` —
@@ -711,6 +775,31 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `RecipeFilterPickerSheet` (`.medium/.large`, nagłówek `compact`, „Wyczyść” tylko swojej grupy, stopka „N z M” +
   „Gotowe”) z TYMI SAMYMI kafelkami, piszącymi na żywo do kopii roboczej rodzica. Wszystkie podarkusze „Filtrów”
   idą jednym `sheet(item: $openPane)`. Filtry kategorii: kuchnia i okazje (`hidesEmptyOptions`) tak samo.
+- Przepisy jak Poczta na iOS 26 (4.10.2026, Rafał: „na dole wyszukiwarka, po lewej button od filtrów”): pływający
+  `RecipesSearchBar` NAD dolnym menu (`safeAreaInset` jak pigułka Planu, zwija się z menu, rozmyty pas od niego w dół —
+  `.recipes` w `NavigationMenu.ownBottomEdge`): szklany krążek filtrów 50 pt (tint + `scCountBadge` przy filtrach) ·
+  szklana kapsuła pola BEZ krzyżyka w środku · przy fokusie krążek z krzyżykiem (czyści i chowa klawiaturę); przy
+  klawiaturze jedzie nad nią. Zwija się z menu skalą 0,84 + jego spadek (0,94 było niewidoczne). Plakietka filtrów
+  stoi w nakładce NAD `GlassEffectContainer` (w grupie była przycinana i przykrywana przez pole).
+  Zakładki kategorii pod tytułem (`RecipeScopeTabs`, 4.10.2026 — świadomy wyjątek od „zawężanie tylko w Filtrach”,
+  prośba Rafała): Wszystkie · Śniadania · Obiady · Kolacje · Przekąski · Ulubione, szklane kapsuły, wybrana w tincie
+  kategorii; TYLKO w stanie wyników (fraza / „Filtry”), także nad pustym stanem — w zwykłym widoku ich nie ma
+  (Rafał 4.10.2026). Zawężają wyniki („kuskus” → Obiady), każda z liczbą trafień; bez frazy i filtrów zakres wraca
+  do „Wszystkie”. Lista wyników przy zmianie zakładki animuje się jak przy szukaniu (wiersze) — wjazd
+  całej listy z boku (#305) odrzucony („ma zostać po staremu”). Animuje się ZAZNACZENIE: kolor stoi w każdej kapsule
+  i tylko PRZENIKA w miejscu (easeInOut 0,24) — przejeżdżająca soczewka odrzucona („bardziej delikatnie”); haptyka. `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
+  nałożył nagłówek, karuzelę i sekcje na siebie).
+  Przejścia (4.10.2026, „przeskakuje, szczególnie z karuzelą”): stany leżą w `ZStack` od góry (w `VStack` wchodzący
+  stał pod wychodzącym i podskakiwał); zwykły widok liczy się z `browseRecipes` (dieta + filtry kategorii, BEZ frazy
+  i „Filtrów”) i STOI pod wynikami przezroczysty (karuzela nie buduje się od nowa), zwijany do zera po zgaśnięciu
+  (`browseLayerCollapsed`); jeden ruch `RecipesView.stateMotion`. Pusto w wynikach = `RecipeNoResultsView` (bez karty
+  i bez nagłówka „0 przepisów”: szklany krążek powodu z podskokiem, „Nic dla „fraza””, akcje w szkle — najpierw
+  „Wszystkie kategorie · N”, „Pokaż mimo diety”, potem „Wyczyść filtry / frazę”).
+  Na górze sam `EditorialPageHeader("Przepisy")` (`EditorialRecipesHeader` usunięty). Fraza ALBO filtry z „Filtrów”
+  = STAN WYNIKÓW, jeden dla obu: `RecipeResultsHeader` (etykieta, duża liczba, „fraza” · filtry, szklane „Wyczyść”)
+  i JEDNA płaska lista `RecipeRowStack` — bez karuzeli i sekcji („nie może być mocnego podziału na sekcje”); przy
+  frazie najpierw nazwy zaczynające się nią, potem słowo, reszta nazw, sam opis. Dieta z profilu i filtry jednej
+  kategorii zostają w zwykłym widoku (filtry kategorii = plakietka na strzałce sekcji).
 - Karuzela na Przepisach: karta 330 pt (nie 420 z makiety) — zdjęcia są kwadratowe i przy 420
   `scaledToFill` skalował je do wysokości, przybliżając talerz. Kolejność kart jest ZAMROŻONA
   (`featuredOrder`) między ułożeniami (wyszukiwanie, filtry, dopasowanie, doba, katalog): ranking
@@ -769,7 +858,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   (`SlotTileLayout`: 1–2 poziome w rzędzie, 3 pionowe obok siebie, 4 = 2 × 2 poziome, 5–6 = 3 kolumny pionowe;
   ikona w kolorze pory, nazwa, godzina z `mealSlotSchedule` — i NIC więcej (runda 20: danie w kaflach „brzydkie”); podmianę mówi JEDNA karta „ZAMIENISZ · danie” ze zdjęciem nad zdaniem stopki;
   wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
-  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = JEDEN wiersz: „Porcje”, rolująca liczba, `SCStepper`. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
+  podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = szklany przycisk z liczbą porcji OBOK „Dodaj do planu” (`portionsButton`) → arkusz
+  `portionsSheet` z `SCPortionSummary` + listą `SCPortionRow` (`Components/SCPortionKit.swift` — ten sam zestaw co
+  arkusz porcji w szczegółach, 4.10.2026; linia „Razem” + wiersze z systemowym `Stepper`); suma ponad 12 = minus działa, zapis czeka (`portionsOverLimit`); jeden wiersz
+  porcji łącznych tylko przed listą domowników / przy dołączaniu do dania w porze. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,
   nie `stroke` (clip zjadał pół obwódki). `EditorialPrimaryActionButton` roluje tytuł (`numericText`) —
@@ -806,20 +898,33 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Powrót do bieżącego tygodnia w pasku dni = SAM krążek z ikoną cofania (`SCWeekTodayButton`, 26 pt jak strzałki,
   terakota soft; 27.09.2026) — pigułka „↩ Wróć do dziś” zabierała miejsce i podpis tygodnia malał. Jeden komponent
   w pasku Planu/Kalendarza (`EditorialWeekBar`) i w „Dodaj do planu”.
-- Asystent w nagłówku Planu = pigułka „✦ Ułóż” (`PlanAssistantPill`, soft, z podpisem), nie
-  podświetlone kółko z iskierkami. Karty pustego tygodnia nad osią dnia NIE MA (27.09.2026, „usuń ten
-  design”) — pusty tydzień z choć jednym dniem do zaplanowania = pigułka ODDYCHA (`invites:`, poświata
-  pod kapsułą, krycie ≤ 0,21, skala 1,028 — dobrane między „za mocno” a „ciut mocniej”, okres 2,6 s jak `attentive` w `SCLivingMark`, `TimelineView`, staje na
-  niewybranej zakładce, przy Reduce Motion stoi w połowie). Odstęp pasek dni → nazwa dnia = 14 pt
-  w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Pigułka otwiera `PlanAssistantIntroSheet`
-  („Ułożę Ci ten tydzień”): jedno zdanie, trzy `SCTag` w jednym wierszu (sprawdzone w planerze — lista
-  w komentarzu pliku; bez „kilku sekund”, „do 30 minut”, „sezonowych”), podgląd tygodnia w stroju
-  `ProposalRecap` z dań `AssistantIntroDish.week` (dieta i alergeny z Ustawień, bez powtórek) i JEDEN
-  przycisk „Ułóż z Asystentem” — „Wolę ułożyć sam” dublowało krzyżyk. Podgląd „wow” (runda 2): tydzień
-  SKŁADA SIĘ na oczach (szkielet → krążki wskakują sprężyną, nazwa pisze się `SCTypedText`, ptaszek
-  w szałwii, licznik posiłków roluje, `SCLivingMark` „myśli” i podskakuje), potem pętla ZAMIANY co ~3,4 s
-  (dzień w tincie terakoty, kręcące się strzałki, danie z `AssistantIntroDish.spares` przenika, nazwa roluje)
-  — to obietnica „każde danie możesz potem zamienić”. Reduce Motion = gotowy tydzień, bez pętli.
+- Nagłówek Planu = koszyk (z plakietką liczby do kupienia) i „…”. Pigułkę „✦ Ułóż” i jej arkusz „Ułożę Ci ten
+  tydzień” (`PlanAssistantPill`, `PlanAssistantIntroSheet`) USUNIĘTO 4.10.2026 na prośbę Rafała — do Asystenta
+  prowadzi zakładka i „Zaplanuj tydzień z asystentem” w „…”; nie wracać. Nagłówek dnia na osi = nazwa dnia
+  i „DZIŚ” — plakietka „3 z 5” (kropki pór, `SCPipsBadge`) też usunięta. Karty pustego tygodnia nad osią NIE MA.
+  Odstęp pasek dni → nazwa dnia = 14 pt w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Plakietka
+  `scCountBadge` bez kremowej obwódki (krążki są szkłem) i bez `GlassEffectContainer` wokół koszyka — grupa
+  szkła nie może trzymać czegoś, co wystaje poza krążek. Kalendarz też bez plakietki „2 z 3” (4.10.2026).
+  Pusta pora (`PlanTimelineEmptyRow`, 4.10.2026) = przerywany obrys z ikoną pory w jej kolorze, nazwą pory i szklanym
+  „+” w kolorze pory — bez „Nic nie zaplanowano” / „Wybierz przepis” (powtarzały się w każdym wierszu). Obrys 56 pt, ikona
+  i „+” 35 pt (52 „za małe”, 60 „za duże”). Strzałki
+  i gest tygodnia (Plan, Kalendarz) zaznaczają ZAWSZE poniedziałek nowego tygodnia (`DatesViewModel`); dziś daje
+  „Wróć do dziś”. Plan i Kalendarz mają OSOBNE tygodnie i dni (4.10.2026: „nie mogę tu przewijać i tam się
+  zmienia”): Plan i jego arkusze — `SessionStore.datesViewModel`, Kalendarz — `calendarDatesViewModel` wstrzyknięty
+  w `NavigationMenu.page(.calendar)`. Socket słucha jednego tygodnia, więc wejście na zakładkę woła
+  `MealCalendarStore.observeWeek` (inny tydzień = jedno odświeżenie). Loader: kafle dni to szkło w jednym
+  `GlassEffectContainer`, kolor dnia wznosi się w szkle. Wiersz przepisu na listach (`EditorialRecipeRow`) = „min · kcal”, bez białka. Przełącznik osób
+  w arkuszu „Cel dnia” ma wysokość krzyżyka (`SCSheetIconLabel.size`).
+- „Dla kogo” w „Wybierz przepis” i „Dodaj do planu” (4.10.2026) = JEDEN mechanizm
+  (`WeeklyPlan/Components/PlanAudiencePicker.swift`): szklany `PlanAudienceButton` obok przycisku zapisu (awatary
+  wybranych / domek) → SYSTEMOWE menu iOS (od 4.10.2026 wieczorem, „uprościć”): `Toggle` „Cały dom”, sekcja „Osoby”
+  z ptaszkami, `menuActionDismissBehavior(.disabled)` — zostaje otwarte przy zaznaczaniu kilku; wszystkie = „Cały
+  dom”. Arkusz `PlanAudienceSheet` usunięty. Chipy w przewijaniu
+  „Dodaj do planu” odpadły. Porcje w „Dodaj do planu” — ikona `chart.pie.fill`. Pusty stan Zakupów =
+  `ShoppingEmptyHero` (szklany koszyk, wokół działy sklepu w swoich kolorach, unoszą się).
+- Zakupy (4.10.2026): pasek postępu, który zjedzie pod górę, ma przypiętą kopię na szkle (`pinnedProgress`,
+  pomiar `frame(in: .scrollView)`); „Na dziś” to NIE wiersz listy, tylko szklany przycisk przyklejony do dołu
+  (`todayButton` w `.scSheetFooter`, ten sam `ShoppingTodayRow`).
 - Puste stany Zakupów (`ProductsView`, 24.09.2026 — „design jest stary, uspójnij”) stoją na `RecipeListEmptyState` (ma teraz opcjonalny `eyebrow`): tydzień bez planu = „LISTA ZAKUPÓW · Tydzień bez planu” + „Ułóż z Asystentem” (przełącza zakładkę i zamyka arkusz) i „Wróć do Planu”; plan jest, lista pusta = „Lista jest pusta” bez akcji; „Na dziś” bez produktów i otwarta rewizja bez nowych = ptaszek w szałwii („Na dziś masz wszystko” + „Pokaż całą listę”); pusta historia — ten sam klocek. Karta z koszykiem 78 pt i dwoma szarymi chipami usunięta.
 - Kalendarz bez linii pod talerzykami (runda 9: „Tym kończysz dzień”, „Następny: …”, „Potem: …” —
   „tego nie potrzebujemy”; `CalendarDayLine`/`CalendarDayNote` usunięte, wysokość idzie na talerz).
@@ -847,12 +952,20 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Świadomie bez kafelka: `AddToPlanSheet` (tę rolę gra zdjęcie dania), `AssistantOptionsStorySheet`
   (pełne zdjęcie jak szczegóły posiłku), `AssistantHowItWorksView` (przepływ kroków). Nowy arkusz =
   od razu z `icon:`.
+- Nagłówek arkusza = JEDEN, `EditorialSheetHeader` (4.10.2026, Rafał: „1:1 wszędzie tak samo — globalny komponent
+  ze slotami”): `icon` albo `leading` (własny widok, np. zdjęcie dania w „Dodaj do planu”), `eyebrow` (pusty = bez
+  wiersza), `title`, `subtitle`, `accessory` (akcje obok krzyżyka), krzyżyk `SCSheetCloseButton`, `compact`.
+  `ShoppingSheetHeader` i `AssistantSheetHeader` to nakładki na niego; arkusz wyjścia z Gotuj też na nim (krzyżyk =
+  „Gotuj dalej”). Własny układ mają tylko arkusze ze zdjęciem na całą górę (szczegóły posiłku, przegląd propozycji).
+  Krążki nagłówka = czyste szkło + miękki cień (jak natywne szklane przyciski iOS 26); jasny tint z 4.10 robił
+  z nich płaskie guziki „po staremu” — nie wracać. Zakupy: pasek nawigacji SCHOWANY (`.toolbar(.hidden)`), pusty
+  pasek łapał stuknięcia w krzyżyk i „…” mimo `NavBarHitTestPassthrough`.
 - Wspólne kontrolki (runda 8): nagłówek arkusza = `EditorialSheetHeader` z opcjonalnym `icon`
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
   gospodarstwo). Pole szukania = `SCSearchField` (kapsuła 44 pt, krzyżyk, obwódka przy fokusie; przy
-  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — jedyny wyjątek to pływające pole
-  rozmów Asystenta. Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
+  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — wyjątki to pływające pole
+  rozmów Asystenta i pasek szukania Przepisów (`RecipesSearchBar`). Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
   Podpowiedź szukania kategorii: `RecipesConstants.searchPrompt(for:)` („Szukaj w śniadaniach”, nie „w śniadania”).
 - Po audycie spójności (runda 8, 23.09.2026, 26 punktów): akcja niszcząca = `SCDestructiveButton`
   (soft kapsuła w ciepłej czerwieni: wyloguj, usuń konto, opuść gospodarstwo, odłącz Cookidoo/Zdrowie);
@@ -870,7 +983,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   plan i lista zakupów”; domownicy: sama tożsamość — awatar, imię, plakietki „TY” / „WŁAŚCICIEL”
   (dieta i alergeny usunięte w rundzie 10: „to tu nie ma sensu”); zaproszenie (link jednorazowy, 7 dni)
   i „Opuść gospodarstwo” PRZYPIĘTE w stopce arkusza (`scSheetFooter`, runda 10) — od 23.09 zaproszenie
-  to dwuwierszowy przycisk „Zaproś domownika · Link dla jednej osoby · ważny 7 dni” NAD „Opuść”. Wcześniej: nazwa w nagłówku
+  to dwuwierszowy przycisk „Zaproś domownika · Link dla jednej osoby · ważny 7 dni” NAD „Opuść”; od 4.10.2026
+  zaproszenie to OSTATNI wiersz karty „Domownicy” (`inviteRow`: przerywane kółko z plusem w miejscu awatara, tytuł
+  w terakocie, warunki linku, szklany krążek udostępniania), a w stopce zostaje samo „Opuść”. Wcześniej: nazwa w nagłówku
   z ołówkiem obok krzyżyka (`EditorialSheetHeader` ma opcjonalne `accessory`; zmienia właściciel
   przez `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
   `households:findById`), zaproszenie jako wiersz listy (link 7 dni), „Opuść” na dole. NIC więcej — Rafał:
@@ -882,7 +997,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   są 1:1 ze stroną (scoffie-web `src/pages/{privacy,terms}`); po zmianie — Android
   `python scripts/gen-legal-content.py`.
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak|plan-ulos|plan-asystent(-dom)` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
 - Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień

@@ -20,6 +20,12 @@ final class SCTabBarChrome {
     /// Klawiatura zasłania pasek — treść nie rezerwuje pod nim miejsca,
     /// inaczej pole asystenta wisiałoby 70 pt nad klawiaturą.
     var isKeyboardVisible = false
+    /// Tytuł do kapsuły pod paskiem stanu (`SCCompactTitle`) dla zakładek,
+    /// których duży tytuł zjechał już pod górną krawędź.
+    var compactTitles: [DashboardTab: String] = [:]
+    /// Ostatnie liczby pigułki „Cel dnia” z aktywnej zakładki — pigułka
+    /// wchodzącej zakładki rośnie od nich do swoich (`PlanDayGoalBar`).
+    var goalSnapshot: PlanDayGoalSnapshot?
     /// Czas ostatniego ruchu klawiatury (z powiadomienia) — rezerwa schodzi
     /// i wraca w tym samym tempie i tej samej krzywej co klawiatura.
     var keyboardDuration: Double = 0.25
@@ -66,11 +72,13 @@ struct SCTabBarItem: Identifiable {
 /// o jedną czwartą i węższy o ~60 pt — czyta się jako TEN SAM pasek, który
 /// zszedł z drogi treści, a nie jako inny element.
 ///
-/// Dotyk jest JEDEN na cały pasek, jak w systemowym pasku z iOS 26: pigułka
-/// idzie za palcem (stuknięcie, przeciągnięcie w lewo i w prawo), a zakładka
-/// zmienia się po puszczeniu. Pozycje nie są przyciskami — nie ma stylu
-/// wciśnięcia, `matchedGeometryEffect` ani osobnych animacji na ikonach,
-/// które wcześniej nakładały się na siebie przy szybkim przełączaniu.
+/// Dotyk jest JEDEN na cały pasek, jak w systemowym pasku z iOS 26: soczewka
+/// pojawia się pod palcem i idzie za nim (stuknięcie, przeciągnięcie w lewo
+/// i w prawo), a zakładka zmienia się po puszczeniu. W spoczynku soczewki nie
+/// ma — wybraną zakładkę mówi kolor ikony i podpisu. Pozycje nie są
+/// przyciskami — nie ma stylu wciśnięcia, `matchedGeometryEffect` ani
+/// osobnych animacji na ikonach, które wcześniej nakładały się na siebie
+/// przy szybkim przełączaniu.
 ///
 /// Rezerwa pod treścią (`reservedHeight`) jest STAŁA, liczona od pełnego
 /// paska: pasek pływa nad treścią, a treść nie skacze przy każdym zwinięciu.
@@ -88,6 +96,10 @@ struct SCFloatingTabBar: View {
     let items: [SCTabBarItem]
     @Binding var selection: DashboardTab
     let isCompact: Bool
+    /// Rozmyty pas pod paskiem. Wyłącza go zakładka, która nad paskiem ma
+    /// własny pływający element i rysuje pas od niego w dół (pole asystenta,
+    /// pigułka „Cel dnia”) — dwa materiały na sobie dałyby widoczny próg.
+    var showsEdgeBlur: Bool = true
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -123,10 +135,16 @@ struct SCFloatingTabBar: View {
             let highlighted = highlightedIndex(slot: slot)
 
             ZStack(alignment: .leading) {
+                // Soczewka TYLKO pod palcem, jak w systemowym pasku iOS 26:
+                // w spoczynku wybraną zakładkę mówi sam kolor ikony
+                // i podpisu (Rafał, 4.10.2026: „na active ikona ma mieć
+                // kolor, a nie cały state”). Neutralna, nie terakotowa —
+                // kolor należy do zakładki, którą palec właśnie wskazuje.
                 Capsule(style: .continuous)
-                    .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.2 : 0.13))
+                    .fill(Color.scLabel(scheme).opacity(scheme == .dark ? 0.12 : 0.07))
                     .frame(width: slot, height: proxy.size.height - 8)
-                    .scaleEffect(dragX == nil ? 1 : 1.06)
+                    .scaleEffect(dragX == nil ? 0.9 : 1.06)
+                    .opacity(dragX == nil ? 0 : 1)
                     .offset(x: pillCenter(slot: slot, width: proxy.size.width) - slot / 2)
 
                 HStack(spacing: 0) {
@@ -141,15 +159,21 @@ struct SCFloatingTabBar: View {
             .gesture(touch(slot: slot))
         }
         .frame(height: isCompact ? Self.compactHeight : Self.expandedHeight)
-        // To samo szkło co pigułka „Cel dnia" i pole asystenta: warstwa tła
-        // pod szkłem przygasza przelatującą treść do rozmytej plamy, odblaski
-        // zostają na szkle.
-        .glassEffect(
-            .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
-            in: .capsule
-        )
-        .background(Color.scPageBase(scheme).opacity(0.72), in: .capsule)
+        // Czyste Liquid Glass (`scChromeGlass`), interaktywne jak systemowy
+        // pasek. Przelatującą treść gasi rozmyty pas POD paskiem (niżej),
+        // a nie kryjąca warstwa w szkle.
+        .scChromeGlass(in: .capsule, interactive: true)
         .padding(.horizontal, isCompact ? Self.compactSideMargin : Self.sideMargin)
+        // Treść chowa się pod paskiem jak w Telegramie: rozmywa się i gaśnie
+        // w tło strony, zanim dojdzie do szkła. Pas sięga 28 pt nad pasek
+        // i w dół do krawędzi ekranu; zwinięty pasek zabiera go ze sobą.
+        .background(alignment: .top) {
+            if showsEdgeBlur {
+                SCScrollEdgeBlur(edge: .bottom)
+                    .padding(.top, -28)
+                    .ignoresSafeArea(.container, edges: .bottom)
+            }
+        }
         .animation(compaction, value: isCompact)
         // Zmiana spoza paska (asystent → Plan, powiadomienie): pigułka
         // dojeżdża tą samą sprężyną, co po puszczeniu palca.
@@ -230,7 +254,9 @@ struct SCFloatingTabBar: View {
                 .opacity(isCompact ? 0 : 1)
                 .clipped()
         }
-        .foregroundStyle(selected ? SCPalette.terracotta : Color.scMuted(scheme))
+        // Na czystym szkle nieaktywne ikony mają pełny kolor tekstu —
+        // przygaszone `scMuted` ginęło na jasnej treści pod paskiem.
+        .foregroundStyle(selected ? SCPalette.terracotta : Color.scLabel(scheme))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Kolor i wypełnienie symbolu przeskakują razem z pigułką — bez
         // własnej animacji, która ciągnęłaby się za palcem.

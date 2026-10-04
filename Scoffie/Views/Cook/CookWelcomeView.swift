@@ -123,7 +123,7 @@ enum CookWelcomeDrawer {
 /// — jedna pod drugą nie mieściły się z resztą powitania bez przewijania).
 struct CookWelcomeFooter: View {
     let session: CookSession
-    let onPortions: (Int) -> Void
+    let onPortions: (Double) -> Void
     let onOpen: (CookSheet) -> Void
     let onStart: () -> Void
 
@@ -132,10 +132,12 @@ struct CookWelcomeFooter: View {
 
     var body: some View {
         SCSheetFooter(horizontalPadding: SCCook.Spacing.page, reservesShade: true) {
-            VStack(spacing: 8) {
+            // 12 między kaflami (było 8 — Rafał 4.10.2026: „większy space
+            // pomiędzy kaflami”).
+            VStack(spacing: 12) {
                 servingsCard
                     .cookReveal(hasAppeared, order: 3)
-                HStack(spacing: 8) {
+                HStack(spacing: 12) {
                     drawerButton(.ingredients)
                     if !session.scenario.tips.isEmpty {
                         drawerButton(.tips)
@@ -204,7 +206,7 @@ struct CookWelcomeFooter: View {
     private func drawerSummary(_ kind: CookWelcomeDrawer) -> String {
         switch kind {
         case .ingredients:
-            "\(session.package.ingredients.count) · na \(PolishPlural.servingsAccusative(session.portions))"
+            "\(session.package.ingredients.count) · na \(CookPortionsText.accusative(session.portions))"
         case .tips:
             "\(session.scenario.tips.count) \(PolishPlural.form(session.scenario.tips.count, one: "rada", few: "rady", many: "rad"))"
         }
@@ -226,10 +228,10 @@ struct CookWelcomeFooter: View {
         let shape = RoundedRectangle(cornerRadius: SCCook.Radius.tile, style: .continuous)
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Gotujesz \(PolishPlural.servingsAccusative(session.portions))")
+                Text("Gotujesz \(CookPortionsText.accusative(session.portions))")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.scLabel(scheme))
-                    .contentTransition(.numericText(value: Double(session.portions)))
+                    .contentTransition(.numericText(value: session.portions))
                 Text(servingsCaption)
                     .font(.system(size: 13))
                     .foregroundStyle(Color.scMuted(scheme))
@@ -274,35 +276,38 @@ struct CookRecipeFacts {
     }
 }
 
-/// Stepper porcji z powitania — wygląd steppera ze szczegółów przepisu
-/// (przyciski 40 × 36, liczba 16 heavy) na żetonach aplikacji.
+/// Stepper porcji z powitania — co pół porcji (4.10.2026), od 0,5 do 12,
+/// na szklanej pigułce jak `SCStepper`.
 struct CookPortionStepper: View {
-    let value: Int
-    let onChange: (Int) -> Void
+    let value: Double
+    let onChange: (Double) -> Void
 
     @Environment(\.colorScheme) private var scheme
 
+    private var canDecrement: Bool { value > CookSession.portionStep }
+    private var canIncrement: Bool { value < Double(CookSession.maxPortions) }
+
     var body: some View {
         HStack(spacing: 0) {
-            stepButton("minus", enabled: value > 1, label: "Mniej porcji") { onChange(value - 1) }
-            Text("\(value)")
+            stepButton("minus", enabled: canDecrement, label: "Mniej porcji") { onChange(value - CookSession.portionStep) }
+            Text(CookPortionsText.number(value))
                 .font(.system(size: 16, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(Color.scLabel(scheme))
-                .frame(minWidth: 28)
-                .contentTransition(.numericText(value: Double(value)))
-            stepButton("plus", enabled: value < CookSession.maxPortions, label: "Więcej porcji") { onChange(value + 1) }
+                .frame(minWidth: 34)
+                .contentTransition(.numericText(value: value))
+            stepButton("plus", enabled: canIncrement, label: "Więcej porcji") { onChange(value + CookSession.portionStep) }
         }
-        .background(Capsule().fill(Color.scChipBg(scheme)))
-        .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+        // Szklana pigułka jak `SCStepper` (Liquid Glass runda 3).
+        .scChromeGlass(in: Capsule())
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Liczba porcji")
-        .accessibilityValue(PolishPlural.servings(value))
+        .accessibilityValue(CookPortionsText.spoken(value))
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: if value < CookSession.maxPortions { onChange(value + 1) }
-            case .decrement: if value > 1 { onChange(value - 1) }
+            case .increment: if canIncrement { onChange(value + CookSession.portionStep) }
+            case .decrement: if canDecrement { onChange(value - CookSession.portionStep) }
             @unknown default: break
             }
         }
@@ -320,6 +325,23 @@ struct CookPortionStepper: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.35)
         .accessibilityLabel(label)
+    }
+}
+
+/// Porcje sesji słowami — „2 porcje”, „1,5 porcji” (ułamek z dopełniaczem),
+/// w bierniku „na 2 porcje” / „na 1,5 porcji”. Przez jednostki porcji
+/// planu (`PlanPortions`), żeby Gotuj mówił tak samo jak Plan.
+enum CookPortionsText {
+    static func number(_ portions: Double) -> String {
+        PlanPortions.label(units: PlanPortions.units(fromServings: portions))
+    }
+
+    static func spoken(_ portions: Double) -> String {
+        PlanPortions.spokenServings(units: PlanPortions.units(fromServings: portions), plural: PolishPlural.servings)
+    }
+
+    static func accusative(_ portions: Double) -> String {
+        PlanPortions.spokenServings(units: PlanPortions.units(fromServings: portions), plural: PolishPlural.servingsAccusative)
     }
 }
 
@@ -371,7 +393,7 @@ struct CookWelcomeDrawerSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetHeader(
-                eyebrow: drawer == .ingredients ? "NA \(PolishPlural.servingsAccusative(session.portions).uppercased(with: Locale(identifier: "pl_PL")))" : "OD KUCHARZA",
+                eyebrow: drawer == .ingredients ? "NA \(CookPortionsText.accusative(session.portions).uppercased(with: Locale(identifier: "pl_PL")))" : "OD KUCHARZA",
                 title: drawer == .ingredients ? "Składniki" : "Rady kucharza",
                 icon: drawer == .ingredients ? "basket" : "lightbulb",
                 accent: drawer == .ingredients ? SCPalette.terracotta : SCPalette.butter,

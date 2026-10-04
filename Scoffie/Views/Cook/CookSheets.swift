@@ -208,8 +208,7 @@ private struct CookTimerRow: View {
                         .foregroundStyle(Color.scMuted(scheme))
                         .padding(.horizontal, 14)
                         .frame(height: 34)
-                        .background(Capsule().fill(Color.scChipBg(scheme)))
-                        .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                        .scChromeGlass(in: Capsule())
                         .contentShape(Capsule())
                         .scTapHeight(44, drawn: 34)
                 }
@@ -416,7 +415,13 @@ struct CookIngredientsSheet: View {
             .foregroundStyle(selected ? Color.scLabel(scheme) : Color.scMuted(scheme))
             .frame(maxWidth: .infinity)
             .frame(height: SCCook.Height.segment)
-            .background(Capsule().fill(selected ? SCCook.Palette.badge(scheme) : .clear))
+            // Wybrany zakres = szklana soczewka na płaskim torze (Liquid
+            // Glass runda 3), jak przełączniki iOS 26.
+            .background {
+                if selected {
+                    Color.clear.scChromeGlass(in: Capsule())
+                }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

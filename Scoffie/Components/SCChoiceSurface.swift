@@ -34,17 +34,30 @@ struct SCChoiceSurface<S: InsettableShape>: ViewModifier {
         }
     }
 
+    /// Chip = Liquid Glass (runda 3, 4.10.2026): wybrany w tincie akcentu,
+    /// niewybrany — samo szkło. Kafel (`.tile`) zostaje w stroju karty: niesie
+    /// zdjęcie i liczby, a w siatce stoi ich kilkanaście.
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .background(
-                shape.fill(isOn ? onFill : (offFill ?? Color.scChipBg(scheme)))
-            )
-            .overlay(
-                shape.strokeBorder(
-                    isOn ? accent.opacity(0.45) : Color.scTileStroke(scheme),
-                    lineWidth: isOn ? 1.2 : 1
+        switch style {
+        case .chip:
+            content
+                .scChromeGlass(
+                    in: shape,
+                    tint: isOn ? accent.opacity(scheme == .dark ? 0.3 : 0.22) : nil
                 )
-            )
+        case .tile:
+            content
+                .background(
+                    shape.fill(isOn ? onFill : (offFill ?? Color.scChipBg(scheme)))
+                )
+                .overlay(
+                    shape.strokeBorder(
+                        isOn ? accent.opacity(0.45) : Color.scTileStroke(scheme),
+                        lineWidth: isOn ? 1.2 : 1
+                    )
+                )
+        }
     }
 }
 

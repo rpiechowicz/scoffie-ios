@@ -292,8 +292,8 @@ private struct AssistantIntroHelloPage: View {
 /// Pole wiadomości z przykładami, które piszą się po kolei — ilustracja, nie
 /// kontrolka: nie przyjmuje fokusu, a do VoiceOver trafia jako jedna lista
 /// przykładów. Wygląd prawdziwego pola (`AssistantView.composerField`):
-/// kapsuła 50 pt w `AssistantLook.input`, a obok osobny krążek wysyłania
-/// w wariancie „soft”.
+/// szklana kapsuła 50 pt, obok szklany krążek wysyłania w tincie terakoty,
+/// oba w jednej grupie szkła.
 private struct AssistantIntroComposerDemo: View {
     /// Pole wchodzi (i zaczyna pisać) dopiero na znak od strony.
     let isShown: Bool
@@ -327,6 +327,7 @@ private struct AssistantIntroComposerDemo: View {
                 .foregroundStyle(Color.scFaint(scheme))
                 .padding(.leading, 6)
 
+            GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
                 ZStack(alignment: .leading) {
                     // Każdy przykład to NOWY tekst (`.id`) — rodzi się jako
@@ -346,18 +347,18 @@ private struct AssistantIntroComposerDemo: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 18)
                 .frame(minHeight: 50)
-                .background(Capsule(style: .continuous).fill(AssistantLook.input(scheme)))
-                .overlay(Capsule(style: .continuous).stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
+                .scChromeGlass(in: Capsule(style: .continuous))
 
-                ZStack {
-                    Color.clear
-                        .scSoftSurface(Circle())
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(SCPalette.terracotta)
-                }
-                .frame(width: 50, height: 50)
-                .scaleEffect(sendPressed ? 0.86 : 1)
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .frame(width: 50, height: 50)
+                    .scChromeGlass(
+                        in: Circle(),
+                        tint: SCPalette.terracotta.opacity(scheme == .dark ? 0.3 : 0.22)
+                    )
+                    .scaleEffect(sendPressed ? 0.86 : 1)
+            }
             }
 
             // Który przykład — jak kropki kart, bieżący rozciągnięty.
@@ -826,43 +827,6 @@ struct AssistantIntroDish: Identifiable {
             picked.append(AssistantIntroDish(recipe: recipe, slot: slot))
         }
         return picked
-    }
-
-    /// Tydzień do podglądu w arkuszu „Ułożę Ci ten tydzień”
-    /// (`PlanAssistantIntroSheet`): siedem dni, w każdym po daniu na pory
-    /// domu — do trzech, śniadanie, obiad i kolacja przed dodatkowymi — z tej
-    /// samej puli co scenki (dieta i alergeny z Ustawień). Bez powtórek
-    /// w tygodniu, dopóki pula starcza: arkusz obiecuje „Bez powtórek”.
-    /// Pusta lista, gdy żadnej pory nie da się obsadzić.
-    @MainActor
-    static func week(from recipes: [Recipe], slots: [MealSlot]) -> [[AssistantIntroDish]] {
-        let core = slots.filter { MealSlot.core.contains($0) }
-        let shown = (core.isEmpty ? slots : core).sorted().prefix(3)
-        let pools = shown
-            .map { slot in (slot: slot, recipes: pool(from: recipes, slot: slot, maxMinutes: .max).shuffled()) }
-            .filter { !$0.recipes.isEmpty }
-        guard !pools.isEmpty else { return [] }
-
-        var used = Set<UUID>()
-        return (0..<7).map { _ in
-            pools.map { entry in
-                let recipe = entry.recipes.first { !used.contains($0.id) }
-                    ?? entry.recipes[Int.random(in: entry.recipes.indices)]
-                used.insert(recipe.id)
-                return AssistantIntroDish(recipe: recipe, slot: entry.slot)
-            }
-        }
-    }
-
-    /// Zapas dań do pokazu podmiany w tym samym podglądzie — ta sama pula co
-    /// `week`, bez dań, które już w tygodniu stoją.
-    @MainActor
-    static func spares(from recipes: [Recipe], slot: MealSlot, excluding used: Set<String>, limit: Int = 12) -> [AssistantIntroDish] {
-        pool(from: recipes, slot: slot, maxMinutes: .max)
-            .filter { !used.contains($0.id.uuidString) }
-            .shuffled()
-            .prefix(limit)
-            .map { AssistantIntroDish(recipe: $0, slot: slot) }
     }
 
     /// Zanim katalog się wczyta (albo gdy jest pusty) — dania z katalogu

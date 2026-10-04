@@ -162,8 +162,12 @@ struct CookFinishContent: View {
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce.up.byLayer, value: selected)
                 .frame(width: 56, height: 44)
-                .background(Capsule().fill(selected ? SCCook.Palette.badge(scheme) : Color.scTileStroke(scheme)))
-                .overlay(Capsule().strokeBorder(selected ? Color.scLabel(scheme).opacity(0.4) : Color.scTileStroke(scheme), lineWidth: 1))
+                // Szklane kciuki (Liquid Glass, 4.10.2026); wybrany w tincie
+                // szałwii (w górę) albo terakoty (w dół).
+                .scChromeGlass(
+                    in: Capsule(),
+                    tint: selected ? (value == .up ? SCPalette.sage : SCPalette.terracotta).opacity(0.24) : nil
+                )
                 .overlay {
                     if value == .up {
                         ThumbCheer(trigger: cheer, tint: SCPalette.sage)
@@ -249,8 +253,8 @@ struct CookFeedbackSheet: View {
                             .foregroundStyle(isOn ? SCPalette.terracotta : Color.scLabel(scheme).opacity(0.8))
                             .padding(.horizontal, 14)
                             .frame(height: 36)
-                            .background(Capsule().fill(isOn ? SCPalette.terracotta.opacity(0.14) : Color.scChipBg(scheme)))
-                            .overlay(Capsule().strokeBorder(isOn ? SCPalette.terracotta.opacity(0.45) : Color.scTileStroke(scheme), lineWidth: 1))
+                            // Wspólny chip wyboru — szkło, wybrany w tincie.
+                            .scChoiceSurface(Capsule(), isOn: isOn)
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isOn ? .isSelected : [])

@@ -15,6 +15,10 @@ struct EditorialRecipesSectionHeader: View {
     let eyebrow: String
     let title: String
     let accent: Color
+    /// Filtry kategorii w działaniu — plakietka z liczbą na strzałce, jak na
+    /// przycisku filtrów (Rafał 4.10.2026: „obok buttonu dalej powinien być
+    /// badge, że są włączone filtry”).
+    var filterCount: Int = 0
     var action: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
@@ -46,16 +50,17 @@ struct EditorialRecipesSectionHeader: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .heavy))
                         .foregroundStyle(accent)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle().fill(accent.opacity(scheme == .dark ? 0.18 : 0.12))
-                        )
-                        .overlay(
-                            Circle().stroke(accent.opacity(scheme == .dark ? 0.32 : 0.24), lineWidth: 1)
-                        )
+                        // Rozmiar krzyżyka arkusza (`SCSheetIconLabel.size`,
+                        // Rafał 4.10.2026: „takiej samej wielkości jak X”).
+                        .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
+                        // Szkło w tincie kategorii (Liquid Glass, 4.10.2026).
+                        .scChromeGlass(in: Circle(), tint: accent.opacity(scheme == .dark ? 0.3 : 0.22))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Zobacz wszystkie – \(title)")
+                .buttonStyle(PlanPressStyle(scale: 0.9))
+                .scCountBadge(filterCount, color: accent)
+                .accessibilityLabel(filterCount > 0
+                    ? "Zobacz wszystkie – \(title), filtry: \(filterCount)"
+                    : "Zobacz wszystkie – \(title)")
             }
         }
     }

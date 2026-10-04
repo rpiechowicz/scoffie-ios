@@ -7,7 +7,7 @@ import SwiftUI
 /// pomniejsza — daj sam button z ikoną cofania, aby wszystko się zgadzało”):
 /// pigułka ze słowami zabierała podpisowi tygodnia ~90 pt i „TEN TYDZIEŃ ·
 /// 22–28 WRZ” zjeżdżał `minimumScaleFactor`. Krążek ma szerokość strzałki, więc
-/// podpis zostaje w swoim rozmiarze. Terakota „soft” odróżnia go od
+/// podpis zostaje w swoim rozmiarze. Terakotowe szkło odróżnia go od
 /// neutralnych strzałek; słowa zostają dla VoiceOver.
 struct SCWeekTodayButton: View {
     let action: () -> Void
@@ -18,7 +18,10 @@ struct SCWeekTodayButton: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 26, height: 26)
-                .scSoftSurface(Circle())
+                // Szkło w tincie terakoty (Liquid Glass runda 2, 4.10.2026)
+                // zamiast wariantu „soft” — odróżnia się od neutralnych
+                // strzałek tak samo, a stoi w języku reszty kontrolek.
+                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22))
                 .scTapTarget(drawn: 26)
         }
         .buttonStyle(.plain)

@@ -55,6 +55,11 @@ struct NavigationMenu: View {
 
     private static let order: [DashboardTab] = [.recipes, .plan, .calendar, .assistant, .settings]
 
+    /// Zakładki z własnym pływającym elementem nad paskiem (pigułka „Cel
+    /// dnia”, pole asystenta). Rozmyty pas rysują od NIEGO w dół, więc pas
+    /// paska zakładek byłby drugim materiałem na pierwszym.
+    private static let ownBottomEdge: Set<DashboardTab> = [.recipes, .plan, .assistant]
+
     var body: some View {
         @Bindable var session = sessionStore
 
@@ -82,8 +87,31 @@ struct NavigationMenu: View {
         // samego tła, które ma sama, a nie z gołego okna.
         .background(SCPageBackground(scheme: colorScheme).ignoresSafeArea())
         .tint(SCPalette.terracotta)
+        // Pod paskiem stanu treść CHOWA SIĘ — rozmywa i gaśnie — zamiast
+        // przejeżdżać ostro pod zegarem i Dynamic Island (Telegram, iOS 26).
+        // Jeden pas na wszystkie zakładki, w samym górnym bezpiecznym obszarze.
+        .overlay(alignment: .top) {
+            let compactTitle = chrome.compactTitles[session.dashboardTab]
+            ZStack(alignment: .top) {
+                SCStatusBarBlur(extends: compactTitle == nil ? 0 : SCCompactTitle.blurExtension)
+
+                // Duży tytuł zjechał — jego miejsce pod paskiem stanu bierze
+                // szklana kapsuła (Telegram). Zmiana zakładki = cięcie, jak
+                // treść; animuje się tylko pojawienie i zniknięcie.
+                if let compactTitle {
+                    SCCompactTitle(title: compactTitle)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .top)))
+                }
+            }
+            .animation(.smooth(duration: 0.3), value: compactTitle == nil)
+        }
         .overlay(alignment: .bottom) {
-            SCFloatingTabBar(items: items, selection: tabSelection, isCompact: chrome.isCompact)
+            SCFloatingTabBar(
+                items: items,
+                selection: tabSelection,
+                isCompact: chrome.isCompact,
+                showsEdgeBlur: !Self.ownBottomEdge.contains(session.dashboardTab)
+            )
                 // Klawiatura ma pasek ZASŁONIĆ, jak systemowy — bez tego
                 // `overlay` uciekałby nad klawiaturę i stawał między nią
                 // a polem asystenta.
@@ -178,7 +206,10 @@ struct NavigationMenu: View {
         case .plan:
             WeeklyPlanView()
         case .calendar:
+            // Własny tydzień i dzień — przewijanie Kalendarza nie przestawia
+            // Planu i odwrotnie. Arkusze otwarte z Kalendarza dziedziczą ten.
             CalendarView()
+                .environment(\.datesViewModel, sessionStore.calendarDatesViewModel)
         case .assistant:
             // Asystent zajął miejsce „Produktów": to do niego wraca się
             // wiele razy w tygodniu, a lista zakupów powstaje przy Planie

@@ -184,15 +184,16 @@ struct EditorialWeekBar: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(Color.scTileBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                // Szklany krążek (Liquid Glass, 4.10.2026: „wszystkie małe
+                // buttony, np. przełączanie tygodnia, też liquid style”).
+                .scChromeGlass(in: Circle())
                 // Kółko zostaje 26 pt (wiersz podpisu ma być niski), cel
                 // dotyku rośnie do 44. Dwa cele obok siebie zachodzą na
                 // siebie o kilkanaście punktów — środek między strzałkami
                 // i tak jest niczyj.
                 .scTapTarget(drawn: 26)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.88))
         .accessibilityLabel(label)
     }
 

@@ -54,7 +54,7 @@ struct SCSoftButton: View {
             .frame(maxWidth: .infinity, minHeight: 56)
             .scSoftCapsule(accent)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.97))
         .disabled(!isEnabled || isLoading)
         // Wygaszamy tylko za brak danych. Spinner zostaje w pełnej mocy —
         // przygaszona kręciołka wygląda jak zawieszony ekran, a nie jak praca.
@@ -80,21 +80,26 @@ struct SCSoftIconButton: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 56, height: 56)
-                .background(Circle().fill(Color.scTileBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                // Neutralne szkło — para dla terakotowego szkła obok.
+                .scChromeGlass(in: Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlanPressStyle(scale: 0.97))
         .accessibilityLabel(accessibilityLabel)
     }
 }
 
 // MARK: - Powierzchnia „soft" do użycia poza gotowymi przyciskami
 
-/// Tło i obwódka w wariancie „soft" na dowolnym kształcie — tint akcentu
-/// pod spodem, obwódka w tym samym kolorze. Ten sam zestaw liczb, co w
-/// `SCSoftButton`, wyjęty do modyfikatora, żeby przyciski o innych
-/// rozmiarach (okrągły „Wyślij", 44-punktowe akcje kart, CTA arkuszy)
-/// nie kopiowały go po swojemu i nie rozjeżdżały się w odcieniach.
+/// Powierzchnia wariantu „soft" na dowolnym kształcie. Ten sam zestaw liczb,
+/// co w `SCSoftButton`, wyjęty do modyfikatora, żeby przyciski o innych
+/// rozmiarach (44-punktowe akcje kart, CTA arkuszy, pigułka „Ułóż”) nie
+/// kopiowały go po swojemu i nie rozjeżdżały się w odcieniach.
+///
+/// Od 4.10.2026 (Liquid Glass runda 3 — Rafał: „wszystkie możliwe buttony
+/// w stylu liquid”) to SZKŁO w tincie akcentu, interaktywne, bez obwódki:
+/// szkło ma własny brzeg. Dawniej tint akcentu 0,10 + obwódka 0,45. Nie
+/// kłaść go na innym szkle (szkło na szkle) — tam akcent idzie samym
+/// `tint` szkła spodu albo zwykłym wypełnieniem.
 struct SCSoftSurface<S: InsettableShape>: ViewModifier {
     let shape: S
     let accent: Color
@@ -103,8 +108,10 @@ struct SCSoftSurface<S: InsettableShape>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(shape.fill(accent.opacity(scheme == .dark ? 0.16 : 0.10)))
-            .overlay(shape.strokeBorder(accent.opacity(0.45), lineWidth: 1.2))
+            .scChromeGlass(
+                in: shape,
+                tint: accent.opacity(scheme == .dark ? 0.3 : 0.22)
+            )
     }
 }
 

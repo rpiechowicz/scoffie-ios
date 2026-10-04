@@ -5,12 +5,15 @@ import SwiftUI
 // Source: design/Scoffie - Przepisy.html → recipes-v2.jsx RecipesV2_W3.
 //
 // Layout (top → bottom):
-//   1. EditorialRecipesHeader  — tytuł "Przepisy" + pigułka wyszukiwarki
+//   1. EditorialPageHeader     — tytuł "Przepisy"
 //   2. EditorialRecipesHero    — eyebrow + "Smaki na dziś" z terakotowym pionem
 //   3. Karuzela kart-story     — pełna szerokość, paging, kropki
 //   4. Sekcje Tasting menu     — po jednej na `RecipesCategory.catalogSections`
 //      (Śniadania / Obiady / Kolacje / Przekąski i desery), każda z
 //      EditorialRecipesSectionHeader nad listą EditorialRecipeRow
+//   Na dole, nad menu: `RecipesSearchBar` (filtry + szukanie, jak Poczta).
+//   Szukanie albo filtry z „Filtrów” = STAN WYNIKÓW: `RecipeResultsHeader`
+//   i jedna płaska lista — bez karuzeli i sekcji (4.10.2026).
 //
 // Stylistyka i paddings idą za pozostałymi widokami v2 (Ustawienia, Produkty,
 // Kalendarz): `SCPageBackground`, `pageTopPadding=78`, `pageHorizontalPadding=20`,
@@ -19,6 +22,8 @@ struct RecipesView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scTabBarChrome) private var tabBarChrome
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Co dziesięć minut — wystarczy, żeby zestaw zmienił się najdalej dziesięć
     /// minut po piątej, a nie budzi widoku częściej niż trzeba.
@@ -40,6 +45,13 @@ struct RecipesView: View {
     /// `resyncFeaturedSelectionIfNeeded`. `nil` = jeszcze nie ułożona.
     @State private var featuredOrder: [UUID]?
     @State private var filters = RecipeFilterOptions()
+    /// Zakładka kategorii nad treścią (`RecipeScopeTabs`); `nil` = wszystkie.
+    @State private var scope: RecipesCategory?
+    /// Zwykły widok (karuzela + sekcje) STOI w drzewie także pod wynikami —
+    /// przezroczysty, więc karuzela nie buduje się od nowa i nie przeskakuje
+    /// przy powrocie. Po zgaśnięciu dostaje zerową wysokość, żeby lista
+    /// wyników nie miała pod sobą pustego przewijania.
+    @State private var browseLayerCollapsed = false
     @State private var isFilterSheetPresented = false
 
     /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
@@ -72,6 +84,7 @@ struct RecipesView: View {
         let accent: Color
         let recipes: [Recipe]          // displayed inline (cap = sectionPreviewLimit)
         let totalCount: Int            // full count for this category (sheet badge)
+        let filterCount: Int           // filtry tej kategorii (plakietka strzałki)
 
         var id: RecipesCategory { category }
         var hasMore: Bool { totalCount > recipes.count }
@@ -122,6 +135,16 @@ struct RecipesView: View {
         filters.apply(to: personalizedRecipes)
     }
 
+    /// Pula ZWYKŁEGO widoku (karuzela i sekcje): dieta z profilu i filtry
+    /// kategorii — bez frazy i bez filtrów z „Filtrów”, które należą do stanu
+    /// wyników. Dzięki temu szukanie nie przestawia kart karuzeli pod spodem
+    /// i powrót z wyników trafia na ten sam widok, który się zostawiło.
+    private var browseRecipes: [Recipe] {
+        var categoryOnly = RecipeFilterOptions()
+        categoryOnly.categoryFilters = filters.categoryFilters
+        return categoryOnly.apply(to: personalization.apply(to: recipeCatalogStore.recipes))
+    }
+
     /// Ile przepisów zabrała sama dieta / alergeny — do podpisu w banerze.
     private var hiddenByPersonalizationCount: Int {
         personalization.hiddenCount(in: searchedRecipes)
@@ -130,8 +153,7 @@ struct RecipesView: View {
     /// Czy lista jest w ogóle zawężona — steruje tekstem pustego stanu i
     /// zwijaniem pustych sekcji Tasting menu.
     private var isNarrowed: Bool {
-        !debouncedSearchText.isEmpty
-            || filters.isActive
+        filters.hasCategoryFilters
             || (personalization.isEnabled && personalization.restrictsCatalog)
     }
 
@@ -147,11 +169,77 @@ struct RecipesView: View {
         mealSections.contains { !$0.recipes.isEmpty }
     }
 
+    /// Stan wyników: fraza albo filtry z arkusza „Filtry” (Rafał 4.10.2026:
+    /// „jak już się wyszuka, nie może być karuzeli i takiego mocnego podziału
+    /// na sekcje”; „jak filtrujemy globalnie, karuzela też może zniknąć”).
+    /// Dieta z profilu i filtry jednej kategorii zostają w zwykłym widoku —
+    /// to stałe ustawienia, nie szukanie (filtry kategorii mówi plakietka na
+    /// strzałce sekcji).
+    private var isResultsMode: Bool {
+        isSearchingOrFiltering
+    }
+
+    /// Fraza albo filtry — wtedy zakładki kategorii pokazują liczby trafień.
+    private var isSearchingOrFiltering: Bool {
+        !debouncedSearchText.isEmpty || filters.activeCount > 0
+    }
+
+    /// Wyniki w zakresie wybranej zakładki.
+    private var resultRecipes: [Recipe] {
+        guard let scope else { return unscopedResults }
+        return unscopedResults.filter { RecipeScopeTabs.contains($0, in: scope) }
+    }
+
+    /// Ile trafień leży w każdej zakładce — przy frazie / filtrach.
+    private var scopeCounts: [RecipesCategory: Int]? {
+        guard isSearchingOrFiltering else { return nil }
+        let results = unscopedResults
+        return Dictionary(uniqueKeysWithValues: RecipeScopeTabs.scopes.map { scope in
+            (scope, results.reduce(0) { $0 + (RecipeScopeTabs.contains($1, in: scope) ? 1 : 0) })
+        })
+    }
+
+    /// Wyniki w jednej liście. Przy frazie najpierw nazwy, które się nią
+    /// ZACZYNAJĄ, potem te, w których słowo się nią zaczyna, potem reszta
+    /// nazw, na końcu trafienia w samym opisie; w obrębie grupy kolejność
+    /// zostaje (dopasowanie do celu).
+    private var unscopedResults: [Recipe] {
+        let visible = visibleRecipes
+        let query = debouncedSearchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return visible }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        func rank(_ recipe: Recipe) -> Int {
+            let name = recipe.name
+            if name.range(of: query, options: options.union(.anchored)) != nil { return 0 }
+            if name.split(separator: " ").contains(where: {
+                String($0).range(of: query, options: options.union(.anchored)) != nil
+            }) { return 1 }
+            if name.range(of: query, options: options) != nil { return 2 }
+            return 3
+        }
+        return visible.enumerated()
+            .map { (rank: rank($0.element), index: $0.offset, recipe: $0.element) }
+            .sorted { ($0.rank, $0.index) < ($1.rank, $1.index) }
+            .map(\.recipe)
+    }
+
+    /// Wyjście ze stanu wyników — fraza i filtry z „Filtrów” (filtry
+    /// kategorii zostają; czyści je ich własny arkusz).
+    private func clearResults() {
+        searchDebounceTask?.cancel()
+        withAnimation(.smooth(duration: 0.3)) {
+            searchText = ""
+            debouncedSearchText = ""
+            filters.resetGlobal()
+            scope = nil
+        }
+    }
+
     /// Karty karuzeli: zamrożona kolejność (`featuredOrder`) z bieżącymi
     /// danymi przepisów. Przepis, który zniknął z listy (np. odlubiony przy
     /// filtrze „Ulubione”), znika też z karuzeli.
     private var featuredRecipes: [Recipe] {
-        let visible = visibleRecipes
+        let visible = browseRecipes
         if let order = featuredOrder {
             let byId = Dictionary(visible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             let frozen = order.compactMap { byId[$0] }
@@ -181,8 +269,6 @@ struct RecipesView: View {
     }
 
     private var heroEyebrow: String {
-        if !debouncedSearchText.isEmpty { return "Najlepsze dopasowanie" }
-        if filters.isActive { return "Twoje filtry" }
         if personalization.isEnabled, personalization.ranksCatalog {
             return "Pod cel: \(personalization.goal.title)"
         }
@@ -190,8 +276,6 @@ struct RecipesView: View {
     }
 
     private var heroTitle: String {
-        if !debouncedSearchText.isEmpty { return "Pasujące do wyszukiwania" }
-        if filters.isActive { return "Wybrane dla Ciebie" }
         if personalization.isEnabled, personalization.hasAnyPreference {
             return "Dopasowane do Ciebie"
         }
@@ -248,7 +332,9 @@ struct RecipesView: View {
                 searchDebounceTask = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     guard !Task.isCancelled else { return }
-                    debouncedSearchText = newValue
+                    withAnimation(.smooth(duration: 0.3)) {
+                        debouncedSearchText = newValue
+                    }
                     resyncFeaturedSelectionIfNeeded()
                 }
             }
@@ -331,35 +417,66 @@ struct RecipesView: View {
     // MARK: - Content tree
 
     private var content: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                EditorialRecipesHeader(
-                    searchText: $searchText,
-                    activeFilterCount: filters.activeCount,
-                    onSubmit: { debouncedSearchText = searchText },
-                    onOpenFilters: { isFilterSheetPresented = true }
-                )
-                .padding(.horizontal, pageHorizontalPadding)
-                .padding(.top, pageTopPadding)
-                .padding(.bottom, 18)
+                EditorialPageHeader("Przepisy")
+                    .id(Self.topAnchor)
+                    .padding(.horizontal, pageHorizontalPadding)
+                    .padding(.top, pageTopPadding)
+                    .padding(.bottom, 12)
 
-                // Szkielet → dane przenika, nie skacze (pierwsze wejście
-                // po uruchomieniu aplikacji).
-                Group {
+                // Zakładki tylko tam, gdzie jest z czego wybierać — nie nad
+                // pustym stanem (Rafał 4.10.2026).
+                if showsScopeTabs {
+                    let counts = scopeCounts
+                    RecipeScopeTabs(
+                        selection: $scope,
+                        counts: counts,
+                        total: counts == nil ? nil : unscopedResults.count
+                    )
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                }
+
+                // Stany leżą NA SOBIE (`ZStack` od góry), nie pod sobą: przy
+                // przenikaniu w `VStack` wchodzący stał chwilę pod wychodzącym
+                // i podskakiwał na górę, kiedy tamten znikał.
+                ZStack(alignment: .top) {
+                    if showsBrowseLayer {
+                        // JEDEN widok: `body(forRecipes:)` oddaje kilka
+                        // (nagłówek, karuzela, kropki, sekcje) — w `ZStack`
+                        // bez `VStack` każdy stawał osobną warstwą na górze
+                        // i wszystko nakładało się na siebie.
+                        VStack(alignment: .leading, spacing: 0) {
+                            body(forRecipes: browseRecipes)
+                        }
+                            .opacity(isResultsMode ? 0 : 1)
+                            .scaleEffect(isResultsMode ? 0.97 : 1, anchor: .top)
+                            .allowsHitTesting(!isResultsMode)
+                            .accessibilityHidden(isResultsMode)
+                            .frame(height: browseLayerCollapsed ? 0 : nil, alignment: .top)
+                            .transition(.opacity)
+                    }
+
                     if shouldShowSkeleton {
                         skeletonState
                             .transition(.opacity)
+                    } else if isResultsMode {
+                        resultsState
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: 14)),
+                                removal: .opacity.combined(with: .offset(y: 8))
+                            ))
                     } else if !hasVisibleRecipes {
                         emptyState
                             .padding(.horizontal, pageHorizontalPadding)
                             .padding(.top, 8)
                             .transition(.opacity)
-                    } else {
-                        body(forRecipes: visibleRecipes)
-                            .transition(.opacity)
                     }
                 }
                 .animation(.easeOut(duration: 0.3), value: shouldShowSkeleton)
+                .animation(Self.stateMotion, value: isResultsMode)
 
                 if recipeCatalogStore.isLoadingMore {
                     ProgressView()
@@ -369,11 +486,205 @@ struct RecipesView: View {
                 }
             }
             .padding(.bottom, pageBottomPadding)
+            .animation(Self.stateMotion, value: showsScopeTabs)
         }
         .scrollIndicators(.hidden)
+        // Przewinięcie listy chowa klawiaturę — jak w Poczcie.
+        .scrollDismissesKeyboard(.immediately)
         // Kierunek przewijania steruje zwijaniem dolnego menu.
         .scTracksTabBarCompaction()
+        // Duży tytuł zjechał — pod paskiem stanu staje szklana kapsuła.
+        .scReportsCompactTitle("Przepisy", for: .recipes)
         .ignoresSafeArea(.container, edges: .top)
+        // Nowa fraza albo wejście w wyniki / wyjście z nich — od góry
+        // (wyniki mogły zacząć się wysoko nad miejscem, w którym się było).
+        .onChange(of: debouncedSearchText) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
+        .onChange(of: isResultsMode) { _, entering in
+            proxy.scrollTo(Self.topAnchor, anchor: .top)
+            if entering {
+                // Zwykły widok zwija się dopiero po zgaśnięciu.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(420))
+                    guard isResultsMode else { return }
+                    var instant = Transaction()
+                    instant.disablesAnimations = true
+                    withTransaction(instant) { browseLayerCollapsed = true }
+                }
+            } else {
+                var instant = Transaction()
+                instant.disablesAnimations = true
+                withTransaction(instant) { browseLayerCollapsed = false }
+            }
+        }
+        .onChange(of: scope) { _, _ in proxy.scrollTo(Self.topAnchor, anchor: .top) }
+        // Zakres kategorii żyje tylko w wynikach — bez frazy i filtrów wraca
+        // do „Wszystkie”, żeby następne szukanie nie startowało zawężone.
+        .onChange(of: isSearchingOrFiltering) { _, active in
+            if !active { scope = nil }
+        }
+        }
+        // Pasek szukania wchodzi bezpiecznym obszarem jak pigułka „Cel dnia”
+        // w Planie: lista przejeżdża pod szkłem, ale kończy się nad nim.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            RecipesSearchBar(
+                text: $searchText,
+                activeFilterCount: filters.activeCount,
+                onSubmit: { debouncedSearchText = searchText },
+                onOpenFilters: { isFilterSheetPresented = true }
+            )
+            .padding(.horizontal, pageHorizontalPadding)
+            // Zwija się RAZEM z dolnym menu i tak jak ono (Rafał 4.10.2026:
+            // „navigation bar ładnie się zmniejsza, a filters bar już nie”):
+            // mniejszy i węższy o tyle, o ile menu, opada o jego spadek.
+            // Skala, nie inna wysokość — lista nad paskiem nie skacze.
+            .scaleEffect(tabBarChrome.isCompact ? 0.84 : 1, anchor: .bottom)
+            .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
+            .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity)
+            // Treść chowa się pod paskiem i menu — rozmyty pas od 28 pt nad
+            // paskiem do krawędzi ekranu (`NavigationMenu.ownBottomEdge`).
+            .background(alignment: .top) {
+                SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
+                    .padding(.top, -28)
+                    .ignoresSafeArea(.container, edges: .bottom)
+            }
+        }
+    }
+
+    private static let topAnchor = "recipes-top"
+
+    /// Jeden ruch przejść między zwykłym widokiem a wynikami.
+    private static let stateMotion: Animation = .smooth(duration: 0.38)
+
+    private var showsBrowseLayer: Bool {
+        !shouldShowSkeleton && hasVisibleRecipes
+    }
+
+    /// Zakładki kategorii TYLKO w stanie wyników — także nad pustym stanem
+    /// (Rafał 4.10.2026: „na głównym widoku nie ma być tab kategorii, tylko
+    /// na filtrach globalnych”; „na pustym brakuje mi tab kategorii”).
+    private var showsScopeTabs: Bool {
+        !shouldShowSkeleton && isResultsMode
+    }
+
+    // MARK: - Wyniki
+
+    @ViewBuilder
+    private var resultsState: some View {
+        let results = resultRecipes
+        ZStack(alignment: .top) {
+            if results.isEmpty {
+                // Pusto: bez nagłówka z „0 przepisów” — tytuł pustego stanu
+                // sam mówi, czego szukano.
+                resultsEmptyState
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    RecipeResultsHeader(
+                        count: results.count,
+                        query: debouncedSearchText,
+                        filterLabels: filters.summaryLabels,
+                        scopeTitle: scope.map(RecipeScopeTabs.title(for:)),
+                        onClear: clearResults
+                    )
+                    .padding(.horizontal, pageHorizontalPadding)
+                    .padding(.bottom, 10)
+
+                    RecipeRowStack(recipes: results) { recipe in
+                        openDetail(for: recipe)
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(Self.stateMotion, value: results.isEmpty)
+    }
+
+    /// Pusto w wynikach — najpierw to, co realnie pomaga: trafienia w innych
+    /// kategoriach, potem przepisy schowane przez dietę, na końcu
+    /// zdejmowanie filtrów i frazy.
+    private var resultsEmptyState: some View {
+        let query = debouncedSearchText
+        let hasQuery = !query.isEmpty
+        let hasFilters = filters.activeCount > 0
+        let elsewhere = scope == nil ? 0 : unscopedResults.count
+        let hiddenByDiet: Int = {
+            guard personalization.isEnabled, personalization.restrictsCatalog else { return 0 }
+            let withoutDiet = filters.apply(to: searchedRecipes)
+            guard let scope else { return withoutDiet.count }
+            return withoutDiet.filter { RecipeScopeTabs.contains($0, in: scope) }.count
+        }()
+
+        var actions: [RecipeNoResultsView.Action] = []
+        if elsewhere > 0 {
+            actions.append(.init(
+                title: "Wszystkie kategorie · \(elsewhere)",
+                icon: "square.grid.2x2"
+            ) {
+                withAnimation(Self.stateMotion) { scope = nil }
+            })
+        }
+        if hiddenByDiet > 0 {
+            actions.append(.init(title: "Pokaż mimo diety", icon: "leaf") {
+                withAnimation(Self.stateMotion) { isPersonalizationEnabled = false }
+            })
+        }
+        if hasFilters {
+            actions.append(.init(title: "Wyczyść filtry", icon: "line.3.horizontal.decrease") {
+                withAnimation(Self.stateMotion) { filters.resetGlobal() }
+            })
+        }
+        if hasQuery {
+            actions.append(.init(title: "Wyczyść frazę", icon: "xmark") {
+                searchDebounceTask?.cancel()
+                withAnimation(Self.stateMotion) {
+                    searchText = ""
+                    debouncedSearchText = ""
+                }
+            })
+        }
+        let onlyScope = !hasQuery && !hasFilters
+        if onlyScope, scope != nil {
+            actions.append(.init(title: "Wszystkie przepisy", icon: "square.grid.2x2") {
+                withAnimation(Self.stateMotion) { scope = nil }
+            })
+        }
+
+        let title: String
+        let message: String
+        let icon: String
+        if onlyScope {
+            icon = RecipesConstants.icon(for: scope ?? .all)
+            title = scope == .favourite ? "Brak ulubionych" : "Pusta kategoria"
+            message = scope == .favourite
+                ? "Serce przy przepisie doda go tutaj."
+                : "Nic tu jeszcze nie ma."
+        } else {
+            icon = hasQuery ? "magnifyingglass" : "line.3.horizontal.decrease"
+            title = hasQuery ? "Nic dla „\(query)”" : "Żaden przepis nie pasuje"
+            if elsewhere > 0 {
+                message = "Są trafienia w innych kategoriach."
+            } else if hiddenByDiet > 0 {
+                message = "Pasujące przepisy ukrywa Twoja dieta."
+            } else if hasQuery && hasFilters {
+                message = "Spróbuj innej frazy albo poluzuj filtry."
+            } else if hasQuery {
+                message = "Wpisz krócej — na przykład sam składnik."
+            } else {
+                message = "Poluzuj filtry, żeby zobaczyć więcej."
+            }
+        }
+
+        return RecipeNoResultsView(
+            icon: icon,
+            accent: scope.map(RecipeScopeTabs.accent(for:)) ?? SCPalette.terracotta,
+            title: title,
+            message: message,
+            actions: actions
+        )
+        // Nowy powód = nowy widok (krążek podskakuje znowu).
+        .id("\(title)|\(message)")
     }
 
     @ViewBuilder
@@ -486,7 +797,10 @@ struct RecipesView: View {
                 eyebrow: section.eyebrow,
                 title: section.title,
                 accent: section.accent,
-                action: section.recipes.isEmpty ? nil : {
+                filterCount: section.filterCount,
+                // Sekcję wyzerowaną przez JEJ filtry dalej da się otworzyć —
+                // tam się je zdejmuje.
+                action: section.recipes.isEmpty && section.filterCount == 0 ? nil : {
                     categorySheetSelection = section.category
                 }
             )
@@ -576,10 +890,10 @@ struct RecipesView: View {
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
-                        .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10)))
-                        .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.32), lineWidth: 1))
+                        // Wariant „soft” = szkło w tincie terakoty (4.10.2026).
+                        .scSoftCapsule()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlanPressStyle(scale: 0.95))
             }
         }
         .frame(maxWidth: .infinity)
@@ -688,7 +1002,7 @@ struct RecipesView: View {
     // MARK: - Helpers
 
     private func makeSection(category: RecipesCategory) -> RecipeSection {
-        let categoryRecipes = visibleRecipes.filter { $0.category == category }
+        let categoryRecipes = browseRecipes.filter { $0.category == category }
         let preview = Array(categoryRecipes.prefix(Self.sectionPreviewLimit))
         let categoryFilterCount = filters.categoryFilters[category]?.activeCount ?? 0
         return RecipeSection(
@@ -701,7 +1015,8 @@ struct RecipesView: View {
                 : RecipeAccent.eyebrow(for: category),
             accent: RecipeAccent.accent(for: category),
             recipes: preview,
-            totalCount: categoryRecipes.count
+            totalCount: categoryRecipes.count,
+            filterCount: categoryFilterCount
         )
     }
 
@@ -743,7 +1058,7 @@ struct RecipesView: View {
     /// jest bindingiem `.scrollPosition`, więc sam zapis wystarcza — dopóki
     /// wybrany przepis nadal jest na liście, zostawiamy pozycję nietkniętą.
     private func resyncFeaturedSelectionIfNeeded() {
-        featuredOrder = rankedFeaturedRecipes(from: visibleRecipes).map(\.id)
+        featuredOrder = rankedFeaturedRecipes(from: browseRecipes).map(\.id)
         let ids = featuredRecipes.map(\.id)
         if let current = featuredSelectionId, ids.contains(current) { return }
         featuredSelectionId = ids.first

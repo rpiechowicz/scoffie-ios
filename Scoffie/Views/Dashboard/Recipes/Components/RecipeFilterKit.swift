@@ -77,6 +77,12 @@ struct RecipeFilterHeader: View {
     var accent: Color = SCPalette.terracotta
     let canClear: Bool
     let onClear: () -> Void
+    /// „Dopasowane do Ciebie” jako sama ikona obok krzyżyka (Rafał 4.10.2026:
+    /// „ten button dałbym gdzieś indziej, może sama ikona obok X”): różdżka,
+    /// włączona = szkło w tincie szałwii. `nil` = bez przełącznika (filtry
+    /// kategorii, profil bez diety i celu).
+    var fitIsOn: Bool? = nil
+    var onToggleFit: () -> Void = {}
     let onClose: () -> Void
 
     var body: some View {
@@ -86,14 +92,28 @@ struct RecipeFilterHeader: View {
             icon: icon,
             accent: accent,
             subtitle: scope,
+            subtitleTransition: .opacity,
             onClose: onClose
         ) {
-            if canClear {
-                RecipeFilterClearButton(action: onClear)
-                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+            HStack(spacing: 8) {
+                if canClear {
+                    RecipeFilterClearButton(action: onClear)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+                if let fitIsOn {
+                    SCSheetIconButton(
+                        systemName: "wand.and.stars",
+                        tint: fitIsOn ? SCPalette.sage : nil,
+                        accessibilityLabel: "Dopasowane do Ciebie",
+                        action: onToggleFit
+                    )
+                    .symbolEffect(.bounce, value: fitIsOn)
+                    .accessibilityValue(fitIsOn ? "włączone" : "wyłączone")
+                }
             }
         }
         .animation(.smooth(duration: 0.22), value: canClear)
+        .animation(.smooth(duration: 0.22), value: fitIsOn)
     }
 }
 
@@ -848,10 +868,40 @@ struct RecipeFilterKcalChart: View {
 struct RecipeFilterFooterButton: View {
     let title: String
     var trailingIcon: String? = "chevron.right"
+    /// Sam glif w szklanym krążku 44 pt, słowo tylko dla VoiceOver — „Pokaż”
+    /// w filtrach (Rafał 4.10.2026: „button dalej na sheet filtrów daj samą
+    /// ikonę”).
+    var iconOnly: Bool = false
     var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
+        if iconOnly {
+            iconButton
+        } else {
+            labeledButton
+        }
+    }
+
+    private var iconButton: some View {
+        Button(action: action) {
+            Image(systemName: trailingIcon ?? "arrow.right")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(SCPalette.terracotta)
+                // 44 pt (było 50 — Rafał 4.10.2026: „nieproporcjonalnie
+                // większy od reszty”): wysokość przycisków stopek obok.
+                .frame(width: 44, height: 44)
+                .scSoftSurface(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .animation(.smooth(duration: 0.18), value: isEnabled)
+        .accessibilityLabel(title)
+    }
+
+    private var labeledButton: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title)
@@ -879,7 +929,7 @@ struct RecipeFilterFooterButton: View {
 /// „Wyczyść” obok krzyżyka — pojawia się dopiero, gdy jest co czyścić.
 /// Ten sam w filtrach, w wykluczaniu składników i w alergenach.
 ///
-/// Sama ikona w terakotowym krążku „soft”, rozmiarem jak krzyżyk arkusza
+/// Sama ikona w terakotowym szklanym krążku, rozmiarem jak krzyżyk arkusza
 /// (Rafał, 24.09: „zmień button z ikona+wyczyść na samą ikonę”). Słowo
 /// zostaje tylko dla VoiceOver.
 struct RecipeFilterClearButton: View {
@@ -890,10 +940,13 @@ struct RecipeFilterClearButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
-                .frame(width: 36, height: 36)
-                .scSoftSurface(Circle())
+                // Rozmiar krzyżyka obok (`SCSheetIconLabel.size`).
+                .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
+                // Szkło w tincie terakoty — para dla szklanego krzyżyka obok
+                // (`SCSheetIconSurface`, Liquid Glass runda 2).
+                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22))
                 .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))

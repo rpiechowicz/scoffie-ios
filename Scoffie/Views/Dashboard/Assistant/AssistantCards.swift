@@ -887,8 +887,7 @@ private struct AssistantOptionsCarouselCard: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(enabled ? AssistantLook.terra(scheme) : AssistantLook.faint(scheme))
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(AssistantLook.wash(scheme)))
-                .overlay(Circle().stroke(AssistantLook.hair(scheme), lineWidth: 1))
+                .scChromeGlass(in: Circle())
                 .scTapTarget(44, drawn: 30)
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
@@ -1865,10 +1864,9 @@ private struct AssistantOptionsStorySheet: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme))
                 .frame(width: 34, height: 34)
-                .background(
-                    Circle().fill(light ? Color.white.opacity(0.92) : AssistantLook.field(scheme))
-                )
-                .overlay(Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: light ? 0 : 1))
+                // Szklany krzyżyk jak `SCSheetCloseButton` (Liquid Glass) —
+                // także nad zdjęciem dania.
+                .scChromeGlass(in: Circle())
                 .contentShape(Circle().inset(by: -5))
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
@@ -1924,17 +1922,11 @@ private struct AssistantOptionsStorySheet: View {
             .font(.system(size: 13, weight: .bold))
             .foregroundStyle(on ? AssistantLook.terra(scheme) : (light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme)))
             .frame(width: 34, height: 34)
-            .background {
-                if on {
-                    // Wypełnienie pod spodem, „soft” na wierzchu — samo
-                    // `scSoftSurface` na pełnym kole schowałoby tint pod fill.
-                    Circle().fill(light ? Color.white.opacity(0.95) : AssistantLook.card(scheme))
-                        .overlay(Color.clear.scSoftSurface(Circle(), accent: AssistantLook.terra(scheme)))
-                } else {
-                    Circle().fill(light ? Color.white.opacity(0.92) : AssistantLook.field(scheme))
-                        .overlay(Circle().stroke(AssistantLook.cardStroke(scheme), lineWidth: light ? 0 : 1))
-                }
-            }
+            // Szkło jak krzyżyk obok; filtr działa = szkło w tincie terakoty.
+            .scChromeGlass(
+                in: Circle(),
+                tint: on ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil
+            )
             .contentShape(Circle().inset(by: -5))
             .animation(motion(.smooth(duration: 0.25)), value: on)
     }
@@ -2397,9 +2389,8 @@ private struct AssistantOptionsStorySheet: View {
                 }
                 // 118 = uchwyt, nagłówek i segmenty nad treścią.
                 .padding(.top, 118)
-                // Miejsce na cień stopki — przewinięta do końca lista kończy
-                // się nad nim, nie pod nim.
-                .padding(.bottom, 16 + SCEdgeShade.bottomHeight)
+                // Oddech nad stopką; samą stopkę odlicza `safeAreaBar` niżej.
+                .padding(.bottom, 16)
                 .animation(motion(.smooth(duration: 0.4)), value: status)
                 .animation(motion(.smooth(duration: 0.3)), value: isBusy)
             }
@@ -2410,44 +2401,47 @@ private struct AssistantOptionsStorySheet: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.hidden)
             .scScrollEdgeFade()
-
-            endStep(3, rise: 20) {
-                // JEDEN przycisk na dole (runda 15, Rafał): zapis całości,
-                // po zapisie „Otwórz plan”, a gdy propozycji nie da się już
-                // zapisać — „Napisz, co zmienić”. Nowe dania to cichy
-                // odnośnik pod listą, nie drugi przycisk.
-                //
-                // Wspólna stopka arkuszy (`SCSheetFooter`): płyta w kolorze
-                // tła i cień krawędzi nad nią — przewijana lista gaśnie pod
-                // przyciskiem, zamiast urywać się na jego brzegu (runda 10).
-                SCSheetFooter(horizontalPadding: 16) {
-                Group {
-                    if let applyTitle, let onApply {
-                        ProposalAcceptButton(
-                            title: isBusy ? "Zapisuję…" : applyTitle,
-                            icon: "checkmark",
-                            isBusy: isBusy,
-                            action: onApply
-                        )
-                        .transition(.opacity)
-                    } else if status == .applied, let onOpenPlan {
-                        ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
+            // Stopka natywnie (iOS 26 `safeAreaBar`): lista przejeżdża pod
+            // szklanym przyciskiem i kończy się nad nim; pod przyciskiem
+            // tylko natywny efekt krawędzi systemu.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                endStep(3, rise: 20) {
+                    // JEDEN przycisk na dole (runda 15, Rafał): zapis całości,
+                    // po zapisie „Otwórz plan”, a gdy propozycji nie da się już
+                    // zapisać — „Napisz, co zmienić”. Nowe dania to cichy
+                    // odnośnik pod listą, nie drugi przycisk.
+                    //
+                    // Wspólna stopka arkuszy (`SCSheetFooter`) — same szklane
+                    // przyciski, bez tła (4.10.2026).
+                    SCSheetFooter(horizontalPadding: 16) {
+                    Group {
+                        if let applyTitle, let onApply {
+                            ProposalAcceptButton(
+                                title: isBusy ? "Zapisuję…" : applyTitle,
+                                icon: "checkmark",
+                                isBusy: isBusy,
+                                action: onApply
+                            )
                             .transition(.opacity)
-                    } else if !isBusy {
-                        AssistantGhostButton(
-                            action: AssistantCardAction(
-                                title: copy.composeTitle,
-                                icon: "square.and.pencil"
-                            ) {
-                                onCompose()
-                            }
-                        )
-                        .transition(.opacity)
+                        } else if status == .applied, let onOpenPlan {
+                            ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
+                                .transition(.opacity)
+                        } else if !isBusy {
+                            AssistantGhostButton(
+                                action: AssistantCardAction(
+                                    title: copy.composeTitle,
+                                    icon: "square.and.pencil"
+                                ) {
+                                    onCompose()
+                                }
+                            )
+                            .transition(.opacity)
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .animation(motion(.smooth(duration: 0.35)), value: status)
-                .animation(motion(.smooth(duration: 0.3)), value: isBusy)
+                    .frame(maxWidth: .infinity)
+                    .animation(motion(.smooth(duration: 0.35)), value: status)
+                    .animation(motion(.smooth(duration: 0.3)), value: isBusy)
+                    }
                 }
             }
         }
@@ -2710,9 +2704,10 @@ private struct ProposalPersonSwitcher: View {
                 .frame(width: Self.disc, height: Self.disc)
                 .background {
                     if isOn {
-                        Circle()
-                            .fill(AssistantLook.card(scheme))
-                            .overlay(Color.clear.scSoftSurface(Circle(), accent: AssistantLook.terra(scheme)))
+                        // Wybrany = szklana soczewka w tincie terakoty na
+                        // płaskim torze, jak przełączniki iOS 26.
+                        Color.clear
+                            .scSoftSurface(Circle(), accent: AssistantLook.terra(scheme))
                             .matchedGeometryEffect(id: "selected", in: pill)
                     }
                 }

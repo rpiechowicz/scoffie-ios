@@ -15,13 +15,10 @@ import SwiftUI
 /// Stan w osobnym widoku, a nie w ekranie szczegółów: stuknięcie przerysowuje
 /// sam przycisk, a nie cały arkusz ze zdjęciem, makro i krokami.
 ///
-/// Wyskok serca przy dodaniu (`BurstHeart`) stoi w drzewie przez cały czas
-/// i odtwarzają go keyframe'y na podbicie licznika — bez wstawiania widoku
-/// i bez uśpień. Dawniej każde dodanie wstawiało nowe serce do nakładki,
-/// które ruszało dopiero po `Task.sleep`: przez pierwsze klatki drugie,
-/// nieruchome serce stało w pełnym kryciu na glifie, a wyskok zaczynał się
-/// z opóźnieniem. To było przycięcie w pierwszej fazie dodawania, którego
-/// odejmowanie (sama zamiana glifu) nie miało (Rafał, 23.09.2026).
+/// Przy dodaniu serce podskakuje i wokół rozbiegają się kropki (`ThumbCheer`,
+/// ten sam „like” co w Gotuj i u Asystenta) — oba stoją w drzewie przez cały
+/// czas i ruszają na podbicie licznika, bez wstawiania widoków i uśpień
+/// (dawny `BurstHeart` ze wstawianym sercem przycinał pierwszą fazę).
 struct RecipeFavouriteButton: View {
     enum Style {
         /// Krążek jak krzyżyk arkusza — `SCSheetIconButton` w wariancie na zdjęciu.
@@ -54,9 +51,13 @@ struct RecipeFavouriteButton: View {
 
     var body: some View {
         button
-            // Dodane do ulubionych: małe serce wyskakuje nad przyciskiem
-            // i gaśnie. W spoczynku niewidoczne i nie łapie dotyku.
-            .overlay { BurstHeart(trigger: burstCount) }
+            // Dodane do ulubionych: serce podskakuje, a wokół rozbiegają się
+            // kropki w terakocie — ten sam „like” co kciuk na zakończeniu
+            // Gotuj i pod odpowiedzią Asystenta (`ThumbCheer`, Rafał
+            // 4.10.2026: „like na feature Gotuj jest super, zrób podobnie”).
+            // Dawniej małe serce wyskakiwało w górę (`BurstHeart`).
+            .symbolEffect(.bounce.up.byLayer, value: burstCount)
+            .overlay { ThumbCheer(trigger: burstCount, tint: SCPalette.terracotta) }
             .sensoryFeedback(.impact(weight: .light), trigger: shown)
             .onChange(of: isFavourite) { _, value in
                 // Zmiana z zewnątrz (inny ekran, cofnięty zapis) wyrównuje
@@ -88,12 +89,7 @@ struct RecipeFavouriteButton: View {
                     // nowy wjeżdża od dołu.
                     .contentTransition(.symbolEffect(.replace.upUp))
                     .frame(width: 32, height: 32)
-                    .background {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(Color.black.opacity(0.40)))
-                    }
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+                    .scPhotoGlass(in: Circle())
                     // Cel dotyku 44 pt przy 32-punktowym kółku.
                     .padding(6)
                     .contentShape(Circle())
@@ -119,66 +115,4 @@ struct RecipeFavouriteButton: View {
             onCommit(shown)
         }
     }
-}
-
-// MARK: - Wyskakujące serce
-
-/// Małe serce, które po dodaniu do ulubionych wyskakuje z przycisku w górę,
-/// rośnie i gaśnie.
-///
-/// Stoi w drzewie przez cały czas, z kryciem zero, a każde podbicie
-/// `trigger` odtwarza keyframe'y od początku (`keyframeAnimator`). Nic się
-/// nie wstawia i na nic się nie czeka, więc ruch rusza w klatce stuknięcia,
-/// razem z zamianą glifu. Krycie wchodzi od zera w 60 ms — w pierwszej
-/// klatce nie stoją dwa serca jedno na drugim.
-///
-/// Nad przyciskiem w szczegółach jest tylko 16 pt do krawędzi arkusza,
-/// a arkusz przycina wszystko, co za nią wyjdzie. Środek przycisku stoi 34 pt
-/// od krawędzi, więc serce wznosi się o 20 pt i gaśnie, zanim jej dotknie —
-/// ta sama droga mieści się też na karcie karuzeli.
-///
-/// Każda cecha ma własny tor: skok sprężyną, wznoszenie z wyhamowaniem,
-/// gaśnięcie dopiero po chwili. Każdy tor zaczyna się od `MoveKeyframe` —
-/// kolejne dodanie startuje od zera, a nie od końca poprzedniego wyskoku.
-private struct BurstHeart: View {
-    let trigger: Int
-
-    var body: some View {
-        Image(systemName: "heart.fill")
-            .font(.system(size: 14, weight: .bold))
-            .foregroundStyle(SCPalette.terracotta)
-            .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
-            .keyframeAnimator(initialValue: BurstFrame(), trigger: trigger) { heart, frame in
-                heart
-                    .scaleEffect(frame.scale)
-                    .offset(y: frame.rise)
-                    .opacity(frame.opacity)
-            } keyframes: { _ in
-                KeyframeTrack(\.scale) {
-                    MoveKeyframe(0.6)
-                    SpringKeyframe(1.45, duration: 0.34, spring: Spring(response: 0.34, dampingRatio: 0.62))
-                }
-                KeyframeTrack(\.rise) {
-                    MoveKeyframe(0)
-                    LinearKeyframe(-20, duration: 0.6, timingCurve: .easeOut)
-                }
-                KeyframeTrack(\.opacity) {
-                    MoveKeyframe(0)
-                    LinearKeyframe(1, duration: 0.06)
-                    LinearKeyframe(1, duration: 0.12)
-                    LinearKeyframe(0, duration: 0.42, timingCurve: .easeIn)
-                }
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}
-
-/// Stan jednej klatki wyskoku. Wartości startowe to spoczynek — serce jest
-/// w drzewie, ale go nie widać (krycie zero), dopóki nic go nie ruszy.
-private struct BurstFrame {
-    var scale: CGFloat = 0.6
-    /// Przesunięcie w górę (ujemne) od środka przycisku.
-    var rise: CGFloat = 0
-    var opacity: Double = 0
 }

@@ -257,9 +257,11 @@ struct PlanSlotPickerSheet: View {
                     header
                 }
 
+                // Stopka przyklejona do przewijania (`safeAreaBar`): lista
+                // przejeżdża pod szklanymi przyciskami, jak w każdym arkuszu
+                // (Rafał 4.10.2026). Dawniej stała pod listą w `VStack`.
                 list(rows: rows, poolIsEmpty: available.isEmpty)
-
-                footer(visible: rows)
+                    .scSheetFooter { footer(visible: rows) }
             }
         }
         .task { await recipeCatalogStore.loadIfNeeded() }
@@ -373,12 +375,13 @@ struct PlanSlotPickerSheet: View {
                     }
                 }
             }
-            .padding(.top, 8)
-            // Zapas na cień stopki (`SCEdgeShade`), który leży na liście.
-            .padding(.bottom, SCEdgeShade.bottomHeight)
+            // Większy oddech pod przypiętym szukaniem (było 8 i 24 pt
+            // przejścia — „przywiera, jak się scrolluje”).
+            .padding(.top, 14)
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
-        .scScrollEdgeFade()
+        .scScrollEdgeFade(height: 34)
         // Przewijanie listy chowa klawiaturę — inaczej zasłania ona przycisk
         // potwierdzenia dokładnie wtedy, gdy użytkownik znalazł już przepis.
         .scrollDismissesKeyboard(.interactively)
@@ -460,29 +463,42 @@ struct PlanSlotPickerSheet: View {
     /// co dziesiątego („Marek” → „Marka”, ale „Paweł” → „Pawła”). Chipy mówią
     /// to samo w mianowniku, pokazują twarze i dają się przestawić w miejscu,
     /// w którym zapada decyzja.
+    @ViewBuilder
     private func footer(visible rows: [Recipe]) -> some View {
-        SCSheetFooter {
-            if let selected = selectedRecipe, !rows.contains(where: { $0.id == selected.id }) {
-                hiddenSelection(selected)
-            }
+        if let selected = selectedRecipe, !rows.contains(where: { $0.id == selected.id }) {
+            hiddenSelection(selected)
+        }
 
+        // Dom jednoosobowy — zdanie, czemu nie ma wyboru osób.
+        if roster.count <= 1 {
             audience
+        }
 
-            // Inne danie w tej porze dla kogoś z wybranych — decyzja nad
-            // przyciskiem, zanim cokolwiek się zapisze.
-            if !slotConflicts.isEmpty {
-                PlanSlotConflictCard(
-                    slot: slot,
-                    meals: slotConflicts,
-                    whoHasIt: conflictOwners,
-                    replacesForEveryone: participantsToSave.isEmpty && roster.count > 1,
-                    choice: $conflictChoice
+        // Inne danie w tej porze dla kogoś z wybranych — decyzja nad
+        // przyciskiem, zanim cokolwiek się zapisze.
+        if !slotConflicts.isEmpty {
+            PlanSlotConflictCard(
+                slot: slot,
+                meals: slotConflicts,
+                whoHasIt: conflictOwners,
+                replacesForEveryone: participantsToSave.isEmpty && roster.count > 1,
+                choice: $conflictChoice
+            )
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
+
+        HStack(spacing: 10) {
+            if roster.count > 1 {
+                PlanAudienceButton(
+                    members: roster,
+                    selection: $selectedParticipants,
+                    accent: accent,
+                    eyebrow: slot.title,
+                    me: sessionStore.currentUserId
                 )
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            // Ten sam przycisk, co w każdym innym arkuszu aplikacji: terakota
-            // w wariancie „soft” (tint + obwódka, bez gradientu i cienia).
+            // Ten sam przycisk, co w każdym innym arkuszu aplikacji.
             EditorialPrimaryActionButton(
                 title: ctaTitle,
                 icon: ctaIcon,

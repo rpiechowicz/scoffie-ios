@@ -21,7 +21,7 @@ struct CookScreen: View {
     let isPhotoRevealed: Bool
     /// Kierunek przejścia kroku — wstecz teksty rolują się w drugą stronę.
     let direction: Edge
-    let onPortions: (Int) -> Void
+    let onPortions: (Double) -> Void
     let onStart: () -> Void
     let onClose: () -> Void
     let onBack: () -> Void

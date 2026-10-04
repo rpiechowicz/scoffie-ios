@@ -94,8 +94,7 @@ struct PlanDayTimeline: View {
                 .padding(.bottom, 14)
 
             // Karta „Ten tydzień jest jeszcze pusty” zniknęła 27.09.2026
-            // (Rafał: „usuń ten design”) — pusty tydzień mówi teraz oddech
-            // pigułki „Ułóż” w nagłówku ekranu (`PlanAssistantPill(invites:)`).
+            // (Rafał: „usuń ten design”), pigułka „Ułóż” — 4.10.2026.
             timeline
         }
         // Świeża tożsamość na każdy dzień: bez niej sprężyna niżej próbowałaby
@@ -115,14 +114,13 @@ struct PlanDayTimeline: View {
     /// a podsumowanie schodziło pod tytuł do drugiej linii. W nagłówku ekranu
     /// stoi w rzędzie z pozostałymi akcjami planu (zakupy, „…”) i dotyczy —
     /// tak jak one — całego tygodnia, a nie akurat oglądanego dnia.
+    ///
+    /// Plakietka „3 z 5” (kropki pór) zniknęła 4.10.2026 na prośbę Rafała —
+    /// ile pór jest obsadzonych, widać na samej osi pod nagłówkiem.
     private var header: some View {
-        // Raz, nie trzy razy: każde sięgnięcie po `summary` przelicza wiersze
-        // dnia od nowa.
-        let summary = self.summary
-
         // `center`, nie `firstTextBaseline` — patrz `CalendarDayHeader`:
-        // pigułka „DZIŚ" i plakietka kropek to kształty, a nie zdania.
-        return HStack(alignment: .center, spacing: 8) {
+        // pigułka „DZIŚ" to kształt, a nie zdanie.
+        HStack(alignment: .center, spacing: 8) {
             Text(Self.longDayFormatter.string(from: date).capitalized)
                 .scFont(22, weight: .bold, relativeTo: .title2)
                 .tracking(-0.5)
@@ -137,28 +135,7 @@ struct PlanDayTimeline: View {
             if isToday { todayBadge }
 
             Spacer(minLength: 10)
-
-            if summary.total > 0 {
-                // Ta sama plakietka, co licznik zjedzonych w Kalendarzu:
-                // „2 z 3” każe przeczytać i porównać dwie liczby, a dwie
-                // pełne kropki z trzech widać kątem oka. Kropki są też
-                // jedyną rzeczą, która nie rośnie z długością zdania — a to
-                // zdanie potrafi urosnąć o „· 5 dań”.
-                SCPipsBadge(
-                    filled: summary.filled,
-                    total: summary.total,
-                    color: SCPalette.sage,
-                    label: summaryLabel(summary),
-                    size: .small
-                )
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(accessibilitySummary(summary))
-            }
         }
-        // Dołożenie obiadu dorysowuje kropkę i przesuwa „1 z 3” na „2 z 3”
-        // w tej samej klatce, w której wiersz wjeżdża na oś — jedna sprężyna
-        // na jeden ruch, ta sama co pod osią niżej.
-        .animation(.spring(response: 0.36, dampingFraction: 0.9), value: summaryLabel(summary))
     }
 
     private var todayBadge: some View {
@@ -245,48 +222,6 @@ struct PlanDayTimeline: View {
         }
     }
 
-    // MARK: - Podsumowanie dnia
-
-    /// Ile pór ma już posiłek, ile ich w ogóle jest i ile stoi w nich dań.
-    private var summary: (filled: Int, total: Int, dishes: Int) {
-        let list = rows
-        return (
-            filled: list.filter { !$0.dishes.isEmpty }.count,
-            total: list.count,
-            dishes: list.reduce(0) { $0 + $1.dishes.count }
-        )
-    }
-
-    /// „2 z 3”, a przy dniu z osobnymi daniami domowników „2 z 3 · 5 dań”.
-    ///
-    /// Słowa „posiłków” nie ma: stoi pod nim rząd kropek, po jednej na porę,
-    /// więc zdanie i tak mówi o czym. Kalorii też nie — tę samą liczbę
-    /// pokazuje pigułka „Cel dnia" nad menu, i to obok celu, więc podtytuł
-    /// powtarzał ją bez kontekstu. Liczba dań zostaje: mówi coś, czego
-    /// kropki nie powiedzą — że w porze stoi więcej niż jedno danie.
-    private func summaryLabel(_ summary: (filled: Int, total: Int, dishes: Int)) -> String {
-        var text = "\(summary.filled) z \(summary.total)"
-
-        if summary.dishes > summary.filled {
-            let word = PolishPlural.form(summary.dishes, one: "danie", few: "dania", many: "dań")
-            text += " · \(summary.dishes) \(word)"
-        }
-        return text
-    }
-
-    /// Po polsku i w całości — kropek VoiceOver nie policzy.
-    private func accessibilitySummary(_ summary: (filled: Int, total: Int, dishes: Int)) -> String {
-        // Po „z <liczba>” polski rzeczownik stoi w dopełniaczu bez względu na
-        // liczbę — „1 z 3 posiłków”, „2 z 4 posiłków”.
-        var text = "Zaplanowane \(summary.filled) z \(summary.total) posiłków"
-
-        if summary.dishes > summary.filled {
-            let word = PolishPlural.form(summary.dishes, one: "danie", few: "dania", many: "dań")
-            text += ", \(summary.dishes) \(word)"
-        }
-        return text
-    }
-
     /// Ilu domowników dzieli się porcjami, albo `nil`, dopóki `SessionStore`
     /// nie dowiezie listy. Pusta lista przed wczytaniem to brak odpowiedzi,
     /// a nie dom jednoosobowy.
@@ -312,10 +247,11 @@ enum PlanTimelineMetrics {
     static let rail: CGFloat = 46
     /// Odstęp między szyną a treścią wiersza.
     static let gutter: CGFloat = 12
-    /// Odstęp nad wierszem.
-    static let rowTop: CGFloat = 12
+    /// Odstęp nad wierszem. 16 od 4.10.2026 (było 12 — Rafał: „dania zbyt
+    /// skupione względem siebie”).
+    static let rowTop: CGFloat = 16
     /// Odstęp pod treścią wiersza, nad hairline'em.
-    static let rowBottom: CGFloat = 12
+    static let rowBottom: CGFloat = 16
     /// Zdjęcie dania domu i zdjęcie dania domownika.
     static let photo: CGFloat = 72
     static let photoAlt: CGFloat = 56
@@ -754,35 +690,36 @@ struct PlanTimelineEmptyRow: View {
     /// więc machnięcie w bok nie może go „stuknąć” po drodze.
     @Environment(\.dayPagerGate) private var pagerGate
 
+    /// Środek kropki na szynie od góry znacznika: 2 pt odstępu + 3 pt
+    /// pierścienia maski + połowa 9-punktowej kropki (`PlanRailMark`).
+    private static let dotCenter: CGFloat = 2 + 3 + 4.5
+
+    /// Kropka z godziną stoi na wysokości ŚRODKA przerywanego obrysu (Rafał
+    /// 4.10.2026: „kreski nie są na równo z czasem”), a między pustymi porami
+    /// nie ma kresek — obrys sam oddziela pory. Dawniej kropka u góry wiersza,
+    /// a kreska pod obrysem, więc nic nie trzymało jednej linii.
     var body: some View {
-        HStack(alignment: .top, spacing: PlanTimelineMetrics.gutter) {
+        HStack(alignment: .center, spacing: PlanTimelineMetrics.gutter) {
             PlanRailMark(
                 time: sessionStore.mealSlotSchedule.time(for: slot),
                 color: slot.cozyAccent,
                 hollow: true,
                 muted: true
             )
+            .alignmentGuide(VerticalAlignment.center) { _ in Self.dotCenter }
 
-            VStack(alignment: .leading, spacing: 0) {
-                tappableContent
-                    .padding(.bottom, PlanTimelineMetrics.rowBottom)
-
-                if !isLast {
-                    Rectangle()
-                        .fill(Color.scRule(scheme))
-                        .frame(height: 1)
-                }
-            }
+            tappableContent
         }
-        .padding(.top, PlanTimelineMetrics.rowTop)
+        // Więcej powietrza między pustymi porami (Rafał 4.10.2026: „daj
+        // większy padding pomiędzy sobą”).
+        .padding(.top, PlanTimelineMetrics.rowTop + 2)
+        .padding(.bottom, isLast ? PlanTimelineMetrics.rowBottom : 0)
     }
 
     /// Celem dotyku jest CAŁY wiersz, a nie sam napis po prawej.
     ///
-    /// „Wybierz przepis” to jedyna akcja tej pory dnia, więc trafienie w nią
-    /// nie może zależeć od tego, czy palec zmieści się w 100-punktowym napisie
-    /// przy prawej krawędzi. Napis zostaje tym, czym jest w makiecie — podpisem
-    /// tego, co się stanie.
+    /// Wybór przepisu to jedyna akcja tej pory dnia, więc trafienie w nią nie
+    /// może zależeć od tego, czy palec trafi w „+” przy prawej krawędzi.
     @ViewBuilder
     private var tappableContent: some View {
         if isEditable {
@@ -796,44 +733,54 @@ struct PlanTimelineEmptyRow: View {
         }
     }
 
+    /// Puste miejsce na danie (Rafał 4.10.2026: „zamiast »Wybierz posiłek«
+    /// daj icon button… »nic nie zaplanowano« zrób lepiej, wiele treści się
+    /// powtarza”): przerywany obrys w rozmiarze wiersza z daniem, ikona pory
+    /// w jej kolorze, sama nazwa pory i szklany „+” w kolorze pory. Dawniej
+    /// trzy napisy na pustą porę — „ŚNIADANIE · Nic nie zaplanowano ·
+    /// Wybierz przepis ›” — powtarzane w każdym wierszu dnia. Godzina stoi
+    /// na osi obok, więc jej tu nie ma.
     private var content: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(slot.title.uppercased())
-                    .scFont(11, weight: .bold, relativeTo: .caption2)
-                    .tracking(1)
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return HStack(alignment: .center, spacing: 12) {
+            Image(systemName: slot.icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(slot.cozyAccent.opacity(isEditable ? 1 : 0.6))
+                .frame(width: 35, height: 35)
+                .background(Circle().fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.12)))
+                .accessibilityHidden(true)
 
-                Text("Nic nie zaplanowano")
-                    .scFont(15, weight: .medium, relativeTo: .subheadline)
-                    .tracking(-0.3)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .padding(.top, 4)
-            }
+            Text(slot.title)
+                .scFont(16, weight: .semibold, relativeTo: .subheadline)
+                .tracking(-0.3)
+                .foregroundStyle(Color.scMuted(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
             Spacer(minLength: 8)
 
             if isEditable {
-                HStack(spacing: 3) {
-                    Text("Wybierz przepis")
-                        .scFont(14, weight: .bold, relativeTo: .footnote)
-                        .tracking(-0.1)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(SCPalette.terracotta)
-                .padding(.leading, 12)
-                .padding(.trailing, 2)
-                .fixedSize()
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(slot.cozyAccent)
+                    .frame(width: 35, height: 35)
+                    .scChromeGlass(in: Circle(), tint: slot.cozyAccent.opacity(scheme == .dark ? 0.3 : 0.22))
+                    .accessibilityHidden(true)
             }
         }
-        // 48 pt to wysokość celu dotyku całego wiersza — tekst zajmuje ~36 pt.
-        .frame(minHeight: 48)
-        .contentShape(Rectangle())
+        // Obrys 56 pt: 52 było „ciut za małe”, 60 — „ciut za duże” (Rafał
+        // 4.10.2026, dwie rundy tego samego dnia).
+        .padding(.leading, 11)
+        .padding(.trailing, 9)
+        .padding(.vertical, 10)
+        .frame(minHeight: 56)
+        .overlay(
+            shape.strokeBorder(
+                Color.scRule(scheme),
+                style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])
+            )
+        )
+        .contentShape(shape)
     }
 }
 

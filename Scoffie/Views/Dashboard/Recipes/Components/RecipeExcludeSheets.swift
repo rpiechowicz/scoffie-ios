@@ -727,7 +727,9 @@ struct RecipeExcludeSheet: View {
                             .foregroundStyle(SCPalette.terracotta)
                             .padding(.horizontal, 12)
                             .frame(height: 32)
-                            .scSoftCapsule()
+                            // Stoi NA szklanym toaście — zwykły tint, nie
+                            // drugie szkło na pierwszym.
+                            .background(Capsule(style: .continuous).fill(SCPalette.terracotta.opacity(0.14)))
                             .contentShape(Capsule(style: .continuous))
                     }
                     .buttonStyle(PlanPressStyle(scale: 0.94))
@@ -735,11 +737,9 @@ struct RecipeExcludeSheet: View {
                 .padding(.leading, 14)
                 .padding(.trailing, 6)
                 .frame(height: 44)
-                .glassEffect(
-                    .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
-                    in: .capsule
-                )
-                .background(Color.scPageBase(scheme).opacity(0.72), in: .capsule)
+                // Pływa nad chmurą pigułek — czyste szkło warstwy nawigacji,
+                // jak dolne menu (`scChromeGlass`), bez matowej warstwy.
+                .scChromeGlass(in: .capsule)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
                 .transition(.move(edge: .bottom).combined(with: .opacity))

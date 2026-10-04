@@ -32,8 +32,8 @@ struct SCStepper: View {
                 adjust(by: step)
             }
         }
-        .background(Capsule().fill(Color.scChipBg(scheme)))
-        .overlay(Capsule().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+        // Szklana pigułka (Liquid Glass runda 3) zamiast tła chipa z obwódką.
+        .scChromeGlass(in: Capsule())
         .accessibilityLabel(accessibilityTitle)
         .accessibilityValue(accessibilityValue)
     }

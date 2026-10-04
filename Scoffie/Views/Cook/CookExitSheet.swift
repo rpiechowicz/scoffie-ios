@@ -86,15 +86,13 @@ struct CookExitSheet: View {
     /// poprawi pomiar, a arkusz nie przeskakuje w trakcie wjazdu.
     private static func estimatedHeight(session: CookSession, running: [CookDockTimer]) -> CGFloat {
         let width = screenWidth - 2 * SCCook.Spacing.page
-        let title = SCCook.Typography.exitTitle
-        var height: CGFloat = 26
-        height += textHeight(
-            "Wychodzisz z gotowania?",
-            font: .systemFont(ofSize: title.size, weight: .heavy),
-            kern: title.tracking,
-            width: width
-        )
-        height += 4 + textHeight(subtitle(session), font: .systemFont(ofSize: 14), width: width)
+        // Nagłówek `EditorialSheetHeader(compact:)`: kafelek 36 obok eyebrow
+        // (10,5 bold) i tytułu (19 bold, jedna linia), pod spodem podtytuł 13
+        // po 10 pt odstępu.
+        let titleBlock = UIFont.systemFont(ofSize: 10.5, weight: .bold).lineHeight + 2
+            + UIFont.systemFont(ofSize: 19, weight: .bold).lineHeight
+        var height: CGFloat = headerTop + max(36, titleBlock)
+        height += 10 + textHeight(subtitle(session), font: .systemFont(ofSize: 13), width: width)
         if !running.isEmpty {
             height += 14 + pillsHeight(running, width: width)
         }
@@ -114,6 +112,9 @@ struct CookExitSheet: View {
         height += 22 + SCCook.Height.button + 8
         return ceil(height)
     }
+
+    /// Odstęp nad nagłówkiem — jak w innych kompaktowych arkuszach.
+    private static let headerTop: CGFloat = 20
 
     private static func subtitle(_ session: CookSession) -> String {
         "Krok \(session.stepIndex + 1) z \(session.stepCount) · \(CookRecipeFacts.shortTitle(session.recipeTitle))"
@@ -164,18 +165,19 @@ struct CookExitSheet: View {
 
     private func content(running: [CookDockTimer]) -> some View {
         VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                Text("Wychodzisz z gotowania?")
-                    .cookText(SCCook.Typography.exitTitle)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .multilineTextAlignment(.center)
-                Text(Self.subtitle(session))
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 4)
-            }
-            .padding(.top, 26)
+            // Wspólny nagłówek arkuszy, kompaktowy (Rafał 4.10.2026: „1:1
+            // wszędzie tak samo”). Krzyżyk = „Gotuj dalej”. Dawniej wyśrodkowany
+            // tytuł bez krzyżyka — jedyny arkusz bez nagłówka.
+            EditorialSheetHeader(
+                eyebrow: "Gotowanie",
+                title: "Wychodzisz z gotowania?",
+                icon: "pause.fill",
+                accent: SCPalette.sage,
+                subtitle: Self.subtitle(session),
+                compact: true,
+                onClose: onContinue
+            )
+            .padding(.top, Self.headerTop)
 
             if !running.isEmpty {
                 AllergenChipFlow(spacing: 8, alignment: .center) {
@@ -211,8 +213,8 @@ struct CookExitSheet: View {
                     .cookText(SCCook.Typography.buttonQuiet)
                     .foregroundStyle(Color.scLabel(scheme))
                     .frame(maxWidth: .infinity, minHeight: SCCook.Height.button)
-                    .background(Capsule().fill(Color.scChipBg(scheme)))
-                    .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                    // Neutralne szkło — przycisk wtórny jak `AssistantGhostButton`.
+                    .scChromeGlass(in: Capsule())
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)

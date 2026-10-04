@@ -147,8 +147,6 @@ struct RecipeFilterSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        fitRow
-                            .padding(.top, 6)
                         timeAndDifficultySection
                         caloriesSection
                         dietSection
@@ -183,11 +181,23 @@ struct RecipeFilterSheet: View {
             icon: "slider.horizontal.3",
             eyebrow: "Przepisy",
             title: "Filtry",
-            scope: "Działają we wszystkich kategoriach",
+            scope: headerScope,
             canClear: draft.activeCount > 0,
             onClear: { clearAll() },
+            fitIsOn: personalization.hasAnyPreference ? fitDraft : nil,
+            onToggleFit: { withAnimation(.smooth(duration: 0.22)) { fitDraft.toggle() } },
             onClose: { dismiss() }
         )
+    }
+
+    /// Podtytuł mówi, co robi różdżka obok krzyżyka — dawna karta
+    /// „Dopasowane do Ciebie” z przełącznikiem zajmowała górę arkusza.
+    private var headerScope: String {
+        guard personalization.hasAnyPreference, fitDraft else { return "Działają we wszystkich kategoriach" }
+        let hidden = index.profileHiddenCount
+        return hidden > 0
+            ? "Dopasowane do Ciebie · ukrywa \(PolishPlural.recipes(hidden))"
+            : "Dopasowane do Ciebie · \(profileSummary)"
     }
 
     // MARK: - Dopasowanie
@@ -211,67 +221,6 @@ struct RecipeFilterSheet: View {
             parts.append("cel: \(personalization.goal.shortTitle.lowercased())")
         }
         return parts.isEmpty ? "Na podstawie Twojego profilu" : parts.joined(separator: " · ")
-    }
-
-    private var fitRow: some View {
-        let canFit = personalization.hasAnyPreference
-        let isOn = fitDraft && canFit
-        let hidden = index.profileHiddenCount
-
-        return Button {
-            withAnimation(.smooth(duration: 0.22)) { fitDraft.toggle() }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(SCPalette.sage)
-                    .frame(width: 22)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dopasowane do Ciebie")
-                        .font(.system(size: 15, weight: .semibold))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                    Text(canFit ? profileSummary : "Ustaw dietę i cel w Ustawieniach")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if isOn, hidden > 0 {
-                        (Text("ukrywa ")
-                            + Text(verbatim: "\(hidden)").fontWeight(.semibold)
-                            + Text(verbatim: " \(PolishPlural.recipesNoun(hidden))"))
-                            .font(.system(size: 12))
-                            .monospacedDigit()
-                            .foregroundStyle(SCPalette.sage)
-                            .transition(.opacity)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                RecipeFilterToggleIndicator(isOn: isOn, accent: SCPalette.sage)
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, 12)
-            .padding(.vertical, 11)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isOn ? SCPalette.sage.opacity(scheme == .dark ? 0.10 : 0.08) : Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(isOn ? SCPalette.sage.opacity(0.26) : Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
-        .disabled(!canFit)
-        .opacity(canFit ? 1 : 0.6)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Dopasowane do Ciebie")
-        .accessibilityValue(isOn ? "włączone, \(profileSummary)" : "wyłączone")
-        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Czas, trudność, kalorie
@@ -635,7 +584,7 @@ struct RecipeFilterSheet: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(footerAccessibilityLabel(count: count, byCategory: byCategory))
 
-            RecipeFilterFooterButton(title: "Pokaż", isEnabled: count > 0, action: apply)
+            RecipeFilterFooterButton(title: "Pokaż", trailingIcon: "magnifyingglass", iconOnly: true, isEnabled: count > 0, action: apply)
         }
         .padding(.leading, 4)
     }

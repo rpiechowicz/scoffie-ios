@@ -35,8 +35,8 @@ struct SCSheetIconButton: View {
     let accessibilityLabel: String
     /// Przycisk stoi na zdjęciu (szczegóły posiłku). Zwykłe tło krążka to
     /// kilka procent krycia — na tle arkusza wystarcza, ale na jasnym kadrze
-    /// krążek znikał. Tu dostaje kryjące tło arkusza pod szkłem i miękki
-    /// cień; rozmiar, glif i obwódka zostają te same.
+    /// krążek znikał. Tu jest Liquid Glass (`SCSheetIconSurface`); rozmiar
+    /// i glif zostają te same.
     var onImage: Bool = false
     /// Praca w toku — kręciołek w krążku (patrz `SCSheetIconLabel.isBusy`).
     var isBusy: Bool = false
@@ -57,6 +57,12 @@ struct SCSheetIconButton: View {
 /// komplecie: `Menu` („Udostępnij” / „Wyłącz link” w szczegółach przepisu)
 /// rysuje ten sam krążek jako swoją etykietę, zamiast drugiej kopii rysunku.
 struct SCSheetIconLabel: View {
+    /// Średnica 38 pt. Do 4.10.2026 było 36 pt z szarym glifem (szkło na
+    /// jednolitym tle czytało się jak płaskie kółko), potem na chwilę 44 pt
+    /// jak natywny pasek — Rafał: „ciut za duże, zmniejsz”. Glif w kolorze
+    /// tekstu zostaje.
+    static let size: CGFloat = 38
+
     let systemName: String
     var tint: Color? = nil
     var onImage: Bool = false
@@ -67,7 +73,9 @@ struct SCSheetIconLabel: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let glyph = tint ?? (onImage ? Color.scLabel(scheme) : Color.scMuted(scheme))
+        // Glif w kolorze tekstu, jak krzyżyk systemowych arkuszy — szary
+        // (`scMuted`) gasł na szkle.
+        let glyph = tint ?? Color.scLabel(scheme)
         Group {
             if isBusy {
                 ProgressView()
@@ -76,7 +84,7 @@ struct SCSheetIconLabel: View {
                     .transition(.opacity)
             } else {
                 Image(systemName: systemName)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(glyph)
                     // W górę: stary glif odjeżdża do góry, nowy wjeżdża od dołu —
                     // serce „napełnia się” ruchem, a nie przenikaniem.
@@ -84,34 +92,41 @@ struct SCSheetIconLabel: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: 36, height: 36)
+        .frame(width: Self.size, height: Self.size)
         .scSheetIconSurface(onImage: onImage)
         .contentShape(Circle())
         .animation(.smooth(duration: 0.2), value: isBusy)
     }
 }
 
-/// Powierzchnia krążka arkusza: tło (na zdjęciu kryjące, pod szkłem),
-/// obwódka i cień. Jedna dla krzyżyka, jego sąsiadów i pierścienia kroków
-/// trybu Gotuj (`CookStepRing`), który stoi naprzeciw krzyżyka na zdjęciu
-/// i ma wyglądać jak jego para.
+/// Powierzchnia krążka arkusza. Jedna dla krzyżyka, jego sąsiadów
+/// i pierścienia kroków trybu Gotuj (`CookStepRing`), który stoi naprzeciw
+/// krzyżyka na zdjęciu i ma wyglądać jak jego para.
+///
+/// Liquid Glass wszędzie — jak krzyżyk systemowych arkuszy iOS 26 i przyciski
+/// nagłówka w Telegramie (runda 1: na zdjęciu, runda 2 4.10.2026: także na
+/// tle arkusza). Szkło ma własny brzeg i głębię: bez obwódki i cienia, a dawne
+/// kryjące tło pod materiałem (0,78) robiło z krążka na zdjęciu kremowy guzik.
+/// `onImage` zmienia już tylko kolor glifu (`SCSheetIconLabel`).
 struct SCSheetIconSurface: ViewModifier {
     let onImage: Bool
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Czyste szkło z miękkim cieniem pod spodem — jak natywne szklane
+    /// przyciski iOS 26, którym głębię daje właśnie cień. Jasny tint z poprzedniej
+    /// rundy robił z krążka płaski, kremowy guzik „po staremu” (Rafał 4.10.2026,
+    /// dwa razy: „X dalej po staremu”, „wszystkie półarkusze mają mieć liquid
+    /// buttony”). Na zdjęciu cień mocniejszy, bo tło jest niespokojne.
     func body(content: Content) -> some View {
         content
-            .background {
-                if onImage {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Circle().fill(Color.scCanvas(scheme).opacity(0.78)))
-                }
-                Circle().fill(Color.scChipBg(scheme))
-            }
-            .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
-            .shadow(color: .black.opacity(onImage ? (scheme == .dark ? 0.35 : 0.16) : 0), radius: 6, x: 0, y: 2)
+            .scChromeGlass(in: Circle())
+            .shadow(
+                color: .black.opacity(scheme == .dark ? 0.4 : (onImage ? 0.18 : 0.1)),
+                radius: onImage ? 8 : 6,
+                x: 0,
+                y: onImage ? 3 : 2
+            )
     }
 }
 
