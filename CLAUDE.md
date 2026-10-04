@@ -783,7 +783,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   Zakładki kategorii pod tytułem (`RecipeScopeTabs`, 4.10.2026 — świadomy wyjątek od „zawężanie tylko w Filtrach”,
   prośba Rafała): Wszystkie · Śniadania · Obiady · Kolacje · Przekąski · Ulubione, szklane kapsuły, wybrana w tincie
   kategorii; wybór = stan wyników tej kategorii, łączy się z frazą i filtrami („kuskus” → Obiady), przy frazie /
-  filtrach każda ma liczbę trafień.
+  filtrach każda ma liczbę trafień. Nad pustym stanem zakładek NIE ma.
+  Przejścia (4.10.2026, „przeskakuje, szczególnie z karuzelą”): stany leżą w `ZStack` od góry (w `VStack` wchodzący
+  stał pod wychodzącym i podskakiwał); zwykły widok liczy się z `browseRecipes` (dieta + filtry kategorii, BEZ frazy
+  i „Filtrów”) i STOI pod wynikami przezroczysty (karuzela nie buduje się od nowa), zwijany do zera po zgaśnięciu
+  (`browseLayerCollapsed`); jeden ruch `RecipesView.stateMotion`. Pusto w wynikach = `RecipeNoResultsView` (bez karty
+  i bez nagłówka „0 przepisów”: szklany krążek powodu z podskokiem, „Nic dla „fraza””, akcje w szkle — najpierw
+  „Wszystkie kategorie · N”, „Pokaż mimo diety”, potem „Wyczyść filtry / frazę”).
   Na górze sam `EditorialPageHeader("Przepisy")` (`EditorialRecipesHeader` usunięty). Fraza ALBO filtry z „Filtrów”
   = STAN WYNIKÓW, jeden dla obu: `RecipeResultsHeader` (etykieta, duża liczba, „fraza” · filtry, szklane „Wyczyść”)
   i JEDNA płaska lista `RecipeRowStack` — bez karuzeli i sekcji („nie może być mocnego podziału na sekcje”); przy
