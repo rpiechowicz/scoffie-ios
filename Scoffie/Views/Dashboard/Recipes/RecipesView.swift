@@ -47,9 +47,6 @@ struct RecipesView: View {
     @State private var filters = RecipeFilterOptions()
     /// Zakładka kategorii nad treścią (`RecipeScopeTabs`); `nil` = wszystkie.
     @State private var scope: RecipesCategory?
-    /// Kierunek ostatniej zmiany zakładki — lista wjeżdża z tej strony,
-    /// w którą poszedł wybór (w prawo = z prawej).
-    @State private var scopeForward = true
     /// Zwykły widok (karuzela + sekcje) STOI w drzewie także pod wynikami —
     /// przezroczysty, więc karuzela nie buduje się od nowa i nie przeskakuje
     /// przy powrocie. Po zgaśnięciu dostaje zerową wysokość, żeby lista
@@ -434,7 +431,7 @@ struct RecipesView: View {
                 if showsScopeTabs {
                     let counts = scopeCounts
                     RecipeScopeTabs(
-                        selection: scopeBinding,
+                        selection: $scope,
                         counts: counts,
                         total: counts == nil ? nil : unscopedResults.count
                     )
@@ -557,24 +554,6 @@ struct RecipesView: View {
 
     private static let topAnchor = "recipes-top"
 
-    /// Wybór zakładki razem z kierunkiem — oba w tej samej transakcji
-    /// (`RecipeScopeTabs` ustawia wybór w `withAnimation`), więc wjazd listy
-    /// zna już nowy kierunek.
-    private var scopeBinding: Binding<RecipesCategory?> {
-        Binding(
-            get: { scope },
-            set: { newValue in
-                scopeForward = Self.scopeIndex(newValue) >= Self.scopeIndex(scope)
-                scope = newValue
-            }
-        )
-    }
-
-    private static func scopeIndex(_ scope: RecipesCategory?) -> Int {
-        guard let scope, let index = RecipeScopeTabs.scopes.firstIndex(of: scope) else { return 0 }
-        return index + 1
-    }
-
     /// Jeden ruch przejść między zwykłym widokiem a wynikami.
     private static let stateMotion: Animation = .smooth(duration: 0.38)
 
@@ -612,18 +591,8 @@ struct RecipesView: View {
                     .padding(.horizontal, pageHorizontalPadding)
                     .padding(.bottom, 10)
 
-                    // Zmiana zakładki = nowa lista, nie przestawianie wierszy
-                    // starej (Rafał 4.10.2026: „przeskakuje, jak się zmienia”):
-                    // nowa wjeżdża z kierunku wyboru i przenika nad starą.
-                    ZStack(alignment: .top) {
-                        RecipeRowStack(recipes: results) { recipe in
-                            openDetail(for: recipe)
-                        }
-                        .id(scope)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(x: scopeForward ? 32 : -32)),
-                            removal: .opacity
-                        ))
+                    RecipeRowStack(recipes: results) { recipe in
+                        openDetail(for: recipe)
                     }
                 }
                 .transition(.opacity)

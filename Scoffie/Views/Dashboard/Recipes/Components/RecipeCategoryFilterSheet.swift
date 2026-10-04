@@ -355,7 +355,7 @@ struct RecipeCategoryFilterSheet: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Zostaje \(PolishPlural.recipes(count)) z \(total) \(totalContext)")
 
-            RecipeFilterFooterButton(title: "Pokaż", trailingIcon: "checkmark", iconOnly: true, isEnabled: count > 0, action: apply)
+            RecipeFilterFooterButton(title: "Pokaż", trailingIcon: "magnifyingglass", iconOnly: true, isEnabled: count > 0, action: apply)
         }
         .padding(.leading, 4)
     }
