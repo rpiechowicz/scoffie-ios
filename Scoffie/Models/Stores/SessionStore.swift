@@ -154,6 +154,11 @@ final class SessionStore {
     /// serwer. Zamknięty ekran nie może tego przegapić.
     var subscriptionStore: SubscriptionStore?
     var datesViewModel = DatesViewModel()
+    /// Tydzień i dzień KALENDARZA — osobno od Planu (Rafał 4.10.2026: „date
+    /// component powinien mieć różne stany na planowaniu oraz na kalendarzu,
+    /// nie mogę tu przewijać i tam się zmienia”). `datesViewModel` zostaje
+    /// Planowi i jego arkuszom (Zakupy, „Dodaj do planu”, Asystent).
+    var calendarDatesViewModel = DatesViewModel()
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
     var dashboardTab: DashboardTab = .calendar
@@ -776,6 +781,7 @@ final class SessionStore {
         }
         let datesViewModel = DatesViewModel()
         self.datesViewModel = datesViewModel
+        calendarDatesViewModel = DatesViewModel()
         // Każde wejście do sesji (logowanie, restore po zimnym starcie,
         // zmiana gospodarstwa) zaczyna się od Kalendarza. Bez tego zakładka
         // zostawała tam, gdzie stała poprzednia sesja na tym telefonie —
@@ -1028,6 +1034,7 @@ final class SessionStore {
         dataExportClient = nil
         subscriptionStore = nil
         datesViewModel = DatesViewModel()
+        calendarDatesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
         householdMembersTask?.cancel()
