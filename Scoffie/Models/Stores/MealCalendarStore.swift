@@ -642,6 +642,11 @@ class MealCalendarStore {
                 return
             }
             guard let self else { return }
+            // Nasłuch przeszedł w międzyczasie na inny tydzień (zakładka
+            // zmieniła tydzień przed końcem debounce) — stare odświeżenie
+            // nie może zabrać mu nasłuchu, bo `loadWeekPlanFromBackend`
+            // ustawia `observedWeekStart` na swój tydzień.
+            guard self.observedWeekStart == weekStart else { return }
             await self.loadWeekPlanFromBackend(weekStart: weekStart, dates: dates)
         }
     }
