@@ -1577,10 +1577,10 @@ struct SettingsView: View {
                     .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
-                    .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.30), lineWidth: 1))
+                    // Wariant „soft” = szkło w tincie terakoty.
+                    .scSoftCapsule()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlanPressStyle(scale: 0.94))
             .accessibilityLabel("Ustaw \(suggestedCalories) kcal")
         }
         .padding(.horizontal, 16)
@@ -1857,10 +1857,9 @@ struct SettingsView: View {
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.20 : 0.12)))
-                        .overlay(Capsule().stroke(SCPalette.terracotta.opacity(0.30), lineWidth: 1))
+                        .scSoftCapsule()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlanPressStyle(scale: 0.94))
                 .accessibilityLabel("Policz makra od nowa")
             }
         }
@@ -2343,6 +2342,14 @@ struct SettingsView: View {
                     ForEach(Array(householdMembers.enumerated()), id: \.element.id) { index, member in
                         memberRow(member, showsRule: index > 0)
                     }
+
+                    // Zaproszenie to OSTATNI wiersz listy domowników — jak
+                    // „dodaj” w listach systemu (Rafał 4.10.2026: „pod
+                    // domownikami albo nad, ładniej i czytelniej”). Dawniej
+                    // dwuwierszowy kafel w stopce nad „Opuść”.
+                    if canCreateInvitations {
+                        inviteRow
+                    }
                 }
 
             }
@@ -2401,47 +2408,44 @@ struct SettingsView: View {
         return "\(count) \(membersLabel(for: count)) · wspólny plan i lista zakupów"
     }
 
-    /// Stopka arkusza: zaproszenie nad wyjściem (Rafał, 23.09.2026: „button
-    /// do zapraszania daj na dole nad opuść”). Zaprasza tylko właściciel —
+    /// Stopka arkusza: samo wyjście. Zaproszenie przeszło do listy
+    /// domowników (`inviteRow`, 4.10.2026). Zaprasza tylko właściciel —
     /// reszta widzi pod domownikami, kogo o to poprosić.
     private var householdFooter: some View {
-        VStack(spacing: 10) {
-            if canCreateInvitations {
-                inviteButton
-            }
-            leaveHouseholdButton
-        }
+        leaveHouseholdButton
     }
 
-    /// Link tworzy się sam przy otwarciu arkusza (`preloadHouseholdContextIfNeeded`),
-    /// więc zwykle od razu jest czym się podzielić; przycisk „Przygotuj” zostaje
-    /// na wypadek, gdyby serwer za pierwszym razem odmówił.
-    ///
-    /// Dwie linijki zamiast samej kapsuły: nad czerwonym „Opuść” dwie
-    /// kapsuły w podobnych barwach czytały się jak para równorzędnych akcji.
-    /// Ikona, co robi, i warunki linku w jednym miejscu; glif po prawej mówi,
-    /// że stuknięcie otwiera udostępnianie.
+    /// Wiersz „Zaproś domownika” na końcu listy domowników, w układzie wiersza
+    /// osoby: w miejscu awatara przerywane kółko z plusem (miejsce na kolejną
+    /// osobę), tytuł i warunki linku, z prawej szklany krążek udostępniania.
+    /// Link tworzy się sam przy otwarciu arkusza
+    /// (`preloadHouseholdContextIfNeeded`), więc zwykle od razu jest czym się
+    /// podzielić; bez linku krążek ma strzałkę „przygotuj ponownie”.
     @ViewBuilder
-    private var inviteButton: some View {
+    private var inviteRow: some View {
         let isReady = invitationLink != nil
         let label = HStack(spacing: 12) {
             Circle()
-                .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.22 : 0.16))
-                .frame(width: 36, height: 36)
+                .strokeBorder(
+                    SCPalette.terracotta.opacity(0.7),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                )
+                .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.12 : 0.08)))
+                .frame(width: 40, height: 40)
                 .overlay(
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                 )
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(isReady ? "Zaproś domownika" : "Przygotuj zaproszenie")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 15, weight: .semibold))
                     .tracking(-0.2)
-                    .foregroundStyle(Color.scLabel(scheme))
+                    .foregroundStyle(SCPalette.terracotta)
                 Text("Link dla jednej osoby · ważny 7 dni")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
             }
             .lineLimit(1)
@@ -2455,18 +2459,23 @@ struct SettingsView: View {
                         .tint(SCPalette.terracotta)
                 } else {
                     Image(systemName: isReady ? "square.and.arrow.up" : "arrow.clockwise")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(SCPalette.terracotta)
                 }
             }
-            .frame(width: 24)
+            .frame(width: 34, height: 34)
+            .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(scheme == .dark ? 0.3 : 0.22))
             .accessibilityHidden(true)
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 16)
-        .padding(.vertical, 10)
-        .scSoftSurface(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.scRule(scheme))
+                .frame(height: 1)
+                .padding(.leading, 14 + 40 + 12)
+        }
 
         if let invitationLink {
             ShareLink(
@@ -2475,7 +2484,8 @@ struct SettingsView: View {
             ) {
                 label
             }
-            .buttonStyle(PlanPressStyle(scale: 0.97))
+            .buttonStyle(PlanPressStyle(scale: 0.98))
+            .accessibilityLabel("Zaproś domownika")
             .accessibilityHint("Udostępnia link zaproszenia ważny 7 dni")
         } else {
             Button {
@@ -2483,8 +2493,9 @@ struct SettingsView: View {
             } label: {
                 label
             }
-            .buttonStyle(PlanPressStyle(scale: 0.97))
+            .buttonStyle(PlanPressStyle(scale: 0.98))
             .disabled(isCreatingInvitation)
+            .accessibilityLabel("Przygotuj zaproszenie")
         }
     }
 
@@ -2571,13 +2582,10 @@ struct SettingsView: View {
                         .foregroundStyle(Color.scLabel(scheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
-                        .background(Capsule(style: .continuous).fill(Color.scChipBg(scheme)))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1.2)
-                        )
+                        // Neutralne szkło obok „Dołącz” (szkło w tincie).
+                        .scChromeGlass(in: Capsule(style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlanPressStyle(scale: 0.96))
 
                 Button {
                     Task {
@@ -2782,8 +2790,7 @@ struct SettingsView: View {
                 .font(.system(size: 13, weight: .heavy))
                 .foregroundStyle(Color.scMuted(scheme))
                 .frame(width: 32, height: 32)
-                .background(Circle().fill(Color.scChipBg(scheme)))
-                .overlay(Circle().stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                .scChromeGlass(in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

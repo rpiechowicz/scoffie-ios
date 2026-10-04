@@ -632,7 +632,7 @@ struct RecipeDetailView: View {
             .padding(.trailing, 16)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .scChromeGlass(in: shape, interactive: true)
+            .scChromeGlass(in: shape)
             .contentShape(shape)
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
@@ -1259,7 +1259,7 @@ struct RecipeDetailView: View {
             // Pełna terakota jako szkło („prominent”, Liquid Glass runda 3):
             // dalej jedyny kryjący przycisk w aplikacji, ale z odblaskiem
             // i reakcją na dotyk jak przycisk obok.
-            .scChromeGlass(in: Capsule(), tint: SCPalette.terracotta, interactive: true)
+            .scChromeGlass(in: Capsule(), tint: SCPalette.terracotta)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -2013,7 +2013,7 @@ private struct DetailServingsStepper: View {
             }
         }
         // Szklana pigułka jak `SCStepper` (Liquid Glass).
-        .scChromeGlass(in: Capsule(), interactive: true)
+        .scChromeGlass(in: Capsule())
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityName)

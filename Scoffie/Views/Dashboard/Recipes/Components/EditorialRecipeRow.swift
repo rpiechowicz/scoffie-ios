@@ -8,7 +8,7 @@ import SwiftUI
 //   placeholder with the category glyph.
 //   Title — 17pt 600, tracking -0.3, line-height 21pt, label color,
 //   `textWrap: balance`, marginBottom 3pt.
-//   Meta — 12pt 500 muted, "{time} min · {kcal} kcal · {protein} g białka"
+//   Meta — 12pt 500 muted, "{time} min · {kcal} kcal" (bez białka od 4.10.2026)
 //   with tabular nums.
 //   Trailing — terracotta heart when favourite, then 14pt chevron in faint.
 //
@@ -103,11 +103,11 @@ struct EditorialRecipeRow: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
+    /// „25 min · 510 kcal” — białko zeszło z wiersza 4.10.2026 (Rafał: „usuń to
+    /// białko”); makro jest w szczegółach przepisu.
     private var metaText: String {
-        let nutrition = recipe.nutritionPerServing
-        let kcal = Int(nutrition.kcal.rounded())
-        let protein = Int(nutrition.protein.rounded())
-        return "\(recipe.prepTimeMinutes) min · \(kcal) kcal · \(protein) g białka"
+        let kcal = Int(recipe.nutritionPerServing.kcal.rounded())
+        return "\(recipe.prepTimeMinutes) min · \(kcal) kcal"
     }
 }
 

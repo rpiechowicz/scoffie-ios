@@ -20,6 +20,12 @@ extension View {
     ///
     /// `tint` — barwa akcji, która coś włącza (aktywne filtry, „Wróć do
     /// dziś”): szkło w kolorze akcentu zamiast dawnego wariantu „soft”.
+    ///
+    /// `interactive` TYLKO dla elementów z własnym gestem, nie w etykietach
+    /// i kontenerach przycisków (dolne menu, pigułka „Cel dnia”). Interaktywne
+    /// szkło w etykiecie przycisku `.plain` przechwytywało na iOS 26 stuknięcie
+    /// — „Dalej” w arkuszu „Jak działa Asystent” nic nie robiło (4.10.2026).
+    /// Reakcję na dotyk daje przyciskom `PlanPressStyle`.
     func scChromeGlass<S: Shape>(in shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
         var glass = Glass.regular
         if let tint { glass = glass.tint(tint) }

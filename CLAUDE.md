@@ -369,6 +369,13 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wybrany = szklana soczewka (osoby w „Cel dnia”, osoby w przeglądzie propozycji, „Ten krok / Cały przepis” w Gotuj,
   „Zamień / Dodaj obok”). Akcent na element stojący NA szkle (przycisk „Wyślij”, „Cofnij” w toaście) = `tint` tego
   jednego szkła albo zwykłe wypełnienie — bez drugiego szkła z `scSoftSurface` na pierwszym.
+  INTERAKTYWNE szkło (`scChromeGlass(interactive: true)`) TYLKO tam, gdzie widok ma własny gest (dolne menu,
+  pigułka „Cel dnia”) — NIGDY w etykiecie ani kontenerze przycisku: z `.buttonStyle(.plain)` przechwytywało na iOS 26
+  stuknięcie („Dalej” w „Jak działa Asystent” nic nie robiło, 4.10.2026). Reakcja na dotyk = `PlanPressStyle`
+  (`EditorialPrimaryActionButton`, `SCSoftButton` przeszły z `.plain`). Też szkło (4.10): strzałki tygodnia
+  (`EditorialWeekBar`, „Dodaj do planu”), „Wyczyść filtry”, strzałka nagłówka sekcji Przepisów, „Otwórz” u Asystenta,
+  „Ustaw/Policz/Odrzuć/…” w Ustawieniach, chipy „Dla kogo”, kciuki oceny Gotuj. Serce ulubionych = podskok glifu +
+  `ThumbCheer` w terakocie (jak „like” w Gotuj).
   Gotuj (4.10.2026): szkło na „Wycisz” i „+N min” alarmu, „Gotuj dalej”, stepperze porcji powitania, „Pomiń” w Timerach,
   pigułkach powodów oceny (`scChoiceSurface`). Przyciski nagłówka arkusza (krzyżyk, serce, „Cofnij/Wyczyść”, „…” w Zakupach) = 38 pt z glifem `scLabel`
   (`SCSheetIconLabel.size`) — 36 pt z szarym glifem wyglądało na płaskie kółko, 44 było „ciut za duże”.
@@ -868,7 +875,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   i „DZIŚ” — plakietka „3 z 5” (kropki pór, `SCPipsBadge`) też usunięta. Karty pustego tygodnia nad osią NIE MA.
   Odstęp pasek dni → nazwa dnia = 14 pt w `PlanDayTimeline`, zero pod paskiem (jak w Kalendarzu). Plakietka
   `scCountBadge` bez kremowej obwódki (krążki są szkłem) i bez `GlassEffectContainer` wokół koszyka — grupa
-  szkła nie może trzymać czegoś, co wystaje poza krążek.
+  szkła nie może trzymać czegoś, co wystaje poza krążek. Kalendarz też bez plakietki „2 z 3” (4.10.2026).
+  Pusta pora (`PlanTimelineEmptyRow`, 4.10.2026) = przerywany obrys z ikoną pory w jej kolorze, nazwą pory i szklanym
+  „+” w kolorze pory — bez „Nic nie zaplanowano” / „Wybierz przepis” (powtarzały się w każdym wierszu). Strzałki
+  i gest tygodnia (Plan, Kalendarz) zaznaczają ZAWSZE poniedziałek nowego tygodnia (`DatesViewModel`); dziś daje
+  „Wróć do dziś”. Wiersz przepisu na listach (`EditorialRecipeRow`) = „min · kcal”, bez białka. Przełącznik osób
+  w arkuszu „Cel dnia” ma wysokość krzyżyka (`SCSheetIconLabel.size`).
 - Zakupy (4.10.2026): pasek postępu, który zjedzie pod górę, ma przypiętą kopię na szkle (`pinnedProgress`,
   pomiar `frame(in: .scrollView)`); „Na dziś” to NIE wiersz listy, tylko szklany przycisk przyklejony do dołu
   (`todayButton` w `.scSheetFooter`, ten sam `ShoppingTodayRow`).
@@ -922,7 +934,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   plan i lista zakupów”; domownicy: sama tożsamość — awatar, imię, plakietki „TY” / „WŁAŚCICIEL”
   (dieta i alergeny usunięte w rundzie 10: „to tu nie ma sensu”); zaproszenie (link jednorazowy, 7 dni)
   i „Opuść gospodarstwo” PRZYPIĘTE w stopce arkusza (`scSheetFooter`, runda 10) — od 23.09 zaproszenie
-  to dwuwierszowy przycisk „Zaproś domownika · Link dla jednej osoby · ważny 7 dni” NAD „Opuść”. Wcześniej: nazwa w nagłówku
+  to dwuwierszowy przycisk „Zaproś domownika · Link dla jednej osoby · ważny 7 dni” NAD „Opuść”; od 4.10.2026
+  zaproszenie to OSTATNI wiersz karty „Domownicy” (`inviteRow`: przerywane kółko z plusem w miejscu awatara, tytuł
+  w terakocie, warunki linku, szklany krążek udostępniania), a w stopce zostaje samo „Opuść”. Wcześniej: nazwa w nagłówku
   z ołówkiem obok krzyżyka (`EditorialSheetHeader` ma opcjonalne `accessory`; zmienia właściciel
   przez `households:updateName`, pozostali dociągają ją po `membersChanged`/`UPDATE_NAME` odczytem
   `households:findById`), zaproszenie jako wiersz listy (link 7 dni), „Opuść” na dole. NIC więcej — Rafał:

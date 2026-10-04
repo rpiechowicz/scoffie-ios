@@ -1120,7 +1120,7 @@ struct AssistantView: View {
                 // Szklany krążek jak „na dół” w Telegramie — pływa nad
                 // rozmową w tej samej warstwie co pole i menu. Szkło ma
                 // własną głębię, więc bez obwódki i cienia.
-                .scChromeGlass(in: Circle(), interactive: true)
+                .scChromeGlass(in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -1382,8 +1382,7 @@ struct AssistantView: View {
                 .frame(width: 50, height: 50)
                 .scChromeGlass(
                     in: Circle(),
-                    tint: active ? SCPalette.terracotta.opacity(scheme == .dark ? 0.3 : 0.22) : nil,
-                    interactive: true
+                    tint: active ? SCPalette.terracotta.opacity(scheme == .dark ? 0.3 : 0.22) : nil
                 )
                 .glassEffectID("send", in: composerGlass)
                 .opacity(store.isStopping ? 0.5 : 1)

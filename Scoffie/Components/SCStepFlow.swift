@@ -367,7 +367,7 @@ struct SCStepFooter: View {
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Color.scMuted(scheme))
                             .frame(width: primaryHeight, height: primaryHeight)
-                            .scChromeGlass(in: Circle(), interactive: true)
+                            .scChromeGlass(in: Circle())
                             .contentShape(Circle())
                     }
                     .buttonStyle(PlanPressStyle(scale: 0.92))

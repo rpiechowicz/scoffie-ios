@@ -50,7 +50,11 @@ struct EditorialPrimaryActionButton: View {
             .padding(.vertical, 14)
             .scSoftCapsule(accent)
         }
-        .buttonStyle(.plain)
+        // Ściśnięcie wspólnym `PlanPressStyle` — szkło w etykiecie NIE jest
+        // interaktywne: `.interactive()` w etykiecie przycisku `.plain`
+        // potrafiło na iOS 26 przechwycić stuknięcie (4.10.2026, „Dalej”
+        // w arkuszu „Jak działa Asystent” nic nie robiło).
+        .buttonStyle(PlanPressStyle(scale: 0.97))
         .disabled(!isInteractive)
         // Jak w `SCSoftButton`: wygaszamy za brak danych, spinner zostaje
         // w pełnej mocy.

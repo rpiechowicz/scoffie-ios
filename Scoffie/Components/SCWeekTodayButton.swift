@@ -21,7 +21,7 @@ struct SCWeekTodayButton: View {
                 // Szkło w tincie terakoty (Liquid Glass runda 2, 4.10.2026)
                 // zamiast wariantu „soft” — odróżnia się od neutralnych
                 // strzałek tak samo, a stoi w języku reszty kontrolek.
-                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22), interactive: true)
+                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22))
                 .scTapTarget(drawn: 26)
         }
         .buttonStyle(.plain)

@@ -246,7 +246,7 @@ struct CookAlarmView: View {
                 .frame(height: 36)
                 // Szkło jak pierścień kroków obok (`SCSheetIconSurface`) —
                 // oba pływają nad zdjęciem pod welonem.
-                .scChromeGlass(in: Capsule(), interactive: true)
+                .scChromeGlass(in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -365,7 +365,7 @@ struct CookAlarmView: View {
                             .foregroundStyle(Color.scLabel(scheme))
                             .frame(maxWidth: .infinity)
                             .frame(height: SCCook.Height.alarmExtend)
-                            .scChromeGlass(in: Capsule(), interactive: true)
+                            .scChromeGlass(in: Capsule())
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)

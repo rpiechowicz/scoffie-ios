@@ -162,8 +162,12 @@ struct CookFinishContent: View {
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce.up.byLayer, value: selected)
                 .frame(width: 56, height: 44)
-                .background(Capsule().fill(selected ? SCCook.Palette.badge(scheme) : Color.scTileStroke(scheme)))
-                .overlay(Capsule().strokeBorder(selected ? Color.scLabel(scheme).opacity(0.4) : Color.scTileStroke(scheme), lineWidth: 1))
+                // Szklane kciuki (Liquid Glass, 4.10.2026); wybrany w tincie
+                // szałwii (w górę) albo terakoty (w dół).
+                .scChromeGlass(
+                    in: Capsule(),
+                    tint: selected ? (value == .up ? SCPalette.sage : SCPalette.terracotta).opacity(0.24) : nil
+                )
                 .overlay {
                     if value == .up {
                         ThumbCheer(trigger: cheer, tint: SCPalette.sage)

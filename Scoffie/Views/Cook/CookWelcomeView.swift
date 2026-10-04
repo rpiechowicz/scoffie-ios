@@ -299,7 +299,7 @@ struct CookPortionStepper: View {
             stepButton("plus", enabled: canIncrement, label: "Więcej porcji") { onChange(value + CookSession.portionStep) }
         }
         // Szklana pigułka jak `SCStepper` (Liquid Glass runda 3).
-        .scChromeGlass(in: Capsule(), interactive: true)
+        .scChromeGlass(in: Capsule())
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Liczba porcji")

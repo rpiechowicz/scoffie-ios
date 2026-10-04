@@ -714,10 +714,8 @@ struct PlanTimelineEmptyRow: View {
 
     /// Celem dotyku jest CAŁY wiersz, a nie sam napis po prawej.
     ///
-    /// „Wybierz przepis” to jedyna akcja tej pory dnia, więc trafienie w nią
-    /// nie może zależeć od tego, czy palec zmieści się w 100-punktowym napisie
-    /// przy prawej krawędzi. Napis zostaje tym, czym jest w makiecie — podpisem
-    /// tego, co się stanie.
+    /// Wybór przepisu to jedyna akcja tej pory dnia, więc trafienie w nią nie
+    /// może zależeć od tego, czy palec trafi w „+” przy prawej krawędzi.
     @ViewBuilder
     private var tappableContent: some View {
         if isEditable {
@@ -731,44 +729,52 @@ struct PlanTimelineEmptyRow: View {
         }
     }
 
+    /// Puste miejsce na danie (Rafał 4.10.2026: „zamiast »Wybierz posiłek«
+    /// daj icon button… »nic nie zaplanowano« zrób lepiej, wiele treści się
+    /// powtarza”): przerywany obrys w rozmiarze wiersza z daniem, ikona pory
+    /// w jej kolorze, sama nazwa pory i szklany „+” w kolorze pory. Dawniej
+    /// trzy napisy na pustą porę — „ŚNIADANIE · Nic nie zaplanowano ·
+    /// Wybierz przepis ›” — powtarzane w każdym wierszu dnia. Godzina stoi
+    /// na osi obok, więc jej tu nie ma.
     private var content: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(slot.title.uppercased())
-                    .scFont(11, weight: .bold, relativeTo: .caption2)
-                    .tracking(1)
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return HStack(alignment: .center, spacing: 12) {
+            Image(systemName: slot.icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(slot.cozyAccent.opacity(isEditable ? 1 : 0.6))
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.12)))
+                .accessibilityHidden(true)
 
-                Text("Nic nie zaplanowano")
-                    .scFont(15, weight: .medium, relativeTo: .subheadline)
-                    .tracking(-0.3)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .padding(.top, 4)
-            }
+            Text(slot.title)
+                .scFont(15, weight: .semibold, relativeTo: .subheadline)
+                .tracking(-0.3)
+                .foregroundStyle(Color.scMuted(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
             Spacer(minLength: 8)
 
             if isEditable {
-                HStack(spacing: 3) {
-                    Text("Wybierz przepis")
-                        .scFont(14, weight: .bold, relativeTo: .footnote)
-                        .tracking(-0.1)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(SCPalette.terracotta)
-                .padding(.leading, 12)
-                .padding(.trailing, 2)
-                .fixedSize()
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(slot.cozyAccent)
+                    .frame(width: 34, height: 34)
+                    .scChromeGlass(in: Circle(), tint: slot.cozyAccent.opacity(scheme == .dark ? 0.3 : 0.22))
+                    .accessibilityHidden(true)
             }
         }
-        // 48 pt to wysokość celu dotyku całego wiersza — tekst zajmuje ~36 pt.
-        .frame(minHeight: 48)
-        .contentShape(Rectangle())
+        .padding(.leading, 10)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .frame(minHeight: 52)
+        .overlay(
+            shape.strokeBorder(
+                Color.scRule(scheme),
+                style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])
+            )
+        )
+        .contentShape(shape)
     }
 }
 
