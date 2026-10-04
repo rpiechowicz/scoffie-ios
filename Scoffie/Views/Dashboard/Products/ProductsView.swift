@@ -835,35 +835,34 @@ struct ProductsView: View {
     /// („Dodaj plan”, „Lista pojawi się sama”) była ostatnim pustym stanem
     /// w starym kroju (24.09.2026).
     @ViewBuilder
+    /// Pusty stan (Rafał 4.10.2026: „zrób trochę lepiej design pustego
+    /// stanu”): `ShoppingEmptyHero` — szklany koszyk, wokół działy sklepu
+    /// w swoich kolorach — tytuł, jedno zdanie i akcja. Dawniej karta
+    /// `RecipeListEmptyState`, ta sama co w pustych listach przepisów.
     private var emptyState: some View {
         Group {
             if weekHasMeals {
-                RecipeListEmptyState(
-                    icon: "basket",
-                    accent: SCPalette.terracotta,
-                    eyebrow: "LISTA ZAKUPÓW",
+                ShoppingEmptyHero(
                     title: "Lista jest pusta",
                     message: "Produkty z zaplanowanych dań pojawią się tu same."
                 )
             } else {
-                RecipeListEmptyState(
-                    icon: MenuConstans.Assistant.icon,
-                    accent: SCPalette.terracotta,
-                    eyebrow: "LISTA ZAKUPÓW",
+                ShoppingEmptyHero(
                     title: "Tydzień bez planu",
                     message: "Lista ułoży się sama z dań w Planie.",
-                    actions: [
-                        .init(title: "Ułóż z Asystentem", icon: MenuConstans.Assistant.icon) {
-                            sessionStore.dashboardTab = .assistant
-                            dismiss()
-                        },
-                        .init(title: "Wróć do Planu") { dismiss() }
-                    ]
+                    primaryTitle: "Ułóż z Asystentem",
+                    primaryIcon: MenuConstans.Assistant.icon,
+                    onPrimary: {
+                        sessionStore.dashboardTab = .assistant
+                        dismiss()
+                    },
+                    secondaryTitle: "Wróć do Planu",
+                    onSecondary: { dismiss() }
                 )
             }
         }
         .padding(.horizontal, pageHorizontalPadding)
-        .padding(.top, 16)
+        .padding(.top, 28)
     }
 
     // MARK: - Historia

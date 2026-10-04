@@ -46,7 +46,9 @@ struct EditorialRecipesSectionHeader: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .heavy))
                         .foregroundStyle(accent)
-                        .frame(width: 32, height: 32)
+                        // Rozmiar krzyżyka arkusza (`SCSheetIconLabel.size`,
+                        // Rafał 4.10.2026: „takiej samej wielkości jak X”).
+                        .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
                         // Szkło w tincie kategorii (Liquid Glass, 4.10.2026).
                         .scChromeGlass(in: Circle(), tint: accent.opacity(scheme == .dark ? 0.3 : 0.22))
                 }

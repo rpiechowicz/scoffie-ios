@@ -883,6 +883,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   i gest tygodnia (Plan, Kalendarz) zaznaczają ZAWSZE poniedziałek nowego tygodnia (`DatesViewModel`); dziś daje
   „Wróć do dziś”. Wiersz przepisu na listach (`EditorialRecipeRow`) = „min · kcal”, bez białka. Przełącznik osób
   w arkuszu „Cel dnia” ma wysokość krzyżyka (`SCSheetIconLabel.size`).
+- „Dla kogo” w „Wybierz przepis” i „Dodaj do planu” (4.10.2026) = JEDEN mechanizm
+  (`WeeklyPlan/Components/PlanAudiencePicker.swift`): szklany `PlanAudienceButton` obok przycisku zapisu (awatary
+  wybranych / domek) → `PlanAudienceSheet` (wspólny nagłówek z podsumowaniem „Ania i Ty”, wiersz „Cały dom”, lista
+  domowników z awatarem w obwódce koloru osoby, „TY” i `SCCheckbox`; wszystkie = „Cały dom”). Chipy w przewijaniu
+  „Dodaj do planu” odpadły. Porcje w „Dodaj do planu” — ikona `chart.pie.fill`. Pusty stan Zakupów =
+  `ShoppingEmptyHero` (szklany koszyk, wokół działy sklepu w swoich kolorach, unoszą się).
 - Zakupy (4.10.2026): pasek postępu, który zjedzie pod górę, ma przypiętą kopię na szkle (`pinnedProgress`,
   pomiar `frame(in: .scrollView)`); „Na dziś” to NIE wiersz listy, tylko szklany przycisk przyklejony do dołu
   (`todayButton` w `.scSheetFooter`, ten sam `ShoppingTodayRow`).
