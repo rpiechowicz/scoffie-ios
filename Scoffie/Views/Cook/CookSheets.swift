@@ -416,7 +416,13 @@ struct CookIngredientsSheet: View {
             .foregroundStyle(selected ? Color.scLabel(scheme) : Color.scMuted(scheme))
             .frame(maxWidth: .infinity)
             .frame(height: SCCook.Height.segment)
-            .background(Capsule().fill(selected ? SCCook.Palette.badge(scheme) : .clear))
+            // Wybrany zakres = szklana soczewka na płaskim torze (Liquid
+            // Glass runda 3), jak przełączniki iOS 26.
+            .background {
+                if selected {
+                    Color.clear.scChromeGlass(in: Capsule(), interactive: true)
+                }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

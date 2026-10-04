@@ -4,12 +4,11 @@ import SwiftUI
 
 /// Stopka z przyciskami na dole arkusza — JEDNA w całej aplikacji.
 ///
-/// Wzór to dolny pasek szczegółów posiłku: pod przyciskami kryjąca płyta
-/// w kolorze tła arkusza, a nad nią cień krawędzi (`SCEdgeShade`, lustro
-/// górnego paska szczegółów), w którym przewijana treść gaśnie. Bez twardej
-/// kreski nad przyciskiem i bez szkła: szkło przepuszczało przewijane wiersze
-/// pod liczbami i przyciskiem (filtry przepisów), a kreska z półprzezroczystym
-/// tłem rysowała granicę w innym miejscu na każdym arkuszu.
+/// Wzór to dolny pasek szczegółów posiłku: pod szklanymi przyciskami rozmyty
+/// pas (`SCFooterScrim`), w którym przewijana treść chowa się i gaśnie
+/// (od 4.10.2026 — wcześniej kryjąca płyta z cieniem krawędzi). Bez twardej
+/// kreski nad przyciskiem: kreska z półprzezroczystym tłem rysowała granicę
+/// w innym miejscu na każdym arkuszu.
 ///
 /// Dawniej ten sam pomysł żył w kilku kopiach: `AssistantStickyFooter`
 /// (szczegóły posiłku, wprowadzenie asystenta), `AssistantSheetFooter`
@@ -55,25 +54,30 @@ struct SCSheetFooter<Content: View>: View {
     }
 }
 
-/// Tło stopki: kryjąca płyta przez strefę wskaźnika home i cień krawędzi NAD
-/// stopką (ujemny offset), więc cień nie zjada miejsca na przyciski i nie
-/// wchodzi na nie, a treść i tak w nim łagodnie ginie.
+/// Tło stopki: rozmyty pas (`SCScrollEdgeBlur`) od `SCEdgeShade.bottomHeight`
+/// NAD stopką do krawędzi ekranu. Nad stopką gęstnieje od zera, pod
+/// przyciskami jest w pełni gęsty — przewijana treść chowa się pod szklanymi
+/// przyciskami, rozmyta i przygaszona, jak w Telegramie (Liquid Glass
+/// runda 3, 4.10.2026: „shadow na detail meal dolny też popraw”).
+///
+/// Dawniej kryjąca płyta w kolorze tła + cień krawędzi nad nią: treść
+/// urywała się ścianą, a szklane przyciski nie miały nad czym być szkłem.
+/// Tło nad rozmyciem jest tu gęstsze niż pod menu (0,62), bo na pasie
+/// stoi tekst — zdanie nad przyciskiem, liczby obok niego.
 struct SCFooterScrim: View {
     var base: Color? = nil
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        let base = base ?? Color.scPageBase(scheme)
         let shade = SCEdgeShade.bottomHeight
-        VStack(spacing: 0) {
-            SCEdgeShade(edge: .bottom, base: base)
-                .frame(height: shade)
-                .offset(y: -shade)
-                .padding(.bottom, -shade)
-
-            base
+        GeometryReader { proxy in
+            SCScrollEdgeBlur(
+                edge: .bottom,
+                solidFraction: max(0, min(1, 1 - shade / max(proxy.size.height, 1))),
+                base: base,
+                baseOpacity: 0.62
+            )
         }
+        .padding(.top, -shade)
         .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
     }

@@ -64,13 +64,20 @@ struct SCScrollEdgeBlur: View {
     let edge: VerticalEdge
     /// Jaka część pasa, licząc od krawędzi, jest w pełni gęsta.
     var solidFraction: Double = 0.5
+    /// Tło, w które treść gaśnie. `nil` = `scPageBase` (dół `SCPageBackground`);
+    /// szczegóły posiłku mają własne, cieplejsze.
+    var base: Color? = nil
+    /// Krycie tła nad rozmyciem. Wyższe tam, gdzie na pasie stoi tekst
+    /// (stopka arkusza: zdanie nad przyciskiem, liczby obok niego).
+    var baseOpacity: Double? = nil
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ZStack {
             Rectangle().fill(.ultraThinMaterial)
-            Color.scPageBase(scheme).opacity(scheme == .dark ? 0.5 : 0.45)
+            (base ?? Color.scPageBase(scheme))
+                .opacity(baseOpacity ?? (scheme == .dark ? 0.5 : 0.45))
         }
         .mask {
             LinearGradient(

@@ -396,11 +396,14 @@ struct PlanPersonSwitcher: View {
                 .frame(width: Self.segmentSize, height: Self.segmentSize)
                 .background {
                     if isOn {
-                        Circle()
-                            .fill(tint.opacity(scheme == .dark ? 0.22 : 0.16))
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(tint.opacity(scheme == .dark ? 0.7 : 0.6), lineWidth: 1.4)
+                        // Wybrana osoba = szklana soczewka w jej kolorze na
+                        // płaskim torze, jak przełączniki iOS 26 (Liquid
+                        // Glass runda 3).
+                        Color.clear
+                            .scChromeGlass(
+                                in: Circle(),
+                                tint: tint.opacity(scheme == .dark ? 0.34 : 0.26),
+                                interactive: true
                             )
                             .matchedGeometryEffect(id: "selection", in: selectionNS)
                     }
