@@ -9,10 +9,11 @@ import SwiftUI
 /// stopka NIE MA tła: ani kryjącej płyty, ani cienia krawędzi, ani rozmytego
 /// pasa. Stoją same szklane przyciski, a przewijana treść płynnie przejeżdża
 /// pod nimi. Przyklejona do przewijania (`.scSheetFooter`) idzie systemowym
-/// `safeAreaBar` z iOS 26: treść kończy się nad stopką, a pod nią system
-/// sam kładzie swój natywny, lekki efekt krawędzi — ten sam co pod paskami
-/// narzędzi w aplikacjach Apple. Nie wracać do `SCEdgeShade` ani pasa
-/// (`SCFooterScrim` usunięty).
+/// `safeAreaBar` z iOS 26 (treść kończy się nad stopką), ale z WYŁĄCZONYM
+/// systemowym efektem krawędzi (`scrollEdgeEffectHidden`) — Rafał widział
+/// w nim dalej „shadow pod buttonami” i nie chce go w ogóle. Pod przyciskami
+/// nie ma NICZEGO. Nie wracać do `SCEdgeShade`, pasa (`SCFooterScrim`
+/// usunięty) ani systemowego efektu krawędzi.
 ///
 /// Dawniej ten sam pomysł żył w kilku kopiach: `AssistantStickyFooter`
 /// (wprowadzenie asystenta), `AssistantSheetFooter` (arkusze asystenta),
@@ -48,7 +49,8 @@ struct SCSheetFooter<Content: View>: View {
 extension View {
     /// Przypina stopkę do dołu przewijanej treści arkusza systemowym
     /// `safeAreaBar` (iOS 26): treść przejeżdża pod szklanymi przyciskami
-    /// i kończy się nad nimi, a efekt krawędzi kładzie system.
+    /// i kończy się nad nimi. Systemowy efekt krawędzi wyłączony — pod
+    /// przyciskami nie ma żadnego cienia ani rozmycia.
     ///
     /// Przyciski w środku biorą się z komponentów aplikacji: pełna szerokość
     /// to `EditorialPrimaryActionButton`, obok liczb — `RecipeFilterFooterButton`.
@@ -57,13 +59,14 @@ extension View {
         horizontalPadding: CGFloat = SCPageMetrics.horizontal,
         @ViewBuilder _ footer: @escaping () -> Footer
     ) -> some View {
-        safeAreaBar(edge: .bottom, spacing: 0) {
-            SCSheetFooter(
-                base: base,
-                horizontalPadding: horizontalPadding,
-                reservesShade: true,
-                content: footer
-            )
-        }
+        scrollEdgeEffectHidden(true, for: .bottom)
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                SCSheetFooter(
+                    base: base,
+                    horizontalPadding: horizontalPadding,
+                    reservesShade: true,
+                    content: footer
+                )
+            }
     }
 }

@@ -2404,7 +2404,9 @@ private struct AssistantOptionsStorySheet: View {
             .scrollIndicators(.hidden)
             .scScrollEdgeFade()
             // Stopka natywnie (iOS 26 `safeAreaBar`): lista przejeżdża pod
-            // szklanym przyciskiem i kończy się nad nim — bez płyty i cienia.
+            // szklanym przyciskiem i kończy się nad nim — bez płyty, cienia
+            // i systemowego efektu krawędzi.
+            .scrollEdgeEffectHidden(true, for: .bottom)
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 endStep(3, rise: 20) {
                     // JEDEN przycisk na dole (runda 15, Rafał): zapis całości,
