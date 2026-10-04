@@ -77,6 +77,12 @@ struct RecipeFilterHeader: View {
     var accent: Color = SCPalette.terracotta
     let canClear: Bool
     let onClear: () -> Void
+    /// „Dopasowane do Ciebie” jako sama ikona obok krzyżyka (Rafał 4.10.2026:
+    /// „ten button dałbym gdzieś indziej, może sama ikona obok X”): różdżka,
+    /// włączona = szkło w tincie szałwii. `nil` = bez przełącznika (filtry
+    /// kategorii, profil bez diety i celu).
+    var fitIsOn: Bool? = nil
+    var onToggleFit: () -> Void = {}
     let onClose: () -> Void
 
     var body: some View {
@@ -86,14 +92,28 @@ struct RecipeFilterHeader: View {
             icon: icon,
             accent: accent,
             subtitle: scope,
+            subtitleTransition: .opacity,
             onClose: onClose
         ) {
-            if canClear {
-                RecipeFilterClearButton(action: onClear)
-                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+            HStack(spacing: 8) {
+                if canClear {
+                    RecipeFilterClearButton(action: onClear)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+                if let fitIsOn {
+                    SCSheetIconButton(
+                        systemName: "wand.and.stars",
+                        tint: fitIsOn ? SCPalette.sage : nil,
+                        accessibilityLabel: "Dopasowane do Ciebie",
+                        action: onToggleFit
+                    )
+                    .symbolEffect(.bounce, value: fitIsOn)
+                    .accessibilityValue(fitIsOn ? "włączone" : "wyłączone")
+                }
             }
         }
         .animation(.smooth(duration: 0.22), value: canClear)
+        .animation(.smooth(duration: 0.22), value: fitIsOn)
     }
 }
 
