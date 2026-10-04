@@ -712,7 +712,7 @@ struct PlanTimelineEmptyRow: View {
         }
         // Więcej powietrza między pustymi porami (Rafał 4.10.2026: „daj
         // większy padding pomiędzy sobą”).
-        .padding(.top, PlanTimelineMetrics.rowTop + 4)
+        .padding(.top, PlanTimelineMetrics.rowTop + 2)
         .padding(.bottom, isLast ? PlanTimelineMetrics.rowBottom : 0)
     }
 
@@ -744,9 +744,9 @@ struct PlanTimelineEmptyRow: View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return HStack(alignment: .center, spacing: 12) {
             Image(systemName: slot.icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(slot.cozyAccent.opacity(isEditable ? 1 : 0.6))
-                .frame(width: 38, height: 38)
+                .frame(width: 35, height: 35)
                 .background(Circle().fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.12)))
                 .accessibilityHidden(true)
 
@@ -761,18 +761,19 @@ struct PlanTimelineEmptyRow: View {
 
             if isEditable {
                 Image(systemName: "plus")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(slot.cozyAccent)
-                    .frame(width: 38, height: 38)
+                    .frame(width: 35, height: 35)
                     .scChromeGlass(in: Circle(), tint: slot.cozyAccent.opacity(scheme == .dark ? 0.3 : 0.22))
                     .accessibilityHidden(true)
             }
         }
-        // Wyższy obrys (60 pt, było 52) — Rafał 4.10.2026: „daj ciut większy”.
-        .padding(.leading, 12)
-        .padding(.trailing, 10)
-        .padding(.vertical, 11)
-        .frame(minHeight: 60)
+        // Obrys 56 pt: 52 było „ciut za małe”, 60 — „ciut za duże” (Rafał
+        // 4.10.2026, dwie rundy tego samego dnia).
+        .padding(.leading, 11)
+        .padding(.trailing, 9)
+        .padding(.vertical, 10)
+        .frame(minHeight: 56)
         .overlay(
             shape.strokeBorder(
                 Color.scRule(scheme),

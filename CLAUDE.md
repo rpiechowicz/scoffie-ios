@@ -881,9 +881,14 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `scCountBadge` bez kremowej obwódki (krążki są szkłem) i bez `GlassEffectContainer` wokół koszyka — grupa
   szkła nie może trzymać czegoś, co wystaje poza krążek. Kalendarz też bez plakietki „2 z 3” (4.10.2026).
   Pusta pora (`PlanTimelineEmptyRow`, 4.10.2026) = przerywany obrys z ikoną pory w jej kolorze, nazwą pory i szklanym
-  „+” w kolorze pory — bez „Nic nie zaplanowano” / „Wybierz przepis” (powtarzały się w każdym wierszu). Strzałki
+  „+” w kolorze pory — bez „Nic nie zaplanowano” / „Wybierz przepis” (powtarzały się w każdym wierszu). Obrys 56 pt, ikona
+  i „+” 35 pt (52 „za małe”, 60 „za duże”). Strzałki
   i gest tygodnia (Plan, Kalendarz) zaznaczają ZAWSZE poniedziałek nowego tygodnia (`DatesViewModel`); dziś daje
-  „Wróć do dziś”. Wiersz przepisu na listach (`EditorialRecipeRow`) = „min · kcal”, bez białka. Przełącznik osób
+  „Wróć do dziś”. Plan i Kalendarz mają OSOBNE tygodnie i dni (4.10.2026: „nie mogę tu przewijać i tam się
+  zmienia”): Plan i jego arkusze — `SessionStore.datesViewModel`, Kalendarz — `calendarDatesViewModel` wstrzyknięty
+  w `NavigationMenu.page(.calendar)`. Socket słucha jednego tygodnia, więc wejście na zakładkę woła
+  `MealCalendarStore.observeWeek` (inny tydzień = jedno odświeżenie). Loader: kafle dni to szkło w jednym
+  `GlassEffectContainer`, kolor dnia wznosi się w szkle. Wiersz przepisu na listach (`EditorialRecipeRow`) = „min · kcal”, bez białka. Przełącznik osób
   w arkuszu „Cel dnia” ma wysokość krzyżyka (`SCSheetIconLabel.size`).
 - „Dla kogo” w „Wybierz przepis” i „Dodaj do planu” (4.10.2026) = JEDEN mechanizm
   (`WeeklyPlan/Components/PlanAudiencePicker.swift`): szklany `PlanAudienceButton` obok przycisku zapisu (awatary

@@ -207,7 +207,12 @@ struct StartupLoaderView: View {
 
     // MARK: - 7 day tiles
 
+    /// Siedem szklanych kafli w JEDNEJ grupie szkła — załamują światło razem
+    /// (Liquid Glass, Rafał 4.10.2026: „na loaderze daj kafle dni też jako
+    /// liquid style”). Odstęp grupy = odstęp kafli, więc w spoczynku się nie
+    /// zlewają.
     private func weekTilesRow(motion: LoaderMotion) -> some View {
+        GlassEffectContainer(spacing: 8) {
         HStack(spacing: 8) {
             ForEach(0..<7, id: \.self) { index in
                 let entrance = motion.tileEntrance(index)
@@ -222,6 +227,7 @@ struct StartupLoaderView: View {
                 .opacity(entrance.opacity)
                 .offset(y: entrance.offset)
             }
+        }
         }
         .frame(height: 42)
     }
@@ -285,11 +291,11 @@ private struct DayLoaderTile: View {
         RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
     }
 
+    /// Kafel = szklana płytka (Liquid Glass) z miękkim cieniem, jak krążki
+    /// nagłówków arkuszy — kolor dnia wznosi się w niej od dołu. Dawniej
+    /// płaska, kremowa podstawa z włosowatą obwódką; szkło ma własny brzeg.
     var body: some View {
         ZStack {
-            // Pusta podstawa — ciepły, ledwo widoczny odcień canvasu.
-            shape.fill(emptyBackground)
-
             // Kolor wypełnienia wznosi się od dołu (maska rośnie w górę).
             shape
                 .fill(fillColor)
@@ -300,10 +306,6 @@ private struct DayLoaderTile: View {
 
             // Refleks po zakończonej fali — jedyny ruch na pełnym tygodniu.
             shape.fill(Color.white.opacity(glow))
-
-            // Hairline border — zawsze widoczny (tak jak w designie),
-            // dlatego MUSI być na wierzchu nad fillem.
-            shape.stroke(borderColor, lineWidth: 1)
 
             VStack(spacing: 0) {
                 // Litera: wyciszona na pustym kafelku, kremowa na
@@ -334,19 +336,17 @@ private struct DayLoaderTile: View {
             }
         }
         .frame(width: Self.tileWidth, height: Self.tileHeight)
+        .clipShape(shape)
+        // Warstwy kafla jako jedna — szkło leży POD całością, a krycie
+        // wejścia (z zewnątrz) gasi kafel w całości.
         .compositingGroup()
-    }
-
-    private var emptyBackground: Color {
-        colorScheme == .dark
-            ? Self.cream.opacity(0.12)
-            : Color(red: 42 / 255, green: 26 / 255, blue: 16 / 255).opacity(0.07)
-    }
-
-    private var borderColor: Color {
-        colorScheme == .dark
-            ? Self.cream.opacity(0.07)
-            : Color(red: 42 / 255, green: 26 / 255, blue: 16 / 255).opacity(0.08)
+        .scChromeGlass(in: shape)
+        .shadow(
+            color: .black.opacity(colorScheme == .dark ? 0.3 : 0.08),
+            radius: 5,
+            x: 0,
+            y: 2
+        )
     }
 
     /// Litera na pustym kafelku — wyciszona, nie czarna: pusty dzień ma

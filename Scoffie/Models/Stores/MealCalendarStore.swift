@@ -592,6 +592,18 @@ class MealCalendarStore {
         scheduleRefreshForObservedState()
     }
 
+    /// Zmiany na żywo (socket) słuchają JEDNEGO tygodnia — ostatnio
+    /// wczytanego. Plan i Kalendarz mają osobne tygodnie, więc zakładka,
+    /// która wraca na ekran, przejmuje nasłuch. Inny tydzień niż dotąd =
+    /// jedno odświeżenie (mógł się zmienić, gdy nikt go nie słuchał); ten sam
+    /// — nic.
+    func observeWeek(weekStart: String, dates: [Date]) {
+        guard weeklyPlanRepository != nil, observedWeekStart != weekStart else { return }
+        observedWeekStart = weekStart
+        observedWeekDates = dates
+        scheduleWeekReload(weekStart: weekStart, dates: dates)
+    }
+
     @MainActor
     private func handleRemoteWeekPlanChanged(event: BackendWeekChangedDTO) async {
         let changedByOtherUser = event.changedByUserId != nil && event.changedByUserId != currentUserId

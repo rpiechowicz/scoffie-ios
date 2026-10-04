@@ -206,7 +206,10 @@ struct NavigationMenu: View {
         case .plan:
             WeeklyPlanView()
         case .calendar:
+            // Własny tydzień i dzień — przewijanie Kalendarza nie przestawia
+            // Planu i odwrotnie. Arkusze otwarte z Kalendarza dziedziczą ten.
             CalendarView()
+                .environment(\.datesViewModel, sessionStore.calendarDatesViewModel)
         case .assistant:
             // Asystent zajął miejsce „Produktów": to do niego wraca się
             // wiele razy w tygodniu, a lista zakupów powstaje przy Planie

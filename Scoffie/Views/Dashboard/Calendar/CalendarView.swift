@@ -862,6 +862,10 @@ struct CalendarView: View {
             .onChange(of: isActiveTab, initial: true) { _, active in
                 guard active else { return }
                 selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
+                mealStore.observeWeek(
+                    weekStart: datesViewModel.weekStartISO,
+                    dates: datesViewModel.dates
+                )
             }
             .onChange(of: datesViewModel.weekStartISO) { _, _ in
                 selectedDate = datesViewModel.selectedDate
