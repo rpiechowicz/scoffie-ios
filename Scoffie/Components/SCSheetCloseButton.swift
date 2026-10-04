@@ -57,6 +57,11 @@ struct SCSheetIconButton: View {
 /// komplecie: `Menu` („Udostępnij” / „Wyłącz link” w szczegółach przepisu)
 /// rysuje ten sam krążek jako swoją etykietę, zamiast drugiej kopii rysunku.
 struct SCSheetIconLabel: View {
+    /// Średnica — jak natywny przycisk paska arkusza w iOS 26 (44 pt). Do
+    /// 4.10.2026 było 36 pt z szarym glifem; szkło na jednolitym tle arkusza
+    /// czytało się wtedy jak płaskie, jasne kółko, a nie przycisk iOS.
+    static let size: CGFloat = 44
+
     let systemName: String
     var tint: Color? = nil
     var onImage: Bool = false
@@ -67,7 +72,9 @@ struct SCSheetIconLabel: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let glyph = tint ?? (onImage ? Color.scLabel(scheme) : Color.scMuted(scheme))
+        // Glif w kolorze tekstu, jak krzyżyk systemowych arkuszy — szary
+        // (`scMuted`) gasł na szkle.
+        let glyph = tint ?? Color.scLabel(scheme)
         Group {
             if isBusy {
                 ProgressView()
@@ -76,7 +83,7 @@ struct SCSheetIconLabel: View {
                     .transition(.opacity)
             } else {
                 Image(systemName: systemName)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(glyph)
                     // W górę: stary glif odjeżdża do góry, nowy wjeżdża od dołu —
                     // serce „napełnia się” ruchem, a nie przenikaniem.
@@ -84,7 +91,7 @@ struct SCSheetIconLabel: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: 36, height: 36)
+        .frame(width: Self.size, height: Self.size)
         .scSheetIconSurface(onImage: onImage)
         .contentShape(Circle())
         .animation(.smooth(duration: 0.2), value: isBusy)

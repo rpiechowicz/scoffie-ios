@@ -99,7 +99,7 @@ struct ShoppingHistorySheet: View {
             } label: {
                 // 36 pt, nie 34: w nagłówku arkusza stoi obok krzyżyka
                 // (`SCSheetCloseButton`) i ma mieć jego rozmiar.
-                SCCircleIconLabel(icon: "ellipsis", size: 36, iconSize: 14)
+                SCCircleIconLabel(icon: "ellipsis", size: SCSheetIconLabel.size, iconSize: 16)
                     .contentShape(Circle())
             }
             .accessibilityLabel("Więcej opcji historii")

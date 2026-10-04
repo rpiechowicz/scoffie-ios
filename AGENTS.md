@@ -364,7 +364,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Zamień / Dodaj obok”). Akcent na element stojący NA szkle (przycisk „Wyślij”, „Cofnij” w toaście) = `tint` tego
   jednego szkła albo zwykłe wypełnienie — bez drugiego szkła z `scSoftSurface` na pierwszym.
   Gotuj (4.10.2026): szkło na „Wycisz” i „+N min” alarmu, „Gotuj dalej”, stepperze porcji powitania, „Pomiń” w Timerach,
-  pigułkach powodów oceny (`scChoiceSurface`). Ciemny dok (`cookDockGlass` w ciemnym = bez szkła, `cookIslandSurface`,
+  pigułkach powodów oceny (`scChoiceSurface`). Przyciski nagłówka arkusza (krzyżyk, serce, „Cofnij/Wyczyść”, „…” w Zakupach) = 44 pt z glifem `scLabel`
+  (`SCSheetIconLabel.size`), jak natywne przyciski arkuszy iOS 26 — 36 pt z szarym glifem wyglądało na płaskie kółko.
+  Ciemny dok (`cookDockGlass` w ciemnym = bez szkła, `cookIslandSurface`,
   kapsuły, plakietka) ŚWIADOMIE bez zmian do decyzji Rafała. Makieta pola we wprowadzeniu Asystenta = strój prawdziwego pola.
 - Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
@@ -603,9 +605,11 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
   „Kto ile je” (posiłek z planu z porcjami osób) to od 4.10.2026 NIE sekcja w przewijaniu, tylko szklana pigułka
   przyczepiona nad przyciskami (`portionsPill`, jak „Cel dnia”): awatary, „Do ugotowania · 3,5 porcji”, ⌃ →
-  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania, na górze karty
-  „Do ugotowania · 3,5 porcji” + kcal garnka (rolują), pasek podziału, wiersze ze stepperem co 0,5 — ten sam szkic
-  `draftPortions`). Po zmianie w stopce arkusza „Zapisz porcje” i obok krzyżyka „Cofnij zmiany”; ten sam zapis
+  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania; GARNEK
+  `DetailPortionPot` — pierścień z łukami osób w ich kolorach i łączną liczbą porcji w środku, pod nim „N kcal
+  w garnku”; KAFLE osób w siatce 2-kolumnowej (`portionTile`: awatar w obwódce koloru osoby, imię + „TY”, duża
+  porcja między szklanymi −/+ co 0,5, kcal; zmieniona niezapisana porcja = obwódka kafla w kolorze osoby) — ten sam
+  szkic `draftPortions`; od 4.10.2026, wiersze z paskiem podziału odpadły). Po zmianie w stopce arkusza „Zapisz porcje” i obok krzyżyka „Cofnij zmiany”; ten sam zapis
   też pod pigułką.
   Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).

@@ -918,9 +918,11 @@ struct RecipeFilterClearButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
-                .frame(width: 36, height: 36)
+                // Rozmiar krzyżyka obok (`SCSheetIconLabel.size`, 44 pt jak
+                // natywne przyciski arkusza iOS 26).
+                .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
                 // Szkło w tincie terakoty — para dla szklanego krzyżyka obok
                 // (`SCSheetIconSurface`, Liquid Glass runda 2).
                 .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.22), interactive: true)

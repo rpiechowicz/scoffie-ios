@@ -738,163 +738,176 @@ struct RecipeDetailView: View {
         .dashboardLiquidSheet()
     }
 
-    /// Góra karty porcji: ile ugotować (duża liczba, roluje) i ile to razem
-    /// kalorii — to, po co się tu przychodzi, zanim ruszy się stepper.
-    private func portionsTotal(_ total: Int) -> some View {
-        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
+    /// Kolor osoby — ten sam co jej awatar w Planie.
+    private func portionColor(_ person: RecipeDetailPortions.Person) -> Color {
+        person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
+    }
 
-        return VStack(alignment: .leading, spacing: 2) {
-            Text("Do ugotowania")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(look.muted)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))
-                    .font(.system(size: 28, weight: .heavy))
-                    .tracking(-0.6)
-                    .monospacedDigit()
-                    .foregroundStyle(look.fg)
-                    .contentTransition(.numericText(value: Double(total)))
-                Spacer(minLength: 8)
-                Text(verbatim: "\(kcal) kcal")
+    /// Porcje od nowa (Rafał 4.10.2026: „zrób jakoś ładniej od nowa design
+    /// porcji dla userów”). Na górze GARNEK: pierścień podzielony na osoby
+    /// w ich kolorach, w środku łączna liczba porcji do ugotowania, pod nim
+    /// kcal garnka. Niżej kafel na osobę (`portionTile`). Dawniej: karta
+    /// z paskiem podziału i wierszami „awatar · imię · kcal · stepper”.
+    private func portionsCard(_ model: RecipeDetailPortions) -> some View {
+        let total = PlanPortions.totalUnits(portionUnits)
+        let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: total)).kcal.rounded())
+        let columns = model.people.count > 1
+            ? [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+            : [GridItem(.flexible())]
+
+        return VStack(spacing: 18) {
+            VStack(spacing: 10) {
+                DetailPortionPot(
+                    segments: model.people.map { person in
+                        DetailPortionPot.Segment(
+                            id: person.memberId,
+                            units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
+                            color: portionColor(person)
+                        )
+                    },
+                    totalLabel: PlanPortions.label(units: total),
+                    caption: total % PlanPortions.unitsPerServing == 0
+                        ? PolishPlural.form(total / PlanPortions.unitsPerServing, one: "porcja", few: "porcje", many: "porcji")
+                        : "porcji",
+                    totalUnits: total,
+                    look: look
+                )
+
+                Text(verbatim: "\(kcal) kcal w garnku")
                     .font(.system(size: 13, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(look.muted)
                     .contentTransition(.numericText(value: Double(kcal)))
+                    .animation(SCMotion.textRoll, value: kcal)
             }
-        }
-        .animation(SCMotion.textRoll, value: total)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Do ugotowania \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings)), razem \(kcal) kilokalorii")
-    }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Do ugotowania \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings)), \(kcal) kilokalorii")
 
-    /// Karta porcji: pasek podziału garnka w kolorach osób (te same co
-    /// awatary w Planie) i wiersz na osobę — awatar, imię z „TY”, kcal JEJ
-    /// porcji i stepper. Zapis dopiero „Zapisz porcje”, każda osoba osobno
-    /// (`setPortion` z jej tokenem). Bez tokenów (stary cache) — sam odczyt
-    /// i jedno zdanie, co zrobić.
-    private func portionsCard(_ model: RecipeDetailPortions) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DetailCard {
-                VStack(spacing: 0) {
-                    portionsTotal(PlanPortions.totalUnits(portionUnits))
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .padding(.bottom, model.people.count > 1 ? 10 : 6)
-
-                    if model.people.count > 1 {
-                        DetailPortionSplitBar(
-                            segments: model.people.map { person in
-                                DetailPortionSplitBar.Segment(
-                                    id: person.memberId,
-                                    units: portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits,
-                                    color: person.member.map { HouseholdMemberStyle.color(for: $0) } ?? SCPalette.terracotta
-                                )
-                            }
-                        )
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
-                        .accessibilityHidden(true)
-                    }
-
-                    ForEach(Array(model.people.enumerated()), id: \.element.memberId) { index, person in
-                        portionRow(person, model: model, isFirst: index == 0)
-                    }
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(model.people, id: \.memberId) { person in
+                    portionTile(person, model: model)
                 }
             }
+
             if !model.isEditable {
                 Text(PlanPortions.readOnlyMessage)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(look.muted)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
             }
         }
     }
 
-    private func portionRow(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions, isFirst: Bool) -> some View {
+    /// Kafel osoby: awatar w obwódce JEJ koloru (tym samym, co jej łuk
+    /// garnka), imię z „TY”, duża porcja między szklanymi −/+, kcal porcji.
+    /// Zmieniona, a niezapisana porcja = obwódka kafla w kolorze osoby.
+    private func portionTile(_ person: RecipeDetailPortions.Person, model: RecipeDetailPortions) -> some View {
         let units = portionUnits[person.memberId] ?? PlanPortions.missingEntryUnits
+        let saved = personalPortions?.units[person.memberId] ?? PlanPortions.missingEntryUnits
+        let isChanged = units != saved
         let isViewer = person.memberId == model.viewerId
+        let color = portionColor(person)
         let kcal = Int(recipe.nutrition(forServings: PlanPortions.servings(fromUnits: units)).kcal.rounded())
-        let avatarSize: CGFloat = 36
-        // Z stepperem VoiceOver czyta wiersz osoby i stepper osobno; bez — jedno zdanie.
-        let spoken = "\(person.name), \(kcal) kilokalorii"
-            + (model.isEditable ? "" : ", \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings))")
+        let totalUnits = PlanPortions.totalUnits(draftPortions)
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
 
-        return HStack(spacing: 12) {
-            HStack(spacing: 12) {
-                ProfileAvatar(
-                    avatarUrl: person.member?.avatarUrl,
-                    displayName: person.name,
-                    size: avatarSize,
-                    colorIndex: person.member?.avatarColor,
-                    seed: person.memberId
-                )
+        return VStack(spacing: 10) {
+            ProfileAvatar(
+                avatarUrl: person.member?.avatarUrl,
+                displayName: person.name,
+                size: 44,
+                colorIndex: person.member?.avatarColor,
+                seed: person.memberId
+            )
+            .padding(3)
+            .overlay(Circle().strokeBorder(color, lineWidth: 2))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(person.name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .tracking(-0.2)
-                            .foregroundStyle(look.fg)
-                            .lineLimit(1)
-                        if isViewer {
-                            DetailPersonBadge(text: "TY")
-                        }
-                    }
-                    Text(verbatim: "\(kcal) kcal")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(look.muted)
-                        .contentTransition(.numericText(value: Double(kcal)))
-                        .animation(SCMotion.textRoll, value: kcal)
+            HStack(spacing: 5) {
+                Text(person.name)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(look.fg)
+                    .lineLimit(1)
+                if isViewer {
+                    DetailPersonBadge(text: "TY")
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(spoken)
 
-            if model.isEditable {
-                DetailServingsStepper(
-                    value: portionBinding(for: person.memberId),
-                    range: PlanPortions.unitsRange,
-                    label: { PlanPortions.label(units: $0) },
-                    accessibilityName: "Porcja: \(person.name)",
-                    accessibilityValueText: { PlanPortions.spokenServings(units: $0, plural: PolishPlural.servings) },
-                    next: { current, direction in
-                        PlanPortions.stepped(
-                            units: current,
-                            direction: direction,
-                            totalUnits: PlanPortions.totalUnits(draftPortions)
-                        )
-                    }
-                )
-            } else {
+            HStack(spacing: 6) {
+                if model.isEditable {
+                    portionStepButton("minus", person: person, units: units, direction: -1, totalUnits: totalUnits)
+                }
                 Text(PlanPortions.label(units: units))
-                    .font(.system(size: 17, weight: .heavy))
+                    .font(.system(size: 30, weight: .heavy))
+                    .tracking(-0.8)
                     .monospacedDigit()
                     .foregroundStyle(look.fg)
-                    .accessibilityHidden(true)
+                    .contentTransition(.numericText(value: Double(units)))
+                    .animation(SCMotion.textRoll, value: units)
+                    .frame(maxWidth: .infinity)
+                if model.isEditable {
+                    portionStepButton("plus", person: person, units: units, direction: 1, totalUnits: totalUnits)
+                }
             }
+
+            Text(verbatim: "\(kcal) kcal")
+                .font(.system(size: 12.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(look.muted)
+                .contentTransition(.numericText(value: Double(kcal)))
+                .animation(SCMotion.textRoll, value: kcal)
         }
-        .accessibilityElement(children: model.isEditable ? .contain : .combine)
-        .padding(.leading, 16)
-        .padding(.trailing, 12)
-        .padding(.vertical, 12)
-        .overlay(alignment: .top) {
-            // Kreska od tekstu, nie od krawędzi — awatary stoją w jednej kolumnie.
-            if !isFirst {
-                DetailHairline()
-                    .padding(.leading, 16 + avatarSize + 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(shape.fill(Color.scTileBg(scheme)))
+        .overlay(
+            shape.strokeBorder(
+                isChanged ? color.opacity(0.7) : Color.scTileStroke(scheme),
+                lineWidth: isChanged ? 1.5 : 1
+            )
+        )
+        .animation(.smooth(duration: 0.2), value: isChanged)
+        // Jedno stuknięcie haptyki na kafel, nie na każdy z dwóch przycisków.
+        .sensoryFeedback(.selection, trigger: units)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(person.name), \(PlanPortions.spokenServings(units: units, plural: PolishPlural.servings)), \(kcal) kilokalorii")
+        .accessibilityAdjustableAction { direction in
+            guard model.isEditable else { return }
+            let step = direction == .increment ? 1 : -1
+            if let next = PlanPortions.stepped(units: units, direction: step, totalUnits: totalUnits) {
+                withAnimation(.smooth(duration: 0.2)) { draftPortions[person.memberId] = next }
             }
         }
     }
 
-    /// Stepper osoby pisze do szkicu; brak wpisu = 1 porcja (reguła serwera).
-    private func portionBinding(for memberId: String) -> Binding<Int> {
-        Binding(
-            get: { draftPortions[memberId] ?? PlanPortions.missingEntryUnits },
-            set: { draftPortions[memberId] = $0 }
-        )
+    /// Szklane −/+ porcji osoby. Krok wychodzący poza widełki = przygaszony.
+    private func portionStepButton(
+        _ systemName: String,
+        person: RecipeDetailPortions.Person,
+        units: Int,
+        direction: Int,
+        totalUnits: Int
+    ) -> some View {
+        let next = PlanPortions.stepped(units: units, direction: direction, totalUnits: totalUnits)
+        return Button {
+            guard let next else { return }
+            withAnimation(.smooth(duration: 0.2)) { draftPortions[person.memberId] = next }
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(look.fg)
+                .frame(width: 34, height: 34)
+                .scChromeGlass(in: Circle(), interactive: true)
+                .contentShape(Circle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.88))
+        .disabled(next == nil)
+        .opacity(next == nil ? 0.35 : 1)
+        .accessibilityHidden(true)
     }
 
     /// Osoby, których porcja różni się od zapisanej.
@@ -2048,9 +2061,10 @@ private struct DetailHairline: View {
 
 // MARK: - Porcje osób
 
-/// Podział garnka: odcinek na osobę, szerokość = jej porcja, kolor = kolor
-/// jej awatara. Odcinki przesuwają się razem ze stepperem.
-private struct DetailPortionSplitBar: View {
+/// Garnek: pierścień podzielony na osoby — łuk = porcja, kolor = kolor
+/// awatara — z łączną liczbą porcji w środku. Łuki przesuwają się razem ze
+/// stepperami (przycięcie koła animuje się w sprężynie zmiany).
+private struct DetailPortionPot: View {
     struct Segment: Identifiable {
         let id: String
         let units: Int
@@ -2058,25 +2072,48 @@ private struct DetailPortionSplitBar: View {
     }
 
     let segments: [Segment]
+    let totalLabel: String
+    let caption: String
+    let totalUnits: Int
+    let look: DetailLook
 
-    private static let gap: CGFloat = 3
-    private static let height: CGFloat = 8
+    private static let diameter: CGFloat = 132
+    private static let lineWidth: CGFloat = 12
 
     var body: some View {
-        GeometryReader { proxy in
-            let total = max(1, segments.reduce(0) { $0 + $1.units })
-            let usable = max(0, proxy.size.width - Self.gap * CGFloat(max(0, segments.count - 1)))
+        let total = max(1, segments.reduce(0) { $0 + $1.units })
+        // Przerwa między łukami w ułamku obwodu — przy jednej osobie pełne koło.
+        let gap: CGFloat = segments.count > 1 ? 0.018 : 0
 
-            HStack(spacing: Self.gap) {
-                ForEach(segments) { segment in
-                    Capsule()
-                        .fill(segment.color)
-                        .frame(width: usable * CGFloat(segment.units) / CGFloat(total))
-                }
+        ZStack {
+            Circle()
+                .stroke(look.fg.opacity(0.07), lineWidth: Self.lineWidth)
+
+            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                let start = CGFloat(segments.prefix(index).reduce(0) { $0 + $1.units }) / CGFloat(total)
+                let end = start + CGFloat(segment.units) / CGFloat(total)
+                Circle()
+                    .trim(from: min(start + gap / 2, end), to: max(end - gap / 2, start))
+                    .stroke(segment.color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+
+            VStack(spacing: 0) {
+                Text(totalLabel)
+                    .font(.system(size: 34, weight: .heavy))
+                    .tracking(-1)
+                    .monospacedDigit()
+                    .foregroundStyle(look.fg)
+                    .contentTransition(.numericText(value: Double(totalUnits)))
+                Text(caption)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(look.muted)
+                    .contentTransition(.opacity)
             }
         }
-        .frame(height: Self.height)
-        .animation(.snappy(duration: 0.3), value: segments.map(\.units))
+        .frame(width: Self.diameter, height: Self.diameter)
+        .animation(.smooth(duration: 0.35), value: segments.map(\.units))
+        .animation(SCMotion.textRoll, value: totalUnits)
     }
 }
 
@@ -2145,8 +2182,8 @@ private struct DetailServingsStepper: View {
                 adjust(by: 1)
             }
         }
-        .background(Capsule().fill(look.chip))
-        .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
+        // Szklana pigułka jak `SCStepper` (Liquid Glass).
+        .scChromeGlass(in: Capsule(), interactive: true)
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityName)
