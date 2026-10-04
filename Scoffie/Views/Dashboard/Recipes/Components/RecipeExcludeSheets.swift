@@ -735,11 +735,9 @@ struct RecipeExcludeSheet: View {
                 .padding(.leading, 14)
                 .padding(.trailing, 6)
                 .frame(height: 44)
-                .glassEffect(
-                    .regular.tint(Color.scPageBase(scheme).opacity(0.35)),
-                    in: .capsule
-                )
-                .background(Color.scPageBase(scheme).opacity(0.72), in: .capsule)
+                // Pływa nad chmurą pigułek — czyste szkło warstwy nawigacji,
+                // jak dolne menu (`scChromeGlass`), bez matowej warstwy.
+                .scChromeGlass(in: .capsule)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
                 .transition(.move(edge: .bottom).combined(with: .opacity))

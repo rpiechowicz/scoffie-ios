@@ -331,6 +331,20 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   główny `ScrollView` zakładki melduje kierunek przez `scTracksTabBarCompaction()`; rezerwa
   miejsca pod treścią (`scReservesTabBarSpace()`, WEWNĄTRZ `NavigationStack`) jest stała i schodzi
   do zera przy klawiaturze.
+- Liquid Glass (4.10.2026, wzór: Telegram na iOS 26 — Rafał: „więcej iOS liquid”) = `Components/SCGlass.swift`.
+  Szkło TYLKO na tym, co PŁYWA nad treścią: `scChromeGlass` (czyste `.regular`, bez kryjącej warstwy `scPageBase`
+  0,72 — „matowa plama”, jak w Gotuj runda 6) dla dolnego menu, pola i krążka wysyłania Asystenta (jeden
+  `GlassEffectContainer`), „na dół rozmowy”, pigułki „Cel dnia”, toastu cofania i krążków NA ZDJĘCIU
+  (`SCSheetIconSurface(onImage: true)`: serce, udostępnij, krzyżyk szczegółów, pierścień kroków Gotuj);
+  `scPhotoGlass` (`.clear` + czerń 0,32) dla serca i pigułek na zdjęciu karty karuzeli. Karty, wiersze i pola
+  w przewijaniu zostają w stroju kafla. Czytelność daje `SCScrollEdgeBlur` POD szkłem: treść chowa się —
+  rozmywa i gaśnie w tło — zamiast przebijać ostro: pod paskiem stanu (`SCStatusBarBlur`, jeden w `NavigationMenu`,
+  tylko w górnym bezpiecznym obszarze — niżej są tytuły zakładek i „wstecz”), pod menu (tło `SCFloatingTabBar`)
+  albo od elementu nad menu w dół (pole Asystenta, pigułka Planu — wtedy pas menu gaśnie,
+  `NavigationMenu.ownBottomEdge`, żeby dwa materiały nie dały progu). Własny pas, nie `scrollEdgeEffectStyle` +
+  `safeAreaBar`: zakładki przewijają pod górnym obszarem (`ignoresSafeArea`) i paski stoją w `overlay`.
+  Menu: wybraną zakładkę mówi KOLOR ikony i podpisu (terakota, reszta `scLabel`); neutralna soczewka tylko pod
+  palcem (Rafał: „na active ikona ma mieć kolor, a nie cały state”) — nie wracać do terakotowej pigułki w spoczynku.
 - Zdjęcia: `CachedAsyncImage(url:variant:)`. Domyślna `.thumbnail` (512 px, ~1 MB w pamięci, JPEG
   na dysku) — listy, kafelki, talerze; `.large` tylko dla okładki szczegółów i dużych kart
   (pokazuje miniaturę, dopóki duża się nie zdekoduje). Oryginały to PNG 1024² po 4 MB po

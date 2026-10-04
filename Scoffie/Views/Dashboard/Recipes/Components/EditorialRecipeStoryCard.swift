@@ -197,14 +197,6 @@ struct EditorialGlassChip: View {
         .foregroundStyle(Color.white.opacity(0.96))
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background {
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule(style: .continuous).fill(Color.black.opacity(0.36)))
-        }
-        .overlay(
-            Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-        )
+        .scPhotoGlass(in: Capsule(style: .continuous))
     }
 }

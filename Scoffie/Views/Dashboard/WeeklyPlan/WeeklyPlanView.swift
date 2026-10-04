@@ -454,6 +454,16 @@ struct WeeklyPlanView: View {
                 // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
                 // pigułka o zerowej szerokości mignęłaby jako kreska.
                 .opacity(goalBarWidth > 0 ? 1 : 0)
+                // Oś dnia chowa się pod pigułką i dolnym menu jak w Telegramie:
+                // rozmyty pas od 28 pt nad pigułką do krawędzi ekranu, także
+                // pod menu (to on gasi treść pod paskiem na tej zakładce —
+                // `NavigationMenu.ownBottomEdge`).
+                .frame(maxWidth: .infinity)
+                .background(alignment: .top) {
+                    SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
+                        .padding(.top, -28)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
             }
             // Wymiary obszaru zakładki: wysokość idzie na sufit arkusza
             // „Cel dnia", szerokość na szerokość pigułki. Mierzone spod spodu,
