@@ -338,22 +338,34 @@ struct ProductsView: View {
                 // aby móc od razu zobaczyć”) — szklany przycisk nad listą,
                 // lista przejeżdża pod nim.
                 .scSheetFooter {
-                    if listState == .content && showsTodayRow {
-                        todayButton
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    // Animacja zawężona do samego przycisku. Przypięta do
+                    // całego ekranu animowała przy otwieraniu arkusza także
+                    // jego układ (lista wczytywała się w trakcie wjazdu) —
+                    // treść „wjeżdżała z lewej” (Rafał 4.10.2026).
+                    VStack(spacing: 0) {
+                        if listState == .content && showsTodayRow {
+                            todayButton
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
                     }
+                    .animation(.smooth(duration: 0.3), value: listState == .content && showsTodayRow)
                 }
-                .animation(.smooth(duration: 0.3), value: listState == .content && showsTodayRow)
 
                 // Przypięty pasek postępu — wchodzi, gdy prawdziwy zjedzie
                 // pod górną krawędź (Rafał: „jak scrolluję, przypnij do góry
-                // górną sekcję z progress barem”).
-                if listState == .content && isProgressPinned {
-                    pinnedProgress
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                // górną sekcję z progress barem”). Przy górnej krawędzi
+                // ARKUSZA, nie pod (ukrytym) paskiem nawigacji — „bardzo od
+                // góry odstaje”.
+                VStack(spacing: 0) {
+                    if listState == .content && isProgressPinned {
+                        pinnedProgress
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea(.container, edges: .top)
+                .animation(.smooth(duration: 0.25), value: isProgressPinned)
             }
-            .animation(.smooth(duration: 0.25), value: isProgressPinned)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -515,7 +527,7 @@ struct ProductsView: View {
             // jego rozmiar. 34 jest rozmiarem akcji w nagłówku EKRANU
             // (Plan tygodnia), gdzie krzyżyka nie ma.
             SCCircleIconLabel(icon: "ellipsis", size: SCSheetIconLabel.size, iconSize: 14)
-                .scTapTarget(drawn: 36)
+                .scTapTarget(drawn: SCSheetIconLabel.size)
         }
         .accessibilityLabel("Więcej opcji listy zakupów")
     }
@@ -551,7 +563,10 @@ struct ProductsView: View {
             // pod górę, przypinamy kopię (`pinnedProgress`). Bool, nie
             // przesunięcie — stan zmienia się raz na przekroczenie.
             .onGeometryChange(for: Bool.self) { proxy in
-                proxy.frame(in: .scrollView).maxY < 8
+                // Przed pierwszym układem ramka ma zero wysokości i stoi na
+                // górze — to nie jest przewinięcie.
+                let frame = proxy.frame(in: .scrollView)
+                return frame.height > 0 && frame.maxY < 8
             } action: { pinned in
                 isProgressPinned = pinned
             }
@@ -714,7 +729,8 @@ struct ProductsView: View {
         .padding(.vertical, 12)
         .scChromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .padding(.horizontal, 12)
-        .padding(.top, 10)
+        // Od górnej krawędzi arkusza — pod uchwytem.
+        .padding(.top, 14)
     }
 
     /// Stuknięcie w wiersz „Na dziś”: z pełnej listy otwiera arkusz z daniami,

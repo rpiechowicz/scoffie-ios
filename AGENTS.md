@@ -164,10 +164,12 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
   Runda 2 testów (1.10.2026): dok stoi jak dolne menu aplikacji (wyspa 60 pt, 20 pt od boków, na krawędzi
   bezpiecznego obszaru; powierzchnia `cook.dockSurface` — w jasnym motywie ciepła biel, bo płótno = tło strony).
-  OD 4.10.2026 na ekranie kroku WSZYSTKIE timery obok siebie (Rafał: „przy 3 timerach nie widzę, jak działa trzeci”):
-  `dockCapsules(now:, limit: .max)` — 1 = pełna kapsuła, 2 = para, 3+ = `CookTimerCapsule.Layout.compact` (pierścień
-  z ruchem + sam czas), powyżej 4 rząd przewija się w bok (92 pt na kapsułę); plakietka `CookOverflowTab` i znaczki
-  `CookTimerMark` USUNIĘTE, jej miejsce w doku zostaje puste (stała wysokość). Live Activity dalej dwie (limit 2).
+  Timery w doku (4.10.2026, druga runda): najwyżej DWIE pełne kapsuły (pojedyncza / para, `dockCapsules` limit 2),
+  a KAŻDY kolejny timer = `CookTimerBadge` w rzędzie nad nimi (miejsce dawnej „+N”, `Height.overflowTab`): pierścień
+  w kolorze timera + „12:04 · Ziemniaki”, po czasie na pełnym kolorze, „do włączenia” = ▶ + warunek startu (stuknięcie
+  włącza; reszta stanów otwiera Timery); rząd przewija się w bok. Zwarte kapsuły po równo (pierwsza runda tego dnia)
+  ODPADŁY — przebudowywały parę przy trzecim timerze, czwarty się nie mieścił, trzeciego nie dało się włączyć; nie
+  wracać (tokeny `cookTimerCapsuleCompactMin`/`cookTimerTimeCompact` w scoffie-design są nieużywane).
   Porcje sesji co 0,5 (`CookSession.portions: Double`, 0,5…12, `clampPortions`; serwer — ocena i wpis „ugotowane” —
   dostaje całe w górę); teksty przez `CookPortionsText` („na 1,5 porcji”). Stopka powitania: odstępy 12 między kaflami.
   Dawniej — kapsuły: najwyżej DWIE (`CookSession.dockCapsules` — dwa najdawniej włączone timery, wolne miejsce bierze timer

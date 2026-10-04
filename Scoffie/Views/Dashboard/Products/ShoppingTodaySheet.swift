@@ -77,9 +77,18 @@ struct ShoppingTodaySheet: View {
             VStack(spacing: 0) {
                 header
 
+                // Stopka przyklejona do przewijania (`scSheetFooter` =
+                // `safeAreaBar`): dania przejeżdżają pod szklanym przyciskiem,
+                // jak w każdym arkuszu (Rafał 4.10.2026: „dolny button jest
+                // po staremu”). Dawniej stopka stała pod listą w `VStack`.
                 content
-
-                footer
+                    .scSheetFooter {
+                        EditorialPrimaryActionButton(
+                            title: "Pokaż na liście zakupów",
+                            icon: "list.bullet",
+                            action: { onShowInList() }
+                        )
+                    }
             }
         }
     }
@@ -227,22 +236,6 @@ struct ShoppingTodaySheet: View {
             Image(systemName: dish.slot.icon)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(dish.slot.cozyAccent)
-        }
-    }
-
-    // MARK: - Stopka
-
-    /// Przycisk pełnej szerokości w stopce arkusza to `EditorialPrimaryActionButton`,
-    /// jak w każdej innej stopce (patrz `SCSheetFooter`) — `SCSoftButton` 56 pt
-    /// jest przyciskiem ekranu, nie arkusza, i tu był o ~11 pt wyższy od
-    /// przycisków stopek (~45 pt).
-    private var footer: some View {
-        SCSheetFooter {
-            EditorialPrimaryActionButton(
-                title: "Pokaż na liście zakupów",
-                icon: "list.bullet",
-                action: { onShowInList() }
-            )
         }
     }
 }
