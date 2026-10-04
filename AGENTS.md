@@ -158,8 +158,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wszystkie teksty kroku rolują się w miejscu (runda 9 — dawny wjazd opisu z boku odpadł, niżej).
   Wejście z Kalendarza (D23, EC41): na talerzu „play” w PRAWYM dolnym rogu ZAWSZE, gdy danie ma paczkę scenariusza
   (`CalendarPlateCooking.ready`) — każdy dzień, każda pora (Rafał: „nie trzymaj się czasu gotowania”); pełna terakota
-  z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół, a „następne” ma w niej ptaszek
-  w kolorze pory zamiast kropki i poświaty (`CalendarMealCheck` — cała aplikacja). Po „Wstrzymaj” talerz tego wpisu
+  z aureolą, gdy talerz „woła” (pora gotować / jeść / wstrzymane), poza tym „soft”. Pieczątka odhaczenia przeszła na LEWY dół; ptaszek TYLKO przy zjedzonym,
+  „następne” = sama obwódka w kolorze pory (4.10.2026: „nie dawaj checku w kolorze”, `CalendarMealCheck`). Po „Wstrzymaj” talerz tego wpisu
   planu (przepis + dzień + pora) to PS1 (`.paused`): pierścień kroków zamiast obręczy pory, „OBIAD · GOTUJESZ”,
   „Krok 8 z 12” w terakocie i tykające pigułki trwających timerów zamiast czasu i kcal.
   Runda 2 testów (1.10.2026): dok stoi jak dolne menu aplikacji (wyspa 60 pt, 20 pt od boków, na krawędzi
@@ -650,8 +650,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   zrób to natywnie, aby pokazywało się, co jest pod spodem”; „każdy sheet… tylko button liquid i pokazuje się
   płynnie”): bez kryjącej płyty, bez `SCEdgeShade`, bez rozmytego pasa (`SCFooterScrim` usunięty) — same szklane
   przyciski. `.scSheetFooter` = systemowe `safeAreaBar(edge: .bottom)`: treść przejeżdża pod przyciskami i kończy
-  się nad nimi; systemowy efekt krawędzi WYŁĄCZONY (`scrollEdgeEffectHidden(true, for: .bottom)` — Rafał widział
-  w nim dalej cień). „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
+  się nad nimi; pod przyciskami TYLKO natywny efekt krawędzi systemu (wyłączony na chwilę w #282, przywrócony:
+  „dodaj z powrotem ten natywny shadow, jednak to ma sens”). „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
   (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i strona końcowa przeglądu propozycji.
   `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton`. `AssistantStickyFooter` i `AssistantSheetFooter` to już

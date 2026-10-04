@@ -23,6 +23,9 @@ final class SCTabBarChrome {
     /// Tytuł do kapsuły pod paskiem stanu (`SCCompactTitle`) dla zakładek,
     /// których duży tytuł zjechał już pod górną krawędź.
     var compactTitles: [DashboardTab: String] = [:]
+    /// Ostatnie liczby pigułki „Cel dnia” z aktywnej zakładki — pigułka
+    /// wchodzącej zakładki rośnie od nich do swoich (`PlanDayGoalBar`).
+    var goalSnapshot: PlanDayGoalSnapshot?
     /// Czas ostatniego ruchu klawiatury (z powiadomienia) — rezerwa schodzi
     /// i wraca w tym samym tempie i tej samej krzywej co klawiatura.
     var keyboardDuration: Double = 0.25

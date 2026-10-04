@@ -379,8 +379,7 @@ struct RecipeDetailView: View {
             .ignoresSafeArea(.container, edges: .top)
             // Dolny pasek akcji natywnie (iOS 26 `safeAreaBar`): same szklane
             // przyciski, przepis przejeżdża pod nimi, a kończy się nad nimi.
-            // Bez systemowego efektu krawędzi — pod przyciskami NIC.
-            .scrollEdgeEffectHidden(true, for: .bottom)
+            // Pod przyciskami tylko natywny efekt krawędzi systemu.
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 primaryActionBar
             }
