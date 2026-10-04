@@ -598,6 +598,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   `weeklyPlans:addRecipeExtras` na tydzień z Planu (nie wcześniejszy niż bieżący) — tylko
   z katalogu, bo posiłek z planu ma składniki na liście od początku. Dopisane pozycje listy
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
+  „Kto ile je” (posiłek z planu z porcjami osób) to od 4.10.2026 NIE sekcja w przewijaniu, tylko szklana pigułka
+  przyczepiona nad przyciskami (`portionsPill`, jak „Cel dnia”): awatary, „Do ugotowania · 3,5 porcji”, ⌃ →
+  półarkusz `.medium/.large` (`portionsSheet`: pasek podziału + wiersze ze stepperem co 0,5, ten sam szkic
+  `draftPortions`); zapis dalej „Zapisz porcje”, który wjeżdża pod pigułką po zmianie.
   Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
 - Filtry przepisów v3 (23.09.2026) — makieta Claude Design „Scoffie - Przepisy v3 - Filtry”
