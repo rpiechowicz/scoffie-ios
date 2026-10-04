@@ -184,6 +184,9 @@ enum SCCook {
         /// Pierścień w kapsule z PARY (dwa timery obok siebie) — zarazem przycisk start / pauza / wznów / gotowe z glifem w środku (runda 2: „włączyć / wyłączyć timer z pulpitu, nie wchodząc w kartę”); kreska stroke.cookTimerRingSmall, dotyk 44.
         static let timerRingPair: CGFloat = 34
 
+        /// Najmniejsza szerokość ZWARTEJ kapsuły timera (3+ timery obok siebie, 4.10.2026): pierścień z pary + czas typography.cookTimerTimeCompact. Gdy wszystkie się nie mieszczą w szerokości doku, rząd przewija się w bok, a każda ma tę szerokość.
+        static let timerCapsuleCompactMin: CGFloat = 100
+
         /// Pierścień-przycisk pauzy w wierszu arkusza Timery; promień 20,5 (ST5).
         static let sheetTimerRing: CGFloat = 46
 
@@ -418,6 +421,9 @@ enum SCCook {
 
         /// Czas w kapsule z pary.
         static let timerTimePair = SCCookTextStyle(size: 17, weight: .heavy, tracking: 0, lineHeight: nil)
+
+        /// Czas w ZWARTEJ kapsule (3+ timery obok siebie, 4.10.2026) — „20:00” mieści się w size.cookTimerCapsuleCompactMin.
+        static let timerTimeCompact = SCCookTextStyle(size: 15, weight: .heavy, tracking: 0, lineHeight: nil)
 
         /// Czas w wierszu arkusza Timery, w kolorze timera.
         static let sheetTime = SCCookTextStyle(size: 26, weight: .heavy, tracking: -0.78, lineHeight: nil)

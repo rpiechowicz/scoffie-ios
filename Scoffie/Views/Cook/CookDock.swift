@@ -84,26 +84,29 @@ struct CookDock: View {
 
     // MARK: - Timery
 
-    /// Ile zwartych kapsuł mieści się w szerokości doku po równo — dalej
-    /// rząd przewija się w bok, a każda ma stałą szerokość.
-    private static let compactFitCount = 4
-    private static let compactScrollWidth: CGFloat = 92
-
-    @ViewBuilder
+    /// Zwarte kapsuły stoją po równo, dopóki każda ma co najmniej
+    /// `size.cookTimerCapsuleCompactMin` (czas „20:00” się mieści) — próg
+    /// liczony z SZEROKOŚCI doku, nie z liczby timerów (review: na 375 pt
+    /// cztery po równo ucinały czas). Gdy się nie mieszczą, rząd przewija się
+    /// w bok, a każda ma tę najmniejszą szerokość.
     private func capsuleRow(_ items: [CookDockTimer]) -> some View {
         let layout: CookTimerCapsule.Layout = switch items.count {
         case 1: .single
         case 2: .pair
         default: .compact
         }
-        if items.count > Self.compactFitCount {
-            ScrollView(.horizontal) {
-                capsules(items, layout: layout, fixedWidth: Self.compactScrollWidth)
+        return GeometryReader { proxy in
+            let gap = SCCook.Spacing.capsuleGap
+            let needed = CGFloat(items.count) * SCCook.Size.timerCapsuleCompactMin + CGFloat(max(0, items.count - 1)) * gap
+            if layout == .compact && needed > proxy.size.width {
+                ScrollView(.horizontal) {
+                    capsules(items, layout: layout, fixedWidth: SCCook.Size.timerCapsuleCompactMin)
+                }
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+            } else {
+                capsules(items, layout: layout, fixedWidth: nil)
             }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-        } else {
-            capsules(items, layout: layout, fixedWidth: nil)
         }
     }
 
@@ -351,8 +354,11 @@ struct CookTimerCapsule: View {
         return .scale(scale: 0.6, anchor: .trailing).combined(with: .opacity)
     }
 
+    /// Stuknięcie w kapsułę. „Do włączenia” startuje od razu tylko tam, gdzie
+    /// widać warunek startu („Gdy woda zawrze”, D37) — zwarta kapsuła go nie
+    /// mieści, więc otwiera arkusz Timery, w którym warunek stoi przy „Start”.
     private func bodyAction() {
-        if isPending {
+        if isPending && !isCompact {
             onTimer(.start(item.id))
         } else {
             onOpen()
@@ -367,7 +373,7 @@ struct CookTimerCapsule: View {
     private var ring: some View {
         let side = isSingle ? SCCook.Size.timerRing : SCCook.Size.timerRingPair
         return Button {
-            if isSingle {
+            if isSingle || (isCompact && isPending) {
                 bodyAction()
             } else if let action = item.primaryAction {
                 onTimer(action)
@@ -397,9 +403,9 @@ struct CookTimerCapsule: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.primaryLabel)
-        // W pojedynczej robi to samo co reszta kapsuły — VoiceOver czytałby
-        // kapsułę dwa razy.
-        .accessibilityHidden(isSingle)
+        // W pojedynczej (i w zwartej „do włączenia”) robi to samo co reszta
+        // kapsuły — VoiceOver czytałby kapsułę dwa razy.
+        .accessibilityHidden(isSingle || (isCompact && isPending))
     }
 
     /// Glif w pierścieniu: w parze — ruch (▶ / pauza / ✓), w pojedynczej —
@@ -435,7 +441,7 @@ struct CookTimerCapsule: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(CookDockLabels.accessibility(item))
-        .accessibilityHint(isPending ? "Włącza timer" : "Otwiera arkusz Timery")
+        .accessibilityHint(isPending && !isCompact ? "Włącza timer" : "Otwiera arkusz Timery")
     }
 
     private var texts: some View {
@@ -459,14 +465,16 @@ struct CookTimerCapsule: View {
                     .minimumScaleFactor(0.85)
                     .cookRoll(label)
             }
+            // Zwarta — od razu mniejszy krój (`timerTimeCompact`), bo skala
+            // nie zmniejsza miejsca, którego tekst żąda w układzie.
             Text(time)
-                .cookText(SCCook.Typography.timerTime)
+                .cookText(isCompact ? SCCook.Typography.timerTimeCompact : SCCook.Typography.timerTime)
                 .monospacedDigit()
                 .foregroundStyle(timeColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .cookTicking(time, countsDown: !isOverdue)
-                .scaleEffect(timeScale, anchor: .leading)
+                .scaleEffect(isCompact ? 1 : timeScale, anchor: .leading)
         }
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
