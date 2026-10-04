@@ -622,10 +622,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
   „Kto ile je” (posiłek z planu z porcjami osób) to od 4.10.2026 NIE sekcja w przewijaniu, tylko szklana pigułka
   przyczepiona nad przyciskami (`portionsPill`, jak „Cel dnia”): awatary, „Do ugotowania · 3,5 porcji”, ⌃ →
-  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania; karta
-  `SCPortionSummary` — mały garnek z łukami osób w ich kolorach + „Do ugotowania · 3,5 porcji · kcal”; lista
-  `SCPortionList`/`SCPortionRow` — awatar w obwódce koloru osoby, imię + „TY” + kcal, z prawej szklany stepper
-  „− 1,5 +” z dużą liczbą; zmieniona niezapisana porcja = liczba w kolorze osoby i kropka przy imieniu). Ten sam
+  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania; od 4.10.2026 wieczorem
+  „w stylu iOS” — linia `SCPortionSummary` „Razem · 3,5 porcji · kcal” nad listą, BEZ karty i paska podziału; grupa
+  `SCPortionList`/`SCPortionRow` jak w Ustawieniach iOS — awatar 34, imię + „· Ty”, kcal pod spodem, z prawej liczba
+  i SYSTEMOWY `Stepper` (strony wyłączane przez `nil`); zmieniona niezapisana porcja = liczba w terakocie). Ten sam
   zestaw (`Components/SCPortionKit.swift`) w „Dodaj do planu”. Duży pierścień z kaflami po dwa (wcześniej tego dnia)
   odpadł — „bardziej czytelne”. Po zmianie w stopce arkusza „Zapisz porcje” i obok krzyżyka „Cofnij zmiany”; ten sam zapis
   też pod pigułką.
@@ -644,7 +644,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   „500 · Twój cel · 800” — nigdy napis nad słupkami, bo przecinała go kreska. Aktywny przycisk
   filtrów na Przepisach = wariant „podświetlony”
   (`SCCircleIconLabel(highlighted:)`), nie pełna terakota. Przełącznik „Dopasowane do Ciebie” jest
-  TYLKO w Filtrach (z podsumowaniem profilu i liczbą ukrytych) — różdżka w nagłówku Przepisów
+  TYLKO w Filtrach — od 4.10.2026 jako różdżka OBOK krzyżyka (`RecipeFilterHeader(fitIsOn:)`, włączona = tint
+  szałwii; karta na górze arkusza usunięta), a podtytuł nagłówka mówi „Dopasowane do Ciebie · ukrywa N przepisów” — różdżka w nagłówku Przepisów
   i `RecipePersonalizationSheet` zniknęły jako duplikat; pusty ekran przez dietę ma własny przycisk
   „Pokaż wszystkie przepisy”. Kafelek wyboru (`SCChoiceTile`, `Components/`; od 27.09.2026 STAŁA wysokość 70 pt
   na dwie linie nazwy, miniatura 54 pt W KARCIE z równym odstępem 8 pt od góry, dołu i lewej (wersja „na całą
@@ -785,8 +786,8 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   kategorii; TYLKO w stanie wyników (fraza / „Filtry”), także nad pustym stanem — w zwykłym widoku ich nie ma
   (Rafał 4.10.2026). Zawężają wyniki („kuskus” → Obiady), każda z liczbą trafień; bez frazy i filtrów zakres wraca
   do „Wszystkie”. Lista wyników przy zmianie zakładki animuje się jak przy szukaniu (wiersze) — wjazd
-  całej listy z boku (#305) odrzucony („ma zostać po staremu”). Animuje się ZAZNACZENIE: jedna soczewka w kolorze
-  kategorii (`matchedGeometryEffect`) przejeżdża sprężyną między zakładkami, haptyka wyboru. `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
+  całej listy z boku (#305) odrzucony („ma zostać po staremu”). Animuje się ZAZNACZENIE: kolor stoi w każdej kapsule
+  i tylko PRZENIKA w miejscu (easeInOut 0,24) — przejeżdżająca soczewka odrzucona („bardziej delikatnie”); haptyka. `body(forRecipes:)` oddaje KILKA widoków — w `ZStack` zawsze owinięte w `VStack` (#303 bez niego
   nałożył nagłówek, karuzelę i sekcje na siebie).
   Przejścia (4.10.2026, „przeskakuje, szczególnie z karuzelą”): stany leżą w `ZStack` od góry (w `VStack` wchodzący
   stał pod wychodzącym i podskakiwał); zwykły widok liczy się z `browseRecipes` (dieta + filtry kategorii, BEZ frazy
@@ -859,8 +860,7 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   wybrany = `scChoiceSurface(.tile)` w `cozyAccent`) — lista wierszy z radiem odpadła („nie do końca mi się
   podoba”). „Dla kogo” = `PlanAudienceChips`. „Porcje” = szklany przycisk z liczbą porcji OBOK „Dodaj do planu” (`portionsButton`) → arkusz
   `portionsSheet` z `SCPortionSummary` + listą `SCPortionRow` (`Components/SCPortionKit.swift` — ten sam zestaw co
-  arkusz porcji w szczegółach, 4.10.2026; podsumowanie = „DO UGOTOWANIA” + duża liczba + kcal + pasek podziału
-  w kolorach osób; stepper w stroju `SCStepper`); suma ponad 12 = minus działa, zapis czeka (`portionsOverLimit`); jeden wiersz
+  arkusz porcji w szczegółach, 4.10.2026; linia „Razem” + wiersze z systemowym `Stepper`); suma ponad 12 = minus działa, zapis czeka (`portionsOverLimit`); jeden wiersz
   porcji łącznych tylko przed listą domowników / przy dołączaniu do dania w porze. Stopka `scSheetFooter`: rolujące zdanie „Środa, 24 września · Obiad” (+ „dla całego domu”) i przycisk „Dodaj do planu” / „Zamień w planie” / „Już jest w planie”. Sekcje
   wjeżdżają kaskadą `scReveal` (`Components/SCReveal.swift` — wyniesione ze szczegółów posiłku), lista ma
   `scrollBounceBehavior(.basedOnSize)` (gdy się mieści, nie odbija). Karty w `clipShape` = `strokeBorder`,
@@ -917,8 +917,9 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   w arkuszu „Cel dnia” ma wysokość krzyżyka (`SCSheetIconLabel.size`).
 - „Dla kogo” w „Wybierz przepis” i „Dodaj do planu” (4.10.2026) = JEDEN mechanizm
   (`WeeklyPlan/Components/PlanAudiencePicker.swift`): szklany `PlanAudienceButton` obok przycisku zapisu (awatary
-  wybranych / domek) → `PlanAudienceSheet` (wspólny nagłówek z podsumowaniem „Ania i Ty”, wiersz „Cały dom”, lista
-  domowników z awatarem w obwódce koloru osoby, „TY” i `SCCheckbox`; wszystkie = „Cały dom”). Chipy w przewijaniu
+  wybranych / domek) → SYSTEMOWE menu iOS (od 4.10.2026 wieczorem, „uprościć”): `Toggle` „Cały dom”, sekcja „Osoby”
+  z ptaszkami, `menuActionDismissBehavior(.disabled)` — zostaje otwarte przy zaznaczaniu kilku; wszystkie = „Cały
+  dom”. Arkusz `PlanAudienceSheet` usunięty. Chipy w przewijaniu
   „Dodaj do planu” odpadły. Porcje w „Dodaj do planu” — ikona `chart.pie.fill`. Pusty stan Zakupów =
   `ShoppingEmptyHero` (szklany koszyk, wokół działy sklepu w swoich kolorach, unoszą się).
 - Zakupy (4.10.2026): pasek postępu, który zjedzie pod górę, ma przypiętą kopię na szkle (`pinnedProgress`,
