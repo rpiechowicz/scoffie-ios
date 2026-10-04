@@ -7,8 +7,8 @@ import Foundation
 /// `sh Scripts/cook-logic-check.sh`.
 enum CookAmounts {
     /// Mnożnik ilości scenariusza: porcje sesji ÷ porcje, dla których pisano.
-    static func factor(portions: Int, basePortions: Int) -> Double {
-        Double(max(1, portions)) / Double(max(1, basePortions))
+    static func factor(portions: Double, basePortions: Int) -> Double {
+        max(CookSession.portionStep, portions) / Double(max(1, basePortions))
     }
 
     /// Ilość po skalowaniu, zaokrąglona do tego, co da się odmierzyć (§5.4):
@@ -133,7 +133,7 @@ extension CookPackage {
     /// Składniki kroku w ilościach dla `portions` porcji. Składnik, którego
     /// nie ma w przepisie (rozjazd danych), wypada — lepiej brak pigułki niż
     /// pigułka „? · 30 g”.
-    func lines(for step: CookStep, portions: Int) -> [CookIngredientLine] {
+    func lines(for step: CookStep, portions: Double) -> [CookIngredientLine] {
         let factor = CookAmounts.factor(portions: portions, basePortions: scenario.basePortions)
         return step.ingredients.enumerated().compactMap { offset, item in
             guard let info = ingredient(item.ingredientId) else { return nil }
@@ -161,7 +161,7 @@ extension CookPackage {
     /// Cały przepis w ilościach sesji — arkusz „Cały przepis” i powitanie.
     /// Kolejność jak w przepisie; ilość to suma ze wszystkich kroków, a gdy
     /// składnik nie trafił do żadnego kroku — ilość z przepisu.
-    func allLines(portions: Int) -> [CookIngredientLine] {
+    func allLines(portions: Double) -> [CookIngredientLine] {
         let factor = CookAmounts.factor(portions: portions, basePortions: scenario.basePortions)
         var used: [String: Double] = [:]
         for step in scenario.steps {
@@ -191,13 +191,13 @@ extension CookPackage {
     }
 
     /// Tekst „jak” kroku z liczbą sztuk dla porcji sesji.
-    func body(for step: CookStep, portions: Int) -> String {
-        CookAmounts.renderBody(step.body, portions: Double(portions))
+    func body(for step: CookStep, portions: Double) -> String {
+        CookAmounts.renderBody(step.body, portions: portions)
     }
 
     /// Nota skali, gdy porcje sesji ją przekraczają.
-    func scaleNote(for step: CookStep, portions: Int) -> String? {
-        guard let note = step.scaleNote, portions >= note.fromPortions else { return nil }
+    func scaleNote(for step: CookStep, portions: Double) -> String? {
+        guard let note = step.scaleNote, portions >= Double(note.fromPortions) else { return nil }
         return note.text
     }
 

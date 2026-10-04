@@ -10,11 +10,15 @@ import SwiftUI
 /// przeskakuje”). Wcześniej rząd kapsuł wchodził do `VStack` nad wyspą, dok
 /// rósł, a wyspa jechała po krzywej innej niż kapsuły i podskakiwała.
 ///
-/// Najwyżej dwie kapsuły (`CookSession.dockCapsules`), w kolejności kroków,
-/// każdy timer w swoim kolorze. Kapsuły mają stałą tożsamość (po id timera)
-/// i jeden układ na oba rozmiary, więc druga wjeżdża z boku, a pierwsza
-/// zwęża się i przestawia w miejscu. Timery, które się nie zmieściły, mówi
-/// plakietka nad kapsułami (`CookOverflowTab`).
+/// WSZYSTKIE timery obok siebie, w kolejności kroków, każdy w swoim kolorze
+/// (Rafał 4.10.2026: „jak są np. 3 timery, nie widzę, jak działa trzeci —
+/// dajmy wszystkie obok siebie”). Jeden — pełna kapsuła z nazwą i akcją,
+/// dwa — para, trzy i więcej — zwarte kapsuły (pierścień z ruchem + czas),
+/// powyżej czterech rząd przewija się w bok. Dawniej najwyżej dwie kapsuły
+/// i plakietka „+N” nad nimi (`CookOverflowTab`) — trzeci timer ginął
+/// w zdaniu. Kapsuły mają stałą tożsamość (po id timera) i jeden układ na
+/// wszystkie rozmiary, więc nowa wjeżdża z boku, a reszta zwęża się
+/// w miejscu. Live Activity dalej pokazuje dwie (`dockCapsules` z limitem).
 ///
 /// Timery i Składniki otwierają się jako arkusze systemu (`CookSheet`).
 struct CookDock: View {
@@ -43,17 +47,13 @@ struct CookDock: View {
     }
 
     var body: some View {
-        let capsules = session.dockCapsules(now: now)
-        let overflow = session.dockOverflow(now: now)
+        let capsules = session.dockCapsules(now: now, limit: .max)
         VStack(spacing: SCCook.Spacing.overflowGap) {
-            ZStack(alignment: .trailing) {
-                if !overflow.isEmpty {
-                    CookOverflowTab(items: overflow, onOpen: { onOpen(.timers) })
-                        .transition(tabTransition)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .frame(height: SCCook.Height.overflowTab)
+            // Miejsce dawnej plakietki „+N” zostaje puste: dok ma STAŁĄ
+            // wysokość (`spacing.cookDockReserve`), a wszystkie timery stoją
+            // już w rzędzie kapsuł.
+            Color.clear
+                .frame(height: SCCook.Height.overflowTab)
 
             VStack(spacing: SCCook.Spacing.dockGap) {
                 ZStack(alignment: .bottom) {
@@ -70,7 +70,6 @@ struct CookDock: View {
         .padding(.horizontal, SCCook.Spacing.dockSide)
         .padding(.bottom, SCCook.Spacing.dockBottom)
         .animation(SCCook.Motion.dock, value: capsules.map(\.id))
-        .animation(SCCook.Motion.dock, value: overflow.map(\.id))
     }
 
     /// Rząd kapsuł wychodzi SPOD wyspy: unosi się i rozjaśnia. Wyspa leży nad
@@ -83,21 +82,39 @@ struct CookDock: View {
         )
     }
 
-    private var tabTransition: AnyTransition {
-        if reduceMotion { return .opacity }
-        return .scale(scale: 0.85, anchor: .bottomTrailing).combined(with: .opacity)
-    }
-
     // MARK: - Timery
 
+    /// Ile zwartych kapsuł mieści się w szerokości doku po równo — dalej
+    /// rząd przewija się w bok, a każda ma stałą szerokość.
+    private static let compactFitCount = 4
+    private static let compactScrollWidth: CGFloat = 92
+
+    @ViewBuilder
     private func capsuleRow(_ items: [CookDockTimer]) -> some View {
-        let layout: CookTimerCapsule.Layout = items.count > 1 ? .pair : .single
-        return HStack(spacing: SCCook.Spacing.capsuleGap) {
+        let layout: CookTimerCapsule.Layout = switch items.count {
+        case 1: .single
+        case 2: .pair
+        default: .compact
+        }
+        if items.count > Self.compactFitCount {
+            ScrollView(.horizontal) {
+                capsules(items, layout: layout, fixedWidth: Self.compactScrollWidth)
+            }
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
+        } else {
+            capsules(items, layout: layout, fixedWidth: nil)
+        }
+    }
+
+    private func capsules(_ items: [CookDockTimer], layout: CookTimerCapsule.Layout, fixedWidth: CGFloat?) -> some View {
+        HStack(spacing: SCCook.Spacing.capsuleGap) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 CookTimerCapsule(item: item, layout: layout, onTimer: onTimer, onOpen: { onOpen(.timers) })
+                    .frame(width: fixedWidth)
                     // Kapsuła wjeżdża z tej strony, po której staje —
                     // pominięty timer z wcześniejszego kroku staje z lewej.
-                    // Z pary schodzi swoim bokiem; pojedyncza w lewo (gdy
+                    // Z rzędu schodzi swoim bokiem; pojedyncza w lewo (gdy
                     // miejsce bierze następna, ta wjeżdża z prawej).
                     .transition(capsuleTransition(
                         in: index == items.count - 1 ? .trailing : .leading,
@@ -279,6 +296,9 @@ struct CookTimerCapsule: View {
     enum Layout {
         case single
         case pair
+        /// Trzy timery i więcej: pierścień z ruchem i sam czas — nazwę
+        /// i stan mówi kolor, glif i arkusz Timery (stuknięcie w kapsułę).
+        case compact
     }
 
     let item: CookDockTimer
@@ -290,6 +310,7 @@ struct CookTimerCapsule: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isSingle: Bool { layout == .single }
+    private var isCompact: Bool { layout == .compact }
     private var isOverdue: Bool { if case .overdue = item.status { true } else { false } }
     private var isPending: Bool { if case .pending = item.status { true } else { false } }
     private var isPaused: Bool { if case .paused = item.status { true } else { false } }
@@ -298,7 +319,7 @@ struct CookTimerCapsule: View {
     private var color: Color { item.accent.color }
 
     var body: some View {
-        HStack(spacing: isSingle ? 10 : 8) {
+        HStack(spacing: isSingle ? 10 : (isCompact ? 6 : 8)) {
             ring
             bodyButton
             if isSingle {
@@ -306,8 +327,8 @@ struct CookTimerCapsule: View {
                     .transition(actionTransition)
             }
         }
-        .padding(.leading, isSingle ? 12 : 8)
-        .padding(.trailing, isSingle ? 6 : 12)
+        .padding(.leading, isSingle ? 12 : (isCompact ? 6 : 8))
+        .padding(.trailing, isSingle ? 6 : (isCompact ? 10 : 12))
         .frame(height: SCCook.Height.timerCapsule)
         .frame(maxWidth: .infinity)
         .background(background)
@@ -428,12 +449,16 @@ struct CookTimerCapsule: View {
         // kroju przeskakuje, a skala przechodzi płynnie razem z kapsułą.
         let timeScale = isSingle ? 1 : SCCook.Typography.timerTimePair.size / SCCook.Typography.timerTime.size
         return VStack(alignment: .leading, spacing: 1) {
-            Text(label)
-                .cookText(SCCook.Typography.timerLabel)
-                .foregroundStyle(labelColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .cookRoll(label)
+            // Zwarta kapsuła — sam czas; nazwa zostaje dla VoiceOver
+            // i w arkuszu Timery.
+            if !isCompact {
+                Text(label)
+                    .cookText(SCCook.Typography.timerLabel)
+                    .foregroundStyle(labelColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .cookRoll(label)
+            }
             Text(time)
                 .cookText(SCCook.Typography.timerTime)
                 .monospacedDigit()
@@ -587,171 +612,6 @@ struct CookTimerCapsule: View {
                 Label("Wszystkie timery", systemImage: "timer")
             }
         }
-    }
-}
-
-// MARK: - Plakietka
-
-/// Plakietka nad kapsułami: timery, które się w nich nie zmieściły (runda 4:
-/// zamiast gołego „+1” — „info, że timer idzie, że trzeba włączyć, że jest
-/// wstrzymany”). Każdy ukryty timer to znaczek stanu w swoim kolorze
-/// (`CookTimerMark`), a obok JEDNO krótkie zdanie (runda 5: „+2 · 2 trwają”
-/// powtarzało liczbę):
-/// - jeden timer — nazwa i stan: „Ziemniaki · 12:04”, „W piekarniku · włącz”;
-/// - kilka w tym samym stanie — liczba ze stanem: „2 timery trwają”;
-/// - kilka różnych — liczba i to, co czeka na ruch: „3 timery · 1 do
-///   włączenia” (resztę mówią znaczki).
-/// Stuknięcie otwiera arkusz Timery.
-struct CookOverflowTab: View {
-    let items: [CookDockTimer]
-    let onOpen: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let captionText = caption
-        Button(action: onOpen) {
-            HStack(spacing: 7) {
-                HStack(spacing: -5) {
-                    ForEach(items.prefix(3)) { item in
-                        CookTimerMark(item: item)
-                    }
-                }
-                Text(captionText)
-                    .font(.system(size: 12, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-                    .cookTicking(captionText)
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .heavy))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-            .padding(.leading, 4)
-            .padding(.trailing, 11)
-            .frame(height: SCCook.Height.overflowTab)
-            .background(Capsule().fill(scheme == .dark ? SCCook.Palette.dockSurface(scheme) : .clear))
-            .overlay(Capsule().strokeBorder(scheme == .dark ? SCCook.Palette.dockStroke(scheme) : .clear, lineWidth: 1))
-            .cookDockGlass(scheme)
-            .shadow(color: scheme == .dark ? SCCook.Palette.dockShadow(scheme) : .clear, radius: 10, y: 6)
-            .contentShape(Capsule())
-            .scTapHeight(44, drawn: SCCook.Height.overflowTab)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Otwiera arkusz Timery")
-    }
-
-    private var caption: String {
-        if items.count == 1, let item = items.first {
-            return "\(Self.name(item)) · \(Self.state(item))"
-        }
-        let count = items.count
-        let timers = "\(count) \(PolishPlural.form(count, one: "timer", few: "timery", many: "timerów"))"
-        let phases = Set(items.map(\.status.phase))
-        if phases.count == 1, let item = items.first {
-            return "\(timers) \(Self.groupState(item.status, count: count))"
-        }
-        // Różne stany — słowem tylko to, co czeka na ruch; resztę mówią znaczki.
-        let pending = items.filter { if case .pending = $0.status { true } else { false } }.count
-        if pending > 0 { return "\(timers) · \(pending) do włączenia" }
-        let overdue = items.filter { if case .overdue = $0.status { true } else { false } }.count
-        if overdue > 0 { return "\(timers) · \(overdue) po czasie" }
-        return timers
-    }
-
-    private var accessibilityText: String {
-        let list = items.map { "\($0.timer.label): \(Self.state($0))" }.joined(separator: ", ")
-        return "Pozostałe timery: \(list)"
-    }
-
-    /// Do włączenia — warunek startu (D37), reszta — nazwa timera.
-    private static func name(_ item: CookDockTimer) -> String {
-        if case .pending = item.status { return item.timer.startLabel }
-        return item.timer.label
-    }
-
-    private static func state(_ item: CookDockTimer) -> String {
-        switch item.status {
-        case .pending: "włącz"
-        case .running: CookDockLabels.time(item.status)
-        case .paused: "pauza"
-        case .overdue: "po czasie"
-        case .finished: "gotowe"
-        }
-    }
-
-    /// Stan kilku timerów naraz, po „2 timery …”.
-    private static func groupState(_ status: CookTimerStatus, count: Int) -> String {
-        switch status {
-        case .pending: "do włączenia"
-        case .running: PolishPlural.form(count, one: "trwa", few: "trwają", many: "trwa")
-        case .paused: PolishPlural.form(count, one: "wstrzymany", few: "wstrzymane", many: "wstrzymanych")
-        case .overdue: "po czasie"
-        case .finished: "gotowe"
-        }
-    }
-}
-
-/// Znaczek stanu timera w jego kolorze (plakietka nad kapsułami): trwa —
-/// łuk pozostałego czasu, do włączenia — pełne koło z ▶, wstrzymany — szary
-/// łuk z pauzą, po czasie — pełne koło z dzwonkiem. Obwódka w kolorze doku
-/// oddziela nachodzące na siebie znaczki.
-struct CookTimerMark: View {
-    let item: CookDockTimer
-
-    @Environment(\.colorScheme) private var scheme
-
-    private var color: Color { item.accent.color }
-
-    var body: some View {
-        let side = SCCook.Size.overflowMark
-        ZStack {
-            Circle().fill(fill)
-            CookTimerRing(
-                fraction: item.status.remainingFraction,
-                color: isPaused ? Color.scMuted(scheme) : color,
-                lineWidth: SCCook.Stroke.overflowMark
-            )
-            .opacity(showsRing ? 1 : 0)
-            Image(systemName: glyph ?? "play.fill")
-                .font(.system(size: 8, weight: .heavy))
-                .foregroundStyle(glyphColor)
-                .offset(x: glyph == "play.fill" ? 0.5 : 0)
-                .opacity(glyph == nil ? 0 : 1)
-        }
-        .frame(width: side, height: side)
-        .background(Circle().fill(SCCook.Palette.dockSurface(scheme)).padding(-1.5))
-        .accessibilityHidden(true)
-    }
-
-    private var isPaused: Bool { if case .paused = item.status { true } else { false } }
-
-    private var showsRing: Bool {
-        switch item.status {
-        case .running, .paused: true
-        case .pending, .overdue, .finished: false
-        }
-    }
-
-    private var fill: Color {
-        switch item.status {
-        case .pending, .overdue: color
-        case .running, .paused, .finished: .clear
-        }
-    }
-
-    private var glyph: String? {
-        switch item.status {
-        case .pending: "play.fill"
-        case .paused: "pause.fill"
-        case .overdue: "bell.fill"
-        case .running, .finished: nil
-        }
-    }
-
-    private var glyphColor: Color {
-        isPaused ? Color.scMuted(scheme) : Color.scPageBase(scheme)
     }
 }
 

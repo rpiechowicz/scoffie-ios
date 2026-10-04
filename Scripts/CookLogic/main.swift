@@ -93,7 +93,7 @@ let package = CookPackage(
 )
 
 func step(_ id: String) -> CookStep { scenario.step(id: id)! }
-func texts(_ id: String, _ portions: Int) -> [String] {
+func texts(_ id: String, _ portions: Double) -> [String] {
     package.lines(for: step(id), portions: portions).map { line in
         [line.name, line.partLabel, line.amountText].compactMap { $0 }.joined(separator: " · ")
     }
@@ -153,6 +153,13 @@ var session = CookSession(
 equal(session.stage, .welcome, "sesja: zaczyna od powitania")
 session.setPortions(3)
 check(session.portionsChanged, "sesja: zmiana porcji tylko w sesji")
+session.setPortions(1.5)
+equal(session.portions, 1.5, "sesja: połówki porcji")
+session.setPortions(0.2)
+equal(session.portions, 0.5, "sesja: najmniej pół porcji")
+session.setPortions(2.3)
+equal(session.portions, 2.5, "sesja: porcje na siatkę co 0,5")
+equal(CookAmounts.factor(portions: 1.5, basePortions: 2), 0.75, "ilości: 1,5 z 2 porcji = ×0,75")
 session.setPortions(2)
 session.begin(now: t0)
 equal(session.currentStep?.id, "s1", "sesja: Zaczynamy → krok 1")

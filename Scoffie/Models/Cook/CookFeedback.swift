@@ -28,7 +28,8 @@ struct CookFeedback: Equatable {
         self.sessionId = session.id
         self.recipeId = session.recipeId
         self.scenarioVersion = session.package.version
-        self.servings = min(max(1, session.portions), CookSession.maxPortions)
+        // Serwer liczy porcje całe — połówka w górę („ugotowałem 1,5” = 2).
+        self.servings = min(max(1, Int(session.portions.rounded(.up))), CookSession.maxPortions)
         self.extensions = session.extensions.reduce(into: [:]) { $0[$1.timerId, default: 0] += $1.seconds }
     }
 

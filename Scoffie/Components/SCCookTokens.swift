@@ -258,8 +258,8 @@ enum SCCook {
         /// Minimalna wysokość wiersza trwającego timera w arkuszu Timery.
         static let timerRow: CGFloat = 62
 
-        /// Przyciski pełnej szerokości trybu: „Zaczynamy”, „Zjedzone”, „Gotuj dalej”, „Wyślij” (miękka kapsuła).
-        static let button: CGFloat = 56
+        /// Przyciski pełnej szerokości trybu: „Zaczynamy”, „Zjedzone”, „Gotuj dalej”, „Wyślij” (miękka kapsuła). 50 od 4.10.2026 (było 56 — „Zaczynamy trochę za duży w porównaniu do reszty”).
+        static let button: CGFloat = 50
 
         /// Szuflady powitania „Składniki” i „Rady kucharza” — runda 7: dwa kafle OBOK SIEBIE w jednym rzędzie (było 72 pt, jedna pod drugą), żeby powitanie mieściło się bez przewijania.
         static let drawer: CGFloat = 52
@@ -431,8 +431,8 @@ enum SCCook {
         /// „Wychodzisz z gotowania?”.
         static let exitTitle = SCCookTextStyle(size: 24, weight: .heavy, tracking: -0.48, lineHeight: nil)
 
-        /// Główne akcje w terakocie: „Zaczynamy”, „Wyślij”, „▶ Start”.
-        static let button = SCCookTextStyle(size: 17, weight: .heavy, tracking: 0, lineHeight: nil)
+        /// Główne akcje w terakocie: „Zaczynamy”, „Wyślij”, „▶ Start”. 16 od 4.10.2026 (było 17).
+        static let button = SCCookTextStyle(size: 16, weight: .heavy, tracking: 0, lineHeight: nil)
 
         /// Akcje w szałwii i neutralne: „Zjedzone”, „Gotuj dalej”, „Gotowe — dalej”.
         static let buttonQuiet = SCCookTextStyle(size: 17, weight: .bold, tracking: 0, lineHeight: nil)

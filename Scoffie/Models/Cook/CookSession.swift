@@ -45,10 +45,12 @@ struct CookSession: Codable, Equatable {
     /// nawet gdy w trakcie przyjdzie nowsza (§4.7).
     let package: CookPackage
     /// Porcje tej sesji — tylko tu, plan zostaje bez zmian (D11).
-    var portions: Int
+    /// Porcje sesji co 0,5 (od 4.10.2026; wcześniej całe). Zapisane sesje
+    /// z liczbą całkowitą dekodują się bez zmian — JSON nie rozróżnia 2 i 2,0.
+    var portions: Double
     /// Porcje, z którymi sesja wystartowała (plan albo przepis) — podpis
     /// „tyle, ile w planie” znika, gdy użytkownik je zmieni.
-    let defaultPortions: Int
+    let defaultPortions: Double
     var stage: Stage
     var stepIndex: Int
     var timers: [String: CookTimerRun]
@@ -91,8 +93,8 @@ struct CookSession: Codable, Equatable {
         self.package = package
         // Przepis domu bywa na 20 porcji, stepper sesji kończy się na 12 —
         // serwer (wpis i ocena) większej liczby nie przyjmie.
-        self.portions = min(max(1, portions), Self.maxPortions)
-        self.defaultPortions = min(max(1, portions), Self.maxPortions)
+        self.portions = Self.clampPortions(Double(portions))
+        self.defaultPortions = Self.clampPortions(Double(portions))
         self.stage = .welcome
         self.stepIndex = 0
         self.timers = [:]
@@ -164,9 +166,19 @@ struct CookSession: Codable, Equatable {
         timers[timerId] = nil
     }
 
-    mutating func setPortions(_ value: Int) {
-        portions = min(max(1, value), Self.maxPortions)
+    mutating func setPortions(_ value: Double) {
+        portions = Self.clampPortions(value)
     }
+
+    /// Porcje w widełkach 0,5…12, na siatce co 0,5 (Rafał 4.10.2026:
+    /// „gotujesz 2 porcje — nie da się ustawić połówek”).
+    static func clampPortions(_ value: Double) -> Double {
+        let snapped = (value / portionStep).rounded() * portionStep
+        return min(max(portionStep, snapped), Double(maxPortions))
+    }
+
+    /// Krok steppera porcji i zarazem najmniejsza porcja.
+    static let portionStep: Double = 0.5
 
     /// Koniec gotowania: biegnące timery przestają mieć znaczenie, sesja
     /// przechodzi na „Smacznego!”.
