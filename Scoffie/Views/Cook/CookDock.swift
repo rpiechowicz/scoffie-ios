@@ -608,7 +608,9 @@ struct CookTimerCapsule: View {
             Button {
                 afterMenu { onTimer(.start(item.id)) }
             } label: {
-                Label("Włącz", systemImage: "play.fill")
+                // Zwarta kapsuła nie pokazuje warunku startu (D37) — mówi go
+                // sama pozycja menu, zanim ktoś włączy odliczanie.
+                Label(isCompact ? "Włącz · \(item.timer.startLabel)" : "Włącz", systemImage: "play.fill")
             }
             Button(role: .destructive) {
                 afterMenu { onTimer(.skip(item.id)) }
