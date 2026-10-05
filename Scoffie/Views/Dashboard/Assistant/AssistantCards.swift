@@ -2444,6 +2444,8 @@ private struct AssistantOptionsStorySheet: View {
                     }
                 }
             }
+            // Pod przyciskiem miękki efekt krawędzi, bez kreski i tła.
+            .scSheetFooterEdge()
         }
         .background(
             SCPageBackground(scheme: scheme)

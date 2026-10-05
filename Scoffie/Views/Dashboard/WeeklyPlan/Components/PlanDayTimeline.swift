@@ -795,6 +795,13 @@ struct PlanTimelineEmptyRow: View {
 /// krawędzi, i systemowa plansza liczyła swoje położenie z tej samej,
 /// przesuniętej geometrii. `Menu` zaczepia się o widok, z którego wyszło,
 /// więc nie ma czego liczyć — a przy okazji od razu widać, co się rozwija.
+///
+/// W etykiecie menu NIE MA szkła (5.10.2026, TestFlight: „dziwnie button
+/// wygląda”). iOS 26 bierze szkło z etykiety `Menu` za źródło animacji menu:
+/// szklany krążek „+” (`scSoftSurface`) znikał spod plusa i rozlewał się
+/// w terakotową kapsułę na cały wiersz — razem z kropką na osi. Krążek ma
+/// więc płaski tint (jak ikona pory w pustym wierszu), a etykietą menu jest
+/// sama treść wiersza; znacznik na osi stoi obok, poza menu.
 struct PlanTimelineAddRow: View {
     /// Sloty do wyboru; z nich składa się podpis wiersza.
     let slots: [MealSlot]
@@ -803,40 +810,44 @@ struct PlanTimelineAddRow: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Menu {
-            ForEach(slots) { slot in
-                Button {
-                    onPick(slot)
-                } label: {
-                    Label(slot.title, systemImage: slot.icon)
-                }
-            }
-        } label: {
-            HStack(alignment: .top, spacing: PlanTimelineMetrics.gutter) {
-                PlanRailMark(
-                    time: nil,
-                    color: Color.scFaint(scheme),
-                    hollow: true,
-                    dashed: true
-                )
-                .padding(.top, 8)
+        HStack(alignment: .top, spacing: PlanTimelineMetrics.gutter) {
+            PlanRailMark(
+                time: nil,
+                color: Color.scFaint(scheme),
+                hollow: true,
+                dashed: true
+            )
+            .padding(.top, 8)
+            .accessibilityHidden(true)
 
+            Menu {
+                ForEach(slots) { slot in
+                    Button {
+                        onPick(slot)
+                    } label: {
+                        Label(slot.title, systemImage: slot.icon)
+                    }
+                }
+            } label: {
                 content
+                    .contentShape(Rectangle())
             }
-            .padding(.top, PlanTimelineMetrics.rowTop)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dodaj posiłek: \(subtitle)")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Dodaj posiłek: \(subtitle)")
+        .padding(.top, PlanTimelineMetrics.rowTop)
     }
 
     private var content: some View {
         HStack(alignment: .center, spacing: 12) {
+            // Płaski tint, nie szkło — patrz opis typu.
             Image(systemName: "plus")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 30, height: 30)
-                .scSoftSurface(Circle())
+                .background(
+                    Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.16 : 0.12))
+                )
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Dodaj posiłek")

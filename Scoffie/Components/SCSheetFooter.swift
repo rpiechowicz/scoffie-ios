@@ -15,6 +15,11 @@ import SwiftUI
 /// Nie wracać do własnych warstw: `SCEdgeShade`, pas (`SCFooterScrim`
 /// usunięty), płyta.
 ///
+/// Efekt krawędzi ma JAWNY styl `.soft` (`scSheetFooterEdge()`): rozmycie, które
+/// gaśnie ku treści, bez kreski. Domyślne `.automatic` w buildzie z Xcode
+/// Cloud (TestFlight, 5.10.2026) rozstrzygało się na `.hard` — kreska i kryjące
+/// tło pod przyciskami, których lokalny build nie miał.
+///
 /// Dawniej ten sam pomysł żył w kilku kopiach: `AssistantStickyFooter`
 /// (wprowadzenie asystenta), `AssistantSheetFooter` (arkusze asystenta),
 /// szklana kapsuła filtrów przepisów i własne stopki „Dodaj do planu”,
@@ -66,5 +71,14 @@ extension View {
                 content: footer
             )
         }
+        .scSheetFooterEdge()
+    }
+
+    /// Natywny efekt krawędzi pod przyklejonymi przyciskami — zawsze miękki
+    /// (`.soft`), nigdy z kreską i kryjącym tłem (`.hard`). Na każdym
+    /// przewijaniu z dolnym `safeAreaBar`: stopka arkusza, pasek szczegółów
+    /// posiłku, strona końcowa przeglądu propozycji.
+    func scSheetFooterEdge() -> some View {
+        scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 }
