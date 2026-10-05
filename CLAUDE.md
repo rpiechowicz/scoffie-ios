@@ -375,7 +375,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   jednego szkła albo zwykłe wypełnienie — bez drugiego szkła z `scSoftSurface` na pierwszym.
   INTERAKTYWNE szkło (`scChromeGlass(interactive: true)`) TYLKO tam, gdzie widok ma własny gest (dolne menu,
   pigułka „Cel dnia”) — NIGDY w etykiecie ani kontenerze przycisku: z `.buttonStyle(.plain)` przechwytywało na iOS 26
-  stuknięcie („Dalej” w „Jak działa Asystent” nic nie robiło, 4.10.2026). Reakcja na dotyk = `PlanPressStyle`
+  stuknięcie („Dalej” w „Jak działa Asystent” nic nie robiło, 4.10.2026). Szkło w etykiecie `Menu` — TYLKO gdy jest
+  CAŁĄ etykietą (krążek „…”, „Dla kogo”): iOS 26 bierze je za źródło animacji menu, więc szklany krążek „+” w szerokim
+  wierszu „Dodaj posiłek” znikał i rozlewał się w terakotową kapsułę na cały wiersz (TestFlight 5.10.2026) — tam płaski
+  tint. Reakcja na dotyk = `PlanPressStyle`
   (`EditorialPrimaryActionButton`, `SCSoftButton` przeszły z `.plain`). Też szkło (4.10): strzałki tygodnia
   (`EditorialWeekBar`, „Dodaj do planu”), „Wyczyść filtry”, strzałka nagłówka sekcji Przepisów, „Otwórz” u Asystenta,
   „Ustaw/Policz/Odrzuć/…” w Ustawieniach, chipy „Dla kogo”, kciuki oceny Gotuj. Serce ulubionych = podskok glifu +
@@ -683,7 +686,10 @@ decyzje i stan prac: w repo backendu — `CLAUDE.md`, `docs/handover/2026-08-28-
   płynnie”): bez kryjącej płyty, bez `SCEdgeShade`, bez rozmytego pasa (`SCFooterScrim` usunięty) — same szklane
   przyciski. `.scSheetFooter` = systemowe `safeAreaBar(edge: .bottom)`: treść przejeżdża pod przyciskami i kończy
   się nad nimi; pod przyciskami TYLKO natywny efekt krawędzi systemu (wyłączony na chwilę w #282, przywrócony:
-  „dodaj z powrotem ten natywny shadow, jednak to ma sens”). „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
+  „dodaj z powrotem ten natywny shadow, jednak to ma sens”) — ZAWSZE jawnie miękki: `scSheetFooterEdge()`
+  (= `scrollEdgeEffectStyle(.soft, for: .bottom)`) przy KAŻDYM dolnym `safeAreaBar`. Domyślne `.automatic` w buildzie
+  z Xcode Cloud (TestFlight, 5.10.2026) wyszło jako `.hard`: kreska i ciemniejsze tło pod przyciskami, których lokalny
+  build nie miał. „Zapisz porcje” w szczegółach posiłku pojawia się dopiero, gdy jest co zapisać (`showsPlanAction`). Tak samo szczegóły posiłku
   (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i strona końcowa przeglądu propozycji.
   `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton` („Pokaż” w Filtrach i filtrach kategorii = `iconOnly`: sama LUPA

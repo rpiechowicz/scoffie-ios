@@ -375,10 +375,13 @@ struct RecipeDetailView: View {
             .ignoresSafeArea(.container, edges: .top)
             // Dolny pasek akcji natywnie (iOS 26 `safeAreaBar`): same szklane
             // przyciski, przepis przejeżdża pod nimi, a kończy się nad nimi.
-            // Pod przyciskami tylko natywny efekt krawędzi systemu.
+            // Pod przyciskami tylko natywny efekt krawędzi systemu — jawnie
+            // miękki (`scSheetFooterEdge`): `.automatic` w buildzie z TestFlight
+            // dawał kreskę i ciemniejsze tło pod przyciskami (5.10.2026).
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 primaryActionBar
             }
+            .scSheetFooterEdge()
             // Bool, nie przesunięcie: stan zmienia się raz przy przekroczeniu
             // progu, a nie w każdej klatce przewijania.
             .onScrollGeometryChange(for: Bool.self) { geometry in
