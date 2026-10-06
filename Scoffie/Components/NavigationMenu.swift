@@ -56,10 +56,27 @@ final class SCTabBarChrome {
 
     /// Twarz, od której pigułka zakładki DOCELOWEJ rysuje się w chwili
     /// przełączenia (Plan ↔ Pulpit). Ustawiana ZANIM zmieni się zakładka
-    /// (`NavigationMenu.prepareGoalBarHandoff`), więc pierwsza klatka nowej
+    /// (`prepareGoalBarHandoff`), więc pierwsza klatka nowej
     /// zakładki to dokładnie pigułka poprzedniej — jeden komponent, który
     /// tylko zmienia stan. Pigułka sama ją zdejmuje, ruchem.
     var goalBarHandoff: [DashboardTab: PlanDayGoalFace] = [:]
+
+    /// Przygotowanie przejścia pigułki kcal (Plan ↔ Pulpit) — ZANIM zakładka
+    /// się przełączy. Wołają je wiązanie wyboru w `NavigationMenu`
+    /// (stuknięcie w pasek) i „Zaplanuj” na Pulpicie (przełączenie z kodu).
+    /// Nigdy po fakcie: przygotowana w `onChange` zakładki twarz dochodziła
+    /// klatkę za późno (pierwsza klatka z własnymi liczbami, druga z cudzymi)
+    /// i potrafiła zostać na pigułce do następnej wizyty (przegląd 6.10.2026).
+    func prepareGoalBarHandoff(from: DashboardTab, to: DashboardTab) {
+        let tabs: Set<DashboardTab> = [.plan, .calendar]
+        guard from != to, tabs.contains(from), tabs.contains(to),
+              goalBarHandoff[to] == nil,
+              let face = goalBarFaces[from]
+        else { return }
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { goalBarHandoff[to] = face }
+    }
 
     /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
     /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.
@@ -120,7 +137,7 @@ struct NavigationMenu: View {
         let selection = Binding<DashboardTab>(
             get: { session.dashboardTab },
             set: { tab in
-                prepareGoalBarHandoff(from: session.dashboardTab, to: tab)
+                chrome.prepareGoalBarHandoff(from: session.dashboardTab, to: tab)
                 session.dashboardTab = tab
             }
         )
@@ -157,11 +174,8 @@ struct NavigationMenu: View {
                 tabLabel(.settings, MenuConstans.Settings.name, systemImage: MenuConstans.Settings.icon)
             }
         }
-        .onChange(of: selected) { old, tab in
+        .onChange(of: selected) { _, tab in
             bounces[tab, default: 0] += 1
-            // Przełączenie z kodu („Zaplanuj” na Pulpicie → Plan) omija
-            // wiązanie — tu przejście dochodzi chwilę później.
-            prepareGoalBarHandoff(from: old, to: tab)
         }
         // Pasek NIE zwija się przy przewijaniu (Rafał 6.10.2026). Zwinięty
         // rozjeżdżał się ze wstawkami nad nim (pasek szukania Przepisów,
@@ -194,17 +208,6 @@ struct NavigationMenu: View {
 
     /// Pigułka kcal zakładki `to` zacznie od twarzy pigułki `from` — tylko
     /// między Planem a Pulpitem i tylko raz na przejście.
-    private func prepareGoalBarHandoff(from: DashboardTab, to: DashboardTab) {
-        let tabs: Set<DashboardTab> = [.plan, .calendar]
-        guard from != to, tabs.contains(from), tabs.contains(to),
-              chrome.goalBarHandoff[to] == nil,
-              let face = chrome.goalBarFaces[from]
-        else { return }
-        var instant = Transaction()
-        instant.disablesAnimations = true
-        withTransaction(instant) { chrome.goalBarHandoff[to] = face }
-    }
-
     /// Podpis zakładki z ikoną, która podskakuje przy wyborze (6.10.2026,
     /// Rafał: „mała animacja na ikony w nav, jak zmieniam strony”). Systemowy
     /// pasek może efektu nie pokazać — wtedy zostaje sama soczewka szkła.

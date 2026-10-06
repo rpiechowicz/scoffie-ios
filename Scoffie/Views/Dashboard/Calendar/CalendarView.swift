@@ -13,6 +13,8 @@ struct CalendarView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scTabIsActive) private var isActiveTab
     @Environment(\.scenePhase) private var scenePhase
+    /// Przejście pigułki kcal przy „Zaplanuj” (Pulpit → Plan z kodu).
+    @Environment(\.scTabBarChrome) private var tabBarChrome
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
     // czytamy go tymi samymi kluczami, co Plan tygodnia, bo tylko
@@ -1535,6 +1537,8 @@ struct CalendarView: View {
             slot: slot,
             participantIds: participants
         )
+        // Twarz pigułki przed przełączeniem — jak przy stuknięciu w pasek.
+        tabBarChrome.prepareGoalBarHandoff(from: .calendar, to: .plan)
         sessionStore.dashboardTab = .plan
     }
 

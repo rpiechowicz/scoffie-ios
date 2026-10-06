@@ -196,6 +196,12 @@ struct PlanDayGoalBar: View {
             guard active else { return }
             startHandoff()
         }
+        // Siatka bezpieczeństwa: twarz, która dojechała, gdy zakładka już
+        // stoi na ekranie, też schodzi — nie zostaje do następnej wizyty.
+        .onChange(of: tabBarChrome.goalBarHandoff[tab] != nil) { _, hasHandoff in
+            guard hasHandoff, isActiveTab else { return }
+            startHandoff()
+        }
     }
 
     /// Pierwsza klatka = pigułka z poprzedniej zakładki (już w stanie — patrz
