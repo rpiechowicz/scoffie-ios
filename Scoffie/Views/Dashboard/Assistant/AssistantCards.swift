@@ -757,10 +757,13 @@ struct AssistantOptionsCard: View {
     private func autoPresentIfFresh() async {
         guard let id = autoPresentID, reply == nil, !card.options.isEmpty,
               !Self.autoPresented.contains(id) else { return }
-        Self.autoPresented.insert(id)
         // Najpierw karta wjeżdża pod tekstem, potem arkusz — nie oba naraz.
         try? await Task.sleep(for: .milliseconds(450))
-        guard !Task.isCancelled else { return }
+        // Zapamiętane DOPIERO po odczekaniu: systemowy `TabView` anuluje
+        // zadanie przy zmianie zakładki (tak samo leniwa lista przy zjechaniu
+        // wiersza) — wpis sprzed snu gubił otwarcie na zawsze.
+        guard !Task.isCancelled, !Self.autoPresented.contains(id) else { return }
+        Self.autoPresented.insert(id)
         presented = OptionsSheetPage(id: autoPresentPage)
     }
 }

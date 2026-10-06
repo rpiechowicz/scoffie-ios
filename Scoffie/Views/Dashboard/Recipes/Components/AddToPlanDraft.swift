@@ -266,6 +266,9 @@ enum RecipeQuickPlan {
         let dayTitle: String
         let draft: AddToPlanDraft
         let slot: MealSlot
+        /// Tydzień dnia był w tej sesji wczytany — inaczej stan pory jest
+        /// niewiadomą i pozycja otwiera arkusz zamiast zapisywać od razu.
+        var isWeekKnown: Bool = true
 
         var id: String { "\(dayTitle).\(slot.rawValue)" }
         var date: Date { draft.date }
@@ -287,9 +290,14 @@ enum RecipeQuickPlan {
             case besides(PlanMeal)
             /// To danie już tu stoi — pozycja wyłączona.
             case alreadyPlanned
+            /// Tydzień dnia nie był jeszcze wczytany (jutro w niedzielę = nowy
+            /// tydzień): pusta pora może być tylko niewczytana, więc pozycja
+            /// otwiera pełny arkusz zamiast dokładać danie na ślepo.
+            case unknownWeek
         }
 
         var outcome: Outcome {
+            if !isWeekKnown { return .unknownWeek }
             if draft.isAlreadyPlanned { return .alreadyPlanned }
             if let replaced = draft.replacedMeal { return .replaces(replaced) }
             if let other = draft.slotMeals.first(where: { $0.recipe.id != draft.recipe.id }) {
@@ -332,7 +340,8 @@ enum RecipeQuickPlan {
         var result: [Option] = []
 
         func option(_ dayTitle: String, _ date: Date, _ slot: MealSlot) -> Option {
-            Option(
+            let weekStart = PlanWeek.dateKey(PlanWeek.monday(of: date))
+            return Option(
                 dayTitle: dayTitle,
                 draft: AddToPlanDraft(
                     recipe: recipe,
@@ -342,7 +351,8 @@ enum RecipeQuickPlan {
                     members: members,
                     portions: portions
                 ),
-                slot: slot
+                slot: slot,
+                isWeekKnown: store.hasLoadedWeek(weekStart)
             )
         }
 

@@ -1313,6 +1313,12 @@ struct RecipeDetailView: View {
                 Text("Już w planie")
             }
             .disabled(true)
+        case .unknownWeek:
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+            }
         }
     }
 

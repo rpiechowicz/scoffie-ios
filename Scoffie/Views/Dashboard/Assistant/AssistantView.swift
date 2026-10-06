@@ -260,14 +260,15 @@ struct AssistantView: View {
             .sensoryFeedback(.impact(flexibility: .soft), trigger: activeIntroStep)
         }
         .task {
+            // Systemowy `TabView` odpala to przy KAŻDYM wejściu na zakładkę —
+            // `openIfNeeded` jest na to odporne. Pulę (plakietka w nagłówku)
+            // ładuje start sesji (`SessionStore.prepareUnbuiltTabs`), a przy
+            // wejściu odświeża ją `refreshUsageIfStale` niżej (60 s), więc tu
+            // już nie pytamy o nią przy każdym przełączeniu.
             await store.openIfNeeded()
-            // Plakietka puli w nagłówku potrzebuje liczb od razu, nie dopiero
-            // po pierwszym 429. Bez zgody to żądanie po prostu nic nie zwraca.
-            _ = await store.loadUsage()
         }
-        // Zakładki żyją wszystkie naraz, więc „widać rozmowę" znaczy
-        // „wybrana zakładka", nie `onAppear` — ten odpala się raz, pod
-        // loaderem startowym.
+        // „Widać rozmowę” = wybrana zakładka (`scTabIsActive`), a nie samo
+        // `onAppear` — ten sam sygnał, którego używają inne zakładki.
         .onChange(of: isActiveTab, initial: true) { _, active in
             store.setVisible(active)
             if active, !introPlayedOnScreen, activeIntroStep != nil {
