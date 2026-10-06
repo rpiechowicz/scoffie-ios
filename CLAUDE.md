@@ -36,7 +36,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`scRefreshesOnDynamicType()` w `DashboardView`). Tokeny Gotuj (`SCCookTextStyle.font`) też idą przez `.sc` —
   generator w scoffie-design. Wygląd sprawdzać też przy „Większym tekście” na xxL (ciasno: dok Gotuj, kapsuły,
   talerze, plakietki).
-- **Zakładki**: Przepisy · Plan · **Dziś** · Asystent · Ustawienia — systemowy `TabView` (akapit „Dolne menu”).
+- **Zakładki**: Przepisy · Plan · **Mój dzień** · Asystent · Ustawienia — systemowy `TabView` (akapit „Dolne menu”).
+  „Mój dzień” (do 6.10.2026 wieczór „Dziś”) ma w pasku ZNAK SCOFFIE (`Assets.xcassets/ScoffieTabMark`, SVG-szablon z geometrii
+  `SCScoffieMark.markPath`); pozostałe ikony podskakują przy wyborze (`symbolEffect(.bounce.down)` w `tabLabel`, licznik
+  `bounces`) — niesprawdzone, czy systemowy pasek to pokazuje. Nagłówek ekranu zostaje „Dziś” / „Wczoraj” / „Jutro”.
   Plan = „co jemy w domu” (tydzień, cały dom, edycja, kalorie każdej osoby); Dziś = „mój dzień” (tylko moje posiłki,
   wczoraj · dziś · jutro, odhaczanie, Gotuj). Planowanie ma jedno miejsce: Plan.
 - **Dziś** (dawny Kalendarz; `CalendarView` + `CalendarTodayHeader`, `DashboardTab.calendar`, ikona

@@ -1,16 +1,19 @@
 struct MenuConstans {
-    /// Zakładka „Dziś” (6.10.2026, dawniej „Kalendarz”) — „mój dzień”: to,
-    /// co JA jem wczoraj, dziś i jutro. Typ zostaje `Calendar`, bo tak zakładkę
-    /// nazywa `DashboardTab.calendar`.
+    /// Zakładka „Mój dzień” (6.10.2026; wcześniej tego dnia „Dziś”, dawniej
+    /// „Kalendarz”): to, co JA jem wczoraj, dziś i jutro — w odróżnieniu od
+    /// Planu, który jest całego domu. Typ zostaje `Calendar`, bo tak zakładkę
+    /// nazywa `DashboardTab.calendar`. Nagłówek ekranu dalej mówi „Dziś” /
+    /// „Wczoraj” / „Jutro”.
     ///
-    /// Talerz ze sztućcami, nie słońce ani kartka kalendarza: sercem ekranu
-    /// jest talerz dnia, a obok w pasku stoją `receipt` (Plan) i `sparkles`
-    /// (Asystent). Słońce (`sun.max`) przy 24 pt to krążek z promieniami — tuż
-    /// obok iskierek Asystenta dwie „błyszczące” ikony zlewały się w jedną;
-    /// kartka kalendarza zderzała się sylwetką z paragonem i książką.
+    /// Ikoną w pasku jest ZNAK SCOFFIE (dysk z kęsem, Rafał 6.10.2026) —
+    /// wektor `image` z katalogu zasobów, rysowany jako szablon jak symbole
+    /// systemu. `icon` (talerz ze sztućcami) zostaje dla miejsc, które biorą
+    /// symbol systemowy.
     struct Calendar: MenuModel {
-        static let name: String = "Dziś"
+        static let name: String = "Mój dzień"
         static let icon: String = "fork.knife.circle"
+        /// `Assets.xcassets/ScoffieTabMark` — geometria z `SCScoffieMark.markPath`.
+        static let image: String = "ScoffieTabMark"
     }
     
     struct Recipes: MenuModel {
