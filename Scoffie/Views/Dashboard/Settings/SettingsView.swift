@@ -7,6 +7,8 @@ struct SettingsView: View {
     @Environment(\.requestReview) private var requestReview
     /// Katalog — tylko do liczby „ukrywa N przepisów” przy alergenach.
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
 
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
     @AppStorage("settings.notifications.enabled") private var notificationsEnabled: Bool = true
@@ -49,6 +51,11 @@ struct SettingsView: View {
     @State private var showCreateHouseholdSheet = false
     @State private var showHouseholdSheet = false
     @State private var showNotificationsSheet = false
+    /// Zgoda systemu na powiadomienia — `nil`, dopóki system nie odpowiedział.
+    /// Czytana przy wejściu, po powrocie aplikacji na wierzch i przy otwarciu
+    /// arkusza (ktoś mógł ją zmienić w Ustawieniach iOS).
+    @State private var notificationPermission: NotificationPermission?
+    @State private var isRequestingNotifications = false
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
     @State private var showMealSlotsSheet = false
@@ -317,6 +324,20 @@ struct SettingsView: View {
         return "\(count) \(membersLabel(for: count))"
     }
 
+    /// Wartość przy „Powiadomieniach” — PRAWDZIWY stan, a nie sam przełącznik
+    /// w aplikacji: bez zgody systemu (odmowa albo jeszcze nie pytaliśmy)
+    /// żadne powiadomienie nie wyjdzie, choćby przełącznik stał na „Włączone”.
+    /// Pusto, dopóki system nie odpowiedział — lepiej nic niż zgadywanie.
+    private var notificationsRowValue: String? {
+        guard let notificationPermission else { return nil }
+        switch notificationPermission {
+        case .notAsked, .denied:
+            return "Wyłączone"
+        case .allowed:
+            return notificationsEnabled ? "Włączone" : "Wyciszone"
+        }
+    }
+
     /// Inline value next to "Wygląd" — uses the localized title from
     /// `AppTheme` so it reads "Auto" / "Jasny" / "Ciemny" in the row.
     private var appearanceRowValue: String {
@@ -552,6 +573,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showNotificationsSheet) {
                 notificationsSheet
                     .dashboardLiquidSheet()
+                    // Zgoda mogła się zmienić w Ustawieniach iOS, zanim ktoś
+                    // tu wszedł — arkusz pokazuje stan z tej chwili.
+                    .task { await refreshNotificationPermission() }
                     // Przełączniki muszą dojechać na serwer, bo to on decyduje
                     // o wysłaniu pusha. Trzymane tylko lokalnie wyciszały
                     // wyłącznie powiadomienia rysowane przez aplikację.
@@ -572,6 +596,15 @@ struct SettingsView: View {
                     .onChange(of: localReminderToken) { _, _ in
                         sessionStore.rescheduleMealReminders()
                     }
+            }
+            .task {
+                await refreshNotificationPermission()
+            }
+            // Powrót z Ustawień iOS („Otwórz ustawienia”) — wiersz i arkusz
+            // mają od razu mówić to, co użytkownik właśnie przestawił.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { await refreshNotificationPermission() }
             }
             .task {
                 planAccess = sessionStore.agentStore?.usage
@@ -710,6 +743,7 @@ struct SettingsView: View {
                     icon: "bell.fill",
                     iconColor: SettingsAccent.coral,
                     title: "Powiadomienia",
+                    value: notificationsRowValue,
                     action: { showNotificationsSheet = true }
                 )
 
@@ -984,14 +1018,15 @@ struct SettingsView: View {
                     notificationsHeroCard
 
                     notificationChannelsCard
-                        .opacity(notificationsEnabled ? 1 : 0.55)
-                        .animation(.smooth(duration: 0.2), value: notificationsEnabled)
+                        .opacity(notificationChannelsActive ? 1 : 0.55)
+                        .animation(.smooth(duration: 0.2), value: notificationChannelsActive)
 
                     // Bez podpisu przy włączonych powiadomieniach — zachowanie
                     // gospodarstwa i ciszy nocnej (22–7) jest wbudowane i nie
                     // wymaga tłumaczenia na ekranie. Zostaje tylko wyjaśnienie
                     // przygaszonej karty, gdy główny przełącznik jest wyłączony.
-                    if !notificationsEnabled {
+                    // Bez zgody systemu przygaszenie tłumaczy karta wyżej.
+                    if systemAllowsNotifications && !notificationsEnabled {
                         Text("Wszystkie powiadomienia są wyciszone. Włącz główny przełącznik, aby zarządzać typami przypomnień.")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Color.scMuted(scheme))
@@ -1008,48 +1043,110 @@ struct SettingsView: View {
         }
     }
 
+    /// Czy system wyświetli powiadomienia. Zanim odpowie (`nil`), arkusz
+    /// stoi w układzie „zgoda jest” — tak jest u większości i nic nie mignie.
+    private var systemAllowsNotifications: Bool {
+        notificationPermission == nil || notificationPermission == .allowed
+    }
+
+    /// Przełączniki kanałów coś zmieniają tylko przy zgodzie systemu
+    /// i włączonym głównym przełączniku — inaczej stoją przygaszone.
+    private var notificationChannelsActive: Bool {
+        systemAllowsNotifications && notificationsEnabled
+    }
+
+    private var notificationsHeroTitle: String {
+        switch notificationPermission {
+        case .denied?:
+            return "Wyłączone w ustawieniach iOS"
+        case .notAsked?:
+            return "Wyłączone"
+        case .allowed?, nil:
+            return notificationsEnabled ? "Włączone" : "Wyciszone"
+        }
+    }
+
+    private var notificationsHeroSubtitle: String {
+        switch notificationPermission {
+        case .denied?:
+            return "Scoffie nie może teraz wysyłać powiadomień. Włączysz je w ustawieniach iOS."
+        case .notAsked?:
+            return "Zmiany planu i zakupów u domowników, pora gotowania i przegląd dnia."
+        case .allowed?, nil:
+            return "Główny przełącznik dla wszystkich przypomnień aplikacji."
+        }
+    }
+
     private var notificationsHeroCard: some View {
-        HStack(alignment: .center, spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                SettingsAccent.coral.opacity(scheme == .dark ? 0.28 : 0.20),
-                                SettingsAccent.coral.opacity(scheme == .dark ? 0.10 : 0.06)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+        let bellIsOn = systemAllowsNotifications && notificationsEnabled
+
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    SettingsAccent.coral.opacity(scheme == .dark ? 0.28 : 0.20),
+                                    SettingsAccent.coral.opacity(scheme == .dark ? 0.10 : 0.06)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                Image(systemName: notificationsEnabled ? "bell.fill" : "bell.slash.fill")
-                    .font(.system(size: 28, weight: .heavy))
-                    .foregroundStyle(SettingsAccent.coral)
-                    .contentTransition(.symbolEffect(.replace))
+                    Image(systemName: bellIsOn ? "bell.fill" : "bell.slash.fill")
+                        .font(.system(size: 28, weight: .heavy))
+                        .foregroundStyle(SettingsAccent.coral)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .frame(width: 64, height: 64)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(notificationsHeroTitle)
+                        .font(.system(size: 17, weight: .heavy))
+                        .tracking(-0.3)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                        .id(notificationsHeroTitle)
+
+                    Text(notificationsHeroSubtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                // Główny przełącznik tylko przy zgodzie systemu — bez niej
+                // nic by nie przełączał. Systemowy `Toggle` w naturalnym
+                // rozmiarze (wcześniej zmniejszany `scaleEffect`).
+                if systemAllowsNotifications {
+                    Toggle("Powiadomienia", isOn: $notificationsEnabled)
+                        .labelsHidden()
+                        .tint(SCPalette.sage)
+                        .fixedSize()
+                }
             }
-            .frame(width: 64, height: 64)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(notificationsEnabled ? "Włączone" : "Wyciszone")
-                    .font(.system(size: 17, weight: .heavy))
-                    .tracking(-0.3)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .contentTransition(.opacity)
-                    .id(notificationsEnabled)
-
-                Text("Główny przełącznik dla wszystkich przypomnień aplikacji.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+            switch notificationPermission {
+            case .notAsked?:
+                editorialPrimaryButton(
+                    title: "Włącz powiadomienia",
+                    icon: "bell.badge.fill",
+                    isEnabled: !isRequestingNotifications,
+                    action: requestNotificationPermission
+                )
+            case .denied?:
+                editorialPrimaryButton(
+                    title: "Otwórz ustawienia",
+                    icon: "gearshape.fill",
+                    isEnabled: true,
+                    action: openSystemNotificationSettings
+                )
+            case .allowed?, nil:
+                EmptyView()
             }
-
-            Spacer(minLength: 0)
-
-            Toggle("", isOn: $notificationsEnabled)
-                .labelsHidden()
-                .tint(SCPalette.sage)
-                .scaleEffect(0.95)
-                .fixedSize()
         }
         .padding(18)
         .background(
@@ -1060,6 +1157,7 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
+        .animation(.smooth(duration: 0.22), value: notificationPermission)
     }
 
     /// Zmiana któregokolwiek przełącznika powiadomień. Steruje `task(id:)`,
@@ -1149,7 +1247,7 @@ struct SettingsView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .disabled(!notificationsEnabled)
+        .disabled(!notificationChannelsActive)
     }
 
     private func channelToggleRow(
@@ -1175,10 +1273,9 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Toggle("", isOn: isOn)
+            Toggle(title, isOn: isOn)
                 .labelsHidden()
                 .tint(SCPalette.sage)
-                .scaleEffect(0.85)
                 .fixedSize()
         }
         .padding(.horizontal, 16)
@@ -2478,10 +2575,12 @@ struct SettingsView: View {
         }
 
         if let invitationLink {
-            ShareLink(
-                item: invitationLink,
-                message: Text("Dołącz do naszego domu w Scoffie — wspólny plan posiłków i lista zakupów.")
-            ) {
+            // Systemowy arkusz udostępniania przez `SCShareSheet`, nie
+            // `ShareLink`: tylko on mówi, że link naprawdę wyszedł
+            // (`completed`) — a dopiero wtedy pytamy o zgodę na powiadomienia.
+            Button {
+                shareInvitation(invitationLink)
+            } label: {
                 label
             }
             .buttonStyle(PlanPressStyle(scale: 0.98))
@@ -2496,6 +2595,30 @@ struct SettingsView: View {
             .buttonStyle(PlanPressStyle(scale: 0.98))
             .disabled(isCreatingInvitation)
             .accessibilityLabel("Przygotuj zaproszenie")
+        }
+    }
+
+    /// Link zaproszenia do systemowego arkusza udostępniania. Po WYSŁANIU
+    /// (nie po samym otwarciu arkusza) prosimy o zgodę na powiadomienia,
+    /// jeśli system jeszcze nie pytał: zaproszony domownik będzie zmieniał
+    /// plan i listę, a o tym właśnie mówią powiadomienia. To jest pierwsze
+    /// miejsce, w którym prośba ma oczywisty powód — przy starcie aplikacji
+    /// nie miała żadnego.
+    private func shareInvitation(_ link: URL) {
+        SCShareSheet.present(
+            url: link,
+            title: "Zaproszenie do domu w Scoffie",
+            image: nil,
+            message: "Dołącz do naszego domu w Scoffie — wspólny plan posiłków i lista zakupów."
+        ) {
+            Task { @MainActor in
+                guard notificationPermission != .allowed,
+                      await NotificationPermission.current() == .notAsked else { return }
+                // Arkusz udostępniania jeszcze zjeżdża — systemowe okno zgody
+                // wchodzi po nim, a nie w trakcie.
+                try? await Task.sleep(for: .milliseconds(450))
+                await askForNotificationPermission()
+            }
         }
     }
 
@@ -2799,6 +2922,46 @@ struct SettingsView: View {
     }
 
     // MARK: - Actions / helpers
+
+    /// Stan zgody z systemu. Gdy zgoda właśnie się POJAWIŁA (prośba albo
+    /// Ustawienia iOS), przypomnienia o posiłkach układają się od nowa —
+    /// rozkład planowany bez zgody nie miałby kiedy wyjść.
+    @MainActor
+    private func refreshNotificationPermission() async {
+        let previous = notificationPermission
+        let current = await NotificationPermission.current()
+        notificationPermission = current
+        if current == .allowed, let previous, previous != .allowed {
+            sessionStore.rescheduleMealReminders()
+        }
+    }
+
+    /// „Włącz powiadomienia” — systemowa prośba, tylko gdy jeszcze nie pytaliśmy.
+    private func requestNotificationPermission() {
+        guard !isRequestingNotifications else { return }
+        isRequestingNotifications = true
+        Task { @MainActor in
+            await askForNotificationPermission()
+            isRequestingNotifications = false
+        }
+    }
+
+    @MainActor
+    private func askForNotificationPermission() async {
+        let previous = notificationPermission
+        let result = await NotificationPermission.requestIfNotAsked()
+        notificationPermission = result
+        if result == .allowed, previous != .allowed {
+            sessionStore.rescheduleMealReminders()
+        }
+    }
+
+    /// Po odmowie system nie zapyta drugi raz — zostają Ustawienia iOS,
+    /// prosto na stronę powiadomień Scoffie.
+    private func openSystemNotificationSettings() {
+        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
+        openURL(url)
+    }
 
     @MainActor
     private func removeMember(_ member: HouseholdMemberSnapshot) async {

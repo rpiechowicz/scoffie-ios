@@ -17,10 +17,14 @@ enum SCShareSheet {
     /// Pokazuje arkusz nad tym, co jest na wierzchu (także nad arkuszem
     /// szczegółów). `onCompleted` przychodzi po faktycznym wysłaniu — przy
     /// anulowaniu nie przychodzi wcale.
+    ///
+    /// `message` — zdanie wysyłane razem z adresem (zaproszenie domownika:
+    /// „Dołącz do naszego domu…”). Przepis go nie ma: tam kartę robi strona.
     static func present(
         url: URL,
         title: String,
         image: UIImage?,
+        message: String? = nil,
         onCompleted: @escaping @MainActor () -> Void
     ) {
         guard let presenter = topViewController() else { return }
@@ -33,8 +37,12 @@ enum SCShareSheet {
             metadata.imageProvider = NSItemProvider(object: image)
         }
 
+        var items: [Any] = [SCLinkActivityItem(url: url, metadata: metadata)]
+        if let message, !message.isEmpty {
+            items.append(message)
+        }
         let controller = UIActivityViewController(
-            activityItems: [SCLinkActivityItem(url: url, metadata: metadata)],
+            activityItems: items,
             applicationActivities: nil
         )
         // Uchwyt dymka na iPadzie; na telefonie arkusz i tak wjeżdża od dołu.

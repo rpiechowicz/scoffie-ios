@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Nasłuch interfejsu startuje razem z aplikacją, żeby pierwsze
         // żądanie miało już z czym porównać swoje niepowodzenie.
         ConnectivityMonitor.shared.start()
-        PlanChangeNotificationService.requestAuthorizationIfNeeded()
+        // O zgodę na powiadomienia pytamy w kontekście, nie przy starcie (`NotificationPermission`).
         application.registerForRemoteNotifications()
         return true
     }
