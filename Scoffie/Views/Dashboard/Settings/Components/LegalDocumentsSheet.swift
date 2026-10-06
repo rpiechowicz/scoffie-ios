@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// „Prywatność i regulamin" — jeden arkusz z Ustawień, w którym polityka
-/// prywatności, warunki korzystania i „Pobierz moje dane" wjeżdżają jako
+/// prywatności, regulamin i „Pobierz moje dane" wjeżdżają jako
 /// kolejne ekrany TEGO arkusza (push z systemowym „wstecz”), a nie arkusze
 /// nad nim. Trzy osobne wiersze w Ustawieniach robiły z sekcji Informacje
 /// listę dokumentów; tu jest jedno wejście i komplet w środku.
@@ -17,71 +17,74 @@ struct LegalDocumentsSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(
-                        eyebrow: "Informacje",
-                        title: "Prywatność i regulamin",
-                        icon: "hand.raised.fill",
-                        accent: SettingsAccent.slate
-                    ) {
-                        dismiss()
-                    }
-
-                    Text("Wersja \(LegalDocMeta.version) · obowiązuje od \(LegalDocMeta.effectiveDate). Te same dokumenty, które akceptujesz przy logowaniu; aktualne wersje są też na scoffie.app.")
-                        .font(.sc(size: 13))
-                        .lineSpacing(2)
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    EditorialSheetSectionLabel(title: "Dokumenty")
-                    EditorialSettingsCardGroup {
-                        EditorialSettingsRow(
-                            icon: "hand.raised.fill",
-                            iconColor: SCPalette.indigo,
-                            title: "Polityka prywatności",
-                            value: "v\(LegalDocMeta.version)",
-                            action: { showPrivacy = true }
-                        )
-                        EditorialSettingsRow(
-                            icon: "doc.text.fill",
-                            iconColor: SCPalette.sage,
-                            title: "Warunki korzystania",
-                            value: "v\(LegalDocMeta.version)",
-                            isLast: true,
-                            action: { showTerms = true }
-                        )
-                    }
-
-                    EditorialSheetSectionLabel(title: "Twoje dane")
-                    EditorialSettingsCardGroup {
-                        EditorialSettingsRow(
-                            icon: "square.and.arrow.down.fill",
-                            iconColor: SCPalette.terracotta,
-                            title: "Pobierz moje dane",
-                            value: "JSON",
-                            isLast: true,
-                            action: { showExport = true }
-                        )
-                        // Bez klienta eksportu (sesja jeszcze nie wstała) push
-                        // pokazałby pusty ekran — wiersz czeka wyłączony.
-                        .disabled(dataExportClient == nil)
-                    }
-
-                    Text("Paczka z Twoim profilem, preferencjami, przepisami, posiłkami, krokami, zgodami i rozmowami z asystentem — prawo dostępu i przenoszenia danych (art. 15 i 20 RODO). Bez danych innych domowników.")
-                        .font(.sc(size: 12))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text("Pytania i żądania: \(LegalDocMeta.contactEmail)")
-                        .font(.sc(size: 12))
-                        .foregroundStyle(Color.scFaint(scheme))
+            // Nagłówek PRZYPIĘTY nad przewijaną treścią (jak w pozostałych
+            // arkuszach) — górny brzeg listy gaśnie pod nim, zamiast kreski.
+            VStack(alignment: .leading, spacing: 0) {
+                EditorialSheetHeader(
+                    eyebrow: "Informacje",
+                    title: "Prywatność i regulamin",
+                    icon: "hand.raised.fill",
+                    accent: SettingsAccent.slate
+                ) {
+                    dismiss()
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
-                .padding(.bottom, 28)
+                .padding(.bottom, 6)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        EditorialSheetSectionLabel(title: "Dokumenty")
+                        EditorialSettingsCardGroup {
+                            EditorialSettingsRow(
+                                icon: "doc.text.fill",
+                                iconColor: SettingsAccent.slate,
+                                title: "Polityka prywatności",
+                                value: "v\(LegalDocMeta.version)",
+                                action: { showPrivacy = true }
+                            )
+                            EditorialSettingsRow(
+                                icon: "building.columns.fill",
+                                iconColor: SettingsAccent.slate,
+                                title: "Regulamin",
+                                value: "v\(LegalDocMeta.version)",
+                                isLast: true,
+                                action: { showTerms = true }
+                            )
+                        }
+
+                        EditorialSheetSectionLabel(title: "Twoje dane")
+                            .padding(.top, 18)
+                        EditorialSettingsCardGroup {
+                            EditorialSettingsRow(
+                                icon: "arrow.down.circle.fill",
+                                iconColor: SCPalette.teal,
+                                title: "Pobierz moje dane",
+                                value: "JSON",
+                                isLast: true,
+                                action: { showExport = true }
+                            )
+                            // Bez klienta eksportu (sesja jeszcze nie wstała) push
+                            // pokazałby pusty ekran — wiersz czeka wyłączony.
+                            .disabled(dataExportClient == nil)
+                        }
+
+                        // Wersja, data i kontakt jednym podpisem — bez akapitu.
+                        Text("Wersja \(LegalDocMeta.version) · od \(LegalDocMeta.effectiveDate) · \(LegalDocMeta.contactEmail)")
+                            .font(.sc(size: 12.5))
+                            .foregroundStyle(Color.scFaint(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 6)
+                            .padding(.top, 10)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 28)
+                }
+                .scrollIndicators(.hidden)
+                .scrollBounceBehavior(.basedOnSize)
+                .scScrollEdgeFade()
             }
-            .scrollIndicators(.hidden)
             .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showPrivacy) {
@@ -90,7 +93,7 @@ struct LegalDocumentsSheet: View {
                 }
             }
             .navigationDestination(isPresented: $showTerms) {
-                LegalDocumentPage(title: "Warunki korzystania") {
+                LegalDocumentPage(title: "Regulamin") {
                     TermsOfServiceContent()
                 }
             }
