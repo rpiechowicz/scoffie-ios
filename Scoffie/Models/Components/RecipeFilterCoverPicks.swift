@@ -9,11 +9,16 @@ import Foundation
 /// w małym kółku, drugi — zapas (zwykle bez mięsa), gdy pierwszy ukrywa
 /// dieta albo alergeny z profilu. Gdy żadnego nie ma w puli, wraca automat.
 ///
-/// Klucz: „rodzaj:kategoria:opcja” (`dish:lunch:soup`, `taste:breakfast:sweet`)
-/// albo „cuisine:KUCHNIA”. Wartość: id przepisów katalogu — ten sam UUID co
-/// nazwa pliku zdjęcia w `img.scoffie.app/recipe-images/`, więc wybór trafia
-/// także wtedy, gdy przepis dostał nowe zdjęcie (zmienia się tylko końcówka
-/// nazwy). Nowy przepis albo zdjęcie lepsze od wybranego = zmiana tutaj.
+/// Klucz: „rodzaj:kategoria:opcja” (`dish:lunch:soup`, `taste:breakfast:sweet`,
+/// `protein:dinner:fish`, `slot:snacks:afternoonSnack`) albo — kafelki
+/// podstron wszystkich przepisów — „cuisine:KUCHNIA”, „diet:dieta”,
+/// „trait:cecha”, „moment:OKAZJA” (wartości `rawValue`). Podstrony doszły
+/// wieczorem 6.10.2026; „Ulubione” i „Thermomix” zostają przy automacie
+/// (ulubione każdy dom ma inne). Wartość: id przepisów katalogu — ten sam
+/// UUID co nazwa pliku zdjęcia w `img.scoffie.app/recipe-images/`, więc wybór
+/// trafia także wtedy, gdy przepis dostał nowe zdjęcie (zmienia się tylko
+/// końcówka nazwy). Nowy przepis albo zdjęcie lepsze od wybranego = zmiana
+/// tutaj.
 enum RecipeFilterCoverPicks {
     static func ids(_ key: String) -> [String] {
         byKey[key] ?? []
@@ -110,5 +115,78 @@ enum RecipeFilterCoverPicks {
         "cuisine:MEXICAN": ["78d01993-b5e4-46b9-8f1c-69becd2ebf2a", "d810fe60-e0f6-423d-8ca5-8c53ceaeb646"],
         // Burgery wołowe z frytkami · Burgery z czerwonej fasoli
         "cuisine:AMERICAN": ["b6967ae5-0885-43a3-a5a0-4f0aa022e9d2", "f8e2e53a-0bbe-41b6-aea5-c073830d9dc9"],
+        // — Diety (podstrona „Dieta”) —
+        // Halloumi z pieczonymi warzywami · Gnocchi z warzywami i pesto
+        "diet:vegetarian": ["f2b0e3a1-f195-4ab4-9d06-d5e3535ac957", "d6c5944f-3c31-4311-9651-d9cdbe3acaeb"],
+        // Kalafior w czerwonym curry po tajsku · Curry z soczewicą i batatem
+        "diet:vegan": ["2d24cab8-b48b-4a33-9d74-7ade8789e753", "c0a1abc9-861a-4e22-8068-a3d4f1b84c9f"],
+        // Łosoś z batatami i fasolką · Łosoś z warzywami z jednej blachy
+        "diet:withFish": ["34d8d9ac-675e-4bdf-9a20-2e2e497f9ea1", "ef87d51d-3b44-448b-99ee-4603958cc558"],
+        // Risotto z pieczarkami i parmezanem · Risotto ze szparagami i groszkiem
+        "diet:glutenFree": ["c3859fc1-0d1e-4f92-888f-9fdc99a6c014", "24ff075d-cb1c-4d7d-a354-0ba438429a83"],
+        // Stir-fry z tofu, brokułem i papryką z ryżem jaśminowym · Dorsz w sosie curry z ryżem
+        "diet:lactoseFree": ["2e500ad6-49fc-4d15-bc65-096f072f0c40", "ca9ed6ca-cb13-441f-8b09-1e3509ec6211"],
+        // Jajka sadzone z awokado i wędzonym łososiem · Łosoś z sosem koperkowym i szparagami
+        "diet:keto": ["59cb545d-5946-40d4-89aa-d98777fc5229", "21c8dadf-e8a0-4ed9-8719-71885d2752e4"],
+        // — Cechy —
+        // Kurczak tandoori z ryżem · Kurczak kung pao z ryżem
+        "trait:highProtein": ["03d086e7-5505-48fb-a347-13f4a1f02146", "85725c62-604e-44ba-aae7-6448b8c1de3c"],
+        // Zimowa sałatka owocowa z pomarańczą, granatem i kiwi · Twarożek z truskawkami i bazylią
+        "trait:lowFat": ["d7b9250a-fdbd-4e7c-ad5c-4a9e36247b53", "2fe82da2-7c32-4193-a57c-f6b6237668ba"],
+        // Fasola z tuńczykiem po toskańsku · Minestrone z fasolą i makaronem
+        "trait:highFiber": ["324d5642-2a12-4b4e-93ef-392eeb547067", "ca1deebc-60e7-49e8-9789-ddbfa5f57b49"],
+        // Owsianka nocna z malinami i porzeczkami · Owsianka ze skyrem i truskawkami
+        "trait:lowSalt": ["63891816-8a91-46d7-bf3f-09b74bbbbbc0", "5f76f54b-9aaa-4e80-95b6-24aecb551a78"],
+        // Frytki z przyprawą paprykową · Skrzydełka BBQ z coleslawem
+        "trait:airfryer": ["e87756b2-7cbb-4411-a509-c231230eb7bf", "225f4275-1d99-42cf-85cd-bbdea8bb1244"],
+        // Sałatka z kaszą gryczaną i fetą · Sałatka gyros warstwowa
+        "trait:lunchbox": ["5183182a-8815-4f50-b027-c26ef92a7954", "0be5ef3c-8441-4891-9975-df702d4a8a3f"],
+        // — Okazje i sezon —
+        // Barszcz czerwony z uszkami z grzybami · Karp pieczony z ziołami
+        "moment:CHRISTMAS_EVE": ["dd18ccbd-4c63-4bfc-8f95-cbc35dc2f0c6", "51f2f35b-ae40-4e32-a335-6429bed7178e"],
+        // Makowiec zawijany · Piernik staropolski dojrzewający
+        "moment:CHRISTMAS": ["524e32fb-16d7-402b-806b-67465b6ade3b", "53961e99-650f-4e17-9772-6966a0a64887"],
+        // Klasyczne jajka faszerowane z musztardą · Mazurek kajmakowy
+        "moment:EASTER": ["83eb317e-3896-45d1-a00d-217eb1253895", "212e2e53-f98e-4182-ad4c-51ea83eaca6c"],
+        // Szaszłyki z kurczaka i warzyw z grilla · Szaszłyki z tofu i warzyw z grilla
+        "moment:BARBECUE": ["435bfc51-8c98-42f8-bff0-c57f79f6ab26", "af7b9807-a526-4012-b4a4-f1e3eb7bcd2b"],
+        // Mini burgery z wołowiną · Guacamole z nachosami
+        "moment:PARTY": ["b1824f70-40d9-4368-87dc-a96e8bc0c4ce", "430a0f51-db80-4a0b-b063-dbdb7f0357d9"],
+        // Szparagi z jajkiem w koszulce i sosem holenderskim · Sałatka z młodych ziemniaków, szparagów i rzodkiewki
+        "moment:SPRING": ["fb492934-52e1-488c-a222-057a8faab89e", "8052e601-b379-476a-be04-c5f9da272414"],
+        // Tarta z truskawkami i kremem · Chłodnik ogórkowy z jogurtem i koperkiem
+        "moment:SUMMER": ["a4511cfd-a796-476a-81e3-bf8035503b2d", "a6b68a5c-e13c-4c7a-9bea-589f7957e775"],
+        // Zupa krem z dyni z imbirem · Risotto z dynią i parmezanem
+        "moment:AUTUMN": ["d9d70d17-3b62-4dec-b8f9-810091f7e93c", "793a0573-f8ae-4f75-8726-4753a0101993"],
+        // Pieczeń wieprzowa z kapustą kiszoną · Bigos wegetariański z grzybami
+        "moment:WINTER": ["d2ffabb6-2f84-446d-a2d9-c44f765a10f6", "c04dd3b6-94f9-4e95-9618-e0f924aee83f"],
+        // — Mięso i ryby w obiadach i kolacjach —
+        // Udka z kurczaka z ziemniakami · Kurczak tikka z sałatką z ogórka
+        "protein:lunch:poultry": ["f1815824-68ee-4109-8f07-7cacbffb57bb", "d78d647c-e98d-44bc-a3a5-742a3016126f"],
+        // Kotlet schabowy z ziemniakami i mizerią · Karkówka z grilla z sałatką z ogórka
+        "protein:lunch:pork": ["669d9bd0-6ded-4006-b281-5299d0f3dff9", "d7bde0c0-1c76-4201-9264-0be6b8c5a9ee"],
+        // Stek wołowy z frytkami z piekarnika i sałatą · Stek z masłem ziołowym i pieczarkami
+        "protein:lunch:beef": ["dc2732be-1468-4156-a444-44996054dceb", "46810e92-4873-4e3b-b138-01532d520194"],
+        // Łosoś z masłem czosnkowym i brokułem · Łosoś pieczony z pesto i ziemniakami
+        "protein:lunch:fish": ["1fb1bba3-e0be-4f01-b5ff-9b2feb2bd3f7", "875ceb0d-449d-4320-bd5a-dd283b0cf2a6"],
+        // Pieczone warzywa korzeniowe z kaszą i jajkiem · Gnocchi z warzywami i pesto
+        "protein:lunch:veg": ["fd0c90b1-18f6-43d7-bbae-8d2a493d3aa3", "d6c5944f-3c31-4311-9651-d9cdbe3acaeb"],
+        // Kurczak cajun z kolbą kukurydzy · Wrap z kurczakiem cezar
+        "protein:dinner:poultry": ["6211faf6-421b-4abd-81e5-b11d1f3fa112", "09af8f56-2b33-4c55-b867-ebb2aa3fd4f6"],
+        // Biała kiełbasa z grilla z chrzanem · Pulled pork w bułce z coleslawem
+        "protein:dinner:pork": ["696c4335-63ac-49da-83b8-be9a26a1a9ea", "2737667d-bda1-47e1-bb00-01473a00d1dd"],
+        // Klasyczny burger wołowy z cheddarem · Klopsiki szwedzkie z ziemniakami i żurawiną
+        "protein:dinner:beef": ["2944b688-7ad9-4bd7-86e8-6cfe7e4b46b2", "f2f7529b-4d6f-4db5-929f-916f5978a80e"],
+        // Łosoś z grilla z cytryną i ziołami · Sałatka z pieczonym łososiem, ogórkiem i koperkiem
+        "protein:dinner:fish": ["39b2f714-b035-4f82-a572-6b8091653f41", "46d1fefa-ef45-44f7-a866-4cb4871f9ee2"],
+        // Szaszłyki z halloumi i warzyw · Pizza na tortilli z warzywami
+        "protein:dinner:veg": ["735c7905-e3f0-413d-8069-97c3c31d2040", "106e26e0-6512-46cd-9ed6-d0efcb565fcf"],
+        // — Pora w planie (przekąski) —
+        // Wrap z kurczakiem tikka i sosem jogurtowym · Jogurt kokosowy z mango i granolą
+        "slot:snacks:secondBreakfast": ["50a47f30-f810-4994-b061-2aefedb38dfb", "13147df6-5d57-4e64-9ab5-528f7ecc40d3"],
+        // Ciasto z rabarbarem i kruszonką · Ciasto ucierane ze śliwkami
+        "slot:snacks:afternoonSnack": ["bb1b5226-75be-4e56-a97f-cbc293b380c4", "2daeae9c-528a-4af5-8a81-df08f8266565"],
+        // Młoda marchewka z hummusem · Chipsy z buraka z tymiankiem
+        "slot:snacks:snack": ["c975e5a9-e881-4d4b-96b0-a739379c4494", "1a7f321c-d654-4db2-a768-36cd52084776"],
     ]
 }
