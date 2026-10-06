@@ -215,6 +215,12 @@ struct AddToPlanDraft {
         let plannedServings = plannedServingsToSave
         let memberCount = members.isEmpty ? nil : members.count
         let message = mergesIntoShared ? placement + " · dla całego domu" : placement
+        // „Cofnij” tylko przy NOWEJ pozycji: jej odwrotnością jest samo
+        // usunięcie. Dołączenie osób do dania, które już tu stało, albo
+        // zamiana cofałyby się przywróceniem cudzego stanu (porcje, tokeny)
+        // — tego toast nie obiecuje.
+        let isNewEntry = samePlanned == nil && replacing == nil
+        let weekStart = PlanWeek.dateKey(PlanWeek.monday(of: date))
         // Dwa identyczne błędy pod rząd nie są dla mostu zmianą — pamiętamy,
         // co było przed zapisem.
         let errorBefore = store.errorMessage
@@ -229,7 +235,7 @@ struct AddToPlanDraft {
                 portions: portionsMap,
                 for: date,
                 slot: slot,
-                weekStart: PlanWeek.dateKey(PlanWeek.monday(of: date))
+                weekStart: weekStart
             )
 
             guard saved else {
@@ -245,8 +251,40 @@ struct AddToPlanDraft {
             // Toast sukcesu niesie też haptykę sukcesu (`SCToastHost`).
             if let replacedName {
                 toasts.success("Zamieniono w planie", "\(slot.title) — zamiast: \(replacedName)")
+            } else if isNewEntry {
+                toasts.success(
+                    "Dodano do planu",
+                    message,
+                    action: SCToast.Action(title: "Cofnij") {
+                        Self.undo(recipe: recipe, date: date, slot: slot, weekStart: weekStart, placement: placement, store: store, toasts: toasts)
+                    }
+                )
             } else {
                 toasts.success("Dodano do planu", message)
+            }
+        }
+    }
+
+    /// „Cofnij” z toastu: zdejmuje z pory dokładnie ten przepis (inne dania
+    /// w porze zostają). Wpis znika od razu (optymistycznie), a gdy serwer
+    /// odmówi, wraca — wtedy toast mówi, że danie zostało.
+    @MainActor
+    private static func undo(
+        recipe: Recipe,
+        date: Date,
+        slot: MealSlot,
+        weekStart: String,
+        placement: String,
+        store: MealCalendarStore,
+        toasts: SCToastCenter
+    ) {
+        let errorBefore = store.errorMessage
+        Task { @MainActor in
+            let removed = await store.removeWeekSlot(for: date, slot: slot, weekStart: weekStart, recipe: recipe)
+            if removed {
+                toasts.info("Usunięto z planu", placement)
+            } else if store.errorMessage == errorBefore {
+                toasts.error("Nie udało się cofnąć", "Danie zostało w planie.")
             }
         }
     }
