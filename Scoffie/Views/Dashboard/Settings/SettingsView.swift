@@ -105,8 +105,10 @@ struct SettingsView: View {
     @State private var showRenameHouseholdAlert = false
     @State private var renameDraft = ""
 
-    private static let householdNameMinLength = 2
-    private static let householdNameMaxLength = 50
+    /// Jedne granice nazwy domu w całej aplikacji (2…50) — zakładanie,
+    /// zmiana nazwy i kreator (`SessionStore.householdNameLengthRange`).
+    private static let householdNameMinLength = SessionStore.householdNameLengthRange.lowerBound
+    private static let householdNameMaxLength = SessionStore.householdNameLengthRange.upperBound
 
     // Calorie goal range — 1200 kcal is the lower medical safety bound for
     // adults; 3500 covers heavy training. 50 kcal step keeps the slider
@@ -181,15 +183,11 @@ struct SettingsView: View {
         }
     }
 
-    /// Inline value next to "Wygląd" — uses the localized title from
-    /// `AppTheme` so it reads "Auto" / "Jasny" / "Ciemny" in the row.
+    /// Wartość przy „Wyglądzie” — ta sama nazwa co na karcie w arkuszu
+    /// („Automatycznie” / „Jasny” / „Ciemny”); dawne „Auto” w wierszu
+    /// i „Systemowy” w arkuszu to były dwie nazwy jednej rzeczy.
     private var appearanceRowValue: String {
-        let theme = AppTheme(rawValue: themeRawValue) ?? .system
-        switch theme {
-        case .system: return "Auto"
-        case .light: return "Jasny"
-        case .dark: return "Ciemny"
-        }
+        (AppTheme(rawValue: themeRawValue) ?? .system).title
     }
 
     private var currentDiet: DietPreference {
@@ -785,24 +783,13 @@ struct SettingsView: View {
     }
 
     private var householdManagementSheet: some View {
-        // Dwie gałęzie, bo stopka z wyjściem ma sens tylko w gospodarstwie —
-        // pusta płyta na dole arkusza bez domu byłaby kreską donikąd.
-        Group {
-            if hasHousehold {
-                pinnedEditorialSheet {
-                    householdHeader
-                } content: {
-                    householdSheetContent
-                } footer: {
-                    householdFooter
-                }
-            } else {
-                pinnedEditorialSheet {
-                    householdHeader
-                } content: {
-                    householdSheetContent
-                }
-            }
+        // „Opuść gospodarstwo” stoi na końcu przewijanej treści, nie w stopce
+        // (6.10.2026, artefakt „Arkusze Ustawień”): rzadki krok, który niczego
+        // nie zatwierdza, nie wisi stale nad domownikami.
+        pinnedEditorialSheet {
+            householdHeader
+        } content: {
+            householdSheetContent
         }
         .alert("Opuścić gospodarstwo?", isPresented: $showLeaveHouseholdAlert) {
             Button("Anuluj", role: .cancel) {}
@@ -845,54 +832,91 @@ struct SettingsView: View {
                 renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
             ))
         } message: {
-            Text("Widzą ją wszyscy domownicy. Od 2 do 64 znaków.")
+            Text("Widzą ją wszyscy domownicy. Od \(Self.householdNameMinLength) do \(Self.householdNameMaxLength) znaków.")
         }
     }
 
     // ─── Powiadomienia ─────────────
     //
-    // Big bell hero with the master toggle on the right; below it a card of
-    // per-channel toggles (plan + lista zakupów) that visibly dim when the
-    // master switch is off. Each channel row sits on a soft icon tile so the
-    // category reads at a glance.
+    // 6.10.2026 (artefakt „Arkusze Ustawień”, sekcja 6): główny przełącznik to
+    // zwykły wiersz listy z systemowym `Toggle` — dawna karta z dzwonkiem 64 pt
+    // i akapitem odpadła. Bez zgody iOS ten sam pierwszy wiersz prosi o zgodę
+    // („Włącz powiadomienia”) albo prowadzi do Ustawień iOS („Otwórz”). Kanały
+    // w dwóch grupach, tak jak naprawdę działają: „Dla Ciebie” planuje telefon
+    // (`MealReminderService`), „Od domowników” wysyła serwer, gdy ktoś inny
+    // coś zmieni. Opis każdego kanału w jednej linii.
     private var notificationsSheet: some View {
-        editorialSheet {
-            ScrollView {
+        pinnedEditorialSheet {
+            EditorialSheetHeader(
+                eyebrow: "Personalizacja",
+                title: "Powiadomienia",
+                icon: "bell.fill",
+                accent: SettingsAccent.coral
+            ) {
+                showNotificationsSheet = false
+            }
+        } content: {
+            VStack(alignment: .leading, spacing: 18) {
+                EditorialSettingsCardGroup {
+                    notificationsMasterRow
+                }
+
                 VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(
-                        eyebrow: "Personalizacja",
-                        title: "Powiadomienia",
-                        icon: "bell.fill",
-                        accent: SettingsAccent.coral
-                    ) {
-                        showNotificationsSheet = false
+                    notificationChannelGroup(title: "Dla Ciebie") {
+                        channelToggleRow(
+                            icon: "sun.horizon.fill",
+                            accent: SCPalette.butter,
+                            title: "Poranny przegląd",
+                            subtitle: "Posiłki i kalorie na dziś",
+                            isOn: $morningBriefingEnabled,
+                            isLast: false
+                        )
+
+                        channelToggleRow(
+                            icon: "clock.fill",
+                            accent: SCPalette.sage,
+                            title: "Pory posiłków",
+                            subtitle: "Kiedy zacząć gotować",
+                            isOn: $mealRemindersEnabled,
+                            isLast: false
+                        )
+
+                        channelToggleRow(
+                            icon: "moon.stars.fill",
+                            accent: SCPalette.indigo,
+                            title: "Podsumowanie dnia",
+                            subtitle: "Wieczorem, przed jutrem",
+                            isOn: $dayWrapUpEnabled,
+                            isLast: true
+                        )
                     }
 
-                    notificationsHeroCard
+                    notificationChannelGroup(title: "Od domowników") {
+                        channelToggleRow(
+                            icon: "calendar.badge.clock",
+                            accent: SCPalette.terracotta,
+                            title: "Zmiany planu",
+                            subtitle: "Gdy ktoś skończy zmieniać plan",
+                            isOn: $planRemindersEnabled,
+                            isLast: false
+                        )
 
-                    notificationChannelsCard
-                        .opacity(notificationChannelsActive ? 1 : 0.55)
-                        .animation(.smooth(duration: 0.2), value: notificationChannelsActive)
-
-                    // Bez podpisu przy włączonych powiadomieniach — zachowanie
-                    // gospodarstwa i ciszy nocnej (22–7) jest wbudowane i nie
-                    // wymaga tłumaczenia na ekranie. Zostaje tylko wyjaśnienie
-                    // przygaszonej karty, gdy główny przełącznik jest wyłączony.
-                    // Bez zgody systemu przygaszenie tłumaczy karta wyżej.
-                    if systemAllowsNotifications && !notificationsEnabled {
-                        Text("Wszystkie powiadomienia są wyciszone. Włącz główny przełącznik, aby zarządzać typami przypomnień.")
-                            .font(.sc(size: 12, weight: .medium))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 6)
-                            .padding(.top, 4)
+                        channelToggleRow(
+                            icon: "cart.fill",
+                            accent: SCPalette.teal,
+                            title: "Lista zakupów",
+                            subtitle: "Gdy ktoś odhaczy zakupy",
+                            isOn: $shoppingRemindersEnabled,
+                            isLast: true
+                        )
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
+                // Bez zgody systemu albo przy wyciszonym głównym przełączniku
+                // kanały stoją przygaszone i nieruchome.
+                .disabled(!notificationChannelsActive)
+                .opacity(notificationChannelsActive ? 1 : 0.5)
+                .animation(.smooth(duration: 0.2), value: notificationChannelsActive)
             }
-            .scrollIndicators(.hidden)
         }
     }
 
@@ -908,109 +932,56 @@ struct SettingsView: View {
         systemAllowsNotifications && notificationsEnabled
     }
 
-    private var notificationsHeroTitle: String {
+    /// Pierwszy wiersz arkusza: przy zgodzie — główny przełącznik; bez niej —
+    /// prośba o zgodę albo droga do Ustawień iOS. Ten sam wiersz listy co
+    /// w Ustawieniach (`EditorialSettingsRow`), zmienia się tylko jego treść.
+    @ViewBuilder
+    private var notificationsMasterRow: some View {
         switch notificationPermission {
-        case .denied?:
-            return "Wyłączone w ustawieniach iOS"
         case .notAsked?:
-            return "Wyłączone"
-        case .allowed?, nil:
-            return notificationsEnabled ? "Włączone" : "Wyciszone"
-        }
-    }
-
-    private var notificationsHeroSubtitle: String {
-        switch notificationPermission {
-        case .denied?:
-            return "Scoffie nie może teraz wysyłać powiadomień. Włączysz je w ustawieniach iOS."
-        case .notAsked?:
-            return "Zmiany planu i zakupów u domowników, pora gotowania i przegląd dnia."
-        case .allowed?, nil:
-            return "Główny przełącznik dla wszystkich przypomnień aplikacji."
-        }
-    }
-
-    private var notificationsHeroCard: some View {
-        let bellIsOn = systemAllowsNotifications && notificationsEnabled
-
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center, spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    SettingsAccent.coral.opacity(scheme == .dark ? 0.28 : 0.20),
-                                    SettingsAccent.coral.opacity(scheme == .dark ? 0.10 : 0.06)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Image(systemName: bellIsOn ? "bell.fill" : "bell.slash.fill")
-                        .font(.sc(size: 28, weight: .heavy))
-                        .foregroundStyle(SettingsAccent.coral)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .frame(width: 64, height: 64)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(notificationsHeroTitle)
-                        .font(.sc(size: 17, weight: .heavy))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .contentTransition(.opacity)
-                        .id(notificationsHeroTitle)
-
-                    Text(notificationsHeroSubtitle)
-                        .font(.sc(size: 12, weight: .medium))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
-
-                // Główny przełącznik tylko przy zgodzie systemu — bez niej
-                // nic by nie przełączał. Systemowy `Toggle` w naturalnym
-                // rozmiarze (wcześniej zmniejszany `scaleEffect`).
-                if systemAllowsNotifications {
-                    Toggle("Powiadomienia", isOn: $notificationsEnabled)
-                        .labelsHidden()
-                        .tint(SCPalette.sage)
-                        .fixedSize()
+            EditorialSettingsRow(
+                icon: "bell.badge.fill",
+                iconColor: SettingsAccent.coral,
+                title: "Włącz powiadomienia",
+                isLast: true,
+                action: { requestNotificationPermission() }
+            ) {
+                if isRequestingNotifications {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    EditorialSettingsChevron()
                 }
             }
-
-            switch notificationPermission {
-            case .notAsked?:
-                editorialPrimaryButton(
-                    title: "Włącz powiadomienia",
-                    icon: "bell.badge.fill",
-                    isEnabled: !isRequestingNotifications,
-                    action: requestNotificationPermission
-                )
-            case .denied?:
-                editorialPrimaryButton(
-                    title: "Otwórz ustawienia",
-                    icon: "gearshape.fill",
-                    isEnabled: true,
-                    action: openSystemNotificationSettings
-                )
-            case .allowed?, nil:
-                EmptyView()
+            .disabled(isRequestingNotifications)
+        case .denied?:
+            EditorialSettingsRow(
+                icon: "bell.slash.fill",
+                iconColor: SettingsAccent.coral,
+                title: "Wyłączone w ustawieniach iOS",
+                isLast: true,
+                action: { openSystemNotificationSettings() }
+            ) {
+                Text("Otwórz")
+                    .font(.sc(size: 15, weight: .semibold))
+                    .foregroundStyle(SCPalette.terracotta)
+                    .fixedSize()
+            }
+            .accessibilityHint("Otwiera ustawienia powiadomień Scoffie w iOS")
+        case .allowed?, nil:
+            EditorialSettingsRow(
+                icon: notificationsEnabled ? "bell.fill" : "bell.slash.fill",
+                iconColor: SettingsAccent.coral,
+                title: "Powiadomienia",
+                isLast: true
+            ) {
+                // Systemowy `Toggle` w naturalnym rozmiarze.
+                Toggle("Powiadomienia", isOn: $notificationsEnabled)
+                    .labelsHidden()
+                    .tint(SCPalette.sage)
+                    .fixedSize()
             }
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .animation(.smooth(duration: 0.22), value: notificationPermission)
     }
 
     /// Zmiana któregokolwiek przełącznika powiadomień. Steruje `task(id:)`,
@@ -1040,69 +1011,22 @@ struct SettingsView: View {
         .joined()
     }
 
-    private var notificationChannelsCard: some View {
+    /// Grupa kanałów: etykieta sekcji + karta listy jak w Ustawieniach.
+    private func notificationChannelGroup<Rows: View>(
+        title: String,
+        @ViewBuilder rows: () -> Rows
+    ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: "Kanały")
-
-            VStack(spacing: 0) {
-                channelToggleRow(
-                    icon: "sun.horizon.fill",
-                    accent: SCPalette.butter,
-                    title: "Poranny przegląd",
-                    subtitle: "Jedno spojrzenie na dzień, zanim się zacznie: ile posiłków, ile kalorii, czym zaczynasz.",
-                    isOn: $morningBriefingEnabled,
-                    isLast: false
-                )
-
-                channelToggleRow(
-                    icon: "flame.fill",
-                    accent: SCPalette.terracotta,
-                    title: "Pory posiłków",
-                    subtitle: "Przypomnienie o gotowaniu tyle przed posiłkiem, ile zajmuje danie. Przy daniach bez gotowania — sama pora.",
-                    isOn: $mealRemindersEnabled,
-                    isLast: false
-                )
-
-                channelToggleRow(
-                    icon: "moon.stars.fill",
-                    accent: SCPalette.lavender,
-                    title: "Podsumowanie dnia",
-                    subtitle: "Wieczorem: niedokończone odhaczanie, zakupy przed jutrzejszym gotowaniem albo seria domkniętych dni.",
-                    isOn: $dayWrapUpEnabled,
-                    isLast: false
-                )
-
-                channelToggleRow(
-                    icon: "calendar.badge.clock",
-                    accent: SCPalette.indigo,
-                    title: "Plan tygodniowy",
-                    subtitle: "Jedno podsumowanie, gdy domownik skończy zmieniać plan.",
-                    isOn: $planRemindersEnabled,
-                    isLast: false
-                )
-
-                channelToggleRow(
-                    icon: "cart.fill",
-                    accent: SCPalette.sage,
-                    title: "Lista zakupów",
-                    subtitle: "Jedno podsumowanie, gdy domownik odhaczy zakupy.",
-                    isOn: $shoppingRemindersEnabled,
-                    isLast: true
-                )
+            EditorialSheetSectionLabel(title: title)
+            EditorialSettingsCardGroup {
+                rows()
             }
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .disabled(!notificationChannelsActive)
     }
 
+    /// Wiersz kanału — wymiary `EditorialSettingsRow` (kafelek 30, tytuł 15,
+    /// wiersz 52, kreska od tytułu), z jednym wierszem opisu pod tytułem
+    /// i systemowym `Toggle` po prawej.
     private func channelToggleRow(
         icon: String,
         accent: Color,
@@ -1111,18 +1035,20 @@ struct SettingsView: View {
         isOn: Binding<Bool>,
         isLast: Bool
     ) -> some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: 12) {
             EditorialSettingsTileIcon(icon: icon, color: accent)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.sc(size: 15, weight: .semibold))
+                    .tracking(-0.3)
                     .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
 
                 Text(subtitle)
-                    .font(.sc(size: 12, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1131,53 +1057,50 @@ struct SettingsView: View {
                 .tint(SCPalette.sage)
                 .fixedSize()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(minHeight: 52)
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
                     .fill(Color.scRule(scheme))
                     .frame(height: 1)
-                    .padding(.leading, 16 + 32 + 14)
+                    .padding(.leading, 12 + 30 + 12)
             }
         }
     }
 
     // ─── Wygląd ─────────────────
     //
-    // Visual theme picker — three full-bleed preview cards stacked vertically.
-    // Each card paints an actual mini canvas for the theme (cream / dark /
-    // split for Auto) and a chip showing the theme's terracotta accent so the
-    // user picks by what they'll see, not by a label.
+    // Trzy karty z podglądem ekranu — wybiera się to, co się zobaczy
+    // (6.10.2026, artefakt „Arkusze Ustawień”, sekcja 7): „Automatycznie” na
+    // górze, bo to domyślne, nazwa + jeden podpis po polsku (bez „Cozy
+    // daylight / Cozy night” i akapitu nad kartami), kółko wyboru po prawej,
+    // wybrana w tincie jak każda karta wyboru (`scChoiceSurface(.tile)`).
+    private static let themeOrder: [AppTheme] = [.system, .light, .dark]
+
     private var appearanceSheet: some View {
-        editorialSheet {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    EditorialSheetHeader(
-                        eyebrow: "Personalizacja",
-                        title: "Wygląd",
-                        icon: "circle.lefthalf.filled",
-                        accent: SCPalette.lavender
-                    ) {
-                        showAppearanceSheet = false
-                    }
-
-                    Text("Wybierz motyw, którego aplikacja będzie używać domyślnie. Auto przełącza się razem z systemem.")
-                        .font(.sc(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(spacing: 12) {
-                        ForEach(AppTheme.allCases) { theme in
-                            themePreviewCard(theme)
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
+        pinnedEditorialSheet {
+            EditorialSheetHeader(
+                eyebrow: "Personalizacja",
+                title: "Wygląd",
+                icon: "circle.lefthalf.filled",
+                accent: SCPalette.lavender
+            ) {
+                showAppearanceSheet = false
             }
-            .scrollIndicators(.hidden)
+        } content: {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Self.themeOrder) { theme in
+                    themePreviewCard(theme)
+                }
+
+                Text("Zmienia się od razu, na tym ekranie też.")
+                    .font(.sc(size: 12.5))
+                    .foregroundStyle(Color.scFaint(scheme))
+                    .padding(.horizontal, 6)
+                    .padding(.top, 2)
+            }
         }
     }
 
@@ -1189,30 +1112,27 @@ struct SettingsView: View {
                 themeRawValue = theme.rawValue
             }
         } label: {
-            HStack(alignment: .center, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
                 themeCanvasPreview(theme)
-                    .frame(width: 76, height: 96)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .frame(width: 58, height: 76)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
                     )
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(themeEyebrow(for: theme).uppercased())
-                        .font(.sc(size: 10, weight: .bold))
-                        .tracking(1.6)
-                        .foregroundStyle(SCPalette.terracotta)
-
+                VStack(alignment: .leading, spacing: 3) {
                     Text(theme.title)
-                        .font(.sc(size: 20, weight: .heavy))
-                        .tracking(-0.4)
+                        .font(.sc(size: 17, weight: .heavy))
+                        .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(1)
 
                     Text(themeDescription(for: theme))
-                        .font(.sc(size: 12, weight: .medium))
+                        .font(.sc(size: 13, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1220,8 +1140,7 @@ struct SettingsView: View {
             }
             .padding(14)
             // Zaznaczenie jak zaznaczony `SCChoiceTile`: tint i obwódka
-            // akcentu, bez cienia. Terakotowa poświata pod wybraną kartą była
-            // jedynym cieniem na kartach Ustawień.
+            // akcentu, bez cienia.
             .scChoiceSurface(
                 RoundedRectangle(cornerRadius: 18, style: .continuous),
                 isOn: selected,
@@ -1234,25 +1153,24 @@ struct SettingsView: View {
         .accessibilityLabel("\(theme.title)\(selected ? ", wybrane" : "")")
     }
 
-    /// Mini canvas — paints the actual base + glow stack used by
-    /// `SCPageBackground` so the user sees what the live screen will look
-    /// like. Auto splits left/right for light/dark.
+    /// Mini ekran — tło `SCPageBackground` z poświatą u góry, nagłówek,
+    /// karta i terakotowy akcent; „Automatycznie” pół na pół.
     @ViewBuilder
     private func themeCanvasPreview(_ theme: AppTheme) -> some View {
         switch theme {
         case .light:
-            themePreviewBlock(scheme: .light)
+            themePreviewBlock(scheme: .light, width: 58, horizontalInset: 6)
         case .dark:
-            themePreviewBlock(scheme: .dark)
+            themePreviewBlock(scheme: .dark, width: 58, horizontalInset: 6)
         case .system:
             HStack(spacing: 0) {
-                themePreviewBlock(scheme: .light)
-                themePreviewBlock(scheme: .dark)
+                themePreviewBlock(scheme: .light, width: 29, horizontalInset: 4)
+                themePreviewBlock(scheme: .dark, width: 29, horizontalInset: 4)
             }
         }
     }
 
-    private func themePreviewBlock(scheme: ColorScheme) -> some View {
+    private func themePreviewBlock(scheme: ColorScheme, width: CGFloat, horizontalInset: CGFloat) -> some View {
         let base = scheme == .dark
             ? Color(red: 12 / 255, green: 8 / 255, blue: 6 / 255)
             : Color(red: 251 / 255, green: 245 / 255, blue: 234 / 255)
@@ -1260,6 +1178,10 @@ struct SettingsView: View {
         let label = scheme == .dark
             ? Color(red: 251 / 255, green: 243 / 255, blue: 232 / 255)
             : Color(red: 26 / 255, green: 20 / 255, blue: 17 / 255)
+        let accent = scheme == .dark
+            ? Color(red: 219 / 255, green: 132 / 255, blue: 82 / 255)
+            : Color(red: 182 / 255, green: 100 / 255, blue: 60 / 255)
+        let inner = max(width - horizontalInset * 2, 1)
 
         return ZStack(alignment: .topLeading) {
             base
@@ -1267,49 +1189,37 @@ struct SettingsView: View {
                 colors: [glow, .clear],
                 center: UnitPoint(x: 0.5, y: 0),
                 startRadius: 0,
-                endRadius: 80
+                endRadius: 50
             )
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(label.opacity(0.85))
-                    .frame(width: 28, height: 5)
+                    .frame(width: inner * 0.7, height: 5)
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(label.opacity(0.45))
-                    .frame(width: 18, height: 4)
+                    .fill(label.opacity(0.4))
+                    .frame(width: inner, height: 4)
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(label.opacity(0.08))
+                    .frame(width: inner, height: 14)
 
                 Spacer(minLength: 0)
 
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(label.opacity(scheme == .dark ? 0.06 : 0.05))
-                    .frame(height: 10)
-                    .overlay(
-                        Capsule()
-                            .fill(SCPalette.terracotta)
-                            .frame(width: 14, height: 4),
-                        alignment: .leading
-                    )
-                    .padding(.top, 3)
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(accent)
+                    .frame(width: inner * 0.45, height: 6)
             }
-            .padding(8)
+            .padding(.horizontal, horizontalInset)
+            .padding(.vertical, 8)
         }
-    }
-
-    private func themeEyebrow(for theme: AppTheme) -> String {
-        switch theme {
-        case .system: return "Synchronizacja z systemem"
-        case .light:  return "Cozy daylight"
-        case .dark:   return "Cozy night"
-        }
+        .frame(width: width)
     }
 
     private func themeDescription(for theme: AppTheme) -> String {
-        // Aim for ~2 lines at 12pt in the ~190pt description column —
-        // anything longer was getting tail-truncated on the preview card.
         switch theme {
-        case .system: return "Aplikacja zmienia się razem z motywem iOS."
-        case .light:  return "Kremowe tło z subtelnym terakotowym poblaskiem."
-        case .dark:   return "Głęboki, brązowo-czarny canvas — łagodny dla oczu wieczorem."
+        case .system: return "Razem z motywem iOS"
+        case .light:  return "Kremowe tło, ciepłe akcenty"
+        case .dark:   return "Ciepła czerń, łagodna wieczorem"
         }
     }
 
@@ -1329,17 +1239,17 @@ struct SettingsView: View {
                     eyebrow: "Personalizacja",
                     title: "Dieta i alergeny",
                     icon: "leaf.fill",
-                    accent: SCPalette.sage
+                    accent: SCPalette.sage,
+                    detail: dietHeaderDetail
                 ) {
                     showDietSheet = false
                 }
             } content: {
+                // Od liczby do skutku (6.10.2026, artefakt „Arkusze Ustawień”,
+                // sekcja 3): kalorie, zaraz pod nimi makro, które się z nich
+                // liczy, potem cel (jego „Ustaw” siedzi w karcie kalorii),
+                // dieta i alergeny, które odsiewają przepisy. Akapit wstępu odpadł.
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
-                        .font(.sc(size: 13.5, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-
                     calorieGoalSection
                     macroSection
                     goalPickerSection
@@ -1413,6 +1323,15 @@ struct SettingsView: View {
         }
     }
 
+    /// Linijka pod tytułem arkusza: dieta i liczba omijanych alergenów
+    /// („Wegetariańska · 3 alergeny”); bez alergenów — sama dieta.
+    private var dietHeaderDetail: String {
+        let count = selectedAllergens.count
+        guard count > 0 else { return currentDiet.title }
+        let noun = PolishPlural.form(count, one: "alergen", few: "alergeny", many: "alergenów")
+        return "\(currentDiet.title) · \(count) \(noun)"
+    }
+
     /// Czy jest co czyścić — steruje widocznością „Wyczyść preferencje”.
     private var hasCustomisedPreferences: Bool {
         currentDiet != .none
@@ -1437,23 +1356,14 @@ struct SettingsView: View {
     // Ten sam wybór, co w kroku 2 kreatora powitalnego — powtórzony tutaj,
     // bo po onboardingu nie było jak go zmienić. Cel nie odsiewa przepisów;
     // przestawia kolejność listy (patrz `RecipePersonalization.goalScore`).
-    // Siedzi pod suwakiem kalorii, a podpowiedź „Ustaw” na dole tej karty
-    // przestawia suwak nad nią.
+    // Jego podpowiedź kaloryczna („Ustaw”) siedzi w karcie kalorii wyżej.
     private var goalPickerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Twój cel")
 
             VStack(spacing: 0) {
-                // Ostatni wiersz nigdy nie rysuje własnej kreski. Gdy pod nim
-                // siedzi podpowiedź kaloryczna, kreskę stawia ona — i to na
-                // pełnej szerokości. Wcześniej rysowały obie i pod ostatnim
-                // celem wychodziła podwójna linia: wcięta i pełna.
                 ForEach(Array(UserGoal.allCases.enumerated()), id: \.element.id) { idx, goal in
                     goalRow(goal, isLast: idx == UserGoal.allCases.count - 1)
-                }
-
-                if showsCalorieSuggestion {
-                    calorieSuggestionRow
                 }
             }
             .background(
@@ -1476,38 +1386,88 @@ struct SettingsView: View {
                 goalRaw = goal.rawValue
             }
         } label: {
-            HStack(alignment: .center, spacing: 14) {
-                EditorialSettingsTileIcon(icon: goal.icon, color: goal.accent)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(goal.title)
-                        .font(.sc(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.scLabel(scheme))
-
-                    Text(goal.subtitle)
-                        .font(.sc(size: 12, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                SCRadioMark(isOn: isSelected)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
+            choiceRowLabel(
+                icon: goal.icon,
+                accent: goal.accent,
+                title: goal.title,
+                subtitle: Self.goalShortSubtitle(goal),
+                isSelected: isSelected
+            )
         }
         .buttonStyle(.plain)
         .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 16 + 32 + 14)
-            }
+            if !isLast { choiceRowRule }
         }
         .accessibilityLabel(goal.title)
         .accessibilityValue(isSelected ? "Wybrane" : "")
+    }
+
+    /// Wiersz wyboru celu i diety — wymiary wiersza Ustawień
+    /// (`EditorialSettingsRow`: kafelek 30, tytuł 15, wiersz 52, kreska od
+    /// tytułu), podpis w JEDNEJ linii, kółko wyboru po prawej.
+    private func choiceRowLabel(
+        icon: String,
+        accent: Color,
+        title: String,
+        subtitle: String,
+        isSelected: Bool
+    ) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            EditorialSettingsTileIcon(icon: icon, color: accent)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.sc(size: 15, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+
+                Text(subtitle)
+                    .font(.sc(size: 12.5, weight: .regular))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            SCRadioMark(isOn: isSelected)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(minHeight: 52)
+        .contentShape(Rectangle())
+    }
+
+    private var choiceRowRule: some View {
+        Rectangle()
+            .fill(Color.scRule(scheme))
+            .frame(height: 1)
+            .padding(.leading, 12 + 30 + 12)
+    }
+
+    /// Podpisy celów w jednej linii — krótsze niż `UserGoal.subtitle`, którego
+    /// dłuższe zdania zostają w kreatorze.
+    private static func goalShortSubtitle(_ goal: UserGoal) -> String {
+        switch goal {
+        case .healthy:  return "Zbilansowane, mniej przetworzonych"
+        case .lose:     return "Lekki deficyt kaloryczny"
+        case .gain:     return "Nadwyżka kaloryczna z białkiem"
+        case .maintain: return "Kalorie na utrzymanie"
+        case .plan:     return "Bez celu kalorycznego"
+        }
+    }
+
+    /// Podpisy diet w jednej linii — krótsze niż `DietPreference.subtitle`
+    /// (kreator zostaje przy swoich).
+    private static func dietShortSubtitle(_ diet: DietPreference) -> String {
+        switch diet {
+        case .none:        return "Wszystkie przepisy"
+        case .vegetarian:  return "Bez mięsa i ryb"
+        case .vegan:       return "Bez produktów odzwierzęcych"
+        case .pescatarian: return "Bez mięsa, z rybami"
+        case .keto:        return "Bardzo mało węglowodanów"
+        case .paleo:       return "Bez zbóż, nabiału i przetworzonych"
+        case .highProtein: return "Min. 20 % kalorii z białka"
+        }
     }
 
     /// Cel niesie ze sobą sugerowaną kaloryczność, ale ustawiony wcześniej
@@ -1523,22 +1483,25 @@ struct SettingsView: View {
     /// zamiast udawać, że liczba jest szyta na miarę.
     private var calorieSuggestionText: String {
         guard bodyMetrics != nil else {
-            return "Dla tego celu zwykle wychodzi \(suggestedCalories) kcal. Uzupełnij sylwetkę w „Twoje dane”, a policzymy dokładniej."
+            return "Dla tego celu zwykle wychodzi \(suggestedCalories) kcal"
         }
-        return "Dla Twojej sylwetki i tego celu wychodzi \(suggestedCalories) kcal."
+        return "Dla celu „\(currentGoal.title)” wychodzi \(suggestedCalories) kcal"
     }
 
+    /// Podpowiedź na dole karty kalorii: żarówka, zdanie i „Ustaw”. Bez
+    /// sylwetki pod zdaniem odsyłacz „Twoje dane ›”.
     private var calorieSuggestionRow: some View {
         HStack(spacing: 12) {
             Image(systemName: "lightbulb.fill")
-                .font(.sc(size: 12, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .foregroundStyle(SCPalette.butter)
-                .frame(width: 22)
+                .frame(width: 30)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(calorieSuggestionText)
-                    .font(.sc(size: 12, weight: .medium))
+                    .font(.sc(size: 13, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
+                    .contentTransition(.numericText())
                     .fixedSize(horizontal: false, vertical: true)
 
                 // Odsyłacz do sylwetki prowadzi TAM, w tym samym arkuszu —
@@ -1565,9 +1528,9 @@ struct SettingsView: View {
             .buttonStyle(PlanPressStyle(scale: 0.94))
             .accessibilityLabel("Ustaw \(suggestedCalories) kcal")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.scChipBg(scheme).opacity(scheme == .dark ? 0.5 : 0.7))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(SCPalette.butter.opacity(scheme == .dark ? 0.10 : 0.07))
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(Color.scRule(scheme))
@@ -1604,39 +1567,19 @@ struct SettingsView: View {
                 dietPreferenceRaw = diet.rawValue
             }
         } label: {
-            HStack(alignment: .center, spacing: 14) {
-                EditorialSettingsTileIcon(icon: diet.icon, color: diet.accent)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(diet.title)
-                        .font(.sc(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.scLabel(scheme))
-
-                    Text(diet.subtitle)
-                        .font(.sc(size: 12, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                SCRadioMark(isOn: isSelected)
-            }
             // Dokładnie ta sama geometria co `goalRow` — obie sekcje to ta
-            // sama lista wyboru i mają wyglądać identycznie. Wcześniej dieta
-            // miała własną `minHeight` i inny padding pionowy, przez co jej
-            // wiersze były wyraźnie wyższe od wierszy celu.
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
+            // sama lista wyboru i mają wyglądać identycznie.
+            choiceRowLabel(
+                icon: diet.icon,
+                accent: diet.accent,
+                title: diet.title,
+                subtitle: Self.dietShortSubtitle(diet),
+                isSelected: isSelected
+            )
         }
         .buttonStyle(.plain)
         .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 16 + 32 + 14)
-            }
+            if !isLast { choiceRowRule }
         }
         .accessibilityLabel(diet.title)
         .accessibilityValue(isSelected ? "Wybrane" : "")
@@ -1844,14 +1787,14 @@ struct SettingsView: View {
 
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Z makr wychodzi \(macros.totalKcal) kcal")
+                Text("Z makr: \(macros.totalKcal) kcal")
                     .font(.sc(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(macroFooterNote(diff: diff))
                     .font(.sc(size: 11.5, weight: .medium))
                     .foregroundStyle(abs(diff) > 60 ? SCPalette.terracotta : Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1859,7 +1802,7 @@ struct SettingsView: View {
                 Button {
                     withAnimation(.smooth(duration: 0.22)) { resetMacroOverrides() }
                 } label: {
-                    Text("Policz")
+                    Text("Policz od nowa")
                         .font(.sc(size: 12, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 12)
@@ -1876,9 +1819,9 @@ struct SettingsView: View {
     }
 
     private func macroFooterNote(diff: Int) -> String {
-        if abs(diff) <= 20 { return "Spina się z dziennym celem." }
-        if diff > 0 { return "To \(diff) kcal ponad Twój cel \(calorieGoal) kcal." }
-        return "To \(abs(diff)) kcal poniżej Twojego celu \(calorieGoal) kcal."
+        if abs(diff) <= 20 { return "Spina się z dziennym celem" }
+        if diff > 0 { return "\(diff) kcal ponad cel" }
+        return "\(abs(diff)) kcal poniżej celu"
     }
 
     private func resetMacroOverrides() {
@@ -1887,29 +1830,25 @@ struct SettingsView: View {
         carbsOverride = -1
     }
 
+    /// Karta „Kalorie”: wiersz „Dzienny cel” z dużą liczbą po prawej, suwak
+    /// co 50 kcal z podpisami skrajnych wartości (`CalorieGoalEditor`), a na
+    /// dole podpowiedź celu z „Ustaw” (6.10.2026 — dawniej pod listą celów).
+    /// Akapit „Aplikacja podpowie, jak rozłożyć…” odpadł.
     private var calorieGoalSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: "Cel kaloryczny")
+            EditorialSheetSectionLabel(title: "Kalorie")
 
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .center, spacing: 14) {
-                    EditorialSettingsTileIcon(icon: "flame.fill", color: SCPalette.terracotta)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Dzienny cel")
-                            .font(.sc(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.scLabel(scheme))
-                        Text("Aplikacja podpowie, jak rozłożyć posiłki w ciągu dnia.")
-                            .font(.sc(size: 12, weight: .regular))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
+            VStack(spacing: 0) {
                 calorieGoalEditor
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                    .padding(.bottom, 12)
+
+                if showsCalorieSuggestion {
+                    calorieSuggestionRow
+                        .transition(.opacity)
+                }
             }
-            .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(Color.scTileBg(scheme))
@@ -1918,10 +1857,11 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(Color.scTileStroke(scheme), lineWidth: 1)
             )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 
-    /// Duża liczba nad suwakiem co 50 kcal — cały wybór. Suwak ma własny
+    /// Wiersz z dużą liczbą i suwak co 50 kcal — cały wybór. Suwak ma własny
     /// stan na czas przeciągania (`CalorieGoalEditor`), patrz niżej.
     private var calorieGoalEditor: some View {
         CalorieGoalEditor(
@@ -1953,6 +1893,13 @@ struct SettingsView: View {
                 onClear: { clearAllergens() },
                 onEdit: { showsAllergenPicker = true }
             )
+
+            Text("Dieta i alergeny odsiewają przepisy, cel ustawia je na liście.")
+                .font(.sc(size: 12.5))
+                .foregroundStyle(Color.scFaint(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 6)
+                .padding(.top, 8)
         }
     }
 
@@ -1988,8 +1935,8 @@ struct SettingsView: View {
         }
     }
 
-    /// Treść arkusza gospodarstwa — domownicy, a bez domu karta zakładania.
-    /// Zaproszenie i wyjście nie stoją tu, tylko w stopce arkusza.
+    /// Treść arkusza gospodarstwa — domownicy (z zaproszeniem jako ostatnim
+    /// wierszem) i „Opuść gospodarstwo” na końcu, a bez domu karta zakładania.
     private var householdSheetContent: some View {
         let hasInvitations = !sessionStore.pendingInvitations.isEmpty
 
@@ -2006,6 +1953,9 @@ struct SettingsView: View {
             if hasHousehold {
                 householdMembersSection
                     .padding(.top, hasInvitations ? 20 : 0)
+
+                leaveHouseholdButton
+                    .padding(.top, 24)
             } else {
                 householdEmptyCard
                     .padding(.top, hasInvitations ? 18 : 0)
@@ -2053,39 +2003,6 @@ struct SettingsView: View {
                 }
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
-            }
-        }
-    }
-
-    /// To samo z akcją przypiętą na dole (`scSheetFooter`, wspólna stopka
-    /// arkuszy) — gospodarstwo trzyma tam wyjście, pod ręką zamiast na końcu
-    /// listy. Stopka rezerwuje miejsce na swój cień sama, więc pod treścią
-    /// wystarczy krótki oddech.
-    private func pinnedEditorialSheet<Header: View, Content: View, Footer: View>(
-        @ViewBuilder header: () -> Header,
-        @ViewBuilder content: () -> Content,
-        @ViewBuilder footer: () -> Footer
-    ) -> some View {
-        // Wartość, nie domknięcie: `scSheetFooter` przechowuje swoje
-        // domknięcie, a parametr `footer` nie może uciec z tej funkcji.
-        let footerView = footer()
-
-        return editorialSheet {
-            VStack(spacing: 0) {
-                header()
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 12)
-
-                ScrollView {
-                    content()
-                        .padding(.horizontal, 20)
-                        .padding(.top, 6)
-                        .padding(.bottom, 8)
-                }
-                .scrollIndicators(.hidden)
-                .scScrollEdgeFade()
-                .scSheetFooter { footerView }
             }
         }
     }
@@ -2150,15 +2067,15 @@ struct SettingsView: View {
     //
     // Tylko to, po co się tu wchodzi: kto mieszka w domu, jak zaprosić
     // kolejną osobę i jak wyjść. Nazwa domu stoi w nagłówku z ikoną domu
-    // i jedną linijką „3 osoby · wspólny plan i lista zakupów”, ołówek do
-    // nazwy — obok krzyżyka, wyjście — w stopce na dole arkusza.
+    // i samym „3 osoby” pod nazwą, ołówek do nazwy — obok krzyżyka,
+    // wyjście — na końcu przewijanej treści (6.10.2026).
     //
     // Trzy rundy uwag Rafała (23.09.2026): najpierw „za dużo zbędnego tekstu”
     // (karta z powtórzoną nazwą, liczby osób w trzech miejscach, sekcja
     // o tym, co domownicy dzielą), potem „znów pusto i smutno” (zaproszenie
     // jako osobna karta z jednym przyciskiem), a w końcu „usuń info
     // o diecie czy czymkolwiek innym, to tu nie ma sensu”. Wiersz domownika
-    // to dziś sama tożsamość: awatar, imię i plakietki „TY” / „WŁAŚCICIEL”.
+    // to dziś sama tożsamość: awatar, imię i plakietki „Ty” / „Właściciel”.
 
     private var householdOwner: HouseholdMemberSnapshot? {
         householdMembers.first { $0.role.uppercased() == "OWNER" }
@@ -2235,7 +2152,8 @@ struct SettingsView: View {
             title: hasHousehold ? persistedHouseholdName : "Brak gospodarstwa",
             icon: "house.fill",
             accent: SCPalette.indigo,
-            subtitle: hasHousehold && !householdMembers.isEmpty ? householdSummary : nil,
+            // Pod nazwą, obok kafelka — samo „3 osoby” (6.10.2026).
+            detail: hasHousehold && !householdMembers.isEmpty ? householdSummary : nil,
             onClose: { showHouseholdSheet = false }
         ) {
             // Nazwę zmienia tylko właściciel — ta sama brama co na
@@ -2249,17 +2167,11 @@ struct SettingsView: View {
         }
     }
 
-    /// „3 osoby · wspólny plan i lista zakupów” — jedyne miejsce z liczbą osób.
+    /// „3 osoby” — jedyne miejsce z liczbą osób. Dopisek „· wspólny plan
+    /// i lista zakupów” odpadł 6.10.2026 (objaśnienie, nie informacja).
     private var householdSummary: String {
         let count = householdMembers.count
-        return "\(count) \(membersLabel(for: count)) · wspólny plan i lista zakupów"
-    }
-
-    /// Stopka arkusza: samo wyjście. Zaproszenie przeszło do listy
-    /// domowników (`inviteRow`, 4.10.2026). Zaprasza tylko właściciel —
-    /// reszta widzi pod domownikami, kogo o to poprosić.
-    private var householdFooter: some View {
-        leaveHouseholdButton
+        return "\(count) \(membersLabel(for: count))"
     }
 
     /// Wiersz „Zaproś domownika” na końcu listy domowników, w układzie wiersza
@@ -2291,7 +2203,7 @@ struct SettingsView: View {
                     .font(.sc(size: 15, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(SCPalette.terracotta)
-                Text("Link dla jednej osoby · ważny 7 dni")
+                Text("Link dla jednej osoby · 7 dni")
                     .font(.sc(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
             }
@@ -2372,10 +2284,9 @@ struct SettingsView: View {
         }
     }
 
-    /// Wyjście w stopce arkusza (Rafał, 23.09.2026: „daj to wychodzenie jako
-    /// button na dole”), w tym samym stroju co każda akcja nieodwracalna
-    /// (`SCDestructiveButton`) i z pytaniem w alercie — nie stoi obok nazwy
-    /// domu ani na końcu przewijanej listy.
+    /// Wyjście na końcu przewijanej treści arkusza (6.10.2026; od 23.09 do
+    /// tego dnia w stopce), w tym samym stroju co każda akcja nieodwracalna
+    /// (`SCDestructiveButton`) i z pytaniem w alercie.
     private var leaveHouseholdButton: some View {
         SCDestructiveButton(title: "Opuść gospodarstwo", icon: "rectangle.portrait.and.arrow.right") {
             showLeaveHouseholdAlert = true
@@ -2604,11 +2515,11 @@ struct SettingsView: View {
                     .lineLimit(1)
 
                 if isMe {
-                    memberBadge("TY", color: SCPalette.terracotta)
+                    memberBadge("Ty", color: SCPalette.terracotta)
                 }
 
                 if isOwner {
-                    memberBadge("WŁAŚCICIEL", color: SCPalette.butter)
+                    memberBadge("Właściciel", color: SCPalette.butter)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2623,7 +2534,7 @@ struct SettingsView: View {
             } else if canCreateInvitations, !isMe {
                 // `canCreateInvitations` == „jestem właścicielem" — ta sama
                 // brama co przy zapraszaniu. Własnego wiersza nie da się
-                // usunąć stąd; od tego jest „Opuść gospodarstwo” w stopce.
+                // usunąć stąd; od tego jest „Opuść gospodarstwo” pod listą.
                 memberActionsMenu(for: member)
             }
         }
@@ -2639,15 +2550,15 @@ struct SettingsView: View {
         }
     }
 
-    /// Mała plakietka przy imieniu — „TY” w terakocie, „WŁAŚCICIEL” w maśle.
-    /// Stały rozmiar (`fixedSize`): przy długim imieniu skraca się imię,
-    /// a nie plakietka.
+    /// Mała plakietka przy imieniu — „Ty” w terakocie, „Właściciel” w maśle,
+    /// zwykłymi literami w tincie (6.10.2026; wersaliki 9,5 pt odstawały od
+    /// reszty aplikacji). Stały rozmiar (`fixedSize`): przy długim imieniu
+    /// skraca się imię, a nie plakietka.
     private func memberBadge(_ text: String, color: Color) -> some View {
         Text(text)
-            .font(.sc(size: 9.5, weight: .heavy))
-            .tracking(0.8)
+            .font(.sc(size: 11.5, weight: .bold))
             .foregroundStyle(color)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(color.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
             .fixedSize()
@@ -3009,7 +2920,9 @@ struct ProfileAvatar: View {
     SettingsView()
 }
 
-/// Suwak „Dzienny cel” z liczbą nad nim.
+/// Wiersz „Dzienny cel” z dużą liczbą po prawej i suwak pod nim
+/// (6.10.2026 — dawniej liczba 44 pt NAD suwakiem). Liczba stoi w tym samym
+/// widoku co suwak, bo pod palcem pokazuje wartość z `draft`.
 ///
 /// W trakcie przeciągania wartość żyje TYLKO tutaj, a do `@AppStorage`
 /// trafia po puszczeniu. Wcześniej każdy krok suwaka (co 50 kcal, kilkanaście
@@ -3033,31 +2946,43 @@ private struct CalorieGoalEditor: View {
     private var shown: Int { draft ?? calorieGoal }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Text(shown, format: .number.grouping(.never))
-                    .font(.sc(size: 44, weight: .heavy))
-                    .tracking(-1.4)
-                    .foregroundStyle(SCPalette.terracotta)
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: Double(shown)))
-                    // Roluje też pod palcem. Animacja siedzi na SAMEJ liczbie
-                    // i jest krótka, więc kolejny krok przejmuje ją w locie
-                    // zamiast czekać na koniec; zapis do @AppStorage i tak idzie
-                    // dopiero po puszczeniu (to on dławił suwak, nie rolowanie).
-                    .animation(
-                        isEditing ? .snappy(duration: 0.14) : .smooth(duration: 0.22),
-                        value: shown
-                    )
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                EditorialSettingsTileIcon(icon: "flame.fill", color: SettingsAccent.coral)
 
-                Text("kcal / dzień")
-                    .font(.sc(size: 13, weight: .semibold))
-                    .tracking(-0.1)
-                    .foregroundStyle(Color.scMuted(scheme))
+                Text("Dzienny cel")
+                    .font(.sc(size: 15, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(shown, format: .number.grouping(.never))
+                        .font(.sc(size: 28, weight: .heavy))
+                        .tracking(-0.8)
+                        .foregroundStyle(SCPalette.terracotta)
+                        .monospacedDigit()
+                        .contentTransition(.numericText(value: Double(shown)))
+                        // Roluje też pod palcem. Animacja siedzi na SAMEJ liczbie
+                        // i jest krótka, więc kolejny krok przejmuje ją w locie
+                        // zamiast czekać na koniec; zapis do @AppStorage i tak idzie
+                        // dopiero po puszczeniu (to on dławił suwak, nie rolowanie).
+                        .animation(
+                            isEditing ? .snappy(duration: 0.14) : .smooth(duration: 0.22),
+                            value: shown
+                        )
+
+                    Text("kcal")
+                        .font(.sc(size: 13, weight: .bold))
+                        .foregroundStyle(Color.scMuted(scheme))
+                }
+                .fixedSize()
+                .accessibilityElement(children: .combine)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 40)
 
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Slider(
                     value: Binding(
                         get: { Double(shown) },
@@ -3084,6 +3009,7 @@ private struct CalorieGoalEditor: View {
                     }
                 )
                 .tint(SCPalette.terracotta)
+                .accessibilityLabel("Dzienny cel w kcal")
 
                 HStack {
                     Text("\(range.lowerBound)")
@@ -3093,6 +3019,7 @@ private struct CalorieGoalEditor: View {
                 .font(.sc(size: 11, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(Color.scFaint(scheme))
+                .accessibilityHidden(true)
             }
         }
     }
