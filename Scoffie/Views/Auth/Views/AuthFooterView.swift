@@ -394,7 +394,7 @@ struct PrivacyPolicyContent: View {
         LegalSection(number: 11, title: "Prawa użytkownika", icon: "checkmark.shield.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalParagraph("Użytkownik ma prawo do:")
-                LegalBullet("dostępu do danych i otrzymania ich kopii (Ustawienia → Informacje → „Pobierz moje dane”),")
+                LegalBullet("dostępu do danych i otrzymania ich kopii (Ustawienia → Informacje → Prywatność i regulamin → „Pobierz moje dane”),")
                 LegalBullet("sprostowania danych,")
                 LegalBullet("usunięcia danych,")
                 LegalBullet("ograniczenia przetwarzania,")
