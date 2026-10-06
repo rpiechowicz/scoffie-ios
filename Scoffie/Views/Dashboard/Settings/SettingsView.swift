@@ -379,7 +379,10 @@ struct SettingsView: View {
                                 showLogoutAlert = true
                             }
                             .padding(.top, 20)
-                            .padding(.bottom, 16)
+
+                            versionCaption
+                                .padding(.top, 14)
+                                .padding(.bottom, 16)
                         }
                         .padding(.horizontal, pageHorizontalPadding)
                     }
@@ -544,9 +547,11 @@ struct SettingsView: View {
             EditorialSettingsSectionHeader(title: "Konto")
 
             EditorialSettingsCardGroup {
+                // Każdy wiersz w swoim kolorze, jak Ustawienia iOS
+                // (6.10.2026) — dotąd szałwia dwa razy, terakota trzy razy.
                 EditorialSettingsRow(
                     icon: "house.fill",
-                    iconColor: SCPalette.sage,
+                    iconColor: SCPalette.indigo,
                     title: "Gospodarstwo",
                     value: householdRowValue,
                     action: openHousehold
@@ -566,7 +571,7 @@ struct SettingsView: View {
                 // różnicy między dwiema decyzjami, zanim ktokolwiek w nie wejdzie.
                 EditorialSettingsRow(
                     icon: "fork.knife",
-                    iconColor: SCPalette.terracotta,
+                    iconColor: SCPalette.butter,
                     title: "Posiłki w planie",
                     value: mealSlotsRowValue,
                     action: { showMealSlotsSheet = true }
@@ -601,8 +606,8 @@ struct SettingsView: View {
                 )
 
                 EditorialSettingsRow(
-                    icon: "slider.horizontal.3",
-                    iconColor: SCPalette.indigo,
+                    icon: "circle.lefthalf.filled",
+                    iconColor: SCPalette.lavender,
                     title: "Wygląd",
                     value: appearanceRowValue,
                     isLast: true,
@@ -686,8 +691,8 @@ struct SettingsView: View {
 
             EditorialSettingsCardGroup {
                 EditorialSettingsRow(
-                    icon: "book.fill",
-                    iconColor: SCPalette.terracotta,
+                    icon: "questionmark",
+                    iconColor: SCPalette.teal,
                     title: "Pomoc i FAQ",
                     action: { showSupportPage = true }
                 )
@@ -697,8 +702,8 @@ struct SettingsView: View {
                 // wyczerpaniu stuknięcie nie robiło NIC. Wiersz to jawna prośba
                 // użytkownika, więc dostaje pewną drogę.
                 EditorialSettingsRow(
-                    icon: "heart.fill",
-                    iconColor: SettingsAccent.coral,
+                    icon: "star.fill",
+                    iconColor: SCPalette.rose,
                     title: "Oceń aplikację",
                     action: openWriteReview
                 )
@@ -707,35 +712,26 @@ struct SettingsView: View {
                 // obiecuje wgląd „w Aplikacji”, a stopka logowania to za mało.
                 EditorialSettingsRow(
                     icon: "hand.raised.fill",
-                    iconColor: SCPalette.indigo,
+                    iconColor: SettingsAccent.slate,
                     title: "Prywatność i regulamin",
                     value: "v\(LegalDocMeta.version)",
+                    isLast: true,
                     action: { showLegalDocumentsSheet = true }
                 )
-
-                versionRow
             }
         }
     }
 
-    /// "Wersja" row — uses the hollow "i" tile + the version pill on the
-    /// right with no chevron / toggle. Manually composed because it doesn't
-    /// fit the standard `EditorialSettingsRow` icon-tile shape.
-    private var versionRow: some View {
-        HStack(spacing: 14) {
-            EditorialSettingsInfoTile()
-
-            Text("Wersja")
-                .font(.sc(size: 15.5, weight: .semibold))
-                .foregroundStyle(Color.scLabel(scheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(appVersionLabel)
-                .font(.sc(size: 14, weight: .regular))
-                .foregroundStyle(Color.scMuted(scheme))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+    /// Wersja aplikacji jako cichy podpis pod „Wyloguj się” (6.10.2026) —
+    /// dawny wiersz „Wersja” z kafelkiem „i” wyglądał na stuknięty, a nic
+    /// nie robił.
+    private var versionCaption: some View {
+        Text("Scoffie \(appVersionLabel)")
+            .font(.sc(size: 12.5))
+            .monospacedDigit()
+            .foregroundStyle(Color.scFaint(scheme))
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Wersja aplikacji \(appVersionLabel)")
     }
 
     // MARK: - Sheets
@@ -751,13 +747,13 @@ struct SettingsView: View {
         editorialSheet {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    // Kafelek domu w szałwii — jak wiersz „Gospodarstwo”
+                    // Kafelek domu w indygo — jak wiersz „Gospodarstwo”
                     // i arkusz istniejącego gospodarstwa.
                     EditorialSheetHeader(
                         eyebrow: "Nowe gospodarstwo",
                         title: "Utwórz wspólną przestrzeń",
                         icon: "house.fill",
-                        accent: SCPalette.sage
+                        accent: SCPalette.indigo
                     ) {
                         showCreateHouseholdSheet = false
                     }
@@ -1160,8 +1156,8 @@ struct SettingsView: View {
                     EditorialSheetHeader(
                         eyebrow: "Personalizacja",
                         title: "Wygląd",
-                        icon: "slider.horizontal.3",
-                        accent: SCPalette.indigo
+                        icon: "circle.lefthalf.filled",
+                        accent: SCPalette.lavender
                     ) {
                         showAppearanceSheet = false
                     }
@@ -2238,7 +2234,7 @@ struct SettingsView: View {
             eyebrow: hasHousehold ? "Twoje gospodarstwo" : "Gospodarstwo",
             title: hasHousehold ? persistedHouseholdName : "Brak gospodarstwa",
             icon: "house.fill",
-            accent: SCPalette.sage,
+            accent: SCPalette.indigo,
             subtitle: hasHousehold && !householdMembers.isEmpty ? householdSummary : nil,
             onClose: { showHouseholdSheet = false }
         ) {
@@ -2500,7 +2496,7 @@ struct SettingsView: View {
     private var householdEmptyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "house.badge.plus", color: SCPalette.sage, size: 44, radius: 12)
+                EditorialSettingsTileIcon(icon: "house.badge.plus", color: SCPalette.indigo, size: 44, radius: 12)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Brak gospodarstwa")
@@ -2836,7 +2832,13 @@ struct SettingsView: View {
 // Bell + heart rows in the design use `oklch(0.70 0.14 22)` — a warm coral
 // that's distinct from the brand terracotta but still in the same family.
 // Defined here (not in SCPalette) because it's only used by Settings v2.
-private enum SettingsAccent {
+/// Akcenty wierszy Ustawień spoza `SCPalette` — wspólne z arkuszami, które
+/// te wiersze otwierają (kafelek i eyebrow w kolorze wiersza).
+enum SettingsAccent {
+    /// Ciepły szary kafelek „Prywatność i regulamin” — jak szare kafle
+    /// w Ustawieniach iOS. Jeden w obu motywach (kafelek bierze głęboki kolor).
+    static let slate = Color(red: 133 / 255, green: 123 / 255, blue: 115 / 255)
+
     static let coral = Color(uiColor: UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 219 / 255, green: 119 / 255, blue: 96 / 255, alpha: 1)   // oklch(0.70 0.14 22)

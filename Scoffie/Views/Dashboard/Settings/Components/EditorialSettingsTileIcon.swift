@@ -1,69 +1,34 @@
 import SwiftUI
 
-// 32pt rounded square with a top-down accent gradient and a centered
-// white SF Symbol — the leading element on every settings row.
-//
-// Source: settings.jsx → `TileIcon`.
-//   `width: 32, height: 32, borderRadius: 9`.
-//   Background: `linear-gradient(135deg, color → color-mix(color, #000 18%))`.
-//   Inset highlight: `inset 0 1px 0 rgba(255,255,255,0.16)`.
-//   Glyph: 56% of the tile size, weight 2.2, white.
+/// Kafelek ikony wiersza listy — JEDEN w całej aplikacji (6.10.2026, „jak od
+/// Apple”, artefakt „Ustawienia Scoffie”): Ustawienia, lista w Filtrach
+/// (`RecipeFilterListRowLabel`), arkusze Ustawień, logowanie i kreator.
+/// Płaski zaokrąglony kwadrat 30 pt w kolorze akcentu z białym glifem, jak
+/// ikony w Ustawieniach iOS — bez gradientu i białej poświaty z makiety
+/// „settings.jsx” (`TileIcon` 32 pt), które odpadły.
+///
+/// Kolor zawsze w GŁĘBOKIM wariancie (jasnego motywu), także w ciemnym:
+/// ciemne warianty palety są jasne, strojone pod tekst na czerni, i biały glif
+/// ginął na jasnej szałwii czy maśle. iOS robi tak samo — kafle Ustawień mają
+/// te same nasycone kolory w obu motywach.
 struct EditorialSettingsTileIcon: View {
     let icon: String
     let color: Color
 
-    var size: CGFloat = 32
-    var radius: CGFloat = 9
+    var size: CGFloat = 30
+    var radius: CGFloat = 8
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.mix(black: 0.18)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            // Inset top highlight — `inset 0 1px 0 rgba(255,255,255,0.16)`.
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 1)
-                .blur(radius: 0.5)
-                .mask(
-                    LinearGradient(
-                        colors: [.white, .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-            Image(systemName: icon)
-                .font(.sc(size: size * 0.52, weight: .bold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
-    }
-}
-
-// Hollow "i" tile used by the "Wersja" row in the Informacje group —
-// matches the design's bordered circle with the dim "i" glyph.
-struct EditorialSettingsInfoTile: View {
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.scFeatureRowBg(scheme))
-
-            Circle()
-                .stroke(Color.scFaint(scheme), lineWidth: 1.4)
-
-            Text("i")
-                .font(.sc(size: 14, weight: .semibold, design: .serif))
-                .italic()
-                .foregroundStyle(Color.scFaint(scheme))
-        }
-        .frame(width: 32, height: 32)
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(color)
+            // Rozwiązanie koloru w jasnym motywie = głęboki wariant palety.
+            .environment(\.colorScheme, .light)
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.sc(size: size * 0.48, weight: .semibold))
+                    .foregroundStyle(.white)
+            )
+            .accessibilityHidden(true)
     }
 }
