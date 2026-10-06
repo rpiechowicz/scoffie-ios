@@ -894,27 +894,27 @@ struct CalendarView: View {
             // Pigułka wchodzi bezpiecznym obszarem, a nie `overlay`. Różnica
             // jest w tym, co dzieje się z listą pod spodem: `overlay`
             // zostawiał ostatni wiersz POD szkłem, gdzie było go widać, ale
-            // nie dało się w niego stuknąć. `safeAreaInset` doksięgowuje
-            // wysokość pigułki do wnętrza `ScrollView`, więc treść nadal
-            // przelatuje pod szkłem przy przewijaniu, ale kończy się nad nim.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                PlanDayGoalBar(
-                    nutrition: eatenNutrition,
-                    targets: dailyTargets,
-                    // Pigułka liczy ZJEDZONE, więc dzień przed pierwszym
-                    // odhaczeniem ma w niej same zera — i nie da się z niej
-                    // odróżnić dnia z planem od dnia pustego. Blada warstwa
-                    // pod każdym torem mówi, dokąd ten dzień ma dojść.
-                    planned: planNutrition(on: selectedDate),
-                    tab: .calendar,
-                    action: { simpleSheet = .dayGoal }
-                )
-                .frame(width: goalBarWidth)
-                .padding(.bottom, 8)
-                // Pierwsza klatka nie zna jeszcze szerokości zakładki,
-                // a pigułka o zerowej szerokości mignęłaby jako kreska.
-                .opacity(goalBarWidth > 0 ? 1 : 0)
+            // nie dało się w niego stuknąć. Pasek bezpiecznego obszaru
+            // doksięgowuje wysokość pigułki do wnętrza przewijania, więc treść
+            // przelatuje pod szkłem, ale kończy się nad nim — ta sama droga
+            // co na Planie (`PlanDayGoalBar.dock`).
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                PlanDayGoalBar.dock(width: goalBarWidth) {
+                    PlanDayGoalBar(
+                        nutrition: eatenNutrition,
+                        targets: dailyTargets,
+                        // Pigułka liczy ZJEDZONE, więc dzień przed pierwszym
+                        // odhaczeniem ma w niej same zera — i nie da się z niej
+                        // odróżnić dnia z planem od dnia pustego. Blada warstwa
+                        // pod każdym torem mówi, dokąd ten dzień ma dojść.
+                        planned: planNutrition(on: selectedDate),
+                        tab: .calendar,
+                        action: { simpleSheet = .dayGoal }
+                    )
+                }
             }
+            // Miękki, jawnie — jak na Planie (`scSheetFooterEdge`).
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             // Wymiary obszaru zakładki: szerokość na pigułkę, wysokość na
             // sufit arkusza „Cel dnia". Mierzone spod spodu, żeby pomiar nie
             // ruszał układu.

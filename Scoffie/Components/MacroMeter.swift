@@ -197,7 +197,7 @@ struct MacroMeter: View {
                 // Z wartością: rosnąca liczba roluje w górę, malejąca w dół.
                 .contentTransition(.numericText(value: Double(value)))
                 // Cyfry tym samym ruchem co tor pod nimi — liczba i pasek
-                // lądują razem (także z opóźnieniem kolumny w pigułce kcal).
+                // lądują razem.
                 .animation(animation, value: value)
 
             if let progress {

@@ -53,7 +53,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   czytelne, w 1 wierszu”; dwa układy psuły przejście). Przejście Plan ↔ Pulpit = jeden komponent, który zmienia stan (Rafał 6.10.2026): menu, ZANIM
   przełączy zakładkę (wiązanie `selection` w `NavigationMenu` + `onChange` dla przełączeń z kodu), wkłada twarz wychodzącej
   pigułki (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`) do `goalBarHandoff[docelowa]`; pierwsza klatka nowej zakładki
-  rysuje ją, potem pigułka zdejmuje ją ruchem — liczba i pasek każdej kolumny razem (0,55 s), kolumny co 0,05 s. Nie wracać do dwóch
+  rysuje ją, potem pigułka zdejmuje ją JEDNĄ sprężyną (`PlanDayGoalBar.animation`, ta sama przy każdej zmianie liczb;
+  sprężyna zmienia cel w locie, gdy zakładka dociąga dzień) — liczba i pasek każdej kolumny razem, BEZ opóźnień między
+  kolumnami (restartowały ruch). Plan i Pulpit przyczepiają pigułkę jedną drogą (`PlanDayGoalBar.dock` w `safeAreaBar`). Nie wracać do dwóch
   układów ani do animowania wysokości szkła. Zakres wczoraj · dziś · jutro jest CELOWY — dalsze dni ogląda się i planuje w Planie. Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
   przycisk) → `SessionStore.planSlotRequest` (`PlanSlotRequest`) + `dashboardTab = .plan`; Plan zdejmuje prośbę,
   `DatesViewModel.show(day:)`, otwiera „Wybierz przepis” na tę porę („dla kogo”: `[]` = cały dom, `[ja]`, gdy ktoś
@@ -437,7 +439,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`TimelineView`) na niewybranej stoją. Co ma działać bez otwarcia zakładki, robi start sesji
   (`SessionStore.prepareUnbuiltTabs`: rozmowa i pula Asystenta). Wstawki nad paskiem = `safeAreaBar(edge: .bottom)` +
   `scrollEdgeEffectStyle(.soft, for: .bottom)` w treści zakładki (pasek szukania Przepisów — też na ekranie
-  kategorii, pigułka Planu, pole Asystenta); pigułka Dziś (bez przewijania) = `safeAreaInset`. `SCTabBarChrome` niesie
+  kategorii, pigułka Planu, pole Asystenta); pigułka Pulpitu też `safeAreaBar` (`PlanDayGoalBar.dock`, wspólne z Planem). `SCTabBarChrome` niesie
   już tylko `compactTitles`, `keyboardCurve` i `goalBarFaces` (przejście pigułek kcal); `SCStatusBarBlur` i `SCCompactTitle` to nakładka nad `TabView`.
   USUNIĘTE i nie wracać: własny `SCFloatingTabBar`, `ZStack` zamiast `TabView`, budowanie wszystkich zakładek pod
   loaderem, gest pigułki, przenikanie `tabSelection` / `leavingTab`, zwijanie „Revolut” (`scTracksTabBarCompaction`),

@@ -90,25 +90,20 @@ struct PlanDayGoalBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scTabIsActive) private var isActiveTab
     @Environment(\.scTabBarChrome) private var tabBarChrome
-    /// Trwa przejście — kolumny dostają ruch przejścia zamiast zwykłej
-    /// sprężyny zmiany liczb.
-    @State private var isHandingOff = false
 
     /// Promień rogu szkła i obszaru dotyku — jedna liczba, żeby te dwa
     /// kształty nie mogły się rozjechać.
     private static let cornerRadius: CGFloat = 20
 
-    /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
-    /// własną domyślną (0,4 s) i przy 0,36 s na cyfrach kreska lądowała
-    /// chwilę po liczbie — dwie sprężyny w jednej kolumnie widać jako dwie.
-    static let animation: Animation = .spring(response: 0.36, dampingFraction: 0.9)
-
-    /// Ruch przejścia Plan ↔ Pulpit — cyfry i tor KAŻDEJ kolumny jednym
-    /// ruchem (te same 0,55 s), kolumny ruszają po kolei co 0,05 s: kcal, B,
-    /// T, W. Wcześniej cyfry jechały krzywą rolowania tekstu (0,42 s), a tory
-    /// własną sprężyną (0,36 s) — liczba i pasek pod nią lądowały osobno.
-    private static let handoffMotion: Animation = .smooth(duration: 0.55)
-    private static let handoffStagger: Double = 0.05
+    /// JEDNA sprężyna dla cyfr i torów — przy zmianie dnia, odhaczeniu
+    /// posiłku i przejściu Plan ↔ Pulpit. Sprężyna, nie krzywa z czasem:
+    /// gdy liczby zmienią się w trakcie ruchu (zakładka zaraz po wejściu
+    /// dociąga dzień), sprężyna zmienia cel z zachowaniem prędkości i ruch
+    /// płynie dalej, zamiast zacząć się od nowa. Bez opóźnień między
+    /// kolumnami — każda nowa zmiana liczb restartowała opóźnienie i kolumny
+    /// ruszały drugi raz (Rafał 6.10.2026: „animacja się nie kończy i już
+    /// zaczyna nowa”).
+    static let animation: Animation = .spring(response: 0.5, dampingFraction: 0.9)
 
     /// Własne liczby pigułki.
     private var ownFace: PlanDayGoalFace {
@@ -139,6 +134,20 @@ struct PlanDayGoalBar: View {
 
     var body: some View {
         bar
+    }
+
+    /// Pigułka przyczepiona nad systemowym paskiem zakładek — JEDNA droga dla
+    /// Planu i Pulpitu, żeby przy przełączeniu stała co do punktu w tym samym
+    /// miejscu (Plan miał `safeAreaBar`, Pulpit `safeAreaInset` — pigułka
+    /// przesuwała się o kilka punktów). Pasek bezpiecznego obszaru: treść
+    /// kończy się nad pigułką, pod nią natywny, miękki efekt krawędzi.
+    static func dock(width: CGFloat, bar: () -> PlanDayGoalBar) -> some View {
+        bar()
+            .frame(width: width)
+            .padding(.bottom, 8)
+            // Pierwsza klatka nie zna jeszcze szerokości zakładki, a pigułka
+            // o zerowej szerokości mignęłaby jako kreska.
+            .opacity(width > 0 ? 1 : 0)
     }
 
     private var bar: some View {
@@ -190,31 +199,19 @@ struct PlanDayGoalBar: View {
     }
 
     /// Pierwsza klatka = pigułka z poprzedniej zakładki (już w stanie — patrz
-    /// `goalBarHandoff`), potem jednym ruchem własna.
+    /// `goalBarHandoff`), potem tą samą sprężyną własna.
     private func startHandoff() {
-        guard let from = tabBarChrome.goalBarHandoff[tab] else { return }
-        guard !reduceMotion, from.fingerprint != ownFace.fingerprint else {
+        guard tabBarChrome.goalBarHandoff[tab] != nil else { return }
+        guard !reduceMotion else {
             tabBarChrome.goalBarHandoff[tab] = nil
             return
         }
-        isHandingOff = true
-
         Task { @MainActor in
             // Klatka z twarzą poprzedniej zakładki musi wejść na ekran, zanim
             // ruszy przejście — inaczej SwiftUI zlepia oba zapisy w jeden.
             try? await Task.sleep(for: .milliseconds(32))
-            withAnimation(Self.handoffMotion) { tabBarChrome.goalBarHandoff[tab] = nil }
-            // Po ostatniej kolumnie wraca zwykła sprężyna zmiany liczb.
-            try? await Task.sleep(for: .milliseconds(800))
-            isHandingOff = false
+            withAnimation(Self.animation) { tabBarChrome.goalBarHandoff[tab] = nil }
         }
-    }
-
-    /// Ruch kolumny `index` (0 = kalorie): w przejściu wspólny ruch
-    /// z opóźnieniem kolumny, poza nim zwykła sprężyna zmiany liczb.
-    private func motion(_ index: Int) -> Animation {
-        guard isHandingOff else { return Self.animation }
-        return Self.handoffMotion.delay(Double(index) * Self.handoffStagger)
     }
 
     /// Treść pigułki: cztery kolumny w jednym wierszu — kalorie i trzy makra.
@@ -248,7 +245,7 @@ struct PlanDayGoalBar: View {
                     color: SCMacroPalette.calories,
                     unit: "kilokalorii",
                     accessibilityDetail: kcalDetail(face),
-                    animation: motion(0)
+                    animation: Self.animation
                 )
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -295,7 +292,7 @@ struct PlanDayGoalBar: View {
                 target: face.targets.macros?.proteinG,
                 plannedValue: face.planned?.protein,
                 color: SCMacroPalette.protein,
-                animation: motion(1)
+                animation: Self.animation
             )
             MacroMeter(
                 letter: "T",
@@ -304,7 +301,7 @@ struct PlanDayGoalBar: View {
                 target: face.targets.macros?.fatG,
                 plannedValue: face.planned?.fat,
                 color: SCMacroPalette.fat,
-                animation: motion(2)
+                animation: Self.animation
             )
             MacroMeter(
                 letter: "W",
@@ -313,7 +310,7 @@ struct PlanDayGoalBar: View {
                 target: face.targets.macros?.carbsG,
                 plannedValue: face.planned?.carbs,
                 color: SCMacroPalette.carbs,
-                animation: motion(3)
+                animation: Self.animation
             )
         }
     }
