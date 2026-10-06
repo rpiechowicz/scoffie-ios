@@ -100,6 +100,16 @@ struct MealSlotsSheet: View {
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.scTileBg(scheme))
+                            // To samo pod przytrzymaniem — gest przesunięcia nie każdy zna.
+                            .contextMenu {
+                                if configuration.isEnabled(slot), MealSlot.optionalSlots.contains(slot) {
+                                    Button(role: .destructive) {
+                                        toggle(slot, to: false)
+                                    } label: {
+                                        Label("Wyłącz \(slot.accusativeName)", systemImage: "minus.circle")
+                                    }
+                                }
+                            }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 if configuration.isEnabled(slot), MealSlot.optionalSlots.contains(slot) {
                                     Button(role: .destructive) {
@@ -163,7 +173,8 @@ struct MealSlotsSheet: View {
         .sheet(item: $editing) { slot in
             editorSheet(slot)
                 // Jedna trzecia ekranu — nad nią dalej widać oś dnia.
-                .presentationDetents([.fraction(1.0 / 3.0)])
+                // Z akcją pory („Wyłącz …”) pod kołem — wyżej niż 1/3.
+                .presentationDetents([MealSlot.optionalSlots.contains(slot) ? .height(380) : .fraction(1.0 / 3.0)])
                 .dashboardLiquidSheet(cornerRadius: 26)
         }
         .alert(
@@ -457,10 +468,11 @@ struct MealSlotsSheet: View {
         guard MealSlot.optionalSlots.contains(slot) else { return nil }
         let isEnabled = configuration.isEnabled(slot)
         return MealTimeEditorSheet.Action(
-            title: isEnabled ? "Wyłącz" : "Dodaj",
+            title: isEnabled ? "Wyłącz \(slot.accusativeName)" : "Dodaj \(slot.accusativeName)",
             accessibilityLabel: isEnabled
                 ? "Wyłącz \(slot.accusativeName)"
                 : "Dodaj \(slot.accusativeName)",
+            isDestructive: isEnabled,
             run: {
                 editing = nil
                 if isEnabled {
