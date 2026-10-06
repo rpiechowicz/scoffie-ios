@@ -76,7 +76,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   w artefakcie — Rafał: „przekombinowane” → „za smutno” → „prościej, ale z kolorem”): w kategorii rodzaj dania =
   kółka ze zdjęciem dania NA STAŁE (`RecipeFacetPhotoGrid`: ≤ 5 w rzędzie, więcej — rzędy po 4 z KRÓTKĄ nazwą w jednej
   linii, `RecipeFacetOption.shortTitle` — wariant R1; śniadania bez krótkich nazw; etykieta zawsze „Rodzaj dania”), smak = dwa kafle ze
-  zdjęciem (`RecipeTasteTiles`, drugie stuknięcie odznacza); czas = przełącznik w kolorze (`RecipeFilterSegment`);
+  zdjęciem (`RecipeTasteTiles`, drugie stuknięcie odznacza); czas = przełącznik Liquid Glass (`RecipeFilterSegment`, L2: tor-
+  kapsuła i JEDNA szklana soczewka w kolorze akcentu pod przyciskami, przesuwana sprężyną z „rozciągnięciem” — keyframe
+  `LensSquish`; bez wstawiania soczewki od nowa i bez szkła w etykietach przycisków); filtry WSZYSTKICH przepisów (G1): na
+  górze kuchnia — 8 kółek ze zdjęciem (`cuisineSection`), w liście „Okazje i sezon” i „Cechy” zamiast „Więcej filtrów”;
   reszta = JEDNA lista jak Ustawienia iOS (`RecipeFilterListMenuRow` / `RecipeFilterListButtonRow`: pełny kolorowy
   kafelek ikony, wartość po prawej, wybrana w kapsułce): mięso / pora kategorii → `Pane.facet`, trudność i kalorie
   (progi 300–800) = systemowe menu, dieta → kafelki, „Bez składników” (strona `RecipeExcludePage` ma ten sam tytuł), „Więcej filtrów” (`Pane.more`: cechy, kuchnia,
