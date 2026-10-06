@@ -248,6 +248,14 @@ struct AddToPlanDraft {
                 return
             }
 
+            // Wpis tak, jak potwierdził go serwer — „Cofnij” zdejmie tylko
+            // TEN stan (`UndoStamp`), nie zmianę domownika z drugiego telefonu.
+            // Domknięcie zamiast `UndoStamp.init` obok `nil` — pułapka SE-0418
+            // z CLAUDE.md (dwa rozwiązania typu, błąd daleko od tej linii).
+            let stamp: UndoStamp? = isNewEntry
+                ? store.meals(for: date, slot: slot).first(where: { $0.recipe.id == recipe.id }).map { UndoStamp($0) }
+                : nil
+
             // Pierwsze danie w planie = prośba o zgodę na przypomnienia,
             // PRZED toastem: okno systemu nie zjada czasu na „Cofnij”.
             await NotificationPermission.requestAfterPlanning()
@@ -255,12 +263,12 @@ struct AddToPlanDraft {
             // Toast sukcesu niesie też haptykę sukcesu (`SCToastHost`).
             if let replacedName {
                 toasts.success("Zamieniono w planie", "\(slot.title) — zamiast: \(replacedName)")
-            } else if isNewEntry {
+            } else if let stamp {
                 toasts.success(
                     "Dodano do planu",
                     message,
                     action: SCToast.Action(title: "Cofnij") {
-                        Self.undo(recipe: recipe, date: date, slot: slot, weekStart: weekStart, placement: placement, store: store, toasts: toasts)
+                        Self.undo(stamp, recipe: recipe, date: date, slot: slot, weekStart: weekStart, placement: placement, store: store, toasts: toasts)
                     }
                 )
             } else {
@@ -269,11 +277,49 @@ struct AddToPlanDraft {
         }
     }
 
+    /// Stan nowej pozycji z chwili potwierdzenia zapisu. „Cofnij” usuwa
+    /// wpis tylko wtedy, gdy nadal wygląda dokładnie tak — inaczej
+    /// zdjęłoby też to, co w międzyczasie dołożył albo zmienił domownik
+    /// (osoby, porcje, odhaczenie, nowa rewizja z serwera; Codex 6.10.2026).
+    /// Serwer nie ma usuwania warunkowego, więc zostaje okno na dojazd
+    /// zmiany przez socket — ułamek sekundy zamiast całego życia toastu.
+    private struct UndoStamp: Equatable {
+        let id: String
+        let revision: Int?
+        let participantIds: [String]
+        let eatenByUserIds: [String]
+        let plannedServings: Int?
+        let portionUnits: [String: Int]
+
+        init(_ meal: PlanMeal) {
+            id = meal.id
+            revision = meal.revision
+            participantIds = meal.participantIds.sorted()
+            eatenByUserIds = meal.eatenByUserIds.sorted()
+            plannedServings = meal.plannedServings
+            portionUnits = meal.portionUnits
+        }
+
+        /// Ta sama pozycja w tym samym stanie. Z rewizją po obu stronach
+        /// rozstrzyga sama rewizja (serwer podbija ją przy każdej zmianie
+        /// pozycji, a pola potrafią różnić się zapisem między odpowiedzią
+        /// zapisu i odczytem tygodnia); bez niej — wszystkie pola.
+        func matches(_ other: UndoStamp) -> Bool {
+            guard id == other.id else { return false }
+            if let revision, let otherRevision = other.revision {
+                return revision == otherRevision
+            }
+            return self == other
+        }
+    }
+
     /// „Cofnij” z toastu: zdejmuje z pory dokładnie ten przepis (inne dania
-    /// w porze zostają). Wpis znika od razu (optymistycznie), a gdy serwer
-    /// odmówi, wraca — wtedy toast mówi, że danie zostało.
+    /// w porze zostają) — o ile wpis nadal jest w stanie z chwili zapisu.
+    /// Wpis znika od razu (optymistycznie), a gdy serwer odmówi, wraca —
+    /// wtedy toast mówi, że danie zostało.
     @MainActor
     private static func undo(
+        _ stamp: UndoStamp,
         recipe: Recipe,
         date: Date,
         slot: MealSlot,
@@ -282,6 +328,14 @@ struct AddToPlanDraft {
         store: MealCalendarStore,
         toasts: SCToastCenter
     ) {
+        // Już zniknęło (ktoś usunął) — nie ma czego cofać.
+        guard let current = store.meals(for: date, slot: slot).first(where: { $0.recipe.id == recipe.id }) else {
+            return
+        }
+        guard stamp.matches(UndoStamp(current)) else {
+            toasts.info("Nie cofam", "Ktoś z domu zmienił już to danie.")
+            return
+        }
         let errorBefore = store.errorMessage
         Task { @MainActor in
             let removed = await store.removeWeekSlot(for: date, slot: slot, weekStart: weekStart, recipe: recipe)

@@ -49,13 +49,24 @@ struct ProposalReview {
         let kcal: Int
         /// Puste = cały dom.
         let participantIds: [String]
-        let change: Change
+        var change: Change
         /// Zdanie „Zamień to danie” — tylko dla dań propozycji, nie usunięć.
         let swapPrompt: String?
+        /// Wiersze usunięć, które ten wiersz mówi jako „Zamiast: …”. Gdy filtr
+        /// osoby schowa ten wiersz, wracają na ekran (`filtered`).
+        var absorbed: [Row] = []
 
         var isRemoval: Bool {
             if case .removed = change { return true }
             return false
+        }
+
+        /// Nowe danie propozycji (z zamianą albo bez).
+        var isNewDish: Bool {
+            switch change {
+            case .added, .replaces: return true
+            case .kept, .removed: return false
+            }
         }
     }
 
@@ -188,6 +199,23 @@ extension ProposalReview {
         var result: [(row: Row, offset: Int)] = []
         var paired = Set<Int>()
 
+        // Każde usunięcie jako wiersz — także to, które przejmie nowe danie
+        // („Zamiast: …”): leży wtedy w jego `absorbed`.
+        let removalRows: [Row] = removals.enumerated().map { index, removal in
+            let reason = removal.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return Row(
+                id: "\(dayKey)-removed-\(index)-\(removal.id)",
+                slot: removal.mealType.flatMap { MealSlot(backendMealType: $0) },
+                mealLabel: removal.mealLabel,
+                title: removal.title,
+                imageURL: image(removal.recipeId),
+                kcal: 0,
+                participantIds: [],
+                change: .removed(reason: (reason?.isEmpty ?? true) ? nil : reason),
+                swapPrompt: nil
+            )
+        }
+
         // Indeks nowego dania → usunięcia, które zastępuje.
         let newIndexes = slots.indices.filter { slots[$0].isNew }
         var replacedBy: [Int: [Int]] = [:]
@@ -201,8 +229,10 @@ extension ProposalReview {
 
         for (index, slot) in slots.enumerated() {
             let change: Change
+            var absorbed: [Row] = []
             if slot.isNew {
                 let replaced = replacedBy[index] ?? []
+                absorbed = replaced.map { removalRows[$0] }
                 change = replaced.isEmpty ? .added : .replaces(replaced.map { removals[$0].title })
             } else {
                 change = .kept
@@ -216,37 +246,69 @@ extension ProposalReview {
                 kcal: slot.kcalPerServing,
                 participantIds: slot.participantIds,
                 change: change,
-                swapPrompt: swapPrompt(slot, day: swapDay)
+                swapPrompt: swapPrompt(slot, day: swapDay),
+                absorbed: absorbed
             )
             result.append((row, index))
         }
 
-        for (index, removal) in removals.enumerated() where !paired.contains(index) {
-            let reason = removal.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let row = Row(
-                id: "\(dayKey)-removed-\(index)-\(removal.id)",
-                slot: removal.mealType.flatMap { MealSlot(backendMealType: $0) },
-                mealLabel: removal.mealLabel,
-                title: removal.title,
-                imageURL: image(removal.recipeId),
-                kcal: 0,
-                participantIds: [],
-                change: .removed(reason: (reason?.isEmpty ?? true) ? nil : reason),
-                swapPrompt: nil
-            )
+        for (index, row) in removalRows.enumerated() where !paired.contains(index) {
             result.append((row, slots.count + index))
         }
 
-        // Porządek dnia: po porze, gdy znana; nieznana za znanymi.
-        return result.sorted { left, right in
-            switch (left.row.slot, right.row.slot) {
+        return byDayOrder(result.map { $0.row })
+    }
+
+    /// Porządek dnia: po porze, gdy znana; nieznana za znanymi; w porze —
+    /// kolejność wejściowa.
+    private static func byDayOrder(_ rows: [Row]) -> [Row] {
+        rows.enumerated().sorted { left, right in
+            switch (left.element.slot, right.element.slot) {
             case let (a?, b?) where a != b: return a < b
             case (.some, .none): return true
             case (.none, .some): return false
             default: return left.offset < right.offset
             }
         }
-        .map { $0.row }
+        .map { $0.element }
+    }
+
+    /// Wiersze dnia po filtrze osoby. Zamiana nie znika razem z wierszem, do
+    /// którego ją przypięto (Codex 6.10.2026: „Zamiast: pizza” przy omlecie
+    /// Rafała chowało przed Anią, że pizza też jej zniknie): usunięcia
+    /// schowanego dania przechodzą na pierwsze WIDOCZNE nowe danie tej pory,
+    /// a gdy takiego nie ma — stają jako osobne wiersze „Usunięte”. Zapis
+    /// i tak zdejmuje je z planu całego domu.
+    static func filtered(_ rows: [Row], keeping isShown: (Row) -> Bool) -> [Row] {
+        var orphans: [String: [Row]] = [:]
+        for row in rows where !isShown(row) && !row.absorbed.isEmpty {
+            orphans[slotKey(row), default: []].append(contentsOf: row.absorbed)
+        }
+
+        var result: [Row] = []
+        for row in rows where isShown(row) {
+            let key = slotKey(row)
+            guard row.isNewDish, let moved = orphans[key], !moved.isEmpty else {
+                result.append(row)
+                continue
+            }
+            var merged = row
+            var titles: [String] = []
+            if case .replaces(let existing) = row.change { titles = existing }
+            merged.change = .replaces(titles + moved.map { $0.title })
+            merged.absorbed = row.absorbed + moved
+            orphans[key] = nil
+            result.append(merged)
+        }
+
+        let leftovers = orphans.keys.sorted().flatMap { orphans[$0] ?? [] }
+        return leftovers.isEmpty ? result : byDayOrder(result + leftovers)
+    }
+
+    /// Pora wiersza do łączenia zamian: znana pora albo — gdy serwer jej nie
+    /// podał — nazwa posiłku.
+    private static func slotKey(_ row: Row) -> String {
+        row.slot?.rawValue ?? row.mealLabel.lowercased()
     }
 
     /// TO SAMO zdanie, które wysyłało „Zamień to danie” na stronie dania
@@ -472,7 +534,7 @@ struct AssistantProposalReviewSheet: View {
     private var visibleSections: [ProposalReview.Section] {
         guard let person else { return review.sections }
         return review.sections.compactMap { section in
-            let rows = section.rows.filter { row in
+            let rows = ProposalReview.filtered(section.rows) { row in
                 row.isRemoval
                     || ProposalAudience.isShared(row.participantIds, members: members)
                     || ProposalAudience.eats(row.participantIds, person: person)

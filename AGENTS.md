@@ -106,8 +106,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
 - **„Dodaj do planu”** w szczegółach z katalogu = systemowe `Menu`: „Dziś · pora” (tylko gdy pora jeszcze przed nami),
   „Jutro · pora”, „Inny dzień…” → `AddToPlanSheet` (push). Szybki zapis dla całego domu z porcjami ze steppera, szczegóły się
   zamykają, toast „Dodano do planu · Jutro · Obiad” z „Cofnij” (6.10.2026: `SCToast.action` — JEDNA akcja po prawej
-  kapsuły, toast z nią trwa ≥ 5,5 s; tylko przy NOWEJ pozycji, cofnięcie = `removeWeekSlot` tego przepisu i toast
-  „Usunięto z planu”; dołączenie osób do dania i zamiana — bez „Cofnij”); reguły i zapis w `AddToPlanDraft` / `AddToPlanPortions`, wspólne
+  kapsuły, toast z nią trwa ≥ 5,5 s, a każda akcja ma własne `id` — dwa toasty o tej samej treści się NIE łączą; tylko przy
+  NOWEJ pozycji, cofnięcie = `removeWeekSlot` tego przepisu i toast „Usunięto z planu”, ale tylko gdy wpis jest w stanie
+  z chwili zapisu (`UndoStamp`: id + rewizja, bez rewizji — osoby, porcje, odhaczenie), inaczej „Nie cofam · Ktoś z domu
+  zmienił już to danie”; serwer nie ma usuwania warunkowego (strict DTO — pole `expectedRevision` z develop iOS odbiłoby
+  się od produkcji); dołączenie osób do dania i zamiana — bez „Cofnij”); reguły i zapis w `AddToPlanDraft` / `AddToPlanPortions`, wspólne
   z arkuszem — nie duplikować. „Zamiast: X” (cały dom) / „Jest już: X” (część domu) otwierają arkusz z `initialDate` /
   `initialSlot`; to samo danie = wyłączone „Już w planie”. Porcje w arkuszu stoją W TREŚCI pod „Posiłek”
   (`SCPortionKit`) — przycisk `chart.pie.fill` i arkusz porcji USUNIĘTE. Szczegóły posiłku otwierają się w gotowym
@@ -207,7 +210,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   `ProposalPersonFilter` („Wszyscy · Ty · Ania”, start „Wszyscy”), sekcje = dni (dzień = jedna sekcja bez etykiety),
   wiersz = pora z ikoną w kolorze pory · miniatura 44 · nazwa (2 linie) · kcal · „dla kogo” (`ProposalAudiencePill`,
   gdy nie cały dom) · zmiana wobec planu W WIERSZU: „Zamiast: …” (przekreślone; kilka nowych dań w jednej porze dzieli
-  usunięcia tej pory PO KOLEI — jedno na danie, nadmiar ostatniemu — zamiast powtarzać to samo „Zamiast: X”), usunięcie
+  usunięcia tej pory PO KOLEI — jedno na danie, nadmiar ostatniemu — zamiast powtarzać to samo „Zamiast: X”; przy filtrze
+  osoby usunięcia schowanego dania przechodzą na widoczne nowe danie tej pory albo stają osobno — `Row.absorbed`,
+  `ProposalReview.filtered`), usunięcie
   z powodem („Usunięte · powtórka”), „Nowe” TYLKO gdy propozycja coś zostawia/usuwa. Filtr osób ŚWIADOMIE startuje od
   „Wszyscy” (6.10.2026): zapis obejmuje cały dom, więc najpierw widać całą propozycję. Usunięcia z dni bez nowych dań = własna sekcja.
   „Zamień to danie” = „…” (`Menu`) w wierszu + to samo pod przytrzymaniem, akcja po 0,35 s (po zamknięciu menu), tylko
