@@ -8,7 +8,8 @@ import Foundation
 /// kategorii, ile zostanie po każdym kafelku, ile ukrywają wykluczenia, w ilu
 /// przepisach jest każdy składnik — i przelicza je przy każdym stuknięciu.
 /// Wszystkie idą przez `RecipeFilterOptions.matches(_:)`, więc liczba w stopce
-/// jest dokładnie tą, którą pokaże lista po „Pokaż”.
+/// jest dokładnie tą, którą pokazuje lista pod arkuszem (filtry działają na
+/// żywo).
 struct RecipeFilterIndex {
     struct Entry {
         let facts: RecipeFilterFacts
@@ -86,6 +87,40 @@ struct RecipeFilterIndex {
         var next = options
         next.moments.insert(moment)
         return count(next, fit: fit)
+    }
+
+    /// Ile zostanie po zaznaczeniu opcji aspektu kategorii (rodzaj dania,
+    /// smak…) — ta sama reguła `matches`, która filtruje listę: opcja zawęża
+    /// tylko przepisy swojej kategorii.
+    func count(
+        adding option: String,
+        in kind: RecipeFacetKind,
+        for category: RecipesCategory,
+        to options: RecipeFilterOptions,
+        fit: Bool
+    ) -> Int {
+        var next = options
+        let chosen = next.categoryFilters[category] ?? RecipeCategoryFilter()
+        next.categoryFilters[category] = chosen.adding(option, in: kind)
+        return count(next, fit: fit)
+    }
+
+    /// Zdjęcia kafelków sekcji kategorii — przykład dania dla każdej opcji,
+    /// z przepisów tej kategorii w puli (wartości aspektów z faktów indeksu).
+    func facetCovers(for category: RecipesCategory, recipes: [Recipe]) -> RecipeFacetCovers {
+        // `zip`, nie indeks: pula arkusza i jego indeks to te same przepisy
+        // w tej samej kolejności, ale indeks policzono raz na otwarcie.
+        var inCategory: [Recipe] = []
+        var values: [[RecipeFacetKind: Set<String>]] = []
+        for (recipe, entry) in zip(recipes, entries) where entry.facts.category == category {
+            inCategory.append(recipe)
+            values.append(entry.facts.facetValues)
+        }
+        return RecipeFacetCovers(
+            facets: RecipeCategoryFacets.facets(for: category),
+            recipes: inCategory,
+            values: values
+        )
     }
 
     /// Rozkład kalorii na porcję pod suwak: przedziały po 50 kcal od zera do

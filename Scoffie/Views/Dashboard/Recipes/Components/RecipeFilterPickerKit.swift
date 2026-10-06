@@ -1,14 +1,15 @@
 import SwiftUI
 
 // Grupy filtrów schowane za wierszem (28.09.2026, Rafał: „w głównych filtrach
-// mam mnóstwo podkategorii, które są nieczytelne — zrób sekcje, gdzie będzie
-// się otwierał sheet na pół ekranu”). Od katalogu 1000 arkusz „Filtry” miał
-// cztery siatki kafelków jedna pod drugą (cechy, kuchnia, okazje i sezon —
-// ponad 25 kafelków), a filtry kategorii dwie kolejne. Na wierzchu zostaje to,
-// czego się używa najczęściej, a reszta stoi jako wiersze w jednej karcie
-// „Więcej filtrów”: ikona, nazwa i to, co wybrano (pigułki + liczba). Stuknięcie
-// otwiera półarkusz z TYMI SAMYMI kafelkami, co dotąd, piszący do tej samej
-// kopii roboczej — liczby na kafelkach i w stopce zmieniają się na żywo.
+// mam mnóstwo podkategorii, które są nieczytelne — zrób sekcje”). Od katalogu
+// 1000 arkusz „Filtry” miał cztery siatki kafelków jedna pod drugą (cechy,
+// kuchnia, okazje i sezon — ponad 25 kafelków), a filtry kategorii dwie
+// kolejne. Na wierzchu zostaje to, czego się używa najczęściej, a reszta stoi
+// jako wiersze w jednej karcie „Więcej filtrów”: ikona, nazwa i to, co wybrano
+// (pigułki + liczba). Stuknięcie WPYCHA podstronę (`RecipeFilterPage`) w stos
+// arkusza — systemowy pasek z tytułem, „wstecz” i „Wyczyść” — z TYMI SAMYMI
+// kafelkami, piszącymi od razu do filtrów (6.10.2026; wcześniej półarkusz na
+// arkuszu).
 //
 // Wzór wiersza to kafelek „Wyklucz składniki” (ikona w tincie, tytuł, chipy,
 // plakietka, strzałka), więc cały arkusz czyta się jednym krojem.
@@ -133,20 +134,20 @@ extension RecipeFilterPickerRow {
     }
 }
 
-// MARK: - Półarkusz
+// MARK: - Podstrona
 
-/// Półarkusz z kafelkami jednej grupy filtrów. Kafelki rysuje wołający
-/// (`tile`) — te same `RecipeFilterOptionTile`, co wcześniej w arkuszu, z liczbą
-/// „ile zostanie” — a zapis idzie od razu do kopii roboczej rodzica, więc
-/// „Gotowe” tylko zamyka.
-struct RecipeFilterPickerSheet<Item: Identifiable, Tile: View>: View {
-    let eyebrow: String
+/// Podstrona filtrów wpchnięta w stos arkusza (Filtry na Przepisach, filtry
+/// wyboru przepisu do planu): systemowy pasek z tytułem, „wstecz”
+/// i „Wyczyść” tej grupy, pod nim jedno zdanie, treść (kafelki rysuje
+/// wołający) i stopka z liczbą przepisów na żywo i „Gotowe”. Zmiany idą od
+/// razu do filtrów, więc „Gotowe” tylko kończy — co znaczy „koniec”, mówi
+/// wołający (`onDone`: zamknięcie arkusza Filtrów albo powrót do listy
+/// wyboru do planu).
+struct RecipeFilterPage<Content: View>: View {
     let title: String
-    let icon: String
     var accent: Color = SCPalette.terracotta
-    /// Jedno zdanie pod tytułem — jak łączą się zaznaczone opcje.
-    let hint: String
-    let items: [Item]
+    /// Jedno zdanie nad treścią — jak łączą się zaznaczone opcje. Puste = bez.
+    var hint: String = ""
     /// Ile opcji tej grupy jest zaznaczonych — „Wyczyść” i stopka.
     let selectedCount: Int
     /// Ile przepisów zostaje przy bieżącym wyborze (wszystkie filtry).
@@ -155,9 +156,9 @@ struct RecipeFilterPickerSheet<Item: Identifiable, Tile: View>: View {
     /// „przepisów” / „w tej kategorii” / „do wyboru”.
     let totalContext: String
     let onClear: () -> Void
-    @ViewBuilder let tile: (Item) -> Tile
+    let onDone: () -> Void
+    @ViewBuilder var content: () -> Content
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -165,44 +166,41 @@ struct RecipeFilterPickerSheet<Item: Identifiable, Tile: View>: View {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 10)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !hint.isEmpty {
+                        Text(hint)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 6)
+                            .padding(.bottom, 12)
+                    }
 
-                ScrollView {
-                    RecipeFilterTileGrid(items: items, tile: tile)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 6)
-                        .padding(.bottom, 8)
-                        .containerRelativeFrame(.horizontal)
+                    content()
                 }
-                .scrollIndicators(.hidden)
-                .scScrollEdgeFade()
-                .scSheetFooter { footer }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .containerRelativeFrame(.horizontal)
             }
+            .scrollIndicators(.hidden)
+            // Pod systemowym paskiem — miękka krawędź, bez kreski.
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .scSheetFooter { footer }
         }
-    }
-
-    private var header: some View {
-        EditorialSheetHeader(
-            eyebrow: eyebrow,
-            title: title,
-            icon: icon,
-            accent: accent,
-            subtitle: hint,
-            compact: true,
-            onClose: { dismiss() }
-        ) {
-            if selectedCount > 0 {
-                RecipeFilterClearButton(accessibilityLabel: "Wyczyść: \(title.lowercased())") {
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Wyczyść") {
                     withAnimation(.smooth(duration: 0.22)) { onClear() }
                 }
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                .disabled(selectedCount == 0)
+                .accessibilityLabel("Wyczyść: \(title.lowercased())")
             }
         }
-        .animation(.smooth(duration: 0.22), value: selectedCount > 0)
     }
 
     private var footer: some View {
@@ -235,7 +233,7 @@ struct RecipeFilterPickerSheet<Item: Identifiable, Tile: View>: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Zostaje \(PolishPlural.recipes(resultCount)) z \(totalCount) \(totalContext)")
 
-            RecipeFilterFooterButton(title: "Gotowe", trailingIcon: nil) { dismiss() }
+            RecipeFilterFooterButton(title: "Gotowe", trailingIcon: nil, action: onDone)
         }
         .padding(.leading, 4)
     }

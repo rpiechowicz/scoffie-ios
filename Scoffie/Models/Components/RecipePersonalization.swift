@@ -11,15 +11,20 @@ import SwiftUI
 ///   preferencją, a nie zakazem, i twarde cięcie po kaloriach wywalałoby
 ///   z listy sensowne dania za 30 kcal ponad próg.
 ///
-/// Całość da się wyłączyć jednym przełącznikiem na widoku Przepisów — bez
-/// tego użytkownik nie miałby jak zobaczyć, czego nie widzi.
+/// Całość da się wyłączyć (różdżka w Filtrach, „Pokaż mimo diety” w pustym
+/// stanie) — bez tego użytkownik nie miałby jak zobaczyć, czego nie widzi.
+/// Wyłączenie jest CHWILOWE: trzyma do końca uruchomienia aplikacji
+/// (`restoreForThisLaunch`), a dopóki trwa, Przepisy i „Wybierz przepis”
+/// mówią to wprost żetonem „Bez dopasowania · Włącz” (6.10.2026 — wcześniej
+/// zostawało wyłączone na zawsze i nic nie mówiło, że alergeny nie są
+/// odsiewane).
 struct RecipePersonalization: Equatable {
     var diet: DietPreference = .none
     var avoidedAllergens: Set<Allergen> = []
     var goal: UserGoal = .healthy
     var dailyCalorieGoal: Int = 2000
 
-    /// Przełącznik z banera na Przepisach. `false` = pokazuj cały katalog.
+    /// Przełącznik „Dopasowane do Ciebie”. `false` = pokazuj cały katalog.
     var isEnabled: Bool = true
 
     // MARK: - Odczyt z UserDefaults
@@ -34,6 +39,22 @@ struct RecipePersonalization: Equatable {
     }
 
     static let defaultCalorieGoal = 2000
+
+    /// Czy przełącznik wrócił już w tym uruchomieniu na `true`.
+    private static var didRestoreForThisLaunch = false
+
+    /// Wyłączone dopasowanie wraca przy starcie aplikacji — RAZ na proces.
+    ///
+    /// Woła to `RecipeCatalogStore.init`: katalog powstaje przy pierwszym
+    /// wejściu do sesji (zimny start albo logowanie), zanim ktokolwiek
+    /// zobaczy listę, którą dopasowanie odsiewa. Kolejne sklepy w tym samym
+    /// uruchomieniu (zmiana domu, ponowne logowanie) już niczego nie ruszają —
+    /// wyłączenie trzyma się do zamknięcia aplikacji, nie do następnej sesji.
+    static func restoreForThisLaunch(defaults: UserDefaults = .standard) {
+        guard !didRestoreForThisLaunch else { return }
+        didRestoreForThisLaunch = true
+        defaults.set(true, forKey: Keys.enabled)
+    }
 
     init(
         diet: DietPreference = .none,
@@ -91,6 +112,13 @@ struct RecipePersonalization: Equatable {
     /// wrócić.
     var hasAnyPreference: Bool {
         restrictsCatalog || ranksCatalog
+    }
+
+    /// Dopasowanie wyłączone, choć profil ma dietę albo alergeny — lista
+    /// pokazuje wtedy dania, których profil by nie przepuścił. Steruje
+    /// żetonem „Bez dopasowania · Włącz” (`RecipeFitOffChip`).
+    var isBypassed: Bool {
+        !isEnabled && restrictsCatalog
     }
 
     // MARK: - Odsiew

@@ -72,6 +72,9 @@ final class RecipeCatalogStore {
         ),
         ownerKey: String? = nil
     ) {
+        // Wyłączone „Dopasowane do Ciebie” trzyma tylko do końca uruchomienia
+        // aplikacji — patrz `RecipePersonalization.restoreForThisLaunch`.
+        RecipePersonalization.restoreForThisLaunch()
         self.repository = repository
         self.core = CatalogSyncCore(ownerKey: ownerKey, files: .documents, gate: .shared)
         self.repository.observeFavoritesChanges { [weak self] recipeId, isFavorite in

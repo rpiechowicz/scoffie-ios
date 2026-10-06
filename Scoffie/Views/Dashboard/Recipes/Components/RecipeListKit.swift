@@ -1,13 +1,14 @@
 import SwiftUI
 
-// Klocki arkuszy z listą przepisów: lista kategorii (chevron przy sekcji na
-// Przepisach) i wybór przepisu do planu („Wybierz przepis” w Planie).
+// Klocki list przepisów: ekran kategorii na Przepisach (`RecipeCategoryScreen`,
+// push nagłówkiem sekcji) i wybór przepisu do planu („Wybierz przepis” w Planie).
 //
-// Oba arkusze stoją na tym samym (runda 8, 23.09.2026 — Rafał: „żeby
-// wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”):
-// `EditorialSheetHeader` z kafelkiem i podtytułem, `SCSearchField`, karta
-// kontekstu, wiersze `EditorialRecipeRow`, pusty stan. Różni je tylko to, co
-// robi wiersz — otwiera przepis albo go zaznacza — i stopka wyboru.
+// Obie listy stoją na tym samym (runda 8, 23.09.2026 — Rafał: „żeby
+// wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”): karta
+// kontekstu, wiersze `EditorialRecipeRow`, pusty stan. Różni je to, co robi
+// wiersz — otwiera przepis albo go zaznacza — i góra: wybór do planu to
+// arkusz z `EditorialSheetHeader` i `SCSearchField`, kategoria — ekran
+// z systemowym paskiem i pływającym szukaniem Przepisów.
 //
 // Pigułek z opcjami filtrów pod szukaniem już nie ma (runda 10, Rafał:
 // „usuń to szybkie wybieranie z chips — od tego mamy filtry”): zawężanie
@@ -15,9 +16,8 @@ import SwiftUI
 
 // MARK: - Góra arkusza
 
-/// Przypięta góra arkusza z listą: nagłówek i szukanie. Jedne odstępy dla
-/// obu arkuszy — lista kategorii i wybór do planu mają się zaczynać w tym
-/// samym miejscu.
+/// Przypięta góra arkusza z listą: nagłówek i szukanie („Wybierz przepis”
+/// w Planie).
 struct RecipeListSheetTop<Header: View>: View {
     let searchPrompt: String
     @Binding var searchText: String
@@ -70,12 +70,20 @@ struct RecipeListFilterButton: View {
 /// Karta mówi CO (dieta wegetariańska, bez glutenu) i ile przez to znika.
 struct RecipeListContextCard: View {
     struct Row: Identifiable {
+        /// Akcja słowem po prawej stronie wiersza — „Włącz” przy wyłączonym
+        /// dopasowaniu.
+        struct Action {
+            let title: String
+            let run: () -> Void
+        }
+
         let id: String
         let icon: String
         let accent: Color
         let title: String
         let detail: String
         var onClear: (() -> Void)? = nil
+        var action: Action? = nil
     }
 
     let rows: [Row]
@@ -128,6 +136,20 @@ struct RecipeListContextCard: View {
                 // Ten sam „Wyczyść”, co obok krzyżyka w arkuszach filtrów.
                 RecipeFilterClearButton(accessibilityLabel: "Wyczyść filtry", action: onClear)
             }
+
+            if let action = row.action {
+                Button(action: action.run) {
+                    Text(action.title)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(row.accent)
+                        .padding(.horizontal, 14)
+                        .frame(height: 32)
+                        .scSoftCapsule(row.accent)
+                        .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.94))
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -177,17 +199,78 @@ extension RecipeListContextCard.Row {
         )
     }
 
-    /// Filtry wszystkich przepisów (arkusz „Filtry”): co działa i „Wyczyść”.
+    /// Filtry z arkusza „Filtry” działające na tę listę (ekran kategorii na
+    /// Przepisach): co działa i „Wyczyść”.
     static func filters(_ labels: [String], onClear: @escaping () -> Void) -> Self? {
         guard !labels.isEmpty else { return nil }
         return Self(
             id: "filters",
             icon: "line.3.horizontal.decrease",
             accent: SCPalette.terracotta,
-            title: "Filtry z Przepisów",
+            title: "Filtry",
             detail: labels.joined(separator: " · "),
             onClear: onClear
         )
+    }
+
+    /// Dopasowanie wyłączone, choć profil ma dietę albo alergeny — ten sam
+    /// komunikat, co żeton na Przepisach (`RecipeFitOffChip`), ze „Włącz”.
+    /// `nil`, gdy dopasowanie działa albo nie ma czego odsiewać.
+    static func personalizationOff(_ personalization: RecipePersonalization, onEnable: @escaping () -> Void) -> Self? {
+        guard personalization.isBypassed else { return nil }
+        return Self(
+            id: "personalization-off",
+            icon: "wand.and.stars",
+            accent: SCPalette.sage,
+            title: "Bez dopasowania",
+            detail: "Dieta i alergeny nie są teraz odsiewane",
+            action: Action(title: "Włącz", run: onEnable)
+        )
+    }
+}
+
+// MARK: - Żeton „Bez dopasowania”
+
+/// „Bez dopasowania · Włącz” — stoi na Przepisach (pod tytułem, w zwykłym
+/// widoku, w wynikach i w kategorii), dopóki dopasowanie do diety
+/// i alergenów jest wyłączone. Krótko i stale widoczne, jak „Filtrowane
+/// według…” w Poczcie: lista pokazuje wtedy dania, których profil by nie
+/// przepuścił, i użytkownik ma to wiedzieć. Stuknięcie włącza dopasowanie.
+struct RecipeFitOffChip: View {
+    let onEnable: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Button(action: onEnable) {
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.scMuted(scheme))
+
+                Text("Bez dopasowania")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scLabel(scheme))
+
+                Text(verbatim: "·")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Color.scFaint(scheme))
+
+                Text("Włącz")
+                    .font(.system(size: 13.5, weight: .bold))
+                    .tracking(-0.2)
+                    .foregroundStyle(SCPalette.sage)
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 13)
+            .frame(height: 34)
+            .scChromeGlass(in: Capsule(style: .continuous))
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.95))
+        .accessibilityLabel("Bez dopasowania: dieta i alergeny nie są odsiewane")
+        .accessibilityHint("Włącza dopasowanie do Twojego profilu")
     }
 }
 
