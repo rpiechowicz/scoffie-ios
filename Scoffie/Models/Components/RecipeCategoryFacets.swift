@@ -39,6 +39,12 @@ enum RecipeFacetKind: String, Hashable, CaseIterable {
 struct RecipeFacetOption: Identifiable, Hashable {
     let id: String
     let title: String
+    /// Krótka nazwa w jednej linii pod zdjęciem rodzaju dania w „Filtrach”
+    /// (6.10.2026, wariant R1: „Z ryżem lub kaszą” łamało się na dwie linie
+    /// i siatka po cztery stała nierówno). `nil` = pełna nazwa (śniadania —
+    /// pięć w rzędzie, każda w dwóch liniach, równo). Pełna nazwa zostaje
+    /// w podsumowaniach filtrów i dla VoiceOver.
+    var shortTitle: String? = nil
 }
 
 struct RecipeFacet: Identifiable {
@@ -106,33 +112,33 @@ enum RecipeCategoryFacets {
         case .lunch:
             return [RecipeFacet(kind: .dish, title: "Rodzaj dania", options: [
                 .init(id: "soup", title: "Zupy"),
-                .init(id: "potatoes", title: "Z ziemniakami"),
-                .init(id: "grains", title: "Z ryżem lub kaszą"),
+                .init(id: "potatoes", title: "Z ziemniakami", shortTitle: "Ziemniaki"),
+                .init(id: "grains", title: "Z ryżem lub kaszą", shortTitle: "Ryż i kasze"),
                 .init(id: "pasta", title: "Makarony"),
-                .init(id: "dumplings", title: "Pierogi i kluski"),
-                .init(id: "stew", title: "Gulasze i curry"),
+                .init(id: "dumplings", title: "Pierogi i kluski", shortTitle: "Pierogi"),
+                .init(id: "stew", title: "Gulasze i curry", shortTitle: "Gulasze"),
                 .init(id: "bake", title: "Zapiekanki"),
-                .init(id: "sandwich", title: "Burgery i tortille")
+                .init(id: "sandwich", title: "Burgery i tortille", shortTitle: "Burgery")
             ]), proteinFacet, cuisineFacet, momentFacet]
         case .dinner:
             return [RecipeFacet(kind: .dish, title: "Rodzaj dania", options: [
                 .init(id: "salad", title: "Sałatki"),
-                .init(id: "sandwich", title: "Kanapki i wrapy"),
-                .init(id: "bake", title: "Zapiekanki i pizza"),
-                .init(id: "grains", title: "Makaron, ryż, kasze"),
-                .init(id: "potatoes", title: "Z ziemniakami"),
-                .init(id: "soup", title: "Zupy i kremy"),
-                .init(id: "pancakes", title: "Placki i naleśniki")
+                .init(id: "sandwich", title: "Kanapki i wrapy", shortTitle: "Kanapki"),
+                .init(id: "bake", title: "Zapiekanki i pizza", shortTitle: "Zapiekanki"),
+                .init(id: "grains", title: "Makaron, ryż, kasze", shortTitle: "Makaron i ryż"),
+                .init(id: "potatoes", title: "Z ziemniakami", shortTitle: "Ziemniaki"),
+                .init(id: "soup", title: "Zupy i kremy", shortTitle: "Zupy"),
+                .init(id: "pancakes", title: "Placki i naleśniki", shortTitle: "Placki")
             ]), proteinFacet, cuisineFacet, momentFacet]
         case .snacks:
             return [tasteFacet, RecipeFacet(kind: .dish, title: "Rodzaj", options: [
-                .init(id: "bake", title: "Ciasta i wypieki"),
+                .init(id: "bake", title: "Ciasta i wypieki", shortTitle: "Ciasta"),
                 .init(id: "spoon", title: "Desery"),
                 .init(id: "crunchy", title: "Chrupiące"),
-                .init(id: "bites", title: "Małe przekąski"),
-                .init(id: "dip", title: "Dipy i pasty"),
+                .init(id: "bites", title: "Małe przekąski", shortTitle: "Małe kąski"),
+                .init(id: "dip", title: "Dipy i pasty", shortTitle: "Dipy"),
                 .init(id: "salad", title: "Sałatki"),
-                .init(id: "drink", title: "Napoje i koktajle")
+                .init(id: "drink", title: "Napoje i koktajle", shortTitle: "Napoje")
             ]), RecipeFacet(kind: .slot, title: "Pora w planie", options: [
                 MealSlot.secondBreakfast, .afternoonSnack, .snack
             ].map { RecipeFacetOption(id: $0.rawValue, title: $0.title) }), cuisineFacet, momentFacet]

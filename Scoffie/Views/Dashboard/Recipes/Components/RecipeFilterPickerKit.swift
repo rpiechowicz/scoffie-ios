@@ -293,8 +293,10 @@ struct RecipeFilterSegment<Value: Hashable>: View {
 
 /// Rodzaj dania jako kółka ze zdjęciem dania i podpisem — NA STAŁE, bez
 /// przewijania w bok: do pięciu w jednym rzędzie, więcej — rzędy po cztery
-/// (Rafał 6.10.2026: „góra mi pasuje”). W obrębie aspektu opcje łączą się
-/// przez LUB, jak wszędzie w filtrach kategorii.
+/// (Rafał 6.10.2026: „góra mi pasuje”). Przy rzędach po cztery podpis to
+/// krótka nazwa w JEDNEJ linii (`RecipeFacetOption.shortTitle`, wariant R1),
+/// żeby siatka stała równo. W obrębie aspektu opcje łączą się przez LUB, jak
+/// wszędzie w filtrach kategorii.
 struct RecipeFacetPhotoGrid: View {
     let options: [RecipeFacetOption]
     let accent: Color
@@ -341,12 +343,12 @@ struct RecipeFacetPhotoGrid: View {
                                     .opacity(selected ? 1 : 0)
                             }
 
-                        Text(option.title)
+                        Text(option.shortTitle ?? option.title)
                             .font(.sc(size: 11, weight: .semibold))
                             .foregroundStyle(selected ? Color.scLabel(scheme) : Color.scMuted(scheme))
                             .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.9)
+                            .lineLimit(option.shortTitle == nil ? 2 : 1)
+                            .minimumScaleFactor(0.85)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity)

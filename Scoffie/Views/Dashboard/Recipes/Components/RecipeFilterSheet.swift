@@ -298,7 +298,9 @@ struct RecipeFilterSheet: View {
     private func dishSection(_ category: RecipesCategory) -> some View {
         if let facet = facet(.dish, in: category) {
             let covers = facetCovers(for: category)
-            RecipeFilterSection(title: facet.title, top: 6) {
+            // „Rodzaj dania” w każdej kategorii — aspekt przekąsek nazywa się
+            // krócej („Rodzaj”), ale w arkuszu etykieta ma być jedna.
+            RecipeFilterSection(title: "Rodzaj dania", top: 6) {
                 RecipeFacetPhotoGrid(
                     options: facet.options,
                     accent: RecipeAccent.accent(for: category),
