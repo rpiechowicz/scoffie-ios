@@ -14,11 +14,17 @@ import SwiftUI
 /// planu, bo cena przy zakupie to wymóg App Store 3.1.2, a nazwa oszczędza
 /// spojrzenia z powrotem na listę.
 ///
-/// Wjeżdża NA „Asystent i plan" (albo z linijki „Zobacz plany" w rozmowie)
-/// i sam się zamyka po udanym zakupie — arkusz pod spodem odświeża stan.
+/// Dwa wejścia: z „Asystent i plan" wjeżdża jako kolejny ekran TEGO arkusza
+/// (`isPushed`, systemowy pasek z „wstecz” — bez arkusza na arkuszu), z linijki
+/// „Zobacz plany" w rozmowie jest samodzielnym arkuszem. Po udanym zakupie
+/// sam schodzi (`dismiss` = zamknięcie arkusza albo powrót o ekran), a ekran
+/// pod spodem odświeża stan. Regulamin i polityka to w obu przypadkach push.
 struct PlansSheet: View {
-    /// Po zakupie PRZYJĘTYM przez serwer — arkusz pod spodem przeładowuje
-    /// stan, zanim ten się zamknie.
+    /// Ekran wepchnięty w stos „Asystent i plan” — bez własnego
+    /// `NavigationStack` i nagłówka z krzyżykiem, z paskiem systemu.
+    var isPushed: Bool = false
+    /// Po zakupie PRZYJĘTYM przez serwer — ekran pod spodem przeładowuje
+    /// stan, zanim ten zejdzie.
     var onPurchased: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -41,63 +47,20 @@ struct PlansSheet: View {
         sessionStore.subscriptionStore ?? fallbackSubscriptions
     }
 
+    private static let subtitle = "Pula wspólna dla całego domu, odnawia się co miesiąc."
+
     var body: some View {
-        NavigationStack {
-            // Ten sam szkielet co arkusze asystenta (eyebrow · tytuł · X,
-            // stopka nad gradientem). Bez `GeometryReader`: pierwszy przebieg
-            // układu dostawał szerokość zero i treść rysowała się „od boku”,
-            // zanim arkusz dojechał na miejsce.
-            AssistantSheetScaffold(
-                eyebrow: "Plany · miesięcznie",
-                title: "Wybierz plan",
-                subtitle: "Pula wspólna dla całego domu, odnawia się co miesiąc.",
-                // Plany to plany Asystenta — jego glif, jak wiersz
-                // „Asystent i plan” w Ustawieniach.
-                icon: MenuConstans.Assistant.icon,
-                onClose: { dismiss() },
-                footer: { footer }
-            ) {
-                // Trzy kafle do wyboru, jedna karta szczegółów: przy
-                // zmianie planu liczby i paski przeliczają się w miejscu,
-                // zamiast kazać porównywać trzy karty po kawałku.
-                currentStatus
-                    .padding(.top, 14)
-
-                HStack(spacing: 8) {
-                    ForEach(SubscriptionCatalog.all) { plan in
-                        PlanTile(
-                            plan: plan,
-                            price: price(for: plan),
-                            isSelected: plan.id == selected.id,
-                            isCurrent: plan.id == currentPlan?.id,
-                            isSuggested: plan.id == suggestedPlan?.id && plan.id != currentPlan?.id
-                        ) {
-                            select(plan)
-                        }
-                    }
+        Group {
+            if isPushed {
+                screen
+            } else {
+                NavigationStack {
+                    screen
                 }
-                .padding(.top, 12)
-
-                PlanDetailCard(
-                    plan: selected,
-                    price: price(for: selected),
-                    isCurrent: selected.id == currentPlan?.id,
-                    suggestion: selected.id == suggestedPlan?.id && selected.id != currentPlan?.id
-                        ? suggestionText
-                        : nil
-                )
-                .padding(.top, 10)
+                .presentationDragIndicator(.visible)
             }
-            .toolbar(.hidden, for: .navigationBar)
         }
-        .presentationDragIndicator(.visible)
         .sensoryFeedback(.selection, trigger: selected.id)
-        .sheet(isPresented: $showTerms) {
-            LegalDocumentSheet(title: "Regulamin") { TermsOfServiceContent() }
-        }
-        .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) { PrivacyPolicyContent() }
-        }
         .onAppear {
             // Na wejściu: plan polecany dla domu, a gdy go nie ma — obecny.
             // To jest ZAZNACZENIE kafla, nie stan zakupu. W `onAppear` i bez
@@ -119,6 +82,94 @@ struct PlansSheet: View {
             await subscriptions.refreshState()
             await subscriptions.loadProducts()
         }
+    }
+
+    /// Układ z dokumentami prawnymi jako ekranami stosu (push) — w obu
+    /// wejściach, bo w obu ten ekran stoi w `NavigationStack`.
+    private var screen: some View {
+        layout
+            .navigationDestination(isPresented: $showTerms) {
+                LegalDocumentPage(title: "Regulamin") { TermsOfServiceContent() }
+            }
+            .navigationDestination(isPresented: $showPrivacy) {
+                LegalDocumentPage(title: "Polityka prywatności") { PrivacyPolicyContent() }
+            }
+    }
+
+    @ViewBuilder
+    private var layout: some View {
+        if isPushed {
+            // Ekran w stosie „Asystent i plan”: tytuł w pasku systemu,
+            // zdanie o puli nad treścią, ta sama stopka z zakupem.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Self.subtitle)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+
+                    planContent
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+            .scrollIndicators(.hidden)
+            .scSheetFooter(horizontalPadding: 16) { footer }
+            .scPushedPage("Wybierz plan")
+        } else {
+            // Ten sam szkielet co arkusze asystenta (eyebrow · tytuł · X,
+            // stopka nad gradientem). Bez `GeometryReader`: pierwszy przebieg
+            // układu dostawał szerokość zero i treść rysowała się „od boku”,
+            // zanim arkusz dojechał na miejsce.
+            AssistantSheetScaffold(
+                eyebrow: "Plany · miesięcznie",
+                title: "Wybierz plan",
+                subtitle: Self.subtitle,
+                // Plany to plany Asystenta — jego glif, jak wiersz
+                // „Asystent i plan” w Ustawieniach.
+                icon: MenuConstans.Assistant.icon,
+                onClose: { dismiss() },
+                footer: { footer }
+            ) {
+                planContent
+            }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    /// Trzy kafle do wyboru, jedna karta szczegółów: przy zmianie planu
+    /// liczby i paski przeliczają się w miejscu, zamiast kazać porównywać
+    /// trzy karty po kawałku.
+    @ViewBuilder
+    private var planContent: some View {
+        currentStatus
+            .padding(.top, 14)
+
+        HStack(spacing: 8) {
+            ForEach(SubscriptionCatalog.all) { plan in
+                PlanTile(
+                    plan: plan,
+                    price: price(for: plan),
+                    isSelected: plan.id == selected.id,
+                    isCurrent: plan.id == currentPlan?.id,
+                    isSuggested: plan.id == suggestedPlan?.id && plan.id != currentPlan?.id
+                ) {
+                    select(plan)
+                }
+            }
+        }
+        .padding(.top, 12)
+
+        PlanDetailCard(
+            plan: selected,
+            price: price(for: selected),
+            isCurrent: selected.id == currentPlan?.id,
+            suggestion: selected.id == suggestedPlan?.id && selected.id != currentPlan?.id
+                ? suggestionText
+                : nil
+        )
+        .padding(.top, 10)
     }
 
     // MARK: - Dom

@@ -1,12 +1,12 @@
-import StoreKit
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.requestReview) private var requestReview
     /// Katalog — tylko do liczby „ukrywa N przepisów” przy alergenach.
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
 
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
     @AppStorage("settings.notifications.enabled") private var notificationsEnabled: Bool = true
@@ -48,12 +48,25 @@ struct SettingsView: View {
 
     @State private var showCreateHouseholdSheet = false
     @State private var showHouseholdSheet = false
+    /// „Utwórz gospodarstwo” z pustej karty arkusza gospodarstwa: arkusz
+    /// tworzenia wchodzi PO zamknięciu tamtego, a nie na nim.
+    @State private var opensCreateAfterHousehold = false
     @State private var showNotificationsSheet = false
+    /// Zgoda systemu na powiadomienia — `nil`, dopóki system nie odpowiedział.
+    /// Czytana przy wejściu, po powrocie aplikacji na wierzch i przy otwarciu
+    /// arkusza (ktoś mógł ją zmienić w Ustawieniach iOS).
+    @State private var notificationPermission: NotificationPermission?
+    @State private var isRequestingNotifications = false
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
+    /// Ekrany wpychane w arkusz „Dieta i alergeny” — wybór alergenów i „Twoje
+    /// dane” (z odsyłacza „Uzupełnij sylwetkę”), zamiast arkuszy na arkuszu.
+    @State private var showsAllergenPicker = false
+    @State private var showsProfileFromDiet = false
     @State private var showMealSlotsSheet = false
     @State private var showProfileSheet = false
-    @State private var showHelpSheet = false
+    /// „Pomoc” — strona wsparcia scoffie.app w Safari w aplikacji.
+    @State private var showSupportPage = false
     @State private var showCookidooSheet = false
     @State private var showLegalDocumentsSheet = false
     @State private var showHealthSheet = false
@@ -91,7 +104,6 @@ struct SettingsView: View {
     @State private var isCreatingInvitation = false
     @State private var showRenameHouseholdAlert = false
     @State private var renameDraft = ""
-    @State private var expandedFAQ: String? = nil
 
     private static let householdNameMinLength = 2
     private static let householdNameMaxLength = 50
@@ -104,171 +116,9 @@ struct SettingsView: View {
     private static let calorieGoalStep: Int = 50
     private static let calorieGoalDefault: Int = 2000
 
-    // Static FAQ content rendered by `helpSheet`. Grouped by topic so the
-    // user can jump straight to the area they care about; only one row is
-    // expanded at a time (`expandedFAQ` accordion state).
-    fileprivate static let faqSections: [FAQSection] = [
-        FAQSection(id: "plan", title: "Plan i kalendarz", items: [
-            FAQItem(
-                id: "plan-create",
-                question: "Jak ułożyć plan posiłków na tydzień?",
-                answer: "Wejdź w zakładkę Kalendarz, wybierz dzień i stuknij pusty slot — Śniadanie, Obiad lub Kolację. Otworzy się biblioteka przepisów, z której możesz wybrać danie. Powtórz dla pozostałych dni i posiłków."
-            ),
-            FAQItem(
-                id: "plan-change",
-                question: "Jak zmienić przepis dla danego dnia?",
-                answer: "Stuknij kartę przepisu w kalendarzu — otworzą się szczegóły. Aby podmienić go na inny, wróć do dnia, usuń obecny przepis i przypisz nowy z biblioteki."
-            ),
-            FAQItem(
-                id: "plan-past",
-                question: "Czy mogę edytować przeszłe dni?",
-                answer: "Nie. Plan z minionych dni jest archiwalny — możesz go tylko przeglądać. Dzisiejszy i przyszłe dni są w pełni edytowalne."
-            ),
-            FAQItem(
-                id: "plan-favorites",
-                question: "Co robi serduszko przy przepisie?",
-                answer: "Oznacza ulubione przepisy — łatwiej je później znaleźć w bibliotece (zakładka Przepisy) i AI częściej będzie je proponować jako sugestie."
-            )
-        ]),
-
-        FAQSection(id: "shopping", title: "Lista zakupów", items: [
-            FAQItem(
-                id: "shop-source",
-                question: "Skąd biorą się produkty na liście?",
-                answer: "Aplikacja zbiera składniki ze wszystkich przepisów przypisanych w kalendarzu na bieżący tydzień, sumuje powtarzające się produkty i grupuje je po działach sklepowych."
-            ),
-            FAQItem(
-                id: "shop-close",
-                question: "Co się dzieje, gdy odhaczę wszystko?",
-                answer: "Przycisk „Kupione” zmieni się w „Zamknij” — stuknij go, żeby zarchiwizować listę. Trafi do historii w tej samej zakładce; w każdej chwili możesz ją podejrzeć lub usunąć."
-            ),
-            FAQItem(
-                id: "shop-revision",
-                question: "Dodałem nowy przepis po zamknięciu listy. Co teraz?",
-                answer: "Aplikacja stworzy nową rewizję listy z brakującymi produktami. Zobaczysz ją jako „Lista 2” — działa identycznie jak pierwsza, ale zawiera tylko nowo wymagane składniki."
-            ),
-            FAQItem(
-                id: "shop-manual",
-                question: "Czy mogę dodawać produkty ręcznie?",
-                answer: "Aktualnie nie — lista jest w pełni generowana z planu. Funkcja ręcznego dodawania jest na liście rzeczy do zrobienia."
-            )
-        ]),
-
-        FAQSection(id: "household", title: "Gospodarstwo", items: [
-            FAQItem(
-                id: "house-create",
-                question: "Po co tworzyć gospodarstwo?",
-                answer: "Gospodarstwo to wspólna przestrzeń dla domowników — wszyscy widzą ten sam plan posiłków, listę zakupów i bibliotekę przepisów. Dzięki temu nie kupujecie tych samych rzeczy dwa razy."
-            ),
-            FAQItem(
-                id: "house-invite",
-                question: "Jak zaprosić domownika?",
-                answer: "Otwórz Ustawienia → Gospodarstwo i naciśnij „+” obok listy domowników. Aplikacja wygeneruje link zaproszeniowy — wyślij go bliskiemu dowolnym komunikatorem."
-            ),
-            FAQItem(
-                id: "house-shared",
-                question: "Czy każdy domownik widzi mój plan?",
-                answer: "Tak. Plan, lista zakupów i przepisy są wspólne dla wszystkich osób w gospodarstwie. Każdy może je edytować — zmiany pojawiają się u pozostałych w czasie rzeczywistym."
-            ),
-            FAQItem(
-                id: "house-leave",
-                question: "Jak opuścić gospodarstwo?",
-                answer: "W oknie gospodarstwa stuknij czerwony przycisk „Opuść gospodarstwo”. Stracisz dostęp do wspólnych danych, ale Twoje konto pozostanie aktywne."
-            )
-        ]),
-
-        FAQSection(id: "account", title: "Konto i dane", items: [
-            FAQItem(
-                id: "acc-sync",
-                question: "Czy moje dane są synchronizowane?",
-                answer: "Tak. Każda zmiana w planie, liście zakupów i przepisach jest zapisywana na serwerze i synchronizowana między urządzeniami w tym samym gospodarstwie."
-            ),
-            FAQItem(
-                id: "acc-photo",
-                question: "Skąd bierze się moje zdjęcie profilowe?",
-                answer: "Logując się przez Google przejmujemy zdjęcie z Twojego konta Google. Logując się przez Apple — Apple nie udostępnia zdjęć, więc używamy Twojego inicjału na terakotowym tle."
-            ),
-            FAQItem(
-                id: "acc-delete",
-                question: "Jak usunąć konto?",
-                answer: "W Ustawieniach, w sekcji profilu, stuknij „Usuń konto”. Konto i Twoje dane znikają od razu; wspólne przepisy i plan zostają domownikom. Możesz też napisać na support@scoffie.app z adresu przypisanego do konta."
-            ),
-            FAQItem(
-                id: "acc-export",
-                question: "Czy mogę pobrać swoje dane?",
-                answer: "Tak. Napisz na support@scoffie.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Szybciej: Ustawienia → Informacje → „Prywatność i regulamin” → „Pobierz moje dane” — paczka od razu trafia do arkusza udostępniania."
-            ),
-            FAQItem(
-                id: "acc-allergens",
-                question: "Jakie alergeny zna aplikacja?",
-                answer: "Wszystkie 14 alergenów z listy unijnej (gluten, mleko, jajka, orzechy, orzeszki ziemne, ryby, skorupiaki, mięczaki, soja, seler, gorczyca, sezam, łubin, siarczyny) oraz laktozę jako osobną nietolerancję. Ustawiasz je w profilu — od tej chwili ani asystent, ani ręczne wstawianie posiłku nie przepuści dania z takim składnikiem dla osoby, która go unika."
-            )
-        ]),
-
-        FAQSection(id: "assistant", title: "Asystent", items: [
-            FAQItem(
-                id: "ai-what",
-                question: "Co potrafi asystent?",
-                answer: "Układa cały tydzień albo jeden dzień pod Wasze cele, podmienia pojedyncze danie, dzieli jedno danie na porcje dla domowników o różnych celach, sprawdza, czego brakuje do białka, i składa listę zakupów. Zna Wasz katalog, alergeny i preferencje z profili."
-            ),
-            FAQItem(
-                id: "ai-approve",
-                question: "Czy asystent sam zmienia mój plan?",
-                answer: "Nie. Asystent proponuje, a Ty zatwierdzasz jednym przyciskiem w karcie. Po zapisie masz godzinę na „Cofnij”. Jeśli w międzyczasie ktoś w domu zmienił plan ręcznie, karta powie o tym i zapyta, czy zapisać mimo to."
-            ),
-            FAQItem(
-                id: "ai-limits",
-                question: "Skąd biorą się limity?",
-                answer: "Każda odpowiedź kosztuje. Limit wiadomości i limit zapisanych planów liczą się na gospodarstwo i odnawiają się w dniu odnowienia planu — kupiony 15 września wraca 15 października, a nie pierwszego. Ile zostało i kiedy wraca, widzisz w menu asystenta → Limity. Wyczerpany limit zapisów nie blokuje rozmowy."
-            ),
-            FAQItem(
-                id: "ai-data",
-                question: "Jakie dane trafiają do modelu?",
-                answer: "Plan tygodnia, przepisy, imiona domowników, ich preferencje, alergeny i cele kaloryczne — ale tylko osób, które wyraziły zgodę na asystenta. Wzrost, waga i płeć nigdy nie wychodzą poza aplikację. Rozmowy kasujemy po 90 dniach albo od razu, gdy usuniesz historię."
-            ),
-            FAQItem(
-                id: "ai-memory",
-                question: "Co asystent o nas pamięta?",
-                answer: "Krótkie notatki z rozmów — zwyczaje, niechęci, sprzęt w kuchni — do 30 naraz. Zobaczysz je i skasujesz w menu asystenta → „Co o Was pamięta”. Nie zapisuje niczego o wadze ani zdrowiu."
-            ),
-            FAQItem(
-                id: "ai-wrong",
-                question: "Asystent się pomylił. Co zrobić?",
-                answer: "Przytrzymaj odpowiedź i wybierz „Zgłoś odpowiedź” albo napisz na support@scoffie.app z datą i treścią. Asystent to program oparty na modelu językowym — może się mylić i nie zastępuje dietetyka ani lekarza."
-            )
-        ]),
-
-        FAQSection(id: "notifications", title: "Powiadomienia", items: [
-            FAQItem(
-                id: "notif-missing",
-                question: "Dlaczego nie dostaję powiadomień?",
-                answer: "Sprawdź dwie rzeczy: (1) główny przełącznik w Ustawienia → Powiadomienia w aplikacji, (2) uprawnienia w Ustawieniach iOS → Scoffie → Powiadomienia."
-            ),
-            FAQItem(
-                id: "notif-when",
-                question: "Kiedy wysyłane są przypomnienia?",
-                answer: "Doba ma trzy stałe miejsca i w każdym mieści się najwyżej jedno powiadomienie. Rano — przegląd dnia. Po południu — przekąska, jeśli jest w planie. Wieczorem jedno z czterech: niedokończone odhaczanie, zakupy przed jutrzejszym gotowaniem, jutro bez planu albo seria domkniętych dni. Do tego przypomnienia przy samych posiłkach: o gotowaniu tyle wcześniej, ile zajmuje danie, a przy daniach bez gotowania — o samej porze. Plan tygodniowy i lista zakupów odzywają się wtedy, gdy domownik skończy wprowadzać zmiany."
-            )
-        ]),
-
-        FAQSection(id: "other", title: "Pozostałe", items: [
-            FAQItem(
-                id: "other-slow",
-                question: "Aplikacja działa wolno",
-                answer: "Spróbuj wymusić jej zamknięcie (przeciągnięcie w górę w przeglądzie aplikacji) i otworzyć ponownie. Twoje dane są bezpiecznie zapisane na serwerze, więc nic nie zginie."
-            ),
-            FAQItem(
-                id: "other-idea",
-                question: "Mam pomysł na nową funkcję",
-                answer: "Świetnie! Napisz na support@scoffie.app — czytamy każdą wiadomość i wiele funkcji w aplikacji powstało właśnie z sugestii użytkowników."
-            ),
-            FAQItem(
-                id: "other-bug",
-                question: "Znalazłem błąd. Gdzie zgłosić?",
-                answer: "Wyślij krótki opis na support@scoffie.app — najlepiej z screenem i nazwą urządzenia. Postaramy się odpowiedzieć i naprawić problem jak najszybciej."
-            )
-        ])
-    ]
+    /// Strona wsparcia — scoffie-web `src/pages/support/index.astro`
+    /// (w menu strony „Pomoc”, `/support/`).
+    private static let supportPageURL = URL(string: "https://scoffie.app/support/")!
 
     private var hasHousehold: Bool {
         !persistedHouseholdName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -315,6 +165,20 @@ struct SettingsView: View {
         let count = householdMembers.count
         if count == 0 { return "—" }
         return "\(count) \(membersLabel(for: count))"
+    }
+
+    /// Wartość przy „Powiadomieniach” — PRAWDZIWY stan, a nie sam przełącznik
+    /// w aplikacji: bez zgody systemu (odmowa albo jeszcze nie pytaliśmy)
+    /// żadne powiadomienie nie wyjdzie, choćby przełącznik stał na „Włączone”.
+    /// Pusto, dopóki system nie odpowiedział — lepiej nic niż zgadywanie.
+    private var notificationsRowValue: String? {
+        guard let notificationPermission else { return nil }
+        switch notificationPermission {
+        case .notAsked, .denied:
+            return "Wyłączone"
+        case .allowed:
+            return notificationsEnabled ? "Włączone" : "Wyciszone"
+        }
     }
 
     /// Inline value next to "Wygląd" — uses the localized title from
@@ -540,13 +404,20 @@ struct SettingsView: View {
                 createHouseholdSheet
                     .dashboardLiquidSheet()
             }
-            .sheet(isPresented: $showHouseholdSheet) {
+            .sheet(isPresented: $showHouseholdSheet, onDismiss: {
+                guard opensCreateAfterHousehold else { return }
+                opensCreateAfterHousehold = false
+                showCreateHouseholdSheet = true
+            }) {
                 householdManagementSheet
                     .dashboardLiquidSheet()
             }
             .sheet(isPresented: $showNotificationsSheet) {
                 notificationsSheet
                     .dashboardLiquidSheet()
+                    // Zgoda mogła się zmienić w Ustawieniach iOS, zanim ktoś
+                    // tu wszedł — arkusz pokazuje stan z tej chwili.
+                    .task { await refreshNotificationPermission() }
                     // Przełączniki muszą dojechać na serwer, bo to on decyduje
                     // o wysłaniu pusha. Trzymane tylko lokalnie wyciszały
                     // wyłącznie powiadomienia rysowane przez aplikację.
@@ -569,6 +440,15 @@ struct SettingsView: View {
                     }
             }
             .task {
+                await refreshNotificationPermission()
+            }
+            // Powrót z Ustawień iOS („Otwórz ustawienia”) — wiersz i arkusz
+            // mają od razu mówić to, co użytkownik właśnie przestawił.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { await refreshNotificationPermission() }
+            }
+            .task {
                 planAccess = sessionStore.agentStore?.usage
                 if let refreshed = await sessionStore.agentStore?.loadUsage() {
                     planAccess = refreshed
@@ -588,7 +468,12 @@ struct SettingsView: View {
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
             }
-            .sheet(isPresented: $showDietSheet) {
+            .sheet(isPresented: $showDietSheet, onDismiss: {
+                // Arkusz zamknięty z wepchniętym ekranem — następne otwarcie
+                // ma zacząć od diety, nie od alergenów czy „Twoich danych”.
+                showsAllergenPicker = false
+                showsProfileFromDiet = false
+            }) {
                 dietSheet
                     .dashboardLiquidSheet()
             }
@@ -599,9 +484,18 @@ struct SettingsView: View {
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
             }
-            .sheet(isPresented: $showHelpSheet) {
-                helpSheet
-                    .dashboardLiquidSheet()
+            // Pomoc to strona wsparcia na scoffie.app (te same „Najczęstsze
+            // sprawy”, kontakt, zgłaszanie błędów i RODO) w Safari W APLIKACJI,
+            // w jednym arkuszu: zostaje się w Ustawieniach, „Zamknij” wraca na
+            // listę, a odnośniki „mailto:” otwierają Pocztę. Dawny arkusz
+            // z 28 pytaniami wpisanymi w kod starzał się szybciej niż aplikacja
+            // (planowanie przez Kalendarz, „nie da się dopisać produktów”,
+            // logowanie przez Google) — strona zmienia się bez wydania.
+            .sheet(isPresented: $showSupportPage) {
+                SCSafariView(url: Self.supportPageURL) {
+                    showSupportPage = false
+                }
+                .ignoresSafeArea()
             }
             .sheet(isPresented: $showCookidooSheet) {
                 CookidooIntegrationSheet {
@@ -705,6 +599,7 @@ struct SettingsView: View {
                     icon: "bell.fill",
                     iconColor: SettingsAccent.coral,
                     title: "Powiadomienia",
+                    value: notificationsRowValue,
                     action: { showNotificationsSheet = true }
                 )
 
@@ -797,14 +692,18 @@ struct SettingsView: View {
                     icon: "book.fill",
                     iconColor: SCPalette.terracotta,
                     title: "Pomoc i FAQ",
-                    action: { showHelpSheet = true }
+                    action: { showSupportPage = true }
                 )
 
+                // Strona recenzji w App Store, nie `requestReview()`: systemowa
+                // prośba o ocenę ma limit (najwyżej 3 razy w roku) i po jego
+                // wyczerpaniu stuknięcie nie robiło NIC. Wiersz to jawna prośba
+                // użytkownika, więc dostaje pewną drogę.
                 EditorialSettingsRow(
                     icon: "heart.fill",
                     iconColor: SettingsAccent.coral,
                     title: "Oceń aplikację",
-                    action: { requestReview() }
+                    action: openWriteReview
                 )
 
                 // Jedno wejście do dokumentów i eksportu danych — polityka
@@ -979,14 +878,15 @@ struct SettingsView: View {
                     notificationsHeroCard
 
                     notificationChannelsCard
-                        .opacity(notificationsEnabled ? 1 : 0.55)
-                        .animation(.smooth(duration: 0.2), value: notificationsEnabled)
+                        .opacity(notificationChannelsActive ? 1 : 0.55)
+                        .animation(.smooth(duration: 0.2), value: notificationChannelsActive)
 
                     // Bez podpisu przy włączonych powiadomieniach — zachowanie
                     // gospodarstwa i ciszy nocnej (22–7) jest wbudowane i nie
                     // wymaga tłumaczenia na ekranie. Zostaje tylko wyjaśnienie
                     // przygaszonej karty, gdy główny przełącznik jest wyłączony.
-                    if !notificationsEnabled {
+                    // Bez zgody systemu przygaszenie tłumaczy karta wyżej.
+                    if systemAllowsNotifications && !notificationsEnabled {
                         Text("Wszystkie powiadomienia są wyciszone. Włącz główny przełącznik, aby zarządzać typami przypomnień.")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Color.scMuted(scheme))
@@ -1003,48 +903,110 @@ struct SettingsView: View {
         }
     }
 
+    /// Czy system wyświetli powiadomienia. Zanim odpowie (`nil`), arkusz
+    /// stoi w układzie „zgoda jest” — tak jest u większości i nic nie mignie.
+    private var systemAllowsNotifications: Bool {
+        notificationPermission == nil || notificationPermission == .allowed
+    }
+
+    /// Przełączniki kanałów coś zmieniają tylko przy zgodzie systemu
+    /// i włączonym głównym przełączniku — inaczej stoją przygaszone.
+    private var notificationChannelsActive: Bool {
+        systemAllowsNotifications && notificationsEnabled
+    }
+
+    private var notificationsHeroTitle: String {
+        switch notificationPermission {
+        case .denied?:
+            return "Wyłączone w ustawieniach iOS"
+        case .notAsked?:
+            return "Wyłączone"
+        case .allowed?, nil:
+            return notificationsEnabled ? "Włączone" : "Wyciszone"
+        }
+    }
+
+    private var notificationsHeroSubtitle: String {
+        switch notificationPermission {
+        case .denied?:
+            return "Scoffie nie może teraz wysyłać powiadomień. Włączysz je w ustawieniach iOS."
+        case .notAsked?:
+            return "Zmiany planu i zakupów u domowników, pora gotowania i przegląd dnia."
+        case .allowed?, nil:
+            return "Główny przełącznik dla wszystkich przypomnień aplikacji."
+        }
+    }
+
     private var notificationsHeroCard: some View {
-        HStack(alignment: .center, spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                SettingsAccent.coral.opacity(scheme == .dark ? 0.28 : 0.20),
-                                SettingsAccent.coral.opacity(scheme == .dark ? 0.10 : 0.06)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+        let bellIsOn = systemAllowsNotifications && notificationsEnabled
+
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    SettingsAccent.coral.opacity(scheme == .dark ? 0.28 : 0.20),
+                                    SettingsAccent.coral.opacity(scheme == .dark ? 0.10 : 0.06)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                Image(systemName: notificationsEnabled ? "bell.fill" : "bell.slash.fill")
-                    .font(.system(size: 28, weight: .heavy))
-                    .foregroundStyle(SettingsAccent.coral)
-                    .contentTransition(.symbolEffect(.replace))
+                    Image(systemName: bellIsOn ? "bell.fill" : "bell.slash.fill")
+                        .font(.system(size: 28, weight: .heavy))
+                        .foregroundStyle(SettingsAccent.coral)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .frame(width: 64, height: 64)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(notificationsHeroTitle)
+                        .font(.system(size: 17, weight: .heavy))
+                        .tracking(-0.3)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                        .id(notificationsHeroTitle)
+
+                    Text(notificationsHeroSubtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                // Główny przełącznik tylko przy zgodzie systemu — bez niej
+                // nic by nie przełączał. Systemowy `Toggle` w naturalnym
+                // rozmiarze (wcześniej zmniejszany `scaleEffect`).
+                if systemAllowsNotifications {
+                    Toggle("Powiadomienia", isOn: $notificationsEnabled)
+                        .labelsHidden()
+                        .tint(SCPalette.sage)
+                        .fixedSize()
+                }
             }
-            .frame(width: 64, height: 64)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(notificationsEnabled ? "Włączone" : "Wyciszone")
-                    .font(.system(size: 17, weight: .heavy))
-                    .tracking(-0.3)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .contentTransition(.opacity)
-                    .id(notificationsEnabled)
-
-                Text("Główny przełącznik dla wszystkich przypomnień aplikacji.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+            switch notificationPermission {
+            case .notAsked?:
+                editorialPrimaryButton(
+                    title: "Włącz powiadomienia",
+                    icon: "bell.badge.fill",
+                    isEnabled: !isRequestingNotifications,
+                    action: requestNotificationPermission
+                )
+            case .denied?:
+                editorialPrimaryButton(
+                    title: "Otwórz ustawienia",
+                    icon: "gearshape.fill",
+                    isEnabled: true,
+                    action: openSystemNotificationSettings
+                )
+            case .allowed?, nil:
+                EmptyView()
             }
-
-            Spacer(minLength: 0)
-
-            Toggle("", isOn: $notificationsEnabled)
-                .labelsHidden()
-                .tint(SCPalette.sage)
-                .scaleEffect(0.95)
-                .fixedSize()
         }
         .padding(18)
         .background(
@@ -1055,6 +1017,7 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(Color.scTileStroke(scheme), lineWidth: 1)
         )
+        .animation(.smooth(duration: 0.22), value: notificationPermission)
     }
 
     /// Zmiana któregokolwiek przełącznika powiadomień. Steruje `task(id:)`,
@@ -1144,7 +1107,7 @@ struct SettingsView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .disabled(!notificationsEnabled)
+        .disabled(!notificationChannelsActive)
     }
 
     private func channelToggleRow(
@@ -1170,10 +1133,9 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Toggle("", isOn: isOn)
+            Toggle(title, isOn: isOn)
                 .labelsHidden()
                 .tint(SCPalette.sage)
-                .scaleEffect(0.85)
                 .fixedSize()
         }
         .padding(.horizontal, 16)
@@ -1365,34 +1327,58 @@ struct SettingsView: View {
     // Both selections persist to `@AppStorage` instantly — the xmark
     // button is the only way out, no save / cancel needed.
     private var dietSheet: some View {
-        pinnedEditorialSheet {
-            EditorialSheetHeader(
-                eyebrow: "Personalizacja",
-                title: "Dieta i alergeny",
-                icon: "leaf.fill",
-                accent: SCPalette.sage
-            ) {
-                showDietSheet = false
-            }
-        } content: {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
-                    .font(.system(size: 13.5, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+        // Własny stos nawigacji: wybór alergenów i „Twoje dane” wjeżdżają jako
+        // kolejne ekrany TEGO arkusza, nie arkusze na nim. Pierwszy ekran
+        // zostaje przy swoim nagłówku (pasek systemu schowany).
+        NavigationStack {
+            pinnedEditorialSheet {
+                EditorialSheetHeader(
+                    eyebrow: "Personalizacja",
+                    title: "Dieta i alergeny",
+                    icon: "leaf.fill",
+                    accent: SCPalette.sage
+                ) {
+                    showDietSheet = false
+                }
+            } content: {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
+                        .font(.system(size: 13.5, weight: .regular))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
 
-                calorieGoalSection
-                macroSection
-                goalPickerSection
-                dietPickerSection
-                allergensSection
+                    calorieGoalSection
+                    macroSection
+                    goalPickerSection
+                    dietPickerSection
+                    allergensSection
 
-                if hasCustomisedPreferences {
-                    resetPreferencesButton
-                        .padding(.top, 4)
+                    if hasCustomisedPreferences {
+                        resetPreferencesButton
+                            .padding(.top, 4)
+                    }
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showsAllergenPicker) {
+                AllergenPickerSheet(
+                    selected: selectedAllergens,
+                    hiddenRecipes: allergenHiddenRecipes,
+                    onToggle: { toggleAllergen($0) },
+                    onClear: { clearAllergens() },
+                    isPushed: true
+                )
+            }
+            .navigationDestination(isPresented: $showsProfileFromDiet) {
+                // Usunięcie konta stamtąd zamyka cały arkusz.
+                ProfileDetailsSheet(onClose: { showDietSheet = false }, isPushed: true)
+            }
         }
+        // Alert, zapis i jego licznik na STOSIE, nie na pierwszym ekranie:
+        // ekran przykryty wepchniętym znika z widoku (`onDisappear`), a `task`
+        // związany z nim anulowałby się razem z nim — zmiana alergenów na
+        // ekranie wyboru nie doszłaby wtedy na serwer.
+        //
         // Na arkuszu diety, a nie na ekranie Ustawień — alert podpięty pod
         // widok przykryty arkuszem się nie pokaże.
         .alert("Wyczyścić preferencje?", isPresented: $showResetPreferencesAlert) {
@@ -1556,11 +1542,19 @@ struct SettingsView: View {
                 .foregroundStyle(SCPalette.butter)
                 .frame(width: 22)
 
-            Text(calorieSuggestionText)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.scMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(calorieSuggestionText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Odsyłacz do sylwetki prowadzi TAM, w tym samym arkuszu —
+                // zamiast kazać zamknąć dietę i szukać karty profilu.
+                if bodyMetrics == nil {
+                    openProfileFromDietLink
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
                 withAnimation(.smooth(duration: 0.22)) {
@@ -1683,11 +1677,16 @@ struct SettingsView: View {
                         .frame(height: 1)
                     macroFooter(macros)
                 } else {
-                    Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(16)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        openProfileFromDietLink
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
                 }
             }
             .background(
@@ -1700,6 +1699,26 @@ struct SettingsView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
+    }
+
+    /// „Twoje dane ›” — odsyłacz z arkusza diety do sylwetki. Wpycha ekran
+    /// „Twoje dane” w ten arkusz (`showsProfileFromDiet`); „wstecz” wraca do
+    /// diety z policzonymi już kaloriami i makro.
+    private var openProfileFromDietLink: some View {
+        Button {
+            showsProfileFromDiet = true
+        } label: {
+            HStack(spacing: 3) {
+                Text("Twoje dane")
+                    .font(.system(size: 13, weight: .semibold))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(SCPalette.terracotta)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.96))
+        .accessibilityHint("Otwiera wzrost, wagę i rok urodzenia")
     }
 
     private var macroDivider: some View {
@@ -1928,8 +1947,8 @@ struct SettingsView: View {
     }
 
     /// Alergeny w arkuszu diety to sam wynik — co jest wykluczone i ile
-    /// przepisów przez to znika. Wybór ma własny arkusz
-    /// (`AllergenPickerSheet`), patrz opis w `AllergenPickerSheet.swift`.
+    /// przepisów przez to znika. Wybór (`AllergenPickerSheet(isPushed:)`)
+    /// wjeżdża jako kolejny ekran tego arkusza, patrz `dietSheet`.
     private var allergensSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Alergeny i nietolerancje")
@@ -1938,7 +1957,8 @@ struct SettingsView: View {
                 selected: selectedAllergens,
                 hiddenRecipes: allergenHiddenRecipes,
                 onToggle: { toggleAllergen($0) },
-                onClear: { clearAllergens() }
+                onClear: { clearAllergens() },
+                onEdit: { showsAllergenPicker = true }
             )
         }
     }
@@ -1973,167 +1993,6 @@ struct SettingsView: View {
             goalRaw = UserGoal.healthy.rawValue
             resetMacroOverrides()
         }
-    }
-
-    private var helpSheet: some View {
-        pinnedEditorialSheet {
-            EditorialSheetHeader(
-                eyebrow: "Wsparcie",
-                title: "Pomoc i FAQ",
-                icon: "book.fill"
-            ) {
-                showHelpSheet = false
-                expandedFAQ = nil
-            }
-        } content: {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Najczęściej zadawane pytania o planowanie posiłków, listę zakupów i wspólne gospodarstwo. Nie znalazłeś odpowiedzi? Napisz do nas.")
-                    .font(.system(size: 13.5, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ForEach(Self.faqSections) { section in
-                    faqSectionCard(section)
-                }
-
-                contactCard
-                    .padding(.top, 4)
-            }
-        }
-    }
-
-    private func faqSectionCard(_ section: FAQSection) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: section.title)
-
-            VStack(spacing: 0) {
-                ForEach(Array(section.items.enumerated()), id: \.element.id) { idx, item in
-                    faqRow(item, isLast: idx == section.items.count - 1)
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-    }
-
-    private func faqRow(_ item: FAQItem, isLast: Bool) -> some View {
-        let isExpanded = expandedFAQ == item.id
-
-        return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.smooth(duration: 0.28)) {
-                    expandedFAQ = isExpanded ? nil : item.id
-                }
-            } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    Text(item.question)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(
-                            isExpanded
-                                ? SCPalette.terracotta
-                                : Color.scFaint(scheme)
-                        )
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        .frame(width: 22, height: 22)
-                        .background(
-                            Circle().fill(
-                                isExpanded
-                                    ? SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)
-                                    : Color.scChipBg(scheme)
-                            )
-                        )
-                        .padding(.top, 1)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(item.question)
-            .accessibilityHint(isExpanded ? "Stuknij, aby zwinąć odpowiedź" : "Stuknij, aby pokazać odpowiedź")
-
-            if isExpanded {
-                Text(item.answer)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .top)),
-                        removal: .opacity
-                    ))
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 16)
-            }
-        }
-    }
-
-    private var contactCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "envelope.fill", color: SCPalette.terracotta, size: 44, radius: 12)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Nadal masz pytanie?")
-                        .font(.system(size: 16, weight: .heavy))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                    Text("Czytamy każdą wiadomość. Odpowiadamy zwykle w ciągu kilku dni.")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            if let url = URL(string: "mailto:support@scoffie.app?subject=Scoffie%20—%20Pytanie") {
-                Link(destination: url) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 12.5, weight: .heavy))
-                        Text("Napisz do nas")
-                            .font(.system(size: 14, weight: .bold))
-                            .tracking(-0.1)
-                    }
-                    .foregroundStyle(SCPalette.terracotta)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .scSoftCapsule()
-                }
-                .accessibilityLabel("Napisz do nas — support@scoffie.app")
-            }
-        }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
     }
 
     /// Treść arkusza gospodarstwa — domownicy, a bez domu karta zakładania.
@@ -2178,7 +2037,7 @@ struct SettingsView: View {
     }
 
     /// Arkusz z nagłówkiem przypiętym NAD przewijaną treścią — dla arkuszy
-    /// dłuższych niż ekran (dieta, pomoc, gospodarstwo). Nagłówek wewnątrz
+    /// dłuższych niż ekran (dieta, gospodarstwo). Nagłówek wewnątrz
     /// `ScrollView` odjeżdżał razem z krzyżykiem; tu stoi, a treść gaśnie pod
     /// nim (`scScrollEdgeFade`), bez kreski — jak w szczegółach posiłku
     /// i w filtrach przepisów.
@@ -2473,10 +2332,12 @@ struct SettingsView: View {
         }
 
         if let invitationLink {
-            ShareLink(
-                item: invitationLink,
-                message: Text("Dołącz do naszego domu w Scoffie — wspólny plan posiłków i lista zakupów.")
-            ) {
+            // Systemowy arkusz udostępniania przez `SCShareSheet`, nie
+            // `ShareLink`: tylko on mówi, że link naprawdę wyszedł
+            // (`completed`) — a dopiero wtedy pytamy o zgodę na powiadomienia.
+            Button {
+                shareInvitation(invitationLink)
+            } label: {
                 label
             }
             .buttonStyle(PlanPressStyle(scale: 0.98))
@@ -2491,6 +2352,30 @@ struct SettingsView: View {
             .buttonStyle(PlanPressStyle(scale: 0.98))
             .disabled(isCreatingInvitation)
             .accessibilityLabel("Przygotuj zaproszenie")
+        }
+    }
+
+    /// Link zaproszenia do systemowego arkusza udostępniania. Po WYSŁANIU
+    /// (nie po samym otwarciu arkusza) prosimy o zgodę na powiadomienia,
+    /// jeśli system jeszcze nie pytał: zaproszony domownik będzie zmieniał
+    /// plan i listę, a o tym właśnie mówią powiadomienia. To jest pierwsze
+    /// miejsce, w którym prośba ma oczywisty powód — przy starcie aplikacji
+    /// nie miała żadnego.
+    private func shareInvitation(_ link: URL) {
+        SCShareSheet.present(
+            url: link,
+            title: "Zaproszenie do domu w Scoffie",
+            image: nil,
+            message: "Dołącz do naszego domu w Scoffie — wspólny plan posiłków i lista zakupów."
+        ) {
+            Task { @MainActor in
+                guard notificationPermission != .allowed,
+                      await NotificationPermission.current() == .notAsked else { return }
+                // Arkusz udostępniania jeszcze zjeżdża — systemowe okno zgody
+                // wchodzi po nim, a nie w trakcie.
+                try? await Task.sleep(for: .milliseconds(450))
+                await askForNotificationPermission()
+            }
         }
     }
 
@@ -2639,8 +2524,13 @@ struct SettingsView: View {
                 icon: "house.badge.plus",
                 isEnabled: true
             ) {
+                // Karta stoi W arkuszu gospodarstwa (dom zniknął, gdy był
+                // otwarty) — arkusz tworzenia zastępuje go zamiast wjeżdżać
+                // na niego; dwa arkusze z jednego ekranu SwiftUI i tak by nie
+                // pokazał.
                 createHouseholdName = ""
-                showCreateHouseholdSheet = true
+                opensCreateAfterHousehold = true
+                showHouseholdSheet = false
             }
         }
         .padding(18)
@@ -2795,6 +2685,55 @@ struct SettingsView: View {
 
     // MARK: - Actions / helpers
 
+    /// Stan zgody z systemu. Gdy zgoda właśnie się POJAWIŁA (prośba albo
+    /// Ustawienia iOS), przypomnienia o posiłkach układają się od nowa —
+    /// rozkład planowany bez zgody nie miałby kiedy wyjść.
+    @MainActor
+    private func refreshNotificationPermission() async {
+        let previous = notificationPermission
+        let current = await NotificationPermission.current()
+        notificationPermission = current
+        if current == .allowed, let previous, previous != .allowed {
+            sessionStore.rescheduleMealReminders()
+        }
+    }
+
+    /// „Włącz powiadomienia” — systemowa prośba, tylko gdy jeszcze nie pytaliśmy.
+    private func requestNotificationPermission() {
+        guard !isRequestingNotifications else { return }
+        isRequestingNotifications = true
+        Task { @MainActor in
+            await askForNotificationPermission()
+            isRequestingNotifications = false
+        }
+    }
+
+    @MainActor
+    private func askForNotificationPermission() async {
+        let previous = notificationPermission
+        let result = await NotificationPermission.requestIfNotAsked()
+        notificationPermission = result
+        if result == .allowed, previous != .allowed {
+            sessionStore.rescheduleMealReminders()
+        }
+    }
+
+    /// Formularz recenzji Scoffie w App Store. Id aplikacji z jednego miejsca
+    /// (`SCAppUpdateGate.defaultStoreURL`), z `?action=write-review`.
+    private func openWriteReview() {
+        var components = URLComponents(url: SCAppUpdateGate.defaultStoreURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "action", value: "write-review")]
+        guard let url = components?.url else { return }
+        openURL(url)
+    }
+
+    /// Po odmowie system nie zapyta drugi raz — zostają Ustawienia iOS,
+    /// prosto na stronę powiadomień Scoffie.
+    private func openSystemNotificationSettings() {
+        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
+        openURL(url)
+    }
+
     @MainActor
     private func removeMember(_ member: HouseholdMemberSnapshot) async {
         removingMemberId = member.id
@@ -2895,20 +2834,6 @@ struct SettingsView: View {
             invitationLink = nil
         }
     }
-}
-
-// Static FAQ data model — lives at file scope so the `static let` lookup
-// table on `SettingsView` can reference it without ordering headaches.
-fileprivate struct FAQSection: Identifiable {
-    let id: String
-    let title: String
-    let items: [FAQItem]
-}
-
-fileprivate struct FAQItem: Identifiable, Equatable {
-    let id: String
-    let question: String
-    let answer: String
 }
 
 // Bell + heart rows in the design use `oklch(0.70 0.14 22)` — a warm coral
