@@ -901,7 +901,7 @@ private struct SCToastPreviewStage: View {
                     center.info("Lista zamknięta")
                 }
                 SCSoftButton(title: "Uwaga", trailingIcon: nil, accent: SCPalette.butter) {
-                    center.warning("Cookidoo prosi o ponowne logowanie")
+                    center.warning("Lista zakupów zmieniła się w tle")
                 }
                 SCSoftButton(title: "Błąd", trailingIcon: nil, accent: SCPalette.terracottaDeep) {
                     center.error("Nie udało się zapisać", "Spróbuj ponownie za chwilę.")

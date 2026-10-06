@@ -54,9 +54,9 @@ struct AuthFooterView: View {
 /// (`src/common/legal-documents.ts`) — wersja z przyszłości jest odrzucana,
 /// a starsza niż minimalna nie otwiera bramki asystenta.
 enum LegalDocMeta {
-    static let version = "1.2"
-    static let effectiveDate = "2 października 2026"
-    static let documentVersionISO = "2026-10-02"
+    static let version = "1.3"
+    static let effectiveDate = "6 października 2026"
+    static let documentVersionISO = "2026-10-06"
     static let contactEmail = "support@scoffie.app"
 }
 
@@ -235,7 +235,7 @@ private struct LegalBullet: View {
 
 // MARK: - Polityka prywatności
 //
-// Treść 1:1 ze strony (scoffie-web `src/pages/privacy`, wersja 1.2, 2 października 2026).
+// Treść 1:1 ze strony (scoffie-web `src/pages/privacy`, wersja 1.3, 6 października 2026).
 // Zmiana tutaj = zmiana na stronie, potem Android (`scripts/gen-legal-content.py`).
 // Istotna zmiana (nowy odbiorca, nowy cel) = też podbicie wersji tu
 // (`LegalDocMeta`) i w `src/common/legal-documents.ts` na serwerze — inaczej nikt
@@ -277,8 +277,6 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("dane o użyciu: liczba wiadomości i zapisanych planów, zużyte tokeny i koszt każdej odpowiedzi (do rozliczeń i limitów).")
                 LegalParagraph("Zdrowie (Apple Health / HealthKit), jeśli użytkownik włączy tę integrację:").fontWeight(.medium)
                 LegalBullet("dzienna liczba kroków z ostatnich 14 dni oraz cel kroków.")
-                LegalParagraph("Cookidoo (Thermomix), jeśli użytkownik połączy konto:").fontWeight(.medium)
-                LegalBullet("adres e-mail i hasło do konta Cookidoo użytkownika, przechowywane w postaci zaszyfrowanej (patrz sekcja 8).")
                 LegalParagraph("Techniczne:").fontWeight(.medium)
                 LegalBullet("token urządzenia do powiadomień push (za zgodą na powiadomienia),")
                 LegalBullet("logi żądań: identyfikator użytkownika, adres IP, wersja aplikacji, czas i status żądania — bez treści wiadomości do asystenta,")
@@ -299,7 +297,6 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("wyliczanie zapotrzebowania i personalizacja propozycji na podstawie profilu i preferencji — wykonanie umowy, art. 6 ust. 1 lit. b RODO,")
                 LegalBullet("dieta i alergeny (dane dotyczące zdrowia): przetwarzanie w Aplikacji — na podstawie wyraźnej zgody użytkownika wyrażonej przy ich podaniu (art. 9 ust. 2 lit. a RODO); przekazanie ich do asystenta AI — na podstawie odrębnej, wyraźnej zgody każdej osoby, której dotyczą (sekcja 6),")
                 LegalBullet("dane ze Zdrowia (kroki) — zgoda udzielona w systemie iOS przy włączaniu integracji (art. 9 ust. 2 lit. a RODO),")
-                LegalBullet("poświadczenia Cookidoo — zgoda wyrażona przy łączeniu konta (art. 6 ust. 1 lit. a RODO),")
                 LegalBullet("bezpieczeństwo, wykrywanie nadużyć, limity użycia i ochrona sesji — prawnie uzasadniony interes, art. 6 ust. 1 lit. f RODO,")
                 LegalBullet("wiadomości e-mail o koncie (sekcja 2) — wykonanie umowy, art. 6 ust. 1 lit. b RODO; bez marketingu i newsletterów,")
                 LegalBullet("lista adresów, na które wiadomość się odbiła albo które zgłosiły ją jako spam — prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO): nie wysyłamy tam ponownie,")
@@ -335,8 +332,8 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("te same dane pozostałych domowników — wyłącznie tych, którzy sami wyrazili zgodę na asystenta; ograniczenia pozostałych (alergeny) egzekwuje serwer przy zapisie planu bez przekazywania ich danych,")
                 LegalBullet("nazwa gospodarstwa, aktualny plan tygodnia i notatki pamięci,")
                 LegalBullet("wspólny katalog przepisów.")
-                LegalParagraph("Nie jest wysyłane: wzrost, waga, płeć, rok urodzenia, kroki ze Zdrowia, adres e-mail, poświadczenia Cookidoo.")
-                LegalParagraph("Podstawa: odrębna, wyraźna zgoda każdej osoby, której dane są przekazywane (art. 9 ust. 2 lit. a RODO), wyrażana przed pierwszą wiadomością i możliwa do cofnięcia w menu asystenta. Po cofnięciu asystent przestaje dla tej osoby działać, a jej dane nie są już wysyłane; zapisane rozmowy pozostają do czasu usunięcia przez użytkownika lub upływu okresu z sekcji 10.")
+                LegalParagraph("Nie jest wysyłane: wzrost, waga, płeć, rok urodzenia, kroki ze Zdrowia, adres e-mail.")
+                LegalParagraph("Podstawa: odrębna, wyraźna zgoda każdej osoby, której dane są przekazywane (art. 9 ust. 2 lit. a RODO), wyrażana przed pierwszą wiadomością i możliwa do cofnięcia w menu asystenta. Po cofnięciu asystent przestaje dla tej osoby działać, a jej dane nie są już wysyłane; zapisane rozmowy pozostają do czasu usunięcia przez użytkownika lub upływu okresu z sekcji 9.")
                 LegalParagraph("Przekazanie poza EOG: Anthropic przetwarza dane w Stanach Zjednoczonych. Przekazanie odbywa się na podstawie umowy powierzenia zawierającej standardowe klauzule umowne przyjęte przez Komisję Europejską (art. 46 ust. 2 lit. c RODO). Zgodnie z warunkami usługi API Anthropic nie wykorzystuje przekazywanych danych do trenowania swoich modeli.")
                 LegalParagraph("Limity i rozliczenia: liczba wiadomości i zapisanych planów jest liczona na gospodarstwo w okresie rozliczeniowym subskrypcji; koszt każdej odpowiedzi jest zapisywany do rozliczeń i pozostaje po usunięciu rozmowy (bez jej treści).")
             }
@@ -349,14 +346,7 @@ struct PrivacyPolicyContent: View {
             }
         }
 
-        LegalSection(number: 8, title: "Integracja z Cookidoo (opcjonalna)", icon: "app.connected.to.app.below.fill") {
-            VStack(alignment: .leading, spacing: 6) {
-                LegalParagraph("Funkcja „Gotuj w Thermomixie” pozwala wysłać wybrany przepis do kalendarza „Mój tydzień” w Cookidoo. Wymaga podania adresu e-mail i hasła do konta Cookidoo, które są przechowywane na serwerze Administratora w postaci zaszyfrowanej (AES-256-GCM) i używane wyłącznie do logowania do Cookidoo w imieniu użytkownika. Hasło nigdy nie jest pokazywane ani przekazywane innym domownikom; pozostali domownicy mogą korzystać z połączonego konta i widzą jego adres e-mail.")
-                LegalParagraph("Integracja korzysta z nieoficjalnego interfejsu Cookidoo i może przestać działać bez uprzedzenia. Cookidoo i Thermomix są znakami towarowymi Vorwerk; Administrator nie jest powiązany z Vorwerk. Połączenie można rozłączyć w Ustawieniach — poświadczenia są wtedy natychmiast usuwane; są też usuwane, gdy osoba, która je podała, opuści gospodarstwo lub usunie konto. Administrator może czasowo wyłączyć integrację.")
-            }
-        }
-
-        LegalSection(number: 9, title: "Odbiorcy danych", icon: "building.2.fill") {
+        LegalSection(number: 8, title: "Odbiorcy danych", icon: "building.2.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalBullet("Railway Corp. — hosting serwera i bazy danych oraz wykonanie nocnej kopii zapasowej bazy (infrastruktura Aplikacji),")
                 LegalBullet("Cloudflare, Inc. — przechowywanie i serwowanie zdjęć przepisów z katalogu oraz przechowywanie zaszyfrowanych kopii zapasowych bazy danych (kopie zawierają dane osobowe; przechowywane 30 dni),")
@@ -364,14 +354,13 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("Functional Software, Inc. (Sentry) — diagnostyka aplikacji i serwera: awarie i błędy, czasy działania, ostrzeżenia z logów serwera; identyfikator żądania, kod i ścieżka błędu, wersja, identyfikator użytkownika; bez treści wiadomości, danych profilu, zrzutów ekranu i adresu IP; serwery w Unii Europejskiej,")
                 LegalBullet("Apple Inc. — Sign in with Apple, powiadomienia push, App Store,")
                 LegalBullet("Anthropic, PBC — model językowy asystenta AI, w zakresie z sekcji 6, wyłącznie dla osób, które wyraziły zgodę,")
-                LegalBullet("Vorwerk (Cookidoo) — wyłącznie jeśli użytkownik połączy konto Cookidoo, w zakresie z sekcji 8,")
                 LegalBullet("członkowie gospodarstwa domowego użytkownika, w zakresie z sekcji 5,")
                 LegalBullet("osoby, którym użytkownik przekazał link do przepisu, i komunikatory, którymi go wysłał (karta z tytułem i zdjęciem) — w zakresie z sekcji 5,")
                 LegalBullet("podmioty uprawnione na podstawie przepisów prawa.")
             }
         }
 
-        LegalSection(number: 10, title: "Okresy przechowywania", icon: "clock.fill") {
+        LegalSection(number: 9, title: "Okresy przechowywania", icon: "clock.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalBullet("dane konta, profilu i gospodarstwa — przez czas korzystania z Aplikacji,")
                 LegalBullet("rozmowy z asystentem (wraz z propozycjami) — 90 dni od ostatniej wiadomości, potem usuwane automatycznie; wcześniej użytkownik może usunąć każdą rozmowę lub wszystkie naraz,")
@@ -379,7 +368,6 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("dane o użyciu asystenta (liczba wiadomości, tokeny, koszt) — 12 miesięcy, bez treści rozmów,")
                 LegalBullet("zgłoszenia odpowiedzi asystenta — 12 miesięcy,")
                 LegalBullet("kroki ze Zdrowia — przez czas korzystania z integracji, usuwane przy jej wyłączeniu i z kontem,")
-                LegalBullet("poświadczenia Cookidoo — do rozłączenia lub usunięcia konta,")
                 LegalBullet("historia list zakupów — przez czas korzystania z Aplikacji,")
                 LegalBullet("linki do udostępnionych przepisów — do wyłączenia linku lub usunięcia przepisu; informacja, kto utworzył link, znika z usunięciem konta; liczby udostępnień i otwarć (bez osób) — przez czas istnienia przepisu,")
                 LegalBullet("dziennik zgód — przez czas korzystania z Aplikacji, usuwany z kontem,")
@@ -391,7 +379,7 @@ struct PrivacyPolicyContent: View {
             }
         }
 
-        LegalSection(number: 11, title: "Prawa użytkownika", icon: "checkmark.shield.fill") {
+        LegalSection(number: 10, title: "Prawa użytkownika", icon: "checkmark.shield.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalParagraph("Użytkownik ma prawo do:")
                 LegalBullet("dostępu do danych i otrzymania ich kopii (Ustawienia → Informacje → Prywatność i regulamin → „Pobierz moje dane”),")
@@ -406,19 +394,19 @@ struct PrivacyPolicyContent: View {
             }
         }
 
-        LegalSection(number: 12, title: "Usunięcie konta", icon: "trash.fill") {
-            LegalParagraph("Konto można usunąć bezpośrednio w Aplikacji: Ustawienia → profil użytkownika → „Usuń konto”. Operacja usuwa konto wraz z profilem, preferencjami, rozmowami z asystentem, krokami, poświadczeniami Cookidoo, tokenami i dziennikiem zgód; unieważniane są także tokeny Sign in with Apple. Żądanie usunięcia można też przesłać e-mailem z adresu przypisanego do konta.")
+        LegalSection(number: 11, title: "Usunięcie konta", icon: "trash.fill") {
+            LegalParagraph("Konto można usunąć bezpośrednio w Aplikacji: Ustawienia → profil użytkownika → „Usuń konto”. Operacja usuwa konto wraz z profilem, preferencjami, rozmowami z asystentem, krokami, tokenami i dziennikiem zgód; unieważniane są także tokeny Sign in with Apple. Żądanie usunięcia można też przesłać e-mailem z adresu przypisanego do konta.")
         }
 
-        LegalSection(number: 13, title: "Personalizacja i zautomatyzowane decyzje", icon: "cpu.fill") {
+        LegalSection(number: 12, title: "Personalizacja i zautomatyzowane decyzje", icon: "cpu.fill") {
             LegalParagraph("Aplikacja i asystent dopasowują propozycje posiłków do podanych preferencji, celów i ograniczeń (profilowanie w rozumieniu art. 4 pkt 4 RODO). Propozycje nie wywołują wobec użytkownika skutków prawnych ani nie wpływają na niego w podobnie istotny sposób — art. 22 RODO nie ma zastosowania. Każdą propozycję użytkownik zatwierdza lub odrzuca sam.")
         }
 
-        LegalSection(number: 14, title: "Bezpieczeństwo", icon: "lock.fill") {
-            LegalParagraph("Administrator stosuje odpowiednie środki techniczne i organizacyjne: szyfrowanie transmisji (HTTPS/TLS), szyfrowanie poświadczeń Cookidoo w bazie, bezpieczne przechowywanie tokenów sesji na urządzeniu, uwierzytelnianie każdego żądania i połączenia, limity żądań oraz ograniczenie danych przekazywanych do asystenta do niezbędnego minimum.")
+        LegalSection(number: 13, title: "Bezpieczeństwo", icon: "lock.fill") {
+            LegalParagraph("Administrator stosuje odpowiednie środki techniczne i organizacyjne: szyfrowanie transmisji (HTTPS/TLS), bezpieczne przechowywanie tokenów sesji na urządzeniu, uwierzytelnianie każdego żądania i połączenia, limity żądań oraz ograniczenie danych przekazywanych do asystenta do niezbędnego minimum.")
         }
 
-        LegalSection(number: 15, title: "Zmiany polityki", icon: "arrow.triangle.2.circlepath") {
+        LegalSection(number: 14, title: "Zmiany polityki", icon: "arrow.triangle.2.circlepath") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalParagraph("Polityka może być aktualizowana w związku ze zmianami prawa lub funkcji Aplikacji. Istotne zmiany (nowy odbiorca danych, nowy cel) wymagają ponownego potwierdzenia w Aplikacji; o pozostałych informujemy w Aplikacji z wyprzedzeniem. Aktualna wersja jest publikowana na stronie scoffie.app.")
                 LegalParagraph("W razie pytań napisz na \(LegalDocMeta.contactEmail).")
@@ -429,7 +417,7 @@ struct PrivacyPolicyContent: View {
 
 // MARK: - Warunki korzystania
 //
-// Treść 1:1 ze strony (scoffie-web `src/pages/terms`, wersja 1.2 — treść jak w 1.1, numer wspólny z polityką).
+// Treść 1:1 ze strony (scoffie-web `src/pages/terms`, wersja 1.3 — bez Cookidoo, numer wspólny z polityką).
 // Ceny planów na stronie biorą się z `pricing.plans` — zmiana ceny = tu i tam.
 // Android generuje z tego pliku `LegalContent.kt` (`scripts/gen-legal-content.py`).
 
@@ -468,7 +456,7 @@ struct TermsOfServiceContent: View {
                 LegalBullet("zarządzanie preferencjami żywieniowymi (dieta, alergeny, liczba i pory posiłków),")
                 LegalBullet("przypomnienia o posiłkach oraz powiadomienia o zmianach w planie gospodarstwa,")
                 LegalBullet("asystenta AI planującego posiłki (sekcja 5),")
-                LegalBullet("opcjonalne integracje: Apple Health (kroki) i Cookidoo (sekcja 7).")
+                LegalBullet("opcjonalną integrację z Apple Health — kroki (sekcja 7).")
                 LegalParagraph("Wartości odżywcze przepisów są wyliczane automatycznie ze składników i mają charakter szacunkowy. Informacje o alergenach pochodzą z oznaczeń składników katalogu i mogą być niepełne — w przypadku alergii użytkownik zawsze weryfikuje skład samodzielnie.")
                 LegalParagraph("Propozycje posiłków oraz sugestie żywieniowe mają charakter wyłącznie informacyjny i nie zastępują porady lekarza, dietetyka ani specjalisty. Użytkownik samodzielnie ocenia, czy dany plan jest dla niego odpowiedni, w szczególności biorąc pod uwagę alergie, nietolerancje pokarmowe i indywidualny stan zdrowia.")
             }
@@ -501,7 +489,6 @@ struct TermsOfServiceContent: View {
         LegalSection(number: 7, title: "Integracje zewnętrzne", icon: "app.connected.to.app.below.fill") {
             VStack(alignment: .leading, spacing: 6) {
                 LegalParagraph("Apple Health. Za zgodą udzieloną w iOS Aplikacja odczytuje liczbę kroków. Integrację można wyłączyć w każdej chwili.")
-                LegalParagraph("Cookidoo (Thermomix). Funkcja jest opcjonalna i korzysta z nieoficjalnego interfejsu Cookidoo. Łącząc konto, użytkownik przekazuje Usługodawcy swoje dane logowania do Cookidoo (przechowywane w postaci zaszyfrowanej) i sam odpowiada za zgodność takiego użycia z regulaminem Cookidoo. Funkcja może przestać działać bez uprzedzenia lub zostać wyłączona przez Usługodawcę; nie stanowi to nienależytego wykonania umowy. Cookidoo i Thermomix są znakami towarowymi Vorwerk; Usługodawca nie jest powiązany z Vorwerk.")
             }
         }
 
