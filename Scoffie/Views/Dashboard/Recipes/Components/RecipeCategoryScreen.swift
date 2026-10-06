@@ -11,7 +11,8 @@ import SwiftUI
 // przepisów (z dopiskiem o diecie, gdy coś ukrywa), żeton „Bez dopasowania”,
 // karta filtrów i ta sama lista, co w sekcjach (`RecipeRowStack`). Na dole ten
 // sam pływający pasek szukania, co na korzeniu Przepisów — tu szuka W TEJ
-// KATEGORII, a przycisk filtrów otwiera wspólne „Filtry”. Szczegół przepisu
+// KATEGORII, a przycisk filtrów otwiera wspólne „Filtry” z sekcją tej
+// kategorii (rodzaj dania, smak, mięso). Szczegół przepisu
 // to jeden arkusz, otwierany przez korzeń (`onOpenRecipe`), jak z głównej listy.
 struct RecipeCategoryScreen: View {
     let category: RecipesCategory
@@ -69,9 +70,10 @@ struct RecipeCategoryScreen: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Grupy filtrów, które zawężają TĘ listę — plakietka na przycisku filtrów.
+    /// Grupy filtrów, które zawężają TĘ listę (filtry wszystkich przepisów
+    /// i aspekty tej kategorii) — plakietka na przycisku filtrów.
     private var activeFilterCount: Int {
-        filters.activeCount + (filters.categoryFilters[category]?.activeCount ?? 0)
+        filters.activeCount(in: category)
     }
 
     /// Czy filtry cokolwiek tu zawężają.
@@ -188,10 +190,11 @@ struct RecipeCategoryScreen: View {
 
     // MARK: - Karta filtrów
 
-    /// Co z „Filtrów” zawęża tę listę i „Wyczyść”. `nil`, gdy nic.
+    /// KAŻDY filtr, który zawęża tę listę (także rodzaj dania czy smak tej
+    /// kategorii), i „Wyczyść”, które zdejmuje je wszystkie. `nil`, gdy nic.
     private var filtersContextRow: RecipeListContextCard.Row? {
-        RecipeListContextCard.Row.filters(filters.summaryLabels) {
-            withAnimation(.smooth(duration: 0.25)) { filters.resetGlobal() }
+        RecipeListContextCard.Row.filters(filters.summaryLabels(in: category)) {
+            withAnimation(.smooth(duration: 0.25)) { filters.reset(in: category) }
         }
     }
 
@@ -201,7 +204,7 @@ struct RecipeCategoryScreen: View {
     /// przepisu do planu (`RecipeListEmptyState`).
     private func emptyState(categoryIsEmpty: Bool, fittedIsEmpty: Bool) -> some View {
         let clearFilters = RecipeListEmptyState.Action(title: "Wyczyść filtry") {
-            withAnimation(.smooth(duration: 0.25)) { filters.resetGlobal() }
+            withAnimation(.smooth(duration: 0.25)) { filters.reset(in: category) }
         }
 
         if categoryIsEmpty {

@@ -65,6 +65,11 @@ struct RecipesView: View {
     /// wyników nie miała pod sobą pustego przewijania.
     @State private var browseLayerCollapsed = false
     @State private var isFilterSheetPresented = false
+    /// Gdzie stała lista, z której otwarto „Filtry” — kategoria (ekran
+    /// kategorii, zakładka w wynikach), „Ulubione” albo `nil`. Zapisane przy
+    /// otwarciu, żeby arkusz nie przestawiał się pod palcem, gdy zakładka
+    /// wyników wróci do „Wszystkie”.
+    @State private var filterSheetScope: RecipesCategory?
 
     /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
     /// Trzymany w stanie, a nie liczony w locie z `Date()`, żeby przewijanie
@@ -131,7 +136,7 @@ struct RecipesView: View {
 
     /// Przepisy po wyszukiwarce i po preferencjach — dieta i alergeny tną,
     /// cel przestawia kolejność. Filtry z arkusza idą dopiero na to, żeby
-    /// licznik „Pokaż N przepisów” w arkuszu liczył się w tym samym świecie,
+    /// liczba przepisów w arkuszu liczyła się w tym samym świecie,
     /// który użytkownik widzi na liście.
     private var personalizedRecipes: [Recipe] {
         personalization.apply(to: searchedRecipes)
@@ -215,16 +220,37 @@ struct RecipesView: View {
         RecipeTextSearch.ranked(visibleRecipes, query: debouncedSearchText)
     }
 
-    /// Wyjście ze stanu wyników — fraza i filtry z „Filtrów” (filtry
-    /// kategorii zostają; czyści je ich własny arkusz).
+    /// Wyjście ze stanu wyników — fraza i WSZYSTKO, co nagłówek wyników
+    /// wymienia jako aktywne: filtry wszystkich przepisów i filtry kategorii
+    /// z zakresu (`reset(in:)` — ten sam ruch, co „Wyczyść” w Filtrach).
     private func clearResults() {
         searchDebounceTask?.cancel()
         withAnimation(.smooth(duration: 0.3)) {
             searchText = ""
             debouncedSearchText = ""
-            filters.resetGlobal()
+            filters.reset(in: scope)
             scope = nil
         }
+    }
+
+    /// „Filtry” z krążka w pasku szukania — w zakresie listy, która stoi pod
+    /// spodem.
+    private func openFilters(scope: RecipesCategory?) {
+        filterSheetScope = scope
+        isFilterSheetPresented = true
+    }
+
+    /// Pula arkusza „Filtry”: przepisy zakresu po szukaniu, PRZED dopasowaniem
+    /// (przełącznik „Dopasowane do Ciebie” siedzi w arkuszu i liczby muszą
+    /// się dać przeliczyć w obie strony) i przed filtrami. W kategorii —
+    /// jej przepisy i jej fraza; w wynikach z zakładką — trafienia zakładki.
+    private var filterSheetPool: [Recipe] {
+        if let category = categoryPath.last, filterSheetScope == category {
+            let inCategory = recipeCatalogStore.recipes.filter { $0.category == category }
+            return RecipeTextSearch.filter(inCategory, query: categorySearchText)
+        }
+        guard let scope = filterSheetScope else { return searchedRecipes }
+        return searchedRecipes.filter { RecipeScopeTabs.contains($0, in: scope) }
     }
 
     /// Karty karuzeli: zamrożona kolejność (`featuredOrder`) z bieżącymi
@@ -314,7 +340,7 @@ struct RecipesView: View {
                     filters: $filters,
                     searchText: $categorySearchText,
                     onOpenRecipe: { recipe in openDetail(for: recipe) },
-                    onOpenFilters: { isFilterSheetPresented = true }
+                    onOpenFilters: { openFilters(scope: category) }
                 )
             }
             .task {
@@ -369,13 +395,13 @@ struct RecipesView: View {
         // Arkusze wiszą na STOSIE, nie na korzeniu: w kategorii korzeń nie
         // stoi w oknie, a szczegół przepisu i Filtry otwierają się także stamtąd.
         .sheet(isPresented: $isFilterSheetPresented) {
-            // Pula PRZED dopasowaniem: przełącznik „Dopasowane do Ciebie”
-            // siedzi w arkuszu i liczby muszą się dać przeliczyć w obie
-            // strony.
+            // Filtry działają od razu — lista pod arkuszem zmienia się
+            // z każdym stuknięciem, a „Gotowe” tylko zamyka.
             RecipeFilterSheet(
                 filters: $filters,
                 isPersonalizationEnabled: $isPersonalizationEnabled,
-                recipes: searchedRecipes,
+                scope: filterSheetScope,
+                recipes: filterSheetPool,
                 personalization: personalization
             )
                 .presentationDetents([.large])
@@ -555,9 +581,9 @@ struct RecipesView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             RecipesSearchBar(
                 text: $searchText,
-                activeFilterCount: filters.activeCount,
+                activeFilterCount: filters.activeCount(in: scope),
                 onSubmit: { debouncedSearchText = searchText },
-                onOpenFilters: { isFilterSheetPresented = true }
+                onOpenFilters: { openFilters(scope: scope) }
             )
             .padding(.horizontal, pageHorizontalPadding)
             // Zwija się RAZEM z dolnym menu i tak jak ono (Rafał 4.10.2026:
@@ -621,7 +647,7 @@ struct RecipesView: View {
                     RecipeResultsHeader(
                         count: results.count,
                         query: debouncedSearchText,
-                        filterLabels: filters.summaryLabels,
+                        filterLabels: filters.summaryLabels(in: scope),
                         scopeTitle: scope.map(RecipeScopeTabs.title(for:)),
                         onClear: clearResults
                     )
@@ -644,7 +670,7 @@ struct RecipesView: View {
     private var resultsEmptyState: some View {
         let query = debouncedSearchText
         let hasQuery = !query.isEmpty
-        let hasFilters = filters.activeCount > 0
+        let hasFilters = filters.isActive(in: scope)
         let elsewhere = scope == nil ? 0 : unscopedResults.count
         let hiddenByDiet: Int = {
             guard personalization.isEnabled, personalization.restrictsCatalog else { return 0 }
@@ -669,7 +695,7 @@ struct RecipesView: View {
         }
         if hasFilters {
             actions.append(.init(title: "Wyczyść filtry", icon: "line.3.horizontal.decrease") {
-                withAnimation(Self.stateMotion) { filters.resetGlobal() }
+                withAnimation(Self.stateMotion) { filters.reset(in: scope) }
             })
         }
         if hasQuery {
