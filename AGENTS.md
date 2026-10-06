@@ -139,6 +139,32 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   koral, Wygląd lawenda `circle.lefthalf.filled`, Pomoc morska `questionmark`, Oceń róż `star.fill`, Prywatność szary
   `SettingsAccent.slate`), a arkusz bierze kolor wiersza; profil 56/17; wersja = podpis „Scoffie 1.0 (35)” pod
   „Wyloguj się” (wiersz „Wersja” i `EditorialSettingsInfoTile` USUNIĘTE).
+- **„Twoje dane”** (`ProfileDetailsSheet`, 6.10.2026 wieczór — artefakt „Arkusze Ustawień”, sekcja 1, cztery rundy,
+  „super, pasuje mi, koduj”; arkusze 2–8 z tego artefaktu czekają po kolei): nagłówek = PROFIL (`EditorialSheetHeader`
+  z awatarem w `leading` i e-mailem w nowym slocie `detail` pod tytułem; ołówek obok krzyżyka → alert „Imię” z polem,
+  jak nazwa gospodarstwa; w trybie `isPushed` ten sam profil stoi na górze treści). Na górze WYNIK: kcal na utrzymanie
+  (`numericText`) i BMI na skali ocen (`BMIScale`: progi 18,5 · 25 · 30 na 15–35, znacznik jedzie sprężyną). Sylwetka =
+  cztery `EditorialSettingsRow` (płeć indygo, rok morska, wzrost szałwia, waga róż, glif `chevron.up.chevron.down`,
+  wartość w terakocie, gdy jej wybór jest otwarty) → MAŁY ARKUSZ na 1/3 (`ProfileFieldPickerSheet`, `.fraction(1/3)`
+  jak koło godzin) z `presentationBackgroundInteraction(.enabled(upThrough:))`: reszta NIE gaśnie i przyjmuje dotyk —
+  wynik zmienia się na oczach, a stuknięcie w inny wiersz podmienia wybór bez zamykania (`picking` / `pickerField`);
+  zamyka krzyżyk, przeciągnięcie albo ten sam wiersz, zapis od razu (bez „Gotowe”). Płeć = kafle z „Nie podaję”,
+  rok i wzrost = koło, waga = koło kilogramów i dziesiątych jak w Zdrowiu (dokładność 0,1 kg jak dawne pole).
+  „Nie podaję” wybrane w TYM otwarciu = `saveProfile(clearSex: true)` → jawny `null` (pominięte pole serwer zostawia
+  i stara płeć wracała z `users:me`); `users:me` z `sex: null` kasuje płeć zapamiętaną na innym telefonie
+  (`persistProfileFields`), a niepotwierdzone skasowanie (zapis padł) leży w `settings.profile.sexClearPending`
+  i `saveProfile` ponawia je przy każdym zapisie, aż serwer potwierdzi (inne pola leczą się same — zapis wysyła je
+  zawsze; do tego czasu `users:me` nie wpisuje starej płci). Ołówek i „Usuń konto” przy otwartym małym arkuszu: najpierw zjazd, okno
+  z `onDismiss` (`pendingAlert`) — alertu z widoku prezentującego arkusz system nie pokaże. Zapis przy zejściu
+  (`onDisappear`) w OBU trybach — przeciągnięcie w dół anulowało debounce. Imię tnie `SessionStore.limitedDisplayName`
+  (punkty kodowe, jak `@MaxLength` serwera). `SCWheelPicker` (`Components/`) = `UIPickerView` z kolumnami — WŁASNY,
+  bo dwa `Picker(.wheel)` obok siebie nakładają obszary dotyku (UIKit liczy je z naturalnej szerokości koła); wartość
+  wchodzi, gdy koło stanie; koło przestawia się TYLKO przy zmianie z zewnątrz (`shownRows`, nie `selectedRow` — to
+  cofało wybiegające koło), a przycięty zapis (250 kg zeruje dziesiąte) dociąga w `didSelectRow`. Treningi =
+  `SCIconTilePicker` (`Components/`, wariant A „Kafle”): ikona w kółku w kolorze wysiłku (0–1 indygo `sofa.fill`, 2–3
+  szałwia, 4–5 terakota, 6+ `SCPalette.Toast.ember`), wybrany = pełne kółko (głęboki wariant) + szklana soczewka
+  przesuwana sprężyną z `LensSquish` (wspólne z `RecipeFilterSegment`) + podskok ikony; BEZ podpisu z nazwą poziomu
+  („to lekko aktywny usuń”). Pola tekstowe wzrostu/wagi i ich drafty USUNIĘTE. Kreator (krok 1–2) świadomie bez zmian.
 - **Ustawienia**: zgoda na powiadomienia NIGDY przy starcie — `NotificationPermission.requestIfNotAsked()` w kontekście:
   Ustawienia → Powiadomienia („Włącz powiadomienia” / „Wyłączone w ustawieniach iOS” + „Otwórz ustawienia”), po wysłaniu
   zaproszenia domownika (`SCShareSheet(message:)`, `completed`), po dołączeniu z zaproszenia (pulpit odsłonięty,
