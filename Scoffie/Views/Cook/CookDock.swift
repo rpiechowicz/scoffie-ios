@@ -22,6 +22,10 @@ import SwiftUI
 /// Kapsuły mają stałą tożsamość (po id timera), więc druga wjeżdża z boku,
 /// a pierwsza zwęża się w miejscu; trzeci timer nie rusza żadnej z nich.
 ///
+/// Stuknięcie w timer (kapsuła albo plakietka) ma JEDNĄ regułę
+/// (`CookDockTimer.dockTapAction`): „do włączenia” włącza, reszta otwiera
+/// arkusz Timery — tylko tam są pauza, „+1 min”, „Pomiń” i „Gotowe”.
+///
 /// Timery i Składniki otwierają się jako arkusze systemu (`CookSheet`).
 struct CookDock: View {
     let session: CookSession
@@ -236,8 +240,8 @@ struct CookDock: View {
     }
 }
 
-/// Co użytkownik zrobił z timerem — jedna droga z kapsuły, plakietki,
-/// arkusza i alarmu.
+/// Co użytkownik zrobił z timerem — jedna droga z kapsuły, plakietki
+/// i arkusza Timery.
 enum CookTimerAction {
     case start(String)
     case pause(String)
@@ -246,11 +250,24 @@ enum CookTimerAction {
     /// „Pomiń” timer, który czeka na włączenie (runda 4: pominięty przy
     /// „Dalej” już sam nie znika).
     case skip(String)
+    /// „+1 min” w arkuszu Timery (timer po czasie, wyciszony) — sekundy.
+    case extend(String, Int)
 }
 
 extension CookDockTimer {
-    /// Jedyny ruch, który ma sens w tym stanie: włącz / pauza / wznów /
-    /// gotowe. `nil` = timer skończony.
+    /// JEDNA reguła stuknięcia w timer w DOKU — kapsuła pojedyncza, para
+    /// i plakietka: „do włączenia” = Start, każdy inny stan (trwa, pauza, po
+    /// czasie, wyciszony) = arkusz Timery (`nil`). Mokrą ręką przy kuchence
+    /// łatwo trafić przypadkiem, więc pauza, wznowienie, „+1 min”, „Pomiń”
+    /// i „Gotowe” są wyłącznie w arkuszu (6.10.2026; wcześniej pierścień
+    /// kapsuły w parze pauzował, a pojedyncza miała przycisk pauzy obok).
+    var dockTapAction: CookTimerAction? {
+        if case .pending = status { return .start(id) }
+        return nil
+    }
+
+    /// Ruch pierścienia-przycisku w wierszu arkusza Timery: włącz / pauza /
+    /// wznów / gotowe. `nil` = timer skończony.
     var primaryAction: CookTimerAction? {
         switch status {
         case .pending: .start(id)
@@ -261,7 +278,7 @@ extension CookDockTimer {
         }
     }
 
-    /// Glif tego ruchu — ten sam w kapsule i w arkuszu Timery.
+    /// Glif tego ruchu w arkuszu Timery.
     var primaryIcon: String {
         switch status {
         case .pending, .paused: "play.fill"
@@ -282,10 +299,9 @@ extension CookDockTimer {
 
 /// Kapsuła timera nad wyspą — w kolorze SWOJEGO timera, we wszystkich stanach.
 ///
-/// - Pojedyncza (cała szerokość): pierścień, etykieta, czas i przycisk
-///   w pigułce z makiety (pauza / ▶ Start / ▶ Wznów / ✓ Gotowe).
-/// - Z pary: PIERŚCIEŃ JEST PRZYCISKIEM tego samego ruchu, z glifem w środku
-///   (runda 2: „włączyć / wyłączyć timer z pulpitu, nie wchodząc w kartę”).
+/// - Pojedyncza (cała szerokość): pierścień, etykieta i czas, a przy „do
+///   włączenia” pigułka „▶ Start” z makiety.
+/// - Z pary: większy pierścień z glifem stanu w środku.
 ///
 /// Oba rozmiary to JEDEN układ: pierścień, teksty i pigułka zostają tymi
 /// samymi widokami, więc przy wjeździe drugiego timera kapsuła zwęża się,
@@ -293,8 +309,13 @@ extension CookDockTimer {
 /// (runda 4: „ten 1 powinien animować się, zmieniając swój design”). Dawniej
 /// `switch` na układzie podmieniał całą treść i kapsuła przeskakiwała.
 ///
-/// Stuknięcie w resztę kapsuły otwiera arkusz Timery; w „do włączenia” cała
-/// kapsuła włącza timer (makieta). Przytrzymanie: „Włącz” / „Pomiń timer”.
+/// Cała kapsuła to JEDEN przycisk z jedną regułą doku
+/// (`CookDockTimer.dockTapAction`): „do włączenia” — włącza, każdy inny
+/// stan — otwiera arkusz Timery. Bez menu przytrzymania i bez osobnych
+/// przycisków w środku (6.10.2026, „mokre ręce”): pierścień w parze pauzował
+/// timer, a pojedyncza miała obok przycisk pauzy — łatwo o przypadek. Glif
+/// w pierścieniu mówi więc STAN (dzwonek po czasie, pauza), a ▶ zostaje tylko
+/// tam, gdzie stuknięcie naprawdę włącza.
 struct CookTimerCapsule: View {
     enum Layout {
         case single
@@ -318,25 +339,28 @@ struct CookTimerCapsule: View {
     private var color: Color { item.accent.color }
 
     var body: some View {
-        HStack(spacing: isSingle ? 10 : 8) {
-            ring
-            bodyButton
-            if isSingle {
-                singleAction
-                    .transition(actionTransition)
+        Button(action: tap) {
+            HStack(spacing: isSingle ? 10 : 8) {
+                ring
+                texts
+                if isSingle, isPending {
+                    startPill
+                        .transition(actionTransition)
+                }
             }
+            .padding(.leading, isSingle ? 12 : 8)
+            .padding(.trailing, isSingle ? 6 : 12)
+            .frame(height: SCCook.Height.timerCapsule)
+            .frame(maxWidth: .infinity)
+            .background(background)
+            .overlay(border)
+            .clipShape(Capsule())
+            .cookDockGlass(scheme)
+            .contentShape(Capsule())
         }
-        .padding(.leading, isSingle ? 12 : 8)
-        .padding(.trailing, isSingle ? 6 : 12)
-        .frame(height: SCCook.Height.timerCapsule)
-        .frame(maxWidth: .infinity)
-        .background(background)
-        .overlay(border)
-        .clipShape(Capsule())
-        .cookDockGlass(scheme)
-        .contentShape(Capsule())
-        .contentShape(.contextMenuPreview, Capsule())
-        .contextMenu { menu }
+        .buttonStyle(PlanPressStyle(scale: 0.97))
+        .accessibilityLabel(CookDockLabels.accessibility(item))
+        .accessibilityHint(isPending ? "Włącza timer" : "Otwiera arkusz Timery")
         .shadow(color: scheme == .dark ? SCCook.Palette.dockShadow(scheme) : .clear, radius: 15, y: 12)
         .cookInvitePulse(Capsule(), color: color, isActive: isPending)
         .cookOverduePulse(Capsule(), color: color, isActive: isOverdue)
@@ -350,9 +374,9 @@ struct CookTimerCapsule: View {
         return .scale(scale: 0.6, anchor: .trailing).combined(with: .opacity)
     }
 
-    private func bodyAction() {
-        if isPending {
-            onTimer(.start(item.id))
+    private func tap() {
+        if let action = item.dockTapAction {
+            onTimer(action)
         } else {
             onOpen()
         }
@@ -360,55 +384,43 @@ struct CookTimerCapsule: View {
 
     // MARK: Pierścień
 
-    /// Pierścień — ten sam widok w obu rozmiarach: w parze rośnie i dostaje
-    /// glif ruchu (jest przyciskiem), w pojedynczej jest częścią kapsuły
-    /// (stuknięcie jak w resztę), a ruch stoi w pigułce obok.
+    /// Pierścień — ten sam widok w obu rozmiarach (w parze większy i z glifem).
+    /// Nie jest osobnym przyciskiem: stuknięcie w niego to stuknięcie
+    /// w kapsułę.
     private var ring: some View {
         let side = isSingle ? SCCook.Size.timerRing : SCCook.Size.timerRingPair
-        return Button {
-            if isSingle {
-                bodyAction()
-            } else if let action = item.primaryAction {
-                onTimer(action)
-            }
-        } label: {
-            ZStack {
-                Circle().fill(ringFill)
-                // Do włączenia w pojedynczej: cicha obręcz — start jest w pigułce.
-                Circle()
-                    .strokeBorder(color.opacity(SCCook.Opacity.pendingRing), lineWidth: SCCook.Stroke.timerRing)
-                    .opacity(isPending && isSingle ? 1 : 0)
-                CookTimerRing(
-                    fraction: item.status.remainingFraction,
-                    color: isPaused ? Color.scMuted(scheme) : color,
-                    lineWidth: isSingle ? SCCook.Stroke.timerRing : SCCook.Stroke.timerRingSmall
-                )
-                .opacity(isRunning || isPaused ? 1 : 0)
-                Image(systemName: glyph ?? item.primaryIcon)
-                    .font(.system(size: isSingle && isOverdue ? 15 : 11, weight: .heavy))
-                    .foregroundStyle(glyphColor)
-                    .offset(x: glyph == "play.fill" ? 1 : 0)
-                    .contentTransition(.symbolEffect(.replace))
-                    .opacity(glyph == nil ? 0 : 1)
-            }
-            .frame(width: side, height: side)
-            .scTapTarget(44, drawn: side)
+        return ZStack {
+            Circle().fill(ringFill)
+            // Do włączenia w pojedynczej: cicha obręcz — start jest w pigułce.
+            Circle()
+                .strokeBorder(color.opacity(SCCook.Opacity.pendingRing), lineWidth: SCCook.Stroke.timerRing)
+                .opacity(isPending && isSingle ? 1 : 0)
+            CookTimerRing(
+                fraction: item.status.remainingFraction,
+                color: isPaused ? Color.scMuted(scheme) : color,
+                lineWidth: isSingle ? SCCook.Stroke.timerRing : SCCook.Stroke.timerRingSmall
+            )
+            .opacity(isRunning || isPaused ? 1 : 0)
+            Image(systemName: glyph ?? item.primaryIcon)
+                .font(.system(size: isSingle && isOverdue ? 15 : 11, weight: .heavy))
+                .foregroundStyle(glyphColor)
+                .offset(x: glyph == "play.fill" ? 1 : 0)
+                .contentTransition(.symbolEffect(.replace))
+                .opacity(glyph == nil ? 0 : 1)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(item.primaryLabel)
-        // W pojedynczej robi to samo co reszta kapsuły — VoiceOver czytałby
-        // kapsułę dwa razy.
-        .accessibilityHidden(isSingle)
+        .frame(width: side, height: side)
+        .accessibilityHidden(true)
     }
 
-    /// Glif w pierścieniu: w parze — ruch (▶ / pauza / ✓), w pojedynczej —
-    /// sam stan (dzwonek po czasie, pauza), bo ruch stoi w pigułce.
+    /// Glif w pierścieniu = STAN, nie ruch: po czasie — dzwonek, wstrzymany —
+    /// pauza (przygaszona), trwa — sam łuk. „Do włączenia” w parze — ▶, bo
+    /// stuknięcie w kapsułę włącza; w pojedynczej ▶ stoi w pigułce „Start”.
     private var glyph: String? {
-        if !isSingle { return item.primaryIcon }
         switch item.status {
         case .overdue: return "bell.fill"
         case .paused: return "pause.fill"
-        case .pending, .running, .finished: return nil
+        case .pending: return isSingle ? nil : "play.fill"
+        case .running, .finished: return nil
         }
     }
 
@@ -420,22 +432,11 @@ struct CookTimerCapsule: View {
 
     private var glyphColor: Color {
         if isOverdue || isPending { return Color.scPageBase(scheme) }
-        if isPaused { return isSingle ? Color.scMuted(scheme) : Color.scLabel(scheme) }
+        if isPaused { return Color.scMuted(scheme) }
         return color
     }
 
     // MARK: Teksty
-
-    private var bodyButton: some View {
-        Button(action: bodyAction) {
-            texts
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(CookDockLabels.accessibility(item))
-        .accessibilityHint(isPending ? "Włącza timer" : "Otwiera arkusz Timery")
-    }
 
     private var texts: some View {
         // W parze bez dopisków („· pauza”, „· po czasie”) — stan mówi kolor
@@ -509,104 +510,22 @@ struct CookTimerCapsule: View {
         }
     }
 
-    // MARK: Pojedyncza — przycisk z makiety
+    // MARK: Pojedyncza — „▶ Start”
 
-    /// Przycisk z makiety: pauza w krążku albo pigułka.
-    @ViewBuilder
-    private var singleAction: some View {
-        switch item.status {
-        case .running:
-            Button { onTimer(.pause(item.id)) } label: {
-                Image(systemName: "pause.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(color)
-                    .frame(width: SCCook.Height.timerAction, height: SCCook.Height.timerAction)
-                    .overlay(Circle().strokeBorder(color, lineWidth: 2))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(item.primaryLabel)
-            .transition(.scale(scale: 0.8).combined(with: .opacity))
-        case .pending:
-            pillButton(title: "Start", icon: "play.fill", fill: color, ink: Color.scPageBase(scheme)) {
-                onTimer(.start(item.id))
-            }
-        case .paused:
-            pillButton(title: "Wznów", icon: "play.fill", fill: Color.scChipBg(scheme), ink: Color.scLabel(scheme), stroke: SCCook.Palette.ringTodo(scheme)) {
-                onTimer(.resume(item.id))
-            }
-        case .overdue:
-            pillButton(title: "Gotowe", icon: "checkmark", fill: Color.scPageBase(scheme).opacity(0.16), ink: Color.scPageBase(scheme), size: 14) {
-                onTimer(.finish(item.id))
-            }
-        case .finished:
-            EmptyView()
+    /// Pigułka „▶ Start” z makiety (pojedyncza, do włączenia). Sam rysunek —
+    /// stuka się w całą kapsułę, która robi to samo.
+    private var startPill: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "play.fill")
+                .font(.system(size: 12, weight: .heavy))
+            Text("Start")
+                .font(.system(size: 15, weight: .heavy))
         }
-    }
-
-    private func pillButton(
-        title: String,
-        icon: String,
-        fill: Color,
-        ink: Color,
-        stroke: Color? = nil,
-        size: CGFloat = 15,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: size - 3, weight: .heavy))
-                Text(title)
-                    .font(.system(size: size, weight: .heavy))
-            }
-            .foregroundStyle(ink)
-            .padding(.leading, 12)
-            .padding(.trailing, 16)
-            .frame(height: SCCook.Height.timerAction)
-            .background(Capsule().fill(fill))
-            .overlay {
-                if let stroke {
-                    Capsule().strokeBorder(stroke, lineWidth: 1)
-                }
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(item.primaryLabel)
-        .transition(.scale(scale: 0.8).combined(with: .opacity))
-    }
-
-    // MARK: Przytrzymanie
-
-    /// Akcja z menu kontekstowego rusza PO jego zamknięciu (runda 9). Zmiana
-    /// kapsuły w trakcie zamykania menu — podgląd wraca na miejsce, którego
-    /// już nie ma albo które właśnie się zmienia — szarpała animacją.
-    private func afterMenu(_ action: @escaping () -> Void) {
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(350))
-            action()
-        }
-    }
-
-    @ViewBuilder
-    private var menu: some View {
-        if isPending {
-            Button {
-                afterMenu { onTimer(.start(item.id)) }
-            } label: {
-                Label("Włącz", systemImage: "play.fill")
-            }
-            Button(role: .destructive) {
-                afterMenu { onTimer(.skip(item.id)) }
-            } label: {
-                Label("Pomiń timer", systemImage: "forward.end")
-            }
-        } else {
-            Button(action: onOpen) {
-                Label("Wszystkie timery", systemImage: "timer")
-            }
-        }
+        .foregroundStyle(Color.scPageBase(scheme))
+        .padding(.leading, 12)
+        .padding(.trailing, 16)
+        .frame(height: SCCook.Height.timerAction)
+        .background(Capsule().fill(color))
     }
 }
 
@@ -617,7 +536,8 @@ struct CookTimerCapsule: View {
 /// trwa / pauza — „12:04 · Ziemniaki”, po czasie — „+1:20 · Ziemniaki” na
 /// pełnym kolorze, do włączenia — ▶ i warunek startu („Gdy woda zawrze”, D37),
 /// więc stuknięcie od razu włącza odliczanie. W pozostałych stanach
-/// stuknięcie otwiera arkusz Timery (pauza, wznowienie, pominięcie).
+/// stuknięcie otwiera arkusz Timery — ta sama reguła co kapsuły
+/// (`CookDockTimer.dockTapAction`).
 struct CookTimerBadge: View {
     let item: CookDockTimer
     let onTimer: (CookTimerAction) -> Void
@@ -637,7 +557,7 @@ struct CookTimerBadge: View {
 
     var body: some View {
         Button {
-            if isPending { onTimer(.start(item.id)) } else { onOpen() }
+            if let action = item.dockTapAction { onTimer(action) } else { onOpen() }
         } label: {
             HStack(spacing: 6) {
                 mark
